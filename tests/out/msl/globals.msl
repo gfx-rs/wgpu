@@ -8,7 +8,6 @@ struct _mslBufferSizes {
     uint size3;
 };
 
-constexpr constant bool Foo_1 = true;
 struct type_2 {
     float inner[10];
 };
@@ -32,6 +31,7 @@ struct type_14 {
 struct type_15 {
     type_14 inner[2];
 };
+constant bool Foo_1 = true;
 
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg

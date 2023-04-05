@@ -26,10 +26,10 @@ layout(location = 0) in vec2 _p2vs_location0;
 layout(location = 0) smooth out vec2 _vs2fs_location0;
 
 void main_1() {
-    vec2 _e12 = a_uv_1;
-    v_uv = _e12;
-    vec2 _e13 = a_pos_1;
-    perVertexStruct.gen_gl_Position = vec4(_e13.x, _e13.y, 0.0, 1.0);
+    vec2 _e8 = a_uv_1;
+    v_uv = _e8;
+    vec2 _e9 = a_pos_1;
+    perVertexStruct.gen_gl_Position = vec4(_e9.x, _e9.y, 0.0, 1.0);
     return;
 }
 

@@ -1,4 +1,3 @@
-
 float4 fs_main() : SV_Target0
 {
     float4 Pass_ = (float4)0;

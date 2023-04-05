@@ -198,6 +198,7 @@ impl crate::TypeInner {
 }
 
 mod type_inner_tests {
+
     #[test]
     fn to_wgsl() {
         use std::num::NonZeroU32;
@@ -228,6 +229,7 @@ mod type_inner_tests {
         let gctx = crate::proc::GlobalCtx {
             types: &types,
             constants: &crate::Arena::new(),
+            const_expressions: &crate::Arena::new(),
         };
         let array = crate::TypeInner::Array {
             base: mytype1,

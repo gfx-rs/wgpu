@@ -57,6 +57,7 @@
             init: None,
         ),
     ],
+    const_expressions: [],
     functions: [
         (
             name: Some("collatz_iterations"),

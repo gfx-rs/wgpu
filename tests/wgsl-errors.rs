@@ -952,18 +952,18 @@ fn invalid_arrays() {
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, 0>;
-  │                        ^ must be positive
+  │                        ^ must be greater than zero
 
 "###,
     );
 
     check(
         "alias Bad = array<f32, -1>;",
-        r###"error: array element count must resolve to an integer scalar (u32 or i32)
+        r###"error: array element count must be greater than zero
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, -1>;
-  │                        ^^ must resolve to u32/i32
+  │                        ^^ must be greater than zero
 
 "###,
     );

@@ -14,10 +14,10 @@ struct type_13 {
 struct type_14 {
     int inner[4];
 };
-constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
-constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
-constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
-constant metal::int4 v_i32_one = {1, 1, 1, 1};
+constant metal::float4 v_f32_one = metal::float4(1.0, 1.0, 1.0, 1.0);
+constant metal::float4 v_f32_zero = metal::float4(0.0, 0.0, 0.0, 0.0);
+constant metal::float4 v_f32_half = metal::float4(0.5, 0.5, 0.5, 0.5);
+constant metal::int4 v_i32_one = metal::int4(1, 1, 1, 1);
 
 metal::float4 builtins(
 ) {
@@ -263,15 +263,15 @@ void assignment(
     a_1 = _e27 << 2u;
     int _e30 = a_1;
     a_1 = _e30 >> 1u;
-    int _e32 = a_1;
-    a_1 = _e32 + 1;
-    int _e35 = a_1;
-    a_1 = _e35 - 1;
+    int _e33 = a_1;
+    a_1 = _e33 + 1;
+    int _e36 = a_1;
+    a_1 = _e36 - 1;
     vec0_ = metal::int3 {};
-    int _e42 = vec0_.y;
-    vec0_.y = _e42 + 1;
-    int _e47 = vec0_.y;
-    vec0_.y = _e47 - 1;
+    int _e43 = vec0_.y;
+    vec0_.y = _e43 + 1;
+    int _e48 = vec0_.y;
+    vec0_.y = _e48 - 1;
     return;
 }
 

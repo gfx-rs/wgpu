@@ -3,7 +3,7 @@ struct VertexOutput {
     @builtin(position) member: vec4<f32>,
 }
 
-const c_scale: f32 = 1.2000000476837158;
+const c_scale: f32 = 1.2;
 
 var<private> a_pos_1: vec2<f32>;
 var<private> a_uv_1: vec2<f32>;

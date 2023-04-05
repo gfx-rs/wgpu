@@ -1,4 +1,3 @@
-
 struct Struct {
     uint atomic_scalar;
     int atomic_arr[2];

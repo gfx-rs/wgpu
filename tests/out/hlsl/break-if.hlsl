@@ -1,4 +1,3 @@
-
 void breakIfEmpty()
 {
     bool loop_init = true;

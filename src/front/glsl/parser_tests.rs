@@ -509,7 +509,8 @@ fn functions() {
 
 #[test]
 fn constants() {
-    use crate::{Constant, ConstantInner, ScalarValue};
+    use crate::{Constant, Expression, ScalarKind, Type, TypeInner};
+
     let mut frontend = Frontend::default();
 
     let module = frontend
@@ -526,28 +527,49 @@ fn constants() {
         )
         .unwrap();
 
+    let mut types = module.types.iter();
     let mut constants = module.constants.iter();
+    let mut const_expressions = module.const_expressions.iter();
+
+    let (ty_handle, ty) = types.next().unwrap();
+    assert_eq!(
+        ty,
+        &Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Float,
+                width: 4
+            }
+        }
+    );
+
+    let (init_a_handle, init_a) = const_expressions.next().unwrap();
+    assert_eq!(init_a, &Expression::Literal(crate::Literal::F32(1.0)));
+
+    let (constant_a_handle, constant_a) = constants.next().unwrap();
+    assert_eq!(
+        constant_a,
+        &Constant {
+            name: Some("a".to_owned()),
+            r#override: crate::Override::None,
+            ty: ty_handle,
+            init: init_a_handle
+        }
+    );
+
+    // skip const expr that was inserted for `global` var
+    const_expressions.next().unwrap();
+
+    let (init_b_handle, init_b) = const_expressions.next().unwrap();
+    assert_eq!(init_b, &Expression::Constant(constant_a_handle));
 
     assert_eq!(
         constants.next().unwrap().1,
         &Constant {
-            name: Some("a".to_owned()),
-            specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value: ScalarValue::Float(1.0)
-            }
-        }
-    );
-    assert_eq!(
-        constants.next().unwrap().1,
-        &Constant {
             name: Some("b".to_owned()),
-            specialization: None,
-            inner: ConstantInner::Scalar {
-                width: 4,
-                value: ScalarValue::Float(1.0)
-            }
+            r#override: crate::Override::None,
+            ty: ty_handle,
+            init: init_b_handle
         }
     );
 

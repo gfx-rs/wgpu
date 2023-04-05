@@ -57,8 +57,6 @@ struct type_22 {
 struct type_26 {
     metal::float4 inner[2];
 };
-constant metal::uint3 const_type_1_ = {0u, 0u, 0u};
-constant GlobalConst const_GlobalConst = {0u, {}, const_type_1_, 0};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -66,8 +64,8 @@ void test_matrix_within_struct_accesses(
     int idx = {};
     Baz t = {};
     idx = 1;
-    int _e2 = idx;
-    idx = _e2 - 1;
+    int _e3 = idx;
+    idx = _e3 - 1;
     metal::float3x2 l0_ = baz.m;
     metal::float2 l1_ = baz.m[0];
     int _e15 = idx;
@@ -81,8 +79,8 @@ void test_matrix_within_struct_accesses(
     int _e43 = idx;
     float l6_ = baz.m[_e41][_e43];
     t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
-    int _e55 = idx;
-    idx = _e55 + 1;
+    int _e56 = idx;
+    idx = _e56 + 1;
     t.m = metal::float3x2(metal::float2(6.0), metal::float2(5.0), metal::float2(4.0));
     t.m[0] = metal::float2(9.0);
     int _e72 = idx;
@@ -104,8 +102,8 @@ void test_matrix_within_array_within_struct_accesses(
     int idx_1 = {};
     MatCx2InArray t_1 = {};
     idx_1 = 1;
-    int _e2 = idx_1;
-    idx_1 = _e2 - 1;
+    int _e3 = idx_1;
+    idx_1 = _e3 - 1;
     type_15 l0_1 = nested_mat_cx2_.am;
     metal::float4x2 l1_1 = nested_mat_cx2_.am.inner[0];
     metal::float2 l2_1 = nested_mat_cx2_.am.inner[0][0];
@@ -120,8 +118,8 @@ void test_matrix_within_array_within_struct_accesses(
     int _e60 = idx_1;
     float l7_ = nested_mat_cx2_.am.inner[0][_e58][_e60];
     t_1 = MatCx2InArray {type_15 {}};
-    int _e66 = idx_1;
-    idx_1 = _e66 + 1;
+    int _e67 = idx_1;
+    idx_1 = _e67 + 1;
     t_1.am = type_15 {};
     t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
     t_1.am.inner[0][0] = metal::float2(9.0);

@@ -237,6 +237,29 @@ impl<'w> BlockContext<'w> {
 
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
         let id = match self.ir_function.expressions[expr_handle] {
+            crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
+            crate::Expression::Constant(handle) => {
+                let init = self.ir_module.constants[handle].init;
+                self.writer.constant_ids[init.index()]
+            }
+            crate::Expression::ZeroValue(_) => self.writer.write_constant_null(result_type_id),
+            crate::Expression::Compose {
+                ty: _,
+                ref components,
+            } => {
+                self.temp_list.clear();
+                for &component in components {
+                    self.temp_list.push(self.cached[component]);
+                }
+
+                let id = self.gen_id();
+                block.body.push(Instruction::composite_construct(
+                    result_type_id,
+                    id,
+                    &self.temp_list,
+                ));
+                id
+            }
             crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {
                 // See `is_intermediate`; we'll handle this later in
                 // `write_expression_pointer`.
@@ -372,9 +395,6 @@ impl<'w> BlockContext<'w> {
             crate::Expression::GlobalVariable(handle) => {
                 self.writer.global_variables[handle.index()].access_id
             }
-            crate::Expression::Constant(handle) => self.writer.constant_ids[handle.index()],
-            crate::Expression::ZeroValue(_) => self.writer.write_constant_null(result_type_id),
-            crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
             crate::Expression::Splat { size, value } => {
                 let value_id = self.cached[value];
                 let components = [value_id; 4];
@@ -402,23 +422,6 @@ impl<'w> BlockContext<'w> {
                     id,
                     vector_id,
                     vector_id,
-                    &self.temp_list,
-                ));
-                id
-            }
-            crate::Expression::Compose {
-                ty: _,
-                ref components,
-            } => {
-                self.temp_list.clear();
-                for &component in components {
-                    self.temp_list.push(self.cached[component]);
-                }
-
-                let id = self.gen_id();
-                block.body.push(Instruction::composite_construct(
-                    result_type_id,
-                    id,
                     &self.temp_list,
                 ));
                 id

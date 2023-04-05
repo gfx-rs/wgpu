@@ -15,6 +15,7 @@ struct FragmentOutput {
 }
 
 const strct: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
+
 var<private> global: f32;
 @group(0) @binding(0) 
 var<storage, read_write> global_1: a_buf;
@@ -401,7 +402,7 @@ fn testConstantLength(a_24: array<f32, 4>) {
 
 fn indexConstantNonConstantIndex(i: i32) {
     var i_1: i32;
-    var local_5: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
+    var local_5: TestStruct = strct;
     var a_26: vec4<u32>;
 
     i_1 = i;

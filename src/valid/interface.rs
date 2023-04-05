@@ -31,6 +31,8 @@ pub enum GlobalVariableError {
         Handle<crate::Type>,
         #[source] Disalignment,
     ),
+    #[error("Initializer doesn't match the variable type")]
+    InitializerType,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -396,6 +398,7 @@ impl super::Validator {
         &self,
         var: &crate::GlobalVariable,
         gctx: crate::proc::GlobalCtx,
+        mod_info: &ModuleInfo,
     ) -> Result<(), GlobalVariableError> {
         use super::TypeFlags;
 
@@ -506,6 +509,14 @@ impl super::Validator {
         if is_resource != var.binding.is_some() {
             if self.flags.contains(super::ValidationFlags::BINDINGS) {
                 return Err(GlobalVariableError::InvalidBinding);
+            }
+        }
+
+        if let Some(init) = var.init {
+            let decl_ty = &gctx.types[var.ty].inner;
+            let init_ty = mod_info[init].inner_with(gctx.types);
+            if !decl_ty.equivalent(init_ty, gctx.types) {
+                return Err(GlobalVariableError::InitializerType);
             }
         }
 

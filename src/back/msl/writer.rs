@@ -300,50 +300,6 @@ impl<'a> TypedGlobalVariable<'a> {
     }
 }
 
-struct ConstantContext<'a> {
-    handle: Handle<crate::Constant>,
-    arena: &'a crate::Arena<crate::Constant>,
-    names: &'a FastHashMap<NameKey, String>,
-    first_time: bool,
-}
-
-impl<'a> Display for ConstantContext<'a> {
-    fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
-        let con = &self.arena[self.handle];
-        if con.needs_alias() && !self.first_time {
-            let name = &self.names[&NameKey::Constant(self.handle)];
-            return write!(out, "{name}");
-        }
-
-        match con.inner {
-            crate::ConstantInner::Scalar { value, width: _ } => match value {
-                crate::ScalarValue::Sint(value) => {
-                    write!(out, "{value}")
-                }
-                crate::ScalarValue::Uint(value) => {
-                    write!(out, "{value}u")
-                }
-                crate::ScalarValue::Float(value) => {
-                    if value.is_infinite() {
-                        let sign = if value.is_sign_negative() { "-" } else { "" };
-                        write!(out, "{sign}INFINITY")
-                    } else if value.is_nan() {
-                        write!(out, "NAN")
-                    } else {
-                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
-
-                        write!(out, "{value}{suffix}")
-                    }
-                }
-                crate::ScalarValue::Bool(value) => {
-                    write!(out, "{value}")
-                }
-            },
-            crate::ConstantInner::Composite { .. } => unreachable!("should be aliased"),
-        }
-    }
-}
-
 pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
@@ -501,16 +457,6 @@ impl crate::Type {
     }
 }
 
-impl crate::Constant {
-    // Returns `true` if we need to emit an alias for this constant.
-    const fn needs_alias(&self) -> bool {
-        match self.inner {
-            crate::ConstantInner::Scalar { .. } => self.name.is_some(),
-            crate::ConstantInner::Composite { .. } => true,
-        }
-    }
-}
-
 enum FunctionOrigin {
     Handle(Handle<crate::Function>),
     EntryPoint(proc::EntryPointIndex),
@@ -655,12 +601,25 @@ impl<W: Write> Writer<W> {
         parameters: impl Iterator<Item = Handle<crate::Expression>>,
         context: &ExpressionContext,
     ) -> BackendResult {
+        self.put_call_parameters_impl(parameters, |writer, expr| {
+            writer.put_expression(expr, context, true)
+        })
+    }
+
+    fn put_call_parameters_impl<E>(
+        &mut self,
+        parameters: impl Iterator<Item = Handle<crate::Expression>>,
+        put_expression: E,
+    ) -> BackendResult
+    where
+        E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
+    {
         write!(self.out, "(")?;
         for (i, handle) in parameters.enumerate() {
             if i != 0 {
                 write!(self.out, ", ")?;
             }
-            self.put_expression(handle, context, true)?;
+            put_expression(self, handle)?;
         }
         write!(self.out, ")")?;
         Ok(())
@@ -1077,44 +1036,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn put_compose(
-        &mut self,
-        ty: Handle<crate::Type>,
-        components: &[Handle<crate::Expression>],
-        context: &ExpressionContext,
-    ) -> BackendResult {
-        match context.module.types[ty].inner {
-            crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
-                write!(self.out, "{}", kind.to_msl_name())?;
-                self.put_call_parameters(components.iter().cloned(), context)?;
-            }
-            crate::TypeInner::Vector { size, kind, .. } => {
-                put_numeric_type(&mut self.out, kind, &[size])?;
-                self.put_call_parameters(components.iter().cloned(), context)?;
-            }
-            crate::TypeInner::Matrix { columns, rows, .. } => {
-                put_numeric_type(&mut self.out, crate::ScalarKind::Float, &[rows, columns])?;
-                self.put_call_parameters(components.iter().cloned(), context)?;
-            }
-            crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
-                write!(self.out, "{} {{", &self.names[&NameKey::Type(ty)])?;
-                for (index, &component) in components.iter().enumerate() {
-                    if index != 0 {
-                        write!(self.out, ", ")?;
-                    }
-                    // insert padding initialization, if needed
-                    if self.struct_member_pads.contains(&(ty, index as u32)) {
-                        write!(self.out, "{{}}, ")?;
-                    }
-                    self.put_expression(component, context, true)?;
-                }
-                write!(self.out, "}}")?;
-            }
-            _ => return Err(Error::UnsupportedCompose(ty)),
-        }
-        Ok(())
-    }
-
     /// Write the maximum valid index of the dynamically sized array at the end of `handle`.
     ///
     /// The 'maximum valid index' is simply one less than the array's length.
@@ -1260,6 +1181,113 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_const_expression(
+        &mut self,
+        expr_handle: Handle<crate::Expression>,
+        module: &crate::Module,
+    ) -> BackendResult {
+        self.put_possibly_const_expression(
+            expr_handle,
+            &module.const_expressions,
+            module,
+            |writer, expr| writer.put_const_expression(expr, module),
+        )
+    }
+
+    fn put_possibly_const_expression<E>(
+        &mut self,
+        expr_handle: Handle<crate::Expression>,
+        expressions: &crate::Arena<crate::Expression>,
+        module: &crate::Module,
+        put_expression: E,
+    ) -> BackendResult
+    where
+        E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
+    {
+        match expressions[expr_handle] {
+            crate::Expression::Literal(literal) => match literal {
+                crate::Literal::F64(_) => {
+                    return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
+                }
+                crate::Literal::F32(value) => {
+                    if value.is_infinite() {
+                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        write!(self.out, "{sign}INFINITY")?;
+                    } else if value.is_nan() {
+                        write!(self.out, "NAN")?;
+                    } else {
+                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
+                        write!(self.out, "{value}{suffix}")?;
+                    }
+                }
+                crate::Literal::U32(value) => {
+                    write!(self.out, "{value}u")?;
+                }
+                crate::Literal::I32(value) => {
+                    write!(self.out, "{value}")?;
+                }
+                crate::Literal::Bool(value) => {
+                    write!(self.out, "{value}")?;
+                }
+            },
+            crate::Expression::Constant(handle) => {
+                let constant = &module.constants[handle];
+                if constant.name.is_some() {
+                    write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
+                } else {
+                    self.put_const_expression(constant.init, module)?;
+                }
+            }
+            crate::Expression::ZeroValue(ty) => {
+                let ty_name = TypeContext {
+                    handle: ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    binding: None,
+                    first_time: false,
+                };
+                write!(self.out, "{ty_name} {{}}")?;
+            }
+            crate::Expression::Compose { ty, ref components } => {
+                let ty_name = TypeContext {
+                    handle: ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    binding: None,
+                    first_time: false,
+                };
+                write!(self.out, "{ty_name}")?;
+                match module.types[ty].inner {
+                    crate::TypeInner::Scalar { .. }
+                    | crate::TypeInner::Vector { .. }
+                    | crate::TypeInner::Matrix { .. } => {
+                        self.put_call_parameters_impl(components.iter().copied(), put_expression)?;
+                    }
+                    crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
+                        write!(self.out, " {{")?;
+                        for (index, &component) in components.iter().enumerate() {
+                            if index != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            // insert padding initialization, if needed
+                            if self.struct_member_pads.contains(&(ty, index as u32)) {
+                                write!(self.out, "{{}}, ")?;
+                            }
+                            put_expression(self, component)?;
+                        }
+                        write!(self.out, "}}")?;
+                    }
+                    _ => return Err(Error::UnsupportedCompose(ty)),
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        Ok(())
+    }
+
     /// Emit code for the expression `expr_handle`.
     ///
     /// The `is_scoped` argument is true if the surrounding operators have the
@@ -1291,6 +1319,17 @@ impl<W: Write> Writer<W> {
         let expression = &context.function.expressions[expr_handle];
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
+            crate::Expression::Literal(_)
+            | crate::Expression::Constant(_)
+            | crate::Expression::ZeroValue(_)
+            | crate::Expression::Compose { .. } => {
+                self.put_possibly_const_expression(
+                    expr_handle,
+                    &context.function.expressions,
+                    context.module,
+                    |writer, expr| writer.put_expression(expr, context, true),
+                )?;
+            }
             crate::Expression::Access { base, .. }
             | crate::Expression::AccessIndex { base, .. } => {
                 // This is an acceptable place to generate a `ReadZeroSkipWrite` check.
@@ -1318,51 +1357,6 @@ impl<W: Write> Writer<W> {
                     self.put_access_chain(expr_handle, policy, context)?;
                 }
             }
-            crate::Expression::Constant(handle) => {
-                let coco = ConstantContext {
-                    handle,
-                    arena: &context.module.constants,
-                    names: &self.names,
-                    first_time: false,
-                };
-                write!(self.out, "{coco}")?;
-            }
-            crate::Expression::ZeroValue(ty) => {
-                let ty_name = TypeContext {
-                    handle: ty,
-                    gctx: context.module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                write!(self.out, "{ty_name} {{}}")?;
-            }
-            crate::Expression::Literal(literal) => match literal {
-                crate::Literal::F64(_) => {
-                    return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
-                }
-                crate::Literal::F32(value) => {
-                    if value.is_infinite() {
-                        let sign = if value.is_sign_negative() { "-" } else { "" };
-                        write!(self.out, "{sign}INFINITY")?;
-                    } else if value.is_nan() {
-                        write!(self.out, "NAN")?;
-                    } else {
-                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
-                        write!(self.out, "{value}{suffix}")?;
-                    }
-                }
-                crate::Literal::U32(value) => {
-                    write!(self.out, "{value}u")?;
-                }
-                crate::Literal::I32(value) => {
-                    write!(self.out, "{value}")?;
-                }
-                crate::Literal::Bool(value) => {
-                    write!(self.out, "{value}")?;
-                }
-            },
             crate::Expression::Splat { size, value } => {
                 let scalar_kind = match *context.resolve_type(value) {
                     crate::TypeInner::Scalar { kind, .. } => kind,
@@ -1383,9 +1377,6 @@ impl<W: Write> Writer<W> {
                 for &sc in pattern[..size as usize].iter() {
                     write!(self.out, "{}", back::COMPONENTS[sc as usize])?;
                 }
-            }
-            crate::Expression::Compose { ty, ref components } => {
-                self.put_compose(ty, components, context)?;
             }
             crate::Expression::FunctionArgument(index) => {
                 let name_key = match context.origin {
@@ -1448,15 +1439,11 @@ impl<W: Write> Writer<W> {
 
                 self.put_image_sample_level(image, level, context)?;
 
-                if let Some(constant) = offset {
-                    let coco = ConstantContext {
-                        handle: constant,
-                        arena: &context.module.constants,
-                        names: &self.names,
-                        first_time: false,
-                    };
-                    write!(self.out, ", {coco}")?;
+                if let Some(offset) = offset {
+                    write!(self.out, ", ")?;
+                    self.put_const_expression(offset, context.module)?;
                 }
+
                 match gather {
                     None | Some(crate::SwizzleComponent::X) => {}
                     Some(component) => {
@@ -2270,15 +2257,11 @@ impl<W: Write> Writer<W> {
         policy: index::BoundsCheckPolicy,
         context: &ExpressionContext,
     ) -> BackendResult {
-        let is_atomic = match *context.resolve_type(pointer) {
-            crate::TypeInner::Pointer { base, .. } => match context.module.types[base].inner {
-                crate::TypeInner::Atomic { .. } => true,
-                _ => false,
-            },
-            _ => false,
-        };
+        let is_atomic_pointer = context
+            .resolve_type(pointer)
+            .is_atomic_pointer(&context.module.types);
 
-        if is_atomic {
+        if is_atomic_pointer {
             write!(
                 self.out,
                 "{NAMESPACE}::atomic_load_explicit({ATOMIC_REFERENCE}"
@@ -2420,9 +2403,8 @@ impl<W: Write> Writer<W> {
 
                         // check what kind of product this is depending
                         // on the resolve type of the Dot function itself
-                        if let crate::TypeInner::Scalar { kind, .. } =
-                            *context.resolve_type(expr_handle)
-                        {
+                        let inner = context.resolve_type(expr_handle);
+                        if let crate::TypeInner::Scalar { kind, .. } = *inner {
                             match kind {
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
                                     self.need_bake_expressions.insert(arg);
@@ -2991,18 +2973,12 @@ impl<W: Write> Writer<W> {
         level: back::Level,
         context: &StatementContext,
     ) -> BackendResult {
-        let pointer_inner = context.expression.resolve_type(pointer);
-        let is_atomic = match *pointer_inner {
-            crate::TypeInner::Pointer { base, .. } => {
-                match context.expression.module.types[base].inner {
-                    crate::TypeInner::Atomic { .. } => true,
-                    _ => false,
-                }
-            }
-            _ => false,
-        };
+        let is_atomic_pointer = context
+            .expression
+            .resolve_type(pointer)
+            .is_atomic_pointer(&context.expression.module.types);
 
-        if is_atomic {
+        if is_atomic_pointer {
             write!(
                 self.out,
                 "{level}{NAMESPACE}::atomic_store_explicit({ATOMIC_REFERENCE}"
@@ -3107,9 +3083,8 @@ impl<W: Write> Writer<W> {
             }
         };
 
-        self.write_scalar_constants(module)?;
         self.write_type_defs(module)?;
-        self.write_composite_constants(module)?;
+        self.write_global_constants(module)?;
         self.write_functions(module, info, options, pipeline_options)
     }
 
@@ -3264,78 +3239,25 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_scalar_constants(&mut self, module: &crate::Module) -> BackendResult {
-        for (handle, constant) in module.constants.iter() {
-            match constant.inner {
-                crate::ConstantInner::Scalar {
-                    width: _,
-                    ref value,
-                } if constant.name.is_some() => {
-                    debug_assert!(constant.needs_alias());
-                    write!(self.out, "constexpr constant ")?;
-                    match *value {
-                        crate::ScalarValue::Sint(_) => {
-                            write!(self.out, "int")?;
-                        }
-                        crate::ScalarValue::Uint(_) => {
-                            write!(self.out, "unsigned")?;
-                        }
-                        crate::ScalarValue::Float(_) => {
-                            write!(self.out, "float")?;
-                        }
-                        crate::ScalarValue::Bool(_) => {
-                            write!(self.out, "bool")?;
-                        }
-                    }
-                    let name = &self.names[&NameKey::Constant(handle)];
-                    let coco = ConstantContext {
-                        handle,
-                        arena: &module.constants,
-                        names: &self.names,
-                        first_time: true,
-                    };
-                    writeln!(self.out, " {name} = {coco};")?;
-                }
-                _ => {}
-            }
-        }
-        Ok(())
-    }
+    /// Writes all named constants
+    fn write_global_constants(&mut self, module: &crate::Module) -> BackendResult {
+        let constants = module.constants.iter().filter(|&(_, c)| c.name.is_some());
 
-    fn write_composite_constants(&mut self, module: &crate::Module) -> BackendResult {
-        for (handle, constant) in module.constants.iter() {
-            match constant.inner {
-                crate::ConstantInner::Scalar { .. } => {}
-                crate::ConstantInner::Composite { ty, ref components } => {
-                    debug_assert!(constant.needs_alias());
-                    let name = &self.names[&NameKey::Constant(handle)];
-                    let ty_name = TypeContext {
-                        handle: ty,
-                        gctx: module.to_ctx(),
-                        names: &self.names,
-                        access: crate::StorageAccess::empty(),
-                        binding: None,
-                        first_time: false,
-                    };
-                    write!(self.out, "constant {ty_name} {name} = {{",)?;
-                    for (i, &sub_handle) in components.iter().enumerate() {
-                        // insert padding initialization, if needed
-                        if self.struct_member_pads.contains(&(ty, i as u32)) {
-                            write!(self.out, ", {{}}")?;
-                        }
-                        let separator = if i != 0 { ", " } else { "" };
-                        let coco = ConstantContext {
-                            handle: sub_handle,
-                            arena: &module.constants,
-                            names: &self.names,
-                            first_time: false,
-                        };
-                        write!(self.out, "{separator}{coco}")?;
-                    }
-                    writeln!(self.out, "}};")?;
-                }
-            }
+        for (handle, constant) in constants {
+            let ty_name = TypeContext {
+                handle: constant.ty,
+                gctx: module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                binding: None,
+                first_time: false,
+            };
+            let name = &self.names[&NameKey::Constant(handle)];
+            write!(self.out, "constant {ty_name} {name} = ")?;
+            self.put_const_expression(constant.init, module)?;
+            writeln!(self.out, ";")?;
         }
+
         Ok(())
     }
 
@@ -3528,13 +3450,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
                 match local.init {
                     Some(value) => {
-                        let coco = ConstantContext {
-                            handle: value,
-                            arena: &module.constants,
-                            names: &self.names,
-                            first_time: false,
-                        };
-                        write!(self.out, " = {coco}")?;
+                        write!(self.out, " = ")?;
+                        self.put_const_expression(value, module)?;
                     }
                     None => {
                         write!(self.out, " = {{}}")?;
@@ -3935,13 +3852,8 @@ impl<W: Write> Writer<W> {
                     resolved.try_fmt(&mut self.out)?;
                 }
                 if let Some(value) = var.init {
-                    let coco = ConstantContext {
-                        handle: value,
-                        arena: &module.constants,
-                        names: &self.names,
-                        first_time: false,
-                    };
-                    write!(self.out, " = {coco}")?;
+                    write!(self.out, " = ")?;
+                    self.put_const_expression(value, module)?;
                 }
                 writeln!(self.out)?;
             }
@@ -3996,13 +3908,9 @@ impl<W: Write> Writer<W> {
                     tyvar.try_fmt(&mut self.out)?;
                     match var.init {
                         Some(value) => {
-                            let coco = ConstantContext {
-                                handle: value,
-                                arena: &module.constants,
-                                names: &self.names,
-                                first_time: false,
-                            };
-                            writeln!(self.out, " = {coco};")?;
+                            write!(self.out, " = ")?;
+                            self.put_const_expression(value, module)?;
+                            writeln!(self.out, ";")?;
                         }
                         None => {
                             writeln!(self.out, " = {{}};")?;
@@ -4100,13 +4008,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
                 match local.init {
                     Some(value) => {
-                        let coco = ConstantContext {
-                            handle: value,
-                            arena: &module.constants,
-                            names: &self.names,
-                            first_time: false,
-                        };
-                        write!(self.out, " = {coco}")?;
+                        write!(self.out, " = ")?;
+                        self.put_const_expression(value, module)?;
                     }
                     None => {
                         write!(self.out, " = {{}}")?;
@@ -4373,21 +4276,11 @@ fn test_stack_size() {
     use crate::valid::{Capabilities, ValidationFlags};
     // create a module with at least one expression nested
     let mut module = crate::Module::default();
-    let constant = module.constants.append(
-        crate::Constant {
-            name: None,
-            specialization: None,
-            inner: crate::ConstantInner::Scalar {
-                value: crate::ScalarValue::Float(1.0),
-                width: 4,
-            },
-        },
+    let mut fun = crate::Function::default();
+    let const_expr = fun.expressions.append(
+        crate::Expression::Literal(crate::Literal::F32(1.0)),
         Default::default(),
     );
-    let mut fun = crate::Function::default();
-    let const_expr = fun
-        .expressions
-        .append(crate::Expression::Constant(constant), Default::default());
     let nested_expr = fun.expressions.append(
         crate::Expression::Unary {
             op: crate::UnaryOperator::Negate,

@@ -9,7 +9,6 @@ struct _mslBufferSizes {
     uint size2;
 };
 
-constexpr constant unsigned NUM_PARTICLES = 1500u;
 struct Particle {
     metal::float2 pos;
     metal::float2 vel;
@@ -27,6 +26,7 @@ typedef Particle type_3[1];
 struct Particles {
     type_3 particles;
 };
+constant uint NUM_PARTICLES = 1500u;
 
 struct main_Input {
 };

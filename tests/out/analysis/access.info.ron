@@ -79,15 +79,6 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(2),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(3),
-                ),
-                (
-                    uniformity: (
                         non_uniform_result: None,
                         requirements: (""),
                     ),
@@ -97,6 +88,15 @@
                         kind: Sint,
                         width: 4,
                     )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(3),
                 ),
                 (
                     uniformity: (
@@ -710,15 +710,6 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(2),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(3),
-                ),
-                (
-                    uniformity: (
                         non_uniform_result: None,
                         requirements: (""),
                     ),
@@ -728,6 +719,15 @@
                         kind: Sint,
                         width: 4,
                     )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(3),
                 ),
                 (
                     uniformity: (
@@ -1296,15 +1296,6 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(2),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(3),
-                ),
-                (
-                    uniformity: (
                         non_uniform_result: None,
                         requirements: (""),
                     ),
@@ -1314,6 +1305,15 @@
                         kind: Sint,
                         width: 4,
                     )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(3),
                 ),
                 (
                     uniformity: (
@@ -2053,15 +2053,6 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(2),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(3),
-                ),
-                (
-                    uniformity: (
                         non_uniform_result: None,
                         requirements: (""),
                     ),
@@ -2071,6 +2062,15 @@
                         kind: Sint,
                         width: 4,
                     )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(3),
                 ),
                 (
                     uniformity: (
@@ -4289,5 +4289,89 @@
             ],
             sampling: [],
         ),
+    ],
+    const_expression_types: [
+        Value(Scalar(
+            kind: Uint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Uint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Uint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Uint,
+            width: 4,
+        )),
+        Handle(2),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Handle(4),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
+        Value(Scalar(
+            kind: Sint,
+            width: 4,
+        )),
     ],
 )

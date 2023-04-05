@@ -9,8 +9,7 @@ use super::{
     variables::{GlobalOrConstant, VarDeclaration},
     Frontend, Result,
 };
-use crate::{arena::Handle, Block, Constant, ConstantInner, Expression, ScalarValue, Span, Type};
-use core::convert::TryFrom;
+use crate::{arena::Handle, proc::U32EvalError, Block, Expression, Span, Type};
 use pp_rs::token::{PreprocessorError, Token as PPToken, TokenValue as PPTokenValue};
 use std::iter::Peekable;
 
@@ -192,30 +191,21 @@ impl<'source> ParsingContext<'source> {
     }
 
     fn parse_uint_constant(&mut self, frontend: &mut Frontend) -> Result<(u32, Span)> {
-        let (value, meta) = self.parse_constant_expression(frontend)?;
+        let (const_expr, meta) = self.parse_constant_expression(frontend)?;
 
-        let int = match frontend.module.constants[value].inner {
-            ConstantInner::Scalar {
-                value: ScalarValue::Uint(int),
-                ..
-            } => u32::try_from(int).map_err(|_| Error {
+        let res = frontend.module.to_ctx().eval_expr_to_u32(const_expr);
+
+        let int = match res {
+            Ok(value) => Ok(value),
+            Err(U32EvalError::Negative) => Err(Error {
                 kind: ErrorKind::SemanticError("int constant overflows".into()),
                 meta,
-            })?,
-            ConstantInner::Scalar {
-                value: ScalarValue::Sint(int),
-                ..
-            } => u32::try_from(int).map_err(|_| Error {
-                kind: ErrorKind::SemanticError("int constant overflows".into()),
+            }),
+            Err(U32EvalError::NonConst) => Err(Error {
+                kind: ErrorKind::SemanticError("Expected a uint constant".into()),
                 meta,
-            })?,
-            _ => {
-                return Err(Error {
-                    kind: ErrorKind::SemanticError("Expected a uint constant".into()),
-                    meta,
-                })
-            }
-        };
+            }),
+        }?;
 
         Ok((int, meta))
     }
@@ -223,7 +213,7 @@ impl<'source> ParsingContext<'source> {
     fn parse_constant_expression(
         &mut self,
         frontend: &mut Frontend,
-    ) -> Result<(Handle<Constant>, Span)> {
+    ) -> Result<(Handle<Expression>, Span)> {
         let mut block = Block::new();
 
         let mut ctx = Context::new(frontend, &mut block);
@@ -412,7 +402,7 @@ impl<'ctx, 'qualifiers> DeclarationContext<'ctx, 'qualifiers> {
         frontend: &mut Frontend,
         ty: Handle<Type>,
         name: String,
-        init: Option<Handle<Constant>>,
+        init: Option<Handle<Expression>>,
         meta: Span,
     ) -> Result<Handle<Expression>> {
         let decl = VarDeclaration {

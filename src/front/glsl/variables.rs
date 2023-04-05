@@ -14,7 +14,7 @@ pub struct VarDeclaration<'a, 'key> {
     pub qualifiers: &'a mut TypeQualifiers<'key>,
     pub ty: Handle<Type>,
     pub name: Option<String>,
-    pub init: Option<Handle<Constant>>,
+    pub init: Option<Handle<Expression>>,
     pub meta: Span,
 }
 
@@ -494,29 +494,21 @@ impl Frontend {
                     meta,
                 })?;
 
+                let constant = Constant {
+                    name: name.clone(),
+                    r#override: crate::Override::None,
+                    ty,
+                    init,
+                };
+                let handle = self.module.constants.fetch_or_append(constant, meta);
+
                 let lookup = GlobalLookup {
-                    kind: GlobalLookupKind::Constant(init, ty),
+                    kind: GlobalLookupKind::Constant(handle, ty),
                     entry_arg: None,
                     mutable: false,
                 };
 
-                if let Some(name) = name.as_ref() {
-                    let constant = self.module.constants.get_mut(init);
-                    if constant.name.is_none() {
-                        // set the name of the constant
-                        constant.name = Some(name.clone())
-                    } else {
-                        // add a copy of the constant with the new name
-                        let new_const = Constant {
-                            name: Some(name.clone()),
-                            specialization: constant.specialization,
-                            inner: constant.inner.clone(),
-                        };
-                        self.module.constants.fetch_or_append(new_const, meta);
-                    }
-                }
-
-                (GlobalOrConstant::Constant(init), lookup)
+                (GlobalOrConstant::Constant(handle), lookup)
             }
             StorageQualifier::AddressSpace(mut space) => {
                 match space {

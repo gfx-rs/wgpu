@@ -8,8 +8,8 @@ void fb1_(inout bool cond) {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            bool _e6 = cond;
-            if (!(_e6)) {
+            bool _e2 = cond;
+            if (!(_e2)) {
                 break;
             }
         }

@@ -176,17 +176,19 @@ impl<'w> BlockContext<'w> {
         // done the bounds check.
         let max_index_id = match self.write_sequence_max_index(sequence, block)? {
             MaybeKnown::Known(known_max_index) => {
-                if let crate::Expression::Constant(index_k) = self.ir_function.expressions[index] {
-                    if let Some(known_index) = self.ir_module.constants[index_k].to_array_length() {
-                        // Both the index and length are known at compile time.
-                        //
-                        // In strict WGSL compliance mode, out-of-bounds indices cannot be
-                        // reported at shader translation time, and must be replaced with
-                        // in-bounds indices at run time. So we cannot assume that
-                        // validation ensured the index was in bounds. Restrict now.
-                        let restricted = std::cmp::min(known_index, known_max_index);
-                        return Ok(BoundsCheckResult::KnownInBounds(restricted));
-                    }
+                if let Ok(known_index) = self
+                    .ir_module
+                    .to_ctx()
+                    .eval_expr_to_u32_from(index, &self.ir_function.expressions)
+                {
+                    // Both the index and length are known at compile time.
+                    //
+                    // In strict WGSL compliance mode, out-of-bounds indices cannot be
+                    // reported at shader translation time, and must be replaced with
+                    // in-bounds indices at run time. So we cannot assume that
+                    // validation ensured the index was in bounds. Restrict now.
+                    let restricted = std::cmp::min(known_index, known_max_index);
+                    return Ok(BoundsCheckResult::KnownInBounds(restricted));
                 }
 
                 self.get_index_constant(known_max_index)
@@ -236,31 +238,33 @@ impl<'w> BlockContext<'w> {
         // bounds check.
         let length_id = match self.write_sequence_length(sequence, block)? {
             MaybeKnown::Known(known_length) => {
-                if let crate::Expression::Constant(index_k) = self.ir_function.expressions[index] {
-                    if let Some(known_index) = self.ir_module.constants[index_k].to_array_length() {
-                        // Both the index and length are known at compile time.
-                        //
-                        // It would be nice to assume that, since we are using the
-                        // `ReadZeroSkipWrite` policy, we are not in strict WGSL
-                        // compliance mode, and thus we can count on the validator to have
-                        // rejected any programs with known out-of-bounds indices, and
-                        // thus just return `KnownInBounds` here without actually
-                        // checking.
-                        //
-                        // But it's also reasonable to expect that bounds check policies
-                        // and error reporting policies should be able to vary
-                        // independently without introducing security holes. So, we should
-                        // support the case where bad indices do not cause validation
-                        // errors, and are handled via `ReadZeroSkipWrite`.
-                        //
-                        // In theory, when `known_index` is bad, we could return a new
-                        // `KnownOutOfBounds` variant here. But it's simpler just to fall
-                        // through and let the bounds check take place. The shader is
-                        // broken anyway, so it doesn't make sense to invest in emitting
-                        // the ideal code for it.
-                        if known_index < known_length {
-                            return Ok(BoundsCheckResult::KnownInBounds(known_index));
-                        }
+                if let Ok(known_index) = self
+                    .ir_module
+                    .to_ctx()
+                    .eval_expr_to_u32_from(index, &self.ir_function.expressions)
+                {
+                    // Both the index and length are known at compile time.
+                    //
+                    // It would be nice to assume that, since we are using the
+                    // `ReadZeroSkipWrite` policy, we are not in strict WGSL
+                    // compliance mode, and thus we can count on the validator to have
+                    // rejected any programs with known out-of-bounds indices, and
+                    // thus just return `KnownInBounds` here without actually
+                    // checking.
+                    //
+                    // But it's also reasonable to expect that bounds check policies
+                    // and error reporting policies should be able to vary
+                    // independently without introducing security holes. So, we should
+                    // support the case where bad indices do not cause validation
+                    // errors, and are handled via `ReadZeroSkipWrite`.
+                    //
+                    // In theory, when `known_index` is bad, we could return a new
+                    // `KnownOutOfBounds` variant here. But it's simpler just to fall
+                    // through and let the bounds check take place. The shader is
+                    // broken anyway, so it doesn't make sense to invest in emitting
+                    // the ideal code for it.
+                    if known_index < known_length {
+                        return Ok(BoundsCheckResult::KnownInBounds(known_index));
                     }
                 }
 

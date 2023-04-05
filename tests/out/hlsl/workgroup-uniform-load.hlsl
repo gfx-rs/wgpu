@@ -1,4 +1,4 @@
-static const uint SIZE = 128;
+static const uint SIZE = 128u;
 
 groupshared int arr_i32_[128];
 

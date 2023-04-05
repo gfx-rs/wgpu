@@ -1,4 +1,3 @@
-
 void main()
 {
     float4 v = (0.0).xxxx;

@@ -12,14 +12,14 @@ struct VertexOutput {
 
 var<private> v_uv: vec2<f32>;
 var<private> a_uv_1: vec2<f32>;
-var<private> perVertexStruct: gl_PerVertex = gl_PerVertex(vec4<f32>(0.0, 0.0, 0.0, 1.0), 1.0, array<f32, 1>(0.0), array<f32, 1>(0.0));
+var<private> perVertexStruct: gl_PerVertex = gl_PerVertex(vec4<f32>(0.0, 0.0, 0.0, 1.0), 1.0, array<f32, 1>(), array<f32, 1>());
 var<private> a_pos_1: vec2<f32>;
 
 fn main_1() {
-    let _e12 = a_uv_1;
-    v_uv = _e12;
-    let _e13 = a_pos_1;
-    perVertexStruct.gl_Position = vec4<f32>(_e13.x, _e13.y, 0.0, 1.0);
+    let _e8 = a_uv_1;
+    v_uv = _e8;
+    let _e9 = a_pos_1;
+    perVertexStruct.gl_Position = vec4<f32>(_e9.x, _e9.y, 0.0, 1.0);
     return;
 }
 

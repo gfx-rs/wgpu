@@ -1,4 +1,3 @@
-
 static float a = (float)0;
 
 void main_1()
@@ -7,12 +6,12 @@ void main_1()
     float c = (float)0;
     float d = (float)0;
 
+    float _expr4 = a;
+    b = log(_expr4 + sqrt(_expr4 * _expr4 + 1.0));
+    float _expr6 = a;
+    c = log(_expr6 + sqrt(_expr6 * _expr6 - 1.0));
     float _expr8 = a;
-    b = log(_expr8 + sqrt(_expr8 * _expr8 + 1.0));
-    float _expr10 = a;
-    c = log(_expr10 + sqrt(_expr10 * _expr10 - 1.0));
-    float _expr12 = a;
-    d = 0.5 * log((1.0 + _expr12) / (1.0 - _expr12));
+    d = 0.5 * log((1.0 + _expr8) / (1.0 - _expr8));
     return;
 }
 

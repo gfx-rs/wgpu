@@ -10,10 +10,10 @@ OpEntryPoint Fragment %44 "frag_main" %41 %43
 OpEntryPoint Fragment %60 "fs_extra" %59
 OpExecutionMode %44 OriginUpperLeft
 OpExecutionMode %60 OriginUpperLeft
-OpName %3 "c_scale"
-OpMemberName %7 0 "uv"
-OpMemberName %7 1 "position"
-OpName %7 "VertexOutput"
+OpMemberName %6 0 "uv"
+OpMemberName %6 1 "position"
+OpName %6 "VertexOutput"
+OpName %9 "c_scale"
 OpName %10 "u_texture"
 OpName %12 "u_sampler"
 OpName %15 "pos"
@@ -24,8 +24,8 @@ OpName %24 "vert_main"
 OpName %41 "uv"
 OpName %44 "frag_main"
 OpName %60 "fs_extra"
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %7 1 Offset 16
+OpMemberDecorate %6 0 Offset 0
+OpMemberDecorate %6 1 Offset 16
 OpDecorate %10 DescriptorSet 0
 OpDecorate %10 Binding 0
 OpDecorate %12 DescriptorSet 0
@@ -38,73 +38,73 @@ OpDecorate %41 Location 0
 OpDecorate %43 Location 0
 OpDecorate %59 Location 0
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpConstant  %4  1.2
-%5 = OpTypeVector %4 2
-%6 = OpTypeVector %4 4
-%7 = OpTypeStruct %5 %6
-%8 = OpTypeImage %4 2D 0 0 0 1 Unknown
-%9 = OpTypeSampler
-%11 = OpTypePointer UniformConstant %8
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 2
+%5 = OpTypeVector %3 4
+%6 = OpTypeStruct %4 %5
+%7 = OpTypeImage %3 2D 0 0 0 1 Unknown
+%8 = OpTypeSampler
+%9 = OpConstant  %3  1.2
+%11 = OpTypePointer UniformConstant %7
 %10 = OpVariable  %11  UniformConstant
-%13 = OpTypePointer UniformConstant %9
+%13 = OpTypePointer UniformConstant %8
 %12 = OpVariable  %13  UniformConstant
-%16 = OpTypePointer Input %5
+%16 = OpTypePointer Input %4
 %15 = OpVariable  %16  Input
 %18 = OpVariable  %16  Input
-%21 = OpTypePointer Output %5
+%21 = OpTypePointer Output %4
 %20 = OpVariable  %21  Output
-%23 = OpTypePointer Output %6
+%23 = OpTypePointer Output %5
 %22 = OpVariable  %23  Output
 %25 = OpTypeFunction %2
-%26 = OpConstant  %4  0.0
-%27 = OpConstant  %4  1.0
-%34 = OpTypePointer Output %4
+%26 = OpConstant  %3  0.0
+%27 = OpConstant  %3  1.0
+%34 = OpTypePointer Output %3
 %36 = OpTypeInt 32 0
 %35 = OpConstant  %36  1
 %41 = OpVariable  %16  Input
 %43 = OpVariable  %23  Output
-%48 = OpTypeSampledImage %8
+%48 = OpTypeSampledImage %7
 %52 = OpTypeBool
 %59 = OpVariable  %23  Output
-%61 = OpConstant  %4  0.5
+%61 = OpConstant  %3  0.5
 %24 = OpFunction  %2  None %25
 %14 = OpLabel
-%17 = OpLoad  %5  %15
-%19 = OpLoad  %5  %18
+%17 = OpLoad  %4  %15
+%19 = OpLoad  %4  %18
 OpBranch %28
 %28 = OpLabel
-%29 = OpVectorTimesScalar  %5  %17 %3
-%30 = OpCompositeConstruct  %6  %29 %26 %27
-%31 = OpCompositeConstruct  %7  %19 %30
-%32 = OpCompositeExtract  %5  %31 0
+%29 = OpVectorTimesScalar  %4  %17 %9
+%30 = OpCompositeConstruct  %5  %29 %26 %27
+%31 = OpCompositeConstruct  %6  %19 %30
+%32 = OpCompositeExtract  %4  %31 0
 OpStore %20 %32
-%33 = OpCompositeExtract  %6  %31 1
+%33 = OpCompositeExtract  %5  %31 1
 OpStore %22 %33
 %37 = OpAccessChain  %34  %22 %35
-%38 = OpLoad  %4  %37
-%39 = OpFNegate  %4  %38
+%38 = OpLoad  %3  %37
+%39 = OpFNegate  %3  %38
 OpStore %37 %39
 OpReturn
 OpFunctionEnd
 %44 = OpFunction  %2  None %25
 %40 = OpLabel
-%42 = OpLoad  %5  %41
-%45 = OpLoad  %8  %10
-%46 = OpLoad  %9  %12
+%42 = OpLoad  %4  %41
+%45 = OpLoad  %7  %10
+%46 = OpLoad  %8  %12
 OpBranch %47
 %47 = OpLabel
 %49 = OpSampledImage  %48  %45 %46
-%50 = OpImageSampleImplicitLod  %6  %49 %42
-%51 = OpCompositeExtract  %4  %50 3
+%50 = OpImageSampleImplicitLod  %5  %49 %42
+%51 = OpCompositeExtract  %3  %50 3
 %53 = OpFOrdEqual  %52  %51 %26
 OpSelectionMerge %54 None
 OpBranchConditional %53 %55 %54
 %55 = OpLabel
 OpKill
 %54 = OpLabel
-%56 = OpCompositeExtract  %4  %50 3
-%57 = OpVectorTimesScalar  %6  %50 %56
+%56 = OpCompositeExtract  %3  %50 3
+%57 = OpVectorTimesScalar  %5  %50 %56
 OpStore %43 %57
 OpReturn
 OpFunctionEnd
@@ -112,7 +112,7 @@ OpFunctionEnd
 %58 = OpLabel
 OpBranch %62
 %62 = OpLabel
-%63 = OpCompositeConstruct  %6  %26 %61 %26 %61
+%63 = OpCompositeConstruct  %5  %26 %61 %26 %61
 OpStore %59 %63
 OpReturn
 OpFunctionEnd

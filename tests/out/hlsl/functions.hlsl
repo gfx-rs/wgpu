@@ -1,4 +1,3 @@
-
 float2 test_fma()
 {
     float2 a = float2(2.0, 2.0);

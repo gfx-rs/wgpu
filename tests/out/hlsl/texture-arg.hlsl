@@ -1,4 +1,3 @@
-
 Texture2D<float4> Texture : register(t0);
 SamplerState Sampler : register(s1);
 

@@ -405,6 +405,10 @@ fn write_function_expressions(
             E::Literal(_) => ("Literal".into(), 2),
             E::Constant(_) => ("Constant".into(), 2),
             E::ZeroValue(_) => ("ZeroValue".into(), 2),
+            E::Compose { ref components, .. } => {
+                payload = Some(Payload::Arguments(components));
+                ("Compose".into(), 3)
+            }
             E::Access { base, index } => {
                 edges.insert("base", base);
                 edges.insert("index", index);
@@ -425,10 +429,6 @@ fn write_function_expressions(
             } => {
                 edges.insert("vector", vector);
                 (format!("Swizzle{:?}", &pattern[..size as usize]).into(), 3)
-            }
-            E::Compose { ref components, .. } => {
-                payload = Some(Payload::Arguments(components));
-                ("Compose".into(), 3)
             }
             E::FunctionArgument(index) => (format!("Argument[{index}]").into(), 1),
             E::GlobalVariable(h) => {

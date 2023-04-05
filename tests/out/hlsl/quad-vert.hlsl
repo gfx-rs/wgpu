@@ -1,4 +1,3 @@
-
 struct gl_PerVertex {
     float4 gl_Position : SV_Position;
     float gl_PointSize;
@@ -12,12 +11,6 @@ struct type_9 {
     float4 gl_Position : SV_Position;
 };
 
-typedef float ret_Constructarray1_float_[1];
-ret_Constructarray1_float_ Constructarray1_float_(float arg0) {
-    float ret[1] = { arg0 };
-    return ret;
-}
-
 gl_PerVertex Constructgl_PerVertex(float4 arg0, float arg1, float arg2[1], float arg3[1]) {
     gl_PerVertex ret = (gl_PerVertex)0;
     ret.gl_Position = arg0;
@@ -29,7 +22,7 @@ gl_PerVertex Constructgl_PerVertex(float4 arg0, float arg1, float arg2[1], float
 
 static float2 v_uv = (float2)0;
 static float2 a_uv_1 = (float2)0;
-static gl_PerVertex perVertexStruct = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, Constructarray1_float_(0.0), Constructarray1_float_(0.0));
+static gl_PerVertex perVertexStruct = Constructgl_PerVertex(float4(0.0, 0.0, 0.0, 1.0), 1.0, (float[1])0, (float[1])0);
 static float2 a_pos_1 = (float2)0;
 
 struct VertexOutput_main {
@@ -39,10 +32,10 @@ struct VertexOutput_main {
 
 void main_1()
 {
-    float2 _expr12 = a_uv_1;
-    v_uv = _expr12;
-    float2 _expr13 = a_pos_1;
-    perVertexStruct.gl_Position = float4(_expr13.x, _expr13.y, 0.0, 1.0);
+    float2 _expr8 = a_uv_1;
+    v_uv = _expr8;
+    float2 _expr9 = a_pos_1;
+    perVertexStruct.gl_Position = float4(_expr9.x, _expr9.y, 0.0, 1.0);
     return;
 }
 

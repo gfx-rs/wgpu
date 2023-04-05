@@ -1,6 +1,3 @@
-static const float3 c_ambient = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
-static const uint c_max_lights = 10;
-
 struct Globals {
     row_major float4x4 view_proj;
     uint4 num_lights;
@@ -22,6 +19,9 @@ struct Light {
     float4 pos;
     float4 color;
 };
+
+static const float3 c_ambient = float3(0.05, 0.05, 0.05);
+static const uint c_max_lights = 10u;
 
 cbuffer u_globals : register(b0) { Globals u_globals; }
 cbuffer u_entity : register(b0, space1) { Entity u_entity; }
@@ -92,13 +92,13 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
     uint i = (uint)0;
 
     float3 normal_1 = normalize(in_.world_normal);
-    color = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    color = c_ambient;
     i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            uint _expr39 = i;
-            i = (_expr39 + 1u);
+            uint _expr40 = i;
+            i = (_expr40 + 1u);
         }
         loop_init = false;
         uint _expr7 = i;
@@ -130,13 +130,13 @@ float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinp
     uint i_1 = (uint)0;
 
     float3 normal_2 = normalize(in_1.world_normal);
-    color_1 = float3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    color_1 = c_ambient;
     i_1 = 0u;
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {
-            uint _expr39 = i_1;
-            i_1 = (_expr39 + 1u);
+            uint _expr40 = i_1;
+            i_1 = (_expr40 + 1u);
         }
         loop_init_1 = false;
         uint _expr7 = i_1;

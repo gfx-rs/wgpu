@@ -1,4 +1,3 @@
-
 struct WStruct {
     uint arr[512];
     int atom;

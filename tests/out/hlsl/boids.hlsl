@@ -1,5 +1,3 @@
-static const uint NUM_PARTICLES = 1500;
-
 struct Particle {
     float2 pos;
     float2 vel;
@@ -14,6 +12,8 @@ struct SimParams {
     float rule2Scale;
     float rule3Scale;
 };
+
+static const uint NUM_PARTICLES = 1500u;
 
 cbuffer params : register(b0) { SimParams params; }
 ByteAddressBuffer particlesSrc : register(t1);

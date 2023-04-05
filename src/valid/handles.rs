@@ -40,6 +40,7 @@ impl super::Validator {
             ref global_variables,
             ref types,
             ref special_types,
+            ref const_expressions,
         } = module;
 
         // NOTE: Types being first is important. All other forms of validation depend on this.
@@ -70,24 +71,24 @@ impl super::Validator {
             }
         }
 
-        let validate_type = |handle| Self::validate_type_handle(handle, types);
-
-        for (this_handle, constant) in constants.iter() {
-            let &crate::Constant {
-                name: _,
-                specialization: _,
-                ref inner,
-            } = constant;
-            match *inner {
-                crate::ConstantInner::Scalar { .. } => (),
-                crate::ConstantInner::Composite { ty, ref components } => {
-                    validate_type(ty)?;
-                    this_handle.check_dep_iter(components.iter().copied())?;
-                }
-            }
+        for handle_and_expr in const_expressions.iter() {
+            Self::validate_const_expression_handles(handle_and_expr, constants, types)?;
         }
 
-        let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
+        let validate_type = |handle| Self::validate_type_handle(handle, types);
+        let validate_const_expr =
+            |handle| Self::validate_expression_handle(handle, const_expressions);
+
+        for (_handle, constant) in constants.iter() {
+            let &crate::Constant {
+                name: _,
+                r#override: _,
+                ty,
+                init,
+            } = constant;
+            validate_type(ty)?;
+            validate_const_expr(init)?;
+        }
 
         for (_handle, global_variable) in global_variables.iter() {
             let &crate::GlobalVariable {
@@ -99,7 +100,7 @@ impl super::Validator {
             } = global_variable;
             validate_type(ty)?;
             if let Some(init_expr) = init {
-                validate_constant(init_expr)?;
+                validate_const_expr(init_expr)?;
             }
         }
 
@@ -131,7 +132,7 @@ impl super::Validator {
                 let &crate::LocalVariable { name: _, ty, init } = local_variable;
                 validate_type(ty)?;
                 if let Some(init_constant) = init {
-                    validate_constant(init_constant)?;
+                    validate_const_expr(init_constant)?;
                 }
             }
 
@@ -143,6 +144,7 @@ impl super::Validator {
                 Self::validate_expression_handles(
                     handle_and_expr,
                     constants,
+                    const_expressions,
                     types,
                     local_variables,
                     global_variables,
@@ -202,9 +204,36 @@ impl super::Validator {
         handle.check_valid_for(functions).map(|_| ())
     }
 
+    fn validate_const_expression_handles(
+        (handle, expression): (Handle<crate::Expression>, &crate::Expression),
+        constants: &Arena<crate::Constant>,
+        types: &UniqueArena<crate::Type>,
+    ) -> Result<(), InvalidHandleError> {
+        let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
+        let validate_type = |handle| Self::validate_type_handle(handle, types);
+
+        match *expression {
+            crate::Expression::Literal(_) => {}
+            crate::Expression::Constant(constant) => {
+                validate_constant(constant)?;
+            }
+            crate::Expression::ZeroValue(ty) => {
+                validate_type(ty)?;
+            }
+            crate::Expression::Compose { ty, ref components } => {
+                validate_type(ty)?;
+                handle.check_dep_iter(components.iter().copied())?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn validate_expression_handles(
         (handle, expression): (Handle<crate::Expression>, &crate::Expression),
         constants: &Arena<crate::Constant>,
+        const_expressions: &Arena<crate::Expression>,
         types: &UniqueArena<crate::Type>,
         local_variables: &Arena<crate::LocalVariable>,
         global_variables: &Arena<crate::GlobalVariable>,
@@ -213,6 +242,8 @@ impl super::Validator {
         current_function: Option<Handle<crate::Function>>,
     ) -> Result<(), InvalidHandleError> {
         let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
+        let validate_const_expr =
+            |handle| Self::validate_expression_handle(handle, const_expressions);
         let validate_type = |handle| Self::validate_type_handle(handle, types);
 
         match *expression {
@@ -222,18 +253,18 @@ impl super::Validator {
             crate::Expression::AccessIndex { base, .. } => {
                 handle.check_dep(base)?;
             }
-            crate::Expression::Literal(_value) => {}
-            crate::Expression::Constant(constant) => {
-                validate_constant(constant)?;
-            }
-            crate::Expression::ZeroValue(ty) => {
-                validate_type(ty)?;
-            }
             crate::Expression::Splat { value, .. } => {
                 handle.check_dep(value)?;
             }
             crate::Expression::Swizzle { vector, .. } => {
                 handle.check_dep(vector)?;
+            }
+            crate::Expression::Literal(_) => {}
+            crate::Expression::Constant(constant) => {
+                validate_constant(constant)?;
+            }
+            crate::Expression::ZeroValue(ty) => {
+                validate_type(ty)?;
             }
             crate::Expression::Compose { ty, ref components } => {
                 validate_type(ty)?;
@@ -260,7 +291,7 @@ impl super::Validator {
                 depth_ref,
             } => {
                 if let Some(offset) = offset {
-                    validate_constant(offset)?;
+                    validate_const_expr(offset)?;
                 }
 
                 handle

@@ -7,10 +7,9 @@ use super::{
     Error, ErrorKind, Frontend, Result,
 };
 use crate::{
-    BinaryOperator, Block, Constant, DerivativeAxis as Axis, DerivativeControl as Ctrl, Expression,
-    Handle, ImageClass, ImageDimension as Dim, ImageQuery, MathFunction, Module,
-    RelationalFunction, SampleLevel, ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator,
-    VectorSize,
+    BinaryOperator, Block, DerivativeAxis as Axis, DerivativeControl as Ctrl, Expression, Handle,
+    ImageClass, ImageDimension as Dim, ImageQuery, MathFunction, Module, RelationalFunction,
+    SampleLevel, ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator, VectorSize,
 };
 
 impl crate::ScalarKind {
@@ -2183,7 +2182,7 @@ fn texture_call(
     image: Handle<Expression>,
     level: SampleLevel,
     comps: CoordComponents,
-    offset: Option<Handle<Constant>>,
+    offset: Option<Handle<Expression>>,
     body: &mut Block,
     meta: Span,
 ) -> Result<Handle<Expression>> {

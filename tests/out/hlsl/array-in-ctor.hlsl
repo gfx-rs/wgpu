@@ -1,4 +1,3 @@
-
 struct Ah {
     float inner[2];
 };

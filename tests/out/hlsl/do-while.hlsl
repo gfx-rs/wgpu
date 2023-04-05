@@ -1,11 +1,10 @@
-
 void fb1_(inout bool cond)
 {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            bool _expr6 = cond;
-            if (!(_expr6)) {
+            bool _expr2 = cond;
+            if (!(_expr2)) {
                 break;
             }
         }

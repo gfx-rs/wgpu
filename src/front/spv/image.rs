@@ -503,6 +503,10 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 spirv::ImageOperands::CONST_OFFSET => {
                     let offset_constant = self.next()?;
                     let offset_handle = self.lookup_constant.lookup(offset_constant)?.handle;
+                    let offset_handle = ctx.const_expressions.append(
+                        crate::Expression::Constant(offset_handle),
+                        Default::default(),
+                    );
                     offset = Some(offset_handle);
                     words_left -= 1;
                 }

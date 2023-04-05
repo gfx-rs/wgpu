@@ -49,10 +49,8 @@ struct FragmentOutput {
 }
 
 const MAX_POINT_LIGHTS: i32 = 10;
-
 const MAX_DIRECTIONAL_LIGHTS: i32 = 1;
-
-const PI: f32 = 3.1415927410125732;
+const PI: f32 = 3.1415927;
 
 var<private> v_WorldPosition_1: vec3<f32>;
 var<private> v_WorldNormal_1: vec3<f32>;

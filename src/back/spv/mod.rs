@@ -616,6 +616,7 @@ pub struct Writer {
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
+    /// Indexed by const-expression handle indexes
     constant_ids: Vec<Word>,
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: Vec<GlobalVariable>,

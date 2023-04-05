@@ -495,7 +495,6 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             // always uniform
-            E::Literal(_) | E::Constant(_) | E::ZeroValue(_) => Uniformity::new(),
             E::Splat { size: _, value } => Uniformity {
                 non_uniform_result: self.add_ref(value),
                 requirements: UniformityRequirements::empty(),
@@ -504,6 +503,7 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(vector),
                 requirements: UniformityRequirements::empty(),
             },
+            E::Literal(_) | E::Constant(_) | E::ZeroValue(_) => Uniformity::new(),
             E::Compose { ref components, .. } => {
                 let non_uniform_result = components
                     .iter()
@@ -969,6 +969,18 @@ impl FunctionInfo {
 }
 
 impl ModuleInfo {
+    /// Populates `self.const_expression_types`
+    pub(super) fn process_const_expression(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        resolve_context: &ResolveContext,
+        gctx: crate::proc::GlobalCtx,
+    ) -> Result<(), super::ConstExpressionError> {
+        self.const_expression_types[handle.index()] =
+            resolve_context.resolve(&gctx.const_expressions[handle], |h| Ok(&self[h]))?;
+        Ok(())
+    }
+
     /// Builds the `FunctionInfo` based on the function, and validates the
     /// uniform control flow if required by the expressions of this function.
     pub(super) fn process_function(
@@ -1022,18 +1034,6 @@ impl ModuleInfo {
 fn uniform_control_flow() {
     use crate::{Expression as E, Statement as S};
 
-    let mut constant_arena = Arena::new();
-    let constant = constant_arena.append(
-        crate::Constant {
-            name: None,
-            specialization: None,
-            inner: crate::ConstantInner::Scalar {
-                width: 4,
-                value: crate::ScalarValue::Uint(0),
-            },
-        },
-        Default::default(),
-    );
     let mut type_arena = crate::UniqueArena::new();
     let ty = type_arena.insert(
         crate::Type {
@@ -1070,7 +1070,7 @@ fn uniform_control_flow() {
 
     let mut expressions = Arena::new();
     // checks the uniform control flow
-    let constant_expr = expressions.append(E::Constant(constant), Default::default());
+    let constant_expr = expressions.append(E::Literal(crate::Literal::U32(0)), Default::default());
     // checks the non-uniform control flow
     let derivative_expr = expressions.append(
         E::Derivative {
@@ -1110,7 +1110,7 @@ fn uniform_control_flow() {
         sampling: crate::FastHashSet::default(),
     };
     let resolve_context = ResolveContext {
-        constants: &constant_arena,
+        constants: &Arena::new(),
         types: &type_arena,
         special_types: &crate::SpecialTypes::default(),
         global_vars: &global_var_arena,

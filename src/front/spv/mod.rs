@@ -221,6 +221,11 @@ impl Decoration {
         }
     }
 
+    fn specialization(&self) -> crate::Override {
+        self.specialization
+            .map_or(crate::Override::None, crate::Override::ByNameOrId)
+    }
+
     const fn resource_binding(&self) -> Option<crate::ResourceBinding> {
         match *self {
             Decoration {
@@ -536,6 +541,7 @@ struct BlockContext<'function> {
     local_arena: &'function mut Arena<crate::LocalVariable>,
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
+    const_expressions: &'function mut Arena<crate::Expression>,
     /// Type arena of the module being processed
     type_arena: &'function UniqueArena<crate::Type>,
     /// Global arena of the module being processed
@@ -584,8 +590,6 @@ pub struct Frontend<I> {
     // so that in the IR any called function is already known.
     function_call_graph: GraphMap<spirv::Word, (), petgraph::Directed>,
     options: Options,
-    index_constants: Vec<Handle<crate::Constant>>,
-    index_constant_expressions: Vec<Handle<crate::Expression>>,
 
     /// Maps for a switch from a case target to the respective body and associated literals that
     /// use that target block id.
@@ -636,8 +640,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             dummy_functions: Arena::new(),
             function_call_graph: GraphMap::new(),
             options: options.clone(),
-            index_constants: Vec::new(),
-            index_constant_expressions: Vec::new(),
             switch_cases: indexmap::IndexMap::default(),
             gl_per_vertex_builtin_access: FastHashSet::default(),
         }
@@ -1395,7 +1397,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         inst.expect(5)?;
                         let init_id = self.next()?;
                         let lconst = self.lookup_constant.lookup(init_id)?;
-                        Some(lconst.handle)
+                        Some(
+                            ctx.const_expressions
+                                .append(crate::Expression::Constant(lconst.handle), span),
+                        )
                     } else {
                         None
                     };
@@ -1531,11 +1536,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let index_expr_handle = get_expr_handle!(access_id, &index_expr);
                         let index_expr_data = &ctx.expressions[index_expr.handle];
                         let index_maybe = match *index_expr_data {
-                            crate::Expression::Constant(const_handle) => {
-                                Some(ctx.const_arena[const_handle].to_array_length().ok_or(
-                                    Error::InvalidAccess(crate::Expression::Constant(const_handle)),
-                                )?)
-                            }
+                            crate::Expression::Constant(const_handle) => Some(
+                                ctx.gctx()
+                                    .eval_expr_to_u32(ctx.const_arena[const_handle].init)
+                                    .map_err(|_| {
+                                        Error::InvalidAccess(crate::Expression::Constant(
+                                            const_handle,
+                                        ))
+                                    })?,
+                            ),
                             _ => None,
                         };
 
@@ -3731,13 +3740,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 },
             );
         }
-        // register special constants
-        self.index_constant_expressions.clear();
-        for &con_handle in self.index_constants.iter() {
-            let span = constants.get_span(con_handle);
-            let handle = expressions.append(crate::Expression::Constant(con_handle), span);
-            self.index_constant_expressions.push(handle);
-        }
         // register constants
         for (&id, con) in self.lookup_constant.iter() {
             let span = constants.get_span(con.handle);
@@ -3902,23 +3904,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             crate::Module::default()
         };
 
-        // register indexing constants
-        self.index_constants.clear();
-        for i in 0..4 {
-            let handle = module.constants.append(
-                crate::Constant {
-                    name: None,
-                    specialization: None,
-                    inner: crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: crate::ScalarValue::Sint(i),
-                    },
-                },
-                Default::default(),
-            );
-            self.index_constants.push(handle);
-        }
-
         self.layouter.clear();
         self.dummy_functions = Arena::new();
         self.lookup_function.clear();
@@ -3965,9 +3950,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
-                Op::ConstantNull | Op::Undef => self
-                    .parse_null_constant(inst, &module.types, &mut module.constants)
-                    .map(|_| ()),
+                Op::ConstantNull | Op::Undef => self.parse_null_constant(inst, &mut module),
                 Op::ConstantTrue => self.parse_bool_constant(inst, true, &mut module),
                 Op::ConstantFalse => self.parse_bool_constant(inst, false, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
@@ -4892,21 +4875,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = match module.types[ty].inner {
+        let literal = match module.types[ty].inner {
             crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Uint,
                 width,
             } => {
                 let low = self.next()?;
-                let high = if width > 4 {
-                    inst.expect(5)?;
-                    self.next()?
-                } else {
-                    0
-                };
-                crate::ConstantInner::Scalar {
-                    width,
-                    value: crate::ScalarValue::Uint((u64::from(high) << 32) | u64::from(low)),
+                match width {
+                    4 => crate::Literal::U32(low),
+                    _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
             }
             crate::TypeInner::Scalar {
@@ -4914,17 +4891,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 width,
             } => {
                 let low = self.next()?;
-                let high = if width > 4 {
-                    inst.expect(5)?;
-                    self.next()?
-                } else {
-                    0
-                };
-                crate::ConstantInner::Scalar {
-                    width,
-                    value: crate::ScalarValue::Sint(
-                        (i64::from(high as i32) << 32) | ((i64::from(low as i32) << 32) >> 32),
-                    ),
+                match width {
+                    4 => crate::Literal::I32(low as i32),
+                    _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
             }
             crate::TypeInner::Scalar {
@@ -4932,18 +4901,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 width,
             } => {
                 let low = self.next()?;
-                let extended = match width {
-                    4 => f64::from(f32::from_bits(low)),
+                match width {
+                    4 => crate::Literal::F32(f32::from_bits(low)),
                     8 => {
                         inst.expect(5)?;
                         let high = self.next()?;
-                        f64::from_bits((u64::from(high) << 32) | u64::from(low))
+                        crate::Literal::F64(f64::from_bits(
+                            (u64::from(high) << 32) | u64::from(low),
+                        ))
                     }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
-                };
-                crate::ConstantInner::Scalar {
-                    width,
-                    value: crate::ScalarValue::Float(extended),
                 }
             }
             _ => return Err(Error::UnsupportedType(type_lookup.handle)),
@@ -4951,16 +4918,22 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
+        let span = self.span_from_with_op(start);
+
+        let init = module
+            .const_expressions
+            .append(crate::Expression::Literal(literal), span);
         self.lookup_constant.insert(
             id,
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        specialization: decor.specialization,
+                        r#override: decor.specialization(),
                         name: decor.name,
-                        inner,
+                        ty,
+                        init,
                     },
-                    self.span_from_with_op(start),
+                    span,
                 ),
                 type_id,
             },
@@ -4977,27 +4950,41 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(3)?;
         let type_id = self.next()?;
+        let id = self.next()?;
+
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
-        let id = self.next()?;
 
         let mut components = Vec::with_capacity(inst.wc as usize - 3);
         for _ in 0..components.capacity() {
+            let start = self.data_offset;
             let component_id = self.next()?;
+            let span = self.span_from_with_op(start);
             let constant = self.lookup_constant.lookup(component_id)?;
-            components.push(constant.handle);
+            let expr = module
+                .const_expressions
+                .append(crate::Expression::Constant(constant.handle), span);
+            components.push(expr);
         }
 
+        let decor = self.future_decor.remove(&id).unwrap_or_default();
+
+        let span = self.span_from_with_op(start);
+
+        let init = module
+            .const_expressions
+            .append(crate::Expression::Compose { ty, components }, span);
         self.lookup_constant.insert(
             id,
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                        specialization: None,
-                        inner: crate::ConstantInner::Composite { ty, components },
+                        r#override: decor.specialization(),
+                        name: decor.name,
+                        ty,
+                        init,
                     },
-                    self.span_from_with_op(start),
+                    span,
                 ),
                 type_id,
             },
@@ -5008,30 +4995,35 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_null_constant(
         &mut self,
         inst: Instruction,
-        types: &UniqueArena<crate::Type>,
-        constants: &mut Arena<crate::Constant>,
-    ) -> Result<(u32, u32, Handle<crate::Constant>), Error> {
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
         let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(3)?;
         let type_id = self.next()?;
         let id = self.next()?;
         let span = self.span_from_with_op(start);
+
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let inner = null::generate_null_constant(ty, types, constants, span)?;
-        let handle = constants.append(
+        let decor = self.future_decor.remove(&id).unwrap_or_default();
+
+        let init = module
+            .const_expressions
+            .append(crate::Expression::ZeroValue(ty), span);
+        let handle = module.constants.append(
             crate::Constant {
-                name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                specialization: None, //TODO
-                inner,
+                r#override: decor.specialization(),
+                name: decor.name,
+                ty,
+                init,
             },
             span,
         );
         self.lookup_constant
             .insert(id, LookupConstant { handle, type_id });
-        Ok((type_id, id, handle))
+        Ok(())
     }
 
     fn parse_bool_constant(
@@ -5045,17 +5037,28 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         inst.expect(3)?;
         let type_id = self.next()?;
         let id = self.next()?;
+        let span = self.span_from_with_op(start);
 
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let ty = type_lookup.handle;
+
+        let decor = self.future_decor.remove(&id).unwrap_or_default();
+
+        let init = module.const_expressions.append(
+            crate::Expression::Literal(crate::Literal::Bool(value)),
+            span,
+        );
         self.lookup_constant.insert(
             id,
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        name: self.future_decor.remove(&id).and_then(|dec| dec.name),
-                        specialization: None, //TODO
-                        inner: crate::ConstantInner::boolean(value),
+                        r#override: decor.specialization(),
+                        name: decor.name,
+                        ty,
+                        init,
                     },
-                    self.span_from_with_op(start),
+                    span,
                 ),
                 type_id,
             },
@@ -5076,9 +5079,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let storage_class = self.next()?;
         let init = if inst.wc > 4 {
             inst.expect(5)?;
+            let start = self.data_offset;
             let init_id = self.next()?;
+            let span = self.span_from_with_op(start);
             let lconst = self.lookup_constant.lookup(init_id)?;
-            Some(lconst.handle)
+            let expr = module
+                .const_expressions
+                .append(crate::Expression::Constant(lconst.handle), span);
+            Some(expr)
         } else {
             None
         };
@@ -5211,8 +5219,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         match null::generate_default_built_in(
                             Some(built_in),
                             ty,
-                            &module.types,
-                            &mut module.constants,
+                            &mut module.const_expressions,
                             span,
                         ) {
                             Ok(handle) => Some(handle),
@@ -5225,37 +5232,25 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     Some(crate::Binding::Location { .. }) => None,
                     None => match module.types[ty].inner {
                         crate::TypeInner::Struct { ref members, .. } => {
-                            // A temporary to avoid borrowing `module.types`
-                            let pairs = members
-                                .iter()
-                                .map(|member| {
-                                    let built_in = match member.binding {
-                                        Some(crate::Binding::BuiltIn(built_in)) => Some(built_in),
-                                        _ => None,
-                                    };
-                                    (built_in, member.ty)
-                                })
-                                .collect::<Vec<_>>();
-
                             let mut components = Vec::with_capacity(members.len());
-                            for (built_in, member_ty) in pairs {
+                            for member in members.iter() {
+                                let built_in = match member.binding {
+                                    Some(crate::Binding::BuiltIn(built_in)) => Some(built_in),
+                                    _ => None,
+                                };
                                 let handle = null::generate_default_built_in(
                                     built_in,
-                                    member_ty,
-                                    &module.types,
-                                    &mut module.constants,
+                                    member.ty,
+                                    &mut module.const_expressions,
                                     span,
                                 )?;
                                 components.push(handle);
                             }
-                            Some(module.constants.append(
-                                crate::Constant {
-                                    name: None,
-                                    specialization: None,
-                                    inner: crate::ConstantInner::Composite { ty, components },
-                                },
-                                span,
-                            ))
+                            Some(
+                                module
+                                    .const_expressions
+                                    .append(crate::Expression::Compose { ty, components }, span),
+                            )
                         }
                         _ => None,
                     },
@@ -5322,7 +5317,11 @@ fn resolve_constant(
     gctx: crate::proc::GlobalCtx,
     constant: Handle<crate::Constant>,
 ) -> Option<u32> {
-    gctx.constants[constant].to_array_length()
+    match gctx.const_expressions[gctx.constants[constant].init] {
+        crate::Expression::Literal(crate::Literal::U32(id)) => Some(id),
+        crate::Expression::Literal(crate::Literal::I32(id)) => Some(id as u32),
+        _ => None,
+    }
 }
 
 pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, Error> {

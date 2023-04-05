@@ -9,16 +9,21 @@ struct Foo {
     vec4 a;
     int b;
 };
+const vec4 v_f32_one = vec4(1.0, 1.0, 1.0, 1.0);
+const vec4 v_f32_zero = vec4(0.0, 0.0, 0.0, 0.0);
+const vec4 v_f32_half = vec4(0.5, 0.5, 0.5, 0.5);
+const ivec4 v_i32_one = ivec4(1, 1, 1, 1);
+
 
 vec4 builtins() {
     int s1_ = (true ? 1 : 0);
-    vec4 s2_ = (true ? vec4(1.0, 1.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 0.0));
-    vec4 s3_ = mix(vec4(1.0, 1.0, 1.0, 1.0), vec4(0.0, 0.0, 0.0, 0.0), bvec4(false, false, false, false));
-    vec4 m1_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), vec4(0.5, 0.5, 0.5, 0.5));
-    vec4 m2_ = mix(vec4(0.0, 0.0, 0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0), 0.1);
-    float b1_ = intBitsToFloat(ivec4(1, 1, 1, 1).x);
-    vec4 b2_ = intBitsToFloat(ivec4(1, 1, 1, 1));
-    ivec4 v_i32_zero = ivec4(vec4(0.0, 0.0, 0.0, 0.0));
+    vec4 s2_ = (true ? v_f32_one : v_f32_zero);
+    vec4 s3_ = mix(v_f32_one, v_f32_zero, bvec4(false, false, false, false));
+    vec4 m1_ = mix(v_f32_zero, v_f32_one, v_f32_half);
+    vec4 m2_ = mix(v_f32_zero, v_f32_one, 0.1);
+    float b1_ = intBitsToFloat(v_i32_one.x);
+    vec4 b2_ = intBitsToFloat(v_i32_one);
+    ivec4 v_i32_zero = ivec4(v_f32_zero);
     return (((((vec4((ivec4(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
@@ -243,15 +248,15 @@ void assignment() {
     a_1 = (_e27 << 2u);
     int _e30 = a_1;
     a_1 = (_e30 >> 1u);
-    int _e32 = a_1;
-    a_1 = (_e32 + 1);
-    int _e35 = a_1;
-    a_1 = (_e35 - 1);
+    int _e33 = a_1;
+    a_1 = (_e33 + 1);
+    int _e36 = a_1;
+    a_1 = (_e36 - 1);
     vec0_ = ivec3(0);
-    int _e42 = vec0_.y;
-    vec0_.y = (_e42 + 1);
-    int _e47 = vec0_.y;
-    vec0_.y = (_e47 - 1);
+    int _e43 = vec0_.y;
+    vec0_.y = (_e43 + 1);
+    int _e48 = vec0_.y;
+    vec0_.y = (_e48 - 1);
     return;
 }
 
@@ -268,7 +273,7 @@ void negation_avoids_prefix_decrement() {
 void main() {
     vec4 _e0 = builtins();
     vec4 _e1 = splat();
-    vec3 _e4 = bool_cast(vec4(1.0, 1.0, 1.0, 1.0).xyz);
+    vec3 _e4 = bool_cast(v_f32_one.xyz);
     float _e5 = constructors();
     logical();
     arithmetic();

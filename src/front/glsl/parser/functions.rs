@@ -1,5 +1,6 @@
 use crate::front::glsl::context::ExprPos;
 use crate::front::glsl::Span;
+use crate::Literal;
 use crate::{
     front::glsl::{
         ast::ParameterQualifier,
@@ -9,7 +10,7 @@ use crate::{
         variables::VarDeclaration,
         Error, ErrorKind, Frontend, Result,
     },
-    Block, ConstantInner, Expression, ScalarValue, Statement, SwitchCase, UnaryOperator,
+    Block, Expression, Statement, SwitchCase, UnaryOperator,
 };
 
 impl<'source> ParsingContext<'source> {
@@ -194,20 +195,16 @@ impl<'source> ParsingContext<'source> {
                             let expr = self.parse_expression(frontend, ctx, &mut stmt, body)?;
                             let (root, meta) =
                                 ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?;
-                            let constant = frontend.solve_constant(ctx, root, meta)?;
+                            let const_expr = frontend.solve_constant(ctx, root, meta)?;
 
-                            match frontend.module.constants[constant].inner {
-                                ConstantInner::Scalar {
-                                    value: ScalarValue::Sint(int),
-                                    ..
-                                } => match uint {
-                                    true => crate::SwitchValue::U32(int as u32),
-                                    false => crate::SwitchValue::I32(int as i32),
+                            match frontend.module.const_expressions[const_expr] {
+                                Expression::Literal(Literal::I32(value)) => match uint {
+                                    true => crate::SwitchValue::U32(value as u32),
+                                    false => crate::SwitchValue::I32(value),
                                 },
-                                ConstantInner::Scalar {
-                                    value: ScalarValue::Uint(int),
-                                    ..
-                                } => crate::SwitchValue::U32(int as u32),
+                                Expression::Literal(Literal::U32(value)) => {
+                                    crate::SwitchValue::U32(value)
+                                }
                                 _ => {
                                     frontend.errors.push(Error {
                                         kind: ErrorKind::SemanticError(

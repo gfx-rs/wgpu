@@ -428,4 +428,5 @@
             sampling: [],
         ),
     ],
+    const_expression_types: [],
 )

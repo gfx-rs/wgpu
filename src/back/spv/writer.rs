@@ -1213,6 +1213,36 @@ impl Writer {
         null_id
     }
 
+    fn write_constant_expr(
+        &mut self,
+        handle: Handle<crate::Expression>,
+        ir_module: &crate::Module,
+    ) -> Result<Word, Error> {
+        let id = match ir_module.const_expressions[handle] {
+            crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
+            crate::Expression::Constant(constant) => {
+                let constant = &ir_module.constants[constant];
+                self.constant_ids[constant.init.index()]
+            }
+            crate::Expression::ZeroValue(ty) => {
+                let type_id = self.get_type_id(LookupType::Handle(ty));
+                self.write_constant_null(type_id)
+            }
+            crate::Expression::Compose { ty, ref components } => {
+                let component_ids: Vec<_> = components
+                    .iter()
+                    .map(|component| self.constant_ids[component.index()])
+                    .collect();
+                self.get_constant_composite(LookupType::Handle(ty), component_ids.as_slice())
+            }
+            _ => unreachable!(),
+        };
+
+        self.constant_ids[handle.index()] = id;
+
+        Ok(id)
+    }
+
     pub(super) fn write_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
         let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
             spirv::Scope::Device
@@ -1796,59 +1826,30 @@ impl Writer {
             }
         }
 
-        self.constant_ids.resize(ir_module.constants.len(), 0);
-        // first, output all the scalar constants
-        for (handle, constant) in ir_module.constants.iter() {
-            match constant.inner {
-                crate::ConstantInner::Composite { .. } => continue,
-                crate::ConstantInner::Scalar { width, ref value } => {
-                    let literal = crate::Literal::from_scalar(*value, width).ok_or(
-                        Error::Validation("Unexpected kind and/or width for Literal"),
-                    )?;
-                    self.constant_ids[handle.index()] = match constant.name {
-                        Some(ref name) => {
-                            let id = self.id_gen.next();
-                            self.write_constant_scalar(id, &literal, Some(name));
-                            id
-                        }
-                        None => self.get_constant_scalar(literal),
-                    };
-                }
-            }
-        }
-
-        // then all types, some of them may rely on constants and struct type set
+        // write all types
         for (handle, _) in ir_module.types.iter() {
             self.write_type_declaration_arena(&ir_module.types, handle)?;
         }
 
-        // then all the composite constants, they rely on types
-        for (handle, constant) in ir_module.constants.iter() {
-            match constant.inner {
-                crate::ConstantInner::Scalar { .. } => continue,
-                crate::ConstantInner::Composite { ty, ref components } => {
-                    let ty = LookupType::Handle(ty);
+        // write all const-expressions as constants
+        self.constant_ids
+            .resize(ir_module.const_expressions.len(), 0);
+        for (handle, _) in ir_module.const_expressions.iter() {
+            self.write_constant_expr(handle, ir_module)?;
+        }
+        debug_assert!(self.constant_ids.iter().all(|&id| id != 0));
 
-                    let mut constituent_ids = Vec::with_capacity(components.len());
-                    for constituent in components.iter() {
-                        let constituent_id = self.constant_ids[constituent.index()];
-                        constituent_ids.push(constituent_id);
-                    }
-
-                    self.constant_ids[handle.index()] = match constant.name {
-                        Some(ref name) => {
-                            let id = self.id_gen.next();
-                            self.write_constant_composite(id, ty, &constituent_ids, Some(name));
-                            id
-                        }
-                        None => self.get_constant_composite(ty, &constituent_ids),
-                    };
+        // write the name of constants on their respective const-expression initializer
+        if self.flags.contains(WriterFlags::DEBUG) {
+            for (_, constant) in ir_module.constants.iter() {
+                if let Some(ref name) = constant.name {
+                    let id = self.constant_ids[constant.init.index()];
+                    self.debugs.push(Instruction::name(id, name));
                 }
             }
         }
-        debug_assert_eq!(self.constant_ids.iter().position(|&id| id == 0), None);
 
-        // now write all globals
+        // write all global variables
         for (handle, var) in ir_module.global_variables.iter() {
             // If a single entry point was specified, only write `OpVariable` instructions
             // for the globals it actually uses. Emit dummies for the others,
@@ -1865,7 +1866,7 @@ impl Writer {
             self.global_variables.push(gvar);
         }
 
-        // all functions
+        // write all functions
         for (handle, ir_function) in ir_module.functions.iter() {
             let info = &mod_info[handle];
             if let Some(index) = ep_index {
@@ -1882,7 +1883,7 @@ impl Writer {
             self.lookup_function.insert(handle, id);
         }
 
-        // and entry points
+        // write all or one entry points
         for (index, ir_ep) in ir_module.entry_points.iter().enumerate() {
             if ep_index.is_some() && ep_index != Some(index) {
                 continue;

@@ -2,8 +2,8 @@ use super::{
     constants::ConstantSolver, context::Context, Error, ErrorKind, Frontend, Result, Span,
 };
 use crate::{
-    proc::ResolveContext, Bytes, Constant, Expression, Handle, ImageClass, ImageDimension,
-    ScalarKind, Type, TypeInner, VectorSize,
+    proc::ResolveContext, Bytes, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
+    TypeInner, VectorSize,
 };
 
 pub fn parse_type(type_name: &str) -> Option<Type> {
@@ -320,11 +320,12 @@ impl Frontend {
         ctx: &Context,
         root: Handle<Expression>,
         meta: Span,
-    ) -> Result<Handle<Constant>> {
+    ) -> Result<Handle<Expression>> {
         let mut solver = ConstantSolver {
             types: &mut self.module.types,
             expressions: &ctx.expressions,
             constants: &mut self.module.constants,
+            const_expressions: &mut self.module.const_expressions,
         };
 
         solver.solve(root).map_err(|e| Error {

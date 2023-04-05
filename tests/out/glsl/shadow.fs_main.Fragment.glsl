@@ -21,6 +21,9 @@ struct Light {
     vec4 pos;
     vec4 color;
 };
+const vec3 c_ambient = vec3(0.05, 0.05, 0.05);
+const uint c_max_lights = 10u;
+
 uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
 
 uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
@@ -49,18 +52,18 @@ void main() {
     vec3 color = vec3(0.0);
     uint i = 0u;
     vec3 normal_1 = normalize(in_.world_normal);
-    color = vec3(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    color = c_ambient;
     i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            uint _e39 = i;
-            i = (_e39 + 1u);
+            uint _e40 = i;
+            i = (_e40 + 1u);
         }
         loop_init = false;
         uint _e7 = i;
         uint _e11 = _group_0_binding_0_fs.num_lights.x;
-        if ((_e7 < min(_e11, 10u))) {
+        if ((_e7 < min(_e11, c_max_lights))) {
         } else {
             break;
         }

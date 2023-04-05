@@ -4,7 +4,7 @@ use crate::front::wgsl::parse::ast;
 use crate::{Handle, Span};
 
 use crate::front::wgsl::error::Error;
-use crate::front::wgsl::lower::{ExpressionContext, Lowerer, OutputContext};
+use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 use crate::proc::TypeResolution;
 
 enum ConcreteConstructorHandle {
@@ -145,7 +145,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         components: &[Handle<ast::Expression<'source>>],
         mut ctx: ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
-        let constructor_h = self.constructor(constructor, ctx.as_output())?;
+        let constructor_h = self.constructor(constructor, ctx.reborrow())?;
 
         let components_h = match *components {
             [] => ComponentsHandle::None,
@@ -153,7 +153,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let span = ctx.ast_expressions.get_span(component);
                 let component = self.expression(component, ctx.reborrow())?;
                 ctx.grow_types(component)?;
-                let ty = &ctx.typifier[component];
+                let ty = &ctx.typifier()[component];
 
                 ComponentsHandle::One {
                     component,
@@ -179,7 +179,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .collect();
 
                 ctx.grow_types(component)?;
-                let ty = &ctx.typifier[component];
+                let ty = &ctx.typifier()[component];
 
                 ComponentsHandle::Many {
                     components,
@@ -195,14 +195,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         );
         let expr = match (components, constructor) {
             // Empty constructor
-            (Components::None, dst_ty) => {
-                let ty = match dst_ty {
-                    ConcreteConstructor::Type(ty, _) => ty,
-                    _ => return Err(Error::TypeNotInferrable(ty_span)),
-                };
-
-                return Ok(ctx.interrupt_emitter(crate::Expression::ZeroValue(ty), span));
-            }
+            (Components::None, dst_ty) => match dst_ty {
+                ConcreteConstructor::Type(ty, _) => {
+                    return Ok(ctx.interrupt_emitter(crate::Expression::ZeroValue(ty), span))
+                }
+                _ => return Err(Error::TypeNotInferrable(ty_span)),
+            },
 
             // Scalar constructor & conversion (scalar -> scalar)
             (
@@ -402,7 +400,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let components = components
                     .chunks(rows as usize)
                     .map(|vec_components| {
-                        ctx.naga_expressions.append(
+                        ctx.append_expression(
                             crate::Expression::Compose {
                                 ty: vec_ty,
                                 components: Vec::from(vec_components),
@@ -525,53 +523,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             _ => return Err(Error::TypeNotConstructible(ty_span)),
         };
 
-        let expr = ctx.naga_expressions.append(expr, span);
+        let expr = ctx.append_expression(expr, span);
         Ok(expr)
-    }
-
-    /// Build a Naga IR [`ConstantInner`] given a WGSL construction expression.
-    ///
-    /// Given `constructor`, representing the head of a WGSL [`type constructor
-    /// expression`], and a slice of [`ast::Expression`] handles representing
-    /// the constructor's arguments, build a Naga [`ConstantInner`] value
-    /// representing the given value.
-    ///
-    /// If `constructor` is for a composite type, this may entail adding new
-    /// [`Type`]s and [`Constant`]s to [`ctx.module`], if it doesn't already
-    /// have what we need.
-    ///
-    /// If the arguments cannot be evaluated at compile time, return an error.
-    ///
-    /// [`ConstantInner`]: crate::ConstantInner
-    /// [`type constructor expression`]: https://gpuweb.github.io/gpuweb/wgsl/#type-constructor-expr
-    /// [`Function::expressions`]: ast::Function::expressions
-    /// [`TranslationUnit::global_expressions`]: ast::TranslationUnit::global_expressions
-    /// [`Type`]: crate::Type
-    /// [`Constant`]: crate::Constant
-    /// [`ctx.module`]: OutputContext::module
-    pub fn const_construct(
-        &mut self,
-        span: Span,
-        constructor: &ast::ConstructorType<'source>,
-        components: &[Handle<ast::Expression<'source>>],
-        mut ctx: OutputContext<'source, '_, '_>,
-    ) -> Result<crate::ConstantInner, Error<'source>> {
-        // TODO: Support zero values, splatting and inference.
-
-        let constructor = self.constructor(constructor, ctx.reborrow())?;
-
-        let c = match constructor {
-            ConcreteConstructorHandle::Type(ty) => {
-                let components = components
-                    .iter()
-                    .map(|&expr| self.constant(expr, ctx.reborrow()))
-                    .collect::<Result<_, _>>()?;
-
-                crate::ConstantInner::Composite { ty, components }
-            }
-            _ => return Err(Error::ConstExprUnsupported(span)),
-        };
-        Ok(c)
     }
 
     /// Build a Naga IR [`Type`] for `constructor` if there is enough
@@ -591,13 +544,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     /// array's length.
     ///
     /// [`Type`]: crate::Type
-    /// [`ctx.module`]: OutputContext::module
+    /// [`ctx.module`]: ExpressionContext::module
     /// [`Array`]: crate::TypeInner::Array
     /// [`Constant`]: crate::Constant
     fn constructor<'out>(
         &mut self,
         constructor: &ast::ConstructorType<'source>,
-        mut ctx: OutputContext<'source, '_, 'out>,
+        mut ctx: ExpressionContext<'source, '_, 'out>,
     ) -> Result<ConcreteConstructorHandle, Error<'source>> {
         let c = match *constructor {
             ast::ConstructorType::Scalar { width, kind } => {
@@ -628,17 +581,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::ConstructorType::PartialArray => ConcreteConstructorHandle::PartialArray,
             ast::ConstructorType::Array { base, size } => {
-                let base = self.resolve_ast_type(base, ctx.reborrow())?;
+                let base = self.resolve_ast_type(base, ctx.as_global())?;
                 let size = match size {
                     ast::ArraySize::Constant(expr) => {
-                        let span = ctx.ast_expressions.get_span(expr);
-                        let constant = self.constant(expr, ctx.reborrow())?;
-                        let size = ctx.module.constants[constant]
-                            .to_array_length()
-                            .ok_or(Error::ExpectedArraySize(span))?;
-                        let size =
-                            NonZeroU32::new(size).ok_or(Error::NonPositiveArrayLength(span))?;
-                        crate::ArraySize::Constant(size)
+                        let const_expr = self.expression(expr, ctx.as_const())?;
+                        crate::ArraySize::Constant(ctx.array_length(const_expr)?)
                     }
                     ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
                 };

@@ -18,6 +18,8 @@ struct SimParams {
     float rule2Scale;
     float rule3Scale;
 };
+const uint NUM_PARTICLES = 1500u;
+
 uniform SimParams_block_0Compute { SimParams _group_0_binding_0_cs; };
 
 layout(std430) readonly buffer Particles_block_1Compute {
@@ -42,7 +44,7 @@ void main() {
     vec2 vel = vec2(0.0);
     uint i = 0u;
     uint index = global_invocation_id.x;
-    if ((index >= 1500u)) {
+    if ((index >= NUM_PARTICLES)) {
         return;
     }
     vec2 _e8 = _group_0_binding_1_cs.particles[index].pos;
@@ -63,7 +65,7 @@ void main() {
         }
         loop_init = false;
         uint _e36 = i;
-        if ((_e36 >= 1500u)) {
+        if ((_e36 >= NUM_PARTICLES)) {
             break;
         }
         uint _e39 = i;

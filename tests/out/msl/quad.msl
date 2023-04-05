@@ -4,11 +4,11 @@
 
 using metal::uint;
 
-constexpr constant float c_scale = 1.2000000476837158;
 struct VertexOutput {
     metal::float2 uv;
     metal::float4 position;
 };
+constant float c_scale = 1.2;
 
 struct vert_mainInput {
     metal::float2 pos [[attribute(0)]];

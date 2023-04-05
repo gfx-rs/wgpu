@@ -11,8 +11,8 @@ struct type_1 {
 void function(
     device type_1& unnamed
 ) {
-    int _e8 = unnamed.member;
-    unnamed.member = _e8 + 1;
+    int _e4 = unnamed.member;
+    unnamed.member = _e4 + 1;
     return;
 }
 

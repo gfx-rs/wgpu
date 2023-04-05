@@ -1,5 +1,3 @@
-static const bool Foo_1 = true;
-
 typedef struct { float2 _0; float2 _1; float2 _2; } __mat3x2;
 float2 __get_col_of_mat3x2(__mat3x2 mat, uint idx) {
     switch(idx) {
@@ -55,6 +53,8 @@ struct FooStruct {
     float3 v3_;
     float v1_;
 };
+
+static const bool Foo_1 = true;
 
 groupshared float wg[10];
 groupshared uint at_1;

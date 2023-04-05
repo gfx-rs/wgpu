@@ -9,6 +9,8 @@ struct FooStruct {
     vec3 v3_;
     float v1_;
 };
+const bool Foo_1 = true;
+
 shared float wg[10];
 
 shared uint at_1;

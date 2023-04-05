@@ -1,4 +1,3 @@
-
 typedef struct { float2 _0; float2 _1; } __mat2x2;
 float2 __get_col_of_mat2x2(__mat2x2 mat, uint idx) {
     switch(idx) {
@@ -84,6 +83,14 @@ RWByteAddressBuffer qux : register(u2);
 cbuffer nested_mat_cx2_ : register(b3) { MatCx2InArray nested_mat_cx2_; }
 groupshared uint val;
 
+Baz ConstructBaz(float3x2 arg0) {
+    Baz ret = (Baz)0;
+    ret.m_0 = arg0[0];
+    ret.m_1 = arg0[1];
+    ret.m_2 = arg0[2];
+    return ret;
+}
+
 float3x2 GetMatmOnBaz(Baz obj) {
     return float3x2(obj.m_0, obj.m_1, obj.m_2);
 }
@@ -110,22 +117,14 @@ void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
     }
 }
 
-Baz ConstructBaz(float3x2 arg0) {
-    Baz ret = (Baz)0;
-    ret.m_0 = arg0[0];
-    ret.m_1 = arg0[1];
-    ret.m_2 = arg0[2];
-    return ret;
-}
-
 void test_matrix_within_struct_accesses()
 {
     int idx = (int)0;
     Baz t = (Baz)0;
 
     idx = 1;
-    int _expr2 = idx;
-    idx = (_expr2 - 1);
+    int _expr3 = idx;
+    idx = (_expr3 - 1);
     float3x2 l0_ = GetMatmOnBaz(baz);
     float2 l1_ = GetMatmOnBaz(baz)[0];
     int _expr15 = idx;
@@ -139,8 +138,8 @@ void test_matrix_within_struct_accesses()
     int _expr43 = idx;
     float l6_ = GetMatmOnBaz(baz)[_expr41][_expr43];
     t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
-    int _expr55 = idx;
-    idx = (_expr55 + 1);
+    int _expr56 = idx;
+    idx = (_expr56 + 1);
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
     t.m_0 = (9.0).xx;
     int _expr72 = idx;
@@ -168,8 +167,8 @@ void test_matrix_within_array_within_struct_accesses()
     MatCx2InArray t_1 = (MatCx2InArray)0;
 
     idx_1 = 1;
-    int _expr2 = idx_1;
-    idx_1 = (_expr2 - 1);
+    int _expr3 = idx_1;
+    idx_1 = (_expr3 - 1);
     float4x2 l0_1[2] = ((float4x2[2])nested_mat_cx2_.am);
     float4x2 l1_1 = ((float4x2)nested_mat_cx2_.am[0]);
     float2 l2_1 = nested_mat_cx2_.am[0]._0;
@@ -184,8 +183,8 @@ void test_matrix_within_array_within_struct_accesses()
     int _expr60 = idx_1;
     float l7_ = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr58)[_expr60];
     t_1 = ConstructMatCx2InArray((float4x2[2])0);
-    int _expr66 = idx_1;
-    idx_1 = (_expr66 + 1);
+    int _expr67 = idx_1;
+    idx_1 = (_expr67 + 1);
     t_1.am = (__mat4x2[2])(float4x2[2])0;
     t_1.am[0] = (__mat4x2)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
     t_1.am[0]._0 = (9.0).xx;
@@ -231,6 +230,12 @@ void assign_array_through_ptr_fn(inout float4 foo_2[2])
     return;
 }
 
+typedef int ret_Constructarray5_int_[5];
+ret_Constructarray5_int_ Constructarray5_int_(int arg0, int arg1, int arg2, int arg3, int arg4) {
+    int ret[5] = { arg0, arg1, arg2, arg3, arg4 };
+    return ret;
+}
+
 typedef uint2 ret_Constructarray2_uint2_[2];
 ret_Constructarray2_uint2_ Constructarray2_uint2_(uint2 arg0, uint2 arg1) {
     uint2 ret[2] = { arg0, arg1 };
@@ -241,12 +246,6 @@ uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 {
     uint ret;
     buffer.GetDimensions(ret);
-    return ret;
-}
-
-typedef int ret_Constructarray5_int_[5];
-ret_Constructarray5_int_ Constructarray5_int_(int arg0, int arg1, int arg2, int arg3, int arg4) {
-    int ret[5] = { arg0, arg1, arg2, arg3, arg4 };
     return ret;
 }
 

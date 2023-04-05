@@ -7,38 +7,38 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %20 "main" %18
 OpExecutionMode %20 OriginUpperLeft
-OpDecorate %6 ArrayStride 4
+OpDecorate %4 ArrayStride 4
 OpDecorate %18 Location 0
 %2 = OpTypeVoid
-%4 = OpTypeInt 32 1
-%3 = OpConstant  %4  2
-%5 = OpTypeFloat 32
-%8 = OpTypeInt 32 0
-%7 = OpConstant  %8  2
-%6 = OpTypeArray %5 %7
-%9 = OpTypeVector %5 4
-%12 = OpTypeFunction %6
-%13 = OpConstant  %5  1.0
-%14 = OpConstant  %5  2.0
-%19 = OpTypePointer Output %9
+%3 = OpTypeFloat 32
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  2
+%4 = OpTypeArray %3 %5
+%7 = OpTypeVector %3 4
+%9 = OpTypeInt 32 1
+%8 = OpConstant  %9  2
+%12 = OpTypeFunction %4
+%13 = OpConstant  %3  1.0
+%14 = OpConstant  %3  2.0
+%19 = OpTypePointer Output %7
 %18 = OpVariable  %19  Output
 %21 = OpTypeFunction %2
-%22 = OpConstant  %5  0.0
-%11 = OpFunction  %6  None %12
+%22 = OpConstant  %3  0.0
+%11 = OpFunction  %4  None %12
 %10 = OpLabel
 OpBranch %15
 %15 = OpLabel
-%16 = OpCompositeConstruct  %6  %13 %14
+%16 = OpCompositeConstruct  %4  %13 %14
 OpReturnValue %16
 OpFunctionEnd
 %20 = OpFunction  %2  None %21
 %17 = OpLabel
 OpBranch %23
 %23 = OpLabel
-%24 = OpFunctionCall  %6  %11
-%25 = OpCompositeExtract  %5  %24 0
-%26 = OpCompositeExtract  %5  %24 1
-%27 = OpCompositeConstruct  %9  %25 %26 %22 %13
+%24 = OpFunctionCall  %4  %11
+%25 = OpCompositeExtract  %3  %24 0
+%26 = OpCompositeExtract  %3  %24 1
+%27 = OpCompositeConstruct  %7  %25 %26 %22 %13
 OpStore %18 %27
 OpReturn
 OpFunctionEnd

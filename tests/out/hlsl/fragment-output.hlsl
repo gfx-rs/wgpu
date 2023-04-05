@@ -1,4 +1,3 @@
-
 struct FragmentOutputVec4Vec3_ {
     float4 vec4f : SV_Target0;
     nointerpolation int4 vec4i : SV_Target1;

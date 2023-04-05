@@ -10,10 +10,10 @@ use super::{
 use crate::{
     front::{Emitter, Typifier},
     AddressSpace, Arena, BinaryOperator, Block, Expression, FastHashMap, FunctionArgument, Handle,
-    Literal, LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Span, Statement, Type,
-    TypeInner, VectorSize,
+    Literal, LocalVariable, RelationalFunction, ScalarKind, Span, Statement, Type, TypeInner,
+    VectorSize,
 };
-use std::{convert::TryFrom, ops::Index};
+use std::ops::Index;
 
 /// The position at which an expression is, used while lowering
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -519,21 +519,12 @@ impl Context {
                     .0;
 
                 let pointer = maybe_constant_index
-                    .and_then(|constant| {
+                    .and_then(|const_expr| {
                         Some(self.add_expression(
                             Expression::AccessIndex {
                                 base,
-                                index: match frontend.module.constants[constant].inner {
-                                    crate::ConstantInner::Scalar {
-                                        value: ScalarValue::Uint(i),
-                                        ..
-                                    } => u32::try_from(i).ok()?,
-                                    crate::ConstantInner::Scalar {
-                                        value: ScalarValue::Sint(i),
-                                        ..
-                                    } => u32::try_from(i).ok()?,
-                                    _ => return None,
-                                },
+                                index:
+                                    frontend.module.to_ctx().eval_expr_to_u32(const_expr).ok()?,
                             },
                             meta,
                             body,
@@ -1039,14 +1030,18 @@ impl Context {
                     // pointer type which is required for dynamic indexing
                     if !constant_index {
                         if let Some((constant, ty)) = var.constant {
-                            let local = self.locals.append(
-                                LocalVariable {
-                                    name: None,
-                                    ty,
-                                    init: Some(constant),
-                                },
-                                Span::default(),
-                            );
+                            let local =
+                                self.locals.append(
+                                    LocalVariable {
+                                        name: None,
+                                        ty,
+                                        init: Some(frontend.module.const_expressions.append(
+                                            Expression::Constant(constant),
+                                            Span::default(),
+                                        )),
+                                    },
+                                    Span::default(),
+                                );
 
                             self.add_expression(
                                 Expression::LocalVariable(local),

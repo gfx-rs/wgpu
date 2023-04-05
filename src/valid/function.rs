@@ -941,6 +941,7 @@ impl super::Validator {
         &self,
         var: &crate::LocalVariable,
         gctx: crate::proc::GlobalCtx,
+        mod_info: &ModuleInfo,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
         let type_info = self
@@ -954,24 +955,14 @@ impl super::Validator {
             return Err(LocalVariableError::InvalidType(var.ty));
         }
 
-        if let Some(const_handle) = var.init {
-            match gctx.constants[const_handle].inner {
-                crate::ConstantInner::Scalar { width, ref value } => {
-                    let ty_inner = crate::TypeInner::Scalar {
-                        width,
-                        kind: value.scalar_kind(),
-                    };
-                    if gctx.types[var.ty].inner != ty_inner {
-                        return Err(LocalVariableError::InitializerType);
-                    }
-                }
-                crate::ConstantInner::Composite { ty, components: _ } => {
-                    if ty != var.ty {
-                        return Err(LocalVariableError::InitializerType);
-                    }
-                }
+        if let Some(init) = var.init {
+            let decl_ty = &gctx.types[var.ty].inner;
+            let init_ty = mod_info[init].inner_with(gctx.types);
+            if !decl_ty.equivalent(init_ty, gctx.types) {
+                return Err(LocalVariableError::InitializerType);
             }
         }
+
         Ok(())
     }
 
@@ -987,7 +978,7 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
-            self.validate_local_var(var, module.to_ctx())
+            self.validate_local_var(var, module.to_ctx(), mod_info)
                 .map_err(|source| {
                     FunctionError::LocalVariable {
                         handle: var_handle,
@@ -1061,14 +1052,7 @@ impl super::Validator {
             }
             #[cfg(feature = "validate")]
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
-                match self.validate_expression(
-                    handle,
-                    expr,
-                    fun,
-                    module,
-                    &info,
-                    &mod_info.functions,
-                ) {
+                match self.validate_expression(handle, expr, fun, module, &info, mod_info) {
                     Ok(stages) => info.available_stages &= stages,
                     Err(source) => {
                         return Err(FunctionError::Expression { handle, source }

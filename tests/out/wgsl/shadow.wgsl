@@ -20,7 +20,7 @@ struct Light {
     color: vec4<f32>,
 }
 
-const c_ambient: vec3<f32> = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+const c_ambient: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 const c_max_lights: u32 = 10u;
 
 @group(0) @binding(0) 
@@ -68,7 +68,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var i: u32;
 
     let normal_1 = normalize(in.world_normal);
-    color = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    color = c_ambient;
     i = 0u;
     loop {
         let _e7 = i;
@@ -88,8 +88,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             color = (_e37 + ((_e23 * diffuse) * light.color.xyz));
         }
         continuing {
-            let _e39 = i;
-            i = (_e39 + 1u);
+            let _e40 = i;
+            i = (_e40 + 1u);
         }
     }
     let _e42 = color;
@@ -103,7 +103,7 @@ fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
     var i_1: u32;
 
     let normal_2 = normalize(in_1.world_normal);
-    color_1 = vec3<f32>(0.05000000074505806, 0.05000000074505806, 0.05000000074505806);
+    color_1 = c_ambient;
     i_1 = 0u;
     loop {
         let _e7 = i_1;
@@ -123,8 +123,8 @@ fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
             color_1 = (_e37 + ((_e23 * diffuse_1) * light_1.color.xyz));
         }
         continuing {
-            let _e39 = i_1;
-            i_1 = (_e39 + 1u);
+            let _e40 = i_1;
+            i_1 = (_e40 + 1u);
         }
     }
     let _e42 = color_1;

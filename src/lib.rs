@@ -796,18 +796,6 @@ pub enum TypeInner {
     BindingArray { base: Handle<Type>, size: ArraySize },
 }
 
-/// Constant value.
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "clone", derive(Clone))]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct Constant {
-    pub name: Option<String>,
-    pub specialization: Option<u32>,
-    pub inner: ConstantInner,
-}
-
 #[derive(Debug, Clone, Copy, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -820,32 +808,29 @@ pub enum Literal {
     Bool(bool),
 }
 
-/// A literal scalar value, used in constants.
-#[derive(Debug, Clone, Copy, PartialOrd)]
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "clone", derive(Clone))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum ScalarValue {
-    Sint(i64),
-    Uint(u64),
-    Float(f64),
-    Bool(bool),
+pub enum Override {
+    None,
+    ByName,
+    ByNameOrId(u32),
 }
 
-/// Additional information, dependent on the kind of constant.
-#[derive(Clone, Debug, PartialEq)]
+/// Constant value.
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "clone", derive(Clone))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum ConstantInner {
-    Scalar {
-        width: Bytes,
-        value: ScalarValue,
-    },
-    Composite {
-        ty: Handle<Type>,
-        components: Vec<Handle<Constant>>,
-    },
+pub struct Constant {
+    pub name: Option<String>,
+    pub r#override: Override,
+    pub ty: Handle<Type>,
+    /// Expression handle lives in const_expressions
+    pub init: Handle<Expression>,
 }
 
 /// Describes how an input/output variable is to be bound.
@@ -907,7 +892,9 @@ pub struct GlobalVariable {
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// Initial value for this variable.
-    pub init: Option<Handle<Constant>>,
+    ///
+    /// Expression handle lives in const_expressions
+    pub init: Option<Handle<Expression>>,
 }
 
 /// Variable defined at function level.
@@ -921,7 +908,9 @@ pub struct LocalVariable {
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// Initial value for this variable.
-    pub init: Option<Handle<Constant>>,
+    ///
+    /// Expression handle lives in const_expressions
+    pub init: Option<Handle<Expression>>,
 }
 
 /// Operation that can be applied on a single value.
@@ -1224,6 +1213,11 @@ pub enum Expression {
     Constant(Handle<Constant>),
     /// Zero value of a type.
     ZeroValue(Handle<Type>),
+    /// Composite expression.
+    Compose {
+        ty: Handle<Type>,
+        components: Vec<Handle<Expression>>,
+    },
 
     /// Array access with a computed index.
     ///
@@ -1294,11 +1288,6 @@ pub enum Expression {
         vector: Handle<Expression>,
         pattern: [SwizzleComponent; 4],
     },
-    /// Composite expression.
-    Compose {
-        ty: Handle<Type>,
-        components: Vec<Handle<Expression>>,
-    },
 
     /// Reference a function parameter, by its index.
     ///
@@ -1347,7 +1336,8 @@ pub enum Expression {
         gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
-        offset: Option<Handle<Constant>>,
+        /// Expression handle lives in const_expressions
+        offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
     },
@@ -1448,7 +1438,6 @@ pub enum Expression {
     Derivative {
         axis: DerivativeAxis,
         ctrl: DerivativeControl,
-        //modifier,
         expr: Handle<Expression>,
     },
     /// Call a relational function.
@@ -1510,7 +1499,6 @@ pub enum Expression {
 pub use block::Block;
 
 /// The value of the switch case.
-// Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -1619,7 +1607,7 @@ pub enum Statement {
     /// [`body`]: SwitchCase::body
     /// [`Default`]: SwitchValue::Default
     Switch {
-        selector: Handle<Expression>, //int
+        selector: Handle<Expression>,
         cases: Vec<SwitchCase>,
     },
 
@@ -1939,6 +1927,11 @@ pub struct Module {
     pub constants: Arena<Constant>,
     /// Arena for the global variables defined in this module.
     pub global_variables: Arena<GlobalVariable>,
+    /// const/override-expressions used by this module.
+    ///
+    /// An `Expression` must occur before all other `Expression`s that use its
+    /// value.
+    pub const_expressions: Arena<Expression>,
     /// Arena for the functions defined in this module.
     ///
     /// Each function must appear in this arena strictly before all its callers.

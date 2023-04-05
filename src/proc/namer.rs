@@ -225,43 +225,7 @@ impl Namer {
                     use std::fmt::Write;
                     // Try to be more descriptive about the constant values
                     temp.clear();
-                    match constant.inner {
-                        crate::ConstantInner::Scalar {
-                            width: _,
-                            value: crate::ScalarValue::Sint(v),
-                        } => write!(temp, "const_{v}i"),
-                        crate::ConstantInner::Scalar {
-                            width: _,
-                            value: crate::ScalarValue::Uint(v),
-                        } => write!(temp, "const_{v}u"),
-                        crate::ConstantInner::Scalar {
-                            width: _,
-                            value: crate::ScalarValue::Float(v),
-                        } => {
-                            let abs = v.abs();
-                            write!(
-                                temp,
-                                "const_{}{}",
-                                if v < 0.0 { "n" } else { "" },
-                                abs.trunc(),
-                            )
-                            .unwrap();
-                            let fract = abs.fract();
-                            if fract == 0.0 {
-                                write!(temp, "f")
-                            } else {
-                                write!(temp, "_{:02}f", (fract * 100.0) as i8)
-                            }
-                        }
-                        crate::ConstantInner::Scalar {
-                            width: _,
-                            value: crate::ScalarValue::Bool(v),
-                        } => write!(temp, "const_{v}"),
-                        crate::ConstantInner::Composite { ty, components: _ } => {
-                            write!(temp, "const_{}", output[&NameKey::Type(ty)])
-                        }
-                    }
-                    .unwrap();
+                    write!(temp, "const_{}", output[&NameKey::Type(constant.ty)]).unwrap();
                     &temp
                 }
             };

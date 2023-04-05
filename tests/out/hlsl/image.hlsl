@@ -1,4 +1,3 @@
-
 Texture2D<uint4> image_mipmapped_src : register(t0);
 Texture2DMS<uint4> image_multisampled_src : register(t3);
 Texture2DMS<float> image_depth_multisampled_src : register(t4);

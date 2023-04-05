@@ -8,8 +8,6 @@ mod namer;
 mod terminator;
 mod typifier;
 
-use std::cmp::PartialEq;
-
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
@@ -58,17 +56,6 @@ impl From<super::StorageFormat> for super::ScalarKind {
             Sf::Rg16Snorm => Sk::Float,
             Sf::Rgba16Unorm => Sk::Float,
             Sf::Rgba16Snorm => Sk::Float,
-        }
-    }
-}
-
-impl super::ScalarValue {
-    pub const fn scalar_kind(&self) -> super::ScalarKind {
-        match *self {
-            Self::Uint(_) => super::ScalarKind::Uint,
-            Self::Sint(_) => super::ScalarKind::Sint,
-            Self::Float(_) => super::ScalarKind::Float,
-            Self::Bool(_) => super::ScalarKind::Bool,
         }
     }
 }
@@ -135,17 +122,6 @@ impl crate::Literal {
         }
     }
 
-    pub const fn from_scalar(scalar: crate::ScalarValue, width: crate::Bytes) -> Option<Self> {
-        match (scalar, width) {
-            (crate::ScalarValue::Sint(n), 4) => Some(Self::I32(n as _)),
-            (crate::ScalarValue::Uint(n), 4) => Some(Self::U32(n as _)),
-            (crate::ScalarValue::Float(n), 4) => Some(Self::F32(n as _)),
-            (crate::ScalarValue::Float(n), 8) => Some(Self::F64(n)),
-            (crate::ScalarValue::Bool(b), _) => Some(Self::Bool(b)),
-            _ => None,
-        }
-    }
-
     pub const fn zero(kind: crate::ScalarKind, width: crate::Bytes) -> Option<Self> {
         Self::new(0, kind, width)
     }
@@ -206,6 +182,16 @@ impl super::TypeInner {
             Self::Pointer { space, .. } => Some(space),
             Self::ValuePointer { space, .. } => Some(space),
             _ => None,
+        }
+    }
+
+    pub fn is_atomic_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        match *self {
+            crate::TypeInner::Pointer { base, .. } => match types[base].inner {
+                crate::TypeInner::Atomic { .. } => true,
+                _ => false,
+            },
+            _ => false,
         }
     }
 
@@ -307,6 +293,39 @@ impl super::TypeInner {
                 .unwrap_or(false),
             _ => false,
         }
+    }
+
+    pub fn components(&self) -> Option<u32> {
+        Some(match *self {
+            Self::Vector { size, .. } => size as u32,
+            Self::Matrix { columns, .. } => columns as u32,
+            Self::Array {
+                size: crate::ArraySize::Constant(len),
+                ..
+            } => len.get(),
+            Self::Struct { ref members, .. } => members.len() as u32,
+            _ => return None,
+        })
+    }
+
+    pub fn component_type(&self, index: usize) -> Option<TypeResolution> {
+        Some(match *self {
+            Self::Vector { kind, width, .. } => {
+                TypeResolution::Value(crate::TypeInner::Scalar { kind, width })
+            }
+            Self::Matrix { rows, width, .. } => TypeResolution::Value(crate::TypeInner::Vector {
+                size: rows,
+                kind: crate::ScalarKind::Float,
+                width,
+            }),
+            Self::Array {
+                base,
+                size: crate::ArraySize::Constant(_),
+                ..
+            } => TypeResolution::Handle(base),
+            Self::Struct { ref members, .. } => TypeResolution::Handle(members[index].ty),
+            _ => return None,
+        })
     }
 }
 
@@ -441,7 +460,7 @@ impl crate::Expression {
     pub fn is_dynamic_index(&self, module: &crate::Module) -> bool {
         if let Self::Constant(handle) = *self {
             let constant = &module.constants[handle];
-            constant.specialization.is_some()
+            !matches!(constant.r#override, crate::Override::None)
         } else {
             true
         }
@@ -484,65 +503,11 @@ impl crate::SampleLevel {
     }
 }
 
-impl crate::Constant {
-    /// Interpret this constant as an array length, and return it as a `u32`.
-    ///
-    /// Ignore any specialization available for this constant; return its
-    /// unspecialized value.
-    ///
-    /// If the constant has an inappropriate kind (non-scalar or non-integer) or
-    /// value (negative, out of range for u32), return `None`. This usually
-    /// indicates an error, but only the caller has enough information to report
-    /// the error helpfully: in back ends, it's a validation error, but in front
-    /// ends, it may indicate ill-formed input (for example, a SPIR-V
-    /// `OpArrayType` referring to an inappropriate `OpConstant`). So we return
-    /// `Option` and let the caller sort things out.
-    pub(crate) fn to_array_length(&self) -> Option<u32> {
-        match self.inner {
-            crate::ConstantInner::Scalar { value, width: _ } => match value {
-                crate::ScalarValue::Uint(value) => value.try_into().ok(),
-                // Accept a signed integer size to avoid
-                // requiring an explicit uint
-                // literal. Type inference should make
-                // this unnecessary.
-                crate::ScalarValue::Sint(value) => value.try_into().ok(),
-                _ => None,
-            },
-            // caught by type validation
-            crate::ConstantInner::Composite { .. } => None,
-        }
-    }
-}
-
 impl crate::Binding {
     pub const fn to_built_in(&self) -> Option<crate::BuiltIn> {
         match *self {
             crate::Binding::BuiltIn(built_in) => Some(built_in),
             Self::Location { .. } => None,
-        }
-    }
-}
-
-//TODO: should we use an existing crate for hashable floats?
-impl PartialEq for crate::ScalarValue {
-    fn eq(&self, other: &Self) -> bool {
-        match (*self, *other) {
-            (Self::Uint(a), Self::Uint(b)) => a == b,
-            (Self::Sint(a), Self::Sint(b)) => a == b,
-            (Self::Float(a), Self::Float(b)) => a.to_bits() == b.to_bits(),
-            (Self::Bool(a), Self::Bool(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-impl Eq for crate::ScalarValue {}
-impl std::hash::Hash for crate::ScalarValue {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
-        match *self {
-            Self::Sint(v) => v.hash(hasher),
-            Self::Uint(v) => v.hash(hasher),
-            Self::Float(v) => v.to_bits().hash(hasher),
-            Self::Bool(v) => v.hash(hasher),
         }
     }
 }
@@ -589,14 +554,71 @@ impl crate::Module {
         GlobalCtx {
             types: &self.types,
             constants: &self.constants,
+            const_expressions: &self.const_expressions,
         }
     }
+}
+
+#[derive(Debug)]
+pub(super) enum U32EvalError {
+    NonConst,
+    Negative,
 }
 
 #[derive(Clone, Copy)]
 pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
+    pub const_expressions: &'a crate::Arena<crate::Expression>,
+}
+
+impl GlobalCtx<'_> {
+    /// Try to evaluate the expression in `self.const_expressions` using its `handle` and return it as a `u32`.
+    #[allow(dead_code)]
+    pub(super) fn eval_expr_to_u32(
+        &self,
+        handle: crate::Handle<crate::Expression>,
+    ) -> Result<u32, U32EvalError> {
+        self.eval_expr_to_u32_from(handle, self.const_expressions)
+    }
+
+    /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `u32`.
+    pub(super) fn eval_expr_to_u32_from(
+        &self,
+        handle: crate::Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
+    ) -> Result<u32, U32EvalError> {
+        fn get(
+            gctx: GlobalCtx,
+            handle: crate::Handle<crate::Expression>,
+            arena: &crate::Arena<crate::Expression>,
+        ) -> Result<u32, U32EvalError> {
+            match arena[handle] {
+                crate::Expression::Literal(crate::Literal::U32(value)) => Ok(value),
+                crate::Expression::Literal(crate::Literal::I32(value)) => {
+                    value.try_into().map_err(|_| U32EvalError::Negative)
+                }
+                crate::Expression::ZeroValue(ty)
+                    if matches!(
+                        gctx.types[ty].inner,
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                            width: _
+                        }
+                    ) =>
+                {
+                    Ok(0)
+                }
+                _ => Err(U32EvalError::NonConst),
+            }
+        }
+        match arena[handle] {
+            crate::Expression::Constant(c) => {
+                get(*self, self.constants[c].init, self.const_expressions)
+            }
+            _ => get(*self, handle, arena),
+        }
+    }
 }
 
 #[test]

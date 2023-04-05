@@ -37,8 +37,8 @@ void test_matrix_within_struct_accesses() {
     int idx = 0;
     Baz t = Baz(mat3x2(0.0));
     idx = 1;
-    int _e2 = idx;
-    idx = (_e2 - 1);
+    int _e3 = idx;
+    idx = (_e3 - 1);
     mat3x2 l0_ = _group_0_binding_1_vs.m;
     vec2 l1_ = _group_0_binding_1_vs.m[0];
     int _e15 = idx;
@@ -52,8 +52,8 @@ void test_matrix_within_struct_accesses() {
     int _e43 = idx;
     float l6_ = _group_0_binding_1_vs.m[_e41][_e43];
     t = Baz(mat3x2(vec2(1.0), vec2(2.0), vec2(3.0)));
-    int _e55 = idx;
-    idx = (_e55 + 1);
+    int _e56 = idx;
+    idx = (_e56 + 1);
     t.m = mat3x2(vec2(6.0), vec2(5.0), vec2(4.0));
     t.m[0] = vec2(9.0);
     int _e72 = idx;
@@ -73,8 +73,8 @@ void test_matrix_within_array_within_struct_accesses() {
     int idx_1 = 0;
     MatCx2InArray t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
     idx_1 = 1;
-    int _e2 = idx_1;
-    idx_1 = (_e2 - 1);
+    int _e3 = idx_1;
+    idx_1 = (_e3 - 1);
     mat4x2 l0_1[2] = _group_0_binding_3_vs.am;
     mat4x2 l1_1 = _group_0_binding_3_vs.am[0];
     vec2 l2_1 = _group_0_binding_3_vs.am[0][0];
@@ -89,8 +89,8 @@ void test_matrix_within_array_within_struct_accesses() {
     int _e60 = idx_1;
     float l7_ = _group_0_binding_3_vs.am[0][_e58][_e60];
     t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
-    int _e66 = idx_1;
-    idx_1 = (_e66 + 1);
+    int _e67 = idx_1;
+    idx_1 = (_e67 + 1);
     t_1.am = mat4x2[2](mat4x2(0.0), mat4x2(0.0));
     t_1.am[0] = mat4x2(vec2(8.0), vec2(7.0), vec2(6.0), vec2(5.0));
     t_1.am[0][0] = vec2(9.0);

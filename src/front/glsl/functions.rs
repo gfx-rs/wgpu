@@ -8,8 +8,8 @@ use super::{
 };
 use crate::{
     front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace, Arena, Block,
-    Constant, ConstantInner, EntryPoint, Expression, Function, FunctionArgument, FunctionResult,
-    Handle, LocalVariable, ScalarKind, ScalarValue, Span, Statement, StructMember, Type, TypeInner,
+    EntryPoint, Expression, Function, FunctionArgument, FunctionResult, Handle, Literal,
+    LocalVariable, ScalarKind, Span, Statement, StructMember, Type, TypeInner,
 };
 use std::iter;
 
@@ -24,29 +24,6 @@ struct ProxyWrite {
 }
 
 impl Frontend {
-    fn add_constant_value(
-        &mut self,
-        scalar_kind: ScalarKind,
-        value: u64,
-        meta: Span,
-    ) -> Handle<Constant> {
-        let value = match scalar_kind {
-            ScalarKind::Uint => ScalarValue::Uint(value),
-            ScalarKind::Sint => ScalarValue::Sint(value as i64),
-            ScalarKind::Float => ScalarValue::Float(value as f64),
-            ScalarKind::Bool => unreachable!(),
-        };
-
-        self.module.constants.fetch_or_append(
-            Constant {
-                name: None,
-                specialization: None,
-                inner: ConstantInner::Scalar { width: 4, value },
-            },
-            meta,
-        )
-    }
-
     pub(crate) fn function_or_constructor_call(
         &mut self,
         ctx: &mut Context,
@@ -97,10 +74,10 @@ impl Frontend {
                 if expr_type.scalar_kind() == Some(ScalarKind::Bool)
                     && result_scalar_kind != ScalarKind::Bool =>
             {
-                let c0 = self.add_constant_value(result_scalar_kind, 0u64, meta);
-                let c1 = self.add_constant_value(result_scalar_kind, 1u64, meta);
-                let mut reject = ctx.add_expression(Expression::Constant(c0), expr_meta, body);
-                let mut accept = ctx.add_expression(Expression::Constant(c1), expr_meta, body);
+                let l0 = Literal::zero(result_scalar_kind, 4).unwrap();
+                let l1 = Literal::one(result_scalar_kind, 4).unwrap();
+                let mut reject = ctx.add_expression(Expression::Literal(l0), expr_meta, body);
+                let mut accept = ctx.add_expression(Expression::Literal(l1), expr_meta, body);
 
                 ctx.implicit_splat(self, &mut reject, meta, vector_size)?;
                 ctx.implicit_splat(self, &mut accept, meta, vector_size)?;
@@ -282,18 +259,9 @@ impl Frontend {
                     },
                     meta,
                 );
-                let zero_constant = self.module.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Scalar {
-                            width,
-                            value: ScalarValue::Float(0.0),
-                        },
-                    },
-                    meta,
-                );
-                let zero = ctx.add_expression(Expression::Constant(zero_constant), meta, body);
+
+                let zero_literal = Literal::zero(ScalarKind::Float, width).unwrap();
+                let zero = ctx.add_expression(Expression::Literal(zero_literal), meta, body);
 
                 for i in 0..columns as u32 {
                     components.push(
@@ -323,30 +291,12 @@ impl Frontend {
                 // (column i, row j) in the argument will be initialized from there. All
                 // other components will be initialized to the identity matrix.
 
-                let zero_constant = self.module.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Scalar {
-                            width,
-                            value: ScalarValue::Float(0.0),
-                        },
-                    },
-                    meta,
-                );
-                let zero = ctx.add_expression(Expression::Constant(zero_constant), meta, body);
-                let one_constant = self.module.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Scalar {
-                            width,
-                            value: ScalarValue::Float(1.0),
-                        },
-                    },
-                    meta,
-                );
-                let one = ctx.add_expression(Expression::Constant(one_constant), meta, body);
+                let zero_literal = Literal::zero(ScalarKind::Float, width).unwrap();
+                let one_literal = Literal::one(ScalarKind::Float, width).unwrap();
+
+                let zero = ctx.add_expression(Expression::Literal(zero_literal), meta, body);
+                let one = ctx.add_expression(Expression::Literal(one_literal), meta, body);
+
                 let vector_ty = self.module.types.insert(
                     Type {
                         name: None,
@@ -406,24 +356,17 @@ impl Frontend {
                             Ordering::Greater => ctx.vector_resize(rows, vector, meta, body),
                         })
                     } else {
-                        let vec_constant = self.module.constants.fetch_or_append(
-                            Constant {
-                                name: None,
-                                specialization: None,
-                                inner: ConstantInner::Composite {
-                                    ty: vector_ty,
-                                    components: (0..rows as u32)
-                                        .map(|r| match r == i {
-                                            true => one_constant,
-                                            false => zero_constant,
-                                        })
-                                        .collect(),
-                                },
-                            },
-                            meta,
-                        );
-                        let vec =
-                            ctx.add_expression(Expression::Constant(vec_constant), meta, body);
+                        let compose_expr = Expression::Compose {
+                            ty: vector_ty,
+                            components: (0..rows as u32)
+                                .map(|r| match r == i {
+                                    true => one,
+                                    false => zero,
+                                })
+                                .collect(),
+                        };
+
+                        let vec = ctx.add_expression(compose_expr, meta, body);
 
                         components.push(vec)
                     }

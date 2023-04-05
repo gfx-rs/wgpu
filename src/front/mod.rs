@@ -55,16 +55,6 @@ impl Emitter {
     }
 }
 
-#[allow(dead_code)]
-impl super::ConstantInner {
-    const fn boolean(value: bool) -> Self {
-        Self::Scalar {
-            width: super::BOOL_WIDTH,
-            value: super::ScalarValue::Bool(value),
-        }
-    }
-}
-
 /// A table of types for an `Arena<Expression>`.
 ///
 /// A front end can use a `Typifier` to get types for an arena's expressions

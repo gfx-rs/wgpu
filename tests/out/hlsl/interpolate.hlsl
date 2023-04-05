@@ -1,4 +1,3 @@
-
 struct FragmentInput {
     float4 position : SV_Position;
     nointerpolation uint _flat : LOC0;

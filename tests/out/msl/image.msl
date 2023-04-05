@@ -4,7 +4,6 @@
 
 using metal::uint;
 
-constant metal::int2 const_type_9_ = {3, 1};
 
 struct main_Input {
 };
@@ -126,46 +125,46 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e14 = image_2d.sample(sampler_reg, tc);
     metal::float4 _e15 = a;
     a = _e15 + _e14;
-    metal::float4 _e19 = image_2d.sample(sampler_reg, tc, const_type_9_);
+    metal::float4 _e19 = image_2d.sample(sampler_reg, tc, metal::int2(3, 1));
     metal::float4 _e20 = a;
     a = _e20 + _e19;
     metal::float4 _e24 = image_2d.sample(sampler_reg, tc, metal::level(2.3));
     metal::float4 _e25 = a;
     a = _e25 + _e24;
-    metal::float4 _e29 = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type_9_);
+    metal::float4 _e29 = image_2d.sample(sampler_reg, tc, metal::level(2.3), metal::int2(3, 1));
     metal::float4 _e30 = a;
     a = _e30 + _e29;
-    metal::float4 _e35 = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_type_9_);
+    metal::float4 _e35 = image_2d.sample(sampler_reg, tc, metal::bias(2.0), metal::int2(3, 1));
     metal::float4 _e36 = a;
     a = _e36 + _e35;
     metal::float4 _e41 = image_2d_array.sample(sampler_reg, tc, 0u);
     metal::float4 _e42 = a;
     a = _e42 + _e41;
-    metal::float4 _e47 = image_2d_array.sample(sampler_reg, tc, 0u, const_type_9_);
+    metal::float4 _e47 = image_2d_array.sample(sampler_reg, tc, 0u, metal::int2(3, 1));
     metal::float4 _e48 = a;
     a = _e48 + _e47;
     metal::float4 _e53 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.3));
     metal::float4 _e54 = a;
     a = _e54 + _e53;
-    metal::float4 _e59 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.3), const_type_9_);
+    metal::float4 _e59 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.3), metal::int2(3, 1));
     metal::float4 _e60 = a;
     a = _e60 + _e59;
-    metal::float4 _e66 = image_2d_array.sample(sampler_reg, tc, 0u, metal::bias(2.0), const_type_9_);
+    metal::float4 _e66 = image_2d_array.sample(sampler_reg, tc, 0u, metal::bias(2.0), metal::int2(3, 1));
     metal::float4 _e67 = a;
     a = _e67 + _e66;
     metal::float4 _e72 = image_2d_array.sample(sampler_reg, tc, 0);
     metal::float4 _e73 = a;
     a = _e73 + _e72;
-    metal::float4 _e78 = image_2d_array.sample(sampler_reg, tc, 0, const_type_9_);
+    metal::float4 _e78 = image_2d_array.sample(sampler_reg, tc, 0, metal::int2(3, 1));
     metal::float4 _e79 = a;
     a = _e79 + _e78;
     metal::float4 _e84 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.3));
     metal::float4 _e85 = a;
     a = _e85 + _e84;
-    metal::float4 _e90 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.3), const_type_9_);
+    metal::float4 _e90 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.3), metal::int2(3, 1));
     metal::float4 _e91 = a;
     a = _e91 + _e90;
-    metal::float4 _e97 = image_2d_array.sample(sampler_reg, tc, 0, metal::bias(2.0), const_type_9_);
+    metal::float4 _e97 = image_2d_array.sample(sampler_reg, tc, 0, metal::bias(2.0), metal::int2(3, 1));
     metal::float4 _e98 = a;
     a = _e98 + _e97;
     metal::float4 _e103 = image_cube_array.sample(sampler_reg, tc3_, 0u);
@@ -245,9 +244,9 @@ fragment gatherOutput gather(
 ) {
     metal::float2 tc_2 = metal::float2(0.5);
     metal::float4 s2d = image_2d.gather(sampler_reg, tc_2, metal::int2(0), metal::component::y);
-    metal::float4 s2d_offset = image_2d.gather(sampler_reg, tc_2, const_type_9_, metal::component::w);
+    metal::float4 s2d_offset = image_2d.gather(sampler_reg, tc_2, metal::int2(3, 1), metal::component::w);
     metal::float4 s2d_depth = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5);
-    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, const_type_9_);
+    metal::float4 s2d_depth_offset = image_2d_depth.gather_compare(sampler_cmp, tc_2, 0.5, metal::int2(3, 1));
     metal::uint4 u = image_2d_u32_.gather(sampler_reg, tc_2);
     metal::int4 i = image_2d_i32_.gather(sampler_reg, tc_2);
     metal::float4 f = static_cast<metal::float4>(u) + static_cast<metal::float4>(i);

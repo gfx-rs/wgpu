@@ -8,7 +8,6 @@ struct _mslBufferSizes {
     uint size2;
 };
 
-constexpr constant unsigned c_max_lights = 10u;
 struct Globals {
     metal::float4x4 view_proj;
     metal::uint4 num_lights;
@@ -31,7 +30,8 @@ typedef Light type_6[1];
 struct type_7 {
     Light inner[10];
 };
-constant metal::float3 c_ambient = {0.05000000074505806, 0.05000000074505806, 0.05000000074505806};
+constant metal::float3 c_ambient = metal::float3(0.05, 0.05, 0.05);
+constant uint c_max_lights = 10u;
 
 float fetch_shadow(
     uint light_id,
@@ -105,8 +105,8 @@ fragment fs_mainOutput fs_main(
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
-            uint _e39 = i;
-            i = _e39 + 1u;
+            uint _e40 = i;
+            i = _e40 + 1u;
         }
         loop_init = false;
         uint _e7 = i;
@@ -157,8 +157,8 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {
-            uint _e39 = i_1;
-            i_1 = _e39 + 1u;
+            uint _e40 = i_1;
+            i_1 = _e40 + 1u;
         }
         loop_init_1 = false;
         uint _e7 = i_1;

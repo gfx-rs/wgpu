@@ -823,7 +823,7 @@ impl<'w> BlockContext<'w> {
         gather: Option<crate::SwizzleComponent>,
         coordinate: Handle<crate::Expression>,
         array_index: Option<Handle<crate::Expression>>,
-        offset: Option<Handle<crate::Constant>>,
+        offset: Option<Handle<crate::Expression>>,
         level: crate::SampleLevel,
         depth_ref: Option<Handle<crate::Expression>>,
         block: &mut Block,

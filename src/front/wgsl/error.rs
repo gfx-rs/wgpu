@@ -100,8 +100,6 @@ pub enum ExpectedToken<'a> {
     Identifier,
     Number,
     Integer,
-    /// A compile-time constant expression.
-    Constant,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
     /// Expected: assignment, increment/decrement expression
@@ -141,6 +139,7 @@ pub enum InvalidAssignmentType {
 pub enum Error<'a> {
     Unexpected(Span, ExpectedToken<'a>),
     UnexpectedComponents(Span),
+    UnexpectedOperationInConstContext(Span),
     BadNumber(Span, NumberError),
     /// A negative signed integer literal where both signed and unsigned,
     /// but only non-negative literals are allowed.
@@ -227,7 +226,6 @@ pub enum Error<'a> {
         /// the same identifier as `ident`, above.
         path: Vec<(Span, Span)>,
     },
-    ConstExprUnsupported(Span),
     InvalidSwitchValue {
         uint: bool,
         span: Span,
@@ -273,7 +271,6 @@ impl<'a> Error<'a> {
                     ExpectedToken::Identifier => "identifier".to_string(),
                     ExpectedToken::Number => "32-bit signed integer literal".to_string(),
                     ExpectedToken::Integer => "unsigned/signed integer literal".to_string(),
-                    ExpectedToken::Constant => "compile-time constant".to_string(),
                     ExpectedToken::PrimaryExpression => "expression".to_string(),
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => "switch item ('case' or 'default') or a closing curly bracket to signify the end of the switch statement ('}')".to_string(),
@@ -295,6 +292,11 @@ impl<'a> Error<'a> {
             Error::UnexpectedComponents(bad_span) => ParseError {
                 message: "unexpected components".to_string(),
                 labels: vec![(bad_span, "unexpected components".into())],
+                notes: vec![],
+            },
+            Error::UnexpectedOperationInConstContext(span) => ParseError {
+                message: "this operation is not supported in a const context".to_string(),
+                labels: vec![(span, "operation not supported here".into())],
                 notes: vec![],
             },
             Error::BadNumber(bad_span, ref err) => ParseError {
@@ -625,14 +627,6 @@ impl<'a> Error<'a> {
                     .collect(),
                 notes: vec![],
             },
-            Error::ConstExprUnsupported(span) => ParseError {
-                message: "this constant expression is not supported".to_string(),
-                labels: vec![(span, "expression is not supported".into())],
-                notes: vec![
-                    "this should be fixed in a future version of Naga".into(),
-                    "https://github.com/gfx-rs/naga/issues/1829".into(),
-                ],
-            },
             Error::InvalidSwitchValue { uint, span } => ParseError {
                 message: "invalid switch value".to_string(),
                 labels: vec![(
@@ -701,7 +695,7 @@ impl<'a> Error<'a> {
             },
             Error::NonPositiveArrayLength(span) => ParseError {
                 message: "array element count must be greater than zero".to_string(),
-                labels: vec![(span, "must be positive".into())],
+                labels: vec![(span, "must be greater than zero".into())],
                 notes: vec![],
             },
         }

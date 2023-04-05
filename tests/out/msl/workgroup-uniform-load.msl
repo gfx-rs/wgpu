@@ -4,10 +4,10 @@
 
 using metal::uint;
 
-constexpr constant unsigned SIZE = 128u;
 struct type_2 {
     int inner[128];
 };
+constant uint SIZE = 128u;
 
 struct test_workgroupUniformLoadInput {
 };

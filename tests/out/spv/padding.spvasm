@@ -6,31 +6,31 @@ OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %28 "vertex" %26
-OpMemberName %7 0 "a"
-OpName %7 "S"
-OpMemberName %8 0 "a"
-OpMemberName %8 1 "b"
-OpName %8 "Test"
+OpMemberName %5 0 "a"
+OpName %5 "S"
+OpMemberName %6 0 "a"
+OpMemberName %6 1 "b"
+OpName %6 "Test"
+OpMemberName %10 0 "a"
+OpMemberName %10 1 "b"
+OpName %10 "Test2"
 OpMemberName %12 0 "a"
 OpMemberName %12 1 "b"
-OpName %12 "Test2"
-OpMemberName %14 0 "a"
-OpMemberName %14 1 "b"
-OpName %14 "Test3"
+OpName %12 "Test3"
 OpName %16 "input1"
 OpName %19 "input2"
 OpName %22 "input3"
 OpName %28 "vertex"
-OpMemberDecorate %7 0 Offset 0
-OpMemberDecorate %8 0 Offset 0
-OpMemberDecorate %8 1 Offset 16
-OpDecorate %9 ArrayStride 16
+OpMemberDecorate %5 0 Offset 0
+OpMemberDecorate %6 0 Offset 0
+OpMemberDecorate %6 1 Offset 16
+OpDecorate %7 ArrayStride 16
+OpMemberDecorate %10 0 Offset 0
+OpMemberDecorate %10 1 Offset 32
 OpMemberDecorate %12 0 Offset 0
-OpMemberDecorate %12 1 Offset 32
-OpMemberDecorate %14 0 Offset 0
-OpMemberDecorate %14 0 ColMajor
-OpMemberDecorate %14 0 MatrixStride 16
-OpMemberDecorate %14 1 Offset 64
+OpMemberDecorate %12 0 ColMajor
+OpMemberDecorate %12 0 MatrixStride 16
+OpMemberDecorate %12 1 Offset 64
 OpDecorate %16 DescriptorSet 0
 OpDecorate %16 Binding 0
 OpDecorate %17 Block
@@ -45,38 +45,38 @@ OpDecorate %23 Block
 OpMemberDecorate %23 0 Offset 0
 OpDecorate %26 BuiltIn Position
 %2 = OpTypeVoid
-%4 = OpTypeInt 32 1
-%3 = OpConstant  %4  2
-%6 = OpTypeFloat 32
-%5 = OpTypeVector %6 3
-%7 = OpTypeStruct %5
-%8 = OpTypeStruct %7 %6
-%11 = OpTypeInt 32 0
-%10 = OpConstant  %11  2
-%9 = OpTypeArray %5 %10
-%12 = OpTypeStruct %9 %6
-%13 = OpTypeMatrix %5 4
-%14 = OpTypeStruct %13 %6
-%15 = OpTypeVector %6 4
-%17 = OpTypeStruct %8
+%4 = OpTypeFloat 32
+%3 = OpTypeVector %4 3
+%5 = OpTypeStruct %3
+%6 = OpTypeStruct %5 %4
+%9 = OpTypeInt 32 0
+%8 = OpConstant  %9  2
+%7 = OpTypeArray %3 %8
+%10 = OpTypeStruct %7 %4
+%11 = OpTypeMatrix %3 4
+%12 = OpTypeStruct %11 %4
+%13 = OpTypeVector %4 4
+%15 = OpTypeInt 32 1
+%14 = OpConstant  %15  2
+%17 = OpTypeStruct %6
 %18 = OpTypePointer Uniform %17
 %16 = OpVariable  %18  Uniform
-%20 = OpTypeStruct %12
+%20 = OpTypeStruct %10
 %21 = OpTypePointer Uniform %20
 %19 = OpVariable  %21  Uniform
-%23 = OpTypeStruct %14
+%23 = OpTypeStruct %12
 %24 = OpTypePointer Uniform %23
 %22 = OpVariable  %24  Uniform
-%27 = OpTypePointer Output %15
+%27 = OpTypePointer Output %13
 %26 = OpVariable  %27  Output
 %29 = OpTypeFunction %2
-%30 = OpTypePointer Uniform %8
-%31 = OpConstant  %11  0
-%33 = OpTypePointer Uniform %12
-%35 = OpTypePointer Uniform %14
-%37 = OpConstant  %6  1.0
-%40 = OpTypePointer Uniform %6
-%41 = OpConstant  %11  1
+%30 = OpTypePointer Uniform %6
+%31 = OpConstant  %9  0
+%33 = OpTypePointer Uniform %10
+%35 = OpTypePointer Uniform %12
+%37 = OpConstant  %4  1.0
+%40 = OpTypePointer Uniform %4
+%41 = OpConstant  %9  1
 %28 = OpFunction  %2  None %29
 %25 = OpLabel
 %32 = OpAccessChain  %30  %16 %31
@@ -84,16 +84,16 @@ OpDecorate %26 BuiltIn Position
 %36 = OpAccessChain  %35  %22 %31
 OpBranch %38
 %38 = OpLabel
-%39 = OpCompositeConstruct  %15  %37 %37 %37 %37
+%39 = OpCompositeConstruct  %13  %37 %37 %37 %37
 %42 = OpAccessChain  %40  %32 %41
-%43 = OpLoad  %6  %42
-%44 = OpVectorTimesScalar  %15  %39 %43
+%43 = OpLoad  %4  %42
+%44 = OpVectorTimesScalar  %13  %39 %43
 %45 = OpAccessChain  %40  %34 %41
-%46 = OpLoad  %6  %45
-%47 = OpVectorTimesScalar  %15  %44 %46
+%46 = OpLoad  %4  %45
+%47 = OpVectorTimesScalar  %13  %44 %46
 %48 = OpAccessChain  %40  %36 %41
-%49 = OpLoad  %6  %48
-%50 = OpVectorTimesScalar  %15  %47 %49
+%49 = OpLoad  %4  %48
+%50 = OpVectorTimesScalar  %13  %47 %49
 OpStore %26 %50
 OpReturn
 OpFunctionEnd

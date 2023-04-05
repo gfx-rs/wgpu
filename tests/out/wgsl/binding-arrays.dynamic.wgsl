@@ -5,8 +5,8 @@ var global_1: binding_array<sampler>;
 var<private> global_2: vec4<f32>;
 
 fn function() {
-    let _e13 = textureSampleLevel(global[1], global_1[1], vec2<f32>(0.5, 0.5), 0.0);
-    global_2 = _e13;
+    let _e9 = textureSampleLevel(global[1], global_1[1], vec2<f32>(0.5, 0.5), 0.0);
+    global_2 = _e9;
     return;
 }
 

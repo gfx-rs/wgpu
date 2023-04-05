@@ -244,7 +244,7 @@ impl<'source> ParsingContext<'source> {
                 .transpose()?;
 
             let is_const = ctx.qualifiers.storage.0 == StorageQualifier::Const;
-            let maybe_constant = if ctx.external {
+            let maybe_const_expr = if ctx.external {
                 if let Some((root, meta)) = init {
                     match frontend.solve_constant(ctx.ctx, root, meta) {
                         Ok(res) => Some(res),
@@ -260,9 +260,9 @@ impl<'source> ParsingContext<'source> {
                 None
             };
 
-            let pointer = ctx.add_var(frontend, ty, name, maybe_constant, meta)?;
+            let pointer = ctx.add_var(frontend, ty, name, maybe_const_expr, meta)?;
 
-            if let Some((value, _)) = init.filter(|_| maybe_constant.is_none()) {
+            if let Some((value, _)) = init.filter(|_| maybe_const_expr.is_none()) {
                 ctx.flush_expressions();
                 ctx.body.push(Statement::Store { pointer, value }, meta);
             }

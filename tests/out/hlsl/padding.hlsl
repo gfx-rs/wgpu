@@ -1,4 +1,3 @@
-
 struct S {
     float3 a;
     int _end_pad_0;

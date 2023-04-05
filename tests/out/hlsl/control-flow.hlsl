@@ -1,4 +1,3 @@
-
 void switch_default_break(int i)
 {
     switch(i) {

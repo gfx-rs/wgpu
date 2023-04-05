@@ -335,87 +335,14 @@
         ray_desc: None,
         ray_intersection: None,
     ),
-    constants: [
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 2,
-                components: [
-                    1,
-                    1,
-                    1,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 4,
-                components: [
-                    1,
-                    2,
-                    3,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(2),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(10),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(1),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(5),
-            ),
-        ),
-    ],
+    constants: [],
     global_variables: [
         (
             name: Some("global_const"),
             space: Private,
             binding: None,
             ty: 4,
-            init: Some(4),
+            init: Some(7),
         ),
         (
             name: Some("bar"),
@@ -469,6 +396,44 @@
             init: None,
         ),
     ],
+    const_expressions: [
+        Literal(U32(0)),
+        Literal(U32(0)),
+        Literal(U32(0)),
+        Literal(U32(0)),
+        Compose(
+            ty: 2,
+            components: [
+                2,
+                3,
+                4,
+            ],
+        ),
+        Literal(I32(0)),
+        Compose(
+            ty: 4,
+            components: [
+                1,
+                5,
+                6,
+            ],
+        ),
+        Literal(I32(2)),
+        Literal(I32(10)),
+        Literal(I32(2)),
+        Literal(I32(2)),
+        Literal(I32(2)),
+        Literal(I32(2)),
+        Literal(I32(10)),
+        Literal(I32(5)),
+        Literal(I32(5)),
+        Literal(I32(10)),
+        Literal(I32(5)),
+        Literal(I32(2)),
+        Literal(I32(2)),
+        Literal(I32(2)),
+        Literal(I32(2)),
+    ],
     functions: [
         (
             name: Some("test_matrix_within_struct_accesses"),
@@ -489,14 +454,14 @@
             expressions: [
                 Literal(I32(1)),
                 LocalVariable(1),
+                Literal(I32(1)),
                 Load(
                     pointer: 2,
                 ),
-                Constant(7),
                 Binary(
                     op: Subtract,
-                    left: 3,
-                    right: 4,
+                    left: 4,
+                    right: 3,
                 ),
                 GlobalVariable(3),
                 AccessIndex(
@@ -644,14 +609,14 @@
                     ],
                 ),
                 LocalVariable(2),
+                Literal(I32(1)),
                 Load(
                     pointer: 2,
                 ),
-                Constant(7),
                 Binary(
                     op: Add,
-                    left: 56,
-                    right: 57,
+                    left: 57,
+                    right: 56,
                 ),
                 AccessIndex(
                     base: 55,
@@ -794,11 +759,7 @@
                     value: 1,
                 ),
                 Emit((
-                    start: 2,
-                    end: 3,
-                )),
-                Emit((
-                    start: 4,
+                    start: 3,
                     end: 5,
                 )),
                 Store(
@@ -870,11 +831,7 @@
                     value: 54,
                 ),
                 Emit((
-                    start: 55,
-                    end: 56,
-                )),
-                Emit((
-                    start: 57,
+                    start: 56,
                     end: 58,
                 )),
                 Store(
@@ -1001,14 +958,14 @@
             expressions: [
                 Literal(I32(1)),
                 LocalVariable(1),
+                Literal(I32(1)),
                 Load(
                     pointer: 2,
                 ),
-                Constant(7),
                 Binary(
                     op: Subtract,
-                    left: 3,
-                    right: 4,
+                    left: 4,
+                    right: 3,
                 ),
                 GlobalVariable(5),
                 AccessIndex(
@@ -1177,14 +1134,14 @@
                     ],
                 ),
                 LocalVariable(2),
+                Literal(I32(1)),
                 Load(
                     pointer: 2,
                 ),
-                Constant(7),
                 Binary(
                     op: Add,
-                    left: 67,
-                    right: 68,
+                    left: 68,
+                    right: 67,
                 ),
                 AccessIndex(
                     base: 66,
@@ -1374,11 +1331,7 @@
                     value: 1,
                 ),
                 Emit((
-                    start: 2,
-                    end: 3,
-                )),
-                Emit((
-                    start: 4,
+                    start: 3,
                     end: 5,
                 )),
                 Store(
@@ -1474,11 +1427,7 @@
                     value: 65,
                 ),
                 Emit((
-                    start: 66,
-                    end: 67,
-                )),
-                Emit((
-                    start: 68,
+                    start: 67,
                     end: 69,
                 )),
                 Store(

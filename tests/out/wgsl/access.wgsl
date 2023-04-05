@@ -41,8 +41,8 @@ fn test_matrix_within_struct_accesses() {
     var t: Baz;
 
     idx = 1;
-    let _e2 = idx;
-    idx = (_e2 - 1);
+    let _e3 = idx;
+    idx = (_e3 - 1);
     let l0_ = baz.m;
     let l1_ = baz.m[0];
     let _e15 = idx;
@@ -56,8 +56,8 @@ fn test_matrix_within_struct_accesses() {
     let _e43 = idx;
     let l6_ = baz.m[_e41][_e43];
     t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
-    let _e55 = idx;
-    idx = (_e55 + 1);
+    let _e56 = idx;
+    idx = (_e56 + 1);
     t.m = mat3x2<f32>(vec2<f32>(6.0), vec2<f32>(5.0), vec2<f32>(4.0));
     t.m[0] = vec2<f32>(9.0);
     let _e72 = idx;
@@ -78,8 +78,8 @@ fn test_matrix_within_array_within_struct_accesses() {
     var t_1: MatCx2InArray;
 
     idx_1 = 1;
-    let _e2 = idx_1;
-    idx_1 = (_e2 - 1);
+    let _e3 = idx_1;
+    idx_1 = (_e3 - 1);
     let l0_1 = nested_mat_cx2_.am;
     let l1_1 = nested_mat_cx2_.am[0];
     let l2_1 = nested_mat_cx2_.am[0][0];
@@ -94,8 +94,8 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e60 = idx_1;
     let l7_ = nested_mat_cx2_.am[0][_e58][_e60];
     t_1 = MatCx2InArray(array<mat4x2<f32>, 2>());
-    let _e66 = idx_1;
-    idx_1 = (_e66 + 1);
+    let _e67 = idx_1;
+    idx_1 = (_e67 + 1);
     t_1.am = array<mat4x2<f32>, 2>();
     t_1.am[0] = mat4x2<f32>(vec2<f32>(8.0), vec2<f32>(7.0), vec2<f32>(6.0), vec2<f32>(5.0));
     t_1.am[0][0] = vec2<f32>(9.0);
