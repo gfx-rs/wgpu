@@ -174,6 +174,58 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     )
                     .unwrap();
                 }
+                trace::Command::BuildAccelerationStructures { blas, tlas } => {
+                    let blas_iter = (&blas).into_iter().map(|x| {
+                        let geometries = match &x.geometries {
+                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
+                                triangle_geometries,
+                            ) => {
+                                let iter = triangle_geometries.into_iter().map(|tg| {
+                                    wgc::ray_tracing::BlasTriangleGeometry {
+                                        size: &tg.size,
+                                        vertex_buffer: tg.vertex_buffer,
+                                        index_buffer: tg.index_buffer,
+                                        transform_buffer: tg.transform_buffer,
+                                        first_vertex: tg.first_vertex,
+                                        vertex_stride: tg.vertex_stride,
+                                        index_buffer_offset: tg.index_buffer_offset,
+                                        transform_buffer_offset: tg.transform_buffer_offset,
+                                    }
+                                });
+                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
+                            }
+                        };
+                        wgc::ray_tracing::BlasBuildEntry {
+                            blas_id: x.blas_id,
+                            geometries: geometries,
+                        }
+                    });
+
+                    let tlas_iter = (&tlas).into_iter().map(|x| {
+                        let instances = x.instances.iter().map(|instance| {
+                            if let Some(ref instance) = instance {
+                                Some(wgc::ray_tracing::TlasInstance {
+                                    blas_id: instance.blas_id,
+                                    transform: &instance.transform,
+                                    custom_index: instance.custom_index,
+                                    mask: instance.mask,
+                                })
+                            } else {
+                                None
+                            }
+                        });
+                        wgc::ray_tracing::TlasPackage {
+                            tlas_id: x.tlas_id,
+                            instances: Box::new(instances),
+                            lowest_unmodified: x.lowest_unmodified,
+                        }
+                    });
+
+                    self.command_encoder_build_acceleration_structures::<A>(
+                        encoder, blas_iter, tlas_iter,
+                    )
+                    .unwrap();
+                }
             }
         }
         let (cmd_buf, error) = self
@@ -423,9 +475,21 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_maintain_ids::<A>(device).unwrap();
                 self.device_create_blas::<A>(device, &desc, sizes, id);
             }
+            Action::FreeBlas(id) => {
+                self.blas_destroy::<A>(id).unwrap();
+            }
+            Action::DestroyBlas(id) => {
+                self.blas_drop::<A>(id, true);
+            }
             Action::CreateTlas { id, desc } => {
                 self.device_maintain_ids::<A>(device).unwrap();
                 self.device_create_tlas::<A>(device, &desc, id);
+            }
+            Action::FreeTlas(id) => {
+                self.tlas_destroy::<A>(id).unwrap();
+            }
+            Action::DestroyTlas(id) => {
+                self.tlas_drop::<A>(id, true);
             }
         }
     }

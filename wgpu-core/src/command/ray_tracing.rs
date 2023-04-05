@@ -1057,7 +1057,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             tlas_storage.push((
                 tlas,
                 hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(&tlas.instance_buffer),
+                    buffer: Some(tlas.instance_buffer.as_ref().unwrap()),
                     offset: 0,
                     count: instance_count,
                 }),
@@ -1169,7 +1169,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     None
                 } else {
                     Some(hal::BufferBarrier::<A> {
-                        buffer: &tlas.instance_buffer,
+                        buffer: tlas.instance_buffer.as_ref().unwrap(),
                         usage: hal::BufferUses::COPY_DST
                             ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     })
@@ -1217,7 +1217,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                     cmd_buf_raw.copy_buffer_to_buffer(
                         &staging_buffer,
-                        &tlas.instance_buffer,
+                        tlas.instance_buffer.as_ref().unwrap(),
                         iter::once(temp),
                     );
                 }

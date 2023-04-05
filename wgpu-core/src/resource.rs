@@ -828,7 +828,7 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built: Mutex<bool>,
-    pub(crate) instance_buffer: A::Buffer,
+    pub(crate) instance_buffer: Option<A::Buffer>,
 }
 
 impl<A: hal::Api> Resource for Tlas<A> {

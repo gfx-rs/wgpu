@@ -149,7 +149,7 @@ impl<A: HalApi> Device<A> {
             flags: desc.flags,
             update_mode: desc.update_mode,
             built: Mutex::new(false),
-            instance_buffer,
+            instance_buffer: Some(instance_buffer),
         })
     }
 }
@@ -269,10 +269,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &mut device_guard[blas.device_id.value];
 
-        // #[cfg(feature = "trace")]
-        // if let Some(ref trace) = device.trace {
-        //     trace.lock().add(trace::Action::FreeBlas(blas_id));
-        // }
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::FreeBlas(blas_id));
+        }
 
         let raw = blas
             .raw
@@ -347,22 +347,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &mut device_guard[tlas.device_id.value];
 
-        // #[cfg(feature = "trace")]
-        // if let Some(ref trace) = device.trace {
-        //     trace.lock().add(trace::Action::FreeTlas(tlas_id));
-        // }
+        #[cfg(feature = "trace")]
+        if let Some(ref trace) = device.trace {
+            trace.lock().add(trace::Action::FreeTlas(tlas_id));
+        }
 
         let raw = tlas
             .raw
             .take()
             .ok_or(resource::DestroyError::AlreadyDestroyed)?;
+
         let temp = TempResource::AccelerationStructure(raw);
+
+        let raw_instance_buffer = tlas.instance_buffer.take();
+        let temp_instance_buffer = raw_instance_buffer.map(|e| TempResource::Buffer(e));
         {
             let last_submit_index = tlas.life_guard.life_count();
             drop(tlas_guard);
-            device
-                .lock_life(&mut token)
-                .schedule_resource_destruction(temp, last_submit_index);
+            let guard = &mut device.lock_life(&mut token);
+
+            guard.schedule_resource_destruction(temp, last_submit_index);
+            if let Some(temp_instance_buffer) = temp_instance_buffer {
+                guard.schedule_resource_destruction(temp_instance_buffer, last_submit_index);
+            }
         }
 
         Ok(())

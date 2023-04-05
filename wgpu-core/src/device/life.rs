@@ -821,10 +821,10 @@ impl<A: HalApi> LifetimeTracker<A> {
             for id in self.suspected_resources.blas_s.drain(..) {
                 if trackers.blas_s.remove_abandoned(id) {
                     log::debug!("Blas {:?} will be destroyed", id);
-                    // #[cfg(feature = "trace")]
-                    // if let Some(t) = trace {
-                    //     t.lock().add(trace::Action::DestroyBlas(id.0));
-                    // }
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyBlas(id.0));
+                    }
 
                     if let Some(res) = hub.blas_s.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.life_count();
@@ -845,11 +845,11 @@ impl<A: HalApi> LifetimeTracker<A> {
 
             for id in self.suspected_resources.tlas_s.drain(..) {
                 if trackers.tlas_s.remove_abandoned(id) {
-                    log::debug!("Blas {:?} will be destroyed", id);
-                    // #[cfg(feature = "trace")]
-                    // if let Some(t) = trace {
-                    //     t.lock().add(trace::Action::DestroyBlas(id.0));
-                    // }
+                    log::debug!("Tlas {:?} will be destroyed", id);
+                    #[cfg(feature = "trace")]
+                    if let Some(t) = trace {
+                        t.lock().add(trace::Action::DestroyTlas(id.0));
+                    }
 
                     if let Some(res) = hub.tlas_s.unregister_locked(id.0, &mut *guard) {
                         let submit_index = res.life_guard.life_count();
@@ -859,6 +859,13 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .acceleration_structures
                             .extend(res.raw);
+
+                        self.active
+                            .iter_mut()
+                            .find(|a| a.index == submit_index)
+                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                            .buffers
+                            .extend(res.instance_buffer);
                     }
                 }
             }
