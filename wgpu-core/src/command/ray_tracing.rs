@@ -10,7 +10,7 @@ use crate::{
         TraceTlasInstance, ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, StagingBuffer, Tlas},
-    FastHashSet,
+    FastHashMap, FastHashSet,
 };
 
 use hal::{CommandEncoder, Device};
@@ -41,6 +41,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
         let device = &mut device_guard[cmd_buf.device_id.value];
+
+        let build_command_index = NonZeroU64::new(
+            device
+                .last_acceleration_structure_build_command_index
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1,
+        )
+        .unwrap();
 
         #[cfg(feature = "trace")]
         let trace_blas: Vec<crate::ray_tracing::TraceBlasBuildEntry> = blas_iter
@@ -132,12 +140,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
             }
 
-            if !*blas.built.lock() {
-                cmd_buf.blas_actions.push(BlasAction {
-                    id: entry.blas_id,
-                    kind: crate::ray_tracing::AccelerationStructureActionKind::Build,
-                });
-            }
+            cmd_buf.blas_actions.push(BlasAction {
+                id: entry.blas_id,
+                kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
+            });
 
             match entry.geometries {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
@@ -459,12 +465,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
             }
 
-            if !*tlas.built.lock() {
-                cmd_buf.tlas_actions.push(TlasAction {
-                    id: entry.tlas_id,
-                    kind: crate::ray_tracing::AccelerationStructureActionKind::Build,
-                });
-            }
+            cmd_buf.tlas_actions.push(TlasAction {
+                id: entry.tlas_id,
+                kind: crate::ray_tracing::TlasActionKind::Build {
+                    build_index: build_command_index,
+                    dependencies: Vec::new(),
+                },
+            });
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
             scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
@@ -509,7 +516,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                         log::info!("only rebuild implemented")
                     }
-                    *blas.built.lock() = true;
                     hal::BuildAccelerationStructureDescriptor {
                         entries,
                         mode: hal::AccelerationStructureBuildMode::Build, // TODO
@@ -528,7 +534,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                         log::info!("only rebuild implemented")
                     }
-                    *tlas.built.lock() = true;
                     hal::BuildAccelerationStructureDescriptor {
                         entries,
                         mode: hal::AccelerationStructureBuildMode::Build, // TODO
@@ -589,6 +594,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
         let device = &mut device_guard[cmd_buf.device_id.value];
+
+        let build_command_index = NonZeroU64::new(
+            device
+                .last_acceleration_structure_build_command_index
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1,
+        )
+        .unwrap();
 
         #[cfg(feature = "trace")]
         let trace_blas: Vec<crate::ray_tracing::TraceBlasBuildEntry> = blas_iter
@@ -718,12 +731,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
             }
 
-            if !*blas.built.lock() {
-                cmd_buf.blas_actions.push(BlasAction {
-                    id: entry.blas_id,
-                    kind: crate::ray_tracing::AccelerationStructureActionKind::Build,
-                });
-            }
+            cmd_buf.blas_actions.push(BlasAction {
+                id: entry.blas_id,
+                kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
+            });
 
             match entry.geometries {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
@@ -1023,17 +1034,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
             }
 
-            if !*tlas.built.lock() {
-                cmd_buf.tlas_actions.push(TlasAction {
-                    id: entry.tlas_id,
-                    kind: crate::ray_tracing::AccelerationStructureActionKind::Build,
-                });
-            }
-
             let scratch_buffer_offset = scratch_buffer_tlas_size;
             scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
 
             let first_byte_index = instance_buffer_staging_source.len();
+
+            let mut dependencies = Vec::new();
 
             let mut instance_count = 0;
             for instance in entry.instances {
@@ -1051,8 +1057,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .extend(tlas_instance_into_bytes::<A>(&instance, blas.handle));
 
                     instance_count += 1;
+
+                    dependencies.push(instance.blas_id);
+
+                    cmd_buf.blas_actions.push(BlasAction {
+                        id: instance.blas_id,
+                        kind: crate::ray_tracing::BlasActionKind::Use,
+                    });
                 }
             }
+
+            cmd_buf.tlas_actions.push(TlasAction {
+                id: entry.tlas_id,
+                kind: crate::ray_tracing::TlasActionKind::Build {
+                    build_index: build_command_index,
+                    dependencies,
+                },
+            });
 
             tlas_storage.push((
                 tlas,
@@ -1082,37 +1103,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(crate::device::DeviceError::from)?
         };
 
-        let staging_buffer = unsafe {
-            device
-                .raw
-                .create_buffer(&hal::BufferDescriptor {
-                    label: Some("(wgpu) instance staging buffer"),
-                    size: instance_buffer_staging_source.len() as u64,
-                    usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
-                    memory_flags: hal::MemoryFlags::empty(),
-                })
-                .map_err(crate::device::DeviceError::from)?
-        };
+        let staging_buffer = if instance_buffer_staging_source.len() > 0 {
+            unsafe {
+                let staging_buffer = device
+                    .raw
+                    .create_buffer(&hal::BufferDescriptor {
+                        label: Some("(wgpu) instance staging buffer"),
+                        size: instance_buffer_staging_source.len() as u64,
+                        usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
+                        memory_flags: hal::MemoryFlags::empty(),
+                    })
+                    .map_err(crate::device::DeviceError::from)?;
 
-        unsafe {
-            let mapping = device
-                .raw
-                .map_buffer(
-                    &staging_buffer,
-                    0..instance_buffer_staging_source.len() as u64,
-                )
-                .map_err(crate::device::DeviceError::from)?;
-            ptr::copy_nonoverlapping(
-                instance_buffer_staging_source.as_ptr(),
-                mapping.ptr.as_ptr(),
-                instance_buffer_staging_source.len(),
-            );
-            device
-                .raw
-                .unmap_buffer(&staging_buffer)
-                .map_err(crate::device::DeviceError::from)?;
-            assert!(mapping.is_coherent);
-        }
+                let mapping = device
+                    .raw
+                    .map_buffer(
+                        &staging_buffer,
+                        0..instance_buffer_staging_source.len() as u64,
+                    )
+                    .map_err(crate::device::DeviceError::from)?;
+                ptr::copy_nonoverlapping(
+                    instance_buffer_staging_source.as_ptr(),
+                    mapping.ptr.as_ptr(),
+                    instance_buffer_staging_source.len(),
+                );
+                device
+                    .raw
+                    .unmap_buffer(&staging_buffer)
+                    .map_err(crate::device::DeviceError::from)?;
+                assert!(mapping.is_coherent);
+
+                Some(staging_buffer)
+            }
+        } else {
+            None
+        };
 
         let blas_descriptors =
             blas_storage
@@ -1121,7 +1146,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                         log::info!("only rebuild implemented")
                     }
-                    *blas.built.lock() = true;
                     hal::BuildAccelerationStructureDescriptor {
                         entries,
                         mode: hal::AccelerationStructureBuildMode::Build, // TODO
@@ -1138,7 +1162,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
                     log::info!("only rebuild implemented")
                 }
-                *tlas.built.lock() = true;
                 hal::BuildAccelerationStructureDescriptor {
                     entries,
                     mode: hal::AccelerationStructureBuildMode::Build, // TODO
@@ -1155,11 +1178,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer: &scratch_buffer,
             usage: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH
                 ..hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
-        };
-
-        let staging_buffer_barrier = hal::BufferBarrier::<A> {
-            buffer: &scratch_buffer,
-            usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         };
 
         let instance_buffer_barriers = tlas_storage.iter().filter_map(
@@ -1201,7 +1219,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if tlas_present {
             unsafe {
-                cmd_buf_raw.transition_buffers(iter::once(staging_buffer_barrier));
+                cmd_buf_raw.transition_buffers(iter::once(hal::BufferBarrier::<A> {
+                    buffer: staging_buffer.as_ref().unwrap(),
+                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                }));
             }
 
             for (tlas, _entries, _scratch_buffer_offset, range) in &tlas_storage {
@@ -1216,7 +1237,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size: NonZeroU64::new(size).unwrap(),
                     };
                     cmd_buf_raw.copy_buffer_to_buffer(
-                        &staging_buffer,
+                        staging_buffer.as_ref().unwrap(),
                         tlas.instance_buffer.as_ref().unwrap(),
                         iter::once(temp),
                     );
@@ -1231,12 +1252,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 cmd_buf_raw
                     .build_acceleration_structures(tlas_storage.len() as u32, tlas_descriptors);
             }
+
+            device
+                .pending_writes
+                .temp_resources
+                .push(TempResource::Buffer(staging_buffer.unwrap()));
         }
 
-        device.pending_writes.temp_resources.extend([
-            TempResource::Buffer(scratch_buffer),
-            TempResource::Buffer(staging_buffer),
-        ]);
+        device
+            .pending_writes
+            .temp_resources
+            .push(TempResource::Buffer(scratch_buffer));
 
         Ok(())
     }
@@ -1246,20 +1272,24 @@ impl<A: HalApi> BakedCommands<A> {
     // makes sure a blas is build before it is used
     pub(crate) fn validate_blas_actions(
         &mut self,
-        blas_guard: &Storage<Blas<A>, BlasId>,
+        blas_guard: &mut Storage<Blas<A>, BlasId>,
     ) -> Result<(), ValidateBlasActionsError> {
         let mut built = FastHashSet::default();
         for action in self.blas_actions.drain(..) {
             match action.kind {
-                crate::ray_tracing::AccelerationStructureActionKind::Build => {
+                crate::ray_tracing::BlasActionKind::Build(id) => {
                     built.insert(action.id);
+                    let blas = blas_guard
+                        .get_mut(action.id)
+                        .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
+                    blas.built_index = Some(id);
                 }
-                crate::ray_tracing::AccelerationStructureActionKind::Use => {
+                crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.id) {
                         let blas = blas_guard
                             .get(action.id)
                             .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
-                        if !*blas.built.lock() {
+                        if blas.built_index == None {
                             return Err(ValidateBlasActionsError::UsedUnbuilt(action.id));
                         }
                     }
@@ -1272,21 +1302,46 @@ impl<A: HalApi> BakedCommands<A> {
     // makes sure a tlas is build before it is used
     pub(crate) fn validate_tlas_actions(
         &mut self,
-        tlas_guard: &Storage<Tlas<A>, TlasId>,
+        blas_guard: &Storage<Blas<A>, BlasId>,
+        tlas_guard: &mut Storage<Tlas<A>, TlasId>,
     ) -> Result<(), ValidateTlasActionsError> {
-        let mut built = FastHashSet::default();
         for action in self.tlas_actions.drain(..) {
             match action.kind {
-                crate::ray_tracing::AccelerationStructureActionKind::Build => {
-                    built.insert(action.id);
+                crate::ray_tracing::TlasActionKind::Build {
+                    build_index,
+                    dependencies,
+                } => {
+                    let tlas = tlas_guard
+                        .get_mut(action.id)
+                        .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
+
+                    tlas.built_index = Some(build_index);
+                    tlas.dependencies = dependencies;
                 }
-                crate::ray_tracing::AccelerationStructureActionKind::Use => {
-                    if !built.contains(&action.id) {
-                        let tlas = tlas_guard
-                            .get(action.id)
-                            .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
-                        if !*tlas.built.lock() {
+                crate::ray_tracing::TlasActionKind::Use => {
+                    let tlas = tlas_guard
+                        .get(action.id)
+                        .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
+
+                    let tlas_build_index = tlas.built_index;
+                    let dependencies = &tlas.dependencies;
+
+                    if tlas_build_index == None {
+                        return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
+                    }
+                    for dependency in dependencies {
+                        let blas = blas_guard.get(*dependency).map_err(|_| {
+                            ValidateTlasActionsError::InvalidBlas(*dependency, action.id)
+                        })?;
+                        let blas_build_index = blas.built_index;
+                        if blas_build_index == None {
                             return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
+                        }
+                        if blas_build_index.unwrap() > tlas_build_index.unwrap() {
+                            return Err(ValidateTlasActionsError::BlasNewerThenTlas(
+                                *dependency,
+                                action.id,
+                            ));
                         }
                     }
                 }

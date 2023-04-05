@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, num::NonZeroU64, ops::Range, ptr::NonNull};
 
 /// The status code provided to the buffer mapping callback.
 ///
@@ -808,7 +808,7 @@ pub struct Blas<A: hal::Api> {
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
-    pub(crate) built: Mutex<bool>,
+    pub(crate) built_index: Option<NonZeroU64>,
     pub(crate) handle: u64,
 }
 
@@ -827,7 +827,8 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
-    pub(crate) built: Mutex<bool>,
+    pub(crate) built_index: Option<NonZeroU64>,
+    pub(crate) dependencies: Vec<crate::id::BlasId>,
     pub(crate) instance_buffer: Option<A::Buffer>,
 }
 

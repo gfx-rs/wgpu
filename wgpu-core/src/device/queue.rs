@@ -1065,8 +1065,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, mut token) = hub.samplers.read(&mut token);
                     let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-                    let (blas_guard, mut token) = hub.blas_s.read(&mut token);
-                    let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+                    let (mut blas_guard, mut token) = hub.blas_s.write(&mut token);
+                    let (mut tlas_guard, _) = hub.tlas_s.write(&mut token);
 
                     //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
@@ -1237,8 +1237,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
 
-                        baked.validate_blas_actions(&*blas_guard)?;
-                        baked.validate_tlas_actions(&*tlas_guard)?;
+                        baked.validate_blas_actions(&mut *blas_guard)?;
+                        baked.validate_tlas_actions(&*blas_guard, &mut *tlas_guard)?;
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.

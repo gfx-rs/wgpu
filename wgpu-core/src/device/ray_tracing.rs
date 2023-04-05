@@ -85,8 +85,8 @@ impl<A: HalApi> Device<A> {
             sizes,
             flags: blas_desc.flags,
             update_mode: blas_desc.update_mode,
-            built: Mutex::new(false),
             handle,
+            built_index: None,
         })
     }
 
@@ -148,7 +148,8 @@ impl<A: HalApi> Device<A> {
             size_info,
             flags: desc.flags,
             update_mode: desc.update_mode,
-            built: Mutex::new(false),
+            built_index: None,
+            dependencies: Vec::new(),
             instance_buffer: Some(instance_buffer),
         })
     }

@@ -1358,14 +1358,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         cmd_buf.tlas_actions.extend(
-                            bind_group.used.acceleration_structures.used().filter_map(|id| {
+                            bind_group.used.acceleration_structures.used().map(|id| {
                                 let tlas = &tlas_guard[id];
-                                if *tlas.built.lock() {
-                                    None
-                                }
-                                else
-                                {
-                                    Some(crate::ray_tracing::TlasAction{ id: id.0, kind: crate::ray_tracing::AccelerationStructureActionKind::Use })
+                                crate::ray_tracing::TlasAction {
+                                    id: id.0,
+                                    kind: crate::ray_tracing::TlasActionKind::Use,
                                 }
                             }),
                         );

@@ -6,7 +6,7 @@
 /// - maybe share scratch and instance staging buffer allocation
 /// - partial instance buffer uploads (api surface already designed with this in mind)
 /// - (non performance extract function in build (rust function extraction with guards is a pain))
-use std::{ptr, slice};
+use std::{num::NonZeroU64, ptr, slice};
 
 use crate::{
     command::CommandEncoderError,
@@ -105,6 +105,15 @@ pub enum ValidateTlasActionsError {
 
     #[error("Tlas {0:?} is used before it is build")]
     UsedUnbuilt(TlasId),
+
+    #[error("Blas {0:?} is used before it is build (in Tlas {1:?})")]
+    UsedUnbuiltBlas(BlasId, TlasId),
+
+    #[error("Blas {0:?} is invalid or destroyed (in Tlas {1:?})")]
+    InvalidBlas(BlasId, TlasId),
+
+    #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
+    BlasNewerThenTlas(BlasId, TlasId),
 }
 
 #[derive(Debug)]
@@ -152,21 +161,30 @@ pub struct TlasPackage<'a> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum AccelerationStructureActionKind {
-    Build,
+pub(crate) enum BlasActionKind {
+    Build(NonZeroU64),
+    Use,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum TlasActionKind {
+    Build {
+        build_index: NonZeroU64,
+        dependencies: Vec<BlasId>,
+    },
     Use,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct BlasAction {
     pub id: BlasId,
-    pub kind: AccelerationStructureActionKind,
+    pub kind: BlasActionKind,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct TlasAction {
     pub id: TlasId,
-    pub kind: AccelerationStructureActionKind,
+    pub kind: TlasActionKind,
 }
 
 #[derive(Debug, Clone)]

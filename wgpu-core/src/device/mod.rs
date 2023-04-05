@@ -342,6 +342,7 @@ pub struct Device<A: HalApi> {
     pub(crate) pending_writes: queue::PendingWrites<A>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<trace::Trace>>,
+    pub(crate) last_acceleration_structure_build_command_index: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -461,6 +462,7 @@ impl<A: HalApi> Device<A> {
             features: desc.features,
             downlevel,
             pending_writes,
+            last_acceleration_structure_build_command_index: std::sync::atomic::AtomicU64::new(0),
         })
     }
 

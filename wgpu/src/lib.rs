@@ -3030,7 +3030,7 @@ impl CommandEncoder {
     }
 
     /// Build bottom and top level acceleration structures
-    pub unsafe fn build_acceleration_structures<'a>(
+    pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
         tlas: impl IntoIterator<Item = &'a TlasPackage>,
