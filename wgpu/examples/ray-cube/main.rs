@@ -474,50 +474,47 @@ impl framework::Example for Example {
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        unsafe {
-            encoder.build_acceleration_structures(
-                iter::once(&wgpu::BlasBuildEntry {
-                    blas: &blas,
-                    geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
-                        wgpu::BlasTriangleGeometry {
-                            size: &blas_geo_size_desc,
-                            vertex_buffer: &vertex_buf,
-                            first_vertex: 0,
-                            vertex_stride: mem::size_of::<Vertex>() as u64,
-                            index_buffer: Some(&index_buf),
-                            index_buffer_offset: Some(0),
-                            transform_buffer: None,
-                            transform_buffer_offset: None,
-                        },
-                    ]),
-                }),
-                // iter::empty(),
-                iter::once(&tlas_package),
-            );
 
-            // encoder.build_acceleration_structures_unsafe_tlas(
-            //     iter::once(&wgpu::BlasBuildEntry {
-            //         blas: &blas,
-            //         geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
-            //             wgpu::BlasTriangleGeometry {
-            //                 size: &blas_geo_size_desc,
-            //                 vertex_buffer: &vertex_buf,
-            //                 first_vertex: 0,
-            //                 vertex_stride: mem::size_of::<Vertex>() as u64,
-            //                 index_buffer: Some(&index_buf),
-            //                 index_buffer_offset: Some(0),
-            //                 transform_buffer: None,
-            //                 transform_buffer_offset: None,
-            //             },
-            //         ]),
-            //     }),
-            //     iter::once(&wgpu::TlasBuildEntry {
-            //         tlas: &tlas,
-            //         instance_buffer: &instance_buf,
-            //         instance_count: 1,
-            //     }),
-            // );
-        }
+        encoder.build_acceleration_structures(
+            iter::once(&wgpu::BlasBuildEntry {
+                blas: &blas,
+                geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
+                    wgpu::BlasTriangleGeometry {
+                        size: &blas_geo_size_desc,
+                        vertex_buffer: &vertex_buf,
+                        first_vertex: 0,
+                        vertex_stride: mem::size_of::<Vertex>() as u64,
+                        index_buffer: Some(&index_buf),
+                        index_buffer_offset: Some(0),
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    },
+                ]),
+            }),
+            // iter::empty(),
+            iter::once(&tlas_package),
+        );
+
+        // encoder.build_acceleration_structures(
+        //     iter::once(&wgpu::BlasBuildEntry {
+        //         blas: &blas,
+        //         geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
+        //             wgpu::BlasTriangleGeometry {
+        //                 size: &blas_geo_size_desc,
+        //                 vertex_buffer: &vertex_buf,
+        //                 first_vertex: 0,
+        //                 vertex_stride: mem::size_of::<Vertex>() as u64,
+        //                 index_buffer: Some(&index_buf),
+        //                 index_buffer_offset: Some(0),
+        //                 transform_buffer: None,
+        //                 transform_buffer_offset: None,
+        //             },
+        //         ]),
+        //     }),
+        //     iter::empty(),
+        //     // iter::once(&tlas_package),
+        // );
+
         queue.submit(Some(encoder.finish()));
 
         let start_inst = Instant::now();
@@ -585,9 +582,7 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        unsafe {
-            encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
-        }
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
 
         {
             let mut cpass =
