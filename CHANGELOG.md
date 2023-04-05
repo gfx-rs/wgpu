@@ -70,6 +70,22 @@ Additionally `sample_type` and `block_size` now take an optional `TextureAspect`
 
 By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
+#### BufferUsages::QUERY_RESOLVE
+
+Buffers used as the `destination` argument of `CommandEncoder::resolve_query_set` now have to contain the `QUERY_RESOLVE` usage instead of the `COPY_DST` usage.
+
+```diff
+  let destination = device.create_buffer(&wgpu::BufferDescriptor {
+      // ...
+-     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
++     usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::MAP_READ,
+      mapped_at_creation: false,
+  });
+  command_encoder.resolve_query_set(&query_set, query_range, &destination, destination_offset);
+```
+
+By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+
 #### Renamed features
 
 The following `Features` have been renamed.
@@ -108,6 +124,7 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 #### General
 
 - Added `TextureFormatFeatureFlags::MULTISAMPLE_X16`. By @Dinnerbone in [#3454](https://github.com/gfx-rs/wgpu/pull/3454)
+- Added `BufferUsages::QUERY_RESOLVE`. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
 - Support stencil-only views and copying to/from combined depth-stencil textures. By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 - Added `Features::SHADER_EARLY_DEPTH_TEST`. By @teoxoy in [#3494](https://github.com/gfx-rs/wgpu/pull/3494)
 - Allow copying of textures with copy-compatible formats. By @teoxoy in [#3528](https://github.com/gfx-rs/wgpu/pull/3528)
@@ -120,6 +137,7 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 - Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 - Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
 - Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
+- Implement `command_encoder_resolve_query_set`. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
 
 #### Vulkan
 
@@ -163,6 +181,10 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 - `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)
 - Fix definition of `NSOperatingSystemVersion` to avoid potential crashes. By @grovesNL in [#3557](https://github.com/gfx-rs/wgpu/pull/3557)
 - Fix shader bounds checking being ignored. By @FL33TW00D in [#3603](https://github.com/gfx-rs/wgpu/pull/3603)
+
+### Examples
+
+ - Use `BufferUsages::QUERY_RESOLVE` instead of `BufferUsages::COPY_DST` for buffers used in `CommandEncoder::resolve_query_set` calls in `mipmap` example. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
 
 ## wgpu-0.15.0 (2023-01-25)
 

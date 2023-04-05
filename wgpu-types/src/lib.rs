@@ -4220,6 +4220,8 @@ bitflags::bitflags! {
         const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 1 << 8;
+        /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
+        const QUERY_RESOLVE = 1 << 9;
     }
 }
 
