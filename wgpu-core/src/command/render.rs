@@ -465,6 +465,7 @@ impl fmt::Display for AttachmentErrorLocation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ColorAttachmentError {
     #[error("Attachment format {0:?} is not a color format")]
     InvalidFormat(wgt::TextureFormat),

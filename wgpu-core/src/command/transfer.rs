@@ -34,6 +34,7 @@ pub enum CopySide {
 
 /// Error encountered while attempting a data transfer.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TransferError {
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
@@ -170,6 +171,7 @@ impl PrettyError for TransferError {
 }
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CopyError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
