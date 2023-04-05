@@ -911,3 +911,27 @@ pub fn map_acceleration_structure_geomety_flags(
 
     vk_flags
 }
+
+pub fn map_acceleration_structure_usage_to_barrier(
+    usage: crate::AccelerationStructureUses,
+) -> (vk::PipelineStageFlags, vk::AccessFlags) {
+    let mut stages = vk::PipelineStageFlags::empty();
+    let mut access = vk::AccessFlags::empty();
+
+    if usage.contains(crate::AccelerationStructureUses::BUILD_INPUT) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::BUILD_OUTPUT) {
+        stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
+    }
+    if usage.contains(crate::AccelerationStructureUses::SHADER_INPUT) {
+        stages |= vk::PipelineStageFlags::VERTEX_SHADER
+            | vk::PipelineStageFlags::FRAGMENT_SHADER
+            | vk::PipelineStageFlags::COMPUTE_SHADER;
+        access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR;
+    }
+
+    (stages, access)
+}

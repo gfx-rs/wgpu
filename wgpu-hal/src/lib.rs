@@ -582,6 +582,11 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
     ) where
         A: 'a,
         T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, A>>;
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: AccelerationStructureBarrier,
+    );
 }
 
 bitflags!(
@@ -1459,3 +1464,19 @@ pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
 
 pub type AccelerationStructureBuildFlags = wgt::AccelerationStructureFlags;
 pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
+
+bitflags::bitflags! {
+    pub struct AccelerationStructureUses: u8 {
+        // For blas used as input for tlas
+        const BUILD_INPUT = 1 << 0;
+        // Target for acceleration structure build
+        const BUILD_OUTPUT = 1 << 1;
+        // Tlas used in a shader
+        const SHADER_INPUT = 1 << 2;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccelerationStructureBarrier {
+    pub usage: Range<AccelerationStructureUses>,
+}
