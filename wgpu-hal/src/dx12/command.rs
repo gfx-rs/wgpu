@@ -43,7 +43,7 @@ impl crate::BufferTextureCopy {
                             .unwrap();
                         (self.size.width / block_width) * block_size
                     });
-                    crate::auxil::align_to(actual, d3d12_ty::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
+                    wgt::math::align_to(actual, d3d12_ty::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)
                 },
             },
         }
