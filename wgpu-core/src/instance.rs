@@ -627,7 +627,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Surface::drop");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
-        self.instance.destroy_surface(surface.unwrap());
+        let mut surface = surface.unwrap();
+
+        fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
+            global: &Global<G>,
+            surface: &mut HalSurface<A>,
+            present: &Presentation,
+        ) {
+            let hub = HalApi::hub(global);
+            hub.surface_unconfigure(present.device_id.value, surface);
+        }
+
+        if let Some(present) = surface.presentation.take() {
+            match present.backend() {
+                #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                Backend::Vulkan => unconfigure(self, surface.vulkan.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                Backend::Metal => unconfigure(self, surface.metal.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "dx12", windows))]
+                Backend::Dx12 => unconfigure(self, surface.dx12.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "dx11", windows))]
+                Backend::Dx11 => unconfigure(self, surface.dx11.as_mut().unwrap(), &present),
+                #[cfg(feature = "gles")]
+                Backend::Gl => unconfigure(self, surface.gl.as_mut().unwrap(), &present),
+                _ => unreachable!(),
+            }
+        }
+
+        self.instance.destroy_surface(surface);
     }
 
     fn enumerate<A: HalApi>(

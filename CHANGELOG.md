@@ -153,6 +153,7 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 - Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
 - Fix fatal errors (those which panic even if an error handler is set) not including all of the details. By @kpreid in [#3563](https://github.com/gfx-rs/wgpu/pull/3563)
 - Validate shader location clashes. By @emilk in [#3613](https://github.com/gfx-rs/wgpu/pull/3613)
+- Fix surfaces not being dropped until exit. By @benjaminschaaf in [#3647](https://github.com/gfx-rs/wgpu/pull/3647)
 
 #### Vulkan
 

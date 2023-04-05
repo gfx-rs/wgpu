@@ -1035,6 +1035,20 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         }
     }
 
+    pub(crate) fn surface_unconfigure(
+        &self,
+        device_id: id::Valid<id::DeviceId>,
+        surface: &mut HalSurface<A>,
+    ) {
+        use hal::Surface as _;
+
+        let devices = self.devices.data.read();
+        let device = &devices[device_id];
+        unsafe {
+            surface.raw.unconfigure(&device.raw);
+        }
+    }
+
     pub fn generate_report(&self) -> HubReport {
         HubReport {
             adapters: self.adapters.data.read().generate_report(),
