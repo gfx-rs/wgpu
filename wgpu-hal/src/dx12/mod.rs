@@ -519,6 +519,7 @@ pub struct BindGroup {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct TableTypes: u8 {
         const SRV_CBV_UAV = 1 << 0;
         const SAMPLERS = 1 << 1;

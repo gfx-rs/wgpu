@@ -79,6 +79,7 @@ impl Default for TestParameters {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FailureReasons: u8 {
         const BACKEND = 1 << 0;
         const VENDOR = 1 << 1;
