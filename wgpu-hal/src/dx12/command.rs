@@ -1564,4 +1564,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
         todo!()
     }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        todo!()
+    }
 }
