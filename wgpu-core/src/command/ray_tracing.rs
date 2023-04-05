@@ -553,6 +553,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             cmd_buf_raw.transition_buffers(input_barriers.into_iter());
 
             if blas_present {
+                cmd_buf_raw.place_acceleration_structure_barrier(
+                    hal::AccelerationStructureBarrier {
+                        usage: hal::AccelerationStructureUses::BUILD_INPUT
+                            ..hal::AccelerationStructureUses::BUILD_OUTPUT,
+                    },
+                );
+
                 cmd_buf_raw
                     .build_acceleration_structures(blas_storage.len() as u32, blas_descriptors);
             }
@@ -561,9 +568,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 cmd_buf_raw.transition_buffers(iter::once(scratch_buffer_barrier));
             }
 
+            let mut source_usage = hal::AccelerationStructureUses::empty();
+            let mut destination_usage = hal::AccelerationStructureUses::empty();
+            if blas_present {
+                source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT;
+                destination_usage |= hal::AccelerationStructureUses::BUILD_INPUT
+            }
+            if tlas_present {
+                source_usage |= hal::AccelerationStructureUses::SHADER_INPUT;
+                destination_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT;
+            }
+
+            cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                usage: source_usage..destination_usage,
+            });
+
             if tlas_present {
                 cmd_buf_raw
                     .build_acceleration_structures(tlas_storage.len() as u32, tlas_descriptors);
+
+                cmd_buf_raw.place_acceleration_structure_barrier(
+                    hal::AccelerationStructureBarrier {
+                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
+                            ..hal::AccelerationStructureUses::SHADER_INPUT,
+                    },
+                );
             }
         }
 
@@ -1112,6 +1141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         0..instance_buffer_staging_source.len() as u64,
                     )
                     .map_err(crate::device::DeviceError::from)?;
+
                 ptr::copy_nonoverlapping(
                     instance_buffer_staging_source.as_ptr(),
                     mapping.ptr.as_ptr(),
@@ -1196,6 +1226,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if blas_present {
             unsafe {
+                cmd_buf_raw.place_acceleration_structure_barrier(
+                    hal::AccelerationStructureBarrier {
+                        usage: hal::AccelerationStructureUses::BUILD_INPUT
+                            ..hal::AccelerationStructureUses::BUILD_OUTPUT,
+                    },
+                );
+
                 cmd_buf_raw
                     .build_acceleration_structures(blas_storage.len() as u32, blas_descriptors);
             }
@@ -1205,6 +1242,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             unsafe {
                 cmd_buf_raw.transition_buffers(iter::once(scratch_buffer_barrier));
             }
+        }
+
+        let mut source_usage = hal::AccelerationStructureUses::empty();
+        let mut destination_usage = hal::AccelerationStructureUses::empty();
+        if blas_present {
+            source_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT;
+            destination_usage |= hal::AccelerationStructureUses::BUILD_INPUT
+        }
+        if tlas_present {
+            source_usage |= hal::AccelerationStructureUses::SHADER_INPUT;
+            destination_usage |= hal::AccelerationStructureUses::BUILD_OUTPUT;
+        }
+        unsafe {
+            cmd_buf_raw.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                usage: source_usage..destination_usage,
+            });
         }
 
         if tlas_present {
@@ -1236,11 +1289,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             unsafe {
                 cmd_buf_raw.transition_buffers(instance_buffer_barriers);
-            }
 
-            unsafe {
                 cmd_buf_raw
                     .build_acceleration_structures(tlas_storage.len() as u32, tlas_descriptors);
+
+                cmd_buf_raw.place_acceleration_structure_barrier(
+                    hal::AccelerationStructureBarrier {
+                        usage: hal::AccelerationStructureUses::BUILD_OUTPUT
+                            ..hal::AccelerationStructureUses::SHADER_INPUT,
+                    },
+                );
             }
 
             device

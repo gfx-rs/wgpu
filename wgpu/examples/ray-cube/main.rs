@@ -281,6 +281,8 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
+        let side_count = 8;
+
         let rt_target = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("rt_target"),
             size: wgpu::Extent3d {
@@ -376,7 +378,7 @@ impl framework::Example for Example {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-            max_instances: 1,
+            max_instances: side_count*side_count,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -456,21 +458,31 @@ impl framework::Example for Example {
             ],
         });
 
-        let mut tlas_package = wgpu::TlasPackage::new(tlas, 1);
+        let mut tlas_package = wgpu::TlasPackage::new(tlas, side_count * side_count);
 
-        *tlas_package.get_mut_single(0).unwrap() = Some(wgpu::TlasInstance::new(
-            &blas,
-            AccelerationStructureInstance::affine_to_rows(&Affine3A::from_rotation_translation(
-                Quat::from_rotation_x(45.9_f32.to_radians()),
-                Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: -3.0,
-                },
-            )),
-            0,
-            0xff,
-        ));
+        let dist = 3.0;
+
+        for x in 0..side_count {
+            for y in 0..side_count {
+                *tlas_package
+                    .get_mut_single((x + y * side_count) as usize)
+                    .unwrap() = Some(wgpu::TlasInstance::new(
+                    &blas,
+                    AccelerationStructureInstance::affine_to_rows(
+                        &Affine3A::from_rotation_translation(
+                            Quat::from_rotation_x(45.9_f32.to_radians()),
+                            Vec3 {
+                                x: x as f32 * dist,
+                                y: y as f32 * dist,
+                                z: -30.0,
+                            },
+                        ),
+                    ),
+                    0,
+                    0xff,
+                ));
+            }
+        }
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -575,7 +587,7 @@ impl framework::Example for Example {
                 Vec3 {
                     x: 0.0,
                     y: 0.0,
-                    z: -3.0,
+                    z: -6.0,
                 },
             ));
 
