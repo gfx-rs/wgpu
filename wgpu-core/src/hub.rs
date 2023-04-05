@@ -475,9 +475,9 @@ impl<T, I: id::TypedId> Storage<T, I> {
 /// If type `A` implements `Access<B>`, that means we are allowed to
 /// proceed with locking resource `B` after we lock `A`.
 ///
-/// The implementations of `Access` basically describe the edges in a
-/// directed graph of lock transitions. As long as it doesn't have
-/// loops, any number of threads can acquire locks along paths through
+/// The implementations of `Access` basically describe the edges in an
+/// acyclic directed graph of lock transitions. As long as it doesn't have
+/// cycles, any number of threads can acquire locks along paths through
 /// the graph without deadlock. That is, if you look at each thread's
 /// lock acquisitions as steps along a path in the graph, then because
 /// there are no cycles in the graph, there must always be some thread
