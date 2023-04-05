@@ -1,0 +1,50 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct Foo {
+    metal::float4 a;
+    int b;
+};
+struct type_5 {
+    metal::float2x2 inner[1];
+};
+struct type_10 {
+    Foo inner[3];
+};
+struct type_11 {
+    int inner[4];
+};
+constant metal::float3 const2_ = metal::float3(0.0, 1.0, 2.0);
+constant metal::float2x2 const3_ = metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0));
+constant type_5 const4_ = type_5 {metal::float2x2(metal::float2(0.0, 1.0), metal::float2(2.0, 3.0))};
+constant bool cz0_ = bool {};
+constant int cz1_ = int {};
+constant uint cz2_ = uint {};
+constant float cz3_ = float {};
+constant metal::uint2 cz4_ = metal::uint2 {};
+constant metal::float2x2 cz5_ = metal::float2x2 {};
+constant type_10 cz6_ = type_10 {};
+constant Foo cz7_ = Foo {};
+constant type_11 cp3_ = type_11 {0, 1, 2, 3};
+
+kernel void main_(
+) {
+    Foo foo = {};
+    foo = Foo {metal::float4(1.0), 1};
+    metal::float2x2 m0_ = metal::float2x2(metal::float2(1.0, 0.0), metal::float2(0.0, 1.0));
+    metal::float4x4 m1_ = metal::float4x4(metal::float4(1.0, 0.0, 0.0, 0.0), metal::float4(0.0, 1.0, 0.0, 0.0), metal::float4(0.0, 0.0, 1.0, 0.0), metal::float4(0.0, 0.0, 0.0, 1.0));
+    metal::uint2 cit0_ = metal::uint2(0u);
+    metal::float2x2 cit1_ = metal::float2x2(metal::float2(0.0), metal::float2(0.0));
+    type_11 cit2_ = type_11 {0, 1, 2, 3};
+    bool ic0_ = static_cast<bool>(bool {});
+    int ic1_ = static_cast<int>(int {});
+    uint ic2_ = static_cast<uint>(uint {});
+    float ic3_ = static_cast<float>(float {});
+    metal::uint2 ic4_ = static_cast<metal::uint2>(metal::uint2 {});
+    metal::float2x3 ic5_ = metal::float2x3(metal::float2x3 {});
+    metal::uint2 ic6_ = as_type<metal::uint2>(metal::uint2 {});
+    metal::float2x3 ic7_ = metal::float2x3(metal::float2x3 {});
+}

@@ -607,6 +607,10 @@ fn convert_wgsl() {
         ("invariant", Targets::GLSL),
         ("ray-query", Targets::SPIRV | Targets::METAL),
         ("hlsl-keyword", Targets::HLSL),
+        (
+            "constructors",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

@@ -1,4 +1,3 @@
-//TODO: support splatting constructors for globals?
 const v_f32_one = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 const v_f32_zero = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 const v_f32_half = vec4<f32>(0.5, 0.5, 0.5, 0.5);
@@ -39,54 +38,6 @@ fn splat_assignment() -> vec2<f32> {
 fn bool_cast(x: vec3<f32>) -> vec3<f32> {
     let y = vec3<bool>(x);
     return vec3<f32>(y);
-}
-
-struct Foo {
-    a: vec4<f32>,
-    b: i32,
-}
-
-fn constructors() -> f32 {
-    var foo: Foo;
-    foo = Foo(vec4<f32>(1.0), 1);
-
-    let m0 = mat2x2<f32>(
-        1.0, 0.0,
-        0.0, 1.0,
-    );
-    let m1 = mat4x4<f32>(
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-    );
-
-    // zero value constructors
-    let zvc0 = bool();
-    let zvc1 = i32();
-    let zvc2 = u32();
-    let zvc3 = f32();
-    let zvc4 = vec2<u32>();
-    let zvc5 = mat2x2<f32>();
-    let zvc6 = array<Foo, 3>();
-    let zvc7 = Foo();
-
-    // constructors that infer their type from their parameters
-    let cit0 = vec2(0u);
-    let cit1 = mat2x2(vec2(0.), vec2(0.));
-    let cit2 = array(0, 1, 2, 3);
-
-    // identity constructors
-    let ic0 = bool(bool());
-    let ic1 = i32(i32());
-    let ic2 = u32(u32());
-    let ic3 = f32(f32());
-    let ic4 = vec2<u32>(vec2<u32>());
-    let ic5 = mat2x3<f32>(mat2x3<f32>());
-    let ic6 = vec2(vec2<u32>());
-    let ic7 = mat2x3(mat2x3<f32>());
-
-    return foo.a.x;
 }
 
 fn logical() {
@@ -306,7 +257,6 @@ fn main() {
     builtins();
     splat();
     bool_cast(v_f32_one.xyz);
-    constructors();
 
     logical();
     arithmetic();

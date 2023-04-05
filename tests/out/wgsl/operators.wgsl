@@ -1,8 +1,3 @@
-struct Foo {
-    a: vec4<f32>,
-    b: i32,
-}
-
 const v_f32_one: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 const v_f32_zero: vec4<f32> = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 const v_f32_half: vec4<f32> = vec4<f32>(0.5, 0.5, 0.5, 0.5);
@@ -43,27 +38,6 @@ fn splat_assignment() -> vec2<f32> {
 fn bool_cast(x: vec3<f32>) -> vec3<f32> {
     let y = vec3<bool>(x);
     return vec3<f32>(y);
-}
-
-fn constructors() -> f32 {
-    var foo: Foo;
-
-    foo = Foo(vec4<f32>(1.0), 1);
-    let m0_ = mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0));
-    let m1_1 = mat4x4<f32>(vec4<f32>(1.0, 0.0, 0.0, 0.0), vec4<f32>(0.0, 1.0, 0.0, 0.0), vec4<f32>(0.0, 0.0, 1.0, 0.0), vec4<f32>(0.0, 0.0, 0.0, 1.0));
-    let cit0_ = vec2<u32>(0u);
-    let cit1_ = mat2x2<f32>(vec2<f32>(0.0), vec2<f32>(0.0));
-    let cit2_ = array<i32, 4>(0, 1, 2, 3);
-    let ic0_ = bool(bool());
-    let ic1_ = i32(i32());
-    let ic2_ = u32(u32());
-    let ic3_ = f32(f32());
-    let ic4_ = vec2<u32>(vec2<u32>());
-    let ic5_ = mat2x3<f32>(mat2x3<f32>());
-    let ic6_ = bitcast<vec2<u32>>(vec2<u32>());
-    let ic7_ = mat2x3<f32>(mat2x3<f32>());
-    let _e71 = foo.a.x;
-    return _e71;
 }
 
 fn logical() {
@@ -271,7 +245,6 @@ fn main() {
     let _e0 = builtins();
     let _e1 = splat();
     let _e4 = bool_cast(v_f32_one.xyz);
-    let _e5 = constructors();
     logical();
     arithmetic();
     bit();
