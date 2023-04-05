@@ -1017,7 +1017,7 @@ impl HubReport {
 /// making `Token` neither `Send` nor `Sync`).
 ///
 /// [`A::hub(global)`]: HalApi::hub
-/// [`RwLock`]: std::sync::RwLock
+/// [`RwLock`]: parking_lot::RwLock
 /// [`buffers`]: Hub::buffers
 /// [`read`]: Registry::read
 /// [`write`]: Registry::write
