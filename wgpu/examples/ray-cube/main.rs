@@ -142,7 +142,7 @@ impl AccelerationStructureInstance {
         Self::rows_to_affine(&self.transform)
     }
     pub fn set_transform(&mut self, transform: &Affine3A) {
-        self.transform = Self::affine_to_rows(&transform);
+        self.transform = Self::affine_to_rows(transform);
     }
 
     pub fn custom_index(&self) -> u32 {
@@ -378,7 +378,7 @@ impl framework::Example for Example {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-            max_instances: side_count*side_count,
+            max_instances: side_count * side_count,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -608,7 +608,7 @@ impl framework::Example for Example {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
