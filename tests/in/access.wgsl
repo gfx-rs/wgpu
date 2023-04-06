@@ -151,23 +151,6 @@ fn foo_frag() -> @location(0) vec4<f32> {
 	return vec4<f32>(0.0);
 }
 
-@compute @workgroup_size(1)
-fn atomics() {
-	var tmp: i32;
-	let value = atomicLoad(&bar.atom);
-	tmp = atomicAdd(&bar.atom, 5);
-	tmp = atomicSub(&bar.atom, 5);
-	tmp = atomicAnd(&bar.atom, 5);
-	tmp = atomicOr(&bar.atom, 5);
-	tmp = atomicXor(&bar.atom, 5);
-	tmp = atomicMin(&bar.atom, 5);
-	tmp = atomicMax(&bar.atom, 5);
-	tmp = atomicExchange(&bar.atom, 5);
-	// https://github.com/gpuweb/gpuweb/issues/2021
-	// tmp = atomicCompareExchangeWeak(&bar.atom, 5, 5);
-	atomicStore(&bar.atom, value);
-}
-
 var<workgroup> val: u32;
 
 fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {

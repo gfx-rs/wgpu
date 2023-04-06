@@ -222,33 +222,6 @@ fragment foo_fragOutput foo_frag(
 }
 
 
-kernel void atomics(
-  device Bar& bar [[buffer(0)]]
-, constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
-) {
-    int tmp = {};
-    int value_1 = metal::atomic_load_explicit(&bar.atom, metal::memory_order_relaxed);
-    int _e7 = metal::atomic_fetch_add_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e7;
-    int _e11 = metal::atomic_fetch_sub_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e11;
-    int _e15 = metal::atomic_fetch_and_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e15;
-    int _e19 = metal::atomic_fetch_or_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e19;
-    int _e23 = metal::atomic_fetch_xor_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e23;
-    int _e27 = metal::atomic_fetch_min_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e27;
-    int _e31 = metal::atomic_fetch_max_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e31;
-    int _e35 = metal::atomic_exchange_explicit(&bar.atom, 5, metal::memory_order_relaxed);
-    tmp = _e35;
-    metal::atomic_store_explicit(&bar.atom, value_1, metal::memory_order_relaxed);
-    return;
-}
-
-
 kernel void assign_through_ptr(
   metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
 , threadgroup uint& val

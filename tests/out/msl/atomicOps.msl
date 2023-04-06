@@ -1,0 +1,126 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_2 {
+    metal::atomic_int inner[2];
+};
+struct Struct {
+    metal::atomic_uint atomic_scalar;
+    type_2 atomic_arr;
+};
+
+struct cs_mainInput {
+};
+kernel void cs_main(
+  metal::uint3 id [[thread_position_in_threadgroup]]
+, device metal::atomic_uint& storage_atomic_scalar [[user(fake0)]]
+, device type_2& storage_atomic_arr [[user(fake0)]]
+, device Struct& storage_struct [[user(fake0)]]
+, threadgroup metal::atomic_uint& workgroup_atomic_scalar
+, threadgroup type_2& workgroup_atomic_arr
+, threadgroup Struct& workgroup_struct
+) {
+    if (metal::all(id == metal::uint3(0u))) {
+        metal::atomic_store_explicit(&workgroup_atomic_scalar, 0, metal::memory_order_relaxed);
+        for (int __i0 = 0; __i0 < 2; __i0++) {
+            metal::atomic_store_explicit(&workgroup_atomic_arr.inner[__i0], 0, metal::memory_order_relaxed);
+        }
+        metal::atomic_store_explicit(&workgroup_struct.atomic_scalar, 0, metal::memory_order_relaxed);
+        for (int __i0 = 0; __i0 < 2; __i0++) {
+            metal::atomic_store_explicit(&workgroup_struct.atomic_arr.inner[__i0], 0, metal::memory_order_relaxed);
+        }
+    }
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    metal::atomic_store_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    metal::atomic_store_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint unnamed = metal::atomic_load_explicit(&storage_atomic_scalar, metal::memory_order_relaxed);
+    int unnamed_1 = metal::atomic_load_explicit(&storage_atomic_arr.inner[1], metal::memory_order_relaxed);
+    uint unnamed_2 = metal::atomic_load_explicit(&storage_struct.atomic_scalar, metal::memory_order_relaxed);
+    int unnamed_3 = metal::atomic_load_explicit(&storage_struct.atomic_arr.inner[1], metal::memory_order_relaxed);
+    uint unnamed_4 = metal::atomic_load_explicit(&workgroup_atomic_scalar, metal::memory_order_relaxed);
+    int unnamed_5 = metal::atomic_load_explicit(&workgroup_atomic_arr.inner[1], metal::memory_order_relaxed);
+    uint unnamed_6 = metal::atomic_load_explicit(&workgroup_struct.atomic_scalar, metal::memory_order_relaxed);
+    int unnamed_7 = metal::atomic_load_explicit(&workgroup_struct.atomic_arr.inner[1], metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e59 = metal::atomic_fetch_add_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e64 = metal::atomic_fetch_add_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e68 = metal::atomic_fetch_add_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e74 = metal::atomic_fetch_add_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e77 = metal::atomic_fetch_add_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e82 = metal::atomic_fetch_add_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e86 = metal::atomic_fetch_add_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e92 = metal::atomic_fetch_add_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e95 = metal::atomic_fetch_sub_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e100 = metal::atomic_fetch_sub_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e104 = metal::atomic_fetch_sub_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e110 = metal::atomic_fetch_sub_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e113 = metal::atomic_fetch_sub_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e118 = metal::atomic_fetch_sub_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e122 = metal::atomic_fetch_sub_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e128 = metal::atomic_fetch_sub_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e131 = metal::atomic_fetch_max_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e136 = metal::atomic_fetch_max_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e140 = metal::atomic_fetch_max_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e146 = metal::atomic_fetch_max_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e149 = metal::atomic_fetch_max_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e154 = metal::atomic_fetch_max_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e158 = metal::atomic_fetch_max_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e164 = metal::atomic_fetch_max_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e167 = metal::atomic_fetch_min_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e172 = metal::atomic_fetch_min_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e176 = metal::atomic_fetch_min_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e182 = metal::atomic_fetch_min_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e185 = metal::atomic_fetch_min_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e190 = metal::atomic_fetch_min_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e194 = metal::atomic_fetch_min_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e200 = metal::atomic_fetch_min_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e203 = metal::atomic_fetch_and_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e208 = metal::atomic_fetch_and_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e212 = metal::atomic_fetch_and_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e218 = metal::atomic_fetch_and_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e221 = metal::atomic_fetch_and_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e226 = metal::atomic_fetch_and_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e230 = metal::atomic_fetch_and_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e236 = metal::atomic_fetch_and_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e239 = metal::atomic_fetch_or_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e244 = metal::atomic_fetch_or_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e248 = metal::atomic_fetch_or_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e254 = metal::atomic_fetch_or_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e257 = metal::atomic_fetch_or_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e262 = metal::atomic_fetch_or_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e266 = metal::atomic_fetch_or_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e272 = metal::atomic_fetch_or_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint _e275 = metal::atomic_fetch_xor_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e280 = metal::atomic_fetch_xor_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e284 = metal::atomic_fetch_xor_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e290 = metal::atomic_fetch_xor_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e293 = metal::atomic_fetch_xor_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e298 = metal::atomic_fetch_xor_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e302 = metal::atomic_fetch_xor_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e308 = metal::atomic_fetch_xor_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e311 = metal::atomic_exchange_explicit(&storage_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e316 = metal::atomic_exchange_explicit(&storage_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e320 = metal::atomic_exchange_explicit(&storage_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e326 = metal::atomic_exchange_explicit(&storage_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e329 = metal::atomic_exchange_explicit(&workgroup_atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e334 = metal::atomic_exchange_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    uint _e338 = metal::atomic_exchange_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
+    int _e344 = metal::atomic_exchange_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    return;
+}

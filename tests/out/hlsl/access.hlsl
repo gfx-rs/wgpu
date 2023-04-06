@@ -312,32 +312,6 @@ float4 foo_frag() : SV_Target0
 }
 
 [numthreads(1, 1, 1)]
-void atomics()
-{
-    int tmp = (int)0;
-
-    int value_1 = asint(bar.Load(96));
-    int _e7; bar.InterlockedAdd(96, 5, _e7);
-    tmp = _e7;
-    int _e11; bar.InterlockedAdd(96, -5, _e11);
-    tmp = _e11;
-    int _e15; bar.InterlockedAnd(96, 5, _e15);
-    tmp = _e15;
-    int _e19; bar.InterlockedOr(96, 5, _e19);
-    tmp = _e19;
-    int _e23; bar.InterlockedXor(96, 5, _e23);
-    tmp = _e23;
-    int _e27; bar.InterlockedMin(96, 5, _e27);
-    tmp = _e27;
-    int _e31; bar.InterlockedMax(96, 5, _e31);
-    tmp = _e31;
-    int _e35; bar.InterlockedExchange(96, 5, _e35);
-    tmp = _e35;
-    bar.Store(96, asuint(value_1));
-    return;
-}
-
-[numthreads(1, 1, 1)]
 void assign_through_ptr(uint3 __local_invocation_id : SV_GroupThreadID)
 {
     if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {

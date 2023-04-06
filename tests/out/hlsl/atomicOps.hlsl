@@ -1,0 +1,112 @@
+
+struct Struct {
+    uint atomic_scalar;
+    int atomic_arr[2];
+};
+
+RWByteAddressBuffer storage_atomic_scalar : register(u0);
+RWByteAddressBuffer storage_atomic_arr : register(u1);
+RWByteAddressBuffer storage_struct : register(u2);
+groupshared uint workgroup_atomic_scalar;
+groupshared int workgroup_atomic_arr[2];
+groupshared Struct workgroup_struct;
+
+[numthreads(2, 1, 1)]
+void cs_main(uint3 id : SV_GroupThreadID, uint3 __local_invocation_id : SV_GroupThreadID)
+{
+    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
+        workgroup_atomic_scalar = (uint)0;
+        workgroup_atomic_arr = (int[2])0;
+        workgroup_struct = (Struct)0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    storage_atomic_scalar.Store(0, asuint(1u));
+    storage_atomic_arr.Store(4, asuint(1));
+    storage_struct.Store(0, asuint(1u));
+    storage_struct.Store(4+4, asuint(1));
+    workgroup_atomic_scalar = 1u;
+    workgroup_atomic_arr[1] = 1;
+    workgroup_struct.atomic_scalar = 1u;
+    workgroup_struct.atomic_arr[1] = 1;
+    GroupMemoryBarrierWithGroupSync();
+    uint unnamed = asuint(storage_atomic_scalar.Load(0));
+    int unnamed_1 = asint(storage_atomic_arr.Load(4));
+    uint unnamed_2 = asuint(storage_struct.Load(0));
+    int unnamed_3 = asint(storage_struct.Load(4+4));
+    uint unnamed_4 = workgroup_atomic_scalar;
+    int unnamed_5 = workgroup_atomic_arr[1];
+    uint unnamed_6 = workgroup_struct.atomic_scalar;
+    int unnamed_7 = workgroup_struct.atomic_arr[1];
+    GroupMemoryBarrierWithGroupSync();
+    uint _e59; storage_atomic_scalar.InterlockedAdd(0, 1u, _e59);
+    int _e64; storage_atomic_arr.InterlockedAdd(4, 1, _e64);
+    uint _e68; storage_struct.InterlockedAdd(0, 1u, _e68);
+    int _e74; storage_struct.InterlockedAdd(4+4, 1, _e74);
+    uint _e77; InterlockedAdd(workgroup_atomic_scalar, 1u, _e77);
+    int _e82; InterlockedAdd(workgroup_atomic_arr[1], 1, _e82);
+    uint _e86; InterlockedAdd(workgroup_struct.atomic_scalar, 1u, _e86);
+    int _e92; InterlockedAdd(workgroup_struct.atomic_arr[1], 1, _e92);
+    GroupMemoryBarrierWithGroupSync();
+    uint _e95; storage_atomic_scalar.InterlockedAdd(0, -1u, _e95);
+    int _e100; storage_atomic_arr.InterlockedAdd(4, -1, _e100);
+    uint _e104; storage_struct.InterlockedAdd(0, -1u, _e104);
+    int _e110; storage_struct.InterlockedAdd(4+4, -1, _e110);
+    uint _e113; InterlockedAdd(workgroup_atomic_scalar, -1u, _e113);
+    int _e118; InterlockedAdd(workgroup_atomic_arr[1], -1, _e118);
+    uint _e122; InterlockedAdd(workgroup_struct.atomic_scalar, -1u, _e122);
+    int _e128; InterlockedAdd(workgroup_struct.atomic_arr[1], -1, _e128);
+    GroupMemoryBarrierWithGroupSync();
+    uint _e131; storage_atomic_scalar.InterlockedMax(0, 1u, _e131);
+    int _e136; storage_atomic_arr.InterlockedMax(4, 1, _e136);
+    uint _e140; storage_struct.InterlockedMax(0, 1u, _e140);
+    int _e146; storage_struct.InterlockedMax(4+4, 1, _e146);
+    uint _e149; InterlockedMax(workgroup_atomic_scalar, 1u, _e149);
+    int _e154; InterlockedMax(workgroup_atomic_arr[1], 1, _e154);
+    uint _e158; InterlockedMax(workgroup_struct.atomic_scalar, 1u, _e158);
+    int _e164; InterlockedMax(workgroup_struct.atomic_arr[1], 1, _e164);
+    GroupMemoryBarrierWithGroupSync();
+    uint _e167; storage_atomic_scalar.InterlockedMin(0, 1u, _e167);
+    int _e172; storage_atomic_arr.InterlockedMin(4, 1, _e172);
+    uint _e176; storage_struct.InterlockedMin(0, 1u, _e176);
+    int _e182; storage_struct.InterlockedMin(4+4, 1, _e182);
+    uint _e185; InterlockedMin(workgroup_atomic_scalar, 1u, _e185);
+    int _e190; InterlockedMin(workgroup_atomic_arr[1], 1, _e190);
+    uint _e194; InterlockedMin(workgroup_struct.atomic_scalar, 1u, _e194);
+    int _e200; InterlockedMin(workgroup_struct.atomic_arr[1], 1, _e200);
+    GroupMemoryBarrierWithGroupSync();
+    uint _e203; storage_atomic_scalar.InterlockedAnd(0, 1u, _e203);
+    int _e208; storage_atomic_arr.InterlockedAnd(4, 1, _e208);
+    uint _e212; storage_struct.InterlockedAnd(0, 1u, _e212);
+    int _e218; storage_struct.InterlockedAnd(4+4, 1, _e218);
+    uint _e221; InterlockedAnd(workgroup_atomic_scalar, 1u, _e221);
+    int _e226; InterlockedAnd(workgroup_atomic_arr[1], 1, _e226);
+    uint _e230; InterlockedAnd(workgroup_struct.atomic_scalar, 1u, _e230);
+    int _e236; InterlockedAnd(workgroup_struct.atomic_arr[1], 1, _e236);
+    GroupMemoryBarrierWithGroupSync();
+    uint _e239; storage_atomic_scalar.InterlockedOr(0, 1u, _e239);
+    int _e244; storage_atomic_arr.InterlockedOr(4, 1, _e244);
+    uint _e248; storage_struct.InterlockedOr(0, 1u, _e248);
+    int _e254; storage_struct.InterlockedOr(4+4, 1, _e254);
+    uint _e257; InterlockedOr(workgroup_atomic_scalar, 1u, _e257);
+    int _e262; InterlockedOr(workgroup_atomic_arr[1], 1, _e262);
+    uint _e266; InterlockedOr(workgroup_struct.atomic_scalar, 1u, _e266);
+    int _e272; InterlockedOr(workgroup_struct.atomic_arr[1], 1, _e272);
+    GroupMemoryBarrierWithGroupSync();
+    uint _e275; storage_atomic_scalar.InterlockedXor(0, 1u, _e275);
+    int _e280; storage_atomic_arr.InterlockedXor(4, 1, _e280);
+    uint _e284; storage_struct.InterlockedXor(0, 1u, _e284);
+    int _e290; storage_struct.InterlockedXor(4+4, 1, _e290);
+    uint _e293; InterlockedXor(workgroup_atomic_scalar, 1u, _e293);
+    int _e298; InterlockedXor(workgroup_atomic_arr[1], 1, _e298);
+    uint _e302; InterlockedXor(workgroup_struct.atomic_scalar, 1u, _e302);
+    int _e308; InterlockedXor(workgroup_struct.atomic_arr[1], 1, _e308);
+    uint _e311; storage_atomic_scalar.InterlockedExchange(0, 1u, _e311);
+    int _e316; storage_atomic_arr.InterlockedExchange(4, 1, _e316);
+    uint _e320; storage_struct.InterlockedExchange(0, 1u, _e320);
+    int _e326; storage_struct.InterlockedExchange(4+4, 1, _e326);
+    uint _e329; InterlockedExchange(workgroup_atomic_scalar, 1u, _e329);
+    int _e334; InterlockedExchange(workgroup_atomic_arr[1], 1, _e334);
+    uint _e338; InterlockedExchange(workgroup_struct.atomic_scalar, 1u, _e338);
+    int _e344; InterlockedExchange(workgroup_struct.atomic_arr[1], 1, _e344);
+    return;
+}

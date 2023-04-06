@@ -1856,14 +1856,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 };
 
-                let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
-                // working around the borrow checker in `self.write_expr`
-                let chain = mem::take(&mut self.temp_access_chain);
-                let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                // Validation ensures that `pointer` has a `Pointer` type.
+                let pointer_space = func_ctx.info[pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_space()
+                    .unwrap();
 
                 let fun_str = fun.to_hlsl_suffix();
-                write!(self.out, " {res_name}; {var_name}.Interlocked{fun_str}(")?;
-                self.write_storage_address(module, &chain, func_ctx)?;
+                write!(self.out, " {res_name}; ")?;
+                match pointer_space {
+                    crate::AddressSpace::WorkGroup => {
+                        write!(self.out, "Interlocked{fun_str}(")?;
+                        self.write_expr(module, pointer, func_ctx)?;
+                    }
+                    crate::AddressSpace::Storage { .. } => {
+                        let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
+                        // The call to `self.write_storage_address` wants
+                        // mutable access to all of `self`, so temporarily take
+                        // ownership of our reusable access chain buffer.
+                        let chain = mem::take(&mut self.temp_access_chain);
+                        let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                        write!(self.out, "{var_name}.Interlocked{fun_str}(")?;
+                        self.write_storage_address(module, &chain, func_ctx)?;
+                        self.temp_access_chain = chain;
+                    }
+                    ref other => {
+                        return Err(Error::Custom(format!(
+                            "invalid address space {other:?} for atomic statement"
+                        )))
+                    }
+                }
                 write!(self.out, ", ")?;
                 // handle the special cases
                 match *fun {
@@ -1878,7 +1901,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ", {res_name});")?;
-                self.temp_access_chain = chain;
                 self.named_expressions.insert(result, res_name);
             }
             Statement::Switch {

@@ -505,6 +505,10 @@ fn convert_wgsl() {
                 | Targets::IR
                 | Targets::ANALYSIS,
         ),
+        (
+            "atomicOps",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
         ("atomicCompareExchange", Targets::SPIRV | Targets::WGSL),
         (
             "padding",

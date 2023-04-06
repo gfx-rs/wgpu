@@ -166,31 +166,6 @@ fn foo_frag() -> @location(0) vec4<f32> {
 }
 
 @compute @workgroup_size(1, 1, 1) 
-fn atomics() {
-    var tmp: i32;
-
-    let value_1 = atomicLoad((&bar.atom));
-    let _e7 = atomicAdd((&bar.atom), 5);
-    tmp = _e7;
-    let _e11 = atomicSub((&bar.atom), 5);
-    tmp = _e11;
-    let _e15 = atomicAnd((&bar.atom), 5);
-    tmp = _e15;
-    let _e19 = atomicOr((&bar.atom), 5);
-    tmp = _e19;
-    let _e23 = atomicXor((&bar.atom), 5);
-    tmp = _e23;
-    let _e27 = atomicMin((&bar.atom), 5);
-    tmp = _e27;
-    let _e31 = atomicMax((&bar.atom), 5);
-    tmp = _e31;
-    let _e35 = atomicExchange((&bar.atom), 5);
-    tmp = _e35;
-    atomicStore((&bar.atom), value_1);
-    return;
-}
-
-@compute @workgroup_size(1, 1, 1) 
 fn assign_through_ptr() {
     var arr: array<vec4<f32>,2>;
 
