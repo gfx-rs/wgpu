@@ -196,7 +196,12 @@ impl<A: HalApi> PendingWrites<A> {
                 initialization_status: RwLock::new(BufferInitTracker::new(buffer.size)),
                 sync_mapped_writes: Mutex::new(None),
                 map_state: Mutex::new(crate::resource::BufferMapState::Idle),
-                info: ResourceInfo::new(&buffer.info.label),
+                info: ResourceInfo::new(
+                    #[cfg(debug_assertions)]
+                    &buffer.info.label,
+                    #[cfg(not(debug_assertions))]
+                    "<Buffer>",
+                ),
             })));
     }
 
