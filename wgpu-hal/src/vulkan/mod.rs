@@ -173,6 +173,7 @@ struct PrivateCapabilities {
 
 bitflags::bitflags!(
     /// Workaround flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Workarounds: u32 {
         /// Only generate SPIR-V for one entry point at a time.
         const SEPARATE_ENTRY_POINTS = 0x1;
@@ -249,11 +250,10 @@ struct DeviceShared {
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     timestamp_period: f32,
-    downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
-    render_passes: Mutex<fxhash::FxHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<fxhash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
 }
 
 pub struct Device {
@@ -595,6 +595,11 @@ impl crate::Queue<Api> for Queue {
             })?
         };
         if suboptimal {
+            // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
+            // On Android 10+, libvulkan's `vkQueuePresentKHR` implementation returns `VK_SUBOPTIMAL_KHR` if not doing pre-rotation
+            // (i.e `VkSwapchainCreateInfoKHR::preTransform` not being equal to the current device orientation).
+            // This is always the case when the device orientation is anything other than the identity one, as we unconditionally use `VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR`.
+            #[cfg(not(target_os = "android"))]
             log::warn!("Suboptimal present of frame {}", texture.index);
         }
         Ok(())

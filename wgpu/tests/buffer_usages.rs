@@ -52,7 +52,7 @@ fn buffer_usage() {
         Bu::MAP_WRITE | Bu::COPY_SRC | Bu::STORAGE,
         Bu::all(),
     ];
-    let invalid_bits = unsafe { Bu::from_bits_unchecked(0b1111111111111) };
+    let invalid_bits = Bu::from_bits_retain(0b1111111111111);
     let always_fail = &[Bu::empty(), invalid_bits];
 
     try_create(

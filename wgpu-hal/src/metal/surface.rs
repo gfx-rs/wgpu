@@ -59,7 +59,7 @@ impl HalManagedMetalLayerDelegate {
 }
 
 impl super::Surface {
-    fn new(view: Option<NonNull<Object>>, layer: mtl::MetalLayer) -> Self {
+    fn new(view: Option<NonNull<Object>>, layer: metal::MetalLayer) -> Self {
         Self {
             view,
             render_layer: Mutex::new(layer),
@@ -85,14 +85,14 @@ impl super::Surface {
         let view = view as *mut Object;
         let render_layer = {
             let layer = unsafe { Self::get_metal_layer(view, delegate) };
-            unsafe { mem::transmute::<_, &mtl::MetalLayerRef>(layer) }
+            unsafe { mem::transmute::<_, &metal::MetalLayerRef>(layer) }
         }
         .to_owned();
         let _: *mut c_void = msg_send![view, retain];
         Self::new(NonNull::new(view), render_layer)
     }
 
-    pub unsafe fn from_layer(layer: &mtl::MetalLayerRef) -> Self {
+    pub unsafe fn from_layer(layer: &metal::MetalLayerRef) -> Self {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
@@ -255,7 +255,7 @@ impl crate::Surface<super::Api> for super::Surface {
             texture: super::Texture {
                 raw: texture,
                 format: self.swapchain_format.unwrap(),
-                raw_type: mtl::MTLTextureType::D2,
+                raw_type: metal::MTLTextureType::D2,
                 array_layers: 1,
                 mip_levels: 1,
                 copy_size: crate::CopyExtent {

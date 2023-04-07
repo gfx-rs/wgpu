@@ -9,9 +9,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, mem,
-    num::NonZeroU32,
-    ptr,
+    iter, mem, ptr,
     time::Instant,
 };
 
@@ -328,7 +326,7 @@ impl<A: hal::Api> Example<A> {
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgt::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: NonZeroU32::new(4),
+                    bytes_per_row: Some(4),
                     rows_per_image: None,
                 },
                 texture_base: hal::TextureCopyBase {
@@ -357,9 +355,9 @@ impl<A: hal::Api> Example<A> {
             mag_filter: wgt::FilterMode::Linear,
             min_filter: wgt::FilterMode::Nearest,
             mipmap_filter: wgt::FilterMode::Nearest,
-            lod_clamp: None,
+            lod_clamp: 0.0..32.0,
             compare: None,
-            anisotropy_clamp: None,
+            anisotropy_clamp: 1,
             border_color: None,
         };
         let sampler = unsafe { device.create_sampler(&sampler_desc).unwrap() };
@@ -397,7 +395,7 @@ impl<A: hal::Api> Example<A> {
             buffer
         };
 
-        let local_alignment = hal::auxil::align_to(
+        let local_alignment = wgt::math::align_to(
             mem::size_of::<Locals>() as u32,
             capabilities.limits.min_uniform_buffer_offset_alignment,
         );
