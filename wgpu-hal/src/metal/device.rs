@@ -72,6 +72,12 @@ impl super::Device {
         let module = &stage.module.naga.module;
         let ep_resources = &layout.per_stage_map[naga_stage];
 
+        let bounds_check_policy = if stage.module.runtime_checks {
+            naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite
+        } else {
+            naga::proc::BoundsCheckPolicy::Unchecked
+        };
+
         let options = naga::back::msl::Options {
             lang_version: match self.shared.private_caps.msl_version {
                 metal::MTLLanguageVersion::V1_0 => (1, 0),
@@ -91,9 +97,9 @@ impl super::Device {
                 ep_resources.clone(),
             )]),
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
-                index: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
-                buffer: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
-                image: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
+                index: bounds_check_policy,
+                buffer: bounds_check_policy,
+                image: bounds_check_policy,
                 // TODO: support bounds checks on binding arrays
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
