@@ -1,11 +1,11 @@
 /// Ray tracing
 /// Major missing optimizations (no api surface changes needed):
-/// - use custom tracker to track build state instead of mutex
+/// - use custom tracker to track build state
 /// - no forced rebuilt (build mode deduction)
 /// - lazy instance buffer allocation
 /// - maybe share scratch and instance staging buffer allocation
 /// - partial instance buffer uploads (api surface already designed with this in mind)
-/// - (non performance extract function in build (rust function extraction with guards is a pain))
+/// - ([non performance] extract function in build (rust function extraction with guards is a pain))
 use std::{num::NonZeroU64, slice};
 
 use crate::{
@@ -25,8 +25,10 @@ pub enum CreateBlasError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     CreateBufferError(#[from] CreateBufferError),
-    #[error("Unimplemented Blas error: this error is not yet implemented")]
-    Unimplemented,
+    #[error(
+        "Only one of 'index_count' and 'index_format' was provided (either provide both or none)"
+    )]
+    MissingIndexData,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -84,6 +86,11 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} is invalid or destroyed")]
     InvalidBlas(BlasId),
+
+    #[error(
+        "Tlas {0:?} an associated instances contains an invalid custom index (more than 24bits)"
+    )]
+    TlasInvalidCustomIndex(TlasId),
 
     #[error("Blas {0:?} is invalid or destroyed (for instance)")]
     InvalidBlasForInstance(BlasId),

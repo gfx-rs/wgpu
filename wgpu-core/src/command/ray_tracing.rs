@@ -20,7 +20,6 @@ use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
 
 use super::BakedCommands;
 
-// TODO: a lot
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_build_acceleration_structures_unsafe_tlas<'a, A: HalApi>(
         &self,
@@ -421,7 +420,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     let scratch_buffer_offset = scratch_buffer_blas_size;
-                    scratch_buffer_blas_size += blas.size_info.build_scratch_size; // TODO Alignment
+                    scratch_buffer_blas_size += blas.size_info.build_scratch_size;
 
                     blas_storage.push((
                         blas,
@@ -483,7 +482,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
-            scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
+            scratch_buffer_tlas_size += tlas.size_info.build_scratch_size;
 
             tlas_storage.push((
                 tlas,
@@ -527,7 +526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     hal::BuildAccelerationStructureDescriptor {
                         entries,
-                        mode: hal::AccelerationStructureBuildMode::Build, // TODO
+                        mode: hal::AccelerationStructureBuildMode::Build,
                         flags: blas.flags,
                         source_acceleration_structure: None,
                         destination_acceleration_structure: blas.raw.as_ref().unwrap(),
@@ -545,7 +544,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     hal::BuildAccelerationStructureDescriptor {
                         entries,
-                        mode: hal::AccelerationStructureBuildMode::Build, // TODO
+                        mode: hal::AccelerationStructureBuildMode::Build,
                         flags: tlas.flags,
                         source_acceleration_structure: None,
                         destination_acceleration_structure: tlas.raw.as_ref().unwrap(),
@@ -1042,7 +1041,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     let scratch_buffer_offset = scratch_buffer_blas_size;
-                    scratch_buffer_blas_size += blas.size_info.build_scratch_size; // TODO Alignment
+                    scratch_buffer_blas_size += blas.size_info.build_scratch_size;
 
                     blas_storage.push((
                         blas,
@@ -1074,7 +1073,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
-            scratch_buffer_tlas_size += tlas.size_info.build_scratch_size; // TODO Alignment
+            scratch_buffer_tlas_size += tlas.size_info.build_scratch_size;
 
             let first_byte_index = instance_buffer_staging_source.len();
 
@@ -1082,7 +1081,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut instance_count = 0;
             for instance in entry.instances.flatten() {
-                // TODO validation
+                if instance.custom_index >= (1u32 << 24u32) {
+                    return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
+                        entry.tlas_id,
+                    ));
+                }
                 let blas = cmd_buf
                     .trackers
                     .blas_s
@@ -1186,7 +1189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     hal::BuildAccelerationStructureDescriptor {
                         entries,
-                        mode: hal::AccelerationStructureBuildMode::Build, // TODO
+                        mode: hal::AccelerationStructureBuildMode::Build,
                         flags: blas.flags,
                         source_acceleration_structure: None,
                         destination_acceleration_structure: blas.raw.as_ref().unwrap(),
@@ -1202,7 +1205,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 hal::BuildAccelerationStructureDescriptor {
                     entries,
-                    mode: hal::AccelerationStructureBuildMode::Build, // TODO
+                    mode: hal::AccelerationStructureBuildMode::Build,
                     flags: tlas.flags,
                     source_acceleration_structure: None,
                     destination_acceleration_structure: tlas.raw.as_ref().unwrap(),
@@ -1340,6 +1343,7 @@ impl<A: HalApi> BakedCommands<A> {
         &mut self,
         blas_guard: &mut Storage<Blas<A>, BlasId>,
     ) -> Result<(), ValidateBlasActionsError> {
+        profiling::scope!("CommandEncoder::[submission]::validate_blas_actions");
         let mut built = FastHashSet::default();
         for action in self.blas_actions.drain(..) {
             match action.kind {
@@ -1371,6 +1375,7 @@ impl<A: HalApi> BakedCommands<A> {
         blas_guard: &Storage<Blas<A>, BlasId>,
         tlas_guard: &mut Storage<Tlas<A>, TlasId>,
     ) -> Result<(), ValidateTlasActionsError> {
+        profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
         for action in self.tlas_actions.drain(..) {
             match action.kind {
                 crate::ray_tracing::TlasActionKind::Build {

@@ -11,9 +11,6 @@ use crate::{
 use hal::{AccelerationStructureTriangleIndices, Device as _};
 
 impl<A: HalApi> Device<A> {
-    // TODO:
-    // validation
-    // comments/documentation
     fn create_blas(
         &self,
         self_id: id::DeviceId,
@@ -28,9 +25,8 @@ impl<A: HalApi> Device<A> {
                     Vec::<hal::AccelerationStructureTriangles<A>>::with_capacity(desc.len());
                 for x in desc {
                     if x.index_count.is_some() != x.index_format.is_some() {
-                        return Err(CreateBlasError::Unimplemented);
+                        return Err(CreateBlasError::MissingIndexData);
                     }
-                    // TODO more validation
                     let indices =
                         x.index_count
                             .map(|count| AccelerationStructureTriangleIndices::<A> {
@@ -89,9 +85,6 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    // TODO:
-    // validation
-    // comments/documentation
     fn create_tlas(
         &self,
         self_id: id::DeviceId,
@@ -99,7 +92,6 @@ impl<A: HalApi> Device<A> {
     ) -> Result<resource::Tlas<A>, CreateTlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
-        // TODO validate max_instances
         let size_info = unsafe {
             self.raw.get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
@@ -155,9 +147,6 @@ impl<A: HalApi> Device<A> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    // TODO:
-    // tracing
-    // comments/documentation
     pub fn device_create_blas<A: HalApi>(
         &self,
         device_id: id::DeviceId,
@@ -206,9 +195,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, None, Some(error))
     }
 
-    // TODO:
-    // tracing
-    // comments/documentation
     pub fn device_create_tlas<A: HalApi>(
         &self,
         device_id: id::DeviceId,
