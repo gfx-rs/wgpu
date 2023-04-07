@@ -65,6 +65,12 @@ pub enum BuildAccelerationStructureError {
     #[error("Buffer {0:?} associated index buffer sizes invalid (less then three indices)")]
     EmptyIndexBuffer(BufferId),
 
+    #[error("Buffer {0:?} associated offset doesn't align with the index type")]
+    UnalignedIndexBufferOffset(BufferId),
+
+    #[error("Buffer {0:?} associated offset is unaligned")]
+    UnalignedTransformBufferOffset(BufferId),
+
     #[error("Buffer {0:?} associated index count not divisible by 3 (count: {1}")]
     InvalidIndexCount(BufferId, u32),
 

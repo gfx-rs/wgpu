@@ -6288,3 +6288,9 @@ bitflags::bitflags!(
     }
 );
 impl_bitflags!(AccelerationStructureGeometryFlags);
+
+/// Alignemnet requirement for transform buffers used in acceleration structure builds
+pub const TRANSFORM_BUFFER_ALIGNMENT: BufferAddress = 16;
+
+/// Alignemnet requirement for instanc buffers used in acceleration structure builds
+pub const INSTANCE_BUFFER_ALIGNMENT: BufferAddress = 16;

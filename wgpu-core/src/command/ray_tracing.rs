@@ -152,13 +152,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     for (i, mesh) in triangle_geometries.enumerate() {
                         let size_desc = match &blas.sizes {
                             &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => desc,
-                            // _ => {
-                            //     return Err(
-                            //         BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
-                            //             entry.blas_id,
-                            //         ),
-                            //     )
-                            // }
                         };
                         if i >= size_desc.len() {
                             return Err(
@@ -285,6 +278,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 wgt::IndexFormat::Uint16 => 2,
                                 wgt::IndexFormat::Uint32 => 4,
                             };
+                            if mesh.index_buffer_offset.unwrap() % index_stride != 0 {
+                                return Err(
+                                    BuildAccelerationStructureError::UnalignedIndexBufferOffset(
+                                        index_id,
+                                    ),
+                                );
+                            }
                             let index_buffer_size =
                                 mesh.size.index_count.unwrap() as u64 * index_stride;
 
@@ -362,7 +362,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 input_barriers.push(barrier);
                             }
-
+                            if mesh.transform_buffer_offset.unwrap()
+                                % wgt::TRANSFORM_BUFFER_ALIGNMENT
+                                != 0
+                            {
+                                return Err(
+                                    BuildAccelerationStructureError::UnalignedTransformBufferOffset(
+                                        transform_id,
+                                    ),
+                                );
+                            }
                             if transform_buffer.size < 48 + mesh.transform_buffer_offset.unwrap() {
                                 return Err(
                                     BuildAccelerationStructureError::InsufficientBufferSize(
@@ -764,13 +773,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     for (i, mesh) in triangle_geometries.enumerate() {
                         let size_desc = match &blas.sizes {
                             &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => desc,
-                            // _ => {
-                            //     return Err(
-                            //         BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
-                            //             entry.blas_id,
-                            //         ),
-                            //     )
-                            // }
                         };
                         if i >= size_desc.len() {
                             return Err(
@@ -897,6 +899,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 wgt::IndexFormat::Uint16 => 2,
                                 wgt::IndexFormat::Uint32 => 4,
                             };
+                            if mesh.index_buffer_offset.unwrap() % index_stride != 0 {
+                                return Err(
+                                    BuildAccelerationStructureError::UnalignedIndexBufferOffset(
+                                        index_id,
+                                    ),
+                                );
+                            }
                             let index_buffer_size =
                                 mesh.size.index_count.unwrap() as u64 * index_stride;
 
@@ -974,7 +983,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 input_barriers.push(barrier);
                             }
-
+                            if mesh.transform_buffer_offset.unwrap()
+                                % wgt::TRANSFORM_BUFFER_ALIGNMENT
+                                != 0
+                            {
+                                return Err(
+                                    BuildAccelerationStructureError::UnalignedTransformBufferOffset(
+                                        transform_id,
+                                    ),
+                                );
+                            }
                             if transform_buffer.size < 48 + mesh.transform_buffer_offset.unwrap() {
                                 return Err(
                                     BuildAccelerationStructureError::InsufficientBufferSize(
