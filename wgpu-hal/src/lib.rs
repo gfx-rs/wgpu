@@ -87,7 +87,7 @@ pub mod api {
 use std::{
     borrow::{Borrow, Cow},
     fmt,
-    num::{NonZeroU32},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
     sync::atomic::AtomicBool,

@@ -913,6 +913,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_width = source.source.width();
         let src_height = source.source.height();
 
+        let texture_guard = hub.textures.read();
         let dst = hub.textures.get(destination.texture).unwrap();
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
@@ -985,10 +986,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         )?;
 
         let (selector, dst_base) =
-            extract_texture_selector(&destination.to_untagged(), &size, dst)?;
+            extract_texture_selector(&destination.to_untagged(), &size, &dst)?;
 
         let mut trackers = device.trackers.lock();
-        let encoder = device.pending_writes.lock().activate();
+        let mut pending_writes = device.pending_writes.lock();
+        let encoder = pending_writes.as_mut().unwrap().activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
         // zero *first* as we don't keep track of partial texture layer inits.
@@ -1001,7 +1003,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         } else {
             destination.origin.z..destination.origin.z + size.depth_or_array_layers
         };
-        let dst_initialization_status = dst.initialization_status.write();
+        let mut dst_initialization_status = dst.initialization_status.write();
         if dst_initialization_status.mips[destination.mip_level as usize]
             .check(init_layer_range.clone())
             .is_some()
@@ -1021,7 +1023,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         encoder,
                         &mut trackers.textures,
                         &device.alignments,
-                        &device.zero_buffer,
+                        device.zero_buffer.as_ref().unwrap(),
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -1031,24 +1033,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let dst = texture_guard.get(destination.texture).unwrap();
-
         let transitions = trackers
             .textures
             .set_single(
-                dst,
+                &dst,
                 destination.texture,
                 selector,
                 hal::TextureUses::COPY_DST,
             )
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        dst.life_guard
-            .read()
-            .use_at(device.active_submission_index + 1);
+        dst.info.use_at(
+            device
+                .active_submission_index
+                .fetch_add(1, Ordering::Relaxed)
+                + 1,
+        );
 
         let dst_raw = dst
             .inner
+            .as_ref()
+            .unwrap()
             .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
@@ -1064,7 +1069,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         unsafe {
-            encoder.transition_textures(transitions.map(|pending| pending.into_hal(dst)));
+            encoder.transition_textures(transitions.map(|pending| pending.into_hal(&dst)));
             encoder.copy_external_image_to_texture(
                 source,
                 dst_raw,
