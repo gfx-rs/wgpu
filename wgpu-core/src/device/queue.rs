@@ -288,6 +288,7 @@ impl<A: hal::Api> StagingBuffer<A> {
 pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueueWriteError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
@@ -298,6 +299,7 @@ pub enum QueueWriteError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueueSubmitError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
