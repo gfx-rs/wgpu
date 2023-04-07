@@ -74,14 +74,14 @@ impl super::Device {
 
         let options = naga::back::msl::Options {
             lang_version: match self.shared.private_caps.msl_version {
-                mtl::MTLLanguageVersion::V1_0 => (1, 0),
-                mtl::MTLLanguageVersion::V1_1 => (1, 1),
-                mtl::MTLLanguageVersion::V1_2 => (1, 2),
-                mtl::MTLLanguageVersion::V2_0 => (2, 0),
-                mtl::MTLLanguageVersion::V2_1 => (2, 1),
-                mtl::MTLLanguageVersion::V2_2 => (2, 2),
-                mtl::MTLLanguageVersion::V2_3 => (2, 3),
-                mtl::MTLLanguageVersion::V2_4 => (2, 4),
+                metal::MTLLanguageVersion::V1_0 => (1, 0),
+                metal::MTLLanguageVersion::V1_1 => (1, 1),
+                metal::MTLLanguageVersion::V1_2 => (1, 2),
+                metal::MTLLanguageVersion::V2_0 => (2, 0),
+                metal::MTLLanguageVersion::V2_1 => (2, 1),
+                metal::MTLLanguageVersion::V2_2 => (2, 2),
+                metal::MTLLanguageVersion::V2_3 => (2, 3),
+                metal::MTLLanguageVersion::V2_4 => (2, 4),
             },
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
