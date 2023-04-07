@@ -79,6 +79,7 @@ pub(crate) struct RenderPassContext {
     pub multiview: Option<NonZeroU32>,
 }
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RenderPassCompatibilityError {
     #[error(
         "Incompatible color attachments at indices {indices:?}: the RenderPass uses textures with formats {expected:?} but the {ty:?} uses attachments with formats {actual:?}",
@@ -293,6 +294,7 @@ impl<A: HalApi> CommandAllocator<A> {
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DeviceError {
     #[error("Parent device is invalid")]
     Invalid,

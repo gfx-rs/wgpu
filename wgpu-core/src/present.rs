@@ -55,6 +55,7 @@ impl Presentation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum SurfaceError {
     #[error("Surface is invalid")]
     Invalid,
@@ -69,6 +70,7 @@ pub enum SurfaceError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ConfigureSurfaceError {
     #[error(transparent)]
     Device(#[from] DeviceError),

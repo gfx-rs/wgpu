@@ -23,6 +23,7 @@ use wgt::{
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,

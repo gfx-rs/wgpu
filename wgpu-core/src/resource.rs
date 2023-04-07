@@ -279,6 +279,7 @@ pub struct BufferMapOperation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -361,6 +362,7 @@ impl<A: HalApi> Drop for Buffer<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -610,6 +612,7 @@ pub enum TextureErrorDimension {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
@@ -638,6 +641,7 @@ pub enum TextureDimensionError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -774,6 +778,7 @@ impl<A: HalApi> Drop for TextureView<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureViewError {
     #[error("Parent texture is invalid or destroyed")]
     InvalidTexture,
@@ -820,6 +825,7 @@ pub enum CreateTextureViewError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
 impl<A: HalApi> Resource<TextureViewId> for TextureView<A> {
@@ -900,6 +906,7 @@ impl Debug for SamplerFilterErrorType {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -934,6 +941,7 @@ impl<A: HalApi> Resource<SamplerId> for Sampler<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateQuerySetError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -975,6 +983,7 @@ impl<A: HalApi> Resource<QuerySetId> for QuerySet<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DestroyError {
     #[error("Resource is invalid")]
     Invalid,

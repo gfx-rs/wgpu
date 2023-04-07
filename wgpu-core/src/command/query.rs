@@ -105,6 +105,7 @@ impl From<wgt::QueryType> for SimplifiedQueryType {
 
 /// Error encountered when dealing with queries
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueryError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
@@ -132,6 +133,7 @@ impl crate::error::PrettyError for QueryError {
 
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueryUseError {
     #[error("Query {query_index} is out of bounds for a query set of size {query_set_size}")]
     OutOfBounds {
@@ -156,6 +158,7 @@ pub enum QueryUseError {
 
 /// Error encountered while trying to resolve a query.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ResolveError {
     #[error("Queries can only be resolved to buffers that contain the QUERY_RESOLVE usage")]
     MissingBufferUsage,

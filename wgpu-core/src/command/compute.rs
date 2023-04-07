@@ -140,6 +140,7 @@ pub struct ComputePassDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum DispatchError {
     #[error("Compute pipeline must be set")]
     MissingPipeline,
