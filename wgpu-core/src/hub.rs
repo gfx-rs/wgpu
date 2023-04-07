@@ -190,6 +190,71 @@ impl HubReport {
     }
 }
 
+#[allow(rustdoc::private_intra_doc_links)]
+/// All the resources for a particular backend in a [`Global`].
+///
+/// To obtain `global`'s `Hub` for some [`HalApi`] backend type `A`,
+/// call [`A::hub(global)`].
+///
+/// ## Locking
+///
+/// Each field in `Hub` is a [`Registry`] holding all the values of a
+/// particular type of resource, all protected by a single [`RwLock`].
+/// So for example, to access any [`Buffer`], you must acquire a read
+/// lock on the `Hub`s entire [`buffers`] registry. The lock guard
+/// gives you access to the `Registry`'s [`Storage`], which you can
+/// then index with the buffer's id. (Yes, this design causes
+/// contention; see [#2272].)
+///
+/// But most `wgpu` operations require access to several different
+/// kinds of resource, so you often need to hold locks on several
+/// different fields of your [`Hub`] simultaneously. To avoid
+/// deadlock, there is an ordering imposed on the fields, and you may
+/// only acquire new locks on fields that come *after* all those you
+/// are already holding locks on, in this ordering. (The ordering is
+/// described in the documentation for the [`Access`] trait.)
+///
+/// We use Rust's type system to statically check that `wgpu_core` can
+/// only ever acquire locks in the correct order:
+///
+/// - A value of type [`Token<T>`] represents proof that the owner
+///   only holds locks on the `Hub` fields holding resources of type
+///   `T` or earlier in the lock ordering. A special value of type
+///   `Token<Root>`, obtained by calling [`Token::root`], represents
+///   proof that no `Hub` field locks are held.
+///
+/// - To lock the `Hub` field holding resources of type `T`, you must
+///   call its [`read`] or [`write`] methods. These require you to
+///   pass in a `&mut Token<A>`, for some `A` that implements
+///   [`Access<T>`]. This implementation exists only if `T` follows `A`
+///   in the field ordering, which statically ensures that you are
+///   indeed allowed to lock this new `Hub` field.
+///
+/// - The locking methods return both an [`RwLock`] guard that you can
+///   use to access the field's resources, and a new `Token<T>` value.
+///   These both borrow from the lifetime of your `Token<A>`, so since
+///   you passed that by mutable reference, you cannot access it again
+///   until you drop the new token and lock guard.
+///
+/// Because a thread only ever has access to the `Token<T>` for the
+/// last resource type `T` it holds a lock for, and the `Access` trait
+/// implementations only permit acquiring locks for types `U` that
+/// follow `T` in the lock ordering, it is statically impossible for a
+/// program to violate the locking order.
+///
+/// This does assume that threads cannot call `Token<Root>` when they
+/// already hold locks (dynamically enforced in debug builds) and that
+/// threads cannot send their `Token`s to other threads (enforced by
+/// making `Token` neither `Send` nor `Sync`).
+///
+/// [`A::hub(global)`]: HalApi::hub
+/// [`RwLock`]: parking_lot::RwLock
+/// [`buffers`]: Hub::buffers
+/// [`read`]: Registry::read
+/// [`write`]: Registry::write
+/// [`Token<T>`]: Token
+/// [`Access<T>`]: Access
+/// [#2272]: https://github.com/gfx-rs/wgpu/pull/2272
 pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<id::AdapterId, Adapter<A>, F>,
     pub devices: Registry<id::DeviceId, Device<A>, F>,
@@ -288,6 +353,20 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         if with_adapters {
             drop(devices);
             self.adapters.write().map.clear();
+        }
+    }
+
+    pub(crate) fn surface_unconfigure(
+        &self,
+        device_id: id::Valid<id::DeviceId>,
+        surface: &mut HalSurface<A>,
+    ) {
+        use hal::Surface as _;
+
+        let devices = self.devices.data.read();
+        let device = &devices[device_id];
+        unsafe {
+            surface.raw.unconfigure(&device.raw);
         }
     }
 

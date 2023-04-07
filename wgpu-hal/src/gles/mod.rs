@@ -131,6 +131,7 @@ impl crate::Api for Api {
 bitflags::bitflags! {
     /// Flags that affect internal code paths but do not
     /// change the exposed feature set.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct PrivateCapabilities: u32 {
         /// Indicates support for `glBufferStorage` allocation.
         const BUFFER_ALLOCATION = 1 << 0;
@@ -160,6 +161,7 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// Flags that indicate necessary workarounds for specific devices or driver bugs
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     struct Workarounds: u32 {
         // Needs workaround for Intel Mesa bug:
         // https://gitlab.freedesktop.org/mesa/mesa/-/issues/2565.

@@ -632,9 +632,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("Surface::drop");
+
+        fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
+            global: &Global<G>,
+            surface: &mut HalSurface<A>,
+            present: &Presentation,
+        ) {
+            let hub = HalApi::hub(global);
+            hub.surface_unconfigure(present.device_id.value, surface);
+        }
+        
         let surface = self.surfaces.unregister(id);
         if let Ok(surface) = Arc::try_unwrap(surface.unwrap()) {
-            self.instance.destroy_surface(surface);
+          if let Some(present) = surface.presentation.lock().take() {
+              match present.backend() {
+                  #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                  Backend::Vulkan => unconfigure(self, surface.vulkan.as_mut().unwrap(), &present),
+                  #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                  Backend::Metal => unconfigure(self, surface.metal.as_mut().unwrap(), &present),
+                  #[cfg(all(feature = "dx12", windows))]
+                  Backend::Dx12 => unconfigure(self, surface.dx12.as_mut().unwrap(), &present),
+                  #[cfg(all(feature = "dx11", windows))]
+                  Backend::Dx11 => unconfigure(self, surface.dx11.as_mut().unwrap(), &present),
+                  #[cfg(feature = "gles")]
+                  Backend::Gl => unconfigure(self, surface.gl.as_mut().unwrap(), &present),
+                  _ => unreachable!(),
+              }
+          }
+
+          self.instance.destroy_surface(surface);
         } else {
             panic!("Surface cannot be destroyed because is still in use");
         }

@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
+pub mod math;
 
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not
@@ -42,9 +43,7 @@ macro_rules! impl_bitflags {
                 D: serde::Deserializer<'de>,
             {
                 let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
-                // Note: newer version of bitflags replaced from_bits_unchecked with
-                // from_bits_retain which is not marked as unsafe (same implementation).
-                Ok(unsafe { $name::from_bits_unchecked(value) })
+                Ok($name::from_bits_retain(value))
             }
         }
 
@@ -132,6 +131,7 @@ pub enum PowerPreference {
 bitflags::bitflags! {
     /// Represents the backends that wgpu will use.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Backends: u32 {
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
@@ -149,15 +149,15 @@ bitflags::bitflags! {
         /// All the apis that wgpu offers first tier of support for.
         ///
         /// Vulkan + Metal + DX12 + Browser WebGPU
-        const PRIMARY = Self::VULKAN.bits
-            | Self::METAL.bits
-            | Self::DX12.bits
-            | Self::BROWSER_WEBGPU.bits;
+        const PRIMARY = Self::VULKAN.bits()
+            | Self::METAL.bits()
+            | Self::DX12.bits()
+            | Self::BROWSER_WEBGPU.bits();
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
         /// OpenGL + DX11
-        const SECONDARY = Self::GL.bits | Self::DX11.bits;
+        const SECONDARY = Self::GL.bits() | Self::DX11.bits();
     }
 }
 
@@ -214,6 +214,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(transparent)]
     #[derive(Default)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Features: u64 {
         //
         // ---- Start numbering at 1 << 0 ----
@@ -1145,6 +1146,7 @@ bitflags::bitflags! {
     ///
     /// You can check whether a set of flags is compliant through the
     /// [`DownlevelCapabilities::is_webgpu_compliant()`] function.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         ///
@@ -1249,7 +1251,7 @@ impl DownlevelFlags {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
         // WebGPU doesn't actually require aniso
-        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits)
+        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits())
     }
 }
 
@@ -1349,6 +1351,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUShaderStageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpushaderstageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ShaderStages: u32 {
         /// Binding is not visible from any shader stage.
         const NONE = 0;
@@ -1359,7 +1362,7 @@ bitflags::bitflags! {
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
-        const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
+        const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
     }
 }
 
@@ -1774,6 +1777,7 @@ impl Default for MultisampleState {
 bitflags::bitflags! {
     /// Feature flags for a texture format.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureFormatFeatureFlags: u32 {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
@@ -3631,6 +3635,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUColorWriteFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ColorWrites: u32 {
         /// Enable red channel writes
         const RED = 1 << 0;
@@ -3641,9 +3646,9 @@ bitflags::bitflags! {
         /// Enable alpha channel writes
         const ALPHA = 1 << 3;
         /// Enable red, green, and blue channel writes
-        const COLOR = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits;
+        const COLOR = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits();
         /// Enable writes to all channels.
-        const ALL = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits | Self::ALPHA.bits;
+        const ALL = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits() | Self::ALPHA.bits();
     }
 }
 
@@ -4191,6 +4196,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUsages: u32 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
@@ -4220,6 +4226,8 @@ bitflags::bitflags! {
         const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 1 << 8;
+        /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
+        const QUERY_RESOLVE = 1 << 9;
     }
 }
 
@@ -4409,6 +4417,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUTextureUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gputextureusageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
@@ -5990,6 +5999,7 @@ bitflags::bitflags! {
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineStatisticsTypes : u8 {
         /// Amount of times the vertex shader is ran. Accounts for
         /// the vertex cache when doing indexed rendering.

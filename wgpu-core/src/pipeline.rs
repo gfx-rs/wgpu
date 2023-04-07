@@ -416,6 +416,7 @@ pub enum CreateRenderPipelineError {
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineFlags: u32 {
         const BLEND_CONSTANT = 1 << 0;
         const STENCIL_REFERENCE = 1 << 1;

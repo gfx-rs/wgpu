@@ -157,7 +157,7 @@ pub enum QueryUseError {
 /// Error encountered while trying to resolve a query.
 #[derive(Clone, Debug, Error)]
 pub enum ResolveError {
-    #[error("Queries can only be resolved to buffers that contain the COPY_DST usage")]
+    #[error("Queries can only be resolved to buffers that contain the QUERY_RESOLVE usage")]
     MissingBufferUsage,
     #[error("Resolve buffer offset has to be aligned to `QUERY_RESOLVE_BUFFER_ALIGNMENT")]
     BufferOffsetAlignment,
@@ -373,7 +373,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .ok_or(QueryError::InvalidBuffer(destination))?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
 
-        if !dst_buffer.usage.contains(wgt::BufferUsages::COPY_DST) {
+        if !dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
             return Err(ResolveError::MissingBufferUsage.into());
         }
 
