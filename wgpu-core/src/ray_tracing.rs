@@ -76,6 +76,12 @@ pub enum BuildAccelerationStructureError {
     #[error("Buffer {0:?} associated offset is unaligned")]
     UnalignedTransformBufferOffset(ResourceErrorIdent),
 
+    #[error("Buffer {0:?} associated offset doesn't align with the index type")]
+    UnalignedIndexBufferOffset(BufferId),
+
+    #[error("Buffer {0:?} associated offset is unaligned")]
+    UnalignedTransformBufferOffset(BufferId),
+
     #[error("Buffer {0:?} associated index count not divisible by 3 (count: {1}")]
     InvalidIndexCount(ResourceErrorIdent, u32),
 
