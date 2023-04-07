@@ -555,7 +555,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info.use_at(
             device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed),
+                .fetch_add(1, Ordering::Relaxed)
+                + 1,
         );
 
         let region = wgt::BufferSize::new(src_buffer_size).map(|size| hal::BufferCopy {
@@ -769,7 +770,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info.use_at(
             device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed),
+                .fetch_add(1, Ordering::Relaxed)
+                + 1,
         );
 
         let dst_raw = dst
@@ -1086,7 +1088,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let submit_index = device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed);
+                .fetch_add(1, Ordering::Relaxed)
+                + 1;
             let mut active_executions = Vec::new();
             let mut used_surface_textures = track::TextureUsageScope::new();
             let mut pending_writes = device.pending_writes.lock();

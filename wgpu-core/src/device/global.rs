@@ -2454,7 +2454,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 buffer.info.use_at(
                     device
                         .active_submission_index
-                        .fetch_add(1, Ordering::Relaxed),
+                        .fetch_add(1, Ordering::Relaxed)
+                        + 1,
                 );
                 let region = wgt::BufferSize::new(buffer.size).map(|size| hal::BufferCopy {
                     src_offset: 0,
