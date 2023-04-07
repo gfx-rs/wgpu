@@ -14,7 +14,7 @@ use objc::{
     runtime::{Class, Object, Sel, BOOL, NO, YES},
     sel, sel_impl,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 #[cfg(target_os = "macos")]
 #[link(name = "QuartzCore", kind = "framework")]
@@ -63,8 +63,8 @@ impl super::Surface {
         Self {
             view,
             render_layer: Mutex::new(layer),
-            swapchain_format: None,
-            extent: wgt::Extent3d::default(),
+            swapchain_format: RwLock::new(None),
+            extent: RwLock::new(wgt::Extent3d::default()),
             main_thread_id: thread::current().id(),
             present_with_transaction: false,
         }
@@ -178,8 +178,8 @@ impl crate::Surface<super::Api> for super::Surface {
         log::info!("build swapchain {:?}", config);
 
         let caps = &device.shared.private_caps;
-        self.swapchain_format = Some(config.format);
-        self.extent = config.extent;
+        *self.swapchain_format.write() = Some(config.format);
+        *self.extent.write() = config.extent;
 
         let render_layer = self.render_layer.lock();
         let framebuffer_only = config.usage == crate::TextureUses::COLOR_TARGET;
@@ -234,7 +234,7 @@ impl crate::Surface<super::Api> for super::Surface {
     }
 
     unsafe fn unconfigure(&self, _device: &super::Device) {
-        self.swapchain_format = None;
+        *self.swapchain_format.write() = None;
     }
 
     unsafe fn acquire_texture(
@@ -251,16 +251,18 @@ impl crate::Surface<super::Api> for super::Surface {
             None => return Ok(None),
         };
 
+        let swapchain_format = self.swapchain_format.read().unwrap();
+        let extent = self.extent.read();
         let suf_texture = super::SurfaceTexture {
             texture: super::Texture {
                 raw: texture,
-                format: self.swapchain_format.unwrap(),
+                format: swapchain_format,
                 raw_type: metal::MTLTextureType::D2,
                 array_layers: 1,
                 mip_levels: 1,
                 copy_size: crate::CopyExtent {
-                    width: self.extent.width,
-                    height: self.extent.height,
+                    width: extent.width,
+                    height: extent.height,
                     depth: 1,
                 },
             },
