@@ -223,7 +223,7 @@ OpReturnValue %7
 %68 = OpBitcast  %4  %48
 %69 = OpCompositeExtract  %6  %49 2
 %70 = OpFMul  %6  %69 %62
-%72 = OpConvertUToF  %6  %68
+%72 = OpConvertSToF  %6  %68
 %73 = OpCompositeConstruct  %20  %67 %72
 %74 = OpSampledImage  %71  %52 %53
 %75 = OpImageSampleDrefExplicitLod  %6  %74 %73 %70 Lod %5

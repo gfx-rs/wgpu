@@ -359,7 +359,7 @@ impl super::Validator {
                         if let Some(expr) = array_index {
                             match resolver[expr] {
                                 Ti::Scalar {
-                                    kind: Sk::Sint,
+                                    kind: Sk::Sint | Sk::Uint,
                                     width: _,
                                 } => {}
                                 _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
@@ -548,7 +548,7 @@ impl super::Validator {
                         if let Some(expr) = array_index {
                             match resolver[expr] {
                                 Ti::Scalar {
-                                    kind: Sk::Sint,
+                                    kind: Sk::Sint | Sk::Uint,
                                     width: _,
                                 } => {}
                                 _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),

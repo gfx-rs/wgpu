@@ -23,14 +23,16 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let value1 = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4 = textureLoad(image_storage_src, itc);
-    let value5 = textureLoad(image_array_src, itc, i32(local_id.z), i32(local_id.z) + 1);
-    let value6 = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
+    let value5 = textureLoad(image_array_src, itc, local_id.z, i32(local_id.z) + 1);
+    let value6 = textureLoad(image_array_src, itc, i32(local_id.z), i32(local_id.z) + 1);
+    let value7 = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
     // loads with uvec2 coords.
     let value1u = textureLoad(image_mipmapped_src, vec2<u32>(itc), i32(local_id.z));
     let value2u = textureLoad(image_multisampled_src, vec2<u32>(itc), i32(local_id.z));
     let value4u = textureLoad(image_storage_src, vec2<u32>(itc));
-    let value5u = textureLoad(image_array_src, vec2<u32>(itc), i32(local_id.z), i32(local_id.z) + 1);
-    let value6u = textureLoad(image_1d_src, u32(local_id.x), i32(local_id.z));
+    let value5u = textureLoad(image_array_src, vec2<u32>(itc), local_id.z, i32(local_id.z) + 1);
+    let value6u = textureLoad(image_array_src, vec2<u32>(itc), i32(local_id.z), i32(local_id.z) + 1);
+    let value7u = textureLoad(image_1d_src, u32(local_id.x), i32(local_id.z));
     // store with ivec2 coords.
     textureStore(image_dst, itc.x, value1 + value2 + value4 + value5 + value6);
     // store with uvec2 coords.
@@ -109,14 +111,32 @@ var sampler_reg: sampler;
 @fragment
 fn texture_sample() -> @location(0) vec4<f32> {
     let tc = vec2<f32>(0.5);
+    let tc3 = vec3<f32>(0.5);
     let level = 2.3;
-    let s1d = textureSample(image_1d, sampler_reg, tc.x);
-    let s2d = textureSample(image_2d, sampler_reg, tc);
-    let s2d_offset = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
-    let s2d_level = textureSampleLevel(image_2d, sampler_reg, tc, level);
-    let s2d_level_offset = textureSampleLevel(image_2d, sampler_reg, tc, level, vec2<i32>(3, 1));
-    let s2d_bias_offset = textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3, 1));
-    return s1d + s2d + s2d_offset + s2d_level + s2d_level_offset;
+    var a: vec4<f32>;
+    a += textureSample(image_1d, sampler_reg, tc.x);
+    a += textureSample(image_2d, sampler_reg, tc);
+    a += textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
+    a += textureSampleLevel(image_2d, sampler_reg, tc, level);
+    a += textureSampleLevel(image_2d, sampler_reg, tc, level, vec2<i32>(3, 1));
+    a += textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3, 1));
+    a += textureSample(image_2d_array, sampler_reg, tc, 0u);
+    a += textureSample(image_2d_array, sampler_reg, tc, 0u, vec2<i32>(3, 1));
+    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, level);
+    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, level, vec2<i32>(3, 1));
+    a += textureSampleBias(image_2d_array, sampler_reg, tc, 0u, 2.0, vec2<i32>(3, 1));
+    a += textureSample(image_2d_array, sampler_reg, tc, 0);
+    a += textureSample(image_2d_array, sampler_reg, tc, 0, vec2<i32>(3, 1));
+    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level);
+    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level, vec2<i32>(3, 1));
+    a += textureSampleBias(image_2d_array, sampler_reg, tc, 0, 2.0, vec2<i32>(3, 1));
+    a += textureSample(image_cube_array, sampler_reg, tc3, 0u);
+    a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0u, level);
+    a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0u, 2.0);
+    a += textureSample(image_cube_array, sampler_reg, tc3, 0);
+    a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0, level);
+    a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0, 2.0);
+    return a;
 }
 
 @group(1) @binding(1)
@@ -124,16 +144,25 @@ var sampler_cmp: sampler_comparison;
 @group(1) @binding(2)
 var image_2d_depth: texture_depth_2d;
 @group(1) @binding(3)
+var image_2d_array_depth: texture_depth_2d_array;
+@group(1) @binding(4)
 var image_cube_depth: texture_depth_cube;
 
 @fragment
 fn texture_sample_comparison() -> @location(0) f32 {
     let tc = vec2<f32>(0.5);
+    let tc3 = vec3<f32>(0.5);
     let dref = 0.5;
-    let s2d_depth = textureSampleCompare(image_2d_depth, sampler_cmp, tc, dref);
-    let s2d_depth_level = textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc, dref);
-    let scube_depth_level = textureSampleCompareLevel(image_cube_depth, sampler_cmp, vec3<f32>(0.5), dref);
-    return s2d_depth + s2d_depth_level;
+    var a: f32;
+    a += textureSampleCompare(image_2d_depth, sampler_cmp, tc, dref);
+    a += textureSampleCompare(image_2d_array_depth, sampler_cmp, tc, 0u, dref);
+    a += textureSampleCompare(image_2d_array_depth, sampler_cmp, tc, 0, dref);
+    a += textureSampleCompare(image_cube_depth, sampler_cmp, tc3, dref);
+    a += textureSampleCompareLevel(image_2d_depth, sampler_cmp, tc, dref);
+    a += textureSampleCompareLevel(image_2d_array_depth, sampler_cmp, tc, 0u, dref);
+    a += textureSampleCompareLevel(image_2d_array_depth, sampler_cmp, tc, 0, dref);
+    a += textureSampleCompareLevel(image_cube_depth, sampler_cmp, tc3, dref);
+    return a;
 }
 
 @fragment

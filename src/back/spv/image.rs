@@ -314,41 +314,47 @@ impl<'w> BlockContext<'w> {
         };
 
         // Convert the index to the coordinate component type, if necessary.
-        let array_index_i32_id = self.cached[array_index];
-        let reconciled_array_index_id = if component_kind == crate::ScalarKind::Sint {
-            array_index_i32_id
-        } else if component_kind == crate::ScalarKind::Uint {
-            let u32_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                vector_size: None,
-                kind: crate::ScalarKind::Uint,
-                width: 4,
-                pointer_space: None,
-            }));
-
-            let reconciled_id = self.gen_id();
-            block.body.push(Instruction::unary(
-                spirv::Op::Bitcast,
-                u32_id,
-                reconciled_id,
-                array_index_i32_id,
+        let array_index_id = self.cached[array_index];
+        let ty = &self.fun_info[array_index].ty;
+        let inner_ty = ty.inner_with(&self.ir_module.types);
+        let array_index_kind = if let Ti::Scalar { kind, width: 4 } = *inner_ty {
+            debug_assert!(matches!(
+                kind,
+                crate::ScalarKind::Sint | crate::ScalarKind::Uint
             ));
-            reconciled_id
+            kind
         } else {
-            let component_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            unreachable!("we only allow i32 and u32");
+        };
+        let cast = match (component_kind, array_index_kind) {
+            (crate::ScalarKind::Sint, crate::ScalarKind::Sint)
+            | (crate::ScalarKind::Uint, crate::ScalarKind::Uint) => None,
+            (crate::ScalarKind::Sint, crate::ScalarKind::Uint)
+            | (crate::ScalarKind::Uint, crate::ScalarKind::Sint) => Some(spirv::Op::Bitcast),
+            (crate::ScalarKind::Float, crate::ScalarKind::Sint) => Some(spirv::Op::ConvertSToF),
+            (crate::ScalarKind::Float, crate::ScalarKind::Uint) => Some(spirv::Op::ConvertUToF),
+            (crate::ScalarKind::Bool, _) => unreachable!("we don't allow bool for component"),
+            (_, crate::ScalarKind::Bool | crate::ScalarKind::Float) => {
+                unreachable!("we don't allow bool or float for array index")
+            }
+        };
+        let reconciled_array_index_id = if let Some(cast) = cast {
+            let component_ty_id = self.get_type_id(LookupType::Local(LocalType::Value {
                 vector_size: None,
                 kind: component_kind,
                 width: 4,
                 pointer_space: None,
             }));
-
             let reconciled_id = self.gen_id();
             block.body.push(Instruction::unary(
-                spirv::Op::ConvertUToF,
-                component_type_id,
+                cast,
+                component_ty_id,
                 reconciled_id,
-                array_index_i32_id,
+                array_index_id,
             ));
             reconciled_id
+        } else {
+            array_index_id
         };
 
         // Find the SPIR-V type for the combined coordinates/index vector.

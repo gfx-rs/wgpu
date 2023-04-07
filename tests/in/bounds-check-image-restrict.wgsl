@@ -15,7 +15,11 @@ fn test_textureLoad_2d(coords: vec2<i32>, level: i32) -> vec4<f32> {
 @group(0) @binding(2)
 var image_2d_array: texture_2d_array<f32>;
 
-fn test_textureLoad_2d_array(coords: vec2<i32>, index: i32, level: i32) -> vec4<f32> {
+fn test_textureLoad_2d_array_u(coords: vec2<i32>, index: u32, level: i32) -> vec4<f32> {
+   return textureLoad(image_2d_array, coords, index, level);
+}
+
+fn test_textureLoad_2d_array_s(coords: vec2<i32>, index: i32, level: i32) -> vec4<f32> {
    return textureLoad(image_2d_array, coords, index, level);
 }
 
@@ -43,7 +47,11 @@ fn test_textureLoad_depth_2d(coords: vec2<i32>, level: i32) -> f32 {
 @group(0) @binding(6)
 var image_depth_2d_array: texture_depth_2d_array;
 
-fn test_textureLoad_depth_2d_array(coords: vec2<i32>, index: i32, level: i32) -> f32 {
+fn test_textureLoad_depth_2d_array_u(coords: vec2<i32>, index: u32, level: i32) -> f32 {
+   return textureLoad(image_depth_2d_array, coords, index, level);
+}
+
+fn test_textureLoad_depth_2d_array_s(coords: vec2<i32>, index: i32, level: i32) -> f32 {
    return textureLoad(image_depth_2d_array, coords, index, level);
 }
 
@@ -71,7 +79,11 @@ fn test_textureStore_2d(coords: vec2<i32>, value: vec4<f32>) {
 @group(0) @binding(10)
 var image_storage_2d_array: texture_storage_2d_array<rgba8unorm, write>;
 
-fn test_textureStore_2d_array(coords: vec2<i32>, array_index: i32, value: vec4<f32>) {
+fn test_textureStore_2d_array_u(coords: vec2<i32>, array_index: u32, value: vec4<f32>) {
+ textureStore(image_storage_2d_array, coords, array_index, value);
+}
+
+fn test_textureStore_2d_array_s(coords: vec2<i32>, array_index: i32, value: vec4<f32>) {
  textureStore(image_storage_2d_array, coords, array_index, value);
 }
 
@@ -88,16 +100,19 @@ fn test_textureStore_3d(coords: vec3<i32>, value: vec4<f32>) {
 fn fragment_shader() -> @location(0) vec4<f32> {
     test_textureLoad_1d(0, 0);
     test_textureLoad_2d(vec2<i32>(), 0);
-    test_textureLoad_2d_array(vec2<i32>(), 0, 0);
+    test_textureLoad_2d_array_u(vec2<i32>(), 0u, 0);
+    test_textureLoad_2d_array_s(vec2<i32>(), 0, 0);
     test_textureLoad_3d(vec3<i32>(), 0);
     test_textureLoad_multisampled_2d(vec2<i32>(), 0);
     // Not yet implemented for GLSL:
     // test_textureLoad_depth_2d(vec2<i32>(), 0);
-    // test_textureLoad_depth_2d_array(vec2<i32>(), 0, 0);
+    // test_textureLoad_depth_2d_array_u(vec2<i32>(), 0u, 0);
+    // test_textureLoad_depth_2d_array_s(vec2<i32>(), 0, 0);
     // test_textureLoad_depth_multisampled_2d(vec2<i32>(), 0);
     test_textureStore_1d(0, vec4<f32>());
     test_textureStore_2d(vec2<i32>(), vec4<f32>());
-    test_textureStore_2d_array(vec2<i32>(), 0, vec4<f32>());
+    test_textureStore_2d_array_u(vec2<i32>(), 0u, vec4<f32>());
+    test_textureStore_2d_array_s(vec2<i32>(), 0, vec4<f32>());
     test_textureStore_3d(vec3<i32>(), vec4<f32>());
 
     return vec4<f32>(0.,0.,0.,0.);

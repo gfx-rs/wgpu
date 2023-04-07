@@ -758,7 +758,7 @@ impl super::Validator {
                             if let Some(expr) = array_index {
                                 match *context.resolve_type(expr, &self.valid_expression_set)? {
                                     Ti::Scalar {
-                                        kind: crate::ScalarKind::Sint,
+                                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
                                         width: _,
                                     } => {}
                                     _ => {
