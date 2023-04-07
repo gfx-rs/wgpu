@@ -156,7 +156,7 @@ use crate::{
     hal_api::HalApi,
     id,
     identity::GlobalIdentityHandlerFactory,
-    instance::{Adapter, Surface},
+    instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     registry::Registry,
     resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
@@ -359,14 +359,12 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     pub(crate) fn surface_unconfigure(
         &self,
         device_id: id::Valid<id::DeviceId>,
-        surface: &mut HalSurface<A>,
+        surface: &HalSurface<A>,
     ) {
-        use hal::Surface as _;
-
-        let devices = self.devices.data.read();
-        let device = &devices[device_id];
+        let device = self.devices.get(device_id.0).unwrap();
         unsafe {
-            surface.raw.unconfigure(&device.raw);
+            use hal::Surface;
+            surface.raw.unconfigure(device.raw.as_ref().unwrap());
         }
     }
 
