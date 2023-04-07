@@ -68,6 +68,44 @@ impl super::Device {
         naga_stage: naga::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
         let stage_bit = map_naga_stage(naga_stage);
+
+        let module = &stage.module.naga.module;
+        let ep_resources = &layout.per_stage_map[naga_stage];
+
+        let bounds_check_policy = if stage.module.runtime_checks {
+            naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite
+        } else {
+            naga::proc::BoundsCheckPolicy::Unchecked
+        };
+
+        let options = naga::back::msl::Options {
+            lang_version: match self.shared.private_caps.msl_version {
+                metal::MTLLanguageVersion::V1_0 => (1, 0),
+                metal::MTLLanguageVersion::V1_1 => (1, 1),
+                metal::MTLLanguageVersion::V1_2 => (1, 2),
+                metal::MTLLanguageVersion::V2_0 => (2, 0),
+                metal::MTLLanguageVersion::V2_1 => (2, 1),
+                metal::MTLLanguageVersion::V2_2 => (2, 2),
+                metal::MTLLanguageVersion::V2_3 => (2, 3),
+                metal::MTLLanguageVersion::V2_4 => (2, 4),
+            },
+            inline_samplers: Default::default(),
+            spirv_cross_compatibility: false,
+            fake_missing_bindings: false,
+            per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
+                stage.entry_point.to_string(),
+                ep_resources.clone(),
+            )]),
+            bounds_check_policies: naga::proc::BoundsCheckPolicies {
+                index: bounds_check_policy,
+                buffer: bounds_check_policy,
+                image: bounds_check_policy,
+                // TODO: support bounds checks on binding arrays
+                binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
+            },
+            zero_initialize_workgroup_memory: true,
+        };
+
         let pipeline_options = naga::back::msl::PipelineOptions {
             allow_point_size: match primitive_class {
                 metal::MTLPrimitiveTopologyClass::Point => true,
@@ -75,25 +113,10 @@ impl super::Device {
             },
         };
 
-        let mut temp_options;
-        let options = if !stage.module.runtime_checks {
-            temp_options = layout.naga_options.clone();
-            temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
-                index: naga::proc::BoundsCheckPolicy::Unchecked,
-                buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                image: naga::proc::BoundsCheckPolicy::Unchecked,
-                binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-            };
-            &temp_options
-        } else {
-            &layout.naga_options
-        };
-
-        let module = &stage.module.naga.module;
         let (source, info) = naga::back::msl::write_string(
             module,
             &stage.module.naga.info,
-            options,
+            &options,
             &pipeline_options,
         )
         .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
@@ -128,16 +151,17 @@ impl super::Device {
             .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
         let ep = &module.entry_points[ep_index];
-        let name = info.entry_point_names[ep_index]
+        let ep_name = info.entry_point_names[ep_index]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
+
         let wg_size = metal::MTLSize {
             width: ep.workgroup_size[0] as _,
             height: ep.workgroup_size[1] as _,
             depth: ep.workgroup_size[2] as _,
         };
 
-        let function = library.get_function(name, None).map_err(|e| {
+        let function = library.get_function(ep_name, None).map_err(|e| {
             log::error!("get_function: {:?}", e);
             crate::PipelineError::EntryPoint(naga_stage)
         })?;
@@ -169,8 +193,7 @@ impl super::Device {
 
                     // check for an immutable buffer
                     if !ep_info[var_handle].is_empty() && !storage_access_store {
-                        let psm = &layout.naga_options.per_stage_map[naga_stage];
-                        let slot = psm.resources[&br].buffer.unwrap();
+                        let slot = ep_resources.resources[&br].buffer.unwrap();
                         immutable_buffer_mask |= 1 << slot;
                     }
 
@@ -518,7 +541,7 @@ impl crate::Device<super::Api> for super::Device {
             resources: naga::back::msl::BindingMap,
         }
 
-        let mut stage_data = super::NAGA_STAGES.map(|&stage| StageInfo {
+        let mut stage_data = super::NAGA_STAGES.map(|stage| StageInfo {
             stage,
             counters: super::ResourceData::default(),
             pc_buffer: None,
@@ -559,7 +582,7 @@ impl crate::Device<super::Api> for super::Device {
         // Second, place the described resources
         for (group_index, &bgl) in desc.bind_group_layouts.iter().enumerate() {
             // remember where the resources for this set start at each shader stage
-            let base_resource_indices = stage_data.map(|info| info.counters.clone());
+            let base_resource_indices = stage_data.map_ref(|info| info.counters.clone());
 
             for entry in bgl.entries.iter() {
                 if let wgt::BindingType::Buffer {
@@ -640,63 +663,31 @@ impl crate::Device<super::Api> for super::Device {
             }
         }
 
-        let per_stage_map = stage_data.map(|info| naga::back::msl::PerStageResources {
+        let push_constants_infos = stage_data.map_ref(|info| {
+            info.pc_buffer.map(|buffer_index| super::PushConstantsInfo {
+                count: info.pc_limit,
+                buffer_index,
+            })
+        });
+
+        let total_counters = stage_data.map_ref(|info| info.counters.clone());
+
+        let per_stage_map = stage_data.map(|info| naga::back::msl::EntryPointResources {
             push_constant_buffer: info
                 .pc_buffer
                 .map(|buffer_index| buffer_index as naga::back::msl::Slot),
             sizes_buffer: info
                 .sizes_buffer
                 .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-            resources: Default::default(),
+            resources: info.resources,
         });
 
         Ok(super::PipelineLayout {
             bind_group_infos,
-            push_constants_infos: stage_data.map(|info| {
-                info.pc_buffer.map(|buffer_index| super::PushConstantsInfo {
-                    count: info.pc_limit,
-                    buffer_index,
-                })
-            }),
-            total_counters: stage_data.map(|info| info.counters.clone()),
-            naga_options: naga::back::msl::Options {
-                lang_version: match self.shared.private_caps.msl_version {
-                    metal::MTLLanguageVersion::V1_0 => (1, 0),
-                    metal::MTLLanguageVersion::V1_1 => (1, 1),
-                    metal::MTLLanguageVersion::V1_2 => (1, 2),
-                    metal::MTLLanguageVersion::V2_0 => (2, 0),
-                    metal::MTLLanguageVersion::V2_1 => (2, 1),
-                    metal::MTLLanguageVersion::V2_2 => (2, 2),
-                    metal::MTLLanguageVersion::V2_3 => (2, 3),
-                    metal::MTLLanguageVersion::V2_4 => (2, 4),
-                },
-                inline_samplers: Default::default(),
-                spirv_cross_compatibility: false,
-                fake_missing_bindings: false,
-                per_stage_map: naga::back::msl::PerStageMap {
-                    vs: naga::back::msl::PerStageResources {
-                        resources: stage_data.vs.resources,
-                        ..per_stage_map.vs
-                    },
-                    fs: naga::back::msl::PerStageResources {
-                        resources: stage_data.fs.resources,
-                        ..per_stage_map.fs
-                    },
-                    cs: naga::back::msl::PerStageResources {
-                        resources: stage_data.cs.resources,
-                        ..per_stage_map.cs
-                    },
-                },
-                bounds_check_policies: naga::proc::BoundsCheckPolicies {
-                    index: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
-                    buffer: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
-                    image: naga::proc::BoundsCheckPolicy::ReadZeroSkipWrite,
-                    // TODO: support bounds checks on binding arrays
-                    binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                },
-                zero_initialize_workgroup_memory: true,
-            },
+            push_constants_infos,
+            total_counters,
             total_push_constants,
+            per_stage_map,
         })
     }
     unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
@@ -817,23 +808,34 @@ impl crate::Device<super::Api> for super::Device {
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
 
-            let vs = self.load_shader(
-                &desc.vertex_stage,
-                desc.layout,
-                primitive_class,
-                naga::ShaderStage::Vertex,
-            )?;
+            // Vertex shader
+            let (vs_lib, vs_info) = {
+                let vs = self.load_shader(
+                    &desc.vertex_stage,
+                    desc.layout,
+                    primitive_class,
+                    naga::ShaderStage::Vertex,
+                )?;
 
-            descriptor.set_vertex_function(Some(&vs.function));
-            if self.shared.private_caps.supports_mutability {
-                Self::set_buffers_mutability(
-                    descriptor.vertex_buffers().unwrap(),
-                    vs.immutable_buffer_mask,
-                );
-            }
+                descriptor.set_vertex_function(Some(&vs.function));
+                if self.shared.private_caps.supports_mutability {
+                    Self::set_buffers_mutability(
+                        descriptor.vertex_buffers().unwrap(),
+                        vs.immutable_buffer_mask,
+                    );
+                }
+
+                let info = super::PipelineStageInfo {
+                    push_constants: desc.layout.push_constants_infos.vs,
+                    sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
+                    sized_bindings: vs.sized_bindings,
+                };
+
+                (vs.library, info)
+            };
 
             // Fragment shader
-            let (fs_lib, fs_sized_bindings) = match desc.fragment_stage {
+            let (fs_lib, fs_info) = match desc.fragment_stage {
                 Some(ref stage) => {
                     let fs = self.load_shader(
                         stage,
@@ -841,6 +843,7 @@ impl crate::Device<super::Api> for super::Device {
                         primitive_class,
                         naga::ShaderStage::Fragment,
                     )?;
+
                     descriptor.set_fragment_function(Some(&fs.function));
                     if self.shared.private_caps.supports_mutability {
                         Self::set_buffers_mutability(
@@ -848,7 +851,14 @@ impl crate::Device<super::Api> for super::Device {
                             fs.immutable_buffer_mask,
                         );
                     }
-                    (Some(fs.library), fs.sized_bindings)
+
+                    let info = super::PipelineStageInfo {
+                        push_constants: desc.layout.push_constants_infos.fs,
+                        sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
+                        sized_bindings: fs.sized_bindings,
+                    };
+
+                    (Some(fs.library), Some(info))
                 }
                 None => {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
@@ -857,7 +867,7 @@ impl crate::Device<super::Api> for super::Device {
                         descriptor
                             .set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
                     }
-                    (None, Vec::new())
+                    (None, None)
                 }
             };
 
@@ -989,18 +999,10 @@ impl crate::Device<super::Api> for super::Device {
 
             Ok(super::RenderPipeline {
                 raw,
-                vs_lib: vs.library,
+                vs_lib,
                 fs_lib,
-                vs_info: super::PipelineStageInfo {
-                    push_constants: desc.layout.push_constants_infos.vs,
-                    sizes_slot: desc.layout.naga_options.per_stage_map.vs.sizes_buffer,
-                    sized_bindings: vs.sized_bindings,
-                },
-                fs_info: super::PipelineStageInfo {
-                    push_constants: desc.layout.push_constants_infos.fs,
-                    sizes_slot: desc.layout.naga_options.per_stage_map.fs.sizes_buffer,
-                    sized_bindings: fs_sized_bindings,
-                },
+                vs_info,
+                fs_info,
                 raw_primitive_type,
                 raw_triangle_fill_mode,
                 raw_front_winding: conv::map_winding(desc.primitive.front_face),
@@ -1042,6 +1044,12 @@ impl crate::Device<super::Api> for super::Device {
                 );
             }
 
+            let cs_info = super::PipelineStageInfo {
+                push_constants: desc.layout.push_constants_infos.cs,
+                sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
+                sized_bindings: cs.sized_bindings,
+            };
+
             if let Some(name) = desc.label {
                 descriptor.set_label(name);
             }
@@ -1060,11 +1068,7 @@ impl crate::Device<super::Api> for super::Device {
 
             Ok(super::ComputePipeline {
                 raw,
-                cs_info: super::PipelineStageInfo {
-                    push_constants: desc.layout.push_constants_infos.cs,
-                    sizes_slot: desc.layout.naga_options.per_stage_map.cs.sizes_buffer,
-                    sized_bindings: cs.sized_bindings,
-                },
+                cs_info,
                 cs_lib: cs.library,
                 work_group_size: cs.wg_size,
                 work_group_memory_sizes: cs.wg_memory_sizes,
