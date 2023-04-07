@@ -191,7 +191,7 @@ impl HubReport {
 }
 
 #[allow(rustdoc::private_intra_doc_links)]
-/// All the resources for a particular backend in a [`Global`].
+/// All the resources for a particular backend in a [`crate::global::Global`].
 ///
 /// To obtain `global`'s `Hub` for some [`HalApi`] backend type `A`,
 /// call [`A::hub(global)`].
@@ -199,9 +199,9 @@ impl HubReport {
 /// ## Locking
 ///
 /// Each field in `Hub` is a [`Registry`] holding all the values of a
-/// particular type of resource, all protected by a single [`RwLock`].
+/// particular type of resource, all protected by a single RwLock.
 /// So for example, to access any [`Buffer`], you must acquire a read
-/// lock on the `Hub`s entire [`buffers`] registry. The lock guard
+/// lock on the `Hub`s entire buffers registry. The lock guard
 /// gives you access to the `Registry`'s [`Storage`], which you can
 /// then index with the buffer's id. (Yes, this design causes
 /// contention; see [#2272].)
