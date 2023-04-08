@@ -148,6 +148,10 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
 ### Bug Fixes
 
+#### WebGPU
+
+- Fix handling of `None` values for `depth_ops` and `stencil_ops` in `RenderPassDescriptor::depth_stencil_attachment`. By @niklaskorz in [#3660](https://github.com/gfx-rs/wgpu/pull/3660)
+
 #### Metal
 - Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shader samples different Lods in the same quad. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
