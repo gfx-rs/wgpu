@@ -2235,13 +2235,15 @@ impl crate::Context for Context {
         }
     }
 
-    fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
+    fn queue_submit<I: Iterator<Item = (Self::CommandBufferId, Self::CommandBufferData)>>(
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         command_buffers: I,
     ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
-        let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
+        let temp_command_buffers = command_buffers
+            .map(|(i, _)| i)
+            .collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
         let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers))
@@ -2924,9 +2926,11 @@ impl crate::Context for Context {
         &self,
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
+        render_bundles: Box<
+            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
+        >,
     ) {
-        let temp_render_bundles = render_bundles.collect::<SmallVec<[_; 4]>>();
+        let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
         unsafe {
             wgpu_render_pass_execute_bundles(
                 pass_data,
