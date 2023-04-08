@@ -883,7 +883,7 @@ impl crate::context::Context for Context {
             .expect("expected to find single canvas")
             .into();
         let canvas_element: web_sys::HtmlCanvasElement = canvas_node.into();
-        Ok(self.instance_create_surface_from_canvas(&canvas_element)?)
+        self.instance_create_surface_from_canvas(&canvas_element)
     }
 
     fn instance_request_adapter(
