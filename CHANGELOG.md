@@ -170,6 +170,10 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
 - Fix metal erroring on an `array_stride` of 0. By @teoxoy in [#3538](https://github.com/gfx-rs/wgpu/pull/3538)
 
+#### WebGPU
+
+- Avoid using `WasmAbi` functions for WebGPU backend. By @grovesNL in [#3657](https://github.com/gfx-rs/wgpu/pull/3657)
+
 #### General
 
 - `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
