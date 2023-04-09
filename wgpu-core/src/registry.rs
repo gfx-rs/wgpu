@@ -51,7 +51,6 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     }
 
     pub fn assign(self, value: T) -> (id::Valid<I>, Arc<T>) {
-        value.info().set_id(self.id);
         self.data.write().insert(self.id, value);
         (
             id::Valid(self.id),

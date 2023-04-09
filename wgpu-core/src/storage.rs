@@ -44,13 +44,19 @@ pub(crate) struct InvalidId;
 /// values, so you should use an id allocator like `IdentityManager`
 /// that keeps the index values dense and close to zero.
 #[derive(Debug)]
-pub struct Storage<T, I: id::TypedId> {
+pub struct Storage<T, I: id::TypedId>
+where
+    T: Resource<I>,
+{
     pub(crate) map: Vec<Element<T>>,
     kind: &'static str,
     _phantom: PhantomData<I>,
 }
 
-impl<T, I: id::TypedId> ops::Index<id::Valid<I>> for Storage<T, I> {
+impl<T, I: id::TypedId> ops::Index<id::Valid<I>> for Storage<T, I>
+where
+    T: Resource<I>,
+{
     type Output = Arc<T>;
     fn index(&self, id: id::Valid<I>) -> &Arc<T> {
         self.get(id.0).unwrap()
@@ -69,7 +75,10 @@ where
     }
 }
 
-impl<T, I: id::TypedId> Storage<T, I> {
+impl<T, I: id::TypedId> Storage<T, I>
+where
+    T: Resource<I>,
+{
     pub(crate) fn from_kind(kind: &'static str) -> Self {
         Self {
             map: Vec::new(),
@@ -175,6 +184,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
 
     pub(crate) fn insert(&mut self, id: I, value: T) {
         let (index, epoch, _) = id.unzip();
+        value.info().set_id(id);
         self.insert_impl(index as usize, Element::Occupied(Arc::new(value), epoch))
     }
 
@@ -185,6 +195,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
 
     pub(crate) fn force_replace(&mut self, id: I, value: T) {
         let (index, epoch, _) = id.unzip();
+        value.info().set_id(id);
         self.map[index as usize] = Element::Occupied(Arc::new(value), epoch);
     }
 
