@@ -2245,7 +2245,9 @@ impl Device {
         DynContext::device_stop_capture(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// Creates a [`Blas`].
+    /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
+    /// - desc: The descriptor of the acceleration structure.
+    /// - sizes: Size descriptor limiting what can be built into the acceleration structure.
     pub fn create_blas(
         &self,
         desc: &CreateBlasDescriptor,
@@ -2267,7 +2269,8 @@ impl Device {
         }
     }
 
-    /// Creates a [`Tlas`].
+    /// Create a top level acceleration structure, used for ray tracing.
+    /// - desc: The descriptor of the acceleration structure.
     pub fn create_tlas(&self, desc: &CreateTlasDescriptor) -> Tlas {
         let (id, data) =
             DynContext::device_create_tlas(&*self.context, &self.id, self.data.as_ref(), desc);
@@ -2973,9 +2976,16 @@ impl CommandEncoder {
         DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
     }
 
-    /// Build bottom and top level acceleration structures
+    /// Build bottom and top level acceleration structures.
+    /// See [`build_acceleration_structures`] for the safe version and more details.
+    ///
     /// # Safety
-    /// TODO
+    ///
+    ///    - The contents of the raw instance buffer must be valid for the underling api.
+    ///    - All bottom level acceleration structures, referenced in the raw instance buffer must be valid and built,
+    ///       when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
+    ///    - At the time when the top level acceleration structure is used in a bind group, all associated bottom level acceleration structures must be valid,
+    ///      and built (no later than the time when the top level acceleration structure was built).
     pub unsafe fn build_acceleration_structures_unsafe_tlas<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
@@ -3029,7 +3039,24 @@ impl CommandEncoder {
         );
     }
 
-    /// Build bottom and top level acceleration structures
+    /// Build bottom and top level acceleration structures.
+    /// - blas: Iterator of bottom level acceleration structure entries to build
+    ///     For each entry, the provided size descriptor must be strictly smaller or equal to the descriptor given at bottom level acceleration structure creation:
+    ///     - Less or equal number of geometries
+    ///     - Same kind of geometry (with index buffer or without) (same vertex/index format)
+    ///     - Same flags
+    ///     - Less or equal number of vertices
+    ///     - Less or equal number of indices (if applicable)
+    /// - tlas: iterator of top level acceleration structure packages to build
+    ///
+    /// A bottom level acceleration structure may be build and used as a reference in a top level acceleration structure in the same invocation of this function.
+    ///
+    /// # Bind group usage
+    ///
+    /// When a top level acceleration structure is used in a bind group, some validation takes place:
+    ///    - The top level acceleration structure is valid and has been built.
+    ///    - All the bottom level acceleration structures referenced by the top level acceleration structure are valid and have been built prior,
+    ///      or at same time as the containing top level acceleration structure.
     pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
@@ -4648,75 +4675,78 @@ impl Display for Error {
     }
 }
 
-/// TODO Docu
+/// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
 static_assertions::assert_impl_all!(BlasTriangleGeometrySizeDescriptor: Send, Sync);
 
-/// TODO Docu
+/// Descriptor for the size defining attributes, for a bottom level acceleration structure.
 pub type BlasGeometrySizeDescriptors = wgt::BlasGeometrySizeDescriptors;
 static_assertions::assert_impl_all!(BlasGeometrySizeDescriptors: Send, Sync);
 
-/// TODO Docu
+/// Flags for an acceleration structure.
 pub type AccelerationStructureFlags = wgt::AccelerationStructureFlags;
 static_assertions::assert_impl_all!(AccelerationStructureFlags: Send, Sync);
 
-/// TODO Docu
+/// Flags for a geometry inside a bottom level acceleration structure.
 pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
 static_assertions::assert_impl_all!(AccelerationStructureGeometryFlags: Send, Sync);
 
-/// TODO Docu
+/// Update mode for acceleration structure builds.
 pub type AccelerationStructureUpdateMode = wgt::AccelerationStructureUpdateMode;
 static_assertions::assert_impl_all!(AccelerationStructureUpdateMode: Send, Sync);
 
-/// TODO Docu
+/// Descriptor to create bottom level acceleration structures.
 pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateBlasDescriptor: Send, Sync);
 
-/// TODO Docu
+/// Descriptor to create top level acceleration structures.
 pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor: Send, Sync);
 
 #[derive(Debug)]
-/// TODO Docu
+/// Definition for a triangle geometry.
+/// The size must match the rest of the structures fields, otherwise the build will fail.
+/// (e.g. if a index count is present in the size, the index buffer must be present as well.)
 pub struct BlasTriangleGeometry<'a> {
-    /// TODO Docu
+    /// Sub descriptor for the size defining attributes of a triangle geometry.
     pub size: &'a BlasTriangleGeometrySizeDescriptor,
-    /// TODO Docu
+    /// Vertex buffer.
     pub vertex_buffer: &'a Buffer,
-    /// TODO Docu
+    /// Offset into the vertex buffer as a factor of the vertex stride.
     pub first_vertex: u32,
-    /// TODO Docu
+    /// Vertex stride.
     pub vertex_stride: wgt::BufferAddress,
-    /// TODO Docu
+    /// Index buffer (optional).
     pub index_buffer: Option<&'a Buffer>,
-    /// TODO Docu
+    /// Index buffer offset in bytes (optional, required if index buffer is present).
     pub index_buffer_offset: Option<wgt::BufferAddress>,
-    /// TODO Docu
+    /// Transform buffer containing 3x4 (rows x columns, row mayor) affine transform matrices `[f32; 12]` (optional).
     pub transform_buffer: Option<&'a Buffer>,
-    /// TODO Docu
+    /// Transform buffer offset in bytes (optional, required if transform buffer is present).
     pub transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 static_assertions::assert_impl_all!(BlasTriangleGeometry: Send, Sync);
 
 #[derive(Debug)]
-/// TODO Docu
+/// Geometries for a bottom level acceleration structure.
 pub enum BlasGeometries<'a> {
-    /// TODO Docu
+    /// Triangle geometry variant.
     TriangleGeometries(&'a [BlasTriangleGeometry<'a>]),
 }
 static_assertions::assert_impl_all!(BlasGeometries: Send, Sync);
 
-/// TODO Docu
+/// Entry for a bottom level acceleration structure build.
 pub struct BlasBuildEntry<'a> {
-    /// TODO Docu
+    /// Reference to the acceleration structure.
     pub blas: &'a Blas,
-    /// TODO Docu
+    /// Reference to the geometries.
     pub geometry: &'a BlasGeometries<'a>,
 }
 static_assertions::assert_impl_all!(BlasBuildEntry: Send, Sync);
 
 #[derive(Debug)]
-/// TODO Docu
+/// Bottom level acceleration structure.
+/// Used to represent a collection of geometries for ray tracing inside a top level acceleration structure.
 pub struct Blas {
     context: Arc<C>,
     id: ObjectId,
@@ -4724,12 +4754,13 @@ pub struct Blas {
     handle: Option<u64>,
 }
 static_assertions::assert_impl_all!(Blas: Send, Sync);
+
 impl Blas {
-    /// TODO Docu
+    /// Raw handle to the acceleration structure, used inside raw instance buffers.
     pub fn handle(&self) -> Option<u64> {
         self.handle
     }
-    /// TODO Docu
+    /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
         DynContext::blas_destroy(&*self.context, &self.id, self.data.as_ref());
     }
@@ -4744,7 +4775,8 @@ impl Drop for Blas {
 }
 
 #[derive(Debug)]
-/// TODO Docu
+/// Top level acceleration structure.
+/// Used to represent a collection of bottom level acceleration structure instances for ray tracing.
 pub struct Tlas {
     context: Arc<C>,
     id: ObjectId,
@@ -4753,7 +4785,7 @@ pub struct Tlas {
 static_assertions::assert_impl_all!(Tlas: Send, Sync);
 
 impl Tlas {
-    /// TODO Docu
+    /// Destroy the associated native resources as soon as possible.
     pub fn destroy(&self) {
         DynContext::tlas_destroy(&*self.context, &self.id, self.data.as_ref());
     }
@@ -4767,32 +4799,36 @@ impl Drop for Tlas {
     }
 }
 
-/// TODO Docu
+/// Entry for a top level acceleration structure build.
+/// Used with raw instance buffers for a unvalidated builds.
 pub struct TlasBuildEntry<'a> {
-    /// TODO Docu
+    /// Reference to the acceleration structure.
     pub tlas: &'a Tlas,
-    /// TODO Docu
+    /// Reference to the raw instance buffer.
     pub instance_buffer: &'a Buffer,
-    /// TODO Docu
+    /// Number of instances in the instance buffer.
     pub instance_count: u32,
 }
 static_assertions::assert_impl_all!(TlasBuildEntry: Send, Sync);
 
-/// TODO Docu
-/// Very unstable
+/// Safe instance for a top level acceleration structure.
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     blas: ObjectId,
-    /// TODO Docu
+    /// Affine transform matrix 3x4 (rows x columns, row mayor order).
     pub transform: [f32; 12],
-    /// TODO Docu
+    /// Custom index for the instance used inside the shader (max 24 bits).
     pub custom_index: u32,
-    /// TODO Docu
+    /// Mask for the instance used inside the shader to filter instances.
     pub mask: u8,
 }
 
 impl TlasInstance {
-    /// TODO Docu
+    /// Construct TlasInstance.
+    /// - blas: Reference to the bottom level acceleration structure
+    /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
+    /// - custom_index: Custom index for the instance used inside the shader (max 24 bits)
+    /// - mask: Mask for the instance used inside the shader to filter instances
     pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
         Self {
             blas: blas.id,
@@ -4802,7 +4838,7 @@ impl TlasInstance {
         }
     }
 
-    /// TODO Docu
+    /// Set the bottom level acceleration structure.
     pub fn set_blas(&mut self, blas: &Blas) {
         self.blas = blas.id;
     }
@@ -4815,7 +4851,7 @@ pub(crate) struct DynContextTlasInstance<'a> {
     mask: u8,
 }
 
-/// TODO Docu
+/// [Context version] see `TlasInstance`.
 pub struct ContextTlasInstance<'a, T: Context> {
     blas_id: T::BlasId,
     transform: &'a [f32; 12],
@@ -4823,7 +4859,7 @@ pub struct ContextTlasInstance<'a, T: Context> {
     mask: u8,
 }
 
-/// TODO Docu
+/// The safe version of TlasEntry, containing TlasInstances instead of a raw buffer.
 pub struct TlasPackage {
     tlas: Tlas,
     instances: Vec<Option<TlasInstance>>,
@@ -4832,12 +4868,14 @@ pub struct TlasPackage {
 static_assertions::assert_impl_all!(TlasPackage: Send, Sync);
 
 impl TlasPackage {
-    /// TODO Docu
+    /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
+    /// (max_instances needs to fit into tlas)
     pub fn new(tlas: Tlas, max_instances: u32) -> Self {
         Self::new_with_instances(tlas, vec![None; max_instances as usize])
     }
 
-    /// TODO Docu
+    /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
+    /// This contructor moves the instances into the package (the number of instances needs to fit into tlas).
     pub fn new_with_instances(tlas: Tlas, instances: Vec<Option<TlasInstance>>) -> Self {
         Self {
             tlas,
@@ -4846,12 +4884,15 @@ impl TlasPackage {
         }
     }
 
-    /// TODO Docu
+    /// Get a reference to all instances.
     pub fn get(&self) -> &[Option<TlasInstance>] {
         &self.instances
     }
 
-    /// TODO Docu
+    /// Get a mutable slice to a range of instances.
+    /// Returns None if the range is out of bounds.
+    /// All elements from the lowest accessed index up are marked as modified.
+    /// For better performance it is recommended to reduce access to low elements.
     pub fn get_mut_slice(&mut self, range: Range<usize>) -> Option<&mut [Option<TlasInstance>]> {
         if range.end > self.instances.len() {
             return None;
@@ -4862,7 +4903,10 @@ impl TlasPackage {
         Some(&mut self.instances[range])
     }
 
-    /// TODO Docu
+    /// Get a single mutable reference to an instance.
+    /// Returns None if the range is out of bounds.
+    /// All elements from the lowest accessed index up are marked as modified.
+    /// For better performance it is recommended to reduce access to low elements.
     pub fn get_mut_single(&mut self, index: usize) -> Option<&mut Option<TlasInstance>> {
         if index >= self.instances.len() {
             return None;
@@ -4906,7 +4950,7 @@ pub(crate) struct DynContextTlasPackage<'a> {
     lowest_unmodified: u32,
 }
 
-/// TODO Docu
+/// [Context version] see `BlasTriangleGeometry`.
 pub struct ContextBlasTriangleGeometry<'a, T: Context> {
     size: &'a BlasTriangleGeometrySizeDescriptor,
     vertex_buffer: T::BufferId,
@@ -4918,29 +4962,26 @@ pub struct ContextBlasTriangleGeometry<'a, T: Context> {
     transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 
-/// TODO Docu
+/// [Context version] see `BlasGeometries`.
 pub enum ContextBlasGeometries<'a, T: Context> {
-    /// TODO Docu
+    /// Triangle geometries.
     TriangleGeometries(Box<dyn Iterator<Item = ContextBlasTriangleGeometry<'a, T>> + 'a>),
 }
 
-/// TODO Docu
+/// [Context version] see `BlasBuildEntry`.
 pub struct ContextBlasBuildEntry<'a, T: Context> {
     blas_id: T::BlasId,
-    // blas_data: &'a T::BlasData,
     geometries: ContextBlasGeometries<'a, T>,
 }
 
-/// TODO Docu
+/// [Context version] see `TlasBuildEntry`.
 pub struct ContextTlasBuildEntry<T: Context> {
     tlas_id: T::TlasId,
-    // tlas_data: &'a T::TlasData,
     instance_buffer_id: T::BufferId,
-    // instance_buffer_data: &'a T::BufferData,
     instance_count: u32,
 }
 
-/// TODO Docu
+/// [Context version] see `TlasPackage`.
 pub struct ContextTlasPackage<'a, T: Context> {
     tlas_id: T::TlasId,
     instances: Box<dyn Iterator<Item = Option<ContextTlasInstance<'a, T>>> + 'a>,

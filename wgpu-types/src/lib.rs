@@ -6170,28 +6170,30 @@ impl Default for InstanceDescriptor {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-/// TODO Docu
+/// Descriptor for all size definiing attributes of a single triangle geometry inside a bottom level acceleration structure.
 pub struct BlasTriangleGeometrySizeDescriptor {
-    /// TODO Docu
+    /// Format of a vertex position.
     pub vertex_format: VertexFormat,
-    /// TODO Docu    
+    /// Number of vertices.   
     pub vertex_count: u32,
-    /// TODO Docu
+    /// Format of an index. Only needed if an index buffer is used.
+    /// If `index_format` is provided `index_count` is required.
     pub index_format: Option<IndexFormat>,
-    /// TODO Docu
+    /// Number of indices. Only needed if an index buffer is used.  
+    /// If `index_count` is provided `index_format` is required.
     pub index_count: Option<u32>,
-    /// TODO Docu
+    /// Flags for the geometry.
     pub flags: AccelerationStructureGeometryFlags,
 }
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-/// TODO Docu
+/// Descriptor for all size definiing attributes of all geometries inside a bottom level acceleration structure.
 pub enum BlasGeometrySizeDescriptors {
-    /// TODO Docu
+    /// Triangle geometry version.
     Triangles {
-        /// TODO Docu
+        /// Descriptor for each triangle geometry.
         desc: Vec<BlasTriangleGeometrySizeDescriptor>,
     },
 }
@@ -6200,11 +6202,13 @@ pub enum BlasGeometrySizeDescriptors {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-/// TODO Docu
+/// Update mode for acceleration structure builds.
 pub enum AccelerationStructureUpdateMode {
-    /// TODO Docu
+    /// Allwasy perform a full build.
     Build,
-    /// TODO Docu
+    /// If possible, perform an incremental update.
+    /// Not advised for major topology changes.
+    /// (Usefull for e.g. skinning)
     PreferUpdate,
 }
 
@@ -6212,13 +6216,13 @@ pub enum AccelerationStructureUpdateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-/// TODO Docu
+/// Descriptor for creating a bottom level acceleration structure.
 pub struct CreateBlasDescriptor<L> {
-    /// TODO Docu
+    /// Label for the bottom level acceleration structure.
     pub label: L,
-    /// TODO Docu
+    /// Flags for the bottom level acceleration structure.
     pub flags: AccelerationStructureFlags,
-    /// TODO Docu
+    /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
 }
 
@@ -6237,15 +6241,15 @@ impl<L> CreateBlasDescriptor<L> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-/// TODO Docu
+/// Descriptor for creating a top level acceleration structure.
 pub struct CreateTlasDescriptor<L> {
-    /// TODO Docu
+    /// Label for the top level acceleration structure.
     pub label: L,
-    /// TODO Docu
+    /// Number of instances that can be stored in the acceleration structure.
     pub max_instances: u32,
-    /// TODO Docu
+    /// Flags for the bottom level acceleration structure.
     pub flags: AccelerationStructureFlags,
-    /// TODO Docu
+    /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
 }
 
