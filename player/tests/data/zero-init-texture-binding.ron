@@ -17,7 +17,7 @@
         // MISSING: Partial views
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1, Empty), Some(Id(0, 1, Empty)), (
             label: Some("Sampled Texture"),
             size: (
                 width: 64,
@@ -30,11 +30,6 @@
             usage: 5, // SAMPLED + COPY_SRC
             view_formats: [],
         )),
-        CreateTextureView(
-            id: Id(0, 1, Empty),
-            parent_id: Id(0, 1, Empty),
-            desc: (),
-        ),
         CreateBuffer(
             Id(0, 1, Empty),
             (
@@ -44,7 +39,7 @@
                 mapped_at_creation: false,
             ),
         ),
-        CreateTexture(Id(1, 1, Empty), (
+        CreateTexture(Id(1, 1, Empty), Some(Id(1, 1, Empty)), (
             label: Some("Storage Texture"),
             size: (
                 width: 64,
@@ -57,11 +52,6 @@
             usage: 9, // STORAGE + COPY_SRC
             view_formats: [],
         )),
-        CreateTextureView(
-            id: Id(1, 1, Empty),
-            parent_id: Id(1, 1, Empty),
-            desc: (),
-        ),
         CreateBuffer(
             Id(1, 1, Empty),
             (

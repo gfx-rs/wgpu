@@ -10,7 +10,7 @@
         // MISSING: Partial view.
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1, Empty), Some(Id(0, 1, Empty)), (
             label: Some("Render Target Texture"),
             size: (
                 width: 64,
@@ -23,11 +23,6 @@
             usage: 17, // RENDER_ATTACHMENT + COPY_SRC
             view_formats: [],
         )),
-        CreateTextureView(
-            id: Id(0, 1, Empty),
-            parent_id: Id(0, 1, Empty),
-            desc: (),
-        ),
         CreateBuffer(
             Id(0, 1, Empty),
             (

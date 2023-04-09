@@ -20,7 +20,7 @@
         )
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), (
+        CreateTexture(Id(0, 1, Empty), None, (
             label: Some("Output Texture"),
             size: (
                 width: 64,
