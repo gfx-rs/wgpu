@@ -3120,7 +3120,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        _desc: &crate::CreateBlasDescriptor<'_>,
+        _desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
         _sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
         unimplemented!("Raytracing not implemented for web");
@@ -3130,7 +3130,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        _desc: &crate::CreateTlasDescriptor<'_>,
+        _desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData) {
         unimplemented!("Raytracing not implemented for web");
     }
@@ -3139,8 +3139,8 @@ impl crate::context::Context for Context {
         &'a self,
         _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
-        _tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<Self>>,
+        _blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
+        _tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<Self>>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }
@@ -3149,8 +3149,8 @@ impl crate::context::Context for Context {
         &'a self,
         _encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        _blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
-        _tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
+        _blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
+        _tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }

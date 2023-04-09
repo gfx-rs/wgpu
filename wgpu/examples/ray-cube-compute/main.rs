@@ -4,6 +4,9 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
+use rt::traits::*;
+use wgpu::ray_tracing as rt;
+
 #[path = "../framework.rs"]
 mod framework;
 
@@ -250,8 +253,8 @@ struct Example {
     uniform_buf: wgpu::Buffer,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    blas: wgpu::Blas,
-    tlas_package: wgpu::TlasPackage,
+    blas: rt::Blas,
+    tlas_package: rt::TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
@@ -355,29 +358,29 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
         });
 
-        let blas_geo_size_desc = wgpu::BlasTriangleGeometrySizeDescriptor {
+        let blas_geo_size_desc = rt::BlasTriangleGeometrySizeDescriptor {
             vertex_format: wgpu::VertexFormat::Float32x4,
             vertex_count: vertex_data.len() as u32,
             index_format: Some(wgpu::IndexFormat::Uint16),
             index_count: Some(index_data.len() as u32),
-            flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+            flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
         };
 
         let blas = device.create_blas(
-            &wgpu::CreateBlasDescriptor {
+            &rt::CreateBlasDescriptor {
                 label: None,
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                update_mode: rt::AccelerationStructureUpdateMode::Build,
             },
-            wgpu::BlasGeometrySizeDescriptors::Triangles {
+            rt::BlasGeometrySizeDescriptors::Triangles {
                 desc: vec![blas_geo_size_desc.clone()],
             },
         );
 
-        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+        let tlas = device.create_tlas(&rt::CreateTlasDescriptor {
             label: None,
-            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: rt::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
 
@@ -458,7 +461,7 @@ impl framework::Example for Example {
             ],
         });
 
-        let mut tlas_package = wgpu::TlasPackage::new(tlas, side_count * side_count);
+        let mut tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
 
         let dist = 3.0;
 
@@ -466,7 +469,7 @@ impl framework::Example for Example {
             for y in 0..side_count {
                 *tlas_package
                     .get_mut_single((x + y * side_count) as usize)
-                    .unwrap() = Some(wgpu::TlasInstance::new(
+                    .unwrap() = Some(rt::TlasInstance::new(
                     &blas,
                     AccelerationStructureInstance::affine_to_rows(
                         &Affine3A::from_rotation_translation(
@@ -488,44 +491,22 @@ impl framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         encoder.build_acceleration_structures(
-            iter::once(&wgpu::BlasBuildEntry {
+            iter::once(&rt::BlasBuildEntry {
                 blas: &blas,
-                geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
-                    wgpu::BlasTriangleGeometry {
-                        size: &blas_geo_size_desc,
-                        vertex_buffer: &vertex_buf,
-                        first_vertex: 0,
-                        vertex_stride: mem::size_of::<Vertex>() as u64,
-                        index_buffer: Some(&index_buf),
-                        index_buffer_offset: Some(0),
-                        transform_buffer: None,
-                        transform_buffer_offset: None,
-                    },
-                ]),
+                geometry: &rt::BlasGeometries::TriangleGeometries(&[rt::BlasTriangleGeometry {
+                    size: &blas_geo_size_desc,
+                    vertex_buffer: &vertex_buf,
+                    first_vertex: 0,
+                    vertex_stride: mem::size_of::<Vertex>() as u64,
+                    index_buffer: Some(&index_buf),
+                    index_buffer_offset: Some(0),
+                    transform_buffer: None,
+                    transform_buffer_offset: None,
+                }]),
             }),
             // iter::empty(),
             iter::once(&tlas_package),
         );
-
-        // encoder.build_acceleration_structures(
-        //     iter::once(&wgpu::BlasBuildEntry {
-        //         blas: &blas,
-        //         geometry: &wgpu::BlasGeometries::TriangleGeometries(&[
-        //             wgpu::BlasTriangleGeometry {
-        //                 size: &blas_geo_size_desc,
-        //                 vertex_buffer: &vertex_buf,
-        //                 first_vertex: 0,
-        //                 vertex_stride: mem::size_of::<Vertex>() as u64,
-        //                 index_buffer: Some(&index_buf),
-        //                 index_buffer_offset: Some(0),
-        //                 transform_buffer: None,
-        //                 transform_buffer_offset: None,
-        //             },
-        //         ]),
-        //     }),
-        //     iter::empty(),
-        //     // iter::once(&tlas_package),
-        // );
 
         queue.submit(Some(encoder.finish()));
 

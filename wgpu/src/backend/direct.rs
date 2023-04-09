@@ -2,8 +2,8 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    ContextTlasInstance, DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode,
-    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
+    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
@@ -2959,7 +2959,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::CreateBlasDescriptor<'_>,
+        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
         let global = &self.0;
@@ -2991,7 +2991,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::CreateTlasDescriptor<'_>,
+        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_tlas(
@@ -3020,14 +3020,16 @@ impl crate::Context for Context {
         &'a self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ContextTlasBuildEntry<Self>>,
+        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<Self>>,
     ) {
         let global = &self.0;
 
-        let blas = blas.map(|e: crate::ContextBlasBuildEntry<Self>| {
+        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<Self>| {
             let geometries = match e.geometries {
-                crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
+                ) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
                             vertex_buffer: tg.vertex_buffer,
@@ -3051,13 +3053,13 @@ impl crate::Context for Context {
 
         let tlas = tlas
             .into_iter()
-            .map(
-                |e: crate::ContextTlasBuildEntry<Context>| wgc::ray_tracing::TlasBuildEntry {
+            .map(|e: crate::ray_tracing::ContextTlasBuildEntry<Context>| {
+                wgc::ray_tracing::TlasBuildEntry {
                     tlas_id: e.tlas_id,
                     instance_buffer_id: e.instance_buffer_id,
                     instance_count: e.instance_count,
-                },
-            );
+                }
+            });
 
         if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures_unsafe_tlas(
             *encoder,
@@ -3076,14 +3078,16 @@ impl crate::Context for Context {
         &'a self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        blas: impl Iterator<Item = crate::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ContextTlasPackage<'a, Self>>,
+        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
+        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
     ) {
         let global = &self.0;
 
-        let blas = blas.map(|e: crate::ContextBlasBuildEntry<Self>| {
+        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<Self>| {
             let geometries = match e.geometries {
-                crate::ContextBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
+                    triangle_geometries,
+                ) => {
                     let iter = triangle_geometries.into_iter().map(|tg| {
                         wgc::ray_tracing::BlasTriangleGeometry {
                             vertex_buffer: tg.vertex_buffer,
@@ -3106,21 +3110,20 @@ impl crate::Context for Context {
         });
 
         let tlas = tlas.into_iter().map(|e| {
-            let instances =
-                e.instances
-                    .into_iter()
-                    .map(|instance: Option<ContextTlasInstance<_>>| {
-                        if let Some(instance) = instance {
-                            Some(wgc::ray_tracing::TlasInstance {
-                                blas_id: instance.blas_id,
-                                transform: instance.transform,
-                                custom_index: instance.custom_index,
-                                mask: instance.mask,
-                            })
-                        } else {
-                            None
-                        }
-                    });
+            let instances = e.instances.into_iter().map(
+                |instance: Option<crate::ray_tracing::ContextTlasInstance<_>>| {
+                    if let Some(instance) = instance {
+                        Some(wgc::ray_tracing::TlasInstance {
+                            blas_id: instance.blas_id,
+                            transform: instance.transform,
+                            custom_index: instance.custom_index,
+                            mask: instance.mask,
+                        })
+                    } else {
+                        None
+                    }
+                },
+            );
             wgc::ray_tracing::TlasPackage {
                 tlas_id: e.tlas_id,
                 instances: Box::new(instances),
