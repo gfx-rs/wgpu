@@ -179,6 +179,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                         }
 
+                        if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {
+                            return Err(BuildAccelerationStructureError::MissingIndexBuffer(
+                                entry.blas_id,
+                            ));
+                        }
+
                         let vertex_buffer = {
                             let (vertex_buffer, vertex_pending) = cmd_buf
                                 .trackers
@@ -800,6 +806,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                         }
 
+                        if size_desc.index_count.is_some() && mesh.index_buffer.is_none() {
+                            return Err(BuildAccelerationStructureError::MissingIndexBuffer(
+                                entry.blas_id,
+                            ));
+                        }
+
                         let vertex_buffer = {
                             let (vertex_buffer, vertex_pending) = cmd_buf
                                 .trackers
@@ -1283,10 +1295,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if tlas_present {
             unsafe {
-                cmd_buf_raw.transition_buffers(iter::once(hal::BufferBarrier::<A> {
-                    buffer: staging_buffer.as_ref().unwrap(),
-                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
-                }));
+                if let Some(staging_buffer) = &staging_buffer {
+                    cmd_buf_raw.transition_buffers(iter::once(hal::BufferBarrier::<A> {
+                        buffer: staging_buffer,
+                        usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                    }));
+                }
             }
 
             for &(tlas, ref _entries, ref _scratch_buffer_offset, ref range) in &tlas_storage {
@@ -1322,10 +1336,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
 
-            device
-                .pending_writes
-                .temp_resources
-                .push(TempResource::Buffer(staging_buffer.unwrap()));
+            if let Some(staging_buffer) = staging_buffer {
+                device
+                    .pending_writes
+                    .temp_resources
+                    .push(TempResource::Buffer(staging_buffer));
+            }
         }
 
         device

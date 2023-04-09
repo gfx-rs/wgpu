@@ -84,6 +84,9 @@ pub enum BuildAccelerationStructureError {
     )]
     IncompatibleBlasBuildSizes(BlasId),
 
+    #[error("Blas {0:?} build sizes require index buffer but none was provided")]
+    MissingIndexBuffer(BlasId),
+
     #[error("Blas {0:?} is invalid or destroyed")]
     InvalidBlas(BlasId),
 
