@@ -1,7 +1,7 @@
 use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
 
 use bytemuck::{Pod, Zeroable};
-use glam::{Affine3A, Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
@@ -71,28 +71,6 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     (vertex_data.to_vec(), index_data.to_vec())
 }
 
-#[inline]
-fn affine_to_rows(mat: &Affine3A) -> [f32; 12] {
-    let row_0 = mat.matrix3.row(0);
-    let row_1 = mat.matrix3.row(1);
-    let row_2 = mat.matrix3.row(2);
-    let translation = mat.translation;
-    [
-        row_0.x,
-        row_0.y,
-        row_0.z,
-        translation.x,
-        row_1.x,
-        row_1.y,
-        row_1.z,
-        translation.y,
-        row_2.x,
-        row_2.y,
-        row_2.z,
-        translation.z,
-    ]
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Uniforms {
@@ -137,11 +115,7 @@ struct Example {
 
 impl framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
-            | wgpu::Features::VERTEX_WRITABLE_STORAGE
-            | wgpu::Features::RAY_QUERY
-            | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
+        wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -353,7 +327,7 @@ impl framework::Example for Example {
                     let x = x * 2.0 - 1.0;
                     let y = y * 2.0 - 1.0;
 
-                    let transform = affine_to_rows(&Affine3A::from_rotation_translation(
+                    let transform = Mat4::from_rotation_translation(
                         Quat::from_euler(
                             glam::EulerRot::XYZ,
                             anim_time * 0.5 * 0.342,
@@ -365,7 +339,10 @@ impl framework::Example for Example {
                             y: y * dist,
                             z: -24.0,
                         },
-                    ));
+                    );
+                    let transform = transform.transpose().to_cols_array()[..12]
+                        .try_into()
+                        .unwrap();
 
                     *instance = Some(rt::TlasInstance::new(&self.blas, transform, 0, 0xff));
                 }
