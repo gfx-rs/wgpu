@@ -324,7 +324,7 @@ impl framework::Example for Example {
             let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
             let proj = Mat4::perspective_rh(
                 59.0_f32.to_radians(),
-                config.height as f32 / config.width as f32,
+                config.width as f32 / config.height as f32,
                 0.001,
                 1000.0,
             );
@@ -470,7 +470,7 @@ impl framework::Example for Example {
                     &blas,
                     AccelerationStructureInstance::affine_to_rows(
                         &Affine3A::from_rotation_translation(
-                            Quat::from_rotation_x(45.9_f32.to_radians()),
+                            Quat::from_rotation_y(45.9_f32.to_radians()),
                             Vec3 {
                                 x: x as f32 * dist,
                                 y: y as f32 * dist,
@@ -637,9 +637,9 @@ fn main() {
 }
 
 #[test]
-fn ray_cube() {
+fn ray_cube_compute() {
     framework::test::<Example>(framework::FrameworkRefTest {
-        image_path: "/examples/ray-cube/screenshot.png",
+        image_path: "/examples/ray-cube-compute/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
