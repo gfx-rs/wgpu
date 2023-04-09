@@ -86,7 +86,11 @@ name = "stencil-triangles"
 test = true
 
 [[example]]
-name = "ray-cube"
+name = "ray-cube-compute"
+test = true
+
+[[example]]
+name = "ray-cube-fragment"
 test = true
 
 [features]

@@ -60,8 +60,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var color =  vec4<f32>(vec2<f32>(global_id.xy) / vec2<f32>(target_size), 0.0, 1.0);
 
 
-	let pixel_center = vec2<f32>(global_id.yx) + vec2<f32>(0.5);
-	let in_uv = pixel_center/vec2<f32>(target_size.yx);
+	let pixel_center = vec2<f32>(global_id.xy) + vec2<f32>(0.5);
+	let in_uv = pixel_center/vec2<f32>(target_size.xy);
 	let d = in_uv * 2.0 - 1.0;
 
 	let origin = (uniforms.view_inv * vec4<f32>(0.0,0.0,0.0,1.0)).xyz;
