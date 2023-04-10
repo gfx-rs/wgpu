@@ -493,7 +493,7 @@ impl framework::Example for Example {
         encoder.build_acceleration_structures(
             iter::once(&rt::BlasBuildEntry {
                 blas: &blas,
-                geometry: &rt::BlasGeometries::TriangleGeometries(&[rt::BlasTriangleGeometry {
+                geometry: rt::BlasGeometries::TriangleGeometries(&[rt::BlasTriangleGeometry {
                     size: &blas_geo_size_desc,
                     vertex_buffer: &vertex_buf,
                     first_vertex: 0,
