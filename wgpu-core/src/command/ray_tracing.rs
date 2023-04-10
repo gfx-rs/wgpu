@@ -1279,7 +1279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if tlas_present {
             unsafe {
-                if let Some(staging_buffer) = &staging_buffer {
+                if let Some(ref staging_buffer) = staging_buffer {
                     cmd_buf_raw.transition_buffers(iter::once(hal::BufferBarrier::<A> {
                         buffer: staging_buffer,
                         usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,

@@ -69,8 +69,8 @@ static_assertions::assert_impl_all!(BlasGeometries: Send, Sync);
 pub struct BlasBuildEntry<'a> {
     /// Reference to the acceleration structure.
     pub blas: &'a Blas,
-    /// Reference to the geometries.
-    pub geometry: &'a BlasGeometries<'a>,
+    /// Geometries.
+    pub geometry: BlasGeometries<'a>,
 }
 static_assertions::assert_impl_all!(BlasBuildEntry: Send, Sync);
 
@@ -328,11 +328,7 @@ pub trait DeviceRayTracing {
     /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
     /// - desc: The descriptor of the acceleration structure.
     /// - sizes: Size descriptor limiting what can be built into the acceleration structure.
-    fn create_blas(
-        &self,
-        desc: &CreateBlasDescriptor,
-        sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> Blas;
+    fn create_blas(&self, desc: &CreateBlasDescriptor, sizes: BlasGeometrySizeDescriptors) -> Blas;
 
     /// Create a top level acceleration structure, used for ray tracing.
     /// - desc: The descriptor of the acceleration structure.
@@ -340,11 +336,7 @@ pub trait DeviceRayTracing {
 }
 
 impl DeviceRayTracing for Device {
-    fn create_blas(
-        &self,
-        desc: &CreateBlasDescriptor,
-        sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> Blas {
+    fn create_blas(&self, desc: &CreateBlasDescriptor, sizes: BlasGeometrySizeDescriptors) -> Blas {
         let (id, handle, data) = DynContext::device_create_blas(
             &*self.context,
             &self.id,
