@@ -167,6 +167,7 @@ pub struct BufferMapOperation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -235,6 +236,7 @@ pub struct Buffer<A: hal::Api> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -459,6 +461,7 @@ pub enum TextureErrorDimension {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
@@ -487,6 +490,7 @@ pub enum TextureDimensionError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -610,6 +614,7 @@ pub struct TextureView<A: hal::Api> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureViewError {
     #[error("Parent texture is invalid or destroyed")]
     InvalidTexture,
@@ -656,6 +661,7 @@ pub enum CreateTextureViewError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
 impl<A: hal::Api> Resource for TextureView<A> {
@@ -725,6 +731,7 @@ impl std::fmt::Debug for SamplerFilterErrorType {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -759,6 +766,7 @@ impl<A: hal::Api> Resource for Sampler<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateQuerySetError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -789,6 +797,7 @@ impl<A: hal::Api> Resource for QuerySet<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DestroyError {
     #[error("Resource is invalid")]
     Invalid,

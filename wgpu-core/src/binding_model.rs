@@ -21,6 +21,7 @@ use std::{borrow::Cow, ops::Range};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindGroupLayoutEntryError {
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
@@ -35,6 +36,7 @@ pub enum BindGroupLayoutEntryError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBindGroupLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -57,6 +59,7 @@ pub enum CreateBindGroupLayoutError {
 //TODO: refactor this to move out `enum BindingError`.
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBindGroupError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -467,6 +470,7 @@ impl<A: hal::Api> Resource for BindGroupLayout<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -507,6 +511,7 @@ impl PrettyError for CreatePipelineLayoutError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum PushConstantUploadError {
     #[error("Provided push constant with indices {offset}..{end_offset} overruns matching push constant range at index {idx}, with stage(s) {:?} and indices {:?}", range.stages, range.range)]
     TooLarge {
@@ -682,6 +687,7 @@ pub enum BindingResource<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindError {
     #[error(
         "Bind group {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
@@ -828,6 +834,7 @@ impl<A: HalApi> Resource for BindGroup<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum GetBindGroupLayoutError {
     #[error("Pipeline is invalid")]
     InvalidPipeline,

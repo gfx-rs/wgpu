@@ -188,7 +188,12 @@ mod dxc {
                         Err(e) => (
                             Err(crate::PipelineError::Linkage(
                                 stage_bit,
-                                format!("DXC validation error: {:?}\n{:?}", e.0, e.1),
+                                format!(
+                                    "DXC validation error: {:?}\n{:?}",
+                                    get_error_string_from_dxc_result(&dxc_container.library, &e.0)
+                                        .unwrap_or_default(),
+                                    e.1
+                                ),
                             )),
                             log::Level::Error,
                         ),
@@ -205,7 +210,11 @@ mod dxc {
             Err(e) => (
                 Err(crate::PipelineError::Linkage(
                     stage_bit,
-                    format!("DXC compile error: {e:?}"),
+                    format!(
+                        "DXC compile error: {:?}",
+                        get_error_string_from_dxc_result(&dxc_container.library, &e.0)
+                            .unwrap_or_default()
+                    ),
                 )),
                 log::Level::Error,
             ),
@@ -239,6 +248,15 @@ mod dxc {
                 hassle_rs::HassleError::CompileError(_e) => unimplemented!(),
             }
         }
+    }
+
+    fn get_error_string_from_dxc_result(
+        library: &hassle_rs::DxcLibrary,
+        error: &hassle_rs::DxcOperationResult,
+    ) -> Result<String, hassle_rs::HassleError> {
+        error
+            .get_error_buffer()
+            .and_then(|error| library.get_blob_as_string(&hassle_rs::DxcBlob::from(error)))
     }
 }
 

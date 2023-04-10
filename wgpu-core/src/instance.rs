@@ -365,6 +365,7 @@ impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum IsSurfaceSupportedError {
     #[error("Invalid adapter")]
     InvalidAdapter,
@@ -373,6 +374,7 @@ pub enum IsSurfaceSupportedError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum GetSurfaceSupportError {
     #[error("Invalid adapter")]
     InvalidAdapter,
@@ -384,6 +386,7 @@ pub enum GetSurfaceSupportError {
 
 #[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
+#[non_exhaustive]
 pub enum RequestDeviceError {
     #[error("Parent adapter is invalid")]
     InvalidAdapter,
@@ -426,6 +429,7 @@ impl<I: Clone> AdapterInputs<'_, I> {
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RequestAdapterError {
     #[error("No suitable adapter found")]
     NotFound,
