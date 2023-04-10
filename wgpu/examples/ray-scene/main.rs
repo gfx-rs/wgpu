@@ -107,6 +107,11 @@ fn load_model(scene: &mut RawSceneComponents, source: &[u8]) {
         start_vertex_index..scene.vertices.len(),
         start_geometry_index..scene.geometries.len(),
     ));
+
+    // dbg!(scene.vertices.len());
+    // dbg!(scene.indices.len());
+    // dbg!(&scene.geometries);
+    // dbg!(&scene.instances);
 }
 
 fn upload_scene_components(
@@ -238,6 +243,8 @@ fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
         &mut scene,
         include_bytes!("../skybox/models/teslacyberv3.0.obj"),
     );
+
+    load_model(&mut scene, include_bytes!("cube.obj"));
 
     upload_scene_components(device, queue, &scene)
 }
@@ -393,9 +400,9 @@ impl framework::Example for Example {
 
         // scene update
         {
-            let dist = 1.0;
+            let dist = 3.0;
 
-            let side_count = 1;
+            let side_count = 2;
 
             let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
 
@@ -406,8 +413,10 @@ impl framework::Example for Example {
                         .get_mut_single((x + y * side_count) as usize)
                         .unwrap();
 
-                    let x = x as f32 / side_count as f32;
-                    let y = y as f32 / side_count as f32;
+                    let blas_index = (x + y) % 2;
+
+                    let x = x as f32 / (side_count - 1) as f32;
+                    let y = y as f32 / (side_count - 1) as f32;
                     let x = x * 2.0 - 1.0;
                     let y = y * 2.0 - 1.0;
 
@@ -421,7 +430,7 @@ impl framework::Example for Example {
                         Vec3 {
                             x: x * dist,
                             y: y * dist,
-                            z: -5.0,
+                            z: -10.0,
                         },
                     );
                     let transform = transform.transpose().to_cols_array()[..12]
@@ -429,7 +438,7 @@ impl framework::Example for Example {
                         .unwrap();
 
                     *instance = Some(rt::TlasInstance::new(
-                        &self.scene_components.bottom_level_acceleration_structures[0],
+                        &self.scene_components.bottom_level_acceleration_structures[blas_index],
                         transform,
                         0,
                         0xff,
