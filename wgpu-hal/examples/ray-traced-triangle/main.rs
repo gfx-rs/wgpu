@@ -86,7 +86,7 @@ impl AccelerationStructureInstance {
         Self::rows_to_affine(&self.transform)
     }
     pub fn set_transform(&mut self, transform: &Affine3A) {
-        self.transform = Self::affine_to_rows(&transform);
+        self.transform = Self::affine_to_rows(transform);
     }
 
     pub fn custom_index(&self) -> u32 {

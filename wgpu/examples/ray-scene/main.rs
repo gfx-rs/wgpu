@@ -72,7 +72,7 @@ struct InstanceEntry {
 }
 
 fn load_model(scene: &mut RawSceneComponents, source: &[u8]) {
-    let data = obj::ObjData::load_buf(&source[..]).unwrap();
+    let data = obj::ObjData::load_buf(source).unwrap();
 
     let start_vertex_index = scene.vertices.len();
     let start_geometry_index = scene.geometries.len();
@@ -159,65 +159,63 @@ fn upload_scene_components(
         usage: wgpu::BufferUsages::STORAGE,
     });
 
-    let mut temp_storage = Vec::new();
-    let mut bottom_level_acceleration_structures = Vec::new();
-
-    for (vertex_range, geometry_range) in scene.instances.iter() {
-        let size_desc: Vec<rt::BlasTriangleGeometrySizeDescriptor> = (*geometry_range)
-            .clone()
-            .into_iter()
-            .map(|i| rt::BlasTriangleGeometrySizeDescriptor {
-                vertex_format: wgpu::VertexFormat::Float32x3,
-                vertex_count: vertex_range.end as u32 - vertex_range.start as u32,
-                index_format: Some(wgpu::IndexFormat::Uint16),
-                index_count: Some(
-                    scene.geometries[i].end as u32 - scene.geometries[i].start as u32,
-                ),
-                flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
-            })
-            .collect();
-        let blas = device.create_blas(
-            &rt::CreateBlasDescriptor {
-                label: None,
-                flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
-                update_mode: rt::AccelerationStructureUpdateMode::Build,
-            },
-            rt::BlasGeometrySizeDescriptors::Triangles {
-                desc: size_desc.clone(),
-            },
-        );
-
-        temp_storage.push((size_desc, vertex_range.start as u32, geometry_range));
-        bottom_level_acceleration_structures.push(blas);
-    }
-
-    let mut triangle_geometries_storage = Vec::new();
-
-    for (size_desc, vertex_offset, geometries) in temp_storage.iter() {
-        let triangle_geometries: Vec<_> = size_desc
-            .iter()
-            .zip((**geometries).clone().into_iter())
-            .map(|(size, i)| rt::BlasTriangleGeometry {
-                size: &size,
-                vertex_buffer: &vertices,
-                first_vertex: *vertex_offset,
-                vertex_stride: mem::size_of::<Vertex>() as u64,
-                index_buffer: Some(&indices),
-                index_buffer_offset: Some(scene.geometries[i].start as u64 * 2),
-                transform_buffer: None,
-                transform_buffer_offset: None,
-            })
-            .collect();
-
-        triangle_geometries_storage.push(triangle_geometries);
-    }
-
-    let build_entries: Vec<_> = triangle_geometries_storage
+    let (size_descriptors, bottom_level_acceleration_structures): (Vec<_>, Vec<_>) = scene
+        .instances
         .iter()
+        .map(|(vertex_range, geometry_range)| {
+            let size_desc: Vec<rt::BlasTriangleGeometrySizeDescriptor> = (*geometry_range)
+                .clone()
+                .into_iter()
+                .map(|i| rt::BlasTriangleGeometrySizeDescriptor {
+                    vertex_format: wgpu::VertexFormat::Float32x3,
+                    vertex_count: vertex_range.end as u32 - vertex_range.start as u32,
+                    index_format: Some(wgpu::IndexFormat::Uint16),
+                    index_count: Some(
+                        scene.geometries[i].end as u32 - scene.geometries[i].start as u32,
+                    ),
+                    flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
+                })
+                .collect();
+
+            let blas = device.create_blas(
+                &rt::CreateBlasDescriptor {
+                    label: None,
+                    flags: rt::AccelerationStructureFlags::PREFER_FAST_TRACE,
+                    update_mode: rt::AccelerationStructureUpdateMode::Build,
+                },
+                rt::BlasGeometrySizeDescriptors::Triangles {
+                    desc: size_desc.clone(),
+                },
+            );
+            (size_desc, blas)
+        })
+        .unzip();
+
+    let build_entries: Vec<_> = scene
+        .instances
+        .iter()
+        .zip(size_descriptors.iter())
         .zip(bottom_level_acceleration_structures.iter())
-        .map(|(triangle_geometries, blas)| rt::BlasBuildEntry {
-            blas,
-            geometry: rt::BlasGeometries::TriangleGeometries(&triangle_geometries),
+        .map(|(((vertex_range, geometry_range), size_desc), blas)| {
+            let triangle_geometries: Vec<_> = size_desc
+                .iter()
+                .zip(geometry_range.clone().into_iter())
+                .map(|(size, i)| rt::BlasTriangleGeometry {
+                    size,
+                    vertex_buffer: &vertices,
+                    first_vertex: vertex_range.start as u32,
+                    vertex_stride: mem::size_of::<Vertex>() as u64,
+                    index_buffer: Some(&indices),
+                    index_buffer_offset: Some(scene.geometries[i].start as u64 * 2),
+                    transform_buffer: None,
+                    transform_buffer_offset: None,
+                })
+                .collect();
+
+            rt::BlasBuildEntry {
+                blas,
+                geometry: rt::BlasGeometries::TriangleGeometries(triangle_geometries),
+            }
         })
         .collect();
 

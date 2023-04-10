@@ -57,11 +57,10 @@ pub struct BlasTriangleGeometry<'a> {
 }
 static_assertions::assert_impl_all!(BlasTriangleGeometry: Send, Sync);
 
-#[derive(Debug)]
 /// Geometries for a bottom level acceleration structure.
 pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
-    TriangleGeometries(&'a [BlasTriangleGeometry<'a>]),
+    TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
 }
 static_assertions::assert_impl_all!(BlasGeometries: Send, Sync);
 
@@ -417,7 +416,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let id = self.id.as_ref().unwrap();
 
         let mut blas = blas.into_iter().map(|e: &BlasBuildEntry| {
-            let geometries = match e.geometry {
+            let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry| {
                         DynContextBlasTriangleGeometry {
@@ -478,7 +477,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let id = self.id.as_ref().unwrap();
 
         let mut blas = blas.into_iter().map(|e: &BlasBuildEntry| {
-            let geometries = match e.geometry {
+            let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
                     let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry| {
                         DynContextBlasTriangleGeometry {
