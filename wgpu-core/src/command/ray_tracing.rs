@@ -212,11 +212,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 input_barriers.push(barrier);
                             }
-                            if mesh.size.vertex_count as i64 - mesh.first_vertex as i64 <= 0 {
-                                return Err(BuildAccelerationStructureError::EmptyVertexBuffer(
-                                    mesh.vertex_buffer,
-                                ));
-                            }
                             if vertex_buffer.size
                                 < (mesh.size.vertex_count + mesh.first_vertex) as u64
                                     * mesh.vertex_stride
@@ -830,11 +825,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 vertex_pending.map(|pending| pending.into_hal(vertex_buffer))
                             {
                                 input_barriers.push(barrier);
-                            }
-                            if mesh.size.vertex_count as i64 - mesh.first_vertex as i64 <= 0 {
-                                return Err(BuildAccelerationStructureError::EmptyVertexBuffer(
-                                    mesh.vertex_buffer,
-                                ));
                             }
                             if vertex_buffer.size
                                 < (mesh.size.vertex_count + mesh.first_vertex) as u64

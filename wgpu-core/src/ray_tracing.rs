@@ -61,9 +61,6 @@ pub enum BuildAccelerationStructureError {
     )]
     InsufficientBufferSize(BufferId, u64, u64),
 
-    #[error("Buffer {0:?} associated vertex buffer sizes invalid (no vertices)")]
-    EmptyVertexBuffer(BufferId),
-
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
     UnalignedIndexBufferOffset(BufferId),
 
