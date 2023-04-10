@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    # "cts_runner",
-    # "deno_webgpu",
+    "cts_runner",
+    "deno_webgpu",
     "dummy",
     "player",
     "wgpu",
@@ -10,7 +10,7 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    # "run-wasm"
+    "run-wasm"
 ]
 exclude = []
 default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
