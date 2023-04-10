@@ -567,7 +567,7 @@ impl ComputePipeline {
 pub struct CommandBuffer {
     context: Arc<C>,
     id: Option<ObjectId>,
-    data: Box<Data>,
+    data: Option<Box<Data>>,
 }
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
@@ -575,7 +575,7 @@ impl Drop for CommandBuffer {
     fn drop(&mut self) {
         if !thread::panicking() {
             if let Some(ref id) = self.id {
-                self.context.command_buffer_drop(id, self.data.as_ref());
+                self.context.command_buffer_drop(id, &self.data.take());
             }
         }
     }
@@ -2740,7 +2740,7 @@ impl CommandEncoder {
         CommandBuffer {
             context: Arc::clone(&self.context),
             id: Some(id),
-            data,
+            data: Some(data),
         }
     }
 
@@ -3224,7 +3224,11 @@ impl<'a> RenderPass<'a> {
             &*self.parent.context,
             &mut self.id,
             self.data.as_mut(),
-            Box::new(render_bundles.into_iter().map(|rb| &rb.id)),
+            Box::new(
+                render_bundles
+                    .into_iter()
+                    .map(|rb| (&rb.id, rb.data.as_ref())),
+            ),
         )
     }
 }
@@ -4034,7 +4038,7 @@ impl Queue {
             Box::new(
                 command_buffers
                     .into_iter()
-                    .map(|mut comb| comb.id.take().unwrap()),
+                    .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap())),
             ),
         );
 
