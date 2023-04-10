@@ -93,6 +93,10 @@ test = true
 name = "ray-cube-fragment"
 test = true
 
+[[example]]
+name = "ray-scene"
+test = false
+
 [features]
 default = ["wgsl"]
 # Apply run-time checks, even in release builds. These are in addition
