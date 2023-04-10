@@ -14,8 +14,9 @@ mod framework;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Vertex {
-    _pos: [f32; 3],
-    _tex_coord: [f32; 2],
+    _pos: [f32; 4],
+    _normal: [f32; 4],
+    _tex_coord: [f32; 4],
 }
 
 #[repr(C)]
@@ -50,9 +51,9 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
 #[derive(Debug, Clone, Default)]
 struct RawSceneComponents {
     vertices: Vec<Vertex>,
-    indices: Vec<u16>,
-    geometries: Vec<Range<usize>>,
-    instances: Vec<(Range<usize>, Range<usize>)>, //vertex range, geometry range
+    indices: Vec<u32>,
+    geometries: Vec<(Range<usize>, [f32; 3])>, // index range, color
+    instances: Vec<(Range<usize>, Range<usize>)>, // vertex range, geometry range
 }
 
 #[allow(dead_code)]
@@ -69,23 +70,32 @@ struct SceneComponents {
 struct InstanceEntry {
     first_vertex: u32,
     first_geometry: u32,
+    last_geometry: u32,
+    _pad: u32,
 }
 
-fn load_model(scene: &mut RawSceneComponents, source: &[u8]) {
-    let data = obj::ObjData::load_buf(source).unwrap();
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct GeometryEntry {
+    first_index: u32,
+    r: f32,
+    g: f32,
+    b: f32,
+}
+
+fn load_model(scene: &mut RawSceneComponents, path: &str) {
+    let path = env!("CARGO_MANIFEST_DIR").to_string() + "/" + path;
+    let mut object = obj::Obj::load(path).unwrap();
+    object.load_mtls().unwrap();
+
+    let data = object.data;
 
     let start_vertex_index = scene.vertices.len();
     let start_geometry_index = scene.geometries.len();
 
-    scene.vertices.extend(
-        data.position
-            .iter()
-            // .zip(data.normal.iter())
-            .map(|pos| Vertex {
-                _pos: *pos,
-                _tex_coord: [0.0, 0.0],
-            }),
-    );
+    let mut mapping = std::collections::HashMap::<(usize, usize, usize), usize>::new();
+
+    let mut next_index = 0;
 
     for object in data.objects {
         for group in object.groups {
@@ -93,14 +103,45 @@ fn load_model(scene: &mut RawSceneComponents, source: &[u8]) {
             for poly in group.polys {
                 for end_index in 2..poly.0.len() {
                     for &index in &[0, end_index - 1, end_index] {
-                        let obj::IndexTuple(position_id, _texture_id, _normal_id) = poly.0[index];
-                        scene.indices.push(position_id as u16);
+                        let obj::IndexTuple(position_id, texture_id, normal_id) = poly.0[index];
+                        let texture_id = texture_id.expect("uvs required");
+                        let normal_id = normal_id.expect("normals required");
+
+                        let index = *mapping
+                            .entry((position_id, texture_id, normal_id))
+                            .or_insert(next_index);
+                        if index == next_index {
+                            next_index += 1;
+
+                            let pos = data.position[position_id];
+                            let uv = data.texture[texture_id];
+                            let normal = data.normal[normal_id];
+
+                            scene.vertices.push(Vertex {
+                                _pos: [pos[0], pos[1], pos[2], 1.0],
+                                _tex_coord: [uv[0], uv[1], 0.0, 0.0],
+                                _normal: [normal[0], normal[1], normal[2], 0.0],
+                            })
+                        }
+
+                        scene.indices.push(index as u32);
                     }
                 }
             }
+
+            let mut col = [1.0, 0.0, 1.0];
+
+            if let Some(mat) = group.material {
+                if let obj::ObjMaterial::Mtl(mat) = mat {
+                    if let Some(kd) = mat.kd {
+                        col = kd;
+                    }
+                }
+            }
+
             scene
                 .geometries
-                .push(start_index_index..scene.indices.len());
+                .push((start_index_index..scene.indices.len(), col));
         }
     }
     scene.instances.push((
@@ -122,8 +163,13 @@ fn upload_scene_components(
     let geometry_buffer_content = scene
         .geometries
         .iter()
-        .map(|geometry| geometry.start as u32)
-        .collect::<Vec<u32>>();
+        .map(|(index_range, color)| GeometryEntry {
+            first_index: index_range.start as u32,
+            r: color[0],
+            g: color[1],
+            b: color[2],
+        })
+        .collect::<Vec<_>>();
 
     let instance_buffer_content = scene
         .instances
@@ -131,6 +177,8 @@ fn upload_scene_components(
         .map(|geometry| InstanceEntry {
             first_vertex: geometry.0.start as u32,
             first_geometry: geometry.1.start as u32,
+            last_geometry: geometry.1.end as u32,
+            _pad: 1,
         })
         .collect::<Vec<_>>();
 
@@ -169,9 +217,9 @@ fn upload_scene_components(
                 .map(|i| rt::BlasTriangleGeometrySizeDescriptor {
                     vertex_format: wgpu::VertexFormat::Float32x3,
                     vertex_count: vertex_range.end as u32 - vertex_range.start as u32,
-                    index_format: Some(wgpu::IndexFormat::Uint16),
+                    index_format: Some(wgpu::IndexFormat::Uint32),
                     index_count: Some(
-                        scene.geometries[i].end as u32 - scene.geometries[i].start as u32,
+                        scene.geometries[i].0.end as u32 - scene.geometries[i].0.start as u32,
                     ),
                     flags: rt::AccelerationStructureGeometryFlags::OPAQUE,
                 })
@@ -206,7 +254,7 @@ fn upload_scene_components(
                     first_vertex: vertex_range.start as u32,
                     vertex_stride: mem::size_of::<Vertex>() as u64,
                     index_buffer: Some(&indices),
-                    index_buffer_offset: Some(scene.geometries[i].start as u64 * 2),
+                    index_buffer_offset: Some(scene.geometries[i].0.start as u64 * 4),
                     transform_buffer: None,
                     transform_buffer_offset: None,
                 })
@@ -237,12 +285,9 @@ fn upload_scene_components(
 
 fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
     let mut scene = RawSceneComponents::default();
-    load_model(
-        &mut scene,
-        include_bytes!("../skybox/models/teslacyberv3.0.obj"),
-    );
+    load_model(&mut scene, "/examples/skybox/models/teslacyberv3.0.obj");
 
-    load_model(&mut scene, include_bytes!("cube.obj"));
+    load_model(&mut scene, "/examples/ray-scene/cube.obj");
 
     upload_scene_components(device, queue, &scene)
 }
@@ -277,6 +322,8 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> Self {
         let side_count = 8;
+
+        let scene_components = load_scene(device, queue);
 
         let uniforms = {
             let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 2.5), Vec3::ZERO, Vec3::Y);
@@ -344,15 +391,29 @@ impl framework::Example for Example {
                     resource: uniform_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 1,
+                    binding: 5,
                     resource: wgpu::BindingResource::AccelerationStructure(&tlas),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: scene_components.vertices.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: scene_components.indices.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: scene_components.geometries.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: scene_components.instances.as_entire_binding(),
                 },
             ],
         });
 
         let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
-
-        let scene_components = load_scene(device, queue);
 
         let start_inst = Instant::now();
 
@@ -398,7 +459,7 @@ impl framework::Example for Example {
 
         // scene update
         {
-            let dist = 3.0;
+            let dist = 3.5;
 
             let side_count = 2;
 
@@ -428,7 +489,7 @@ impl framework::Example for Example {
                         Vec3 {
                             x: x * dist,
                             y: y * dist,
-                            z: -10.0,
+                            z: -14.0,
                         },
                     );
                     let transform = transform.transpose().to_cols_array()[..12]
@@ -438,7 +499,7 @@ impl framework::Example for Example {
                     *instance = Some(rt::TlasInstance::new(
                         &self.scene_components.bottom_level_acceleration_structures[blas_index],
                         transform,
-                        0,
+                        blas_index as u32,
                         0xff,
                     ));
                 }
@@ -479,7 +540,7 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("ray-cube");
+    framework::run::<Example>("ray-scene");
 }
 
 #[test]
