@@ -64,9 +64,6 @@ pub enum BuildAccelerationStructureError {
     #[error("Buffer {0:?} associated vertex buffer sizes invalid (no vertices)")]
     EmptyVertexBuffer(BufferId),
 
-    #[error("Buffer {0:?} associated index buffer sizes invalid (less then three indices)")]
-    EmptyIndexBuffer(BufferId),
-
     #[error("Buffer {0:?} associated offset doesn't align with the index type")]
     UnalignedIndexBufferOffset(BufferId),
 

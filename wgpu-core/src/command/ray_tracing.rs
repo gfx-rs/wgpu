@@ -293,14 +293,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let index_buffer_size =
                                 mesh.size.index_count.unwrap() as u64 * index_stride;
 
-                            if mesh.size.index_count.unwrap() as u64
-                                - mesh.index_buffer_offset.unwrap() / index_stride
-                                < 3
-                            {
-                                return Err(BuildAccelerationStructureError::EmptyIndexBuffer(
-                                    index_id,
-                                ));
-                            }
                             if mesh.size.index_count.unwrap() % 3 != 0 {
                                 return Err(BuildAccelerationStructureError::InvalidIndexCount(
                                     index_id,
@@ -920,14 +912,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let index_buffer_size =
                                 mesh.size.index_count.unwrap() as u64 * index_stride;
 
-                            if mesh.size.index_count.unwrap() as u64
-                                - mesh.index_buffer_offset.unwrap() / index_stride
-                                < 3
-                            {
-                                return Err(BuildAccelerationStructureError::EmptyIndexBuffer(
-                                    index_id,
-                                ));
-                            }
                             if mesh.size.index_count.unwrap() % 3 != 0 {
                                 return Err(BuildAccelerationStructureError::InvalidIndexCount(
                                     index_id,
