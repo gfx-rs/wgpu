@@ -1101,6 +1101,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
             });
 
+            if instance_count > tlas.max_instance_count {
+                return Err(BuildAccelerationStructureError::TlasInstanceCountExceeded(
+                    entry.tlas_id,
+                    instance_count,
+                    tlas.max_instance_count,
+                ));
+            }
+
             tlas_storage.push((
                 tlas,
                 hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {

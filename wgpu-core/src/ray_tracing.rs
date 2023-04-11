@@ -89,6 +89,11 @@ pub enum BuildAccelerationStructureError {
     )]
     TlasInvalidCustomIndex(TlasId),
 
+    #[error(
+        "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
+    )]
+    TlasInstanceCountExceeded(TlasId, u32, u32),
+
     #[error("Blas {0:?} is invalid or destroyed (for instance)")]
     InvalidBlasForInstance(BlasId),
 

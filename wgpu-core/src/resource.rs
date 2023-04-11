@@ -824,6 +824,7 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) max_instance_count: u32,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
     pub(crate) built_index: Option<NonZeroU64>,

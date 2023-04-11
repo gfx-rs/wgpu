@@ -143,6 +143,7 @@ impl<A: HalApi> Device<A> {
             built_index: None,
             dependencies: Vec::new(),
             instance_buffer: Some(instance_buffer),
+            max_instance_count: desc.max_instances,
         })
     }
 }
