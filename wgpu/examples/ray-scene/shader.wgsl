@@ -69,9 +69,9 @@ struct Uniforms {
 };
 
 struct Vertex {
-    pos:     vec4<f32>,
-    normal:  vec4<f32>,
-    uv:      vec4<f32>,
+    pos:     vec3<f32>,
+    normal:  vec3<f32>,
+    uv:      vec2<f32>,
 };
 
 
@@ -82,11 +82,16 @@ struct Instance {
     _pad: u32
 };
 
+struct Material{
+    r: f32,
+    m: f32,
+    s: f32,
+    albedo: vec3<f32>
+}
+
 struct Geometry {
     first_index: u32,
-    r: f32,
-    g: f32,
-    b: f32,
+    material: Material,
 };
 
 
@@ -139,13 +144,15 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 
         let bary = vec3<f32>(1.0 - intersection.barycentrics.x - intersection.barycentrics.y, intersection.barycentrics);
 
-        let pos = (v_0.pos * bary.x + v_1.pos * bary.y + v_2.pos * bary.z).xyz;
-        let normal_raw = (v_0.normal * bary.x + v_1.normal * bary.y + v_2.normal * bary.z).xyz;
-        let uv = (v_0.uv * bary.x + v_1.uv * bary.y + v_2.uv * bary.z).xy;
+        let pos = v_0.pos * bary.x + v_1.pos * bary.y + v_2.pos * bary.z;
+        let normal_raw = v_0.normal * bary.x + v_1.normal * bary.y + v_2.normal * bary.z;
+        let uv = v_0.uv * bary.x + v_1.uv * bary.y + v_2.uv * bary.z;
 
         let normal = normalize(normal_raw);
 
-        color = vec4<f32>(geometry.r, geometry.g, geometry.b, 1.0);
+        let material = geometry.material;
+
+        color = vec4<f32>(material.albedo, 1.0);
 
         if(intersection.instance_custom_index == 1u){
             color = vec4<f32>(normal, 1.0);
