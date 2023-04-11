@@ -12,11 +12,14 @@ mod framework;
 
 // from cube
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
 struct Vertex {
-    _pos: [f32; 4],
-    _normal: [f32; 4],
-    _tex_coord: [f32; 4],
+    pos: [f32; 3],
+    _p0: [u32; 1],
+    normal: [f32; 3],
+    _p1: [u32; 1],
+    uv: [f32; 2],
+    _p2: [u32; 2],
 }
 
 #[repr(C)]
@@ -52,7 +55,7 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
 struct RawSceneComponents {
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
-    geometries: Vec<(Range<usize>, [f32; 3])>, // index range, color
+    geometries: Vec<(Range<usize>, Material)>, // index range, material
     instances: Vec<(Range<usize>, Range<usize>)>, // vertex range, geometry range
 }
 
@@ -75,12 +78,22 @@ struct InstanceEntry {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable, Default)]
 struct GeometryEntry {
     first_index: u32,
-    r: f32,
-    g: f32,
-    b: f32,
+    _p0: [u32; 3],
+    material: Material,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable, Default, Debug)]
+struct Material {
+    roughness_exponent: f32,
+    metalness: f32,
+    specularity: f32,
+    _p0: [u32; 1],
+    albedo: [f32; 3],
+    _p1: [u32; 1],
 }
 
 fn load_model(scene: &mut RawSceneComponents, path: &str) {
@@ -113,14 +126,11 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
                         if index == next_index {
                             next_index += 1;
 
-                            let pos = data.position[position_id];
-                            let uv = data.texture[texture_id];
-                            let normal = data.normal[normal_id];
-
                             scene.vertices.push(Vertex {
-                                _pos: [pos[0], pos[1], pos[2], 1.0],
-                                _tex_coord: [uv[0], uv[1], 0.0, 0.0],
-                                _normal: [normal[0], normal[1], normal[2], 0.0],
+                                pos: data.position[position_id],
+                                uv: data.texture[texture_id],
+                                normal: data.normal[normal_id],
+                                ..Default::default()
                             })
                         }
 
@@ -129,19 +139,28 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
                 }
             }
 
-            let mut col = [1.0, 0.0, 1.0];
+            let mut material: Material = Default::default();
 
             if let Some(mat) = group.material {
                 if let obj::ObjMaterial::Mtl(mat) = mat {
                     if let Some(kd) = mat.kd {
-                        col = kd;
+                        material.albedo = kd;
+                    }
+                    if let Some(ns) = mat.ns {
+                        material.roughness_exponent = ns;
+                    }
+                    if let Some(ka) = mat.ka {
+                        material.metalness = ka[0];
+                    }
+                    if let Some(ks) = mat.ks {
+                        material.specularity = ks[0];
                     }
                 }
             }
 
             scene
                 .geometries
-                .push((start_index_index..scene.indices.len(), col));
+                .push((start_index_index..scene.indices.len(), material));
         }
     }
     scene.instances.push((
@@ -163,11 +182,10 @@ fn upload_scene_components(
     let geometry_buffer_content = scene
         .geometries
         .iter()
-        .map(|(index_range, color)| GeometryEntry {
+        .map(|(index_range, material)| GeometryEntry {
             first_index: index_range.start as u32,
-            r: color[0],
-            g: color[1],
-            b: color[2],
+            material: *material,
+            ..Default::default()
         })
         .collect::<Vec<_>>();
 
@@ -353,6 +371,8 @@ impl framework::Example for Example {
             max_instances: side_count * side_count,
         });
 
+        let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
@@ -392,7 +412,7 @@ impl framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: wgpu::BindingResource::AccelerationStructure(&tlas),
+                    resource: tlas_package.as_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -412,8 +432,6 @@ impl framework::Example for Example {
                 },
             ],
         });
-
-        let tlas_package = rt::TlasPackage::new(tlas, side_count * side_count);
 
         let start_inst = Instant::now();
 

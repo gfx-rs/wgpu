@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Range, sync::Arc, thread};
 
 use crate::{
     context::{Context, DynContext, ObjectId},
-    Buffer, CommandEncoder, Data, Device, Label, C,
+    BindingResource, Buffer, CommandEncoder, Data, Device, Label, C,
 };
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
@@ -244,6 +244,16 @@ impl TlasPackage {
             self.lowest_unmodified = index as u32 + 1;
         }
         Some(&mut self.instances[index])
+    }
+
+    /// Get the binding resource for the underling acceleration structure, to be used in a
+    pub fn as_binding<'a>(&'a self) -> BindingResource<'a> {
+        BindingResource::AccelerationStructure(&self.tlas)
+    }
+
+    /// Get a reference to the underling top level acceleration structure.
+    pub fn tlas(&self) -> &Tlas {
+        &self.tlas
     }
 }
 
