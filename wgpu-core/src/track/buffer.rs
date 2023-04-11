@@ -252,6 +252,9 @@ impl<A: HalApi> BufferUsageScope<A> {
     }
 }
 
+pub(crate) type SetSingleResult<A> =
+    Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>;
+
 /// Stores all buffer state within a command buffer or device.
 pub(crate) struct BufferTracker<A: HalApi> {
     start: Vec<BufferUses>,
@@ -360,7 +363,7 @@ impl<A: HalApi> BufferTracker<A> {
         storage: &'a Storage<Buffer<A>, BufferId>,
         id: BufferId,
         state: BufferUses,
-    ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)> {
+    ) -> SetSingleResult<A> {
         let buffer = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
@@ -389,7 +392,7 @@ impl<A: HalApi> BufferTracker<A> {
 
         strict_assert!(self.temp.len() <= 1);
 
-        Some((buffer, self.temp.pop()))
+        Some((buffer.clone(), self.temp.pop()))
     }
 
     /// Sets the given state for all buffers in the given tracker.

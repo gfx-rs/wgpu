@@ -76,7 +76,7 @@ pub struct Device<A: HalApi> {
 
     pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
-    pub(crate) fence: Mutex<Option<A::Fence>>,
+    pub(crate) fence: RwLock<Option<A::Fence>>,
 
     /// All live resources allocated with this [`Device`].
     ///
@@ -91,7 +91,7 @@ pub struct Device<A: HalApi> {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
-    pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
+    pub(crate) pending_writes: RwLock<Option<PendingWrites<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
@@ -110,12 +110,12 @@ impl<A: HalApi> std::fmt::Debug for Device<A> {
 impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
         let raw = self.raw.take().unwrap();
-        let pending_writes = self.pending_writes.lock().take().unwrap();
+        let pending_writes = self.pending_writes.write().take().unwrap();
         pending_writes.dispose(&raw);
         self.command_allocator.lock().take().unwrap().dispose(&raw);
         unsafe {
             raw.destroy_buffer(self.zero_buffer.take().unwrap());
-            raw.destroy_fence(self.fence.lock().take().unwrap());
+            raw.destroy_fence(self.fence.write().take().unwrap());
             raw.exit(self.queue.take().unwrap());
         }
     }
@@ -212,7 +212,7 @@ impl<A: HalApi> Device<A> {
             info: ResourceInfo::new("<device>"),
             command_allocator: Mutex::new(Some(com_alloc)),
             active_submission_index: AtomicU64::new(0),
-            fence: Mutex::new(Some(fence)),
+            fence: RwLock::new(Some(fence)),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(life::SuspectedResources::new()),
@@ -234,7 +234,7 @@ impl<A: HalApi> Device<A> {
             limits: desc.limits.clone(),
             features: desc.features,
             downlevel,
-            pending_writes: Mutex::new(Some(pending_writes)),
+            pending_writes: RwLock::new(Some(pending_writes)),
         })
     }
 
@@ -258,28 +258,31 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
         hub: &Hub<A, G>,
+        fence: &A::Fence,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
-        let mut life_tracker = self.lock_life();
+        {
+            let mut life_tracker = self.lock_life();
 
-        // Normally, `temp_suspected` exists only to save heap
-        // allocations: it's cleared at the start of the function
-        // call, and cleared by the end. But `Global::queue_submit` is
-        // fallible; if it exits early, it may leave some resources in
-        // `temp_suspected`.
-        life_tracker
-            .suspected_resources
-            .extend(&self.temp_suspected.lock());
-        self.temp_suspected.lock().clear();
+            // Normally, `temp_suspected` exists only to save heap
+            // allocations: it's cleared at the start of the function
+            // call, and cleared by the end. But `Global::queue_submit` is
+            // fallible; if it exits early, it may leave some resources in
+            // `temp_suspected`.
+            life_tracker
+                .suspected_resources
+                .extend(&self.temp_suspected.lock());
+            self.temp_suspected.lock().clear();
 
-        life_tracker.triage_suspected(
-            hub,
-            &self.trackers,
-            #[cfg(feature = "trace")]
-            self.trace.lock().as_mut(),
-        );
-        life_tracker.triage_mapped();
+            life_tracker.triage_suspected(
+                hub,
+                &self.trackers,
+                #[cfg(feature = "trace")]
+                self.trace.lock().as_mut(),
+            );
+            life_tracker.triage_mapped();
+        }
 
         let last_done_index = if maintain.is_wait() {
             let index_to_wait_for = match maintain {
@@ -294,11 +297,7 @@ impl<A: HalApi> Device<A> {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(
-                        self.fence.lock().as_ref().unwrap(),
-                        index_to_wait_for,
-                        CLEANUP_WAIT_MS,
-                    )
+                    .wait(fence, index_to_wait_for, CLEANUP_WAIT_MS)
                     .map_err(DeviceError::from)?
             };
             index_to_wait_for
@@ -307,11 +306,12 @@ impl<A: HalApi> Device<A> {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .get_fence_value(self.fence.lock().as_ref().unwrap())
+                    .get_fence_value(fence)
                     .map_err(DeviceError::from)?
             }
         };
 
+        let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(
             last_done_index,
             self.command_allocator.lock().as_mut().unwrap(),
@@ -2990,7 +2990,7 @@ impl<A: HalApi> Device<A> {
             self.raw
                 .as_ref()
                 .unwrap()
-                .get_fence_value(self.fence.lock().as_ref().unwrap())
+                .get_fence_value(self.fence.read().as_ref().unwrap())
                 .map_err(DeviceError::from)?
         };
         if last_done_index < submission_index {
@@ -2999,7 +2999,7 @@ impl<A: HalApi> Device<A> {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(self.fence.lock().as_ref().unwrap(), submission_index, !0)
+                    .wait(self.fence.read().as_ref().unwrap(), submission_index, !0)
                     .map_err(DeviceError::from)?
             };
             let closures = self.lock_life().triage_submissions(
@@ -3073,12 +3073,12 @@ impl<A: HalApi> Device<A> {
 
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.lock().as_mut().unwrap().deactivate();
-        let mut life_tracker = self.life_tracker.lock();
+        self.pending_writes.write().as_mut().unwrap().deactivate();
+        let mut life_tracker = self.lock_life();
         let current_index = self.active_submission_index.load(Ordering::Relaxed);
         if let Err(error) = unsafe {
             self.raw.as_ref().unwrap().wait(
-                self.fence.lock().as_ref().unwrap(),
+                self.fence.read().as_ref().unwrap(),
                 current_index,
                 CLEANUP_WAIT_MS,
             )

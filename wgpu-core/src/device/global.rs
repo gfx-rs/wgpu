@@ -311,7 +311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
     ) -> Result<(), WaitIdleError> {
         let hub = A::hub(self);
-        let device_guard = hub.devices.read();
+
         let last_submission = {
             let buffer_guard = hub.buffers.write();
             match buffer_guard.get(buffer_id) {
@@ -320,7 +320,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         };
 
-        device_guard
+        hub.devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?
             .wait_for_submit(last_submission)
@@ -481,7 +481,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let temp = queue::TempResource::Buffer(buffer.clone());
-            let mut pending_writes = device.pending_writes.lock();
+            let mut pending_writes = device.pending_writes.write();
             let pending_writes = pending_writes.as_mut().unwrap();
             if pending_writes.dst_buffers.contains_key(&buffer_id) {
                 pending_writes.temp_resources.push(temp);
@@ -506,13 +506,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("buffer {:?} is dropped", buffer_id);
 
         let hub = A::hub(self);
-        let mut buffer_guard = hub.buffers.write();
 
         let (last_submit_index, buffer) = {
+            let mut buffer_guard = hub.buffers.write();
             match buffer_guard.get(buffer_id) {
                 Ok(buffer) => {
                     let last_submit_index = buffer.info.submission_index();
-                    (last_submit_index, buffer)
+                    (last_submit_index, buffer.clone())
                 }
                 Err(_) => {
                     hub.buffers.unregister_locked(buffer_id, &mut *buffer_guard);
@@ -523,18 +523,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &buffer.device;
         {
-            let mut life_lock = device.lock_life();
             if device
                 .pending_writes
-                .lock()
+                .read()
                 .as_ref()
                 .unwrap()
                 .dst_buffers
                 .contains_key(&buffer_id)
             {
-                life_lock.future_suspected_buffers.push(buffer.clone());
+                device
+                    .lock_life()
+                    .future_suspected_buffers
+                    .push(buffer.clone());
             } else {
-                life_lock.suspected_resources.buffers.push(buffer.clone());
+                device
+                    .lock_life()
+                    .suspected_resources
+                    .buffers
+                    .push(buffer.clone());
             }
         }
 
@@ -759,7 +765,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::TextureInner::Native { ref raw } => {
                 if !raw.is_none() {
                     let temp = queue::TempResource::Texture(texture.clone(), clear_views);
-                    let mut pending_writes = device.pending_writes.lock();
+                    let mut pending_writes = device.pending_writes.write();
                     let pending_writes = pending_writes.as_mut().unwrap();
                     if pending_writes.dst_textures.contains_key(&texture_id) {
                         pending_writes.temp_resources.push(temp);
@@ -785,13 +791,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("texture {:?} is dropped", texture_id);
 
         let hub = A::hub(self);
-        let mut texture_guard = hub.textures.write();
 
         let (last_submit_index, texture) = {
+            let mut texture_guard = hub.textures.write();
             match texture_guard.get(texture_id) {
                 Ok(texture) => {
                     let last_submit_index = texture.info.submission_index();
-                    (last_submit_index, texture)
+                    (last_submit_index, texture.clone())
                 }
                 Err(_) => {
                     hub.textures
@@ -806,7 +812,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut life_lock = device.lock_life();
             if device
                 .pending_writes
-                .lock()
+                .write()
                 .as_ref()
                 .unwrap()
                 .dst_textures
@@ -880,13 +886,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("texture view {:?} is dropped", texture_view_id);
 
         let hub = A::hub(self);
-        let mut texture_view_guard = hub.texture_views.write();
 
         let (last_submit_index, view) = {
+            let mut texture_view_guard = hub.texture_views.write();
             match texture_view_guard.get(texture_view_id) {
                 Ok(view) => {
                     let last_submit_index = view.info.submission_index();
-                    (last_submit_index, view)
+                    (last_submit_index, view.clone())
                 }
                 Err(_) => {
                     hub.texture_views
@@ -961,11 +967,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("sampler {:?} is dropped", sampler_id);
 
         let hub = A::hub(self);
-        let mut sampler_guard = hub.samplers.write();
 
         let sampler = {
+            let mut sampler_guard = hub.samplers.write();
             match sampler_guard.get(sampler_id) {
-                Ok(sampler) => sampler,
+                Ok(sampler) => sampler.clone(),
                 Err(_) => {
                     hub.samplers
                         .unregister_locked(sampler_id, &mut *sampler_guard);
@@ -1056,11 +1062,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("bind group layout {:?} is dropped", bind_group_layout_id);
 
         let hub = A::hub(self);
-        let mut bind_group_layout_guard = hub.bind_group_layouts.write();
 
         let layout = {
+            let mut bind_group_layout_guard = hub.bind_group_layouts.write();
             match bind_group_layout_guard.get(bind_group_layout_id) {
-                Ok(layout) => layout,
+                Ok(layout) => layout.clone(),
                 Err(_) => {
                     hub.bind_group_layouts
                         .unregister_locked(bind_group_layout_id, &mut *bind_group_layout_guard);
@@ -1126,10 +1132,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("pipeline layout {:?} is dropped", pipeline_layout_id);
 
         let hub = A::hub(self);
-        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+
         let layout = {
+            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             match pipeline_layout_guard.get(pipeline_layout_id) {
-                Ok(layout) => layout,
+                Ok(layout) => layout.clone(),
                 Err(_) => {
                     hub.pipeline_layouts
                         .unregister_locked(pipeline_layout_id, &mut *pipeline_layout_guard);
@@ -1199,11 +1206,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("bind group {:?} is dropped", bind_group_id);
 
         let hub = A::hub(self);
-        let mut bind_group_guard = hub.bind_groups.write();
 
         let bind_group = {
+            let mut bind_group_guard = hub.bind_groups.write();
             match bind_group_guard.get(bind_group_id) {
-                Ok(bind_group) => bind_group,
+                Ok(bind_group) => bind_group.clone(),
                 Err(_) => {
                     hub.bind_groups
                         .unregister_locked(bind_group_id, &mut *bind_group_guard);
@@ -1473,11 +1480,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("RenderBundle::drop");
         log::debug!("render bundle {:?} is dropped", render_bundle_id);
         let hub = A::hub(self);
-        let mut bundle_guard = hub.render_bundles.write();
 
         let bundle = {
+            let mut bundle_guard = hub.render_bundles.write();
             match bundle_guard.get(render_bundle_id) {
-                Ok(bundle) => bundle,
+                Ok(bundle) => bundle.clone(),
                 Err(_) => {
                     hub.render_bundles
                         .unregister_locked(render_bundle_id, &mut *bundle_guard);
@@ -1668,11 +1675,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("RenderPipeline::drop");
         log::debug!("render pipeline {:?} is dropped", render_pipeline_id);
         let hub = A::hub(self);
-        let mut pipeline_guard = hub.render_pipelines.write();
 
         let (pipeline, layout_id) = {
+            let mut pipeline_guard = hub.render_pipelines.write();
             match pipeline_guard.get(render_pipeline_id) {
-                Ok(pipeline) => (pipeline, pipeline.layout_id),
+                Ok(pipeline) => (pipeline.clone(), pipeline.layout_id),
                 Err(_) => {
                     hub.render_pipelines
                         .unregister_locked(render_pipeline_id, &mut *pipeline_guard);
@@ -1788,11 +1795,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("ComputePipeline::drop");
         log::debug!("compute pipeline {:?} is dropped", compute_pipeline_id);
         let hub = A::hub(self);
-        let mut pipeline_guard = hub.compute_pipelines.write();
 
         let (pipeline, layout_id) = {
+            let mut pipeline_guard = hub.compute_pipelines.write();
             match pipeline_guard.get(compute_pipeline_id) {
-                Ok(pipeline) => (pipeline, pipeline.layout_id),
+                Ok(pipeline) => (pipeline.clone(), pipeline.layout_id),
                 Err(_) => {
                     hub.compute_pipelines
                         .unregister_locked(compute_pipeline_id, &mut *pipeline_guard);
@@ -2082,10 +2089,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let hub = A::hub(self);
-            hub.devices
+            let device = hub
+                .devices
                 .get(device_id)
-                .map_err(|_| DeviceError::Invalid)?
-                .maintain(hub, maintain)?
+                .map_err(|_| DeviceError::Invalid)?;
+            let fence = device.fence.read();
+            let fence = fence.as_ref().unwrap();
+            device.maintain(hub, fence, maintain)?
         };
 
         closures.fire();
@@ -2118,7 +2128,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } else {
                     wgt::Maintain::Poll
                 };
-                let (cbs, queue_empty) = device.maintain(hub, maintain)?;
+                let fence = device.fence.read();
+                let fence = fence.as_ref().unwrap();
+                let (cbs, queue_empty) = device.maintain(hub, fence, maintain)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
                 // If the device's own `RefCount` is the only one left, and
@@ -2213,7 +2225,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // need to wait for submissions or triage them. We know we were
                 // just polled, so `life_tracker.free_resources` is empty.
                 debug_assert!(device.lock_life().queue_empty());
-                device.pending_writes.lock().as_mut().unwrap().deactivate();
+                device.pending_writes.write().as_mut().unwrap().deactivate();
 
                 let adapter = hub.adapters.get(device.adapter_id.0).unwrap();
                 // Adapter is only referenced by the device and itself.
@@ -2261,7 +2273,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Buffer::map_async");
 
         let hub = A::hub(self);
-        let buffer_guard = hub.buffers.read();
 
         let (pub_usage, internal_use) = match op.host {
             HostMap::Read => (wgt::BufferUsages::MAP_READ, hal::BufferUses::MAP_READ),
@@ -2272,8 +2283,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err((op, BufferAccessError::UnalignedRange));
         }
 
-        let (device, buffer) = {
-            let buffer = buffer_guard
+        let buffer = {
+            let buffer = hub
+                .buffers
                 .get(buffer_id)
                 .map_err(|_| BufferAccessError::Invalid);
 
@@ -2306,29 +2318,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     },
                 ));
             }
-            let mut map_state = buffer.map_state.lock();
-            *map_state = match *map_state {
-                resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
-                    return Err((op, BufferAccessError::AlreadyMapped));
-                }
-                resource::BufferMapState::Waiting(_) => {
-                    return Err((op, BufferAccessError::MapAlreadyPending));
-                }
-                resource::BufferMapState::Idle => {
-                    resource::BufferMapState::Waiting(resource::BufferPendingMapping {
-                        range,
-                        op,
-                        _parent_buffer: buffer.clone(),
-                    })
-                }
-            };
+            {
+                let map_state = &mut *buffer.map_state.lock();
+                *map_state = match *map_state {
+                    resource::BufferMapState::Init { .. }
+                    | resource::BufferMapState::Active { .. } => {
+                        return Err((op, BufferAccessError::AlreadyMapped));
+                    }
+                    resource::BufferMapState::Waiting(_) => {
+                        return Err((op, BufferAccessError::MapAlreadyPending));
+                    }
+                    resource::BufferMapState::Idle => {
+                        resource::BufferMapState::Waiting(resource::BufferPendingMapping {
+                            range,
+                            op,
+                            _parent_buffer: buffer.clone(),
+                        })
+                    }
+                };
+            }
             log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
-            let device = &buffer.device;
-
             {
-                let mut trackers = device.as_ref().trackers.lock();
-
+                let mut trackers = buffer.device.as_ref().trackers.lock();
+                let buffer_guard = hub.buffers.read();
                 trackers
                     .buffers
                     .set_single(&*buffer_guard, buffer_id, internal_use);
@@ -2336,10 +2349,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trackers.buffers.drain();
             }
 
-            (device, buffer)
+            buffer
         };
 
-        device.lock_life().map(buffer);
+        buffer.device.lock_life().map(&buffer);
 
         Ok(())
     }
@@ -2470,7 +2483,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     buffer: raw_buf,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
-                let mut pending_writes = device.pending_writes.lock();
+                let mut pending_writes = device.pending_writes.write();
                 let pending_writes = pending_writes.as_mut().unwrap();
                 let encoder = pending_writes.activate();
                 unsafe {

@@ -575,7 +575,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let buffer_guard = hub.buffers.read();
 
         let device = &cmd_buf.device;
 
@@ -590,11 +589,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (src_buffer, src_pending) = cmd_buf_data
-            .trackers
-            .buffers
-            .set_single(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
-            .ok_or(TransferError::InvalidBuffer(source))?;
+        let (src_buffer, src_pending) = {
+            let buffer_guard = hub.buffers.read();
+            cmd_buf_data
+                .trackers
+                .buffers
+                .set_single(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
+                .ok_or(TransferError::InvalidBuffer(source))?
+        };
         let src_raw = src_buffer
             .raw
             .as_ref()
@@ -603,13 +605,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
         // expecting only a single barrier
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer));
 
-        let (dst_buffer, dst_pending) = cmd_buf_data
-            .trackers
-            .buffers
-            .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
-            .ok_or(TransferError::InvalidBuffer(destination))?;
+        let (dst_buffer, dst_pending) = {
+            let buffer_guard = hub.buffers.read();
+            cmd_buf_data
+                .trackers
+                .buffers
+                .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+                .ok_or(TransferError::InvalidBuffer(destination))?
+        };
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -617,7 +622,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !dst_buffer.usage.contains(BufferUsages::COPY_DST) {
             return Err(TransferError::MissingCopyDstUsageFlag(Some(destination), None).into());
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
 
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(size).into());
@@ -729,7 +734,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
             cmd_buf_data.raw_mut();
-        let buffer_guard = hub.buffers.read();
         let texture_guard = hub.textures.read();
 
         let device = &cmd_buf.device;
@@ -765,10 +769,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &texture_guard,
         )?;
 
-        let (src_buffer, src_pending) = tracker
-            .buffers
-            .set_single(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
-            .ok_or(TransferError::InvalidBuffer(source.buffer))?;
+        let (src_buffer, src_pending) = {
+            let buffer_guard = hub.buffers.read();
+            tracker
+                .buffers
+                .set_single(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
+                .ok_or(TransferError::InvalidBuffer(source.buffer))?
+        };
         let src_raw = src_buffer
             .raw
             .as_ref()
@@ -776,7 +783,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !src_buffer.usage.contains(BufferUsages::COPY_SRC) {
             return Err(TransferError::MissingCopySrcUsageFlag.into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer));
 
         let dst_pending = tracker
             .textures
@@ -881,7 +888,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
             cmd_buf_data.raw_mut();
 
-        let buffer_guard = hub.buffers.read();
         let texture_guard = hub.textures.read();
 
         let device = &cmd_buf.device;
@@ -946,14 +952,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
 
-        let (dst_buffer, dst_pending) = tracker
-            .buffers
-            .set_single(
-                &*buffer_guard,
-                destination.buffer,
-                hal::BufferUses::COPY_DST,
-            )
-            .ok_or(TransferError::InvalidBuffer(destination.buffer))?;
+        let (dst_buffer, dst_pending) = {
+            let buffer_guard = hub.buffers.read();
+            tracker
+                .buffers
+                .set_single(
+                    &*buffer_guard,
+                    destination.buffer,
+                    hal::BufferUses::COPY_DST,
+                )
+                .ok_or(TransferError::InvalidBuffer(destination.buffer))?
+        };
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -963,7 +972,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(Some(destination.buffer), None).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
 
         if !src_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());

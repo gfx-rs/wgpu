@@ -86,18 +86,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| ClearError::InvalidCommandEncoder(command_encoder_id))?;
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let buffer_guard = hub.buffers.read();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::ClearBuffer { dst, offset, size });
         }
 
-        let (dst_buffer, dst_pending) = cmd_buf_data
-            .trackers
-            .buffers
-            .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
-            .ok_or(ClearError::InvalidBuffer(dst))?;
+        let (dst_buffer, dst_pending) = {
+            let buffer_guard = hub.buffers.read();
+            cmd_buf_data
+                .trackers
+                .buffers
+                .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+                .ok_or(ClearError::InvalidBuffer(dst))?
+        };
         let dst_raw = dst_buffer
             .raw
             .as_ref()
@@ -142,7 +144,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ),
         );
         // actual hal barrier & operation
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
         let cmd_buf_raw = cmd_buf_data.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(dst_barrier.into_iter());
@@ -166,8 +168,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
-        let texture_guard = hub.textures.read();
-
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
             list.push(TraceCommand::ClearTexture {
@@ -180,7 +180,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(ClearError::MissingClearTextureFeature);
         }
 
-        let dst_texture = texture_guard
+        let dst_texture = hub
+            .textures
             .get(dst)
             .map_err(|_| ClearError::InvalidTexture(dst))?;
 
@@ -220,6 +221,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &cmd_buf.device;
         let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker();
+        let texture_guard = hub.textures.read();
         clear_texture(
             &*texture_guard,
             Valid(dst),

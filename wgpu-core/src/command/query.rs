@@ -369,12 +369,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .add_single(&*query_set_guard, query_set_id)
             .ok_or(QueryError::InvalidQuerySet(query_set_id))?;
 
-        let buffer_guard = hub.buffers.read();
-        let (dst_buffer, dst_pending) = tracker
-            .buffers
-            .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
-            .ok_or(QueryError::InvalidBuffer(destination))?;
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer));
+        let (dst_buffer, dst_pending) = {
+            let buffer_guard = hub.buffers.read();
+            tracker
+                .buffers
+                .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+                .ok_or(QueryError::InvalidBuffer(destination))?
+        };
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
 
         if !dst_buffer.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
             return Err(ResolveError::MissingBufferUsage.into());

@@ -508,7 +508,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         profiling::scope!("triage_suspected");
 
         if !self.suspected_resources.render_bundles.is_empty() {
-            let mut render_bundles_locked = hub.render_bundles.write();
             let mut trackers = trackers.lock();
 
             while let Some(bundle) = self.suspected_resources.render_bundles.pop() {
@@ -522,7 +521,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub
                         .render_bundles
-                        .unregister_locked(id.0, &mut *render_bundles_locked)
+                        .unregister(id.0)
                     {
                         self.suspected_resources.add_render_bundle_scope(&res.used);
                     }
@@ -531,7 +530,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.bind_groups.is_empty() {
-            let mut bind_groups_locked = hub.bind_groups.write();
             let mut trackers = trackers.lock();
 
             while let Some(resource) = self.suspected_resources.bind_groups.pop() {
@@ -545,7 +543,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub
                         .bind_groups
-                        .unregister_locked(id.0, &mut *bind_groups_locked)
+                        .unregister(id.0)
                     {
                         self.suspected_resources.add_bind_group_states(&res.used);
                         let bind_group_layout =
@@ -567,7 +565,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.texture_views.is_empty() {
-            let mut texture_views_locked = hub.texture_views.write();
             let mut trackers = trackers.lock();
 
             let mut list = mem::take(&mut self.suspected_resources.texture_views);
@@ -582,7 +579,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub
                         .texture_views
-                        .unregister_locked(id.0, &mut *texture_views_locked)
+                        .unregister(id.0)
                     {
                         if let Some(parent_texture) = res.parent.as_ref() {
                             self.suspected_resources
@@ -603,7 +600,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.textures.is_empty() {
-            let mut textures_locked = hub.textures.write();
             let mut trackers = trackers.lock();
 
             for texture in self.suspected_resources.textures.drain(..) {
@@ -615,7 +611,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyTexture(id.0));
                     }
 
-                    if let Some(res) = hub.textures.unregister_locked(id.0, &mut *textures_locked) {
+                    if let Some(res) = hub.textures.unregister(id.0) {
                         let submit_index = res.info.submission_index();
                         let non_referenced_resources = self
                             .active
@@ -638,7 +634,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.samplers.is_empty() {
-            let mut samplers_locked = hub.samplers.write();
             let mut trackers = trackers.lock();
 
             for sampler in self.suspected_resources.samplers.drain(..) {
@@ -650,7 +645,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroySampler(id.0));
                     }
 
-                    if let Some(res) = hub.samplers.unregister_locked(id.0, &mut *samplers_locked) {
+                    if let Some(res) = hub.samplers.unregister(id.0) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -664,7 +659,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.buffers.is_empty() {
-            let mut buffers_locked = hub.buffers.write();
             let mut trackers = trackers.lock();
 
             for buffer in self.suspected_resources.buffers.drain(..) {
@@ -676,7 +670,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyBuffer(id.0));
                     }
 
-                    if let Some(res) = hub.buffers.unregister_locked(id.0, &mut *buffers_locked) {
+                    if let Some(res) = hub.buffers.unregister(id.0) {
                         let submit_index = res.info.submission_index();
                         if let resource::BufferMapState::Init {
                             ref stage_buffer, ..
@@ -696,7 +690,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.compute_pipelines.is_empty() {
-            let mut compute_pipelines_locked = hub.compute_pipelines.write();
             let mut trackers = trackers.lock();
 
             for compute_pipeline in self.suspected_resources.compute_pipelines.drain(..) {
@@ -710,7 +703,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub
                         .compute_pipelines
-                        .unregister_locked(id.0, &mut *compute_pipelines_locked)
+                        .unregister(id.0)
                     {
                         let submit_index = res.info.submission_index();
                         self.active
@@ -725,7 +718,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.render_pipelines.is_empty() {
-            let mut render_pipelines_locked = hub.render_pipelines.write();
             let mut trackers = trackers.lock();
 
             for render_pipeline in self.suspected_resources.render_pipelines.drain(..) {
@@ -739,7 +731,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                     if let Some(res) = hub
                         .render_pipelines
-                        .unregister_locked(id.0, &mut *render_pipelines_locked)
+                        .unregister(id.0)
                     {
                         let submit_index = res.info.submission_index();
                         self.active
@@ -806,7 +798,6 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.query_sets.is_empty() {
-            let mut query_sets_locked = hub.query_sets.write();
             let mut trackers = trackers.lock();
 
             for query_set in self.suspected_resources.query_sets.drain(..) {
@@ -817,7 +808,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id.0)));
                     if let Some(res) = hub
                         .query_sets
-                        .unregister_locked(id.0, &mut *query_sets_locked)
+                        .unregister(id.0)
                     {
                         let submit_index = res.info.submission_index();
                         self.active
@@ -873,18 +864,17 @@ impl<A: HalApi> LifetimeTracker<A> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
         }
-        let mut buffers_locked = hub.buffers.write();
         let mut pending_callbacks: Vec<super::BufferMapPendingClosure> =
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
         for buffer in self.ready_to_map.drain(..) {
             let buffer_id = buffer.info.id();
-            if buffer.is_unique() && trackers.buffers.remove_abandoned(buffer_id) {
+            if trackers.buffers.remove_abandoned(buffer_id) {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::debug!("Mapping request is dropped because the buffer is destroyed.");
                 if let Some(buf) = hub
                     .buffers
-                    .unregister_locked(buffer_id.0, &mut *buffers_locked)
+                    .unregister(buffer_id.0)
                 {
                     self.free_resources.buffers.push(buf);
                 }
