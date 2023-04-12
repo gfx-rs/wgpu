@@ -28,6 +28,9 @@ mod allocation {
         MemoryLocation,
     };
 
+    // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_heap_flags
+    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: d3d12_ty::D3D12_HEAP_FLAGS = 0x1000;
+
     #[derive(Debug)]
     pub(crate) struct GpuAllocatorWrapper {
         pub(crate) allocator: gpu_allocator::d3d12::Allocator,
@@ -63,6 +66,46 @@ mod allocation {
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+
+        if !device.private_caps.suballocation_supported {
+            let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
+                Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,
+                CPUPageProperty: if is_cpu_read {
+                    d3d12_ty::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
+                } else if is_cpu_write {
+                    d3d12_ty::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+                } else {
+                    d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
+                },
+                MemoryPoolPreference: match device.private_caps.memory_architecture {
+                    crate::dx12::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
+                        d3d12_ty::D3D12_MEMORY_POOL_L1
+                    }
+                    _ => d3d12_ty::D3D12_MEMORY_POOL_L0,
+                },
+                CreationNodeMask: 0,
+                VisibleNodeMask: 0,
+            };
+
+            let hr = unsafe {
+                device.raw.CreateCommittedResource(
+                    &heap_properties,
+                    if device.private_caps.heap_create_not_zeroed {
+                        D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+                    } else {
+                        d3d12_ty::D3D12_HEAP_FLAG_NONE
+                    },
+                    &raw_desc,
+                    d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
+                    ptr::null(),
+                    &d3d12_ty::ID3D12Resource::uuidof(),
+                    resource.mut_void(),
+                )
+            };
+
+            return Ok((hr, None));
+        }
+
         let location = match (is_cpu_read, is_cpu_write) {
             (true, true) => MemoryLocation::CpuToGpu,
             (true, false) => MemoryLocation::GpuToCpu,
@@ -111,6 +154,37 @@ mod allocation {
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+        if !device.private_caps.suballocation_supported {
+            let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
+                Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,
+                CPUPageProperty: d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+                MemoryPoolPreference: match device.private_caps.memory_architecture {
+                    crate::dx12::MemoryArchitecture::NonUnified => d3d12_ty::D3D12_MEMORY_POOL_L1,
+                    crate::dx12::MemoryArchitecture::Unified { .. } => d3d12_ty::D3D12_MEMORY_POOL_L0,
+                },
+                CreationNodeMask: 0,
+                VisibleNodeMask: 0,
+            };
+
+            let hr = unsafe {
+                device.raw.CreateCommittedResource(
+                    &heap_properties,
+                    if device.private_caps.heap_create_not_zeroed {
+                        D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+                    } else {
+                        d3d12_ty::D3D12_HEAP_FLAG_NONE
+                    },
+                    &raw_desc,
+                    d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
+                    ptr::null(), // clear value
+                    &d3d12_ty::ID3D12Resource::uuidof(),
+                    resource.mut_void(),
+                )
+            };
+
+            return Ok((hr, None));
+        }
+
         let location = MemoryLocation::GpuOnly;
 
         let name = desc.label.unwrap_or("Unlabeled texture");
@@ -168,7 +242,6 @@ mod allocation {
         };
     }
 
-    #[cfg(feature = "windows_rs")]
     impl From<gpu_allocator::AllocationError> for crate::DeviceError {
         fn from(result: gpu_allocator::AllocationError) -> Self {
             match result {
@@ -216,7 +289,8 @@ mod allocation {
         Interface,
     };
 
-    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12_ty::D3D12_HEAP_FLAG_NONE; // TODO: find the exact value
+    // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_heap_flags
+    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: d3d12_ty::D3D12_HEAP_FLAGS = 0x1000;
 
     // Allocator isn't needed when not suballocating with gpu_allocator
     #[derive(Debug)]
