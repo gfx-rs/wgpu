@@ -538,7 +538,7 @@ impl Resource {
                 }
                 usage
             }
-            ResourceType::AccelerationStructure => GlobalUse::QUERY,
+            ResourceType::AccelerationStructure => GlobalUse::READ | GlobalUse::QUERY,
         };
 
         if allowed_usage.contains(shader_usage) {
