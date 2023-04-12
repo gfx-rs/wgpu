@@ -58,7 +58,7 @@ impl<T> From<Identified<T>> for ObjectId {
             // API.
             core::num::NonZeroU64::new(1).unwrap(),
             #[cfg(feature = "expose-ids")]
-            identified.1,
+            identified.0,
         )
     }
 }
@@ -71,7 +71,7 @@ impl<T> From<(Identified<T>, Sendable<T>)> for ObjectId {
             // API.
             core::num::NonZeroU64::new(1).unwrap(),
             #[cfg(feature = "expose-ids")]
-            id.1,
+            id.0,
         )
     }
 }
@@ -2098,7 +2098,7 @@ impl crate::context::Context for Context {
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
             let depth_stencil_attachment: &<Context as crate::Context>::TextureViewData =
-                downcast_ref(&dsa.view.data);
+                downcast_ref(dsa.view.data.as_ref());
             let mut mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachment::new(&depth_stencil_attachment.0);
             if let Some(ref ops) = dsa.depth_ops {
