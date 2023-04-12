@@ -78,7 +78,9 @@ mod allocation {
                     d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
                 },
                 MemoryPoolPreference: match device.private_caps.memory_architecture {
-                    crate::dx12::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
+                    crate::dx12::MemoryArchitecture::NonUnified
+                        if !is_cpu_read && !is_cpu_write =>
+                    {
                         d3d12_ty::D3D12_MEMORY_POOL_L1
                     }
                     _ => d3d12_ty::D3D12_MEMORY_POOL_L0,
@@ -160,7 +162,9 @@ mod allocation {
                 CPUPageProperty: d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
                 MemoryPoolPreference: match device.private_caps.memory_architecture {
                     crate::dx12::MemoryArchitecture::NonUnified => d3d12_ty::D3D12_MEMORY_POOL_L1,
-                    crate::dx12::MemoryArchitecture::Unified { .. } => d3d12_ty::D3D12_MEMORY_POOL_L0,
+                    crate::dx12::MemoryArchitecture::Unified { .. } => {
+                        d3d12_ty::D3D12_MEMORY_POOL_L0
+                    }
                 },
                 CreationNodeMask: 0,
                 VisibleNodeMask: 0,
