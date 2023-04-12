@@ -58,7 +58,7 @@ impl<T> From<Identified<T>> for ObjectId {
             // API.
             core::num::NonZeroU64::new(1).unwrap(),
             #[cfg(feature = "expose-ids")]
-            identified.1,
+            identified.0,
         )
     }
 }
@@ -71,7 +71,7 @@ impl<T> From<(Identified<T>, Sendable<T>)> for ObjectId {
             // API.
             core::num::NonZeroU64::new(1).unwrap(),
             #[cfg(feature = "expose-ids")]
-            id.1,
+            id.0,
         )
     }
 }
