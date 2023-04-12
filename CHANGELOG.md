@@ -113,6 +113,17 @@ SamplerDescriptor {
 
 By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
+#### TextureFormat Names
+
+Some texture format names have changed to get back in line with the spec.
+
+```diff
+- TextureFormat::Bc6hRgbSfloat
++ TextureFormat::Bc6hRgbFloat
+```
+
+By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
