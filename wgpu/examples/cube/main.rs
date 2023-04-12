@@ -274,7 +274,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: Some(wgpu::Face::Back),
@@ -298,7 +298,7 @@ impl framework::Example for Example {
                     module: &shader,
                     entry_point: "fs_wire",
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: config.format,
+                        format: config.view_formats[0],
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
                                 operation: wgpu::BlendOperation::Add,

@@ -14,6 +14,17 @@ const Y_SCL: f32 = 0.86602540378443864676372317075294;
 const CURVE_BIAS: f32 = -0.1;
 const INV_1_CURVE_BIAS: f32 = 1.11111111111; //1.0 / (1.0 + CURVE_BIAS);
 
+// Polyfill for modf to deal with differences between chrome's WebGPU and
+// current naga.
+fn modf_polyfill_vec3(value: vec3<f32>, int_part: ptr<function, vec3<f32>>) -> vec3<f32> {
+    *int_part = trunc(value);
+    return value - *int_part;
+}
+fn modf_polyfill_vec4(value: vec4<f32>, int_part: ptr<function, vec4<f32>>) -> vec4<f32> {
+    *int_part = trunc(value);
+    return value - *int_part;
+}
+
 //
 // The following code to calculate simplex 3D
 // is from https://github.com/ashima/webgl-noise
@@ -23,7 +34,7 @@ const INV_1_CURVE_BIAS: f32 = 1.11111111111; //1.0 / (1.0 + CURVE_BIAS);
 //
 fn permute(x: vec4<f32>) -> vec4<f32> {
     var temp: vec4<f32> = 289.0 * one;
-    return modf(((x*34.0) + one) * x, &temp);
+    return modf_polyfill_vec4(((x*34.0) + one) * x, &temp);
 }
 
 fn taylorInvSqrt(r: vec4<f32>) -> vec4<f32> {
@@ -57,7 +68,7 @@ fn snoise(v: vec3<f32>) -> f32 {
 
     // Permutations
     var temp: vec3<f32> = 289.0 * one.xyz;
-    i = modf(i, &temp);
+    i = modf_polyfill_vec3(i, &temp);
     let p = permute(
         permute(
             permute(i.zzzz + vec4<f32>(0.0, i1.z, i2.z, 1.0))
