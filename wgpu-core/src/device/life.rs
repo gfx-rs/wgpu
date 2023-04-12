@@ -519,10 +519,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyRenderBundle(id.0));
                     }
 
-                    if let Some(res) = hub
-                        .render_bundles
-                        .unregister(id.0)
-                    {
+                    if let Some(res) = hub.render_bundles.unregister(id.0) {
                         self.suspected_resources.add_render_bundle_scope(&res.used);
                     }
                 }
@@ -541,10 +538,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyBindGroup(id.0));
                     }
 
-                    if let Some(res) = hub
-                        .bind_groups
-                        .unregister(id.0)
-                    {
+                    if let Some(res) = hub.bind_groups.unregister(id.0) {
                         self.suspected_resources.add_bind_group_states(&res.used);
                         let bind_group_layout =
                             hub.bind_group_layouts.get(res.layout_id.0).unwrap();
@@ -577,10 +571,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyTextureView(id.0));
                     }
 
-                    if let Some(res) = hub
-                        .texture_views
-                        .unregister(id.0)
-                    {
+                    if let Some(res) = hub.texture_views.unregister(id.0) {
                         if let Some(parent_texture) = res.parent.as_ref() {
                             self.suspected_resources
                                 .textures
@@ -701,10 +692,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyComputePipeline(id.0));
                     }
 
-                    if let Some(res) = hub
-                        .compute_pipelines
-                        .unregister(id.0)
-                    {
+                    if let Some(res) = hub.compute_pipelines.unregister(id.0) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -729,10 +717,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         t.add(trace::Action::DestroyRenderPipeline(id.0));
                     }
 
-                    if let Some(res) = hub
-                        .render_pipelines
-                        .unregister(id.0)
-                    {
+                    if let Some(res) = hub.render_pipelines.unregister(id.0) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -806,10 +791,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::debug!("Query set {:?} will be destroyed", id);
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id.0)));
-                    if let Some(res) = hub
-                        .query_sets
-                        .unregister(id.0)
-                    {
+                    if let Some(res) = hub.query_sets.unregister(id.0) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -872,10 +854,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             if trackers.buffers.remove_abandoned(buffer_id) {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::debug!("Mapping request is dropped because the buffer is destroyed.");
-                if let Some(buf) = hub
-                    .buffers
-                    .unregister(buffer_id.0)
-                {
+                if let Some(buf) = hub.buffers.unregister(buffer_id.0) {
                     self.free_resources.buffers.push(buf);
                 }
             } else {
