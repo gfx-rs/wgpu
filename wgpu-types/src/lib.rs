@@ -2784,7 +2784,7 @@ impl TextureFormat {
             Self::Bc5RgUnorm =>           (        noaa,      basic),
             Self::Bc5RgSnorm =>           (        noaa,      basic),
             Self::Bc6hRgbUfloat =>        (        noaa,      basic),
-            Self::Bc6hRgbFloat =>        (        noaa,      basic),
+            Self::Bc6hRgbFloat =>         (        noaa,      basic),
             Self::Bc7RgbaUnorm =>         (        noaa,      basic),
             Self::Bc7RgbaUnormSrgb =>     (        noaa,      basic),
 
