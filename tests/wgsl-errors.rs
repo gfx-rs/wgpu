@@ -961,8 +961,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     check_validation! {
         "@vertex
-fn main() {
-    discard;
+fn main() -> @builtin(position) vec4<f32> {
+    if true {
+        discard;
+    }
+    return vec4<f32>();
 }":
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
@@ -1124,13 +1127,13 @@ fn pointer_type_equivalence() {
 fn missing_bindings() {
     check_validation! {
         "
-        @vertex
-        fn vertex(_input: vec4<f32>) -> @location(0) vec4<f32> {
+        @fragment
+        fn fragment(_input: vec4<f32>) -> @location(0) vec4<f32> {
            return _input;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
-            stage: naga::ShaderStage::Vertex,
+            stage: naga::ShaderStage::Fragment,
             source: naga::valid::EntryPointError::Argument(
                 0,
                 naga::valid::VaryingError::MissingBinding,
@@ -1141,13 +1144,13 @@ fn missing_bindings() {
 
     check_validation! {
         "
-        @vertex
-        fn vertex(@location(0) _input: vec4<f32>, more_input: f32) -> @location(0) vec4<f32> {
+        @fragment
+        fn fragment(@location(0) _input: vec4<f32>, more_input: f32) -> @location(0) vec4<f32> {
            return _input + more_input;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
-            stage: naga::ShaderStage::Vertex,
+            stage: naga::ShaderStage::Fragment,
             source: naga::valid::EntryPointError::Argument(
                 1,
                 naga::valid::VaryingError::MissingBinding,
@@ -1158,13 +1161,13 @@ fn missing_bindings() {
 
     check_validation! {
         "
-        @vertex
-        fn vertex(@location(0) _input: vec4<f32>) -> vec4<f32> {
+        @fragment
+        fn fragment(@location(0) _input: vec4<f32>) -> vec4<f32> {
            return _input;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
-            stage: naga::ShaderStage::Vertex,
+            stage: naga::ShaderStage::Fragment,
             source: naga::valid::EntryPointError::Result(
                 naga::valid::VaryingError::MissingBinding,
             ),
@@ -1174,22 +1177,55 @@ fn missing_bindings() {
 
     check_validation! {
         "
-        struct VertexIn {
+        struct FragmentIn {
           @location(0) pos: vec4<f32>,
           uv: vec2<f32>
         }
 
-        @vertex
-        fn vertex(_input: VertexIn) -> @location(0) vec4<f32> {
+        @fragment
+        fn fragment(_input: FragmentIn) -> @location(0) vec4<f32> {
            return _input.pos;
         }
         ":
         Err(naga::valid::ValidationError::EntryPoint {
-            stage: naga::ShaderStage::Vertex,
+            stage: naga::ShaderStage::Fragment,
             source: naga::valid::EntryPointError::Argument(
                 0,
                 naga::valid::VaryingError::MemberMissingBinding(1),
             ),
+            ..
+        })
+    }
+}
+
+#[test]
+fn missing_bindings2() {
+    check_validation! {
+        "
+        @vertex
+        fn vertex() {}
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::MissingVertexOutputPosition,
+            ..
+        })
+    }
+
+    check_validation! {
+        "
+        struct VertexOut {
+            @location(0) a: vec4<f32>,
+        }
+
+        @vertex
+        fn vertex() -> VertexOut {
+            return VertexOut(vec4<f32>());
+        }
+        ":
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::MissingVertexOutputPosition,
             ..
         })
     }

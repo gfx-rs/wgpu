@@ -13,7 +13,7 @@ struct TestStruct {
     b: f32,
 }
 
-struct VertexOutput {
+struct FragmentOutput {
     @location(0) position: vec2<f32>,
     @location(1) a: vec2<f32>,
     @location(2) out_array: vec4<f32>,
@@ -50,8 +50,8 @@ fn main_1() {
     return;
 }
 
-@vertex 
-fn main(@location(0) position: vec2<f32>, @location(1) a: vec2<f32>, @location(2) in_array: vec4<f32>, @location(3) in_array_1: vec4<f32>) -> VertexOutput {
+@fragment 
+fn main(@location(0) position: vec2<f32>, @location(1) a: vec2<f32>, @location(2) in_array: vec4<f32>, @location(3) in_array_1: vec4<f32>) -> FragmentOutput {
     vert.position = position;
     vert.a = a;
     in_array_2[0] = in_array;
@@ -65,5 +65,5 @@ fn main(@location(0) position: vec2<f32>, @location(1) a: vec2<f32>, @location(2
     let _e32 = frag.a;
     let _e35 = out_array[0];
     let _e37 = out_array[1];
-    return VertexOutput(_e30, _e32, _e35, _e37);
+    return FragmentOutput(_e30, _e32, _e35, _e37);
 }

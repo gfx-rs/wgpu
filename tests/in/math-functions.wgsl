@@ -1,4 +1,4 @@
-@vertex
+@fragment
 fn main() {
     let f = 1.0;
     let v = vec4<f32>(0.0);

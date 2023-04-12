@@ -7,7 +7,7 @@ fn main_1() {
     let _e2 = i;
 }
 
-@vertex 
+@fragment 
 fn main() {
     _ = array<f32,2u>(1.0, 2.0);
     main_1();

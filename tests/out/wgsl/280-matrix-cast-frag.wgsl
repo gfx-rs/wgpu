@@ -6,7 +6,7 @@ fn main_1() {
     return;
 }
 
-@vertex 
+@fragment 
 fn main() {
     main_1();
     return;

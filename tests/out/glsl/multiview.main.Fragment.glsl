@@ -7,7 +7,6 @@ precision highp int;
 
 void main() {
     int view_index = gl_ViewIndex;
-    gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;
 }
 

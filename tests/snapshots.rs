@@ -117,7 +117,7 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets) {
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .expect("Naga module validation failed");
+        .expect(&format!("Naga module validation failed on test '{name}'"));
 
     #[cfg(feature = "serialize")]
     {
@@ -595,6 +595,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     let _ = env_logger::try_init();
 
     let root = env!("CARGO_MANIFEST_DIR");
+
     let module = naga::front::spv::parse_u8_slice(
         &fs::read(format!("{root}/{BASE_DIR_IN}/spv/{name}.spv")).expect("Couldn't find spv file"),
         &naga::front::spv::Options {
