@@ -831,7 +831,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc4RSnorm
             | Tf::Bc5RgUnorm
             | Tf::Bc5RgSnorm
-            | Tf::Bc6hRgbSfloat
+            | Tf::Bc6hRgbFloat
             | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => bcn_features,

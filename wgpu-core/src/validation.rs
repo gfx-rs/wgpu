@@ -750,7 +750,7 @@ impl NumericType {
             Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRg11Unorm | Tf::EacRg11Snorm => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Float)
             }
-            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
+            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbFloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
                 (NumericDimension::Vector(Vs::Tri), Sk::Float)
             }
             Tf::Astc {

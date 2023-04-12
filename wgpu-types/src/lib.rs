@@ -2100,7 +2100,7 @@ pub enum TextureFormat {
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc6hRgbSfloat,
+    Bc6hRgbFloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -2258,7 +2258,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "bc5-rg-unorm" => TextureFormat::Bc5RgUnorm,
                     "bc5-rg-snorm" => TextureFormat::Bc5RgSnorm,
                     "bc6h-rgb-ufloat" => TextureFormat::Bc6hRgbUfloat,
-                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbSfloat,
+                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbFloat,
                     "bc7-rgba-unorm" => TextureFormat::Bc7RgbaUnorm,
                     "bc7-rgba-unorm-srgb" => TextureFormat::Bc7RgbaUnormSrgb,
                     "etc2-rgb8unorm" => TextureFormat::Etc2Rgb8Unorm,
@@ -2384,7 +2384,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Bc5RgUnorm => "bc5-rg-unorm",
             TextureFormat::Bc5RgSnorm => "bc5-rg-snorm",
             TextureFormat::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
-            TextureFormat::Bc6hRgbSfloat => "bc6h-rgb-float",
+            TextureFormat::Bc6hRgbFloat => "bc6h-rgb-float",
             TextureFormat::Bc7RgbaUnorm => "bc7-rgba-unorm",
             TextureFormat::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
             TextureFormat::Etc2Rgb8Unorm => "etc2-rgb8unorm",
@@ -2574,7 +2574,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => (4, 4),
 
@@ -2678,7 +2678,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Features::TEXTURE_COMPRESSION_BC,
 
@@ -2784,7 +2784,7 @@ impl TextureFormat {
             Self::Bc5RgUnorm =>           (        noaa,      basic),
             Self::Bc5RgSnorm =>           (        noaa,      basic),
             Self::Bc6hRgbUfloat =>        (        noaa,      basic),
-            Self::Bc6hRgbSfloat =>        (        noaa,      basic),
+            Self::Bc6hRgbFloat =>        (        noaa,      basic),
             Self::Bc7RgbaUnorm =>         (        noaa,      basic),
             Self::Bc7RgbaUnormSrgb =>     (        noaa,      basic),
 
@@ -2890,7 +2890,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Some(float),
 
@@ -2974,7 +2974,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Some(16),
 
@@ -3284,7 +3284,7 @@ fn texture_format_serialize() {
         "\"bc6h-rgb-ufloat\"".to_string()
     );
     assert_eq!(
-        serde_json::to_string(&TextureFormat::Bc6hRgbSfloat).unwrap(),
+        serde_json::to_string(&TextureFormat::Bc6hRgbFloat).unwrap(),
         "\"bc6h-rgb-float\"".to_string()
     );
     assert_eq!(
@@ -3577,7 +3577,7 @@ fn texture_format_deserialize() {
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bc6h-rgb-float\"").unwrap(),
-        TextureFormat::Bc6hRgbSfloat
+        TextureFormat::Bc6hRgbFloat
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bc7-rgba-unorm\"").unwrap(),
@@ -5160,9 +5160,15 @@ impl<L> CommandBufferDescriptor<L> {
 pub struct RenderBundleDepthStencil {
     /// Format of the attachment.
     pub format: TextureFormat,
-    /// True if the depth aspect is used but not modified.
+    /// If the depth aspect of the depth stencil attachment is going to be written to.
+    ///
+    /// This must match the [`RenderPassDepthStencilAttachment::depth_ops`] of the renderpass this render bundle is executed in.
+    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
     pub depth_read_only: bool,
-    /// True if the stencil aspect is used but not modified.
+    /// If the stencil aspect of the depth stencil attachment is going to be written to.
+    ///
+    /// This must match the [`RenderPassDepthStencilAttachment::stencil_ops`] of the renderpass this render bundle is executed in.
+    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
     pub stencil_read_only: bool,
 }
 
