@@ -58,7 +58,7 @@ impl<T> From<Identified<T>> for ObjectId {
             // API.
             core::num::NonZeroU64::new(1).unwrap(),
             #[cfg(feature = "expose-ids")]
-            identified.1,
+            identified.0,
         )
     }
 }
@@ -71,7 +71,7 @@ impl<T> From<(Identified<T>, Sendable<T>)> for ObjectId {
             // API.
             core::num::NonZeroU64::new(1).unwrap(),
             #[cfg(feature = "expose-ids")]
-            id.1,
+            id.0,
         )
     }
 }
@@ -2097,44 +2097,32 @@ impl crate::context::Context for Context {
         }
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
-            let mut depth_clear_value = 0.0;
-            let mut stencil_clear_value = 0;
-            let (depth_load_op, depth_store_op) = match dsa.depth_ops {
-                Some(ref ops) => {
-                    let load_op = match ops.load {
-                        crate::LoadOp::Clear(v) => {
-                            depth_clear_value = v;
-                            web_sys::GpuLoadOp::Clear
-                        }
-                        crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
-                    };
-                    (load_op, map_store_op(ops.store))
-                }
-                None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store),
-            };
-            let (stencil_load_op, stencil_store_op) = match dsa.stencil_ops {
-                Some(ref ops) => {
-                    let load_op = match ops.load {
-                        crate::LoadOp::Clear(v) => {
-                            stencil_clear_value = v;
-                            web_sys::GpuLoadOp::Clear
-                        }
-                        crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
-                    };
-                    (load_op, map_store_op(ops.store))
-                }
-                None => (web_sys::GpuLoadOp::Load, web_sys::GpuStoreOp::Store),
-            };
-            let dsa_view: &<Context as crate::Context>::TextureViewData =
+            let depth_stencil_attachment: &<Context as crate::Context>::TextureViewData =
                 downcast_ref(dsa.view.data.as_ref());
             let mut mapped_depth_stencil_attachment =
-                web_sys::GpuRenderPassDepthStencilAttachment::new(&dsa_view.0);
-            mapped_depth_stencil_attachment.depth_clear_value(depth_clear_value);
-            mapped_depth_stencil_attachment.depth_load_op(depth_load_op);
-            mapped_depth_stencil_attachment.depth_store_op(depth_store_op);
-            mapped_depth_stencil_attachment.stencil_clear_value(stencil_clear_value);
-            mapped_depth_stencil_attachment.stencil_load_op(stencil_load_op);
-            mapped_depth_stencil_attachment.stencil_store_op(stencil_store_op);
+                web_sys::GpuRenderPassDepthStencilAttachment::new(&depth_stencil_attachment.0);
+            if let Some(ref ops) = dsa.depth_ops {
+                let load_op = match ops.load {
+                    crate::LoadOp::Clear(v) => {
+                        mapped_depth_stencil_attachment.depth_clear_value(v);
+                        web_sys::GpuLoadOp::Clear
+                    }
+                    crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
+                };
+                mapped_depth_stencil_attachment.depth_load_op(load_op);
+                mapped_depth_stencil_attachment.depth_store_op(map_store_op(ops.store));
+            }
+            if let Some(ref ops) = dsa.stencil_ops {
+                let load_op = match ops.load {
+                    crate::LoadOp::Clear(v) => {
+                        mapped_depth_stencil_attachment.stencil_clear_value(v);
+                        web_sys::GpuLoadOp::Clear
+                    }
+                    crate::LoadOp::Load => web_sys::GpuLoadOp::Load,
+                };
+                mapped_depth_stencil_attachment.stencil_load_op(load_op);
+                mapped_depth_stencil_attachment.stencil_store_op(map_store_op(ops.store));
+            }
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
         }
 
