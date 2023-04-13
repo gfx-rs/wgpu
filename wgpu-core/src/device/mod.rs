@@ -22,7 +22,7 @@ use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
+use wgt::{BufferAddress, TextureFormat, TextureSampleType, TextureViewDimension};
 
 use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, ptr};
 
@@ -1694,10 +1694,25 @@ impl<A: HalApi> Device<A> {
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
                 ),
-                Bt::Texture { .. } => (
-                    Some(wgt::Features::TEXTURE_BINDING_ARRAY),
-                    WritableStorage::No,
-                ),
+                Bt::Texture {
+                    multisampled,
+                    sample_type,
+                    ..
+                } => {
+                    if multisampled
+                        && matches!(sample_type, TextureSampleType::Float { filterable: true })
+                    {
+                        return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error: binding_model::BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
+                        });
+                    } else {
+                        (
+                            Some(wgt::Features::TEXTURE_BINDING_ARRAY),
+                            WritableStorage::No,
+                        )
+                    }
+                }
                 Bt::StorageTexture {
                     access,
                     view_dimension,
