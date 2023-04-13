@@ -29,6 +29,8 @@ pub enum BindGroupLayoutEntryError {
     StorageTextureReadWrite,
     #[error("Arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
+    #[error("Multisampled binding with sample type `TextureSampleType::Float` must have filterable set to false.")]
+    SampleTypeFloatFilterableBindingMultisampled,
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]

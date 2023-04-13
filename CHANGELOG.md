@@ -143,6 +143,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Make error descriptions all upper case. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 - Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
 - Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
+- Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
 
 #### WebGPU
 
