@@ -2,8 +2,8 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
-    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, MaybeSend, MaybeSync,
+    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
@@ -263,7 +263,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + MaybeSend + MaybeSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -297,7 +297,7 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + MaybeSend + MaybeSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
@@ -306,7 +306,7 @@ impl Context {
     #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + MaybeSend + MaybeSync + 'static,
         operation: &'static str,
     ) -> ! {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));
@@ -1467,7 +1467,7 @@ impl crate::Context for Context {
         buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
@@ -2279,7 +2279,7 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
@@ -3051,7 +3051,9 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 unsafe impl Send for BufferMappedRange {}
+#[cfg(not(target_arch = "wasm32"))]
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::context::BufferMappedRange for BufferMappedRange {

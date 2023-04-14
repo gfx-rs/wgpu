@@ -161,25 +161,25 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync + fmt::Debug;
+    type CommandBuffer: MaybeSend + MaybeSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + Send + Sync + 'static;
-    type Texture: fmt::Debug + Send + Sync + 'static;
-    type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + Send + Sync;
-    type Sampler: fmt::Debug + Send + Sync;
-    type QuerySet: fmt::Debug + Send + Sync;
-    type Fence: fmt::Debug + Send + Sync;
+    type Buffer: fmt::Debug + MaybeSend + MaybeSync + 'static;
+    type Texture: fmt::Debug + MaybeSend + MaybeSync + 'static;
+    type SurfaceTexture: fmt::Debug + MaybeSend + MaybeSync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + MaybeSend + MaybeSync;
+    type Sampler: fmt::Debug + MaybeSend + MaybeSync;
+    type QuerySet: fmt::Debug + MaybeSend + MaybeSync;
+    type Fence: fmt::Debug + MaybeSend + MaybeSync;
 
-    type BindGroupLayout: Send + Sync;
-    type BindGroup: fmt::Debug + Send + Sync;
-    type PipelineLayout: Send + Sync;
-    type ShaderModule: fmt::Debug + Send + Sync;
-    type RenderPipeline: Send + Sync;
-    type ComputePipeline: Send + Sync;
+    type BindGroupLayout: MaybeSend + MaybeSync;
+    type BindGroup: fmt::Debug + MaybeSend + MaybeSync;
+    type PipelineLayout: MaybeSend + MaybeSync;
+    type ShaderModule: fmt::Debug + MaybeSend + MaybeSync;
+    type RenderPipeline: MaybeSend + MaybeSync;
+    type ComputePipeline: MaybeSend + MaybeSync;
 }
 
-pub trait Instance<A: Api>: Sized + Send + Sync {
+pub trait Instance<A: Api>: Sized + MaybeSend + MaybeSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -190,7 +190,7 @@ pub trait Instance<A: Api>: Sized + Send + Sync {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api>: Send + Sync {
+pub trait Surface<A: Api>: MaybeSend + MaybeSync {
     unsafe fn configure(
         &mut self,
         device: &A::Device,
@@ -216,7 +216,7 @@ pub trait Surface<A: Api>: Send + Sync {
     unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api>: Send + Sync {
+pub trait Adapter<A: Api>: MaybeSend + MaybeSync {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -240,7 +240,7 @@ pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
-pub trait Device<A: Api>: Send + Sync {
+pub trait Device<A: Api>: MaybeSend + MaybeSync {
     /// Exit connection to this logical device.
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
@@ -336,7 +336,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn stop_capture(&self);
 }
 
-pub trait Queue<A: Api>: Send + Sync {
+pub trait Queue<A: Api>: MaybeSend + MaybeSync {
     /// Submits the command buffers for execution on GPU.
     ///
     /// Valid usage:
@@ -360,7 +360,7 @@ pub trait Queue<A: Api>: Send + Sync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
+pub trait CommandEncoder<A: Api>: MaybeSend + MaybeSync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.
@@ -1307,6 +1307,28 @@ impl ValidationCanary {
     pub fn get_and_reset(&self) -> bool {
         self.inner.swap(false, std::sync::atomic::Ordering::SeqCst)
     }
+}
+
+use send_sync::*;
+
+mod send_sync {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub trait MaybeSend: Send {}
+    #[cfg(not(target_arch = "wasm32"))]
+    impl<T: Send> MaybeSend for T {}
+    #[cfg(target_arch = "wasm32")]
+    pub trait MaybeSend {}
+    #[cfg(target_arch = "wasm32")]
+    impl<T> MaybeSend for T {}
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub trait MaybeSync: Sync {}
+    #[cfg(not(target_arch = "wasm32"))]
+    impl<T: Sync> MaybeSync for T {}
+    #[cfg(target_arch = "wasm32")]
+    pub trait MaybeSync {}
+    #[cfg(target_arch = "wasm32")]
+    impl<T> MaybeSync for T {}
 }
 
 #[test]

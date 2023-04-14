@@ -246,12 +246,6 @@ pub struct Buffer {
     data: Option<Arc<std::sync::Mutex<Vec<u8>>>>,
 }
 
-// Safe: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for Buffer {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for Buffer {}
-
 #[derive(Clone, Debug)]
 pub enum TextureInner {
     Renderbuffer {
@@ -267,12 +261,6 @@ pub enum TextureInner {
         inner: web_sys::WebGlFramebuffer,
     },
 }
-
-// SAFE: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for TextureInner {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for TextureInner {}
 
 impl TextureInner {
     fn as_native(&self) -> (glow::Texture, BindTarget) {
@@ -462,12 +450,6 @@ struct UniformDesc {
     utype: u32,
 }
 
-// Safe: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for UniformDesc {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for UniformDesc {}
-
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
 type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
@@ -530,21 +512,9 @@ pub struct RenderPipeline {
     alpha_to_coverage_enabled: bool,
 }
 
-// SAFE: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for RenderPipeline {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for RenderPipeline {}
-
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
-
-// SAFE: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for ComputePipeline {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct QuerySet {
@@ -558,7 +528,9 @@ pub struct Fence {
     pending: Vec<(crate::FenceValue, glow::Fence)>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 unsafe impl Send for Fence {}
+#[cfg(not(target_arch = "wasm32"))]
 unsafe impl Sync for Fence {}
 
 impl Fence {

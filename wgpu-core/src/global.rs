@@ -155,7 +155,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 fn _test_send_sync(global: &Global<crate::identity::IdentityManagerFactory>) {
     fn test_internal<T: Send + Sync>(_: T) {}
     test_internal(global)

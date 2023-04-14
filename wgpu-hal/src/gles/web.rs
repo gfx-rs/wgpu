@@ -106,10 +106,6 @@ impl Instance {
     }
 }
 
-// SAFE: Wasm doesn't have threads
-unsafe impl Sync for Instance {}
-unsafe impl Send for Instance {}
-
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         Ok(Instance {
@@ -176,10 +172,6 @@ enum Canvas {
     Canvas(web_sys::HtmlCanvasElement),
     Offscreen(web_sys::OffscreenCanvas),
 }
-
-// SAFE: Because web doesn't have threads ( yet )
-unsafe impl Sync for Surface {}
-unsafe impl Send for Surface {}
 
 #[derive(Clone, Debug)]
 pub struct Swapchain {

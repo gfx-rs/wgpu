@@ -5917,11 +5917,6 @@ impl std::ops::Deref for ExternalImageSource {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for ExternalImageSource {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for ExternalImageSource {}
-
 /// Color spaces supported on the web.
 ///
 /// Corresponds to [HTML Canvas `PredefinedColorSpace`](

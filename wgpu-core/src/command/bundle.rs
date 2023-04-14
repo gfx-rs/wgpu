@@ -746,7 +746,9 @@ pub struct RenderBundle<A: HalApi> {
     pub(crate) life_guard: LifeGuard,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+#[cfg(not(target_arch = "wasm32"))]
 unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 
 impl<A: HalApi> RenderBundle<A> {

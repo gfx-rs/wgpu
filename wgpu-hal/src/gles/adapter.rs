@@ -936,12 +936,6 @@ impl super::AdapterShared {
     }
 }
 
-// SAFE: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Sync for super::Adapter {}
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for super::Adapter {}
-
 #[cfg(test)]
 mod tests {
     use super::super::Adapter;
