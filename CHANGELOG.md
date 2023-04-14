@@ -151,6 +151,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
 - Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
 - Implement `command_encoder_resolve_query_set`. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+- Add support for `Features::RG11B10UFLOAT_RENDERABLE`. By @mockersf in [#3689](https://github.com/gfx-rs/wgpu/pull/3689)
 
 #### Vulkan
 
