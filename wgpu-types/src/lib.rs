@@ -296,7 +296,16 @@ bitflags::bitflags! {
         // ? const FLOAT32_BLENDABLE = 1 << 20; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << 21; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << 22; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // TODO const RG11B10UFLOAT_RENDERABLE = 1 << 23;
+
+        /// Allows for usage of textures of format [`TextureFormat::Rg11b10Float`] as a render target
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const RG11B10UFLOAT_RENDERABLE = 1 << 23;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
