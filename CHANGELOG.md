@@ -144,6 +144,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
 - Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
 - Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
+- On WebGPU and WebGL, adjust the size of the canvas when using `Surface::configure()`. If the canvas was given an explicit size (via CSS), this will not affect the visual size of the canvas. `Instance::create_surface_from_canvas()` and `create_surface_from_offscreen_canvas()` now take the canvas by value. By @daxpedda in [#3690](https://github.com/gfx-rs/wgpu/pull/3690)
 
 #### WebGPU
 

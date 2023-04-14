@@ -31,20 +31,20 @@ pub struct Instance {
 impl Instance {
     pub fn create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::InstanceError> {
-        self.create_surface_from_context(
-            canvas.get_context_with_context_options("webgl2", &Self::create_context_options()),
-        )
+        let result =
+            canvas.get_context_with_context_options("webgl2", &Self::create_context_options());
+        self.create_surface_from_context(Canvas::Canvas(canvas), result)
     }
 
     pub fn create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::InstanceError> {
-        self.create_surface_from_context(
-            canvas.get_context_with_context_options("webgl2", &Self::create_context_options()),
-        )
+        let result =
+            canvas.get_context_with_context_options("webgl2", &Self::create_context_options());
+        self.create_surface_from_context(Canvas::Offscreen(canvas), result)
     }
 
     /// Common portion of public `create_surface_from_*` functions.
@@ -53,6 +53,7 @@ impl Instance {
     /// `wgpu::backend::web::Context`.
     fn create_surface_from_context(
         &self,
+        canvas: Canvas,
         context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
     ) -> Result<Surface, crate::InstanceError> {
         let context_object: js_sys::Object = match context_result {
@@ -84,6 +85,7 @@ impl Instance {
         *self.webgl2_context.lock() = Some(webgl2_context.clone());
 
         Ok(Surface {
+            canvas,
             webgl2_context,
             srgb_present_program: None,
             swapchain: None,
@@ -142,7 +144,7 @@ impl crate::Instance<super::Api> for Instance {
                 .dyn_into()
                 .expect("Failed to downcast to canvas type");
 
-            self.create_surface_from_canvas(&canvas)
+            self.create_surface_from_canvas(canvas)
         } else {
             Err(crate::InstanceError)
         }
@@ -161,11 +163,18 @@ impl crate::Instance<super::Api> for Instance {
 
 #[derive(Clone, Debug)]
 pub struct Surface {
+    canvas: Canvas,
     webgl2_context: web_sys::WebGl2RenderingContext,
     pub(super) swapchain: Option<Swapchain>,
     texture: Option<glow::Texture>,
     pub(super) presentable: bool,
     srgb_present_program: Option<glow::Program>,
+}
+
+#[derive(Clone, Debug)]
+enum Canvas {
+    Canvas(web_sys::HtmlCanvasElement),
+    Offscreen(web_sys::OffscreenCanvas),
 }
 
 // SAFE: Because web doesn't have threads ( yet )
@@ -270,6 +279,17 @@ impl crate::Surface<super::Api> for Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
+        match self.canvas {
+            Canvas::Canvas(ref canvas) => {
+                canvas.set_width(config.extent.width);
+                canvas.set_height(config.extent.height);
+            }
+            Canvas::Offscreen(ref canvas) => {
+                canvas.set_width(config.extent.width);
+                canvas.set_height(config.extent.height);
+            }
+        }
+
         let gl = &device.shared.context.lock();
 
         if let Some(swapchain) = self.swapchain.take() {

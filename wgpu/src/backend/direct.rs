@@ -205,7 +205,7 @@ impl Context {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
             .0
@@ -220,7 +220,7 @@ impl Context {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
             .0

@@ -173,8 +173,9 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
                 log::info!("Creating surface from OffscreenCanvas");
-                instance
-                    .create_surface_from_offscreen_canvas(&offscreen_canvas_setup.offscreen_canvas)
+                instance.create_surface_from_offscreen_canvas(
+                    offscreen_canvas_setup.offscreen_canvas.clone(),
+                )
             } else {
                 instance.create_surface(&window)
             }

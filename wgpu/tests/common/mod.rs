@@ -358,7 +358,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         let canvas = create_html_canvas();
 
         let surface = instance
-            .create_surface_from_canvas(&canvas)
+            .create_surface_from_canvas(canvas.clone())
             .expect("could not create surface from canvas");
 
         surface_guard = SurfaceGuard { canvas };
