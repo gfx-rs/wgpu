@@ -67,6 +67,7 @@ mod allocation {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
+        // It's a workaround for Intel Xe drivers.
         if !device.private_caps.suballocation_supported {
             let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
                 Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,
@@ -156,6 +157,7 @@ mod allocation {
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+        // It's a workaround for Intel Xe drivers.
         if !device.private_caps.suballocation_supported {
             let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
                 Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,

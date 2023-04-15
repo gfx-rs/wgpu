@@ -20,7 +20,10 @@ impl super::Device {
         library: &Arc<d3d12::D3D12Lib>,
         dx12_shader_compiler: wgt::Dx12Compiler,
     ) -> Result<Self, crate::DeviceError> {
-        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
+        let mut mem_allocator = None;
+        if private_caps.suballocation_supported {
+            mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
+        }
 
         let dxc_container = match dx12_shader_compiler {
             wgt::Dx12Compiler::Dxc {
