@@ -1456,6 +1456,16 @@ impl<A: HalApi> Device<A> {
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
                 ),
+                Bt::Texture {
+                    multisampled: true,
+                    sample_type: TextureSampleType::Float { filterable: true },
+                    ..
+                } => {
+                    return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                        binding: entry.binding,
+                        error: binding_model::BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
+                    });
+                }
                 Bt::Texture { .. } => (
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
