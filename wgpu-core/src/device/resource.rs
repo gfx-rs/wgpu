@@ -2996,11 +2996,13 @@ impl<A: HalApi> Device<A> {
         &self,
         submission_index: SubmissionIndex,
     ) -> Result<(), WaitIdleError> {
+        let fence = self.fence.read();
+        let fence = fence.as_ref().unwrap();
         let last_done_index = unsafe {
             self.raw
                 .as_ref()
                 .unwrap()
-                .get_fence_value(self.fence.read().as_ref().unwrap())
+                .get_fence_value(fence)
                 .map_err(DeviceError::from)?
         };
         if last_done_index < submission_index {
@@ -3009,7 +3011,7 @@ impl<A: HalApi> Device<A> {
                 self.raw
                     .as_ref()
                     .unwrap()
-                    .wait(self.fence.read().as_ref().unwrap(), submission_index, !0)
+                    .wait(fence, submission_index, !0)
                     .map_err(DeviceError::from)?
             };
             let closures = self.lock_life().triage_submissions(
@@ -3087,11 +3089,12 @@ impl<A: HalApi> Device<A> {
         let mut life_tracker = self.lock_life();
         let current_index = self.active_submission_index.load(Ordering::Relaxed);
         if let Err(error) = unsafe {
-            self.raw.as_ref().unwrap().wait(
-                self.fence.read().as_ref().unwrap(),
-                current_index,
-                CLEANUP_WAIT_MS,
-            )
+            let fence = self.fence.read();
+            let fence = fence.as_ref().unwrap();
+            self.raw
+                .as_ref()
+                .unwrap()
+                .wait(fence, current_index, CLEANUP_WAIT_MS)
         } {
             log::error!("failed to wait for the device: {:?}", error);
         }
