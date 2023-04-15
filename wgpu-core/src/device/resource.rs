@@ -34,7 +34,7 @@ use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{TextureFormat, TextureViewDimension};
+use wgt::{TextureFormat, TextureSampleType, TextureViewDimension};
 
 use std::{
     borrow::Cow,
