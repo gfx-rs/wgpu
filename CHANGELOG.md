@@ -203,6 +203,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 #### Vulkan
 
 - Treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android. By @James2022-rgb in [#3525](https://github.com/gfx-rs/wgpu/pull/3525)
+- Work around some broken `VK_KHR_timeline_semaphore` impls (e.g. Oculus Quest 2), by falling back to a fence pool when `VkCreateSemaphore` returns `ERROR_INITIALIZATION_FAILED`. By @eddyb in [#3693](https://github.com/gfx-rs/wgpu/pull/3693)
 
 #### Metal
 - `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)

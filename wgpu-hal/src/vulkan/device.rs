@@ -1870,18 +1870,28 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
+        let fence_pool_fallback = super::Fence::FencePool {
+            last_completed: 0,
+            active: Vec::new(),
+            free: Vec::new(),
+        };
         Ok(if self.shared.private_caps.timeline_semaphores {
             let mut sem_type_info =
                 vk::SemaphoreTypeCreateInfo::builder().semaphore_type(vk::SemaphoreType::TIMELINE);
             let vk_info = vk::SemaphoreCreateInfo::builder().push_next(&mut sem_type_info);
-            let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }?;
-            super::Fence::TimelineSemaphore(raw)
-        } else {
-            super::Fence::FencePool {
-                last_completed: 0,
-                active: Vec::new(),
-                free: Vec::new(),
+            let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) };
+            match raw {
+                Ok(raw) => super::Fence::TimelineSemaphore(raw),
+                Err(err @ vk::Result::ERROR_INITIALIZATION_FAILED) => {
+                    log::warn!(
+                        "`VkCreateSemaphore` failed with `{err:?}`, falling back to fence pool"
+                    );
+                    fence_pool_fallback
+                }
+                Err(err) => return Err(err.into()),
             }
+        } else {
+            fence_pool_fallback
         })
     }
     unsafe fn destroy_fence(&self, fence: super::Fence) {
