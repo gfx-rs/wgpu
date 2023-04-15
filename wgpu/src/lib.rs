@@ -936,7 +936,8 @@ static_assertions::assert_impl_all!(Maintain: Send, Sync);
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
-    /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
+    /// Format of the texture view. Either must be the same as the texture format or in the list
+    /// of `view_formats` in the texture's descriptor.
     pub format: Option<TextureFormat>,
     /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`

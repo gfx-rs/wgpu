@@ -333,7 +333,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: fragment_shader_module,
                 entry_point: fragment_entry_point,
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,

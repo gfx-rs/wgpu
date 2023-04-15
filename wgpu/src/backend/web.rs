@@ -203,7 +203,69 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth32Float => tf::Depth32float,
         // "depth32float-stencil8" feature
         TextureFormat::Depth32FloatStencil8 => tf::Depth32floatStencil8,
-        _ => unimplemented!(),
+
+        TextureFormat::Bc1RgbaUnorm => tf::Bc1RgbaUnorm,
+        TextureFormat::Bc1RgbaUnormSrgb => tf::Bc1RgbaUnormSrgb,
+        TextureFormat::Bc2RgbaUnorm => tf::Bc2RgbaUnorm,
+        TextureFormat::Bc2RgbaUnormSrgb => tf::Bc2RgbaUnormSrgb,
+        TextureFormat::Bc3RgbaUnorm => tf::Bc3RgbaUnorm,
+        TextureFormat::Bc3RgbaUnormSrgb => tf::Bc3RgbaUnormSrgb,
+        TextureFormat::Bc4RUnorm => tf::Bc4RUnorm,
+        TextureFormat::Bc4RSnorm => tf::Bc4RSnorm,
+        TextureFormat::Bc5RgUnorm => tf::Bc5RgUnorm,
+        TextureFormat::Bc5RgSnorm => tf::Bc5RgSnorm,
+        TextureFormat::Bc6hRgbUfloat => tf::Bc6hRgbUfloat,
+        TextureFormat::Bc6hRgbFloat => tf::Bc6hRgbFloat,
+        TextureFormat::Bc7RgbaUnorm => tf::Bc7RgbaUnorm,
+        TextureFormat::Bc7RgbaUnormSrgb => tf::Bc7RgbaUnormSrgb,
+        TextureFormat::Etc2Rgb8Unorm => tf::Etc2Rgb8unorm,
+        TextureFormat::Etc2Rgb8UnormSrgb => tf::Etc2Rgb8unormSrgb,
+        TextureFormat::Etc2Rgb8A1Unorm => tf::Etc2Rgb8a1unorm,
+        TextureFormat::Etc2Rgb8A1UnormSrgb => tf::Etc2Rgb8a1unormSrgb,
+        TextureFormat::Etc2Rgba8Unorm => tf::Etc2Rgba8unorm,
+        TextureFormat::Etc2Rgba8UnormSrgb => tf::Etc2Rgba8unormSrgb,
+        TextureFormat::EacR11Unorm => tf::EacR11unorm,
+        TextureFormat::EacR11Snorm => tf::EacR11snorm,
+        TextureFormat::EacRg11Unorm => tf::EacRg11unorm,
+        TextureFormat::EacRg11Snorm => tf::EacRg11snorm,
+        TextureFormat::Astc { block, channel } => match channel {
+            wgt::AstcChannel::Unorm => match block {
+                wgt::AstcBlock::B4x4 => tf::Astc4x4Unorm,
+                wgt::AstcBlock::B5x4 => tf::Astc5x4Unorm,
+                wgt::AstcBlock::B5x5 => tf::Astc5x5Unorm,
+                wgt::AstcBlock::B6x5 => tf::Astc6x5Unorm,
+                wgt::AstcBlock::B6x6 => tf::Astc6x6Unorm,
+                wgt::AstcBlock::B8x5 => tf::Astc8x5Unorm,
+                wgt::AstcBlock::B8x6 => tf::Astc8x6Unorm,
+                wgt::AstcBlock::B8x8 => tf::Astc8x8Unorm,
+                wgt::AstcBlock::B10x5 => tf::Astc10x5Unorm,
+                wgt::AstcBlock::B10x6 => tf::Astc10x6Unorm,
+                wgt::AstcBlock::B10x8 => tf::Astc10x8Unorm,
+                wgt::AstcBlock::B10x10 => tf::Astc10x10Unorm,
+                wgt::AstcBlock::B12x10 => tf::Astc12x10Unorm,
+                wgt::AstcBlock::B12x12 => tf::Astc12x12Unorm,
+            },
+            wgt::AstcChannel::UnormSrgb => match block {
+                wgt::AstcBlock::B4x4 => tf::Astc4x4UnormSrgb,
+                wgt::AstcBlock::B5x4 => tf::Astc5x4UnormSrgb,
+                wgt::AstcBlock::B5x5 => tf::Astc5x5UnormSrgb,
+                wgt::AstcBlock::B6x5 => tf::Astc6x5UnormSrgb,
+                wgt::AstcBlock::B6x6 => tf::Astc6x6UnormSrgb,
+                wgt::AstcBlock::B8x5 => tf::Astc8x5UnormSrgb,
+                wgt::AstcBlock::B8x6 => tf::Astc8x6UnormSrgb,
+                wgt::AstcBlock::B8x8 => tf::Astc8x8UnormSrgb,
+                wgt::AstcBlock::B10x5 => tf::Astc10x5UnormSrgb,
+                wgt::AstcBlock::B10x6 => tf::Astc10x6UnormSrgb,
+                wgt::AstcBlock::B10x8 => tf::Astc10x8UnormSrgb,
+                wgt::AstcBlock::B10x10 => tf::Astc10x10UnormSrgb,
+                wgt::AstcBlock::B12x10 => tf::Astc12x10UnormSrgb,
+                wgt::AstcBlock::B12x12 => tf::Astc12x12UnormSrgb,
+            },
+            wgt::AstcChannel::Hdr => {
+                unimplemented!("Format {texture_format:?} has no WebGPU equivilant")
+            }
+        },
+        _ => unimplemented!("Format {texture_format:?} has no WebGPU equivilant"),
     }
 }
 
@@ -559,7 +621,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 9] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -592,6 +654,10 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 8] = [
     (
         wgt::Features::SHADER_F16,
         web_sys::GpuFeatureName::ShaderF16,
+    ),
+    (
+        wgt::Features::RG11B10UFLOAT_RENDERABLE,
+        web_sys::GpuFeatureName::Rg11b10ufloatRenderable,
     ),
 ];
 
@@ -1688,6 +1754,8 @@ impl crate::context::Context for Context {
         }
         if let Some(ds) = desc.depth_stencil {
             mapped_desc.depth_stencil_format(map_texture_format(ds.format));
+            mapped_desc.depth_read_only(ds.depth_read_only);
+            mapped_desc.stencil_read_only(ds.stencil_read_only);
         }
         mapped_desc.sample_count(desc.sample_count);
         create_identified(device_data.0.create_render_bundle_encoder(&mapped_desc))
@@ -2112,6 +2180,7 @@ impl crate::context::Context for Context {
                 mapped_depth_stencil_attachment.depth_load_op(load_op);
                 mapped_depth_stencil_attachment.depth_store_op(map_store_op(ops.store));
             }
+            mapped_depth_stencil_attachment.depth_read_only(dsa.depth_ops.is_none());
             if let Some(ref ops) = dsa.stencil_ops {
                 let load_op = match ops.load {
                     crate::LoadOp::Clear(v) => {
@@ -2123,6 +2192,7 @@ impl crate::context::Context for Context {
                 mapped_depth_stencil_attachment.stencil_load_op(load_op);
                 mapped_depth_stencil_attachment.stencil_store_op(map_store_op(ops.store));
             }
+            mapped_depth_stencil_attachment.stencil_read_only(dsa.stencil_ops.is_none());
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
         }
 

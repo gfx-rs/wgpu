@@ -113,6 +113,17 @@ SamplerDescriptor {
 
 By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 
+#### TextureFormat Names
+
+Some texture format names have changed to get back in line with the spec.
+
+```diff
+- TextureFormat::Bc6hRgbSfloat
++ TextureFormat::Bc6hRgbFloat
+```
+
+By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
+
 #### General
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
@@ -132,6 +143,7 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 - Make error descriptions all upper case. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 - Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
 - Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
+- Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
 
 #### WebGPU
 
@@ -139,6 +151,7 @@ By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
 - Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
 - Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
 - Implement `command_encoder_resolve_query_set`. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+- Add support for `Features::RG11B10UFLOAT_RENDERABLE`. By @mockersf in [#3689](https://github.com/gfx-rs/wgpu/pull/3689)
 
 #### Vulkan
 

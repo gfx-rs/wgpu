@@ -14,7 +14,7 @@ use arrayvec::ArrayVec;
 use hal::Device as _;
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat};
+use wgt::{BufferAddress, TextureFormat, TextureSampleType};
 
 use std::{iter, num::NonZeroU32, ptr};
 

@@ -64,7 +64,7 @@ static TEXTURE_FORMATS_BC: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Bc5RgUnorm,
     wgpu::TextureFormat::Bc5RgSnorm,
     wgpu::TextureFormat::Bc6hRgbUfloat,
-    wgpu::TextureFormat::Bc6hRgbSfloat,
+    wgpu::TextureFormat::Bc6hRgbFloat,
     wgpu::TextureFormat::Bc7RgbaUnorm,
     wgpu::TextureFormat::Bc7RgbaUnormSrgb,
 ];
