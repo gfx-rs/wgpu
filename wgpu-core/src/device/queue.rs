@@ -1111,14 +1111,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if !command_buffer_ids.is_empty() {
                     profiling::scope!("prepare");
 
-                    let buffer_guard = hub.buffers.write();
-                    let texture_guard = hub.textures.write();
-                    let texture_view_guard = hub.texture_views.read();
-                    let sampler_guard = hub.samplers.read();
-
-                    //Note: locking the trackers has to be done after the storages
-                    let mut trackers = device.trackers.lock();
-
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
@@ -1127,7 +1119,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     for &cmb_id in command_buffer_ids {
                         // we reset the used surface textures every time we use
                         // it, so make sure to set_size on it.
-                        used_surface_textures.set_size(texture_guard.len());
+                        used_surface_textures.set_size(hub.textures.read().len());
 
                         #[allow(unused_mut)]
                         let mut cmdbuf = match hub
@@ -1213,6 +1205,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                                 if should_extend {
                                     unsafe {
+                                        let texture_guard = hub.textures.read();
                                         used_surface_textures
                                             .merge_single(
                                                 &*texture_guard,
@@ -1234,19 +1227,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .push(texture_view.clone());
                                 }
                             }
-                            for bg in cmd_buf_trackers.bind_groups.used_resources() {
-                                bg.info.use_at(submit_index);
-                                // We need to update the submission indices for the contained
-                                // state-less (!) resources as well, so that they don't get
-                                // deleted too early if the parent bind group goes out of scope.
-                                for sub_id in bg.used.views.used() {
-                                    texture_view_guard[sub_id].info.use_at(submit_index);
-                                }
-                                for sub_id in bg.used.samplers.used() {
-                                    sampler_guard[sub_id].info.use_at(submit_index);
-                                }
-                                if bg.is_unique() {
-                                    device.temp_suspected.lock().bind_groups.push(bg.clone());
+                            {
+                                let texture_view_guard = hub.texture_views.read();
+                                let sampler_guard = hub.samplers.read();
+
+                                for bg in cmd_buf_trackers.bind_groups.used_resources() {
+                                    bg.info.use_at(submit_index);
+                                    // We need to update the submission indices for the contained
+                                    // state-less (!) resources as well, so that they don't get
+                                    // deleted too early if the parent bind group goes out of scope.
+                                    for sub_id in bg.used.views.used() {
+                                        texture_view_guard[sub_id].info.use_at(submit_index);
+                                    }
+                                    for sub_id in bg.used.samplers.used() {
+                                        sampler_guard[sub_id].info.use_at(submit_index);
+                                    }
+                                    if bg.is_unique() {
+                                        device.temp_suspected.lock().bind_groups.push(bg.clone());
+                                    }
                                 }
                             }
                             // assert!(cmd_buf_trackers.samplers.is_empty());
@@ -1314,6 +1312,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        let buffer_guard = hub.buffers.read();
+                        let texture_guard = hub.textures.read();
+                        //Note: locking the trackers has to be done after the storages
+                        let mut trackers = device.trackers.lock();
                         baked
                             .initialize_buffer_memory(&mut *trackers, &*buffer_guard)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
@@ -1458,15 +1460,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 active_executions.push(pending_execution);
             }
 
+            let mut pending_writes = device.pending_writes.write();
+            let pending_writes = pending_writes.as_mut().unwrap();
             // this will register the new submission to the life time tracker
-            let mut pending_write_resources = mem::take(
-                &mut device
-                    .pending_writes
-                    .write()
-                    .as_mut()
-                    .unwrap()
-                    .temp_resources,
-            );
+            let mut pending_write_resources = mem::take(&mut pending_writes.temp_resources);
             device.lock_life().track_submission(
                 submit_index,
                 pending_write_resources.drain(..),
@@ -1484,12 +1481,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // pending_write_resources has been drained, so it's empty, but we
             // want to retain its heap allocation.
-            device
-                .pending_writes
-                .write()
-                .as_mut()
-                .unwrap()
-                .temp_resources = pending_write_resources;
+            pending_writes.temp_resources = pending_write_resources;
             device.lock_life().post_submit();
 
             (submit_index, closures)

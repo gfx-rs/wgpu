@@ -397,14 +397,11 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
-        let done_count = self
-            .active
-            .iter()
-            .position(|a| a.index > last_done)
-            .unwrap_or(self.active.len());
-
         let mut work_done_closures = SmallVec::new();
-        for a in self.active.drain(..done_count) {
+        //TODO: Substitute with drain_filter when available
+        let mut active_index = self.active.iter().position(|a| a.index == last_done);
+        while let Some(index) = active_index {
+            let a = self.active.remove(index);
             log::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
@@ -413,6 +410,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 command_allocator.release_encoder(raw);
             }
             work_done_closures.extend(a.work_done_closures);
+            active_index = self.active.iter().position(|a| a.index == last_done);
         }
         work_done_closures
     }
