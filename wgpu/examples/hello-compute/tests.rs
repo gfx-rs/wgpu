@@ -104,7 +104,7 @@ fn test_multithreaded_compute() {
             }
 
             for _ in 0..thread_count {
-                rx.recv_timeout(Duration::from_secs(30))
+                rx.recv_timeout(Duration::from_secs(10))
                     .expect("A thread never completed.");
             }
         },

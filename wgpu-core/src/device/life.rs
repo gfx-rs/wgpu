@@ -614,7 +614,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                         {
                             non_referenced_resources
                                 .texture_views
-                                .extend(clear_views.iter().cloned().into_iter());
+                                .extend(clear_views.iter().cloned());
                         }
                         non_referenced_resources.textures.push(res);
                     }
