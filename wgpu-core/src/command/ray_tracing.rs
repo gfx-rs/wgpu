@@ -13,12 +13,15 @@ use crate::{
     FastHashSet,
 };
 
-use hal::{CommandEncoder, Device};
+use hal::{auxil::align_to, CommandEncoder, Device};
 use wgt::BufferUsages;
 
 use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
 
 use super::BakedCommands;
+
+// This should be queried from the device, maybe the the hal api should pre aline it, since I am unsure how else we can idiomatically get this value.
+const SCRATCH_BUFFER_ALIGNMENT: u32 = 256;
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_build_acceleration_structures_unsafe_tlas<'a, A: HalApi>(
@@ -413,7 +416,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     let scratch_buffer_offset = scratch_buffer_blas_size;
-                    scratch_buffer_blas_size += blas.size_info.build_scratch_size;
+                    scratch_buffer_blas_size += align_to(
+                        blas.size_info.build_scratch_size as u32,
+                        SCRATCH_BUFFER_ALIGNMENT,
+                    ) as u64;
 
                     blas_storage.push((
                         blas,
@@ -475,7 +481,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
-            scratch_buffer_tlas_size += tlas.size_info.build_scratch_size;
+            scratch_buffer_tlas_size += align_to(
+                tlas.size_info.build_scratch_size as u32,
+                SCRATCH_BUFFER_ALIGNMENT,
+            ) as u64;
 
             tlas_storage.push((
                 tlas,
@@ -1027,7 +1036,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     let scratch_buffer_offset = scratch_buffer_blas_size;
-                    scratch_buffer_blas_size += blas.size_info.build_scratch_size;
+                    scratch_buffer_blas_size += align_to(
+                        blas.size_info.build_scratch_size as u32,
+                        SCRATCH_BUFFER_ALIGNMENT,
+                    ) as u64;
 
                     blas_storage.push((
                         blas,
@@ -1059,7 +1071,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
-            scratch_buffer_tlas_size += tlas.size_info.build_scratch_size;
+            scratch_buffer_tlas_size += align_to(
+                tlas.size_info.build_scratch_size as u32,
+                SCRATCH_BUFFER_ALIGNMENT,
+            ) as u64;
 
             let first_byte_index = instance_buffer_staging_source.len();
 
