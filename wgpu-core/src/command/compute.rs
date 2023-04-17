@@ -362,7 +362,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
         let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
         let mut state = State {
             binder: Binder::new(),
@@ -386,7 +387,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None,
             Some(&*query_set_guard),
             None,
-            None,
+            Some(&*tlas_guard),
         );
 
         let hal_desc = hal::ComputePassDescriptor { label: base.label };
@@ -452,6 +453,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     cmd_buf.tlas_actions.extend(
                         bind_group.used.acceleration_structures.used().map(|id| {
+                            cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
                             crate::ray_tracing::TlasAction {
                                 id: id.0,
                                 kind: crate::ray_tracing::TlasActionKind::Use,

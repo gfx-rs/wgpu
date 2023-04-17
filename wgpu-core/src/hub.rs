@@ -1020,6 +1020,28 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
         }
 
+        for element in self.blas_s.data.write().map.drain(..) {
+            if let Element::Occupied(blas, _) = element {
+                let device = &devices[blas.device_id.value];
+                if let Some(raw) = blas.raw {
+                    unsafe {
+                        device.raw.destroy_acceleration_structure(raw);
+                    }
+                }
+            }
+        }
+
+        for element in self.tlas_s.data.write().map.drain(..) {
+            if let Element::Occupied(tlas, _) = element {
+                let device = &devices[tlas.device_id.value];
+                if let Some(raw) = tlas.raw {
+                    unsafe {
+                        device.raw.destroy_acceleration_structure(raw);
+                    }
+                }
+            }
+        }
+
         for element in surface_guard.map.iter_mut() {
             if let Element::Occupied(ref mut surface, _epoch) = *element {
                 if surface
