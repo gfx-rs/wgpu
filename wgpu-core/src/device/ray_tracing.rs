@@ -285,13 +285,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (ref_count, last_submit_index, device_id) = {
+        let (last_submit_index, device_id) = {
             let (mut blas_guard, _) = hub.blas_s.write(&mut token);
             match blas_guard.get_mut(blas_id) {
                 Ok(blas) => {
-                    let ref_count = blas.life_guard.ref_count.take().unwrap();
                     let last_submit_index = blas.life_guard.life_count();
-                    (ref_count, last_submit_index, blas.device_id.value)
+                    (last_submit_index, blas.device_id.value)
                 }
                 Err(crate::hub::InvalidId) => {
                     hub.blas_s.unregister_locked(blas_id, &mut *blas_guard);
@@ -304,7 +303,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
         {
             let mut life_lock = device.lock_life(&mut token);
-            drop(ref_count);
             life_lock
                 .suspected_resources
                 .blas_s
@@ -370,13 +368,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (ref_count, last_submit_index, device_id) = {
+        let (last_submit_index, device_id) = {
             let (mut tlas_guard, _) = hub.tlas_s.write(&mut token);
             match tlas_guard.get_mut(tlas_id) {
                 Ok(tlas) => {
-                    let ref_count = tlas.life_guard.ref_count.take().unwrap();
                     let last_submit_index = tlas.life_guard.life_count();
-                    (ref_count, last_submit_index, tlas.device_id.value)
+                    (last_submit_index, tlas.device_id.value)
                 }
                 Err(crate::hub::InvalidId) => {
                     hub.tlas_s.unregister_locked(tlas_id, &mut *tlas_guard);
@@ -389,7 +386,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
         {
             let mut life_lock = device.lock_life(&mut token);
-            drop(ref_count);
             life_lock
                 .suspected_resources
                 .tlas_s
