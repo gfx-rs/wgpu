@@ -114,6 +114,7 @@ webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     "texture-compression-bc",
     "texture-compression-etc2",
     "texture-compression-astc",
+    "rg11b10ufloat-renderable",
 
     // extended from spec
 
