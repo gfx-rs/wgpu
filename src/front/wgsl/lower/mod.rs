@@ -191,14 +191,52 @@ impl RuntimeExpressionContext<'_, '_> {
     }
 }
 
+/// The type of Naga IR expression we are lowering an [`ast::Expression`] to.
 pub enum ExpressionContextType<'temp, 'out> {
+    /// We are lowering to an arbitrary runtime expression, to be
+    /// included in a function's body.
+    ///
+    /// The given [`RuntimeExpressionContext`] holds information about
+    /// local variables, arguments, and other definitions available to
+    /// runtime expressions, but not constant or override expressions.
     Runtime(RuntimeExpressionContext<'temp, 'out>),
+
+    /// We are lowering to a constant expression.
+    ///
+    /// Everything constant expressions are allowed to refer to is
+    /// available in the [`ExpressionContext`], so this variant
+    /// carries no further information.
     Constant,
 }
 
-/// State for lowering an `ast::Expression` to Naga IR.
+/// State for lowering an [`ast::Expression`] to Naga IR.
 ///
-/// Not to be confused with `parser::ExpressionContext`.
+/// [`ExpressionContext`]s come in two kinds:
+///
+/// depending on the `expr_type` is a value of this type, determining what sort
+/// of IR expression the context builds.
+///
+/// These are constructed in restricted ways:
+///
+/// - To originate a [`Runtime`] [`ExpressionContext`], call
+///   [`StatementContext::as_expression`].
+///
+/// - To originate a [`Constant`] [`ExpressionContext`], call
+///   [`GlobalContext::as_const`].
+///
+/// - You can demote a [`Runtime`] [`ExpressionContext`] to a [`Constant`]
+///   context by calling [`as_const`], but there's no way to go in the other
+///   direction and get a runtime context from a constant one.
+///
+/// - You can always call [`ExpressionContext::reborrow`] to get a fresh context
+///   for a recursive call. The reborrowed context is identical to the original.
+///
+/// Not to be confused with `wgsl::parse::ExpressionContext`, which is
+/// for parsing the `ast::Expression` in the first place.
+///
+/// [`Runtime`]: ExpressionContextType::Runtime
+/// [`Constant`]: ExpressionContextType::Constant
+/// [`as_const`]: ExpressionContext::as_const
 pub struct ExpressionContext<'source, 'temp, 'out> {
     // WGSL AST values.
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
@@ -209,8 +247,18 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
     /// `Handle`s we have built for them, owned by `Lowerer::lower`.
     globals: &'temp mut FastHashMap<&'source str, LoweredGlobalDecl>,
 
-    const_typifier: &'temp mut Typifier,
+    /// The IR [`Module`] we're constructing.
+    ///
+    /// [`Module`]: crate::Module
     module: &'out mut crate::Module,
+
+    /// Type judgments for [`module::const_expressions`].
+    ///
+    /// [`module::const_expressions`]: crate::Module::const_expressions
+    const_typifier: &'temp mut Typifier,
+
+    /// Whether we are lowering a constant expression or a general
+    /// runtime expression, and the data needed in each case.
     expr_type: ExpressionContextType<'temp, 'out>,
 }
 
@@ -353,6 +401,9 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         handle: Handle<crate::Expression>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         self.grow_types(handle)?;
+        // This is equivalent to calling ExpressionContext::typifier(),
+        // except that this lets the borrow checker see that it's okay
+        // to also borrow self.module.types mutably below.
         let typifier = match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => ctx.typifier,
             ExpressionContextType::Constant => &*self.const_typifier,

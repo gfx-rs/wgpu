@@ -11,7 +11,10 @@ pub mod number;
 
 /// State for constructing an AST expression.
 ///
-/// Not to be confused with `lower::ExpressionContext`.
+/// Not to be confused with [`lower::ExpressionContext`], which is for producing
+/// Naga IR from the AST we produce here.
+///
+/// [`lower::ExpressionContext`]: super::lower::ExpressionContext
 struct ExpressionContext<'input, 'temp, 'out> {
     /// The [`TranslationUnit::expressions`] arena to which we should contribute
     /// expressions.
