@@ -7,11 +7,10 @@ var<storage, read_write> arr_u32_: array<atomic<u32>, 128>;
 
 @compute @workgroup_size(1, 1, 1) 
 fn test_atomic_compare_exchange_i32_() {
-    var i: u32;
+    var i: u32 = 0u;
     var old: i32;
-    var exchanged: bool;
+    var exchanged: bool = false;
 
-    i = 0u;
     loop {
         let _e2 = i;
         if (_e2 < SIZE) {
@@ -50,11 +49,10 @@ fn test_atomic_compare_exchange_i32_() {
 
 @compute @workgroup_size(1, 1, 1) 
 fn test_atomic_compare_exchange_u32_() {
-    var i_1: u32;
+    var i_1: u32 = 0u;
     var old_1: u32;
-    var exchanged_1: bool;
+    var exchanged_1: bool = false;
 
-    i_1 = 0u;
     loop {
         let _e2 = i_1;
         if (_e2 < SIZE) {

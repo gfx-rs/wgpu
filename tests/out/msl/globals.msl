@@ -42,9 +42,8 @@ void test_msl_packed_vec3_as_arg(
 void test_msl_packed_vec3_(
     device FooStruct& alignment
 ) {
-    int idx = {};
+    int idx = 1;
     alignment.v3_ = metal::float3(1.0);
-    idx = 1;
     alignment.v3_[0] = 1.0;
     alignment.v3_[0] = 2.0;
     int _e16 = idx;
@@ -77,8 +76,8 @@ kernel void main_(
         metal::atomic_store_explicit(&at_1, 0, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    float Foo = {};
-    bool at = {};
+    float Foo = 1.0;
+    bool at = true;
     test_msl_packed_vec3_(alignment);
     metal::float4x2 _e5 = global_nested_arrays_of_matrices_4x2_.inner[0].inner[0];
     metal::float4 _e10 = global_nested_arrays_of_matrices_2x4_.inner[0].inner[0][0];
@@ -97,7 +96,5 @@ kernel void main_(
     alignment.v1_ = 4.0;
     wg.inner[1] = static_cast<float>(1 + (_buffer_sizes.size3 - 0 - 8) / 8);
     metal::atomic_store_explicit(&at_1, 2u, metal::memory_order_relaxed);
-    Foo = 1.0;
-    at = true;
     return;
 }

@@ -80,10 +80,9 @@ FooStruct ConstructFooStruct(float3 arg0, float arg1) {
 
 void test_msl_packed_vec3_()
 {
-    int idx = (int)0;
+    int idx = 1;
 
     alignment.Store3(0, asuint((1.0).xxx));
-    idx = 1;
     alignment.Store(0+0, asuint(1.0));
     alignment.Store(0+0, asuint(2.0));
     int _expr16 = idx;
@@ -113,8 +112,8 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
         at_1 = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
-    float Foo = (float)0;
-    bool at = (bool)0;
+    float Foo = 1.0;
+    bool at = true;
 
     test_msl_packed_vec3_();
     float4x2 _expr5 = ((float4x2)global_nested_arrays_of_matrices_4x2_[0][0]);
@@ -134,7 +133,5 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
     alignment.Store(12, asuint(4.0));
     wg[1] = float(((NagaBufferLength(dummy) - 0) / 8));
     at_1 = 2u;
-    Foo = 1.0;
-    at = true;
     return;
 }

@@ -25,9 +25,8 @@ float4 splat()
 
 float2 splat_assignment()
 {
-    float2 a = (float2)0;
+    float2 a = (2.0).xx;
 
-    a = (2.0).xx;
     float2 _expr4 = a;
     a = (_expr4 + (1.0).xx);
     float2 _expr8 = a;
@@ -153,10 +152,9 @@ void comparison()
 
 void assignment()
 {
-    int a_1 = (int)0;
+    int a_1 = 1;
     int3 vec0_ = (int3)0;
 
-    a_1 = 1;
     int _expr3 = a_1;
     a_1 = (_expr3 + 1);
     int _expr6 = a_1;
@@ -183,7 +181,6 @@ void assignment()
     a_1 = (_expr33 + 1);
     int _expr36 = a_1;
     a_1 = (_expr36 - 1);
-    vec0_ = (int3)0;
     int _expr42 = vec0_.y;
     vec0_.y = (_expr42 + 1);
     int _expr46 = vec0_.y;

@@ -407,8 +407,8 @@ fn indexConstantNonConstantIndex(i: i32) {
 
     i_1 = i;
     let _e6 = i_1;
-    let _e10 = local_5.array_[_e6];
-    a_26 = _e10;
+    let _e11 = local_5.array_[_e6];
+    a_26 = _e11;
     return;
 }
 

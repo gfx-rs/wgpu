@@ -17,11 +17,10 @@ var<uniform> uni: UniformIndex;
 
 @fragment 
 fn main(fragment_in: FragmentIn) -> @location(0) @interpolate(flat) u32 {
-    var u1_: u32;
+    var u1_: u32 = 0u;
 
     let uniform_index = uni.index;
     let non_uniform_index = fragment_in.index;
-    u1_ = 0u;
     let _e10 = storage_array[0].x;
     let _e11 = u1_;
     u1_ = (_e11 + _e10);

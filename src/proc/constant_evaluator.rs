@@ -91,6 +91,20 @@ pub enum ExprType {
 // Math
 // As
 
+// TODO(teoxoy): consider accumulating this metadata instead of recursing through subexpressions
+impl Arena<Expression> {
+    pub fn is_const(&self, handle: Handle<Expression>) -> bool {
+        match self[handle] {
+            Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => true,
+            Expression::Compose { ref components, .. } => {
+                components.iter().all(|h| self.is_const(*h))
+            }
+            Expression::Splat { ref value, .. } => self.is_const(*value),
+            _ => false,
+        }
+    }
+}
+
 impl<'a, F: FnMut(&mut Arena<Expression>, Expression, Span) -> Handle<Expression>>
     ConstantEvaluator<'a, F>
 {

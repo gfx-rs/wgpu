@@ -7,10 +7,9 @@ var<storage, read_write> v_indices: PrimeIndices;
 
 fn collatz_iterations(n_base: u32) -> u32 {
     var n: u32;
-    var i: u32;
+    var i: u32 = 0u;
 
     n = n_base;
-    i = 0u;
     loop {
         let _e4 = n;
         if (_e4 > 1u) {

@@ -7,26 +7,16 @@ using metal::uint;
 
 kernel void main_(
 ) {
-    int i = {};
-    metal::int2 i2_ = {};
-    metal::int3 i3_ = {};
-    metal::int4 i4_ = {};
-    uint u = {};
-    metal::uint2 u2_ = {};
-    metal::uint3 u3_ = {};
-    metal::uint4 u4_ = {};
-    metal::float2 f2_ = {};
-    metal::float4 f4_ = {};
-    i = 0;
-    i2_ = metal::int2(0);
-    i3_ = metal::int3(0);
-    i4_ = metal::int4(0);
-    u = 0u;
-    u2_ = metal::uint2(0u);
-    u3_ = metal::uint3(0u);
-    u4_ = metal::uint4(0u);
-    f2_ = metal::float2(0.0);
-    f4_ = metal::float4(0.0);
+    int i = 0;
+    metal::int2 i2_ = metal::int2(0);
+    metal::int3 i3_ = metal::int3(0);
+    metal::int4 i4_ = metal::int4(0);
+    uint u = 0u;
+    metal::uint2 u2_ = metal::uint2(0u);
+    metal::uint3 u3_ = metal::uint3(0u);
+    metal::uint4 u4_ = metal::uint4(0u);
+    metal::float2 f2_ = metal::float2(0.0);
+    metal::float4 f4_ = metal::float4(0.0);
     metal::float4 _e28 = f4_;
     u = metal::pack_float_to_snorm4x8(_e28);
     metal::float4 _e30 = f4_;

@@ -1238,7 +1238,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, " = ")?;
             // Write the local initializer if needed
             if let Some(init) = local.init {
-                self.write_const_expression(module, init)?;
+                self.write_expr(module, init, func_ctx)?;
             } else {
                 // Zero initialize local variables
                 self.write_default_init(module, local.ty)?;

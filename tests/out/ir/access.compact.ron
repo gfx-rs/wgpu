@@ -396,12 +396,12 @@
                 (
                     name: Some("idx"),
                     ty: 3,
-                    init: None,
+                    init: Some(1),
                 ),
                 (
                     name: Some("t"),
                     ty: 16,
-                    init: None,
+                    init: Some(49),
                 ),
             ],
             expressions: [
@@ -697,10 +697,6 @@
                 41: "l6",
             },
             body: [
-                Store(
-                    pointer: 2,
-                    value: 1,
-                ),
                 Emit((
                     start: 3,
                     end: 5,
@@ -769,10 +765,6 @@
                     start: 46,
                     end: 49,
                 )),
-                Store(
-                    pointer: 50,
-                    value: 49,
-                ),
                 Emit((
                     start: 51,
                     end: 53,
@@ -890,12 +882,12 @@
                 (
                     name: Some("idx"),
                     ty: 3,
-                    init: None,
+                    init: Some(1),
                 ),
                 (
                     name: Some("t"),
                     ty: 20,
-                    init: None,
+                    init: Some(53),
                 ),
             ],
             expressions: [
@@ -1245,10 +1237,6 @@
                 51: "l7",
             },
             body: [
-                Store(
-                    pointer: 2,
-                    value: 1,
-                ),
                 Emit((
                     start: 3,
                     end: 5,
@@ -1341,10 +1329,6 @@
                     start: 52,
                     end: 53,
                 )),
-                Store(
-                    pointer: 54,
-                    value: 53,
-                ),
                 Emit((
                     start: 55,
                     end: 57,
@@ -1675,7 +1659,7 @@
                     (
                         name: Some("foo"),
                         ty: 21,
-                        init: None,
+                        init: Some(2),
                     ),
                     (
                         name: Some("c2"),
@@ -1846,10 +1830,6 @@
                     46: "value",
                 },
                 body: [
-                    Store(
-                        pointer: 3,
-                        value: 2,
-                    ),
                     Emit((
                         start: 3,
                         end: 4,
@@ -2160,7 +2140,7 @@
                     (
                         name: Some("arr"),
                         ty: 28,
-                        init: None,
+                        init: Some(5),
                     ),
                 ],
                 expressions: [
@@ -2194,10 +2174,6 @@
                         start: 3,
                         end: 5,
                     )),
-                    Store(
-                        pointer: 6,
-                        value: 5,
-                    ),
                     Call(
                         function: 5,
                         arguments: [

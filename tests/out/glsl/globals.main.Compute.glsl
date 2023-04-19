@@ -35,9 +35,8 @@ void test_msl_packed_vec3_as_arg(vec3 arg) {
 }
 
 void test_msl_packed_vec3_() {
-    int idx = 0;
+    int idx = 1;
     _group_0_binding_1_cs.v3_ = vec3(1.0);
-    idx = 1;
     _group_0_binding_1_cs.v3_.x = 1.0;
     _group_0_binding_1_cs.v3_.x = 2.0;
     int _e16 = idx;
@@ -59,8 +58,8 @@ void main() {
     }
     memoryBarrierShared();
     barrier();
-    float Foo = 0.0;
-    bool at = false;
+    float Foo = 1.0;
+    bool at = true;
     test_msl_packed_vec3_();
     mat4x2 _e5 = _group_0_binding_7_cs[0][0];
     vec4 _e10 = _group_0_binding_6_cs[0][0][0];
@@ -79,8 +78,6 @@ void main() {
     _group_0_binding_1_cs.v1_ = 4.0;
     wg[1] = float(uint(_group_0_binding_2_cs.length()));
     at_1 = 2u;
-    Foo = 1.0;
-    at = true;
     return;
 }
 

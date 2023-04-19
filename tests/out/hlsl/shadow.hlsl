@@ -88,12 +88,10 @@ Light ConstructLight(float4x4 arg0, float4 arg1, float4 arg2) {
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 {
     VertexOutput in_ = { fragmentinput_fs_main.proj_position_1, fragmentinput_fs_main.world_normal_1, fragmentinput_fs_main.world_position_1 };
-    float3 color = (float3)0;
-    uint i = (uint)0;
+    float3 color = c_ambient;
+    uint i = 0u;
 
     float3 normal_1 = normalize(in_.world_normal);
-    color = c_ambient;
-    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -126,12 +124,10 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
 float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinput_fs_main_without_storage) : SV_Target0
 {
     VertexOutput in_1 = { fragmentinput_fs_main_without_storage.proj_position_2, fragmentinput_fs_main_without_storage.world_normal_2, fragmentinput_fs_main_without_storage.world_position_2 };
-    float3 color_1 = (float3)0;
-    uint i_1 = (uint)0;
+    float3 color_1 = c_ambient;
+    uint i_1 = 0u;
 
     float3 normal_2 = normalize(in_1.world_normal);
-    color_1 = c_ambient;
-    i_1 = 0u;
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {

@@ -625,7 +625,16 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(20),
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
                         requirements: (""),
                     ),
                     ref_count: 3,
@@ -637,7 +646,16 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(3),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 11,
@@ -649,7 +667,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -708,7 +726,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -720,7 +738,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(20),
+                        non_uniform_result: Some(21),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -729,7 +747,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -752,7 +770,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -761,7 +779,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -775,7 +793,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -789,7 +807,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -807,7 +825,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -861,7 +879,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -870,7 +888,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -884,7 +902,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -898,7 +916,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -914,7 +932,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -940,7 +958,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -949,7 +967,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -963,7 +981,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -977,7 +995,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -993,7 +1011,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1019,7 +1037,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1028,7 +1046,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1042,7 +1060,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1056,7 +1074,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1072,7 +1090,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1084,7 +1102,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1180,7 +1198,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1189,7 +1207,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1242,7 +1260,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1251,7 +1269,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1265,7 +1283,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1279,7 +1297,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1295,7 +1313,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1321,7 +1339,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1330,7 +1348,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1344,7 +1362,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1358,7 +1376,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1374,7 +1392,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1400,7 +1418,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1409,7 +1427,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1423,7 +1441,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1437,7 +1455,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1453,7 +1471,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1465,7 +1483,16 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1483,16 +1510,16 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(20),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(2),
+                    ty: Handle(3),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(21),
+                        non_uniform_result: Some(23),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1506,20 +1533,11 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(3),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(20),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
                     ty: Handle(2),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(20),
+                        non_uniform_result: Some(21),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -1701,7 +1719,5 @@
             kind: Sint,
             width: 4,
         )),
-        Handle(2),
-        Handle(3),
     ],
 )

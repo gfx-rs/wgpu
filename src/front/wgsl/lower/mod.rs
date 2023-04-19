@@ -1031,6 +1031,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut typifier = Typifier::default();
         let mut body = self.block(
             &f.body,
+            false,
             StatementContext {
                 local_table: &mut local_table,
                 globals: ctx.globals,
@@ -1091,12 +1092,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn block(
         &mut self,
         b: &ast::Block<'source>,
+        is_inside_loop: bool,
         mut ctx: StatementContext<'source, '_, '_>,
     ) -> Result<crate::Block, Error<'source>> {
         let mut block = crate::Block::default();
 
         for stmt in b.stmts.iter() {
-            self.statement(stmt, &mut block, ctx.reborrow())?;
+            self.statement(stmt, &mut block, is_inside_loop, ctx.reborrow())?;
         }
 
         Ok(block)
@@ -1106,11 +1108,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         stmt: &ast::Statement<'source>,
         block: &mut crate::Block,
+        is_inside_loop: bool,
         mut ctx: StatementContext<'source, '_, '_>,
     ) -> Result<(), Error<'source>> {
         let out = match stmt.kind {
             ast::StatementKind::Block(ref block) => {
-                let block = self.block(block, ctx.reborrow())?;
+                let block = self.block(block, is_inside_loop, ctx.reborrow())?;
                 crate::Statement::Block(block)
             }
             ast::StatementKind::LocalDecl(ref decl) => match *decl {
@@ -1191,11 +1194,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     };
 
+                    let (const_initializer, initializer) = {
+                        match initializer {
+                            Some(init) if ctx.naga_expressions.is_const(init) => {
+                                (Some(init), is_inside_loop.then_some(init))
+                            }
+                            Some(init) => (None, Some(init)),
+                            None => (None, None),
+                        }
+                    };
+
                     let var = ctx.variables.append(
                         crate::LocalVariable {
                             name: Some(v.name.name.to_string()),
                             ty,
-                            init: None,
+                            init: const_initializer,
                         },
                         stmt.span,
                     );
@@ -1234,8 +1247,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     self.expression(condition, ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(ctx.naga_expressions));
 
-                let accept = self.block(accept, ctx.reborrow())?;
-                let reject = self.block(reject, ctx.reborrow())?;
+                let accept = self.block(accept, is_inside_loop, ctx.reborrow())?;
+                let reject = self.block(reject, is_inside_loop, ctx.reborrow())?;
 
                 crate::Statement::If {
                     condition,
@@ -1282,7 +1295,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 }
                                 ast::SwitchValue::Default => crate::SwitchValue::Default,
                             },
-                            body: self.block(&case.body, ctx.reborrow())?,
+                            body: self.block(&case.body, is_inside_loop, ctx.reborrow())?,
                             fall_through: case.fall_through,
                         })
                     })
@@ -1295,8 +1308,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ref continuing,
                 break_if,
             } => {
-                let body = self.block(body, ctx.reborrow())?;
-                let mut continuing = self.block(continuing, ctx.reborrow())?;
+                let body = self.block(body, true, ctx.reborrow())?;
+                let mut continuing = self.block(continuing, true, ctx.reborrow())?;
 
                 let mut emitter = Emitter::default();
                 emitter.start(ctx.naga_expressions);

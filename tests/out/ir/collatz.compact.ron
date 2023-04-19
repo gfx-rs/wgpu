@@ -82,7 +82,7 @@
                 (
                     name: Some("i"),
                     ty: 1,
-                    init: None,
+                    init: Some(3),
                 ),
             ],
             expressions: [
@@ -158,10 +158,6 @@
                 Store(
                     pointer: 2,
                     value: 1,
-                ),
-                Store(
-                    pointer: 4,
-                    value: 3,
                 ),
                 Loop(
                     body: [

@@ -40,9 +40,8 @@ fn compute(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_i
 
 @vertex 
 fn vertex_two_structs(in1_: Input1_, in2_: Input2_) -> @builtin(position) @invariant vec4<f32> {
-    var index: u32;
+    var index: u32 = 2u;
 
-    index = 2u;
     let _e8: u32 = index;
     return vec4<f32>(f32(in1_.index), f32(in2_.index), f32(_e8), 0.0);
 }

@@ -97,8 +97,7 @@ vertex vertex_two_structsOutput vertex_two_structs(
 ) {
     const Input1_ in1_ = { index_1 };
     const Input2_ in2_ = { index_2 };
-    uint index = {};
-    index = 2u;
+    uint index = 2u;
     uint _e8 = index;
     return vertex_two_structsOutput { metal::float4(static_cast<float>(in1_.index), static_cast<float>(in2_.index), static_cast<float>(_e8), 0.0), 1.0 };
 }

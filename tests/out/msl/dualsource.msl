@@ -18,10 +18,8 @@ struct main_Output {
 fragment main_Output main_(
   metal::float4 position [[position]]
 ) {
-    metal::float4 color = {};
-    metal::float4 mask = {};
-    color = metal::float4(0.4, 0.3, 0.2, 0.1);
-    mask = metal::float4(0.9, 0.8, 0.7, 0.6);
+    metal::float4 color = metal::float4(0.4, 0.3, 0.2, 0.1);
+    metal::float4 mask = metal::float4(0.9, 0.8, 0.7, 0.6);
     metal::float4 _e13 = color;
     metal::float4 _e14 = mask;
     const auto _tmp = FragmentOutput {_e13, _e14};

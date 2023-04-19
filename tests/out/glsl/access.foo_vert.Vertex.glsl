@@ -34,9 +34,8 @@ uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 
 
 void test_matrix_within_struct_accesses() {
-    int idx = 0;
-    Baz t = Baz(mat3x2(0.0));
-    idx = 1;
+    int idx = 1;
+    Baz t = Baz(mat3x2(vec2(1.0), vec2(2.0), vec2(3.0)));
     int _e3 = idx;
     idx = (_e3 - 1);
     mat3x2 l0_ = _group_0_binding_1_vs.m;
@@ -51,7 +50,6 @@ void test_matrix_within_struct_accesses() {
     int _e36 = idx;
     int _e38 = idx;
     float l6_ = _group_0_binding_1_vs.m[_e36][_e38];
-    t = Baz(mat3x2(vec2(1.0), vec2(2.0), vec2(3.0)));
     int _e51 = idx;
     idx = (_e51 + 1);
     t.m = mat3x2(vec2(6.0), vec2(5.0), vec2(4.0));
@@ -70,9 +68,8 @@ void test_matrix_within_struct_accesses() {
 }
 
 void test_matrix_within_array_within_struct_accesses() {
-    int idx_1 = 0;
+    int idx_1 = 1;
     MatCx2InArray t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
-    idx_1 = 1;
     int _e3 = idx_1;
     idx_1 = (_e3 - 1);
     mat4x2 l0_1[2] = _group_0_binding_3_vs.am;
@@ -88,7 +85,6 @@ void test_matrix_within_array_within_struct_accesses() {
     int _e46 = idx_1;
     int _e48 = idx_1;
     float l7_ = _group_0_binding_3_vs.am[0][_e46][_e48];
-    t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
     int _e55 = idx_1;
     idx_1 = (_e55 + 1);
     t_1.am = mat4x2[2](mat4x2(0.0), mat4x2(0.0));
@@ -130,7 +126,6 @@ void main() {
     uint vi = uint(gl_VertexID);
     float foo = 0.0;
     int c2_[5] = int[5](0, 0, 0, 0, 0);
-    foo = 0.0;
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();

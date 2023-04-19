@@ -17,9 +17,8 @@ uint collatz_iterations(
     uint n_base
 ) {
     uint n = {};
-    uint i = {};
+    uint i = 0u;
     n = n_base;
-    i = 0u;
     while(true) {
         uint _e4 = n;
         if (_e4 > 1u) {

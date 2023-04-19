@@ -338,37 +338,6 @@ impl Writer {
     ) -> Result<Word, Error> {
         let mut function = Function::default();
 
-        for (handle, variable) in ir_function.local_variables.iter() {
-            let id = self.id_gen.next();
-
-            if self.flags.contains(WriterFlags::DEBUG) {
-                if let Some(ref name) = variable.name {
-                    self.debugs.push(Instruction::name(id, name));
-                }
-            }
-
-            let init_word = variable
-                .init
-                .map(|constant| self.constant_ids[constant.index()]);
-            let pointer_type_id =
-                self.get_pointer_id(&ir_module.types, variable.ty, spirv::StorageClass::Function)?;
-            let instruction = Instruction::variable(
-                pointer_type_id,
-                id,
-                spirv::StorageClass::Function,
-                init_word.or_else(|| match ir_module.types[variable.ty].inner {
-                    crate::TypeInner::RayQuery => None,
-                    _ => {
-                        let type_id = self.get_type_id(LookupType::Handle(variable.ty));
-                        Some(self.get_constant_null(type_id))
-                    }
-                }),
-            );
-            function
-                .variables
-                .insert(handle, LocalVariable { id, instruction });
-        }
-
         let prelude_id = self.id_gen.next();
         let mut prelude = Block::new(prelude_id);
         let mut ep_context = EntryPointContext {
@@ -656,7 +625,48 @@ impl Writer {
         // fill up the pre-emitted expressions
         context.cached.reset(ir_function.expressions.len());
         for (handle, expr) in ir_function.expressions.iter() {
-            if expr.needs_pre_emit() {
+            if (expr.needs_pre_emit() && !matches!(*expr, crate::Expression::LocalVariable(_)))
+                || ir_function.expressions.is_const(handle)
+            {
+                context.cache_expression_value(handle, &mut prelude)?;
+            }
+        }
+
+        for (handle, variable) in ir_function.local_variables.iter() {
+            let id = context.gen_id();
+
+            if context.writer.flags.contains(WriterFlags::DEBUG) {
+                if let Some(ref name) = variable.name {
+                    context.writer.debugs.push(Instruction::name(id, name));
+                }
+            }
+
+            let init_word = variable.init.map(|constant| context.cached[constant]);
+            let pointer_type_id = context.writer.get_pointer_id(
+                &ir_module.types,
+                variable.ty,
+                spirv::StorageClass::Function,
+            )?;
+            let instruction = Instruction::variable(
+                pointer_type_id,
+                id,
+                spirv::StorageClass::Function,
+                init_word.or_else(|| match ir_module.types[variable.ty].inner {
+                    crate::TypeInner::RayQuery => None,
+                    _ => {
+                        let type_id = context.get_type_id(LookupType::Handle(variable.ty));
+                        Some(context.writer.write_constant_null(type_id))
+                    }
+                }),
+            );
+            context
+                .function
+                .variables
+                .insert(handle, LocalVariable { id, instruction });
+        }
+
+        for (handle, expr) in ir_function.expressions.iter() {
+            if expr.needs_pre_emit() && matches!(*expr, crate::Expression::LocalVariable(_)) {
                 context.cache_expression_value(handle, &mut prelude)?;
             }
         }

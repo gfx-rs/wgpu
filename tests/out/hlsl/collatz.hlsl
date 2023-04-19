@@ -3,10 +3,9 @@ RWByteAddressBuffer v_indices : register(u0);
 uint collatz_iterations(uint n_base)
 {
     uint n = (uint)0;
-    uint i = (uint)0;
+    uint i = 0u;
 
     n = n_base;
-    i = 0u;
     while(true) {
         uint _expr4 = n;
         if ((_expr4 > 1u)) {

@@ -1,55 +1,52 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 35
+; Bound: 34
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %17 "main" %11 %14 %16
-OpExecutionMode %17 OriginUpperLeft
+OpEntryPoint Fragment %13 "main" %7 %10 %12
+OpExecutionMode %13 OriginUpperLeft
 OpMemberDecorate %5 0 Offset 0
 OpMemberDecorate %5 1 Offset 16
-OpDecorate %11 BuiltIn FragCoord
-OpDecorate %14 Location 0
-OpDecorate %16 Location 0
-OpDecorate %16 Index 1
+OpDecorate %7 BuiltIn FragCoord
+OpDecorate %10 Location 0
+OpDecorate %12 Location 0
+OpDecorate %12 Index 1
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 4
 %5 = OpTypeStruct %3 %3
-%7 = OpTypePointer Function %3
-%8 = OpConstantNull  %3
-%12 = OpTypePointer Input %3
-%11 = OpVariable  %12  Input
-%15 = OpTypePointer Output %3
-%14 = OpVariable  %15  Output
-%16 = OpVariable  %15  Output
-%18 = OpTypeFunction %2
-%19 = OpConstant  %4  0.4
-%20 = OpConstant  %4  0.3
-%21 = OpConstant  %4  0.2
-%22 = OpConstant  %4  0.1
-%23 = OpConstant  %4  0.9
-%24 = OpConstant  %4  0.8
-%25 = OpConstant  %4  0.7
-%26 = OpConstant  %4  0.6
-%17 = OpFunction  %2  None %18
-%10 = OpLabel
-%6 = OpVariable  %7  Function %8
-%9 = OpVariable  %7  Function %8
-%13 = OpLoad  %3  %11
-OpBranch %27
-%27 = OpLabel
-%28 = OpCompositeConstruct  %3  %19 %20 %21 %22
-OpStore %6 %28
-%29 = OpCompositeConstruct  %3  %23 %24 %25 %26
-OpStore %9 %29
-%30 = OpLoad  %3  %6
-%31 = OpLoad  %3  %9
-%32 = OpCompositeConstruct  %5  %30 %31
-%33 = OpCompositeExtract  %3  %32 0
-OpStore %14 %33
-%34 = OpCompositeExtract  %3  %32 1
-OpStore %16 %34
+%8 = OpTypePointer Input %3
+%7 = OpVariable  %8  Input
+%11 = OpTypePointer Output %3
+%10 = OpVariable  %11  Output
+%12 = OpVariable  %11  Output
+%14 = OpTypeFunction %2
+%15 = OpConstant  %4  0.4
+%16 = OpConstant  %4  0.3
+%17 = OpConstant  %4  0.2
+%18 = OpConstant  %4  0.1
+%19 = OpConstantComposite  %3  %15 %16 %17 %18
+%20 = OpConstant  %4  0.9
+%21 = OpConstant  %4  0.8
+%22 = OpConstant  %4  0.7
+%23 = OpConstant  %4  0.6
+%24 = OpConstantComposite  %3  %20 %21 %22 %23
+%26 = OpTypePointer Function %3
+%13 = OpFunction  %2  None %14
+%6 = OpLabel
+%25 = OpVariable  %26  Function %19
+%27 = OpVariable  %26  Function %24
+%9 = OpLoad  %3  %7
+OpBranch %28
+%28 = OpLabel
+%29 = OpLoad  %3  %25
+%30 = OpLoad  %3  %27
+%31 = OpCompositeConstruct  %5  %29 %30
+%32 = OpCompositeExtract  %3  %31 0
+OpStore %10 %32
+%33 = OpCompositeExtract  %3  %31 1
+OpStore %12 %33
 OpReturn
 OpFunctionEnd

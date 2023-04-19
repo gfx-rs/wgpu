@@ -292,7 +292,7 @@ impl<W: Write> Writer<W> {
 
                 // Write the constant
                 // `write_constant` adds no trailing or leading space/newline
-                self.write_const_expression(module, init)?;
+                self.write_expr(module, init, func_ctx)?;
             }
 
             // Finish the local with `;` and add a newline (only for readability)

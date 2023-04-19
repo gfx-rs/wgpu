@@ -39,14 +39,14 @@ kernel void main_(
 ) {
     metal::float2 vPos = {};
     metal::float2 vVel = {};
-    metal::float2 cMass = {};
-    metal::float2 cVel = {};
-    metal::float2 colVel = {};
-    int cMassCount = {};
-    int cVelCount = {};
+    metal::float2 cMass = metal::float2(0.0, 0.0);
+    metal::float2 cVel = metal::float2(0.0, 0.0);
+    metal::float2 colVel = metal::float2(0.0, 0.0);
+    int cMassCount = 0;
+    int cVelCount = 0;
     metal::float2 pos = {};
     metal::float2 vel = {};
-    uint i = {};
+    uint i = 0u;
     uint index = global_invocation_id.x;
     if (index >= NUM_PARTICLES) {
         return;
@@ -55,12 +55,6 @@ kernel void main_(
     vPos = _e8;
     metal::float2 _e14 = particlesSrc.particles[index].vel;
     vVel = _e14;
-    cMass = metal::float2(0.0, 0.0);
-    cVel = metal::float2(0.0, 0.0);
-    colVel = metal::float2(0.0, 0.0);
-    cMassCount = 0;
-    cVelCount = 0;
-    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {

@@ -5,9 +5,9 @@
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %39 "main" %36
-OpExecutionMode %39 LocalSize 1 1 1
-OpDecorate %36 BuiltIn GlobalInvocationId
+OpEntryPoint GLCompute %36 "main" %33
+OpExecutionMode %36 LocalSize 1 1 1
+OpDecorate %33 BuiltIn GlobalInvocationId
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 0
 %3 = OpTypeVector %4 3
@@ -15,15 +15,15 @@ OpDecorate %36 BuiltIn GlobalInvocationId
 %9 = OpTypeFunction %2 %5
 %15 = OpTypeFunction %2
 %16 = OpConstant  %5  0
-%33 = OpTypePointer Function %5
-%34 = OpConstantNull  %5
-%37 = OpTypePointer Input %3
-%36 = OpVariable  %37  Input
-%40 = OpConstant  %5  1
-%41 = OpConstant  %5  2
-%42 = OpConstant  %5  3
-%43 = OpConstant  %5  4
-%44 = OpConstant  %4  0
+%34 = OpTypePointer Input %3
+%33 = OpVariable  %34  Input
+%37 = OpConstant  %5  1
+%38 = OpConstant  %5  2
+%39 = OpConstant  %5  3
+%40 = OpConstant  %5  4
+%41 = OpConstant  %4  0
+%43 = OpTypePointer Function %5
+%44 = OpConstantNull  %5
 %46 = OpConstant  %4  2
 %47 = OpConstant  %4  1
 %48 = OpConstant  %4  72
@@ -76,62 +76,62 @@ OpBranch %25
 %26 = OpLabel
 OpReturn
 OpFunctionEnd
-%39 = OpFunction  %2  None %15
-%35 = OpLabel
-%32 = OpVariable  %33  Function %34
-%38 = OpLoad  %3  %36
+%36 = OpFunction  %2  None %15
+%32 = OpLabel
+%42 = OpVariable  %43  Function %44
+%35 = OpLoad  %3  %33
 OpBranch %45
 %45 = OpLabel
 OpControlBarrier %46 %47 %48
 OpControlBarrier %46 %46 %49
 OpSelectionMerge %50 None
-OpSwitch %40 %51
+OpSwitch %37 %51
 %51 = OpLabel
-OpStore %32 %40
+OpStore %42 %37
 OpBranch %50
 %50 = OpLabel
-%52 = OpLoad  %5  %32
+%52 = OpLoad  %5  %42
 OpSelectionMerge %53 None
 OpSwitch %52 %58 1 %54 2 %55 3 %56 4 %56 5 %57 6 %58
 %54 = OpLabel
-OpStore %32 %16
+OpStore %42 %16
 OpBranch %53
 %55 = OpLabel
-OpStore %32 %40
+OpStore %42 %37
 OpBranch %53
 %56 = OpLabel
-OpStore %32 %41
+OpStore %42 %38
 OpBranch %53
 %57 = OpLabel
-OpStore %32 %42
+OpStore %42 %39
 OpBranch %53
 %58 = OpLabel
-OpStore %32 %43
+OpStore %42 %40
 OpBranch %53
 %53 = OpLabel
 OpSelectionMerge %59 None
-OpSwitch %44 %61 0 %60
+OpSwitch %41 %61 0 %60
 %60 = OpLabel
 OpBranch %59
 %61 = OpLabel
 OpBranch %59
 %59 = OpLabel
-%62 = OpLoad  %5  %32
+%62 = OpLoad  %5  %42
 OpSelectionMerge %63 None
 OpSwitch %62 %68 1 %64 2 %65 3 %66 4 %67
 %64 = OpLabel
-OpStore %32 %16
+OpStore %42 %16
 OpBranch %63
 %65 = OpLabel
-OpStore %32 %40
+OpStore %42 %37
 OpReturn
 %66 = OpLabel
-OpStore %32 %41
+OpStore %42 %38
 OpReturn
 %67 = OpLabel
 OpReturn
 %68 = OpLabel
-OpStore %32 %42
+OpStore %42 %39
 OpReturn
 %63 = OpLabel
 OpReturn

@@ -31,8 +31,7 @@ metal::float4 splat(
 
 metal::float2 splat_assignment(
 ) {
-    metal::float2 a = {};
-    a = metal::float2(2.0);
+    metal::float2 a = metal::float2(2.0);
     metal::float2 _e4 = a;
     a = _e4 + metal::float2(1.0);
     metal::float2 _e8 = a;
@@ -159,9 +158,8 @@ void comparison(
 
 void assignment(
 ) {
-    int a_1 = {};
-    metal::int3 vec0_ = {};
-    a_1 = 1;
+    int a_1 = 1;
+    metal::int3 vec0_ = metal::int3 {};
     int _e3 = a_1;
     a_1 = _e3 + 1;
     int _e6 = a_1;
@@ -188,7 +186,6 @@ void assignment(
     a_1 = _e33 + 1;
     int _e36 = a_1;
     a_1 = _e36 - 1;
-    vec0_ = metal::int3 {};
     int _e42 = vec0_.y;
     vec0_.y = _e42 + 1;
     int _e46 = vec0_.y;

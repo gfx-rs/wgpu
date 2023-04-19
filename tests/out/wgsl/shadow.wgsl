@@ -64,12 +64,10 @@ fn vs_main(@location(0) @interpolate(flat) position: vec4<i32>, @location(1) @in
 
 @fragment 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    var color: vec3<f32>;
-    var i: u32;
+    var color: vec3<f32> = c_ambient;
+    var i: u32 = 0u;
 
     let normal_1 = normalize(in.world_normal);
-    color = c_ambient;
-    i = 0u;
     loop {
         let _e7 = i;
         let _e11 = u_globals.num_lights.x;
@@ -99,12 +97,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment 
 fn fs_main_without_storage(in_1: VertexOutput) -> @location(0) vec4<f32> {
-    var color_1: vec3<f32>;
-    var i_1: u32;
+    var color_1: vec3<f32> = c_ambient;
+    var i_1: u32 = 0u;
 
     let normal_2 = normalize(in_1.world_normal);
-    color_1 = c_ambient;
-    i_1 = 0u;
     loop {
         let _e7 = i_1;
         let _e11 = u_globals.num_lights.x;

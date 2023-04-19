@@ -988,18 +988,16 @@ impl<'a> Context<'a> {
                     // pointer type which is required for dynamic indexing
                     if !constant_index {
                         if let Some((constant, ty)) = var.constant {
-                            let local =
-                                self.locals.append(
-                                    LocalVariable {
-                                        name: None,
-                                        ty,
-                                        init: Some(self.module.const_expressions.append(
-                                            Expression::Constant(constant),
-                                            Span::default(),
-                                        )),
-                                    },
-                                    Span::default(),
-                                );
+                            let init = self
+                                .add_expression(Expression::Constant(constant), Span::default())?;
+                            let local = self.locals.append(
+                                LocalVariable {
+                                    name: None,
+                                    ty,
+                                    init: Some(init),
+                                },
+                                Span::default(),
+                            );
 
                             self.add_expression(Expression::LocalVariable(local), Span::default())?
                         } else {

@@ -10,8 +10,8 @@ OpMemoryModel Logical GLSL450
 OpMemberName %7 0 "arr"
 OpName %7 "DynamicArray"
 OpName %8 "dynamic_array"
-OpName %10 "v"
-OpName %14 "f"
+OpName %11 "f"
+OpName %14 "v"
 OpName %22 "i"
 OpName %23 "v"
 OpName %24 "index_unsized"
@@ -31,22 +31,22 @@ OpDecorate %8 Binding 0
 %7 = OpTypeStruct %6
 %9 = OpTypePointer StorageBuffer %7
 %8 = OpVariable  %9  StorageBuffer
-%11 = OpTypePointer Function %3
-%12 = OpConstantNull  %3
-%15 = OpTypeFunction %2
-%16 = OpConstant  %4  10
+%12 = OpTypeFunction %2
+%13 = OpConstant  %4  10
+%15 = OpTypePointer Function %3
+%16 = OpConstantNull  %3
 %18 = OpTypePointer Function %4
 %19 = OpConstant  %5  0
 %25 = OpTypeFunction %2 %4 %5
 %27 = OpTypePointer StorageBuffer %6
 %28 = OpTypePointer StorageBuffer %5
-%14 = OpFunction  %2  None %15
-%13 = OpLabel
-%10 = OpVariable  %11  Function %12
+%11 = OpFunction  %2  None %12
+%10 = OpLabel
+%14 = OpVariable  %15  Function %16
 OpBranch %17
 %17 = OpLabel
-%20 = OpAccessChain  %18  %10 %19
-OpStore %20 %16
+%20 = OpAccessChain  %18  %14 %19
+OpStore %20 %13
 OpReturn
 OpFunctionEnd
 %24 = OpFunction  %2  None %25

@@ -97,11 +97,9 @@ fragment fs_mainOutput fs_main(
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     const VertexOutput in = { proj_position, varyings_1.world_normal, varyings_1.world_position };
-    metal::float3 color = {};
-    uint i = {};
+    metal::float3 color = c_ambient;
+    uint i = 0u;
     metal::float3 normal_1 = metal::normalize(in.world_normal);
-    color = c_ambient;
-    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -149,11 +147,9 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
 , metal::sampler sampler_shadow [[user(fake0)]]
 ) {
     const VertexOutput in_1 = { proj_position_1, varyings_2.world_normal, varyings_2.world_position };
-    metal::float3 color_1 = {};
-    uint i_1 = {};
+    metal::float3 color_1 = c_ambient;
+    uint i_1 = 0u;
     metal::float3 normal_2 = metal::normalize(in_1.world_normal);
-    color_1 = c_ambient;
-    i_1 = 0u;
     bool loop_init_1 = true;
     while(true) {
         if (!loop_init_1) {

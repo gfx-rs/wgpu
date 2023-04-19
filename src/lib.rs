@@ -978,9 +978,7 @@ pub struct LocalVariable {
     pub name: Option<String>,
     /// The type of this variable.
     pub ty: Handle<Type>,
-    /// Initial value for this variable.
-    ///
-    /// Expression handle lives in const_expressions
+    /// Initial value for this variable. Must be a const-expression.
     pub init: Option<Handle<Expression>>,
 }
 

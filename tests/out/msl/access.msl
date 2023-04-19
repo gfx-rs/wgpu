@@ -61,9 +61,8 @@ struct type_22 {
 void test_matrix_within_struct_accesses(
     constant Baz& baz
 ) {
-    int idx = {};
-    Baz t = {};
-    idx = 1;
+    int idx = 1;
+    Baz t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
     int _e3 = idx;
     idx = _e3 - 1;
     metal::float3x2 l0_ = baz.m;
@@ -78,7 +77,6 @@ void test_matrix_within_struct_accesses(
     int _e36 = idx;
     int _e38 = idx;
     float l6_ = baz.m[_e36][_e38];
-    t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
     int _e51 = idx;
     idx = _e51 + 1;
     t.m = metal::float3x2(metal::float2(6.0), metal::float2(5.0), metal::float2(4.0));
@@ -99,9 +97,8 @@ void test_matrix_within_struct_accesses(
 void test_matrix_within_array_within_struct_accesses(
     constant MatCx2InArray& nested_mat_cx2_
 ) {
-    int idx_1 = {};
-    MatCx2InArray t_1 = {};
-    idx_1 = 1;
+    int idx_1 = 1;
+    MatCx2InArray t_1 = MatCx2InArray {type_14 {}};
     int _e3 = idx_1;
     idx_1 = _e3 - 1;
     type_14 l0_1 = nested_mat_cx2_.am;
@@ -117,7 +114,6 @@ void test_matrix_within_array_within_struct_accesses(
     int _e46 = idx_1;
     int _e48 = idx_1;
     float l7_ = nested_mat_cx2_.am.inner[0][_e46][_e48];
-    t_1 = MatCx2InArray {type_14 {}};
     int _e55 = idx_1;
     idx_1 = _e55 + 1;
     t_1.am = type_14 {};
@@ -176,9 +172,8 @@ vertex foo_vertOutput foo_vert(
 , constant MatCx2InArray& nested_mat_cx2_ [[buffer(3)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
-    float foo = {};
+    float foo = 0.0;
     type_20 c2_ = {};
-    foo = 0.0;
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses(baz);
@@ -222,8 +217,7 @@ kernel void assign_through_ptr(
         val = {};
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    type_22 arr = {};
-    arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
+    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
     return;

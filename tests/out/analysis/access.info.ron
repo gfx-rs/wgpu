@@ -66,7 +66,7 @@
                         non_uniform_result: Some(2),
                         requirements: (""),
                     ),
-                    ref_count: 15,
+                    ref_count: 14,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 3,
@@ -637,7 +637,7 @@
                         non_uniform_result: Some(50),
                         requirements: (""),
                     ),
-                    ref_count: 8,
+                    ref_count: 7,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 16,
@@ -1164,7 +1164,7 @@
                         non_uniform_result: Some(2),
                         requirements: (""),
                     ),
-                    ref_count: 15,
+                    ref_count: 14,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 3,
@@ -1777,7 +1777,7 @@
                         non_uniform_result: Some(54),
                         requirements: (""),
                     ),
-                    ref_count: 9,
+                    ref_count: 8,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 20,
@@ -2667,7 +2667,7 @@
                         non_uniform_result: Some(3),
                         requirements: (""),
                     ),
-                    ref_count: 4,
+                    ref_count: 3,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 21,
@@ -3803,7 +3803,7 @@
                         non_uniform_result: Some(6),
                         requirements: (""),
                     ),
-                    ref_count: 2,
+                    ref_count: 1,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 28,

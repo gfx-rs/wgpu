@@ -24,14 +24,14 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
 {
     float2 vPos = (float2)0;
     float2 vVel = (float2)0;
-    float2 cMass = (float2)0;
-    float2 cVel = (float2)0;
-    float2 colVel = (float2)0;
-    int cMassCount = (int)0;
-    int cVelCount = (int)0;
+    float2 cMass = float2(0.0, 0.0);
+    float2 cVel = float2(0.0, 0.0);
+    float2 colVel = float2(0.0, 0.0);
+    int cMassCount = 0;
+    int cVelCount = 0;
     float2 pos = (float2)0;
     float2 vel = (float2)0;
-    uint i = (uint)0;
+    uint i = 0u;
 
     uint index = global_invocation_id.x;
     if ((index >= NUM_PARTICLES)) {
@@ -41,12 +41,6 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     vPos = _expr8;
     float2 _expr14 = asfloat(particlesSrc.Load2(8+index*16+0));
     vVel = _expr14;
-    cMass = float2(0.0, 0.0);
-    cVel = float2(0.0, 0.0);
-    colVel = float2(0.0, 0.0);
-    cMassCount = 0;
-    cVelCount = 0;
-    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {

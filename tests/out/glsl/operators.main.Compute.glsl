@@ -30,8 +30,7 @@ vec4 splat() {
 }
 
 vec2 splat_assignment() {
-    vec2 a = vec2(0.0);
-    a = vec2(2.0);
+    vec2 a = vec2(2.0);
     vec2 _e4 = a;
     a = (_e4 + vec2(1.0));
     vec2 _e8 = a;
@@ -151,9 +150,8 @@ void comparison() {
 }
 
 void assignment() {
-    int a_1 = 0;
+    int a_1 = 1;
     ivec3 vec0_ = ivec3(0);
-    a_1 = 1;
     int _e3 = a_1;
     a_1 = (_e3 + 1);
     int _e6 = a_1;
@@ -180,7 +178,6 @@ void assignment() {
     a_1 = (_e33 + 1);
     int _e36 = a_1;
     a_1 = (_e36 - 1);
-    vec0_ = ivec3(0);
     int _e42 = vec0_.y;
     vec0_.y = (_e42 + 1);
     int _e46 = vec0_.y;

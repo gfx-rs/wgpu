@@ -252,13 +252,39 @@ impl<'w> BlockContext<'w> {
                     self.temp_list.push(self.cached[component]);
                 }
 
-                let id = self.gen_id();
-                block.body.push(Instruction::composite_construct(
-                    result_type_id,
-                    id,
-                    &self.temp_list,
-                ));
-                id
+                if self.ir_function.expressions.is_const(expr_handle) {
+                    let ty = self
+                        .writer
+                        .get_expression_lookup_type(&self.fun_info[expr_handle].ty);
+                    self.writer.get_constant_composite(ty, &self.temp_list)
+                } else {
+                    let id = self.gen_id();
+                    block.body.push(Instruction::composite_construct(
+                        result_type_id,
+                        id,
+                        &self.temp_list,
+                    ));
+                    id
+                }
+            }
+            crate::Expression::Splat { size, value } => {
+                let value_id = self.cached[value];
+                let components = &[value_id; 4][..size as usize];
+
+                if self.ir_function.expressions.is_const(expr_handle) {
+                    let ty = self
+                        .writer
+                        .get_expression_lookup_type(&self.fun_info[expr_handle].ty);
+                    self.writer.get_constant_composite(ty, components)
+                } else {
+                    let id = self.gen_id();
+                    block.body.push(Instruction::composite_construct(
+                        result_type_id,
+                        id,
+                        components,
+                    ));
+                    id
+                }
             }
             crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {
                 // See `is_intermediate`; we'll handle this later in
@@ -404,17 +430,6 @@ impl<'w> BlockContext<'w> {
             }
             crate::Expression::GlobalVariable(handle) => {
                 self.writer.global_variables[handle.index()].access_id
-            }
-            crate::Expression::Splat { size, value } => {
-                let value_id = self.cached[value];
-                let components = [value_id; 4];
-                let id = self.gen_id();
-                block.body.push(Instruction::composite_construct(
-                    result_type_id,
-                    id,
-                    &components[..size as usize],
-                ));
-                id
             }
             crate::Expression::Swizzle {
                 size,
@@ -1758,7 +1773,9 @@ impl<'w> BlockContext<'w> {
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
-                        self.cache_expression_value(handle, &mut block)?;
+                        if !self.ir_function.expressions.is_const(handle) {
+                            self.cache_expression_value(handle, &mut block)?;
+                        }
                     }
                 }
                 crate::Statement::Block(ref block_statements) => {

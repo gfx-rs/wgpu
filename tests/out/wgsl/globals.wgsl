@@ -27,10 +27,9 @@ fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {
 }
 
 fn test_msl_packed_vec3_() {
-    var idx: i32;
+    var idx: i32 = 1;
 
     alignment.v3_ = vec3(1.0);
-    idx = 1;
     alignment.v3_.x = 1.0;
     alignment.v3_.x = 2.0;
     let _e16 = idx;
@@ -47,8 +46,8 @@ fn test_msl_packed_vec3_() {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
-    var Foo: f32;
-    var at: bool;
+    var Foo: f32 = 1.0;
+    var at: bool = true;
 
     test_msl_packed_vec3_();
     let _e5 = global_nested_arrays_of_matrices_4x2_[0][0];
@@ -68,7 +67,5 @@ fn main() {
     alignment.v1_ = 4.0;
     wg[1] = f32(arrayLength((&dummy)));
     atomicStore((&at_1), 2u);
-    Foo = 1.0;
-    at = true;
     return;
 }

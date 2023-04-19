@@ -40,37 +40,37 @@ OpDecorate %21 Location 0
 %25 = OpTypePointer PushConstant %6
 %26 = OpConstant  %3  0
 %28 = OpConstant  %8  1.0
-%31 = OpTypePointer PushConstant %3
-%34 = OpTypeBool
-%40 = OpTypeVector %8 3
+%29 = OpTypeVector %8 3
+%30 = OpConstantComposite  %29  %28 %28 %28
+%33 = OpTypePointer PushConstant %3
+%36 = OpTypeBool
 %23 = OpFunction  %2  None %24
 %13 = OpLabel
 %17 = OpLoad  %7  %15
 %20 = OpLoad  %3  %18
 %14 = OpCompositeConstruct  %9  %17 %20
 %27 = OpAccessChain  %25  %10 %26
-OpBranch %29
-%29 = OpLabel
-%30 = OpCompositeExtract  %3  %14 1
-%32 = OpAccessChain  %31  %27 %26
-%33 = OpLoad  %3  %32
-%35 = OpIEqual  %34  %30 %33
-OpSelectionMerge %36 None
-OpBranchConditional %35 %37 %38
-%37 = OpLabel
-%39 = OpCompositeExtract  %7  %14 0
-OpStore %21 %39
+OpBranch %31
+%31 = OpLabel
+%32 = OpCompositeExtract  %3  %14 1
+%34 = OpAccessChain  %33  %27 %26
+%35 = OpLoad  %3  %34
+%37 = OpIEqual  %36  %32 %35
+OpSelectionMerge %38 None
+OpBranchConditional %37 %39 %40
+%39 = OpLabel
+%41 = OpCompositeExtract  %7  %14 0
+OpStore %21 %41
 OpReturn
-%38 = OpLabel
-%41 = OpCompositeConstruct  %40  %28 %28 %28
+%40 = OpLabel
 %42 = OpCompositeExtract  %7  %14 0
-%43 = OpVectorShuffle  %40  %42 %42 0 1 2
-%44 = OpFSub  %40  %41 %43
+%43 = OpVectorShuffle  %29  %42 %42 0 1 2
+%44 = OpFSub  %29  %30 %43
 %45 = OpCompositeExtract  %7  %14 0
 %46 = OpCompositeExtract  %8  %45 3
 %47 = OpCompositeConstruct  %7  %44 %46
 OpStore %21 %47
 OpReturn
-%36 = OpLabel
+%38 = OpLabel
 OpReturn
 OpFunctionEnd

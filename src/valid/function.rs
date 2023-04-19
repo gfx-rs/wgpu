@@ -941,7 +941,7 @@ impl super::Validator {
         &self,
         var: &crate::LocalVariable,
         gctx: crate::proc::GlobalCtx,
-        mod_info: &ModuleInfo,
+        fun_info: &FunctionInfo,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
         let type_info = self
@@ -954,7 +954,7 @@ impl super::Validator {
 
         if let Some(init) = var.init {
             let decl_ty = &gctx.types[var.ty].inner;
-            let init_ty = mod_info[init].inner_with(gctx.types);
+            let init_ty = fun_info[init].ty.inner_with(gctx.types);
             if !decl_ty.equivalent(init_ty, gctx.types) {
                 return Err(LocalVariableError::InitializerType);
             }
@@ -975,7 +975,7 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
-            self.validate_local_var(var, module.to_ctx(), mod_info)
+            self.validate_local_var(var, module.to_ctx(), &info)
                 .map_err(|source| {
                     FunctionError::LocalVariable {
                         handle: var_handle,

@@ -35,9 +35,9 @@ void main() {
     uvec3 global_invocation_id = gl_GlobalInvocationID;
     vec2 vPos = vec2(0.0);
     vec2 vVel = vec2(0.0);
-    vec2 cMass = vec2(0.0);
-    vec2 cVel = vec2(0.0);
-    vec2 colVel = vec2(0.0);
+    vec2 cMass = vec2(0.0, 0.0);
+    vec2 cVel = vec2(0.0, 0.0);
+    vec2 colVel = vec2(0.0, 0.0);
     int cMassCount = 0;
     int cVelCount = 0;
     vec2 pos = vec2(0.0);
@@ -51,12 +51,6 @@ void main() {
     vPos = _e8;
     vec2 _e14 = _group_0_binding_1_cs.particles[index].vel;
     vVel = _e14;
-    cMass = vec2(0.0, 0.0);
-    cVel = vec2(0.0, 0.0);
-    colVel = vec2(0.0, 0.0);
-    cMassCount = 0;
-    cVelCount = 0;
-    i = 0u;
     bool loop_init = true;
     while(true) {
         if (!loop_init) {

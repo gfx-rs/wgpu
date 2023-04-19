@@ -36,16 +36,12 @@ fragment main_Output main_(
 , constant UniformIndex& uni [[user(fake0)]]
 ) {
     const FragmentIn fragment_in = { varyings.index };
-    uint u1_ = {};
-    metal::uint2 u2_ = {};
-    float v1_ = {};
-    metal::float4 v4_ = {};
+    uint u1_ = 0u;
+    metal::uint2 u2_ = metal::uint2(0u);
+    float v1_ = 0.0;
+    metal::float4 v4_ = metal::float4(0.0);
     uint uniform_index = uni.index;
     uint non_uniform_index = fragment_in.index;
-    u1_ = 0u;
-    u2_ = metal::uint2(0u);
-    v1_ = 0.0;
-    v4_ = metal::float4(0.0);
     metal::float2 uv = metal::float2(0.0);
     metal::int2 pix = metal::int2(0);
     metal::uint2 _e22 = u2_;

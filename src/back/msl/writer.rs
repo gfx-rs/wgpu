@@ -3557,29 +3557,6 @@ impl<W: Write> Writer<W> {
 
             writeln!(self.out, ") {{")?;
 
-            for (local_handle, local) in fun.local_variables.iter() {
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_const_expression(value, module, mod_info)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
-
             let guarded_indices =
                 index::find_checked_indexes(module, fun, fun_info, options.bounds_check_policies);
 
@@ -3596,6 +3573,30 @@ impl<W: Write> Writer<W> {
                 },
                 result_struct: None,
             };
+
+            for (local_handle, local) in fun.local_variables.iter() {
+                let ty_name = TypeContext {
+                    handle: local.ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    binding: None,
+                    first_time: false,
+                };
+                let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
+                write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
+                match local.init {
+                    Some(value) => {
+                        write!(self.out, " = ")?;
+                        self.put_expression(value, &context.expression, true)?;
+                    }
+                    None => {
+                        write!(self.out, " = {{}}")?;
+                    }
+                };
+                writeln!(self.out, ";")?;
+            }
+
             self.named_expressions.clear();
             self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
@@ -4112,31 +4113,6 @@ impl<W: Write> Writer<W> {
                 }
             }
 
-            // Finally, declare all the local variables that we need
-            //TODO: we can postpone this till the relevant expressions are emitted
-            for (local_handle, local) in fun.local_variables.iter() {
-                let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    binding: None,
-                    first_time: false,
-                };
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_const_expression(value, module, mod_info)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
-
             let guarded_indices =
                 index::find_checked_indexes(module, fun, fun_info, options.bounds_check_policies);
 
@@ -4153,6 +4129,32 @@ impl<W: Write> Writer<W> {
                 },
                 result_struct: Some(&stage_out_name),
             };
+
+            // Finally, declare all the local variables that we need
+            //TODO: we can postpone this till the relevant expressions are emitted
+            for (local_handle, local) in fun.local_variables.iter() {
+                let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
+                let ty_name = TypeContext {
+                    handle: local.ty,
+                    gctx: module.to_ctx(),
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    binding: None,
+                    first_time: false,
+                };
+                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
+                match local.init {
+                    Some(value) => {
+                        write!(self.out, " = ")?;
+                        self.put_expression(value, &context.expression, true)?;
+                    }
+                    None => {
+                        write!(self.out, " = {{}}")?;
+                    }
+                };
+                writeln!(self.out, ";")?;
+            }
+
             self.named_expressions.clear();
             self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;

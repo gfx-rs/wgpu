@@ -27,17 +27,13 @@ var<uniform> uni: UniformIndex;
 
 @fragment 
 fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
-    var u1_: u32;
-    var u2_: vec2<u32>;
-    var v1_: f32;
-    var v4_: vec4<f32>;
+    var u1_: u32 = 0u;
+    var u2_: vec2<u32> = vec2(0u);
+    var v1_: f32 = 0.0;
+    var v4_: vec4<f32> = vec4(0.0);
 
     let uniform_index = uni.index;
     let non_uniform_index = fragment_in.index;
-    u1_ = 0u;
-    u2_ = vec2(0u);
-    v1_ = 0.0;
-    v4_ = vec4(0.0);
     let uv = vec2(0.0);
     let pix = vec2(0);
     let _e21 = textureDimensions(texture_array_unbounded[0]);

@@ -27,7 +27,7 @@ impl<'a> FunctionTracer<'a> {
         for (_, local) in self.function.local_variables.iter() {
             self.trace_type(local.ty);
             if let Some(init) = local.init {
-                self.trace_const_expression(init);
+                self.trace_expression(init);
             }
         }
 
@@ -46,12 +46,6 @@ impl<'a> FunctionTracer<'a> {
 
     pub fn trace_expression(&mut self, expr: Handle<crate::Expression>) {
         self.as_expression().trace_expression(expr);
-    }
-
-    pub fn trace_const_expression(&mut self, expr: Handle<crate::Expression>) {
-        self.as_expression()
-            .as_const_expression()
-            .trace_expression(expr);
     }
 
     fn as_type(&mut self) -> super::types::TypeTracer {
@@ -99,7 +93,7 @@ impl FunctionMap {
             log::trace!("adjusting local variable {:?}", local.name);
             module_map.types.adjust(&mut local.ty);
             if let Some(ref mut init) = local.init {
-                module_map.const_expressions.adjust(init);
+                self.expressions.adjust(init);
             }
         }
 

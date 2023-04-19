@@ -51,17 +51,13 @@ uint NagaMSNumSamples2D(Texture2DMS<float4> tex)
 float4 main(FragmentInput_main fragmentinput_main) : SV_Target0
 {
     FragmentIn fragment_in = { fragmentinput_main.index };
-    uint u1_ = (uint)0;
-    uint2 u2_ = (uint2)0;
-    float v1_ = (float)0;
-    float4 v4_ = (float4)0;
+    uint u1_ = 0u;
+    uint2 u2_ = (0u).xx;
+    float v1_ = 0.0;
+    float4 v4_ = (0.0).xxxx;
 
     uint uniform_index = uni.index;
     uint non_uniform_index = fragment_in.index;
-    u1_ = 0u;
-    u2_ = (0u).xx;
-    v1_ = 0.0;
-    v4_ = (0.0).xxxx;
     float2 uv = (0.0).xx;
     int2 pix = (0).xx;
     uint2 _expr22 = u2_;

@@ -57,7 +57,7 @@
                         non_uniform_result: Some(4),
                         requirements: (""),
                     ),
-                    ref_count: 4,
+                    ref_count: 3,
                     assignable_global: None,
                     ty: Value(Pointer(
                         base: 1,

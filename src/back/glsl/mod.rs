@@ -1605,7 +1605,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Write the constant
                 // `write_constant` adds no trailing or leading space/newline
-                self.write_const_expr(init)?;
+                self.write_expr(init, &ctx)?;
             } else if is_value_init_supported(self.module, local.ty) {
                 write!(self.out, " = ")?;
                 self.write_zero_init_value(local.ty)?;

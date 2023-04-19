@@ -1395,7 +1395,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let init_id = self.next()?;
                         let lconst = self.lookup_constant.lookup(init_id)?;
                         Some(
-                            ctx.const_expressions
+                            ctx.expressions
                                 .append(crate::Expression::Constant(lconst.handle), span),
                         )
                     } else {

@@ -131,8 +131,8 @@ impl super::Validator {
             for (_handle, local_variable) in local_variables.iter() {
                 let &crate::LocalVariable { name: _, ty, init } = local_variable;
                 validate_type(ty)?;
-                if let Some(init_constant) = init {
-                    validate_const_expr(init_constant)?;
+                if let Some(init) = init {
+                    Self::validate_expression_handle(init, expressions)?;
                 }
             }
 

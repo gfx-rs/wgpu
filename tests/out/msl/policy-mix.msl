@@ -42,8 +42,7 @@ metal::float4 mock_function(
     threadgroup type_5& in_workgroup,
     thread type_6& in_private
 ) {
-    type_9 in_function = {};
-    in_function = type_9 {metal::float4(0.707, 0.0, 0.0, 1.0), metal::float4(0.0, 0.707, 0.0, 1.0)};
+    type_9 in_function = type_9 {metal::float4(0.707, 0.0, 0.0, 1.0), metal::float4(0.0, 0.707, 0.0, 1.0)};
     metal::float4 _e18 = in_storage.a.inner[i];
     metal::float4 _e22 = in_uniform.a.inner[i];
     metal::float4 _e25 = (uint(l) < image_2d_array.get_num_mip_levels() && uint(i) < image_2d_array.get_array_size() && metal::all(metal::uint2(c) < metal::uint2(image_2d_array.get_width(l), image_2d_array.get_height(l))) ? image_2d_array.read(metal::uint2(c), i, l): DefaultConstructible());

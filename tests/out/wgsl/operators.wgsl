@@ -22,9 +22,8 @@ fn splat() -> vec4<f32> {
 }
 
 fn splat_assignment() -> vec2<f32> {
-    var a: vec2<f32>;
+    var a: vec2<f32> = vec2(2.0);
 
-    a = vec2(2.0);
     let _e4 = a;
     a = (_e4 + vec2(1.0));
     let _e8 = a;
@@ -144,10 +143,9 @@ fn comparison() {
 }
 
 fn assignment() {
-    var a_1: i32;
-    var vec0_: vec3<i32>;
+    var a_1: i32 = 1;
+    var vec0_: vec3<i32> = vec3<i32>();
 
-    a_1 = 1;
     let _e3 = a_1;
     a_1 = (_e3 + 1);
     let _e6 = a_1;
@@ -174,7 +172,6 @@ fn assignment() {
     a_1 = (_e33 + 1);
     let _e36 = a_1;
     a_1 = (_e36 - 1);
-    vec0_ = vec3<i32>();
     let _e42 = vec0_.y;
     vec0_.y = (_e42 + 1);
     let _e46 = vec0_.y;

@@ -119,10 +119,9 @@ void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
 
 void test_matrix_within_struct_accesses()
 {
-    int idx = (int)0;
-    Baz t = (Baz)0;
+    int idx = 1;
+    Baz t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
 
-    idx = 1;
     int _expr3 = idx;
     idx = (_expr3 - 1);
     float3x2 l0_ = GetMatmOnBaz(baz);
@@ -137,7 +136,6 @@ void test_matrix_within_struct_accesses()
     int _expr36 = idx;
     int _expr38 = idx;
     float l6_ = GetMatmOnBaz(baz)[_expr36][_expr38];
-    t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
     int _expr51 = idx;
     idx = (_expr51 + 1);
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
@@ -163,10 +161,9 @@ MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
 
 void test_matrix_within_array_within_struct_accesses()
 {
-    int idx_1 = (int)0;
-    MatCx2InArray t_1 = (MatCx2InArray)0;
+    int idx_1 = 1;
+    MatCx2InArray t_1 = ConstructMatCx2InArray((float4x2[2])0);
 
-    idx_1 = 1;
     int _expr3 = idx_1;
     idx_1 = (_expr3 - 1);
     float4x2 l0_1[2] = ((float4x2[2])nested_mat_cx2_.am);
@@ -182,7 +179,6 @@ void test_matrix_within_array_within_struct_accesses()
     int _expr46 = idx_1;
     int _expr48 = idx_1;
     float l7_ = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _expr46)[_expr48];
-    t_1 = ConstructMatCx2InArray((float4x2[2])0);
     int _expr55 = idx_1;
     idx_1 = (_expr55 + 1);
     t_1.am = (__mat4x2[2])(float4x2[2])0;
@@ -251,10 +247,9 @@ uint NagaBufferLengthRW(RWByteAddressBuffer buffer)
 
 float4 foo_vert(uint vi : SV_VertexID) : SV_Position
 {
-    float foo = (float)0;
+    float foo = 0.0;
     int c2_[5] = (int[5])0;
 
-    foo = 0.0;
     float baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
@@ -299,9 +294,8 @@ void assign_through_ptr(uint3 __local_invocation_id : SV_GroupThreadID)
         val = (uint)0;
     }
     GroupMemoryBarrierWithGroupSync();
-    float4 arr[2] = (float4[2])0;
+    float4 arr[2] = Constructarray2_float4_((6.0).xxxx, (7.0).xxxx);
 
-    arr = Constructarray2_float4_((6.0).xxxx, (7.0).xxxx);
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
     return;

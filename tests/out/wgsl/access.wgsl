@@ -37,10 +37,9 @@ var<uniform> nested_mat_cx2_: MatCx2InArray;
 var<workgroup> val: u32;
 
 fn test_matrix_within_struct_accesses() {
-    var idx: i32;
-    var t: Baz;
+    var idx: i32 = 1;
+    var t: Baz = Baz(mat3x2<f32>(vec2(1.0), vec2(2.0), vec2(3.0)));
 
-    idx = 1;
     let _e3 = idx;
     idx = (_e3 - 1);
     let l0_ = baz.m;
@@ -55,7 +54,6 @@ fn test_matrix_within_struct_accesses() {
     let _e36 = idx;
     let _e38 = idx;
     let l6_ = baz.m[_e36][_e38];
-    t = Baz(mat3x2<f32>(vec2(1.0), vec2(2.0), vec2(3.0)));
     let _e51 = idx;
     idx = (_e51 + 1);
     t.m = mat3x2<f32>(vec2(6.0), vec2(5.0), vec2(4.0));
@@ -74,10 +72,9 @@ fn test_matrix_within_struct_accesses() {
 }
 
 fn test_matrix_within_array_within_struct_accesses() {
-    var idx_1: i32;
-    var t_1: MatCx2InArray;
+    var idx_1: i32 = 1;
+    var t_1: MatCx2InArray = MatCx2InArray(array<mat4x2<f32>, 2>());
 
-    idx_1 = 1;
     let _e3 = idx_1;
     idx_1 = (_e3 - 1);
     let l0_1 = nested_mat_cx2_.am;
@@ -93,7 +90,6 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e46 = idx_1;
     let _e48 = idx_1;
     let l7_ = nested_mat_cx2_.am[0][_e46][_e48];
-    t_1 = MatCx2InArray(array<mat4x2<f32>, 2>());
     let _e55 = idx_1;
     idx_1 = (_e55 + 1);
     t_1.am = array<mat4x2<f32>, 2>();
@@ -133,10 +129,9 @@ fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
 
 @vertex 
 fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
-    var foo: f32;
+    var foo: f32 = 0.0;
     var c2_: array<i32, 5>;
 
-    foo = 0.0;
     let baz_1 = foo;
     foo = 1.0;
     test_matrix_within_struct_accesses();
@@ -167,9 +162,8 @@ fn foo_frag() -> @location(0) vec4<f32> {
 
 @compute @workgroup_size(1, 1, 1) 
 fn assign_through_ptr() {
-    var arr: array<vec4<f32>, 2>;
+    var arr: array<vec4<f32>, 2> = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
 
-    arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
     assign_through_ptr_fn((&val));
     assign_array_through_ptr_fn((&arr));
     return;

@@ -1,27 +1,17 @@
 [numthreads(1, 1, 1)]
 void main()
 {
-    int i = (int)0;
-    int2 i2_ = (int2)0;
-    int3 i3_ = (int3)0;
-    int4 i4_ = (int4)0;
-    uint u = (uint)0;
-    uint2 u2_ = (uint2)0;
-    uint3 u3_ = (uint3)0;
-    uint4 u4_ = (uint4)0;
-    float2 f2_ = (float2)0;
-    float4 f4_ = (float4)0;
+    int i = 0;
+    int2 i2_ = (0).xx;
+    int3 i3_ = (0).xxx;
+    int4 i4_ = (0).xxxx;
+    uint u = 0u;
+    uint2 u2_ = (0u).xx;
+    uint3 u3_ = (0u).xxx;
+    uint4 u4_ = (0u).xxxx;
+    float2 f2_ = (0.0).xx;
+    float4 f4_ = (0.0).xxxx;
 
-    i = 0;
-    i2_ = (0).xx;
-    i3_ = (0).xxx;
-    i4_ = (0).xxxx;
-    u = 0u;
-    u2_ = (0u).xx;
-    u3_ = (0u).xxx;
-    u4_ = (0u).xxxx;
-    f2_ = (0.0).xx;
-    f4_ = (0.0).xxxx;
     float4 _expr28 = f4_;
     u = uint((int(round(clamp(_expr28[0], -1.0, 1.0) * 127.0)) & 0xFF) | ((int(round(clamp(_expr28[1], -1.0, 1.0) * 127.0)) & 0xFF) << 8) | ((int(round(clamp(_expr28[2], -1.0, 1.0) * 127.0)) & 0xFF) << 16) | ((int(round(clamp(_expr28[3], -1.0, 1.0) * 127.0)) & 0xFF) << 24));
     float4 _expr30 = f4_;
