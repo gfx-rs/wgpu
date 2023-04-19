@@ -170,7 +170,8 @@ impl super::Adapter {
 
         wgt::AdapterInfo {
             name: renderer_orig,
-            vendor: vendor_id as usize,
+            vendor: vendor_orig,
+            vendor_id: vendor_id as usize,
             device: 0,
             device_type: inferred_device_type,
             driver: String::new(),

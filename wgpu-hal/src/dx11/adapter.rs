@@ -248,7 +248,8 @@ impl super::Adapter {
 
         let device_info = wgt::AdapterInfo {
             name: String::new(),
-            vendor: 0,
+            vendor: String::new(),
+            vendor_id: 0,
             device: 0,
             device_type: match d3d11_features2.UnifiedMemoryArchitecture {
                 0 => wgt::DeviceType::DiscreteGpu,

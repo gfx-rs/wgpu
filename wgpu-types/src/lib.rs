@@ -1303,11 +1303,17 @@ pub enum DeviceType {
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
-    /// Vendor PCI id of the adapter
+    /// The name of the adapter vendor.
+    ///
+    /// This may be empty if not available.
+    pub vendor: String,
+    /// Vendor PCI id of the adapter.
+    ///
+    /// This value is not available on web.
     ///
     /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
     /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
-    pub vendor: usize,
+    pub vendor_id: usize,
     /// PCI id of the adapter
     pub device: usize,
     /// Type of device

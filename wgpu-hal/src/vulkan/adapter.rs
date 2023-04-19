@@ -951,7 +951,8 @@ impl super::Instance {
                     .unwrap_or("?")
                     .to_owned()
             },
-            vendor: phd_capabilities.properties.vendor_id as usize,
+            vendor: String::new(),
+            vendor_id: phd_capabilities.properties.vendor_id as usize,
             device: phd_capabilities.properties.device_id as usize,
             device_type: match phd_capabilities.properties.device_type {
                 ash::vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,

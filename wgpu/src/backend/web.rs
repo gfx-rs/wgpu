@@ -1084,7 +1084,8 @@ impl crate::context::Context for Context {
         // TODO: web-sys has no way of getting information on adapters
         wgt::AdapterInfo {
             name: String::new(),
-            vendor: 0,
+            vendor: String::new(),
+            vendor_id: 0,
             device: 0,
             device_type: wgt::DeviceType::Other,
             driver: String::new(),

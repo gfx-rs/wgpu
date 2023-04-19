@@ -143,7 +143,8 @@ mod inner {
         println!("Adapter {idx}:");
         println!("\t   Backend: {:?}", info.backend);
         println!("\t      Name: {:?}", info.name);
-        println!("\t  VendorID: {:?}", info.vendor);
+        println!("\t  Vendor: {:?}", info.vendor);
+        println!("\t  VendorID: {:?}", info.vendor_id);
         println!("\t  DeviceID: {:?}", info.device);
         println!("\t      Type: {:?}", info.device_type);
         println!("\t    Driver: {:?}", info.driver);

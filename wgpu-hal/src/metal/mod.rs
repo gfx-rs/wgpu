@@ -109,11 +109,13 @@ impl crate::Instance<Api> for Instance {
             .into_iter()
             .map(|dev| {
                 let name = dev.name().into();
+                let vendor = dev.vendor().into();
                 let shared = AdapterShared::new(dev);
                 crate::ExposedAdapter {
                     info: wgt::AdapterInfo {
                         name,
-                        vendor: 0,
+                        vendor,
+                        vendor_id: 0,
                         device: 0,
                         device_type: shared.private_caps.device_type(),
                         driver: String::new(),

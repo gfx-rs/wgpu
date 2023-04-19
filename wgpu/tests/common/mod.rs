@@ -255,7 +255,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         let expect_failure_backend = failure
             .backends
             .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
-        let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor);
+        let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor_id);
         let expect_failure_adapter = failure
             .adapter
             .as_deref()

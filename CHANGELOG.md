@@ -129,6 +129,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
 - All `fxhash` dependencies have been replaced with `rustc-hash`. By @james7132 in [#3502](https://github.com/gfx-rs/wgpu/pull/3502)
 - Change type of `bytes_per_row` and `rows_per_image` (members of `ImageDataLayout`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3529](https://github.com/gfx-rs/wgpu/pull/3529)
+- Rename `vendor` to `vendor_id` since webgpu standard defines `vendor` a string. By @i509VCB in [#3704](https://github.com/gfx-rs/wgpu/pull/3704)
 
 ### Changes
 
@@ -144,6 +145,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
 - Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
 - Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
+- Add `vendor` string to `AdapterInfo`. Note this is not fully implemented in each backend yet. By @i509VCB in [#3704](https://github.com/gfx-rs/wgpu/pull/3704)
 
 #### WebGPU
 

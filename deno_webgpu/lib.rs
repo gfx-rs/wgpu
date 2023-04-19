@@ -610,7 +610,7 @@ pub async fn op_webgpu_request_adapter_info(
     let info = gfx_select!(adapter => instance.adapter_get_info(adapter))?;
 
     Ok(GPUAdapterInfo {
-        vendor: info.vendor.to_string(),
+        vendor: info.vendor_id.to_string(),
         architecture: String::new(), // TODO(#2170)
         device: info.device.to_string(),
         description: info.name,
