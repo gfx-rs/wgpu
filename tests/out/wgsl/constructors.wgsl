@@ -27,11 +27,8 @@ fn main() {
     let cit1_ = mat2x2<f32>(vec2(0.0), vec2(0.0));
     let cit2_ = array<i32, 4>(0, 1, 2, 3);
     let ic0_ = bool(bool());
-    let ic1_ = i32(i32());
-    let ic2_ = u32(u32());
-    let ic3_ = f32(f32());
-    let ic4_ = vec2<u32>(vec2<u32>());
-    let ic5_ = mat2x3<f32>(mat2x3<f32>());
+    let ic4_ = vec2<u32>(0u, 0u);
+    let ic5_ = mat2x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0));
     let ic6_ = bitcast<vec2<u32>>(vec2<u32>());
     let ic7_ = mat2x3<f32>(mat2x3<f32>());
 }

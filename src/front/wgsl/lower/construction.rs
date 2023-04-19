@@ -197,7 +197,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             // Empty constructor
             (Components::None, dst_ty) => match dst_ty {
                 ConcreteConstructor::Type(ty, _) => {
-                    return Ok(ctx.interrupt_emitter(crate::Expression::ZeroValue(ty), span))
+                    return ctx.append_expression(crate::Expression::ZeroValue(ty), span)
                 }
                 _ => return Err(Error::TypeNotInferrable(ty_span)),
             },
@@ -408,7 +408,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             Default::default(),
                         )
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
@@ -523,7 +523,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             _ => return Err(Error::TypeNotConstructible(ty_span)),
         };
 
-        let expr = ctx.append_expression(expr, span);
+        let expr = ctx.append_expression(expr, span)?;
         Ok(expr)
     }
 
@@ -585,7 +585,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let size = match size {
                     ast::ArraySize::Constant(expr) => {
                         let const_expr = self.expression(expr, ctx.as_const())?;
-                        crate::ArraySize::Constant(ctx.array_length(const_expr)?)
+                        crate::ArraySize::Constant(ctx.as_const().array_length(const_expr)?)
                     }
                     ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
                 };

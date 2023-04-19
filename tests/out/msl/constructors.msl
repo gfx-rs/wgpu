@@ -40,11 +40,8 @@ kernel void main_(
     metal::float2x2 cit1_ = metal::float2x2(metal::float2(0.0), metal::float2(0.0));
     type_11 cit2_ = type_11 {0, 1, 2, 3};
     bool ic0_ = static_cast<bool>(bool {});
-    int ic1_ = static_cast<int>(int {});
-    uint ic2_ = static_cast<uint>(uint {});
-    float ic3_ = static_cast<float>(float {});
-    metal::uint2 ic4_ = static_cast<metal::uint2>(metal::uint2 {});
-    metal::float2x3 ic5_ = metal::float2x3(metal::float2x3 {});
+    metal::uint2 ic4_ = metal::uint2(0u, 0u);
+    metal::float2x3 ic5_ = metal::float2x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
     metal::uint2 ic6_ = as_type<metal::uint2>(metal::uint2 {});
     metal::float2x3 ic7_ = metal::float2x3(metal::float2x3 {});
 }

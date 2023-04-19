@@ -134,6 +134,8 @@ pub enum ConstExpressionError {
     NonConst,
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
+    #[error("Splatting {0:?} can't be done")]
+    InvalidSplatType(Handle<crate::Expression>),
     #[error("Type resolution failed")]
     Type(#[from] ResolveError),
     #[error(transparent)]
@@ -196,6 +198,10 @@ impl super::Validator {
                     components.iter().map(|&handle| mod_info[handle].clone()),
                 )?;
             }
+            E::Splat { value, .. } => match *mod_info[value].inner_with(gctx.types) {
+                crate::TypeInner::Scalar { .. } => {}
+                _ => return Err(super::ConstExpressionError::InvalidSplatType(value)),
+            },
             _ => return Err(super::ConstExpressionError::NonConst),
         }
 

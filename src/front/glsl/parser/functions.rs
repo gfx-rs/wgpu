@@ -187,11 +187,8 @@ impl<'source> ParsingContext<'source> {
                         TokenValue::Case => {
                             self.bump(frontend)?;
 
-                            let mut stmt = ctx.stmt_ctx();
-                            let expr = self.parse_expression(frontend, ctx, &mut stmt)?;
-                            let (root, meta) =
-                                ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs)?;
-                            let const_expr = ctx.solve_constant(root, meta)?;
+                            let (const_expr, meta) =
+                                self.parse_constant_expression(frontend, ctx.module)?;
 
                             match ctx.module.const_expressions[const_expr] {
                                 Expression::Literal(Literal::I32(value)) => match uint {

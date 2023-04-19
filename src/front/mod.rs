@@ -34,6 +34,9 @@ impl Emitter {
         }
         self.start_len = Some(arena.len());
     }
+    const fn is_running(&self) -> bool {
+        self.start_len.is_some()
+    }
     #[must_use]
     fn finish(
         &mut self,

@@ -1795,7 +1795,7 @@ impl MacroCall {
                     true => {
                         let offset_arg = args[num_args];
                         num_args += 1;
-                        match ctx.solve_constant(offset_arg, meta) {
+                        match ctx.eval_constant(offset_arg, meta) {
                             Ok(v) => Some(v),
                             Err(e) => {
                                 frontend.errors.push(e);

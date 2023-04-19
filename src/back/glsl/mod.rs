@@ -1709,7 +1709,7 @@ impl<'a, W: Write> Writer<'a, W> {
         arg: Handle<crate::Expression>,
         arg1: Handle<crate::Expression>,
         size: usize,
-        ctx: &back::FunctionCtx<'_>,
+        ctx: &back::FunctionCtx,
     ) -> BackendResult {
         // Write parantheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
@@ -2254,9 +2254,12 @@ impl<'a, W: Write> Writer<'a, W> {
     /// [`Expression`]: crate::Expression
     /// [`Module`]: crate::Module
     fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
-        self.write_possibly_const_expr(expr, &self.module.const_expressions, |writer, expr| {
-            writer.write_const_expr(expr)
-        })
+        self.write_possibly_const_expr(
+            expr,
+            &self.module.const_expressions,
+            |expr| &self.info[expr],
+            |writer, expr| writer.write_const_expr(expr),
+        )
     }
 
     /// Write [`Expression`] variants that can occur in both runtime and const expressions.
@@ -2277,13 +2280,15 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Adds no newlines or leading/trailing whitespace
     ///
     /// [`Expression`]: crate::Expression
-    fn write_possibly_const_expr<E>(
-        &mut self,
+    fn write_possibly_const_expr<'w, I, E>(
+        &'w mut self,
         expr: Handle<crate::Expression>,
         expressions: &crate::Arena<crate::Expression>,
+        info: I,
         write_expression: E,
     ) -> BackendResult
     where
+        I: Fn(Handle<crate::Expression>) -> &'w proc::TypeResolution,
         E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
     {
         use crate::Expression;
@@ -2331,6 +2336,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 write!(self.out, ")")?
             }
+            // `Splat` needs to actually write down a vector, it's not always inferred in GLSL.
+            Expression::Splat { size: _, value } => {
+                let resolved = info(expr).inner_with(&self.module.types);
+                self.write_value_type(resolved)?;
+                write!(self.out, "(")?;
+                write_expression(self, value)?;
+                write!(self.out, ")")?
+            }
             _ => unreachable!(),
         }
 
@@ -2344,7 +2357,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_expr(
         &mut self,
         expr: Handle<crate::Expression>,
-        ctx: &back::FunctionCtx<'_>,
+        ctx: &back::FunctionCtx,
     ) -> BackendResult {
         use crate::Expression;
 
@@ -2357,10 +2370,14 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::Literal(_)
             | Expression::Constant(_)
             | Expression::ZeroValue(_)
-            | Expression::Compose { .. } => {
-                self.write_possibly_const_expr(expr, ctx.expressions, |writer, expr| {
-                    writer.write_expr(expr, ctx)
-                })?;
+            | Expression::Compose { .. }
+            | Expression::Splat { .. } => {
+                self.write_possibly_const_expr(
+                    expr,
+                    ctx.expressions,
+                    |expr| &ctx.info[expr].ty,
+                    |writer, expr| writer.write_expr(expr, ctx),
+                )?;
             }
             // `Access` is applied to arrays, vectors and matrices and is written as indexing
             Expression::Access { base, index } => {
@@ -2406,14 +2423,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
                 }
-            }
-            // `Splat` needs to actually write down a vector, it's not always inferred in GLSL.
-            Expression::Splat { size: _, value } => {
-                let resolved = ctx.info[expr].ty.inner_with(&self.module.types);
-                self.write_value_type(resolved)?;
-                write!(self.out, "(")?;
-                self.write_expr(value, ctx)?;
-                write!(self.out, ")")?
             }
             // `Swizzle` adds a few letters behind the dot.
             Expression::Swizzle {

@@ -1,5 +1,5 @@
-use super::{constants::ConstantSolvingError, token::TokenValue};
-use crate::Span;
+use super::token::TokenValue;
+use crate::{proc::ConstantEvaluatorError, Span};
 use pp_rs::token::PreprocessorError;
 use std::borrow::Cow;
 use thiserror::Error;
@@ -116,8 +116,8 @@ pub enum ErrorKind {
     InternalError(&'static str),
 }
 
-impl From<ConstantSolvingError> for ErrorKind {
-    fn from(err: ConstantSolvingError) -> Self {
+impl From<ConstantEvaluatorError> for ErrorKind {
+    fn from(err: ConstantEvaluatorError) -> Self {
         ErrorKind::SemanticError(err.to_string().into())
     }
 }

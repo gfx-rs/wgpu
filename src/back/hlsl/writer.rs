@@ -2078,6 +2078,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 write!(self.out, ")")?;
             }
+            Expression::Splat { size, value } => {
+                // hlsl is not supported one value constructor
+                // if we write, for example, int4(0), dxc returns error:
+                // error: too few elements in vector initialization (expected 4 elements, have 1)
+                let number_of_components = match size {
+                    crate::VectorSize::Bi => "xx",
+                    crate::VectorSize::Tri => "xxx",
+                    crate::VectorSize::Quad => "xxxx",
+                };
+                write!(self.out, "(")?;
+                write_expression(self, value)?;
+                write!(self.out, ").{number_of_components}")?
+            }
             _ => unreachable!(),
         }
 
@@ -2135,7 +2148,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Literal(_)
             | Expression::Constant(_)
             | Expression::ZeroValue(_)
-            | Expression::Compose { .. } => {
+            | Expression::Compose { .. }
+            | Expression::Splat { .. } => {
                 self.write_possibly_const_expression(
                     module,
                     expr,
@@ -2423,7 +2437,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
+                    write!(self.out, "int2(")?; // work around https://github.com/microsoft/DirectXShaderCompiler/issues/5082#issuecomment-1540147807
                     self.write_const_expression(module, offset)?;
+                    write!(self.out, ")")?;
                 }
 
                 write!(self.out, ")")?;
@@ -3153,19 +3169,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{fun_str}(")?;
                 self.write_expr(module, argument, func_ctx)?;
                 write!(self.out, ")")?
-            }
-            Expression::Splat { size, value } => {
-                // hlsl is not supported one value constructor
-                // if we write, for example, int4(0), dxc returns error:
-                // error: too few elements in vector initialization (expected 4 elements, have 1)
-                let number_of_components = match size {
-                    crate::VectorSize::Bi => "xx",
-                    crate::VectorSize::Tri => "xxx",
-                    crate::VectorSize::Quad => "xxxx",
-                };
-                write!(self.out, "(")?;
-                self.write_expr(module, value, func_ctx)?;
-                write!(self.out, ").{number_of_components}")?
             }
             Expression::Select {
                 condition,

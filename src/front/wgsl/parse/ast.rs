@@ -89,21 +89,21 @@ pub enum GlobalDeclKind<'a> {
 pub struct FunctionArgument<'a> {
     pub name: Ident<'a>,
     pub ty: Handle<Type<'a>>,
-    pub binding: Option<crate::Binding>,
+    pub binding: Option<Binding<'a>>,
     pub handle: Handle<Local>,
 }
 
 #[derive(Debug)]
 pub struct FunctionResult<'a> {
     pub ty: Handle<Type<'a>>,
-    pub binding: Option<crate::Binding>,
+    pub binding: Option<Binding<'a>>,
 }
 
 #[derive(Debug)]
-pub struct EntryPoint {
+pub struct EntryPoint<'a> {
     pub stage: crate::ShaderStage,
     pub early_depth_test: Option<crate::EarlyDepthTest>,
-    pub workgroup_size: Option<[u32; 3]>,
+    pub workgroup_size: Option<[Option<Handle<Expression<'a>>>; 3]>,
 }
 
 #[cfg(doc)]
@@ -111,7 +111,7 @@ use crate::front::wgsl::lower::{RuntimeExpressionContext, StatementContext};
 
 #[derive(Debug)]
 pub struct Function<'a> {
-    pub entry_point: Option<EntryPoint>,
+    pub entry_point: Option<EntryPoint<'a>>,
     pub name: Ident<'a>,
     pub arguments: Vec<FunctionArgument<'a>>,
     pub result: Option<FunctionResult<'a>>,
@@ -146,10 +146,27 @@ pub struct Function<'a> {
 }
 
 #[derive(Debug)]
+pub enum Binding<'a> {
+    BuiltIn(crate::BuiltIn),
+    Location {
+        location: Handle<Expression<'a>>,
+        second_blend_source: bool,
+        interpolation: Option<crate::Interpolation>,
+        sampling: Option<crate::Sampling>,
+    },
+}
+
+#[derive(Debug)]
+pub struct ResourceBinding<'a> {
+    pub group: Handle<Expression<'a>>,
+    pub binding: Handle<Expression<'a>>,
+}
+
+#[derive(Debug)]
 pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
     pub space: crate::AddressSpace,
-    pub binding: Option<crate::ResourceBinding>,
+    pub binding: Option<ResourceBinding<'a>>,
     pub ty: Handle<Type<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
 }
@@ -158,9 +175,9 @@ pub struct GlobalVariable<'a> {
 pub struct StructMember<'a> {
     pub name: Ident<'a>,
     pub ty: Handle<Type<'a>>,
-    pub binding: Option<crate::Binding>,
-    pub align: Option<(u32, Span)>,
-    pub size: Option<(u32, Span)>,
+    pub binding: Option<Binding<'a>>,
+    pub align: Option<Handle<Expression<'a>>>,
+    pub size: Option<Handle<Expression<'a>>>,
 }
 
 #[derive(Debug)]
@@ -292,16 +309,14 @@ pub enum StatementKind<'a> {
 }
 
 #[derive(Debug)]
-pub enum SwitchValue {
-    I32(i32),
-    U32(u32),
+pub enum SwitchValue<'a> {
+    Expr(Handle<Expression<'a>>),
     Default,
 }
 
 #[derive(Debug)]
 pub struct SwitchCase<'a> {
-    pub value: SwitchValue,
-    pub value_span: Span,
+    pub value: SwitchValue<'a>,
     pub body: Block<'a>,
     pub fall_through: bool,
 }

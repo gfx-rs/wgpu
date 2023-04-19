@@ -1,5 +1,5 @@
 use crate::front::wgsl::parse::lexer::Token;
-use crate::proc::{Alignment, ResolveError};
+use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
 use crate::{SourceLocation, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
@@ -98,8 +98,6 @@ impl std::error::Error for ParseError {
 pub enum ExpectedToken<'a> {
     Token(Token<'a>),
     Identifier,
-    Number,
-    Integer,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
     /// Expected: assignment, increment/decrement expression
@@ -141,10 +139,6 @@ pub enum Error<'a> {
     UnexpectedComponents(Span),
     UnexpectedOperationInConstContext(Span),
     BadNumber(Span, NumberError),
-    /// A negative signed integer literal where both signed and unsigned,
-    /// but only non-negative literals are allowed.
-    NegativeInt(Span),
-    BadU32Constant(Span),
     BadMatrixScalarKind(Span, crate::ScalarKind, u8),
     BadAccessor(Span),
     BadTexture(Span),
@@ -240,9 +234,11 @@ pub enum Error<'a> {
     FunctionReturnsVoid(Span),
     InvalidWorkGroupUniformLoad(Span),
     Other,
-    ExpectedArraySize(Span),
-    NonPositiveArrayLength(Span),
+    ExpectedConstExprConcreteIntegerScalar(Span),
+    ExpectedNonNegative(Span),
+    ExpectedPositiveArrayLength(Span),
     MissingWorkgroupSize(Span),
+    ConstantEvaluatorError(ConstantEvaluatorError, Span),
 }
 
 impl<'a> Error<'a> {
@@ -271,8 +267,6 @@ impl<'a> Error<'a> {
                         }
                     }
                     ExpectedToken::Identifier => "identifier".to_string(),
-                    ExpectedToken::Number => "32-bit signed integer literal".to_string(),
-                    ExpectedToken::Integer => "unsigned/signed integer literal".to_string(),
                     ExpectedToken::PrimaryExpression => "expression".to_string(),
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => "switch item ('case' or 'default') or a closing curly bracket to signify the end of the switch statement ('}')".to_string(),
@@ -304,22 +298,6 @@ impl<'a> Error<'a> {
             Error::BadNumber(bad_span, ref err) => ParseError {
                 message: format!("{}: `{}`", err, &source[bad_span],),
                 labels: vec![(bad_span, err.to_string().into())],
-                notes: vec![],
-            },
-            Error::NegativeInt(bad_span) => ParseError {
-                message: format!(
-                    "expected non-negative integer literal, found `{}`",
-                    &source[bad_span],
-                ),
-                labels: vec![(bad_span, "expected non-negative integer".into())],
-                notes: vec![],
-            },
-            Error::BadU32Constant(bad_span) => ParseError {
-                message: format!(
-                    "expected unsigned integer constant expression, found `{}`",
-                    &source[bad_span],
-                ),
-                labels: vec![(bad_span, "expected unsigned integer".into())],
                 notes: vec![],
             },
             Error::BadMatrixScalarKind(span, kind, width) => ParseError {
@@ -694,15 +672,24 @@ impl<'a> Error<'a> {
                 labels: vec![],
                 notes: vec![],
             },
-            Error::ExpectedArraySize(span) => ParseError {
-                message: "array element count must resolve to an integer scalar (u32 or i32)"
-                    .to_string(),
-                labels: vec![(span, "must resolve to u32/i32".into())],
+            Error::ExpectedConstExprConcreteIntegerScalar(span) => ParseError {
+                message: "must be a const-expression that resolves to a concrete integer scalar (u32 or i32)".to_string(),
+                labels: vec![(span, "must resolve to u32 or i32".into())],
                 notes: vec![],
             },
-            Error::NonPositiveArrayLength(span) => ParseError {
-                message: "array element count must be greater than zero".to_string(),
-                labels: vec![(span, "must be greater than zero".into())],
+            Error::ExpectedNonNegative(span) => ParseError {
+                message: "must be non-negative (>= 0)".to_string(),
+                labels: vec![(span, "must be non-negative".into())],
+                notes: vec![],
+            },
+            Error::ExpectedPositiveArrayLength(span) => ParseError {
+                message: "array element count must be positive (> 0)".to_string(),
+                labels: vec![(span, "must be positive".into())],
+                notes: vec![],
+            },
+            Error::ConstantEvaluatorError(ref e, span) => ParseError {
+                message: e.to_string(),
+                labels: vec![(span, "see msg".into())],
                 notes: vec![],
             },
             Error::MissingWorkgroupSize(span) => ParseError {

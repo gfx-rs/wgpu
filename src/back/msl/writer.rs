@@ -501,6 +501,7 @@ struct ExpressionContext<'a> {
     origin: FunctionOrigin,
     info: &'a valid::FunctionInfo,
     module: &'a crate::Module,
+    mod_info: &'a valid::ModuleInfo,
     pipeline_options: &'a PipelineOptions,
     policies: index::BoundsCheckPolicies,
 
@@ -571,7 +572,6 @@ impl<'a> ExpressionContext<'a> {
 
 struct StatementContext<'a> {
     expression: ExpressionContext<'a>,
-    mod_info: &'a valid::ModuleInfo,
     result_struct: Option<&'a str>,
 }
 
@@ -604,25 +604,26 @@ impl<W: Write> Writer<W> {
         parameters: impl Iterator<Item = Handle<crate::Expression>>,
         context: &ExpressionContext,
     ) -> BackendResult {
-        self.put_call_parameters_impl(parameters, |writer, expr| {
+        self.put_call_parameters_impl(parameters, context, |writer, context, expr| {
             writer.put_expression(expr, context, true)
         })
     }
 
-    fn put_call_parameters_impl<E>(
+    fn put_call_parameters_impl<C, E>(
         &mut self,
         parameters: impl Iterator<Item = Handle<crate::Expression>>,
+        ctx: &C,
         put_expression: E,
     ) -> BackendResult
     where
-        E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
+        E: Fn(&mut Self, &C, Handle<crate::Expression>) -> BackendResult,
     {
         write!(self.out, "(")?;
         for (i, handle) in parameters.enumerate() {
             if i != 0 {
                 write!(self.out, ", ")?;
             }
-            put_expression(self, handle)?;
+            put_expression(self, ctx, handle)?;
         }
         write!(self.out, ")")?;
         Ok(())
@@ -1213,24 +1214,33 @@ impl<W: Write> Writer<W> {
         &mut self,
         expr_handle: Handle<crate::Expression>,
         module: &crate::Module,
+        mod_info: &valid::ModuleInfo,
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
             &module.const_expressions,
             module,
-            |writer, expr| writer.put_const_expression(expr, module),
+            mod_info,
+            &(module, mod_info),
+            |&(_, mod_info), expr| &mod_info[expr],
+            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info),
         )
     }
 
-    fn put_possibly_const_expression<E>(
+    #[allow(clippy::too_many_arguments)]
+    fn put_possibly_const_expression<C, I, E>(
         &mut self,
         expr_handle: Handle<crate::Expression>,
         expressions: &crate::Arena<crate::Expression>,
         module: &crate::Module,
+        mod_info: &valid::ModuleInfo,
+        ctx: &C,
+        get_expr_ty: I,
         put_expression: E,
     ) -> BackendResult
     where
-        E: Fn(&mut Self, Handle<crate::Expression>) -> BackendResult,
+        I: Fn(&C, Handle<crate::Expression>) -> &TypeResolution,
+        E: Fn(&mut Self, &C, Handle<crate::Expression>) -> BackendResult,
     {
         match expressions[expr_handle] {
             crate::Expression::Literal(literal) => match literal {
@@ -1263,7 +1273,7 @@ impl<W: Write> Writer<W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.put_const_expression(constant.init, module)?;
+                    self.put_const_expression(constant.init, module, mod_info)?;
                 }
             }
             crate::Expression::ZeroValue(ty) => {
@@ -1291,7 +1301,11 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Scalar { .. }
                     | crate::TypeInner::Vector { .. }
                     | crate::TypeInner::Matrix { .. } => {
-                        self.put_call_parameters_impl(components.iter().copied(), put_expression)?;
+                        self.put_call_parameters_impl(
+                            components.iter().copied(),
+                            ctx,
+                            put_expression,
+                        )?;
                     }
                     crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
                         write!(self.out, " {{")?;
@@ -1303,12 +1317,22 @@ impl<W: Write> Writer<W> {
                             if self.struct_member_pads.contains(&(ty, index as u32)) {
                                 write!(self.out, "{{}}, ")?;
                             }
-                            put_expression(self, component)?;
+                            put_expression(self, ctx, component)?;
                         }
                         write!(self.out, "}}")?;
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
                 }
+            }
+            crate::Expression::Splat { size, value } => {
+                let scalar_kind = match *get_expr_ty(ctx, value).inner_with(&module.types) {
+                    crate::TypeInner::Scalar { kind, .. } => kind,
+                    _ => return Err(Error::Validation),
+                };
+                put_numeric_type(&mut self.out, scalar_kind, &[size])?;
+                write!(self.out, "(")?;
+                put_expression(self, ctx, value)?;
+                write!(self.out, ")")?;
             }
             _ => unreachable!(),
         }
@@ -1350,12 +1374,16 @@ impl<W: Write> Writer<W> {
             crate::Expression::Literal(_)
             | crate::Expression::Constant(_)
             | crate::Expression::ZeroValue(_)
-            | crate::Expression::Compose { .. } => {
+            | crate::Expression::Compose { .. }
+            | crate::Expression::Splat { .. } => {
                 self.put_possibly_const_expression(
                     expr_handle,
                     &context.function.expressions,
                     context.module,
-                    |writer, expr| writer.put_expression(expr, context, true),
+                    context.mod_info,
+                    context,
+                    |context, expr: Handle<crate::Expression>| &context.info[expr].ty,
+                    |writer, context, expr| writer.put_expression(expr, context, true),
                 )?;
             }
             crate::Expression::Access { base, .. }
@@ -1384,16 +1412,6 @@ impl<W: Write> Writer<W> {
                 } else {
                     self.put_access_chain(expr_handle, policy, context)?;
                 }
-            }
-            crate::Expression::Splat { size, value } => {
-                let scalar_kind = match *context.resolve_type(value) {
-                    crate::TypeInner::Scalar { kind, .. } => kind,
-                    _ => return Err(Error::Validation),
-                };
-                put_numeric_type(&mut self.out, scalar_kind, &[size])?;
-                write!(self.out, "(")?;
-                self.put_expression(value, context, true)?;
-                write!(self.out, ")")?;
             }
             crate::Expression::Swizzle {
                 size,
@@ -1469,7 +1487,7 @@ impl<W: Write> Writer<W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    self.put_const_expression(offset, context.module)?;
+                    self.put_const_expression(offset, context.module, context.mod_info)?;
                 }
 
                 match gather {
@@ -2792,7 +2810,7 @@ impl<W: Write> Writer<W> {
                     }
                     // follow-up with any global resources used
                     let mut separate = !arguments.is_empty();
-                    let fun_info = &context.mod_info[function];
+                    let fun_info = &context.expression.mod_info[function];
                     let mut supports_array_length = false;
                     for (handle, var) in context.expression.module.global_variables.iter() {
                         if fun_info[handle].is_empty() {
@@ -3131,7 +3149,7 @@ impl<W: Write> Writer<W> {
         };
 
         self.write_type_defs(module)?;
-        self.write_global_constants(module)?;
+        self.write_global_constants(module, info)?;
         self.write_functions(module, info, options, pipeline_options)
     }
 
@@ -3338,7 +3356,11 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes all named constants
-    fn write_global_constants(&mut self, module: &crate::Module) -> BackendResult {
+    fn write_global_constants(
+        &mut self,
+        module: &crate::Module,
+        mod_info: &valid::ModuleInfo,
+    ) -> BackendResult {
         let constants = module.constants.iter().filter(|&(_, c)| c.name.is_some());
 
         for (handle, constant) in constants {
@@ -3352,7 +3374,7 @@ impl<W: Write> Writer<W> {
             };
             let name = &self.names[&NameKey::Constant(handle)];
             write!(self.out, "constant {ty_name} {name} = ")?;
-            self.put_const_expression(constant.init, module)?;
+            self.put_const_expression(constant.init, module, mod_info)?;
             writeln!(self.out, ";")?;
         }
 
@@ -3549,7 +3571,7 @@ impl<W: Write> Writer<W> {
                 match local.init {
                     Some(value) => {
                         write!(self.out, " = ")?;
-                        self.put_const_expression(value, module)?;
+                        self.put_const_expression(value, module, mod_info)?;
                     }
                     None => {
                         write!(self.out, " = {{}}")?;
@@ -3569,9 +3591,9 @@ impl<W: Write> Writer<W> {
                     policies: options.bounds_check_policies,
                     guarded_indices,
                     module,
+                    mod_info,
                     pipeline_options,
                 },
-                mod_info,
                 result_struct: None,
             };
             self.named_expressions.clear();
@@ -3958,7 +3980,7 @@ impl<W: Write> Writer<W> {
                 }
                 if let Some(value) = var.init {
                     write!(self.out, " = ")?;
-                    self.put_const_expression(value, module)?;
+                    self.put_const_expression(value, module, mod_info)?;
                 }
                 writeln!(self.out)?;
             }
@@ -4014,7 +4036,7 @@ impl<W: Write> Writer<W> {
                     match var.init {
                         Some(value) => {
                             write!(self.out, " = ")?;
-                            self.put_const_expression(value, module)?;
+                            self.put_const_expression(value, module, mod_info)?;
                             writeln!(self.out, ";")?;
                         }
                         None => {
@@ -4106,7 +4128,7 @@ impl<W: Write> Writer<W> {
                 match local.init {
                     Some(value) => {
                         write!(self.out, " = ")?;
-                        self.put_const_expression(value, module)?;
+                        self.put_const_expression(value, module, mod_info)?;
                     }
                     None => {
                         write!(self.out, " = {{}}")?;
@@ -4126,9 +4148,9 @@ impl<W: Write> Writer<W> {
                     policies: options.bounds_check_policies,
                     guarded_indices,
                     module,
+                    mod_info,
                     pipeline_options,
                 },
-                mod_info,
                 result_struct: Some(&stage_out_name),
             };
             self.named_expressions.clear();

@@ -519,7 +519,7 @@ impl<'a> Context<'a> {
                     // Don't try to generate `AccessIndex` if in a LHS position, since it
                     // wouldn't produce a pointer.
                     ExprPos::Lhs => None,
-                    _ => self.solve_constant(index, index_meta).ok(),
+                    _ => self.eval_constant(index, index_meta).ok(),
                 };
 
                 let base = self

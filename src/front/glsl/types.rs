@@ -1,4 +1,4 @@
-use super::{constants::ConstantSolver, context::Context, Error, ErrorKind, Result, Span};
+use super::{context::Context, Error, ErrorKind, Result, Span};
 use crate::{
     proc::ResolveContext, Bytes, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
     TypeInner, VectorSize,
@@ -305,19 +305,28 @@ impl Context<'_> {
             })
     }
 
-    pub(crate) fn solve_constant(
+    pub(crate) fn eval_constant(
         &mut self,
         root: Handle<Expression>,
         meta: Span,
     ) -> Result<Handle<Expression>> {
-        let mut solver = ConstantSolver {
+        let mut solver = crate::proc::ConstantEvaluator {
             types: &mut self.module.types,
-            expressions: &self.expressions,
+            expressions: &mut self.module.const_expressions,
             constants: &mut self.module.constants,
-            const_expressions: &mut self.module.const_expressions,
+            const_expressions: Some(&self.expressions),
+            append: None::<
+                Box<
+                    dyn FnMut(
+                        &mut crate::Arena<Expression>,
+                        Expression,
+                        Span,
+                    ) -> Handle<Expression>,
+                >,
+            >,
         };
 
-        solver.solve(root).map_err(|e| Error {
+        solver.eval(root).map_err(|e| Error {
             kind: e.into(),
             meta,
         })

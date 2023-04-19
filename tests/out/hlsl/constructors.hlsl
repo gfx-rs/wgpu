@@ -50,11 +50,8 @@ void main()
     float2x2 cit1_ = float2x2((0.0).xx, (0.0).xx);
     int cit2_[4] = Constructarray4_int_(0, 1, 2, 3);
     bool ic0_ = bool((bool)0);
-    int ic1_ = int((int)0);
-    uint ic2_ = uint((uint)0);
-    float ic3_ = float((float)0);
-    uint2 ic4_ = uint2((uint2)0);
-    float2x3 ic5_ = float2x3((float2x3)0);
+    uint2 ic4_ = uint2(0u, 0u);
+    float2x3 ic5_ = float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
     uint2 ic6_ = asuint((uint2)0);
     float2x3 ic7_ = asfloat((float2x3)0);
 }

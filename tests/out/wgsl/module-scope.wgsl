@@ -20,7 +20,6 @@ fn returns() -> S {
 fn call() {
     statement();
     let _e0 = returns();
-    let vf = f32(Value);
-    let s = textureSample(Texture, Sampler, vec2(vf));
+    let s = textureSample(Texture, Sampler, vec2(1.0));
 }
 

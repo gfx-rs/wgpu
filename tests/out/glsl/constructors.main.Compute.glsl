@@ -32,11 +32,8 @@ void main() {
     mat2x2 cit1_ = mat2x2(vec2(0.0), vec2(0.0));
     int cit2_[4] = int[4](0, 1, 2, 3);
     bool ic0_ = bool(false);
-    int ic1_ = int(0);
-    uint ic2_ = uint(0u);
-    float ic3_ = float(0.0);
-    uvec2 ic4_ = uvec2(uvec2(0u));
-    mat2x3 ic5_ = mat2x3(mat2x3(0.0));
+    uvec2 ic4_ = uvec2(0u, 0u);
+    mat2x3 ic5_ = mat2x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
     uvec2 ic6_ = uvec2(0u);
     mat2x3 ic7_ = mat2x3(0.0);
 }

@@ -22,7 +22,6 @@ use parser::ParsingContext;
 
 mod ast;
 mod builtins;
-mod constants;
 mod context;
 mod error;
 mod functions;

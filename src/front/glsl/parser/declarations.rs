@@ -241,7 +241,7 @@ impl<'source> ParsingContext<'source> {
             let is_const = ctx.qualifiers.storage.0 == StorageQualifier::Const;
             let maybe_const_expr = if ctx.external {
                 if let Some((root, meta)) = init {
-                    match ctx.ctx.solve_constant(root, meta) {
+                    match ctx.ctx.eval_constant(root, meta) {
                         Ok(res) => Some(res),
                         // If the declaration is external (global scope) and is constant qualified
                         // then the initializer must be a constant expression

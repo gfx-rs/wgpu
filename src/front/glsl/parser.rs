@@ -226,7 +226,7 @@ impl<'source> ParsingContext<'source> {
         let expr = self.parse_conditional(frontend, &mut ctx, &mut stmt_ctx, None)?;
         let (root, meta) = ctx.lower_expect(stmt_ctx, frontend, expr, ExprPos::Rhs)?;
 
-        Ok((ctx.solve_constant(root, meta)?, meta))
+        Ok((ctx.eval_constant(root, meta)?, meta))
     }
 }
 

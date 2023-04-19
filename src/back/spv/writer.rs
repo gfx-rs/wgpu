@@ -198,11 +198,15 @@ impl Writer {
         }
     }
 
-    pub(super) fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
-        let lookup_ty = match *tr {
+    pub(super) fn get_expression_lookup_type(&mut self, tr: &TypeResolution) -> LookupType {
+        match *tr {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => LookupType::Local(make_local(inner).unwrap()),
-        };
+        }
+    }
+
+    pub(super) fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
+        let lookup_ty = self.get_expression_lookup_type(tr);
         self.get_type_id(lookup_ty)
     }
 
@@ -1242,6 +1246,7 @@ impl Writer {
         &mut self,
         handle: Handle<crate::Expression>,
         ir_module: &crate::Module,
+        mod_info: &ModuleInfo,
     ) -> Result<Word, Error> {
         let id = match ir_module.const_expressions[handle] {
             crate::Expression::Literal(literal) => self.get_constant_scalar(literal),
@@ -1259,6 +1264,14 @@ impl Writer {
                     .map(|component| self.constant_ids[component.index()])
                     .collect();
                 self.get_constant_composite(LookupType::Handle(ty), component_ids.as_slice())
+            }
+            crate::Expression::Splat { size, value } => {
+                let value_id = self.constant_ids[value.index()];
+                let component_ids = &[value_id; 4][..size as usize];
+
+                let ty = self.get_expression_lookup_type(&mod_info[handle]);
+
+                self.get_constant_composite(ty, component_ids)
             }
             _ => unreachable!(),
         };
@@ -1878,7 +1891,7 @@ impl Writer {
         self.constant_ids
             .resize(ir_module.const_expressions.len(), 0);
         for (handle, _) in ir_module.const_expressions.iter() {
-            self.write_constant_expr(handle, ir_module)?;
+            self.write_constant_expr(handle, ir_module, mod_info)?;
         }
         debug_assert!(self.constant_ids.iter().all(|&id| id != 0));
 

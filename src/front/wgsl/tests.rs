@@ -402,9 +402,8 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
     ] {
         let module = parse_str(&format!(
             "
-            const some_vec = vec3<f32>(1.0, 1.0, 1.0);
             @fragment
-            fn main() -> @location(0) vec4<f32> {{
+            fn main(@location(0) some_vec: vec3<f32>) -> @location(0) vec4<f32> {{
                 if (all(1.0 {operand} some_vec)) {{
                     return vec4(0.0);
                 }}
@@ -431,7 +430,12 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
             })
             .count();
 
-        assert_eq!(found_expressions, 1);
+        assert_eq!(
+            found_expressions,
+            1,
+            "expected `{operand}` expression {} splat",
+            if expect_splat { "with" } else { "without" }
+        );
     }
 
     let module = parse_str(
