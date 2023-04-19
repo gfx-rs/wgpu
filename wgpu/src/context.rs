@@ -4,14 +4,14 @@ use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
-    TextureFormatFeatures,
+    TextureFormatFeatures, WasmNotSend, WasmNotSync,
 };
 
 use crate::{
-    AnySendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
+    AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
-    MaybeSend, MaybeSync, PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
+    PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
@@ -27,59 +27,59 @@ impl<T: Into<ObjectId> + From<ObjectId> + Debug + 'static> ContextId for T {}
 /// Meta trait for an data associated with an id tracked by a context.
 ///
 /// There is no need to manually implement this trait since there is a blanket implementation for this trait.
-pub trait ContextData: Debug + MaybeSend + MaybeSync + 'static {}
-impl<T: Debug + MaybeSend + MaybeSync + 'static> ContextData for T {}
+pub trait ContextData: Debug + WasmNotSend + WasmNotSync + 'static {}
+impl<T: Debug + WasmNotSend + WasmNotSync + 'static> ContextData for T {}
 
-pub trait Context: Debug + MaybeSend + MaybeSync + Sized {
-    type AdapterId: ContextId + MaybeSend + MaybeSync;
+pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
+    type AdapterId: ContextId + WasmNotSend + WasmNotSync;
     type AdapterData: ContextData;
-    type DeviceId: ContextId + MaybeSend + MaybeSync;
+    type DeviceId: ContextId + WasmNotSend + WasmNotSync;
     type DeviceData: ContextData;
-    type QueueId: ContextId + MaybeSend + MaybeSync;
+    type QueueId: ContextId + WasmNotSend + WasmNotSync;
     type QueueData: ContextData;
-    type ShaderModuleId: ContextId + MaybeSend + MaybeSync;
+    type ShaderModuleId: ContextId + WasmNotSend + WasmNotSync;
     type ShaderModuleData: ContextData;
-    type BindGroupLayoutId: ContextId + MaybeSend + MaybeSync;
+    type BindGroupLayoutId: ContextId + WasmNotSend + WasmNotSync;
     type BindGroupLayoutData: ContextData;
-    type BindGroupId: ContextId + MaybeSend + MaybeSync;
+    type BindGroupId: ContextId + WasmNotSend + WasmNotSync;
     type BindGroupData: ContextData;
-    type TextureViewId: ContextId + MaybeSend + MaybeSync;
+    type TextureViewId: ContextId + WasmNotSend + WasmNotSync;
     type TextureViewData: ContextData;
-    type SamplerId: ContextId + MaybeSend + MaybeSync;
+    type SamplerId: ContextId + WasmNotSend + WasmNotSync;
     type SamplerData: ContextData;
-    type BufferId: ContextId + MaybeSend + MaybeSync;
+    type BufferId: ContextId + WasmNotSend + WasmNotSync;
     type BufferData: ContextData;
-    type TextureId: ContextId + MaybeSend + MaybeSync;
+    type TextureId: ContextId + WasmNotSend + WasmNotSync;
     type TextureData: ContextData;
-    type QuerySetId: ContextId + MaybeSend + MaybeSync;
+    type QuerySetId: ContextId + WasmNotSend + WasmNotSync;
     type QuerySetData: ContextData;
-    type PipelineLayoutId: ContextId + MaybeSend + MaybeSync;
+    type PipelineLayoutId: ContextId + WasmNotSend + WasmNotSync;
     type PipelineLayoutData: ContextData;
-    type RenderPipelineId: ContextId + MaybeSend + MaybeSync;
+    type RenderPipelineId: ContextId + WasmNotSend + WasmNotSync;
     type RenderPipelineData: ContextData;
-    type ComputePipelineId: ContextId + MaybeSend + MaybeSync;
+    type ComputePipelineId: ContextId + WasmNotSend + WasmNotSync;
     type ComputePipelineData: ContextData;
-    type CommandEncoderId: ContextId + MaybeSend + MaybeSync;
+    type CommandEncoderId: ContextId + WasmNotSend + WasmNotSync;
     type CommandEncoderData: ContextData;
     type ComputePassId: ContextId;
     type ComputePassData: ContextData;
     type RenderPassId: ContextId;
     type RenderPassData: ContextData;
-    type CommandBufferId: ContextId + MaybeSend + MaybeSync;
+    type CommandBufferId: ContextId + WasmNotSend + WasmNotSync;
     type CommandBufferData: ContextData;
     type RenderBundleEncoderId: ContextId;
     type RenderBundleEncoderData: ContextData;
-    type RenderBundleId: ContextId + MaybeSend + MaybeSync;
+    type RenderBundleId: ContextId + WasmNotSend + WasmNotSync;
     type RenderBundleData: ContextData;
-    type SurfaceId: ContextId + MaybeSend + MaybeSync;
+    type SurfaceId: ContextId + WasmNotSend + WasmNotSync;
     type SurfaceData: ContextData;
 
-    type SurfaceOutputDetail: MaybeSend + MaybeSync + 'static;
-    type SubmissionIndex: ContextId + Clone + Copy + MaybeSend + MaybeSync;
+    type SurfaceOutputDetail: WasmNotSend + WasmNotSync + 'static;
+    type SubmissionIndex: ContextId + Clone + Copy + WasmNotSend + WasmNotSync;
     type SubmissionIndexData: ContextData + Copy;
 
     type RequestAdapterFuture: Future<Output = Option<(Self::AdapterId, Self::AdapterData)>>
-        + MaybeSend
+        + WasmNotSend
         + 'static;
     type RequestDeviceFuture: Future<
             Output = Result<
@@ -91,9 +91,9 @@ pub trait Context: Debug + MaybeSend + MaybeSync + Sized {
                 ),
                 RequestDeviceError,
             >,
-        > + MaybeSend
+        > + WasmNotSend
         + 'static;
-    type PopErrorScopeFuture: Future<Output = Option<Error>> + MaybeSend + 'static;
+    type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     fn instance_create_surface(
@@ -1042,13 +1042,15 @@ impl ObjectId {
 #[cfg(not(target_arch = "wasm32"))]
 static_assertions::assert_impl_all!(ObjectId: Send, Sync);
 
-pub(crate) fn downcast_ref<T: Debug + MaybeSend + MaybeSync + 'static>(data: &crate::Data) -> &T {
+pub(crate) fn downcast_ref<T: Debug + WasmNotSend + WasmNotSync + 'static>(
+    data: &crate::Data,
+) -> &T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &*(data as *const dyn Any as *const T) }
 }
 
-fn downcast_mut<T: Debug + MaybeSend + MaybeSync + 'static>(data: &mut crate::Data) -> &mut T {
+fn downcast_mut<T: Debug + WasmNotSend + WasmNotSync + 'static>(data: &mut crate::Data) -> &mut T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &mut *(data as *mut dyn Any as *mut T) }
@@ -1110,7 +1112,7 @@ pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
-pub(crate) trait DynContext: Debug + MaybeSend + MaybeSync {
+pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     fn as_any(&self) -> &dyn Any;
 
     fn instance_create_surface(
@@ -1182,10 +1184,10 @@ pub(crate) trait DynContext: Debug + MaybeSend + MaybeSync {
         Option<ObjectId>,
         Option<Box<crate::Data>>,
         SurfaceStatus,
-        Box<dyn AnySendSync>,
+        Box<dyn AnyWasmNotSendSync>,
     );
-    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnySendSync);
-    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnySendSync);
+    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync);
+    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync);
 
     fn device_features(&self, device: &ObjectId, device_data: &crate::Data) -> Features;
     fn device_limits(&self, device: &ObjectId, device_data: &crate::Data) -> Limits;
@@ -2094,13 +2096,13 @@ where
         Option<ObjectId>,
         Option<Box<crate::Data>>,
         SurfaceStatus,
-        Box<dyn AnySendSync>,
+        Box<dyn AnyWasmNotSendSync>,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
         let surface_data = downcast_ref(surface_data);
         let (texture, texture_data, status, detail) =
             Context::surface_get_current_texture(self, &surface, surface_data);
-        let detail = Box::new(detail) as Box<dyn AnySendSync>;
+        let detail = Box::new(detail) as Box<dyn AnyWasmNotSendSync>;
         (
             texture.map(Into::into),
             texture_data.map(|b| Box::new(b) as _),
@@ -2109,12 +2111,12 @@ where
         )
     }
 
-    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnySendSync) {
+    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync) {
         let texture = <T::TextureId>::from(*texture);
         Context::surface_present(self, &texture, detail.downcast_ref().unwrap())
     }
 
-    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnySendSync) {
+    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync) {
         let texture = <T::TextureId>::from(*texture);
         Context::surface_texture_discard(self, &texture, detail.downcast_ref().unwrap())
     }
@@ -3891,7 +3893,7 @@ where
     }
 }
 
-pub trait QueueWriteBuffer: MaybeSend + MaybeSync {
+pub trait QueueWriteBuffer: WasmNotSend + WasmNotSync {
     fn slice(&self) -> &[u8];
 
     fn slice_mut(&mut self) -> &mut [u8];

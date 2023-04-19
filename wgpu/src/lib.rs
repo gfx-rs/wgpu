@@ -43,8 +43,9 @@ pub use wgt::{
     StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
 
 #[cfg(any(
@@ -1347,7 +1348,7 @@ pub struct SurfaceTexture {
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
     presented: bool,
-    detail: Box<dyn AnySendSync>,
+    detail: Box<dyn AnyWasmNotSendSync>,
 }
 #[cfg(not(target_arch = "wasm32"))]
 static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
@@ -1503,7 +1504,7 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions,
-    ) -> impl Future<Output = Option<Adapter>> + MaybeSend {
+    ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
         async move {
@@ -1783,7 +1784,7 @@ impl Adapter {
         &self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + MaybeSend {
+    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let device = DynContext::adapter_request_device(
             &*self.context,
@@ -2297,7 +2298,7 @@ impl Device {
     }
 
     /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + MaybeSend {
+    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.context
             .device_pop_error_scope(&self.id, self.data.as_ref())
     }
@@ -2602,7 +2603,7 @@ impl<'a> BufferSlice<'a> {
     pub fn map_async(
         &self,
         mode: MapMode,
-        callback: impl FnOnce(Result<(), BufferAsyncError>) + MaybeSend + 'static,
+        callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(
@@ -4695,42 +4696,26 @@ mod send_sync {
     use std::any::Any;
     use std::fmt;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pub trait MaybeSend: Send {}
-    #[cfg(not(target_arch = "wasm32"))]
-    impl<T: Send> MaybeSend for T {}
-    #[cfg(target_arch = "wasm32")]
-    pub trait MaybeSend {}
-    #[cfg(target_arch = "wasm32")]
-    impl<T> MaybeSend for T {}
+    use wgt::{WasmNotSend, WasmNotSync};
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pub trait MaybeSync: Sync {}
-    #[cfg(not(target_arch = "wasm32"))]
-    impl<T: Sync> MaybeSync for T {}
-    #[cfg(target_arch = "wasm32")]
-    pub trait MaybeSync {}
-    #[cfg(target_arch = "wasm32")]
-    impl<T> MaybeSync for T {}
-
-    pub trait AnySendSync: Any + MaybeSend + MaybeSync {
+    pub trait AnyWasmNotSendSync: Any + WasmNotSend + WasmNotSync {
         fn upcast_any_ref(&self) -> &dyn Any;
     }
-    impl<T: Any + MaybeSend + MaybeSync> AnySendSync for T {
+    impl<T: Any + WasmNotSend + WasmNotSync> AnyWasmNotSendSync for T {
         #[inline]
         fn upcast_any_ref(&self) -> &dyn Any {
             self
         }
     }
 
-    impl dyn AnySendSync + 'static {
+    impl dyn AnyWasmNotSendSync + 'static {
         #[inline]
         pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
             self.upcast_any_ref().downcast_ref::<T>()
         }
     }
 
-    impl fmt::Debug for dyn AnySendSync {
+    impl fmt::Debug for dyn AnyWasmNotSendSync {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.debug_struct("Any").finish_non_exhaustive()
         }

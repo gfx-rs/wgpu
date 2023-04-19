@@ -2,8 +2,8 @@ use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
-    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, MaybeSend, MaybeSync,
-    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
+    PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
@@ -23,6 +23,7 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
+use wgt::{WasmNotSend, WasmNotSync};
 
 const LABEL: &str = "label";
 
@@ -263,7 +264,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + MaybeSend + MaybeSync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -297,7 +298,7 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + MaybeSend + MaybeSync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
@@ -306,7 +307,7 @@ impl Context {
     #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + MaybeSend + MaybeSync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         operation: &'static str,
     ) -> ! {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));
