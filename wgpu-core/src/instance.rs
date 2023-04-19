@@ -520,7 +520,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
         id_in: Input<G, SurfaceId>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_canvas");
@@ -547,7 +547,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
         id_in: Input<G, SurfaceId>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
