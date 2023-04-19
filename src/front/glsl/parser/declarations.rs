@@ -161,7 +161,7 @@ impl<'source> ParsingContext<'source> {
 
             let scalar_components = scalar_components(&frontend.module.types[ty].inner);
             if let Some((kind, width)) = scalar_components {
-                ctx.implicit_conversion(frontend, &mut init, init_meta, kind, width)?;
+                ctx.implicit_conversion(frontend, &mut init, init_meta, kind, width, body)?;
             }
 
             Ok((init, init_meta))
@@ -233,8 +233,9 @@ impl<'source> ParsingContext<'source> {
 
                     let scalar_components = scalar_components(&frontend.module.types[ty].inner);
                     if let Some((kind, width)) = scalar_components {
-                        ctx.ctx
-                            .implicit_conversion(frontend, &mut expr, init_meta, kind, width)?;
+                        ctx.ctx.implicit_conversion(
+                            frontend, &mut expr, init_meta, kind, width, ctx.body,
+                        )?;
                     }
 
                     meta.subsume(init_meta);

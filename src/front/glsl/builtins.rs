@@ -2057,7 +2057,7 @@ impl MacroCall {
                 body,
             ),
             MacroCall::Mod(size) => {
-                ctx.implicit_splat(frontend, &mut args[1], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[1], meta, size, body)?;
 
                 // x - y * floor(x / y)
 
@@ -2101,7 +2101,7 @@ impl MacroCall {
                 )
             }
             MacroCall::Splatted(fun, size, i) => {
-                ctx.implicit_splat(frontend, &mut args[i], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[i], meta, size, body)?;
 
                 ctx.add_expression(
                     Expression::Math {
@@ -2125,8 +2125,8 @@ impl MacroCall {
                 body,
             ),
             MacroCall::Clamp(size) => {
-                ctx.implicit_splat(frontend, &mut args[1], meta, size)?;
-                ctx.implicit_splat(frontend, &mut args[2], meta, size)?;
+                ctx.implicit_splat(frontend, &mut args[1], meta, size, body)?;
+                ctx.implicit_splat(frontend, &mut args[2], meta, size, body)?;
 
                 ctx.add_expression(
                     Expression::Math {
@@ -2164,8 +2164,8 @@ impl MacroCall {
                 return Ok(None);
             }
             MacroCall::SmoothStep { splatted } => {
-                ctx.implicit_splat(frontend, &mut args[0], meta, splatted)?;
-                ctx.implicit_splat(frontend, &mut args[1], meta, splatted)?;
+                ctx.implicit_splat(frontend, &mut args[0], meta, splatted, body)?;
+                ctx.implicit_splat(frontend, &mut args[1], meta, splatted, body)?;
 
                 ctx.add_expression(
                     Expression::Math {
@@ -2196,7 +2196,7 @@ fn texture_call(
         let mut array_index = comps.array_index;
 
         if let Some(ref mut array_index_expr) = array_index {
-            ctx.conversion(array_index_expr, meta, Sk::Sint, 4)?;
+            ctx.conversion(array_index_expr, meta, Sk::Sint, 4, body)?;
         }
 
         Ok(ctx.add_expression(

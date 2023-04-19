@@ -79,8 +79,8 @@ impl Frontend {
                 let mut reject = ctx.add_expression(Expression::Literal(l0), expr_meta, body);
                 let mut accept = ctx.add_expression(Expression::Literal(l1), expr_meta, body);
 
-                ctx.implicit_splat(self, &mut reject, meta, vector_size)?;
-                ctx.implicit_splat(self, &mut accept, meta, vector_size)?;
+                ctx.implicit_splat(self, &mut reject, meta, vector_size, body)?;
+                ctx.implicit_splat(self, &mut accept, meta, vector_size, body)?;
 
                 let h = ctx.add_expression(
                     Expression::Select {
@@ -99,7 +99,7 @@ impl Frontend {
 
         Ok(match self.module.types[ty].inner {
             TypeInner::Vector { size, kind, width } if vector_size.is_none() => {
-                ctx.forced_conversion(self, &mut value, expr_meta, kind, width)?;
+                ctx.forced_conversion(self, &mut value, expr_meta, kind, width, body)?;
 
                 if let TypeInner::Scalar { .. } = *self.resolve_type(ctx, value, expr_meta)? {
                     ctx.add_expression(Expression::Splat { size, value }, meta, body)
@@ -186,7 +186,7 @@ impl Frontend {
                     .get(0)
                     .and_then(|member| scalar_components(&self.module.types[member.ty].inner));
                 if let Some((kind, width)) = scalar_components {
-                    ctx.implicit_conversion(self, &mut value, expr_meta, kind, width)?;
+                    ctx.implicit_conversion(self, &mut value, expr_meta, kind, width, body)?;
                 }
 
                 ctx.add_expression(
@@ -202,7 +202,7 @@ impl Frontend {
             TypeInner::Array { base, .. } => {
                 let scalar_components = scalar_components(&self.module.types[base].inner);
                 if let Some((kind, width)) = scalar_components {
-                    ctx.implicit_conversion(self, &mut value, expr_meta, kind, width)?;
+                    ctx.implicit_conversion(self, &mut value, expr_meta, kind, width, body)?;
                 }
 
                 ctx.add_expression(
@@ -242,7 +242,7 @@ impl Frontend {
         // `Expression::As` doesn't support matrix width
         // casts so we need to do some extra work for casts
 
-        ctx.forced_conversion(self, &mut value, expr_meta, ScalarKind::Float, width)?;
+        ctx.forced_conversion(self, &mut value, expr_meta, ScalarKind::Float, width, body)?;
         match *self.resolve_type(ctx, value, expr_meta)? {
             TypeInner::Scalar { .. } => {
                 // If a matrix is constructed with a single scalar value, then that
@@ -395,7 +395,7 @@ impl Frontend {
         let mut components = Vec::with_capacity(size as usize);
 
         for (mut arg, expr_meta) in args.iter().copied() {
-            ctx.forced_conversion(self, &mut arg, expr_meta, kind, width)?;
+            ctx.forced_conversion(self, &mut arg, expr_meta, kind, width, body)?;
 
             if components.len() >= size as usize {
                 break;
@@ -461,7 +461,7 @@ impl Frontend {
                 let mut flattened = Vec::with_capacity(columns as usize * rows as usize);
 
                 for (mut arg, meta) in args.iter().copied() {
-                    ctx.forced_conversion(self, &mut arg, meta, ScalarKind::Float, width)?;
+                    ctx.forced_conversion(self, &mut arg, meta, ScalarKind::Float, width, body)?;
 
                     match *self.resolve_type(ctx, arg, meta)? {
                         TypeInner::Vector { size, .. } => {
@@ -510,7 +510,7 @@ impl Frontend {
                 for (mut arg, meta) in args.iter().copied() {
                     let scalar_components = scalar_components(&self.module.types[base].inner);
                     if let Some((kind, width)) = scalar_components {
-                        ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                        ctx.implicit_conversion(self, &mut arg, meta, kind, width, body)?;
                     }
 
                     components.push(arg)
@@ -520,7 +520,7 @@ impl Frontend {
                 for ((mut arg, meta), member) in args.iter().copied().zip(members.iter()) {
                     let scalar_components = scalar_components(&self.module.types[member.ty].inner);
                     if let Some((kind, width)) = scalar_components {
-                        ctx.implicit_conversion(self, &mut arg, meta, kind, width)?;
+                        ctx.implicit_conversion(self, &mut arg, meta, kind, width, body)?;
                     }
 
                     components.push(arg)
@@ -845,7 +845,7 @@ impl Frontend {
 
             // Apply implicit conversions as needed
             if let Some((kind, width)) = scalar_comps {
-                ctx.implicit_conversion(self, &mut handle, meta, kind, width)?;
+                ctx.implicit_conversion(self, &mut handle, meta, kind, width, body)?;
             }
 
             arguments.push(handle)
@@ -883,7 +883,7 @@ impl Frontend {
                     );
 
                     if let Some((kind, width)) = proxy_write.convert {
-                        ctx.conversion(&mut value, meta, kind, width)?;
+                        ctx.conversion(&mut value, meta, kind, width, body)?;
                     }
 
                     ctx.emit_restart(body);

@@ -114,28 +114,19 @@ impl Context {
         }: GlobalLookup,
         body: &mut Block,
     ) {
-        self.emit_end(body);
         let (expr, load, constant) = match kind {
             GlobalLookupKind::Variable(v) => {
                 let span = frontend.module.global_variables.get_span(v);
-                let res = (
-                    self.expressions.append(Expression::GlobalVariable(v), span),
+                (
+                    self.add_expression(Expression::GlobalVariable(v), span, body),
                     frontend.module.global_variables[v].space != AddressSpace::Handle,
                     None,
-                );
-                self.emit_start();
-
-                res
+                )
             }
             GlobalLookupKind::BlockSelect(handle, index) => {
                 let span = frontend.module.global_variables.get_span(handle);
-                let base = self
-                    .expressions
-                    .append(Expression::GlobalVariable(handle), span);
-                self.emit_start();
-                let expr = self
-                    .expressions
-                    .append(Expression::AccessIndex { base, index }, span);
+                let base = self.add_expression(Expression::GlobalVariable(handle), span, body);
+                let expr = self.add_expression(Expression::AccessIndex { base, index }, span, body);
 
                 (
                     expr,
@@ -162,13 +153,11 @@ impl Context {
             }
             GlobalLookupKind::Constant(v, ty) => {
                 let span = frontend.module.constants.get_span(v);
-                let res = (
-                    self.expressions.append(Expression::Constant(v), span),
+                (
+                    self.add_expression(Expression::Constant(v), span, body),
                     false,
                     Some((v, ty)),
-                );
-                self.emit_start();
-                res
+                )
             }
         };
 
@@ -568,9 +557,10 @@ impl Context {
                             right_meta,
                             ScalarKind::Uint,
                             4,
+                            body,
                         )?,
                     _ => self.binary_implicit_conversion(
-                        frontend, &mut left, left_meta, &mut right, right_meta,
+                        frontend, &mut left, left_meta, &mut right, right_meta, body,
                     )?,
                 }
 
@@ -632,20 +622,21 @@ impl Context {
                                     );
 
                                     // Divide the vectors
-                                    let column = self.expressions.append(
+                                    let column = self.add_expression(
                                         Expression::Binary {
                                             op,
                                             left: left_vector,
                                             right: right_vector,
                                         },
                                         meta,
+                                        body,
                                     );
 
                                     components.push(column)
                                 }
 
                                 // Rebuild the matrix from the divided vectors
-                                self.expressions.append(
+                                self.add_expression(
                                     Expression::Compose {
                                         ty: frontend.module.types.insert(
                                             Type {
@@ -661,6 +652,7 @@ impl Context {
                                         components,
                                     },
                                     meta,
+                                    body,
                                 )
                             }
                             BinaryOperator::Equal | BinaryOperator::NotEqual => {
@@ -699,13 +691,14 @@ impl Context {
                                         body,
                                     );
 
-                                    let argument = self.expressions.append(
+                                    let argument = self.add_expression(
                                         Expression::Binary {
                                             op,
                                             left: left_vector,
                                             right: right_vector,
                                         },
                                         meta,
+                                        body,
                                     );
 
                                     // The result of comparing two vectors is a boolean vector
@@ -750,9 +743,11 @@ impl Context {
                                 false => (BinaryOperator::NotEqual, RelationalFunction::Any),
                             };
 
-                            let argument = self
-                                .expressions
-                                .append(Expression::Binary { op, left, right }, meta);
+                            let argument = self.add_expression(
+                                Expression::Binary { op, left, right },
+                                meta,
+                                body,
+                            );
 
                             self.add_expression(
                                 Expression::Relational { fun, argument },
@@ -872,20 +867,21 @@ impl Context {
 
                                     // Apply the operation to the splatted vector and
                                     // the column vector
-                                    let column = self.expressions.append(
+                                    let column = self.add_expression(
                                         Expression::Binary {
                                             op,
                                             left: scalar_vector,
                                             right: matrix_column,
                                         },
                                         meta,
+                                        body,
                                     );
 
                                     components.push(column)
                                 }
 
                                 // Rebuild the matrix from the operation result vectors
-                                self.expressions.append(
+                                self.add_expression(
                                     Expression::Compose {
                                         ty: frontend.module.types.insert(
                                             Type {
@@ -901,6 +897,7 @@ impl Context {
                                         components,
                                     },
                                     meta,
+                                    body,
                                 )
                             }
                             _ => self.add_expression(
@@ -963,20 +960,21 @@ impl Context {
 
                                     // Apply the operation to the splatted vector and
                                     // the column vector
-                                    let column = self.expressions.append(
+                                    let column = self.add_expression(
                                         Expression::Binary {
                                             op,
                                             left: matrix_column,
                                             right: scalar_vector,
                                         },
                                         meta,
+                                        body,
                                     );
 
                                     components.push(column)
                                 }
 
                                 // Rebuild the matrix from the operation result vectors
-                                self.expressions.append(
+                                self.add_expression(
                                     Expression::Compose {
                                         ty: frontend.module.types.insert(
                                             Type {
@@ -992,6 +990,7 @@ impl Context {
                                         components,
                                     },
                                     meta,
+                                    body,
                                 )
                             }
                             _ => self.add_expression(
@@ -1137,27 +1136,31 @@ impl Context {
                 ) {
                     match accept_power.cmp(&reject_power) {
                         std::cmp::Ordering::Less => {
-                            self.conversion(&mut accept, accept_meta, reject_kind, reject_width)?;
+                            self.conversion(
+                                &mut accept,
+                                accept_meta,
+                                reject_kind,
+                                reject_width,
+                                &mut accept_body,
+                            )?;
                             // The expression belongs to the `true` branch so we need to flush to
                             // the respective body
-                            self.emit_end(&mut accept_body);
+                            self.emit_restart(&mut accept_body);
                         }
-                        // Technically there's nothing to flush but later we will need to
-                        // add some expressions that must not be emitted so instead
-                        // of flushing, starting and flushing again, just make sure
-                        // everything is flushed.
-                        std::cmp::Ordering::Equal => self.emit_end(body),
+                        std::cmp::Ordering::Equal => {}
                         std::cmp::Ordering::Greater => {
-                            self.conversion(&mut reject, reject_meta, accept_kind, accept_width)?;
+                            self.conversion(
+                                &mut reject,
+                                reject_meta,
+                                accept_kind,
+                                accept_width,
+                                &mut reject_body,
+                            )?;
                             // The expression belongs to the `false` branch so we need to flush to
                             // the respective body
-                            self.emit_end(&mut reject_body);
+                            self.emit_restart(&mut reject_body);
                         }
                     }
-                } else {
-                    // Technically there's nothing to flush but later we will need to
-                    // add some expressions that must not be emitted.
-                    self.emit_end(body)
                 }
 
                 // We need to get the type of the resulting expression to create the local,
@@ -1175,11 +1178,7 @@ impl Context {
                     meta,
                 );
 
-                // Note: `Expression::LocalVariable` must not be emited so it's important
-                // that at this point the emitter is flushed but not started.
-                let local_expr = self
-                    .expressions
-                    .append(Expression::LocalVariable(local), meta);
+                let local_expr = self.add_expression(Expression::LocalVariable(local), meta, body);
 
                 // Add to each body the store to the result variable
                 accept_body.push(
@@ -1208,16 +1207,14 @@ impl Context {
                     meta,
                 );
 
-                // Restart the emitter
-                self.emit_start();
-
                 // Note: `Expression::Load` must be emited before it's used so make
                 // sure the emitter is active here.
-                self.expressions.append(
+                self.add_expression(
                     Expression::Load {
                         pointer: local_expr,
                     },
                     meta,
+                    body,
                 )
             }
             HirExprKind::Assign { tgt, value } if ExprPos::Lhs != pos => {
@@ -1232,7 +1229,7 @@ impl Context {
                 };
 
                 if let Some((kind, width)) = scalar_components(ty) {
-                    self.implicit_conversion(frontend, &mut value, value_meta, kind, width)?;
+                    self.implicit_conversion(frontend, &mut value, value_meta, kind, width, body)?;
                 }
 
                 self.lower_store(pointer, value, meta, body);
@@ -1365,6 +1362,7 @@ impl Context {
                                     meta,
                                     ScalarKind::Sint,
                                     4,
+                                    body,
                                 )?;
                                 array_length
                             }
@@ -1375,7 +1373,13 @@ impl Context {
                                     meta,
                                     body,
                                 );
-                                self.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                self.conversion(
+                                    &mut array_length,
+                                    meta,
+                                    ScalarKind::Sint,
+                                    4,
+                                    body,
+                                )?;
                                 array_length
                             }
                         }
@@ -1439,14 +1443,16 @@ impl Context {
         meta: Span,
         kind: ScalarKind,
         width: crate::Bytes,
+        body: &mut Block,
     ) -> Result<()> {
-        *expr = self.expressions.append(
+        *expr = self.add_expression(
             Expression::As {
                 expr: *expr,
                 kind,
                 convert: Some(width),
             },
             meta,
+            body,
         );
 
         Ok(())
@@ -1459,13 +1465,14 @@ impl Context {
         meta: Span,
         kind: ScalarKind,
         width: crate::Bytes,
+        body: &mut Block,
     ) -> Result<()> {
         if let (Some(tgt_power), Some(expr_power)) = (
             type_power(kind, width),
             self.expr_power(frontend, *expr, meta)?,
         ) {
             if tgt_power > expr_power {
-                self.conversion(expr, meta, kind, width)?;
+                self.conversion(expr, meta, kind, width, body)?;
             }
         }
 
@@ -1479,12 +1486,13 @@ impl Context {
         meta: Span,
         kind: ScalarKind,
         width: crate::Bytes,
+        body: &mut Block,
     ) -> Result<()> {
         if let Some((expr_scalar_kind, expr_width)) =
             self.expr_scalar_components(frontend, *expr, meta)?
         {
             if expr_scalar_kind != kind || expr_width != width {
-                self.conversion(expr, meta, kind, width)?;
+                self.conversion(expr, meta, kind, width, body)?;
             }
         }
 
@@ -1498,6 +1506,7 @@ impl Context {
         left_meta: Span,
         right: &mut Handle<Expression>,
         right_meta: Span,
+        body: &mut Block,
     ) -> Result<()> {
         let left_components = self.expr_scalar_components(frontend, *left, left_meta)?;
         let right_components = self.expr_scalar_components(frontend, *right, right_meta)?;
@@ -1512,11 +1521,11 @@ impl Context {
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
-                    self.conversion(left, left_meta, right_kind, right_width)?;
+                    self.conversion(left, left_meta, right_kind, right_width, body)?;
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
-                    self.conversion(right, right_meta, left_kind, left_width)?;
+                    self.conversion(right, right_meta, left_kind, left_width, body)?;
                 }
             }
         }
@@ -1530,13 +1539,12 @@ impl Context {
         expr: &mut Handle<Expression>,
         meta: Span,
         vector_size: Option<VectorSize>,
+        body: &mut Block,
     ) -> Result<()> {
         let expr_type = frontend.resolve_type(self, *expr, meta)?;
 
         if let (&TypeInner::Scalar { .. }, Some(size)) = (expr_type, vector_size) {
-            *expr = self
-                .expressions
-                .append(Expression::Splat { size, value: *expr }, meta)
+            *expr = self.add_expression(Expression::Splat { size, value: *expr }, meta, body)
         }
 
         Ok(())
