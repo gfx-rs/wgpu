@@ -12,7 +12,7 @@ use wgpu::*;
 /// submit, delete the second vertex buffer and `poll(Wait)`. Because we maintained the device,
 /// the actual underlying buffer for the second vertex buffer is deleted, causing a draw call
 /// that is invalid if the second attribute is still enabled.
-/// 
+///
 /// We use non-consecutive vertex attribute locations (0 and 5) in order to also test
 /// that we unset the correct locations (see PR #3706).
 #[wasm_bindgen_test]
