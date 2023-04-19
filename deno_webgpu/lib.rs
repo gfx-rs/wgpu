@@ -186,6 +186,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC) {
         return_features.push("texture-compression-astc");
     }
+    if features.contains(wgpu_types::Features::RG11B10UFLOAT_RENDERABLE) {
+        return_features.push("rg11b10ufloat-renderable");
+    }
 
     // extended from spec
 
@@ -403,6 +406,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::TEXTURE_COMPRESSION_ASTC,
             required_features.0.contains("texture-compression-astc"),
+        );
+        features.set(
+            wgpu_types::Features::RG11B10UFLOAT_RENDERABLE,
+            required_features.0.contains("rg11b10ufloat-renderable"),
         );
 
         // extended from spec

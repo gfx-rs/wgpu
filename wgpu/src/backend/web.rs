@@ -1095,11 +1095,11 @@ impl crate::context::Context for Context {
 
     fn adapter_get_texture_format_features(
         &self,
-        _adapter: &Self::AdapterId,
-        _adapter_data: &Self::AdapterData,
+        adapter: &Self::AdapterId,
+        adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        format.guaranteed_format_features()
+        format.guaranteed_format_features(self.adapter_features(adapter, adapter_data))
     }
 
     fn adapter_get_presentation_timestamp(

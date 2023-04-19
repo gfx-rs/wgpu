@@ -526,6 +526,16 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
+        let rg11b10ufloat_renderable = supports_format(
+            instance,
+            phd,
+            vk::Format::B10G11R11_UFLOAT_PACK32,
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::COLOR_ATTACHMENT
+                | vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND,
+        );
+        features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
+
         (features, dl_flags)
     }
 
