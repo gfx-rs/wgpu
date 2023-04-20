@@ -44,6 +44,15 @@ Bottom level categories:
 
 ### Major changes
 
+#### Shader Changes
+
+`type` has been replaced with `alias` to match with upstream WebGPU.
+
+```diff
+- type MyType = vec4<u32>;
++ alias MyType = vec4<u32>;
+```
+
 #### TextureFormat info API
 
 The `TextureFormat::describe` function was removed in favor of separate functions: `block_dimensions`, `is_compressed`, `is_srgb`, `required_features`, `guaranteed_format_features`, `sample_type` and `block_size`.
