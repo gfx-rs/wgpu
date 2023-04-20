@@ -96,8 +96,6 @@ pub enum TypeError {
     InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The {0:?} scalar width {1} is not supported for an atomic")]
     InvalidAtomicWidth(crate::ScalarKind, crate::Bytes),
-    #[error("The base handle {0:?} can not be resolved")]
-    UnresolvedBase(Handle<crate::Type>),
     #[error("Invalid type for pointer target {0:?}")]
     InvalidPointerBase(Handle<crate::Type>),
     #[error("Unsized types like {base:?} must be in the `Storage` address space, not `{space:?}`")]
@@ -318,10 +316,6 @@ impl super::Validator {
             Ti::Pointer { base, space } => {
                 use crate::AddressSpace as As;
 
-                if base >= handle {
-                    return Err(TypeError::UnresolvedBase(base));
-                }
-
                 let base_info = &self.types[base.index()];
                 if !base_info.flags.contains(TypeFlags::DATA) {
                     return Err(TypeError::InvalidPointerBase(base));
@@ -389,9 +383,6 @@ impl super::Validator {
                 )
             }
             Ti::Array { base, size, stride } => {
-                if base >= handle {
-                    return Err(TypeError::UnresolvedBase(base));
-                }
                 let base_info = &self.types[base.index()];
                 if !base_info.flags.contains(TypeFlags::DATA | TypeFlags::SIZED) {
                     return Err(TypeError::InvalidArrayBaseType(base));
@@ -514,9 +505,6 @@ impl super::Validator {
                 let mut prev_struct_data: Option<(u32, u32)> = None;
 
                 for (i, member) in members.iter().enumerate() {
-                    if member.ty >= handle {
-                        return Err(TypeError::UnresolvedBase(member.ty));
-                    }
                     let base_info = &self.types[member.ty.index()];
                     if !base_info.flags.contains(TypeFlags::DATA) {
                         return Err(TypeError::InvalidData(member.ty));
