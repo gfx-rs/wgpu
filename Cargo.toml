@@ -61,7 +61,7 @@ futures-intrusive = "0.4"
 rustc-hash = "1.1.0"
 glam = "0.21.3"
 image = { version = "0.24", default-features = false, features = ["png"] }
-libloading = "0.8"
+libloading = "0.7.4"
 libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
