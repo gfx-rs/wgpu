@@ -5485,7 +5485,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if !caps.formats.contains(&config.format) {
                     break 'outer E::UnsupportedFormat {
                         requested: config.format,
-                        available: caps.formats.clone(),
+                        available: caps.formats,
                     };
                 }
                 if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
