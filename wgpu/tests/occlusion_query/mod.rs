@@ -40,7 +40,11 @@ fn occlusion_query() {
                     entry_point: "vs_main",
                     buffers: &[],
                 },
-                fragment: None,
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[],
+                }),
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth32Float,
@@ -122,7 +126,6 @@ fn occlusion_query() {
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
         // WebGPU only defines query results as zero/non-zero
-        println!("{} {} {}", query_data[0], query_data[1], query_data[2]);
         assert_ne!(query_data[0], 0);
         assert_ne!(query_data[1], 0);
         assert_eq!(query_data[2], 0);
