@@ -174,6 +174,7 @@ pub struct Surface {
 impl Clone for Surface {
     fn clone(&self) -> Self {
         Self {
+            canvas: self.canvas.clone(),
             webgl2_context: self.webgl2_context.clone(),
             swapchain: RwLock::new(self.swapchain.read().clone()),
             texture: Mutex::new(*self.texture.lock()),
