@@ -180,7 +180,6 @@ jobs:
       - name: execute tests
         run: |
           cd wgpu
-          wasm-pack --version
           wasm-pack test --headless --chrome --features webgl
 
   gpu-test:
