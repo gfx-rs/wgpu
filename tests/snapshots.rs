@@ -558,6 +558,10 @@ fn convert_wgsl() {
             "binding-arrays",
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
         ),
+        (
+            "binding-buffer-arrays",
+            Targets::WGSL | Targets::SPIRV, //TODO: more backends, eventually merge into "binding-arrays"
+        ),
         ("resource-binding-map", Targets::METAL),
         ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
         ("multiview_webgl", Targets::GLSL),

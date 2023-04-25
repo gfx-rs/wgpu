@@ -940,10 +940,11 @@ impl Writer {
                 let scalar_id = self.get_constant_scalar(crate::ScalarValue::Uint(size), 4);
                 Instruction::type_array(id, inner_ty, scalar_id)
             }
-            LocalType::PointerToBindingArray { base, size } => {
+            LocalType::PointerToBindingArray { base, size, space } => {
                 let inner_ty =
                     self.get_type_id(LookupType::Local(LocalType::BindingArray { base, size }));
-                Instruction::type_pointer(id, spirv::StorageClass::UniformConstant, inner_ty)
+                let class = map_storage_class(space);
+                Instruction::type_pointer(id, class, inner_ty)
             }
             LocalType::AccelerationStructure => Instruction::type_acceleration_structure(id),
             LocalType::RayQuery => Instruction::type_ray_query(id),
@@ -1579,6 +1580,9 @@ impl Writer {
             }
         }
 
+        // Note: we should be able to substitute `binding_array<Foo, 0>`,
+        // but there is still code that tries to register the pre-substituted type,
+        // and it is failing on 0.
         let mut substitute_inner_type_lookup = None;
         if let Some(ref res_binding) = global_variable.binding {
             self.decorate(id, Decoration::DescriptorSet, &[res_binding.group]);
@@ -1595,6 +1599,7 @@ impl Writer {
                         Some(LookupType::Local(LocalType::PointerToBindingArray {
                             base,
                             size: remapped_binding_array_size as u64,
+                            space: global_variable.space,
                         }))
                 }
             } else {
@@ -1635,7 +1640,13 @@ impl Writer {
             // a runtime-sized array. In this case, we need to decorate it with
             // Block.
             if let crate::AddressSpace::Storage { .. } = global_variable.space {
-                self.decorate(inner_type_id, Decoration::Block, &[]);
+                let decorated_id = match ir_module.types[global_variable.ty].inner {
+                    crate::TypeInner::BindingArray { base, .. } => {
+                        self.get_type_id(LookupType::Handle(base))
+                    }
+                    _ => inner_type_id,
+                };
+                self.decorate(decorated_id, Decoration::Block, &[]);
             }
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id
@@ -1954,6 +1965,13 @@ impl Writer {
     /// Return the set of capabilities the last module written used.
     pub const fn get_capabilities_used(&self) -> &crate::FastHashSet<spirv::Capability> {
         &self.capabilities_used
+    }
+
+    pub fn decorate_non_uniform_binding_array_access(&mut self, id: Word) -> Result<(), Error> {
+        self.require_any("NonUniformEXT", &[spirv::Capability::ShaderNonUniform])?;
+        self.use_extension("SPV_EXT_descriptor_indexing");
+        self.decorate(id, spirv::Decoration::NonUniform, &[]);
+        Ok(())
     }
 }
 

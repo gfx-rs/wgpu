@@ -298,6 +298,7 @@ impl<'a> ResolveContext<'a> {
                             width,
                             space,
                         },
+                        Ti::BindingArray { base, .. } => Ti::Pointer { base, space },
                         ref other => {
                             log::error!("Access sub-type {:?}", other);
                             return Err(ResolveError::InvalidSubAccess {
@@ -401,6 +402,7 @@ impl<'a> ResolveContext<'a> {
                                 space,
                             }
                         }
+                        Ti::BindingArray { base, .. } => Ti::Pointer { base, space },
                         ref other => {
                             log::error!("Access index sub-type {:?}", other);
                             return Err(ResolveError::InvalidSubAccess {

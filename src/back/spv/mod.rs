@@ -288,9 +288,15 @@ enum LocalType {
         image_type_id: Word,
     },
     Sampler,
+    /// Equivalent to a [`LocalType::Pointer`] whose `base` is a Naga IR [`BindingArray`]. SPIR-V
+    /// permits duplicated `OpTypePointer` ids, so it's fine to have two different [`LocalType`]
+    /// representations for pointer types.
+    ///
+    /// [`BindingArray`]: crate::TypeInner::BindingArray
     PointerToBindingArray {
         base: Handle<crate::Type>,
         size: u64,
+        space: crate::AddressSpace,
     },
     BindingArray {
         base: Handle<crate::Type>,
