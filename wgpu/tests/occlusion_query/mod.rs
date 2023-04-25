@@ -6,7 +6,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[wasm_bindgen_test]
 fn occlusion_query() {
     initialize_test(
-        TestParameters::default().downlevel_flags(wgpu::DownlevelFlags::OCCLUSION_QUERY),
+        TestParameters::default(),
         |ctx| {
             // Create depth texture
             let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -26,14 +26,7 @@ fn occlusion_query() {
             let depth_texture_view =
                 depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            // Setup pipeline with simple shader with hardcoded vertices
-            let pipeline_layout =
-                ctx.device
-                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: None,
-                        bind_group_layouts: &[],
-                        push_constant_ranges: &[],
-                    });
+            // Setup pipeline using a simple shader with hardcoded vertices
             let shader = ctx
                 .device
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -44,17 +37,13 @@ fn occlusion_query() {
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: None,
-                    layout: Some(&pipeline_layout),
+                    layout: None,
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: "vs_main",
                         buffers: &[],
                     },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: "fs_main",
-                        targets: &[],
-                    }),
+                    fragment: None,
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: wgpu::TextureFormat::Depth32Float,
@@ -93,7 +82,7 @@ fn occlusion_query() {
                 });
                 render_pass.set_pipeline(&pipeline);
 
-                // Not occluded (nothing drawn yet)
+                // Not occluded (z = 1.0, nothing drawn yet)
                 render_pass.begin_occlusion_query(0);
                 render_pass.draw(4..7, 0..1);
                 render_pass.end_occlusion_query();
@@ -103,7 +92,7 @@ fn occlusion_query() {
                 render_pass.draw(0..3, 0..1);
                 render_pass.end_occlusion_query();
 
-                // Occluded (z = 0.5)
+                // Occluded (z = 1.0)
                 render_pass.begin_occlusion_query(2);
                 render_pass.draw(4..7, 0..1);
                 render_pass.end_occlusion_query();
@@ -127,9 +116,9 @@ fn occlusion_query() {
             let query_buffer_view = query_buffer.slice(..).get_mapped_range();
             let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
-            // Half a quad shader invocation
-            assert_eq!(query_data[0], 64 * 64 / 2);
-            assert_eq!(query_data[1], 64 * 64 / 2);
+            // WebGPU only defines query results as zero/non-zero
+            assert_ne!(query_data[0], 0);
+            assert_ne!(query_data[1], 0);
             assert_eq!(query_data[2], 0);
         },
     )

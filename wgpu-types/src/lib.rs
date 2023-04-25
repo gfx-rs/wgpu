@@ -1190,9 +1190,6 @@ bitflags::bitflags! {
         ///
         /// The GLES/WebGL and Vulkan on Android doesn't support this.
         const SURFACE_VIEW_FORMATS = 1 << 21;
-
-        /// Supports occlusion queries.
-        const OCCLUSION_QUERY = 1 << 22;
     }
 }
 
