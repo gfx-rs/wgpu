@@ -37,6 +37,7 @@ struct QuerySets {
     timestamp_period: f32,
     pipeline_statistics: wgpu::QuerySet,
     data_buffer: wgpu::Buffer,
+    staging_buffer: wgpu::Buffer,
 }
 
 #[repr(C)]
@@ -195,6 +196,7 @@ impl Example {
                 &query_sets.data_buffer,
                 pipeline_statistics_offset(),
             );
+            encoder.copy_buffer_to_buffer(&query_sets.data_buffer, 0, &query_sets.staging_buffer, 0, query_sets.data_buffer.size());
         }
     }
 }
@@ -361,7 +363,14 @@ impl framework::Example for Example {
                 label: Some("query buffer"),
                 size: pipeline_statistics_offset()
                     + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::MAP_READ,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+
+            let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: data_buffer.size(),
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
 
@@ -370,6 +379,7 @@ impl framework::Example for Example {
                 timestamp_period,
                 pipeline_statistics,
                 data_buffer,
+                staging_buffer,
             })
         } else {
             None
@@ -387,18 +397,18 @@ impl framework::Example for Example {
         if let Some(ref query_sets) = query_sets {
             // We can ignore the callback as we're about to wait for the device.
             query_sets
-                .data_buffer
+                .staging_buffer
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
             device.poll(wgpu::Maintain::Wait);
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
-                .data_buffer
+                .staging_buffer
                 .slice(..mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
                 .get_mapped_range();
             let pipeline_stats_view = query_sets
-                .data_buffer
+                .staging_buffer
                 .slice(pipeline_statistics_offset()..)
                 .get_mapped_range();
             // Convert the raw data into a useful structure

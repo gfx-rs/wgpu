@@ -102,18 +102,26 @@ fn occlusion_query() {
             let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: std::mem::size_of::<u64>() as u64 * 3,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
             encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
 
+            let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: query_buffer.size(),
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            encoder.copy_buffer_to_buffer(&query_buffer, 0, &staging_buffer, 0, query_buffer.size());
+
             ctx.queue.submit(Some(encoder.finish()));
 
-            query_buffer
+            staging_buffer
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             ctx.device.poll(wgpu::Maintain::Wait);
-            let query_buffer_view = query_buffer.slice(..).get_mapped_range();
+            let query_buffer_view = staging_buffer.slice(..).get_mapped_range();
             let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
             // WebGPU only defines query results as zero/non-zero
