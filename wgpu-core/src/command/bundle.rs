@@ -635,8 +635,8 @@ impl RenderBundleEncoder {
                 RenderCommand::PopDebugGroup => unimplemented!(),
                 RenderCommand::WriteTimestamp { .. } // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
                 | RenderCommand::BeginOcclusionQuery { .. }
-                | RenderCommand::EndOcclusionQuery => unimplemented!(),
-                RenderCommand::BeginPipelineStatisticsQuery { .. }
+                | RenderCommand::EndOcclusionQuery
+                | RenderCommand::BeginPipelineStatisticsQuery { .. }
                 | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendConstant(_)
@@ -935,6 +935,8 @@ impl<A: HalApi> RenderBundle<A> {
                     return Err(ExecutionError::Unimplemented("debug-markers"))
                 }
                 RenderCommand::WriteTimestamp { .. }
+                | RenderCommand::BeginOcclusionQuery { .. }
+                | RenderCommand::EndOcclusionQuery
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
                 | RenderCommand::EndPipelineStatisticsQuery => {
                     return Err(ExecutionError::Unimplemented("queries"))

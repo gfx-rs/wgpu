@@ -141,6 +141,19 @@ Some texture format names have changed to get back in line with the spec.
 
 By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 
+#### Occlusion Query Support
+
+The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
+
+```diff
+let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+  // ...
++ occlusion_query_set: None,
+});
+```
+
+By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
+
 #### Misc Breaking Changes
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
@@ -416,19 +429,6 @@ late in the dependency DAG as feasible. Having `wgpu` (and
 option.
 
 By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
-
-#### Occlusion Query Support
-
-The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
-
-```diff
-let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-  // ...
-+ occlusion_query_set: None,
-});
-```
-
-By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 ### Changes
 
