@@ -109,6 +109,7 @@ impl<A: HalApi> std::fmt::Debug for Device<A> {
 
 impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
+        log::info!("Destroying Device {:?}", self.info.label());
         let raw = self.raw.take().unwrap();
         let pending_writes = self.pending_writes.write().take().unwrap();
         pending_writes.dispose(&raw);
@@ -2502,7 +2503,7 @@ impl<A: HalApi> Device<A> {
                 .iter()
                 .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
         } {
-            log::info!("Color targets: {:?}", color_targets);
+            log::debug!("Color targets: {:?}", color_targets);
             self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
         }
 

@@ -152,6 +152,7 @@ pub struct CommandBuffer<A: HalApi> {
 
 impl<A: HalApi> Drop for CommandBuffer<A> {
     fn drop(&mut self) {
+        log::info!("Destroying CommandBuffer {:?}", self.info.label());
         if self.data.lock().is_none() {
             return;
         }

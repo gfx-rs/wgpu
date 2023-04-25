@@ -50,7 +50,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 }
             },
             Err(err) => {
-                log::info!("IDXGIFactory1 creation function not found: {:?}", err);
+                log::warn!("IDXGIFactory1 creation function not found: {:?}", err);
                 None
             }
         };

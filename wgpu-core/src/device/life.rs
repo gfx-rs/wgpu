@@ -511,7 +511,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             while let Some(bundle) = self.suspected_resources.render_bundles.pop() {
                 let id = bundle.info.id();
                 if trackers.bundles.remove_abandoned(id) {
-                    log::debug!("Bundle {:?} will be destroyed", id);
+                    log::info!("Bundle {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyRenderBundle(id.0));
@@ -530,7 +530,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             while let Some(resource) = self.suspected_resources.bind_groups.pop() {
                 let id = resource.info.id();
                 if trackers.bind_groups.remove_abandoned(id) {
-                    log::debug!("Bind group {:?} will be destroyed", id);
+                    log::info!("BindGroup {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyBindGroup(id.0));
@@ -563,7 +563,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for texture_view in list.drain(..) {
                 let id = texture_view.info.id();
                 if trackers.views.remove_abandoned(id) {
-                    log::debug!("Texture view {:?} will be destroyed", id);
+                    log::info!("TextureView {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyTextureView(id.0));
@@ -594,7 +594,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for texture in self.suspected_resources.textures.drain(..) {
                 let id = texture.info.id();
                 if trackers.textures.remove_abandoned(id) {
-                    log::debug!("Texture {:?} will be destroyed", id);
+                    log::info!("Texture {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyTexture(id.0));
@@ -628,7 +628,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for sampler in self.suspected_resources.samplers.drain(..) {
                 let id = sampler.info.id();
                 if trackers.samplers.remove_abandoned(id) {
-                    log::debug!("Sampler {:?} will be destroyed", id);
+                    log::info!("Sampler {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroySampler(id.0));
@@ -653,7 +653,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for buffer in self.suspected_resources.buffers.drain(..) {
                 let id = buffer.info.id();
                 if trackers.buffers.remove_abandoned(id) {
-                    log::debug!("Buffer {:?} will be destroyed", id);
+                    log::info!("Buffer {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyBuffer(id.0));
@@ -684,7 +684,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for compute_pipeline in self.suspected_resources.compute_pipelines.drain(..) {
                 let id = compute_pipeline.info.id();
                 if trackers.compute_pipelines.remove_abandoned(id) {
-                    log::debug!("Compute pipeline {:?} will be destroyed", id);
+                    log::info!("ComputePipeline {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyComputePipeline(id.0));
@@ -709,7 +709,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for render_pipeline in self.suspected_resources.render_pipelines.drain(..) {
                 let id = render_pipeline.info.id();
                 if trackers.render_pipelines.remove_abandoned(id) {
-                    log::debug!("Render pipeline {:?} will be destroyed", id);
+                    log::info!("RenderPipeline {:?} is removed from trackers", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
                         t.add(trace::Action::DestroyRenderPipeline(id.0));
@@ -786,7 +786,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             for query_set in self.suspected_resources.query_sets.drain(..) {
                 let id = query_set.info.id();
                 if trackers.query_sets.remove_abandoned(id) {
-                    log::debug!("Query set {:?} will be destroyed", id);
+                    log::info!("QuerySet {:?} is removed from trackers", id);
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id.0)));
                     if let Some(res) = hub.query_sets.unregister(id.0) {
@@ -851,7 +851,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             let buffer_id = buffer.info.id();
             if trackers.buffers.remove_abandoned(buffer_id) {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
-                log::debug!("Mapping request is dropped because the buffer is destroyed.");
+                log::info!("Buffer {:?} is removed from trackers", buffer_id);
                 if let Some(buf) = hub.buffers.unregister(buffer_id.0) {
                     self.free_resources.buffers.push(buf);
                 }

@@ -143,7 +143,7 @@ async fn execute_gpu_inner(
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
     // Submits command encoder for processing
-    queue.submit(Some(encoder.finish()));
+    let submission_index = queue.submit(Some(encoder.finish()));
 
     // Note that we're not calling `.await` here.
     let buffer_slice = staging_buffer.slice(..);
@@ -154,7 +154,7 @@ async fn execute_gpu_inner(
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::Maintain::WaitForSubmissionIndex(submission_index));
 
     // Awaits until `buffer_future` can be read from
     if let Some(Ok(())) = receiver.receive().await {

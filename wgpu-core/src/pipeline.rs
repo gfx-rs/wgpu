@@ -54,6 +54,7 @@ pub struct ShaderModule<A: HalApi> {
 
 impl<A: HalApi> Drop for ShaderModule<A> {
     fn drop(&mut self) {
+        log::info!("Destroying ShaderModule {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *self.device.trace.lock() {
@@ -241,6 +242,7 @@ pub struct ComputePipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for ComputePipeline<A> {
     fn drop(&mut self) {
+        log::info!("Destroying ComputePipeline {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
@@ -465,6 +467,7 @@ pub struct RenderPipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for RenderPipeline<A> {
     fn drop(&mut self) {
+        log::info!("Destroying RenderPipeline {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;

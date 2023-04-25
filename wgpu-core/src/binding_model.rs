@@ -460,6 +460,7 @@ pub struct BindGroupLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
+        log::info!("Destroying BindGroupLayout {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
@@ -595,6 +596,7 @@ pub struct PipelineLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
+        log::info!("Destroying PipelineLayout {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
@@ -812,6 +814,7 @@ pub struct BindGroup<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroup<A> {
     fn drop(&mut self) {
+        log::info!("Destroying BindGroup {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;

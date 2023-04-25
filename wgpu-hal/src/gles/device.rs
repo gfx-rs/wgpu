@@ -170,7 +170,7 @@ impl super::Device {
         unsafe { gl.shader_source(raw, shader) };
         unsafe { gl.compile_shader(raw) };
 
-        log::info!("\tCompiled shader {:?}", raw);
+        log::debug!("\tCompiled shader {:?}", raw);
 
         let compiled_ok = unsafe { gl.get_shader_compile_status(raw) };
         let msg = unsafe { gl.get_shader_info_log(raw) };
@@ -347,7 +347,7 @@ impl super::Device {
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
             let shader_src = format!("#version {glsl_version} es \n void main(void) {{}}",);
-            log::info!("Only vertex shader is present. Creating an empty fragment shader",);
+            log::warn!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
                     gl,
@@ -368,7 +368,7 @@ impl super::Device {
             unsafe { gl.delete_shader(shader) };
         }
 
-        log::info!("\tLinked program {:?}", program);
+        log::debug!("\tLinked program {:?}", program);
 
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
