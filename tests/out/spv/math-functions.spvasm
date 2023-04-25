@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 76
+; Bound: 87
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -15,9 +15,9 @@ OpExecutionMode %18 OriginUpperLeft
 %6 = OpConstant  %7  0
 %9 = OpTypeInt 32 0
 %8 = OpConstant  %9  0
-%10 = OpConstant  %9  4294967295
-%11 = OpConstant  %7  -1
-%12 = OpConstant  %9  1
+%10 = OpConstant  %7  -1
+%11 = OpConstant  %9  1
+%12 = OpConstant  %9  4294967295
 %13 = OpConstant  %7  1
 %14 = OpTypeVector %4 4
 %15 = OpTypeVector %7 2
@@ -26,11 +26,11 @@ OpExecutionMode %18 OriginUpperLeft
 %27 = OpConstantComposite  %14  %5 %5 %5 %5
 %28 = OpConstantComposite  %14  %3 %3 %3 %3
 %31 = OpConstantNull  %7
-%42 = OpConstant  %9  32
-%50 = OpTypeVector %9 2
-%53 = OpConstantComposite  %50  %42 %42
-%65 = OpConstant  %7  31
-%71 = OpConstantComposite  %15  %65 %65
+%44 = OpTypeVector %9 2
+%54 = OpConstant  %9  32
+%64 = OpConstantComposite  %44  %54 %54
+%76 = OpConstant  %7  31
+%82 = OpConstantComposite  %15  %76 %76
 %18 = OpFunction  %2  None %19
 %17 = OpLabel
 OpBranch %20
@@ -52,35 +52,46 @@ OpBranch %20
 %30 = OpIAdd  %7  %35 %38
 %39 = OpCopyObject  %9  %8
 %40 = OpExtInst  %9  %1 FindUMsb %39
-%43 = OpExtInst  %9  %1 FindILsb %8
-%41 = OpExtInst  %9  %1 UMin %42 %43
-%45 = OpExtInst  %7  %1 FindILsb %6
-%44 = OpExtInst  %7  %1 UMin %42 %45
-%47 = OpExtInst  %9  %1 FindILsb %10
-%46 = OpExtInst  %9  %1 UMin %42 %47
-%49 = OpExtInst  %7  %1 FindILsb %11
-%48 = OpExtInst  %7  %1 UMin %42 %49
-%51 = OpCompositeConstruct  %50  %8 %8
-%54 = OpExtInst  %50  %1 FindILsb %51
-%52 = OpExtInst  %50  %1 UMin %53 %54
-%55 = OpCompositeConstruct  %15  %6 %6
-%57 = OpExtInst  %15  %1 FindILsb %55
-%56 = OpExtInst  %15  %1 UMin %53 %57
-%58 = OpCompositeConstruct  %50  %12 %12
-%60 = OpExtInst  %50  %1 FindILsb %58
-%59 = OpExtInst  %50  %1 UMin %53 %60
-%61 = OpCompositeConstruct  %15  %13 %13
-%63 = OpExtInst  %15  %1 FindILsb %61
-%62 = OpExtInst  %15  %1 UMin %53 %63
-%66 = OpExtInst  %7  %1 FindUMsb %11
-%64 = OpISub  %7  %65 %66
-%68 = OpExtInst  %7  %1 FindUMsb %12
-%67 = OpISub  %9  %65 %68
-%69 = OpCompositeConstruct  %15  %11 %11
-%72 = OpExtInst  %15  %1 FindUMsb %69
-%70 = OpISub  %15  %71 %72
-%73 = OpCompositeConstruct  %50  %12 %12
-%75 = OpExtInst  %15  %1 FindUMsb %73
-%74 = OpISub  %50  %71 %75
+%41 = OpExtInst  %7  %1 FindSMsb %10
+%42 = OpCompositeConstruct  %15  %10 %10
+%43 = OpExtInst  %15  %1 FindSMsb %42
+%45 = OpCompositeConstruct  %44  %11 %11
+%46 = OpExtInst  %44  %1 FindUMsb %45
+%47 = OpExtInst  %7  %1 FindILsb %10
+%48 = OpExtInst  %9  %1 FindILsb %11
+%49 = OpCompositeConstruct  %15  %10 %10
+%50 = OpExtInst  %15  %1 FindILsb %49
+%51 = OpCompositeConstruct  %44  %11 %11
+%52 = OpExtInst  %44  %1 FindILsb %51
+%55 = OpExtInst  %9  %1 FindILsb %8
+%53 = OpExtInst  %9  %1 UMin %54 %55
+%57 = OpExtInst  %7  %1 FindILsb %6
+%56 = OpExtInst  %7  %1 UMin %54 %57
+%59 = OpExtInst  %9  %1 FindILsb %12
+%58 = OpExtInst  %9  %1 UMin %54 %59
+%61 = OpExtInst  %7  %1 FindILsb %10
+%60 = OpExtInst  %7  %1 UMin %54 %61
+%62 = OpCompositeConstruct  %44  %8 %8
+%65 = OpExtInst  %44  %1 FindILsb %62
+%63 = OpExtInst  %44  %1 UMin %64 %65
+%66 = OpCompositeConstruct  %15  %6 %6
+%68 = OpExtInst  %15  %1 FindILsb %66
+%67 = OpExtInst  %15  %1 UMin %64 %68
+%69 = OpCompositeConstruct  %44  %11 %11
+%71 = OpExtInst  %44  %1 FindILsb %69
+%70 = OpExtInst  %44  %1 UMin %64 %71
+%72 = OpCompositeConstruct  %15  %13 %13
+%74 = OpExtInst  %15  %1 FindILsb %72
+%73 = OpExtInst  %15  %1 UMin %64 %74
+%77 = OpExtInst  %7  %1 FindUMsb %10
+%75 = OpISub  %7  %76 %77
+%79 = OpExtInst  %7  %1 FindUMsb %11
+%78 = OpISub  %9  %76 %79
+%80 = OpCompositeConstruct  %15  %10 %10
+%83 = OpExtInst  %15  %1 FindUMsb %80
+%81 = OpISub  %15  %82 %83
+%84 = OpCompositeConstruct  %44  %11 %11
+%86 = OpExtInst  %15  %1 FindUMsb %84
+%85 = OpISub  %44  %82 %86
 OpReturn
 OpFunctionEnd

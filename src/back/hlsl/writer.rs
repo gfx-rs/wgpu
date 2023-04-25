@@ -2574,6 +2574,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack2x16float,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
+                    MissingIntReturnType(&'static str),
                     CountTrailingZeros,
                     CountLeadingZeros,
                 }
@@ -2642,8 +2643,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::CountLeadingZeros => Function::CountLeadingZeros,
                     Mf::CountOneBits => Function::MissingIntOverload("countbits"),
                     Mf::ReverseBits => Function::MissingIntOverload("reversebits"),
-                    Mf::FindLsb => Function::Regular("firstbitlow"),
-                    Mf::FindMsb => Function::Regular("firstbithigh"),
+                    Mf::FindLsb => Function::MissingIntReturnType("firstbitlow"),
+                    Mf::FindMsb => Function::MissingIntReturnType("firstbithigh"),
                     Mf::Unpack2x16float => Function::Unpack2x16float,
                     _ => return Err(Error::Unimplemented(format!("write_expr_math {fun:?}"))),
                 };
@@ -2707,6 +2708,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             write!(self.out, ")")?;
                         }
                     }
+                    Function::MissingIntReturnType(fun_name) => {
+                        let scalar_kind = &func_ctx.info[arg]
+                            .ty
+                            .inner_with(&module.types)
+                            .scalar_kind();
+                        if let Some(ScalarKind::Sint) = *scalar_kind {
+                            write!(self.out, "asint({fun_name}(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, "))")?;
+                        } else {
+                            write!(self.out, "{fun_name}(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ")")?;
+                        }
+                    }
                     Function::CountTrailingZeros => {
                         match *func_ctx.info[arg].ty.inner_with(&module.types) {
                             TypeInner::Vector { size, kind, .. } => {
@@ -2721,9 +2737,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
                                 } else {
-                                    write!(self.out, "asint(min((32u){s}, asuint(firstbitlow(")?;
+                                    write!(self.out, "asint(min((32u){s}, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, "))))")?;
+                                    write!(self.out, ")))")?;
                                 }
                             }
                             TypeInner::Scalar { kind, .. } => {
@@ -2732,9 +2748,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
                                 } else {
-                                    write!(self.out, "asint(min(32u, asuint(firstbitlow(")?;
+                                    write!(self.out, "asint(min(32u, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, "))))")?;
+                                    write!(self.out, ")))")?;
                                 }
                             }
                             _ => unreachable!(),
@@ -2752,30 +2768,35 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 };
 
                                 if let ScalarKind::Uint = kind {
-                                    write!(self.out, "asuint((31){s} - firstbithigh(")?;
+                                    write!(self.out, "((31u){s} - firstbithigh(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
                                 } else {
                                     write!(self.out, "(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(
                                         self.out,
-                                        " < (0){s} ? (0){s} : (31){s} - firstbithigh("
+                                        " < (0){s} ? (0){s} : (31){s} - asint(firstbithigh("
                                     )?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, ")))")?;
                                 }
                             }
                             TypeInner::Scalar { kind, .. } => {
                                 if let ScalarKind::Uint = kind {
-                                    write!(self.out, "asuint(31 - firstbithigh(")?;
+                                    write!(self.out, "(31u - firstbithigh(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, "))")?;
                                 } else {
                                     write!(self.out, "(")?;
                                     self.write_expr(module, arg, func_ctx)?;
-                                    write!(self.out, " < 0 ? 0 : 31 - firstbithigh(")?;
+                                    write!(self.out, " < 0 ? 0 : 31 - asint(firstbithigh(")?;
+                                    self.write_expr(module, arg, func_ctx)?;
+                                    write!(self.out, ")))")?;
                                 }
                             }
                             _ => unreachable!(),
                         }
-
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, "))")?;
 
                         return Ok(());
                     }
