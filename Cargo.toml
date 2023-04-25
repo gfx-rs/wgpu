@@ -22,28 +22,28 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["wgpu developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.15"
+version = "0.16"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.15"
+version = "0.16"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.15"
+version = "0.16"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "f59668ccfaf7bdb3a7e43d84363a21c77357b2fe"
-version = "0.11.0"
+rev = "b99d58ea435090e561377949f428bce2c18451bb"
+version = "0.12.0"
 
 [workspace.dependencies]
 arrayvec = "0.7"
@@ -61,7 +61,8 @@ futures-intrusive = "0.4"
 rustc-hash = "1.1.0"
 glam = "0.21.3"
 image = { version = "0.24", default-features = false, features = ["png"] }
-libloading = "0.8"
+# libloading 0.8 switches from `winapi` to `windows-sys`; permit either
+libloading = ">=0.7,<0.9"
 libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
@@ -83,7 +84,7 @@ serde_json = "1.0.96"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.15", path = "./wgpu" }
+wgpu = { version = "0.16", path = "./wgpu" }
 winit = "0.27.1"
 
 # Metal dependencies

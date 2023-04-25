@@ -1599,7 +1599,7 @@ impl Instance {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, CreateSurfaceError> {
         let surface = self
             .context
@@ -1635,7 +1635,7 @@ impl Instance {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, CreateSurfaceError> {
         let surface = self
             .context
@@ -3293,7 +3293,7 @@ impl<'a> RenderPass<'a> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
-    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
     /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
@@ -3335,7 +3335,7 @@ impl<'a> RenderPass<'a> {
     /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
     ///
-    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
     /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active

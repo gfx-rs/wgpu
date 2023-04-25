@@ -762,7 +762,7 @@ where
 impl Context {
     pub fn instance_create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<
         (
             <Self as crate::Context>::SurfaceId,
@@ -770,12 +770,13 @@ impl Context {
         ),
         crate::CreateSurfaceError,
     > {
-        self.create_surface_from_context(canvas.get_context("webgpu"))
+        let result = canvas.get_context("webgpu");
+        self.create_surface_from_context(Canvas::Canvas(canvas), result)
     }
 
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<
         (
             <Self as crate::Context>::SurfaceId,
@@ -783,7 +784,8 @@ impl Context {
         ),
         crate::CreateSurfaceError,
     > {
-        self.create_surface_from_context(canvas.get_context("webgpu"))
+        let result = canvas.get_context("webgpu");
+        self.create_surface_from_context(Canvas::Offscreen(canvas), result)
     }
 
     /// Common portion of public `instance_create_surface_from_*` functions.
@@ -792,6 +794,7 @@ impl Context {
     /// `wgpu_hal::gles::web::Instance`.
     fn create_surface_from_context(
         &self,
+        canvas: Canvas,
         context_result: Result<Option<js_sys::Object>, wasm_bindgen::JsValue>,
     ) -> Result<
         (
@@ -825,7 +828,7 @@ impl Context {
             .dyn_into()
             .expect("canvas context is not a GPUCanvasContext");
 
-        Ok(create_identified(context))
+        Ok(create_identified((canvas, context)))
     }
 }
 
@@ -842,6 +845,12 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, js_name = WorkerGlobalScope)]
     fn worker(this: &Global) -> JsValue;
+}
+
+#[derive(Debug)]
+pub enum Canvas {
+    Canvas(web_sys::HtmlCanvasElement),
+    Offscreen(web_sys::OffscreenCanvas),
 }
 
 impl crate::context::Context for Context {
@@ -885,8 +894,8 @@ impl crate::context::Context for Context {
     type RenderBundleEncoderData = Sendable<web_sys::GpuRenderBundleEncoder>;
     type RenderBundleId = Identified<web_sys::GpuRenderBundle>;
     type RenderBundleData = Sendable<web_sys::GpuRenderBundle>;
-    type SurfaceId = Identified<web_sys::GpuCanvasContext>;
-    type SurfaceData = Sendable<web_sys::GpuCanvasContext>;
+    type SurfaceId = Identified<(Canvas, web_sys::GpuCanvasContext)>;
+    type SurfaceData = Sendable<(Canvas, web_sys::GpuCanvasContext)>;
 
     type SurfaceOutputDetail = SurfaceOutputDetail;
     type SubmissionIndex = Unused;
@@ -949,7 +958,7 @@ impl crate::context::Context for Context {
             .expect("expected to find single canvas")
             .into();
         let canvas_element: web_sys::HtmlCanvasElement = canvas_node.into();
-        self.instance_create_surface_from_canvas(&canvas_element)
+        self.instance_create_surface_from_canvas(canvas_element)
     }
 
     fn instance_request_adapter(
@@ -1095,11 +1104,11 @@ impl crate::context::Context for Context {
 
     fn adapter_get_texture_format_features(
         &self,
-        _adapter: &Self::AdapterId,
-        _adapter_data: &Self::AdapterData,
+        adapter: &Self::AdapterId,
+        adapter_data: &Self::AdapterData,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        format.guaranteed_format_features()
+        format.guaranteed_format_features(self.adapter_features(adapter, adapter_data))
     }
 
     fn adapter_get_presentation_timestamp(
@@ -1138,6 +1147,17 @@ impl crate::context::Context for Context {
         device_data: &Self::DeviceData,
         config: &crate::SurfaceConfiguration,
     ) {
+        match surface_data.0 .0 {
+            Canvas::Canvas(ref canvas) => {
+                canvas.set_width(config.width);
+                canvas.set_height(config.height);
+            }
+            Canvas::Offscreen(ref canvas) => {
+                canvas.set_width(config.width);
+                canvas.set_height(config.height);
+            }
+        }
+
         if let wgt::PresentMode::Mailbox | wgt::PresentMode::Immediate = config.present_mode {
             panic!("Only FIFO/Auto* is supported on web");
         }
@@ -1160,7 +1180,7 @@ impl crate::context::Context for Context {
             .map(|format| JsValue::from(map_texture_format(*format)))
             .collect::<js_sys::Array>();
         mapped.view_formats(&mapped_view_formats);
-        surface_data.0.configure(&mapped);
+        surface_data.0 .1.configure(&mapped);
     }
 
     fn surface_get_current_texture(
@@ -1173,7 +1193,7 @@ impl crate::context::Context for Context {
         wgt::SurfaceStatus,
         Self::SurfaceOutputDetail,
     ) {
-        let (surface_id, surface_data) = create_identified(surface_data.0.get_current_texture());
+        let (surface_id, surface_data) = create_identified(surface_data.0 .1.get_current_texture());
         (
             Some(surface_id),
             Some(surface_data),
