@@ -3,8 +3,9 @@ Implementations for `BlockContext` methods.
 */
 
 use super::{
-    index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext, Dimension,
-    Error, Instruction, LocalType, LookupType, LoopContext, ResultMember, Writer, WriterFlags,
+    helpers, index::BoundsCheckResult, make_local, selection::Selection, Block, BlockContext,
+    Dimension, Error, Instruction, LocalType, LookupType, LoopContext, ResultMember, Writer,
+    WriterFlags,
 };
 use crate::{arena::Handle, proc::TypeResolution};
 use spirv::Word;
@@ -196,9 +197,8 @@ impl<'w> BlockContext<'w> {
     fn is_intermediate(&self, expr_handle: Handle<crate::Expression>) -> bool {
         match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
-                let ty = self.ir_module.global_variables[handle].ty;
-                match self.ir_module.types[ty].inner {
-                    crate::TypeInner::BindingArray { .. } => false,
+                match self.ir_module.global_variables[handle].space {
+                    crate::AddressSpace::Handle => false,
                     _ => true,
                 }
             }
@@ -221,7 +221,6 @@ impl<'w> BlockContext<'w> {
         block: &mut Block,
     ) -> Result<(), Error> {
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
-
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {
                 // See `is_intermediate`; we'll handle this later in
@@ -237,9 +236,15 @@ impl<'w> BlockContext<'w> {
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
+                        let space = match self.ir_function.expressions[base] {
+                            crate::Expression::GlobalVariable(gvar) => {
+                                self.ir_module.global_variables[gvar].space
+                            }
+                            _ => unreachable!(),
+                        };
                         let binding_array_false_pointer = LookupType::Local(LocalType::Pointer {
                             base: binding_type,
-                            class: spirv::StorageClass::UniformConstant,
+                            class: helpers::map_storage_class(space),
                         });
 
                         let result_id = match self.write_expression_pointer(
@@ -265,15 +270,6 @@ impl<'w> BlockContext<'w> {
                             None,
                         ));
 
-                        if self.fun_info[index].uniformity.non_uniform_result.is_some() {
-                            self.writer.require_any(
-                                "NonUniformEXT",
-                                &[spirv::Capability::ShaderNonUniform],
-                            )?;
-                            self.writer.use_extension("SPV_EXT_descriptor_indexing");
-                            self.writer
-                                .decorate(load_id, spirv::Decoration::NonUniform, &[]);
-                        }
                         load_id
                     }
                     ref other => {
@@ -316,9 +312,15 @@ impl<'w> BlockContext<'w> {
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
+                        let space = match self.ir_function.expressions[base] {
+                            crate::Expression::GlobalVariable(gvar) => {
+                                self.ir_module.global_variables[gvar].space
+                            }
+                            _ => unreachable!(),
+                        };
                         let binding_array_false_pointer = LookupType::Local(LocalType::Pointer {
                             base: binding_type,
-                            class: spirv::StorageClass::UniformConstant,
+                            class: helpers::map_storage_class(space),
                         });
 
                         let result_id = match self.write_expression_pointer(
@@ -1403,8 +1405,8 @@ impl<'w> BlockContext<'w> {
     /// Emit any needed bounds-checking expressions to `block`.
     ///
     /// Some cases we need to generate a different return type than what the IR gives us.
-    /// This is because pointers to binding arrays don't exist in the IR, but we need to
-    /// create them to create an access chain in SPIRV.
+    /// This is because pointers to binding arrays of handles (such as images or samplers)
+    /// don't exist in the IR, but we need to create them to create an access chain in SPIRV.
     ///
     /// On success, the return value is an [`ExpressionPointer`] value; see the
     /// documentation for that type.
@@ -1434,11 +1436,25 @@ impl<'w> BlockContext<'w> {
         // but we expect these checks to almost always succeed, and keeping branches to a
         // minimum is essential.
         let mut accumulated_checks = None;
+        // Is true if we are accessing into a binding array of buffers with a non-uniform index.
+        let mut is_non_uniform_binding_array = false;
 
         self.temp_list.clear();
         let root_id = loop {
             expr_handle = match self.ir_function.expressions[expr_handle] {
                 crate::Expression::Access { base, index } => {
+                    if let crate::Expression::GlobalVariable(var_handle) =
+                        self.ir_function.expressions[base]
+                    {
+                        let gvar = &self.ir_module.global_variables[var_handle];
+                        if let crate::TypeInner::BindingArray { .. } =
+                            self.ir_module.types[gvar.ty].inner
+                        {
+                            is_non_uniform_binding_array |=
+                                self.fun_info[index].uniformity.non_uniform_result.is_some();
+                        }
+                    }
+
                     let index_id = match self.write_bounds_check(base, index, block)? {
                         BoundsCheckResult::KnownInBounds(known_index) => {
                             // Even if the index is known, `OpAccessIndex`
@@ -1471,7 +1487,6 @@ impl<'w> BlockContext<'w> {
                         }
                     };
                     self.temp_list.push(index_id);
-
                     base
                 }
                 crate::Expression::AccessIndex { base, index } => {
@@ -1494,10 +1509,13 @@ impl<'w> BlockContext<'w> {
             }
         };
 
-        let pointer = if self.temp_list.is_empty() {
-            ExpressionPointer::Ready {
-                pointer_id: root_id,
-            }
+        let (pointer_id, expr_pointer) = if self.temp_list.is_empty() {
+            (
+                root_id,
+                ExpressionPointer::Ready {
+                    pointer_id: root_id,
+                },
+            )
         } else {
             self.temp_list.reverse();
             let pointer_id = self.gen_id();
@@ -1508,16 +1526,21 @@ impl<'w> BlockContext<'w> {
             // caller to generate the branch, the access, the load or store, and
             // the zero value (for loads). Otherwise, we can emit the access
             // ourselves, and just hand them the id of the pointer.
-            match accumulated_checks {
+            let expr_pointer = match accumulated_checks {
                 Some(condition) => ExpressionPointer::Conditional { condition, access },
                 None => {
                     block.body.push(access);
                     ExpressionPointer::Ready { pointer_id }
                 }
-            }
+            };
+            (pointer_id, expr_pointer)
         };
+        if is_non_uniform_binding_array {
+            self.writer
+                .decorate_non_uniform_binding_array_access(pointer_id)?;
+        }
 
-        Ok(pointer)
+        Ok(expr_pointer)
     }
 
     /// Build the instructions for matrix - matrix column operations

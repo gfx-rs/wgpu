@@ -200,7 +200,8 @@ tree.
     clippy::match_like_matches_macro,
     clippy::collapsible_if,
     clippy::derive_partial_eq_without_eq,
-    clippy::needless_borrowed_reference
+    clippy::needless_borrowed_reference,
+    clippy::single_match
 )]
 #![warn(
     trivial_casts,
@@ -752,13 +753,12 @@ pub enum TypeInner {
     /// buffers could have elements that are dynamically sized arrays, each with
     /// a different length.
     ///
-    /// Binding arrays are not [`DATA`]. This means that all binding array
-    /// globals must be placed in the [`Handle`] address space. Referring to
-    /// such a global produces a `BindingArray` value directly; there are never
-    /// pointers to binding arrays. The only operation permitted on
-    /// `BindingArray` values is indexing, which yields the element by value,
-    /// not a pointer to the element. (This means that buffer array contents
-    /// cannot be stored to; [naga#1864] covers lifting this restriction.)
+    /// Binding arrays are in the same address spaces as their underlying type.
+    /// As such, referring to an array of images produces an [`Image`] value
+    /// directly (as opposed to a pointer). The only operation permitted on
+    /// `BindingArray` values is indexing, which works transparently: indexing
+    /// a binding array of samplers yields a [`Sampler`], indexing a pointer to the
+    /// binding array of storage buffers produces a pointer to the storage struct.
     ///
     /// Unlike textures and samplers, binding arrays are not [`ARGUMENT`], so
     /// they cannot be passed as arguments to functions.
@@ -774,7 +774,6 @@ pub enum TypeInner {
     /// [`SamplerArray`]: https://docs.rs/wgpu/latest/wgpu/enum.BindingResource.html#variant.SamplerArray
     /// [`BufferArray`]: https://docs.rs/wgpu/latest/wgpu/enum.BindingResource.html#variant.BufferArray
     /// [`DATA`]: crate::valid::TypeFlags::DATA
-    /// [`Handle`]: AddressSpace::Handle
     /// [`ARGUMENT`]: crate::valid::TypeFlags::ARGUMENT
     /// [naga#1864]: https://github.com/gfx-rs/naga/issues/1864
     BindingArray { base: Handle<Type>, size: ArraySize },

@@ -117,6 +117,8 @@ pub enum TypeError {
     InvalidArrayStride { stride: u32, expected: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
     InvalidDynamicArray(String, Handle<crate::Type>),
+    #[error("The base handle {0:?} has to be a struct")]
+    BindingArrayBaseTypeNotStruct(Handle<crate::Type>),
     #[error("Structure member[{index}] at {offset} overlaps the previous member")]
     MemberOverlap { index: u32, offset: u32 },
     #[error(
@@ -612,13 +614,35 @@ impl super::Validator {
             }
             Ti::AccelerationStructure => {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
-                TypeInfo::new(TypeFlags::empty(), Alignment::ONE)
+                TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE)
             }
             Ti::RayQuery => {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
                 TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
             }
-            Ti::BindingArray { .. } => TypeInfo::new(TypeFlags::empty(), Alignment::ONE),
+            Ti::BindingArray { base, size } => {
+                if base >= handle {
+                    return Err(TypeError::InvalidArrayBaseType(base));
+                }
+                let type_info_mask = match size {
+                    crate::ArraySize::Constant(_) => TypeFlags::SIZED | TypeFlags::HOST_SHAREABLE,
+                    crate::ArraySize::Dynamic => {
+                        // Final type is non-sized
+                        TypeFlags::HOST_SHAREABLE
+                    }
+                };
+                let base_info = &self.types[base.index()];
+
+                if base_info.flags.contains(TypeFlags::DATA) {
+                    // Currently Naga only supports binding arrays of structs for non-handle types.
+                    match types[base].inner {
+                        crate::TypeInner::Struct { .. } => {}
+                        _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
+                    };
+                }
+
+                TypeInfo::new(base_info.flags & type_info_mask, Alignment::ONE)
+            }
         })
     }
 }

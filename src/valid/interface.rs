@@ -400,7 +400,14 @@ impl super::Validator {
         use super::TypeFlags;
 
         log::debug!("var {:?}", var);
-        let type_info = &self.types[var.ty.index()];
+        let inner_ty = match types[var.ty].inner {
+            // A binding array is (mostly) supposed to behave the same as a
+            // series of individually bound resources, so we can (mostly)
+            // validate a `binding_array<T>` as if it were just a plain `T`.
+            crate::TypeInner::BindingArray { base, .. } => base,
+            _ => var.ty,
+        };
+        let type_info = &self.types[inner_ty.index()];
 
         let (required_type_flags, is_resource) = match var.space {
             crate::AddressSpace::Function => {
@@ -437,22 +444,8 @@ impl super::Validator {
                 )
             }
             crate::AddressSpace::Handle => {
-                match types[var.ty].inner {
-                    crate::TypeInner::Image { .. }
-                    | crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::BindingArray { .. }
-                    | crate::TypeInner::AccelerationStructure
-                    | crate::TypeInner::RayQuery => {}
-                    _ => {
-                        return Err(GlobalVariableError::InvalidType(var.space));
-                    }
-                };
-                let inner_ty = match &types[var.ty].inner {
-                    &crate::TypeInner::BindingArray { base, .. } => &types[base].inner,
-                    ty => ty,
-                };
-                if let crate::TypeInner::Image {
-                    class:
+                match types[inner_ty].inner {
+                    crate::TypeInner::Image { class, .. } => match class {
                         crate::ImageClass::Storage {
                             format:
                                 crate::StorageFormat::R16Unorm
@@ -462,17 +455,23 @@ impl super::Validator {
                                 | crate::StorageFormat::Rgba16Unorm
                                 | crate::StorageFormat::Rgba16Snorm,
                             ..
-                        },
-                    ..
-                } = *inner_ty
-                {
-                    if !self
-                        .capabilities
-                        .contains(Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS)
-                    {
-                        return Err(GlobalVariableError::UnsupportedCapability(
-                            Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
-                        ));
+                        } => {
+                            if !self
+                                .capabilities
+                                .contains(Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS)
+                            {
+                                return Err(GlobalVariableError::UnsupportedCapability(
+                                    Capabilities::STORAGE_TEXTURE_16BIT_NORM_FORMATS,
+                                ));
+                            }
+                        }
+                        _ => {}
+                    },
+                    crate::TypeInner::Sampler { .. }
+                    | crate::TypeInner::AccelerationStructure
+                    | crate::TypeInner::RayQuery => {}
+                    _ => {
+                        return Err(GlobalVariableError::InvalidType(var.space));
                     }
                 }
 

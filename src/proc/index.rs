@@ -390,7 +390,9 @@ impl crate::TypeInner {
                 match *base_inner {
                     Ti::Vector { size, .. } => size as _,
                     Ti::Matrix { columns, .. } => columns as _,
-                    Ti::Array { size, .. } => return size.to_indexable_length(module),
+                    Ti::Array { size, .. } | Ti::BindingArray { size, .. } => {
+                        return size.to_indexable_length(module)
+                    }
                     _ => return Err(IndexableLengthError::TypeNotIndexable),
                 }
             }
