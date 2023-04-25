@@ -1,6 +1,6 @@
 struct DoubleVertexIn {
     @location(0) position: vec4<f32>,
-    @location(1) value: f32,
+    @location(5) value: f32,
 }
 
 struct DoubleVertexOut {

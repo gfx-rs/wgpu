@@ -67,7 +67,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn create_surface_from_layer(&self, layer: &mtl::MetalLayerRef) -> Surface {
+    pub fn create_surface_from_layer(&self, layer: &metal::MetalLayerRef) -> Surface {
         unsafe { Surface::from_layer(layer) }
     }
 }
@@ -104,7 +104,7 @@ impl crate::Instance<Api> for Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
-        let devices = mtl::Device::all();
+        let devices = metal::Device::all();
         let mut adapters: Vec<crate::ExposedAdapter<Api>> = devices
             .into_iter()
             .map(|dev| {
@@ -140,9 +140,9 @@ impl crate::Instance<Api> for Instance {
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
     family_check: bool,
-    msl_version: mtl::MTLLanguageVersion,
+    msl_version: metal::MTLLanguageVersion,
     fragment_rw_storage: bool,
-    read_write_texture_tier: mtl::MTLReadWriteTextureTier,
+    read_write_texture_tier: metal::MTLReadWriteTextureTier,
     msaa_desktop: bool,
     msaa_apple3: bool,
     msaa_apple7: bool,
@@ -151,7 +151,6 @@ struct PrivateCapabilities {
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
-    sampler_lod_average: bool,
     base_instance: bool,
     base_vertex_instance_drawing: bool,
     dual_source_blending: bool,
@@ -250,7 +249,7 @@ struct Settings {
 }
 
 struct AdapterShared {
-    device: Mutex<mtl::Device>,
+    device: Mutex<metal::Device>,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
@@ -261,7 +260,7 @@ unsafe impl Send for AdapterShared {}
 unsafe impl Sync for AdapterShared {}
 
 impl AdapterShared {
-    fn new(device: mtl::Device) -> Self {
+    fn new(device: metal::Device) -> Self {
         let private_caps = PrivateCapabilities::new(&device);
         log::debug!("{:#?}", private_caps);
 
@@ -280,14 +279,14 @@ pub struct Adapter {
 }
 
 pub struct Queue {
-    raw: Arc<Mutex<mtl::CommandQueue>>,
+    raw: Arc<Mutex<metal::CommandQueue>>,
 }
 
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
 impl Queue {
-    pub unsafe fn queue_from_raw(raw: mtl::CommandQueue) -> Self {
+    pub unsafe fn queue_from_raw(raw: metal::CommandQueue) -> Self {
         Self {
             raw: Arc::new(Mutex::new(raw)),
         }
@@ -300,7 +299,7 @@ pub struct Device {
 
 pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
-    render_layer: Mutex<mtl::MetalLayer>,
+    render_layer: Mutex<metal::MetalLayer>,
     swapchain_format: Option<wgt::TextureFormat>,
     extent: wgt::Extent3d,
     main_thread_id: thread::ThreadId,
@@ -315,7 +314,7 @@ unsafe impl Sync for Surface {}
 #[derive(Debug)]
 pub struct SurfaceTexture {
     texture: Texture,
-    drawable: mtl::MetalDrawable,
+    drawable: metal::MetalDrawable,
     present_with_transaction: bool,
 }
 
@@ -409,7 +408,7 @@ impl crate::Queue<Api> for Queue {
 
 #[derive(Debug)]
 pub struct Buffer {
-    raw: mtl::Buffer,
+    raw: metal::Buffer,
     size: wgt::BufferAddress,
 }
 
@@ -424,9 +423,9 @@ impl Buffer {
 
 #[derive(Debug)]
 pub struct Texture {
-    raw: mtl::Texture,
+    raw: metal::Texture,
     format: wgt::TextureFormat,
-    raw_type: mtl::MTLTextureType,
+    raw_type: metal::MTLTextureType,
     array_layers: u32,
     mip_levels: u32,
     copy_size: crate::CopyExtent,
@@ -437,7 +436,7 @@ unsafe impl Sync for Texture {}
 
 #[derive(Debug)]
 pub struct TextureView {
-    raw: mtl::Texture,
+    raw: metal::Texture,
     aspects: crate::FormatAspects,
 }
 
@@ -452,7 +451,7 @@ impl TextureView {
 
 #[derive(Debug)]
 pub struct Sampler {
-    raw: mtl::SamplerState,
+    raw: metal::SamplerState,
 }
 
 unsafe impl Send for Sampler {}
@@ -502,11 +501,18 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
 }
 
 impl<T> MultiStageData<T> {
-    fn map<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
+    fn map_ref<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
         MultiStageData {
             vs: fun(&self.vs),
             fs: fun(&self.fs),
             cs: fun(&self.cs),
+        }
+    }
+    fn map<Y>(self, fun: impl Fn(T) -> Y) -> MultiStageData<Y> {
+        MultiStageData {
+            vs: fun(self.vs),
+            fs: fun(self.fs),
+            cs: fun(self.cs),
         }
     }
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
@@ -522,6 +528,7 @@ impl<T> MultiStageData<T> {
 }
 
 type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
+type MultiStageResources = MultiStageData<naga::back::msl::EntryPointResources>;
 
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
@@ -536,11 +543,11 @@ struct PushConstantsInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    naga_options: naga::back::msl::Options,
     bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
     push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
     total_counters: MultiStageResourceCounters,
     total_push_constants: u32,
+    per_stage_map: MultiStageResources,
 }
 
 trait AsNative {
@@ -549,12 +556,12 @@ trait AsNative {
     fn as_native(&self) -> &Self::Native;
 }
 
-type BufferPtr = NonNull<mtl::MTLBuffer>;
-type TexturePtr = NonNull<mtl::MTLTexture>;
-type SamplerPtr = NonNull<mtl::MTLSamplerState>;
+type BufferPtr = NonNull<metal::MTLBuffer>;
+type TexturePtr = NonNull<metal::MTLTexture>;
+type SamplerPtr = NonNull<metal::MTLSamplerState>;
 
 impl AsNative for BufferPtr {
-    type Native = mtl::BufferRef;
+    type Native = metal::BufferRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
@@ -566,7 +573,7 @@ impl AsNative for BufferPtr {
 }
 
 impl AsNative for TexturePtr {
-    type Native = mtl::TextureRef;
+    type Native = metal::TextureRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
@@ -578,7 +585,7 @@ impl AsNative for TexturePtr {
 }
 
 impl AsNative for SamplerPtr {
-    type Native = mtl::SamplerStateRef;
+    type Native = metal::SamplerStateRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
@@ -622,6 +629,7 @@ unsafe impl Sync for BindGroup {}
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
+    runtime_checks: bool,
 }
 
 #[derive(Debug, Default)]
@@ -655,30 +663,30 @@ impl PipelineStageInfo {
 }
 
 pub struct RenderPipeline {
-    raw: mtl::RenderPipelineState,
+    raw: metal::RenderPipelineState,
     #[allow(dead_code)]
-    vs_lib: mtl::Library,
+    vs_lib: metal::Library,
     #[allow(dead_code)]
-    fs_lib: Option<mtl::Library>,
+    fs_lib: Option<metal::Library>,
     vs_info: PipelineStageInfo,
-    fs_info: PipelineStageInfo,
-    raw_primitive_type: mtl::MTLPrimitiveType,
-    raw_triangle_fill_mode: mtl::MTLTriangleFillMode,
-    raw_front_winding: mtl::MTLWinding,
-    raw_cull_mode: mtl::MTLCullMode,
-    raw_depth_clip_mode: Option<mtl::MTLDepthClipMode>,
-    depth_stencil: Option<(mtl::DepthStencilState, wgt::DepthBiasState)>,
+    fs_info: Option<PipelineStageInfo>,
+    raw_primitive_type: metal::MTLPrimitiveType,
+    raw_triangle_fill_mode: metal::MTLTriangleFillMode,
+    raw_front_winding: metal::MTLWinding,
+    raw_cull_mode: metal::MTLCullMode,
+    raw_depth_clip_mode: Option<metal::MTLDepthClipMode>,
+    depth_stencil: Option<(metal::DepthStencilState, wgt::DepthBiasState)>,
 }
 
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
 pub struct ComputePipeline {
-    raw: mtl::ComputePipelineState,
+    raw: metal::ComputePipelineState,
     #[allow(dead_code)]
-    cs_lib: mtl::Library,
+    cs_lib: metal::Library,
     cs_info: PipelineStageInfo,
-    work_group_size: mtl::MTLSize,
+    work_group_size: metal::MTLSize,
     work_group_memory_sizes: Vec<u32>,
 }
 
@@ -687,7 +695,7 @@ unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct QuerySet {
-    raw_buffer: mtl::Buffer,
+    raw_buffer: metal::Buffer,
     ty: wgt::QueryType,
 }
 
@@ -698,7 +706,7 @@ unsafe impl Sync for QuerySet {}
 pub struct Fence {
     completed_value: Arc<atomic::AtomicU64>,
     /// The pending fence values have to be ascending.
-    pending_command_buffers: Vec<(crate::FenceValue, mtl::CommandBuffer)>,
+    pending_command_buffers: Vec<(crate::FenceValue, metal::CommandBuffer)>,
 }
 
 unsafe impl Send for Fence {}
@@ -708,7 +716,7 @@ impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
         let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
-            if cmd_buf.status() == mtl::MTLCommandBufferStatus::Completed {
+            if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
         }
@@ -726,7 +734,7 @@ struct IndexState {
     buffer_ptr: BufferPtr,
     offset: wgt::BufferAddress,
     stride: wgt::BufferAddress,
-    raw_type: mtl::MTLIndexType,
+    raw_type: metal::MTLIndexType,
 }
 
 #[derive(Default)]
@@ -735,12 +743,12 @@ struct Temp {
 }
 
 struct CommandState {
-    blit: Option<mtl::BlitCommandEncoder>,
-    render: Option<mtl::RenderCommandEncoder>,
-    compute: Option<mtl::ComputeCommandEncoder>,
-    raw_primitive_type: mtl::MTLPrimitiveType,
+    blit: Option<metal::BlitCommandEncoder>,
+    render: Option<metal::RenderCommandEncoder>,
+    compute: Option<metal::ComputeCommandEncoder>,
+    raw_primitive_type: metal::MTLPrimitiveType,
     index: Option<IndexState>,
-    raw_wg_size: mtl::MTLSize,
+    raw_wg_size: metal::MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
 
     /// Sizes of currently bound [`wgt::BufferBindingType::Storage`] buffers.
@@ -762,7 +770,7 @@ struct CommandState {
     /// See [`device::CompiledShader::sized_bindings`] for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: fxhash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,
@@ -770,8 +778,8 @@ struct CommandState {
 
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
-    raw_queue: Arc<Mutex<mtl::CommandQueue>>,
-    raw_cmd_buf: Option<mtl::CommandBuffer>,
+    raw_queue: Arc<Mutex<metal::CommandQueue>>,
+    raw_cmd_buf: Option<metal::CommandBuffer>,
     state: CommandState,
     temp: Temp,
 }
@@ -790,7 +798,7 @@ unsafe impl Sync for CommandEncoder {}
 
 #[derive(Debug)]
 pub struct CommandBuffer {
-    raw: mtl::CommandBuffer,
+    raw: metal::CommandBuffer,
 }
 
 unsafe impl Send for CommandBuffer {}

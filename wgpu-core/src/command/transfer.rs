@@ -34,27 +34,28 @@ pub enum CopySide {
 
 /// Error encountered while attempting a data transfer.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TransferError {
-    #[error("buffer {0:?} is invalid or destroyed")]
+    #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
-    #[error("texture {0:?} is invalid or destroyed")]
+    #[error("Texture {0:?} is invalid or destroyed")]
     InvalidTexture(TextureId),
     #[error("Source and destination cannot be the same buffer")]
     SameSourceDestinationBuffer,
-    #[error("source buffer/texture is missing the `COPY_SRC` usage flag")]
+    #[error("Source buffer/texture is missing the `COPY_SRC` usage flag")]
     MissingCopySrcUsageFlag,
-    #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
+    #[error("Destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag(Option<BufferId>, Option<TextureId>),
-    #[error("destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
+    #[error("Destination texture is missing the `RENDER_ATTACHMENT` usage flag")]
     MissingRenderAttachmentUsageFlag(TextureId),
-    #[error("copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
+    #[error("Copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
     BufferOverrun {
         start_offset: BufferAddress,
         end_offset: BufferAddress,
         buffer_size: BufferAddress,
         side: CopySide,
     },
-    #[error("copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
+    #[error("Copy of {dimension:?} {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
     TextureOverrun {
         start_offset: u32,
         end_offset: u32,
@@ -62,67 +63,67 @@ pub enum TransferError {
         dimension: TextureErrorDimension,
         side: CopySide,
     },
-    #[error("unable to select texture aspect {aspect:?} from fromat {format:?}")]
+    #[error("Unable to select texture aspect {aspect:?} from fromat {format:?}")]
     InvalidTextureAspect {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
-    #[error("unable to select texture mip level {level} out of {total}")]
+    #[error("Unable to select texture mip level {level} out of {total}")]
     InvalidTextureMipLevel { level: u32, total: u32 },
-    #[error("texture dimension must be 2D when copying from an external texture")]
+    #[error("Texture dimension must be 2D when copying from an external texture")]
     InvalidDimensionExternal(TextureId),
-    #[error("buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
-    #[error("copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedCopySize(BufferAddress),
-    #[error("copy width is not a multiple of block width")]
+    #[error("Copy width is not a multiple of block width")]
     UnalignedCopyWidth,
-    #[error("copy height is not a multiple of block height")]
+    #[error("Copy height is not a multiple of block height")]
     UnalignedCopyHeight,
-    #[error("copy origin's x component is not a multiple of block width")]
+    #[error("Copy origin's x component is not a multiple of block width")]
     UnalignedCopyOriginX,
-    #[error("copy origin's y component is not a multiple of block height")]
+    #[error("Copy origin's y component is not a multiple of block height")]
     UnalignedCopyOriginY,
-    #[error("bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
+    #[error("Bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
     UnalignedBytesPerRow,
-    #[error("number of bytes per row needs to be specified since more than one row is copied")]
+    #[error("Number of bytes per row needs to be specified since more than one row is copied")]
     UnspecifiedBytesPerRow,
-    #[error("number of rows per image needs to be specified since more than one image is copied")]
+    #[error("Number of rows per image needs to be specified since more than one image is copied")]
     UnspecifiedRowsPerImage,
-    #[error("number of bytes per row is less than the number of bytes in a complete row")]
+    #[error("Number of bytes per row is less than the number of bytes in a complete row")]
     InvalidBytesPerRow,
-    #[error("image is 1D and the copy height and depth are not both set to 1")]
+    #[error("Image is 1D and the copy height and depth are not both set to 1")]
     InvalidCopySize,
-    #[error("number of rows per image is invalid")]
+    #[error("Number of rows per image is invalid")]
     InvalidRowsPerImage,
-    #[error("copy source aspects must refer to all aspects of the source texture format")]
+    #[error("Copy source aspects must refer to all aspects of the source texture format")]
     CopySrcMissingAspects,
     #[error(
-        "copy destination aspects must refer to all aspects of the destination texture format"
+        "Copy destination aspects must refer to all aspects of the destination texture format"
     )]
     CopyDstMissingAspects,
-    #[error("copy aspect must refer to a single aspect of texture format")]
+    #[error("Copy aspect must refer to a single aspect of texture format")]
     CopyAspectNotOne,
-    #[error("copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
+    #[error("Copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
     CopyFromForbiddenTextureFormat {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
-    #[error("copying to textures with format {format:?} and aspect {aspect:?} is forbidden")]
+    #[error("Copying to textures with format {format:?} and aspect {aspect:?} is forbidden")]
     CopyToForbiddenTextureFormat {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
     #[error(
-        "copying to textures with format {0:?} is forbidden when copying from external texture"
+        "Copying to textures with format {0:?} is forbidden when copying from external texture"
     )]
     ExternalCopyToForbiddenTextureFormat(wgt::TextureFormat),
-    #[error("the entire texture must be copied when copying from depth texture")]
+    #[error("The entire texture must be copied when copying from depth texture")]
     InvalidDepthTextureExtent,
     #[error(
-        "source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible"
+        "Source format ({src_format:?}) and destination format ({dst_format:?}) are not copy-compatible (they may only differ in srgb-ness)"
     )]
-    MismatchedTextureFormats {
+    TextureFormatsNotCopyCompatible {
         src_format: wgt::TextureFormat,
         dst_format: wgt::TextureFormat,
     },
@@ -170,6 +171,7 @@ impl PrettyError for TransferError {
 }
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CopyError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
@@ -264,7 +266,7 @@ pub(crate) fn validate_linear_texture_data(
     let bytes_in_last_row = width_in_blocks * block_size;
 
     let bytes_per_row = if let Some(bytes_per_row) = layout.bytes_per_row {
-        let bytes_per_row = bytes_per_row.get() as BufferAddress;
+        let bytes_per_row = bytes_per_row as BufferAddress;
         if bytes_per_row < bytes_in_last_row {
             return Err(TransferError::InvalidBytesPerRow);
         }
@@ -276,7 +278,7 @@ pub(crate) fn validate_linear_texture_data(
         0
     };
     let block_rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
-        let rows_per_image = rows_per_image.get() as BufferAddress;
+        let rows_per_image = rows_per_image as BufferAddress;
         if rows_per_image < height_in_blocks {
             return Err(TransferError::InvalidRowsPerImage);
         }
@@ -1036,13 +1038,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
 
-        // src and dst texture format must be the same.
-        let src_format = src_texture.desc.format;
-        let dst_format = dst_texture.desc.format;
-        if src_format != dst_format {
-            return Err(TransferError::MismatchedTextureFormats {
-                src_format,
-                dst_format,
+        // src and dst texture format must be copy-compatible
+        // https://gpuweb.github.io/gpuweb/#copy-compatible
+        if src_texture.desc.format.remove_srgb_suffix()
+            != dst_texture.desc.format.remove_srgb_suffix()
+        {
+            return Err(TransferError::TextureFormatsNotCopyCompatible {
+                src_format: src_texture.desc.format,
+                dst_format: dst_texture.desc.format,
             }
             .into());
         }
@@ -1096,7 +1099,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
             .map(|pending| pending.into_hal(src_texture))
-            .into_iter()
             .collect();
 
         let dst_pending = cmd_buf

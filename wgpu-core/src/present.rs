@@ -45,24 +45,26 @@ impl Presentation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum SurfaceError {
-    #[error("surface is invalid")]
+    #[error("Surface is invalid")]
     Invalid,
-    #[error("surface is not configured for presentation")]
+    #[error("Surface is not configured for presentation")]
     NotConfigured,
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("surface image is already acquired")]
+    #[error("Surface image is already acquired")]
     AlreadyAcquired,
-    #[error("acquired frame is still referenced")]
+    #[error("Acquired frame is still referenced")]
     StillReferenced,
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ConfigureSurfaceError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("invalid surface")]
+    #[error("Invalid surface")]
     InvalidSurface,
     #[error("The view format {0:?} is not compatible with texture format {1:?}, only changing srgb-ness is allowed.")]
     InvalidViewFormat(wgt::TextureFormat, wgt::TextureFormat),
@@ -72,24 +74,24 @@ pub enum ConfigureSurfaceError {
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
     ZeroArea,
-    #[error("surface does not support the adapter's queue family")]
+    #[error("Surface does not support the adapter's queue family")]
     UnsupportedQueueFamily,
-    #[error("requested format {requested:?} is not in list of supported formats: {available:?}")]
+    #[error("Requested format {requested:?} is not in list of supported formats: {available:?}")]
     UnsupportedFormat {
         requested: wgt::TextureFormat,
         available: Vec<wgt::TextureFormat>,
     },
-    #[error("requested present mode {requested:?} is not in the list of supported present modes: {available:?}")]
+    #[error("Requested present mode {requested:?} is not in the list of supported present modes: {available:?}")]
     UnsupportedPresentMode {
         requested: wgt::PresentMode,
         available: Vec<wgt::PresentMode>,
     },
-    #[error("requested alpha mode {requested:?} is not in the list of supported alpha modes: {available:?}")]
+    #[error("Requested alpha mode {requested:?} is not in the list of supported alpha modes: {available:?}")]
     UnsupportedAlphaMode {
         requested: wgt::CompositeAlphaMode,
         available: Vec<wgt::CompositeAlphaMode>,
     },
-    #[error("requested usage is not supported")]
+    #[error("Requested usage is not supported")]
     UnsupportedUsage,
 }
 

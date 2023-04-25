@@ -197,7 +197,6 @@ fn main() {
         }
 
         env_logger::init();
-        // Temporarily avoid srgb formats for the swapchain on the web
         pollster::block_on(run(event_loop, viewports));
     }
     #[cfg(target_arch = "wasm32")]

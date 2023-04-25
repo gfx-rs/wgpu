@@ -117,7 +117,7 @@ impl framework::Example for Example {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::default(),
                 })],
@@ -159,7 +159,7 @@ impl framework::Example for Example {
                 &buf,
                 wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: std::num::NonZeroU32::new(info.width * 4),
+                    bytes_per_row: Some(info.width * 4),
                     rows_per_image: None,
                 },
                 size,

@@ -85,7 +85,7 @@ impl super::PrivateCapabilities {
             Tf::Bc5RgUnorm => F::BC5_UNORM_BLOCK,
             Tf::Bc5RgSnorm => F::BC5_SNORM_BLOCK,
             Tf::Bc6hRgbUfloat => F::BC6H_UFLOAT_BLOCK,
-            Tf::Bc6hRgbSfloat => F::BC6H_SFLOAT_BLOCK,
+            Tf::Bc6hRgbFloat => F::BC6H_SFLOAT_BLOCK,
             Tf::Bc7RgbaUnorm => F::BC7_UNORM_BLOCK,
             Tf::Bc7RgbaUnormSrgb => F::BC7_SRGB_BLOCK,
             Tf::Etc2Rgb8Unorm => F::ETC2_R8G8B8_UNORM_BLOCK,

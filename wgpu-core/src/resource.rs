@@ -11,7 +11,7 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, ops::Range, ptr::NonNull};
 
 /// The status code provided to the buffer mapping callback.
 ///
@@ -167,49 +167,50 @@ pub struct BufferMapOperation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("buffer map failed")]
+    #[error("Buffer map failed")]
     Failed,
-    #[error("buffer is invalid")]
+    #[error("Buffer is invalid")]
     Invalid,
-    #[error("buffer is destroyed")]
+    #[error("Buffer is destroyed")]
     Destroyed,
-    #[error("buffer is already mapped")]
+    #[error("Buffer is already mapped")]
     AlreadyMapped,
-    #[error("buffer map is pending")]
+    #[error("Buffer map is pending")]
     MapAlreadyPending,
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error("buffer is not mapped")]
+    #[error("Buffer is not mapped")]
     NotMapped,
     #[error(
-        "buffer map range must start aligned to `MAP_ALIGNMENT` and end to `COPY_BUFFER_ALIGNMENT`"
+        "Buffer map range must start aligned to `MAP_ALIGNMENT` and end to `COPY_BUFFER_ALIGNMENT`"
     )]
     UnalignedRange,
-    #[error("buffer offset invalid: offset {offset} must be multiple of 8")]
+    #[error("Buffer offset invalid: offset {offset} must be multiple of 8")]
     UnalignedOffset { offset: wgt::BufferAddress },
-    #[error("buffer range size invalid: range_size {range_size} must be multiple of 4")]
+    #[error("Buffer range size invalid: range_size {range_size} must be multiple of 4")]
     UnalignedRangeSize { range_size: wgt::BufferAddress },
-    #[error("buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
+    #[error("Buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
     OutOfBoundsUnderrun {
         index: wgt::BufferAddress,
         min: wgt::BufferAddress,
     },
     #[error(
-        "buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+        "Buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
     )]
     OutOfBoundsOverrun {
         index: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
-    #[error("buffer map range start {start} is greater than end {end}")]
+    #[error("Buffer map range start {start} is greater than end {end}")]
     NegativeRange {
         start: wgt::BufferAddress,
         end: wgt::BufferAddress,
     },
-    #[error("buffer map aborted")]
+    #[error("Buffer map aborted")]
     MapAborted,
 }
 
@@ -235,12 +236,13 @@ pub struct Buffer<A: hal::Api> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("failed to map buffer while creating: {0}")]
+    #[error("Failed to map buffer while creating: {0}")]
     AccessError(#[from] BufferAccessError),
-    #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
+    #[error("Buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::BufferUsages),
@@ -459,6 +461,7 @@ pub enum TextureErrorDimension {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
@@ -487,6 +490,7 @@ pub enum TextureDimensionError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -576,6 +580,22 @@ impl HalTextureViewDescriptor {
     }
 }
 
+#[derive(Debug, Copy, Clone, Error)]
+pub enum TextureViewNotRenderableReason {
+    #[error("The texture this view references doesn't include the RENDER_ATTACHMENT usage. Provided usages: {0:?}")]
+    Usage(wgt::TextureUsages),
+    #[error("The dimension of this texture view is not 2D. View dimension: {0:?}")]
+    Dimension(wgt::TextureViewDimension),
+    #[error("This texture view has more than one mipmap level. View mipmap levels: {0:?}")]
+    MipLevelCount(u32),
+    #[error("This texture view has more than one array layer. View array layers: {0:?}")]
+    ArrayLayerCount(u32),
+    #[error(
+        "The aspects of this texture view are a subset of the aspects in the original texture. Aspects: {0:?}"
+    )]
+    Aspects(hal::FormatAspects),
+}
+
 #[derive(Debug)]
 pub struct TextureView<A: hal::Api> {
     pub(crate) raw: A::TextureView,
@@ -586,18 +606,19 @@ pub struct TextureView<A: hal::Api> {
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,
     pub(crate) format_features: wgt::TextureFormatFeatures,
-    /// This is `None` only if the texture view is not renderable
-    pub(crate) render_extent: Option<wgt::Extent3d>,
+    /// This is `Err` only if the texture view is not renderable
+    pub(crate) render_extent: Result<wgt::Extent3d, TextureViewNotRenderableReason>,
     pub(crate) samples: u32,
     pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureViewError {
-    #[error("parent texture is invalid or destroyed")]
+    #[error("Parent texture is invalid or destroyed")]
     InvalidTexture,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
@@ -612,9 +633,9 @@ pub enum CreateTextureViewError {
     InvalidCubemapArrayTextureDepth { depth: u32 },
     #[error("Source texture width and height must be equal for a texture view of dimension `Cube`/`CubeArray`")]
     InvalidCubeTextureViewSize,
-    #[error("mip level count is 0")]
+    #[error("Mip level count is 0")]
     ZeroMipLevelCount,
-    #[error("array layer count is 0")]
+    #[error("Array layer count is 0")]
     ZeroArrayLayerCount,
     #[error(
         "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
@@ -640,6 +661,7 @@ pub enum CreateTextureViewError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
 impl<A: hal::Api> Resource for TextureView<A> {
@@ -673,28 +695,11 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<wgt::CompareFunction>,
-    /// Valid values: 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Must be at least 1. If this is not 1, all filter modes must be linear.
+    pub anisotropy_clamp: u16,
     /// Border color to use when address_mode is
     /// [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
-}
-
-impl Default for SamplerDescriptor<'_> {
-    fn default() -> Self {
-        Self {
-            label: None,
-            address_modes: Default::default(),
-            mag_filter: Default::default(),
-            min_filter: Default::default(),
-            mipmap_filter: Default::default(),
-            lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
-            compare: None,
-            anisotropy_clamp: None,
-            border_color: None,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -708,15 +713,44 @@ pub struct Sampler<A: hal::Api> {
     pub(crate) filtering: bool,
 }
 
+#[derive(Copy, Clone)]
+pub enum SamplerFilterErrorType {
+    MagFilter,
+    MinFilter,
+    MipmapFilter,
+}
+
+impl std::fmt::Debug for SamplerFilterErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            SamplerFilterErrorType::MagFilter => write!(f, "magFilter"),
+            SamplerFilterErrorType::MinFilter => write!(f, "minFilter"),
+            SamplerFilterErrorType::MipmapFilter => write!(f, "mipmapFilter"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("invalid lod clamp lod_min_clamp:{} lod_max_clamp:{}, must satisfy lod_min_clamp >= 0 and lod_max_clamp >= lod_min_clamp ", .0.start, .0.end)]
-    InvalidLodClamp(Range<f32>),
-    #[error("invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
-    InvalidClamp(u8),
-    #[error("cannot create any more samplers")]
+    #[error("Invalid lodMinClamp: {0}. Must be greater or equal to 0.0")]
+    InvalidLodMinClamp(f32),
+    #[error("Invalid lodMaxClamp: {lod_max_clamp}. Must be greater or equal to lodMinClamp (which is {lod_min_clamp}).")]
+    InvalidLodMaxClamp {
+        lod_min_clamp: f32,
+        lod_max_clamp: f32,
+    },
+    #[error("Invalid anisotropic clamp: {0}. Must be at least 1.")]
+    InvalidAnisotropy(u16),
+    #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1 (it is {anisotropic_clamp}), all filter modes must be linear.")]
+    InvalidFilterModeWithAnisotropy {
+        filter_type: SamplerFilterErrorType,
+        filter_mode: wgt::FilterMode,
+        anisotropic_clamp: u16,
+    },
+    #[error("Cannot create any more samplers")]
     TooManyObjects,
     /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
     #[error(transparent)]
@@ -732,6 +766,7 @@ impl<A: hal::Api> Resource for Sampler<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateQuerySetError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -762,9 +797,10 @@ impl<A: hal::Api> Resource for QuerySet<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DestroyError {
-    #[error("resource is invalid")]
+    #[error("Resource is invalid")]
     Invalid,
-    #[error("resource is already destroyed")]
+    #[error("Resource is already destroyed")]
     AlreadyDestroyed,
 }

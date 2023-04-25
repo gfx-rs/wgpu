@@ -137,17 +137,18 @@ pub struct ComputePassDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum DispatchError {
-    #[error("compute pipeline must be set")]
+    #[error("Compute pipeline must be set")]
     MissingPipeline,
-    #[error("the pipeline layout, associated with the current compute pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
+    #[error("The pipeline layout, associated with the current compute pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
     #[error(
-        "each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
+        "Each current dispatch group size dimension ({current:?}) must be less or equal to {limit}"
     )]
     InvalidGroupSize { current: [u32; 3], limit: u32 },
     #[error(transparent)]
@@ -159,29 +160,29 @@ pub enum DispatchError {
 pub enum ComputePassErrorInner {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error("bind group {0:?} is invalid")]
+    #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
-    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
+    #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u8, max: u32 },
-    #[error("compute pipeline {0:?} is invalid")]
+    #[error("Compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
-    #[error("indirect buffer {0:?} is invalid or destroyed")]
+    #[error("Indirect buffer {0:?} is invalid or destroyed")]
     InvalidIndirectBuffer(id::BufferId),
-    #[error("indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
+    #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
     IndirectBufferOverrun {
         offset: u64,
         end_offset: u64,
         buffer_size: u64,
     },
-    #[error("buffer {0:?} is invalid or destroyed")]
+    #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(id::BufferId),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error("cannot pop debug group, because number of pushed debug groups is zero")]
+    #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
@@ -714,7 +715,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let scope = PassErrorScope::WriteTimestamp;
 
                     device
-                        .require_features(wgt::Features::WRITE_TIMESTAMP_INSIDE_PASSES)
+                        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                         .map_pass_err(scope)?;
 
                     let query_set: &resource::QuerySet<A> = cmd_buf

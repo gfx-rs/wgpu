@@ -83,7 +83,7 @@ impl framework::Example for Triangles {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: None,
                     write_mask: wgpu::ColorWrites::empty(),
                 })],
@@ -120,7 +120,7 @@ impl framework::Example for Triangles {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: Default::default(),
             depth_stencil: Some(wgpu::DepthStencilState {

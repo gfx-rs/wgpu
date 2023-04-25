@@ -61,7 +61,7 @@ impl Example {
             fragment: Some(wgpu::FragmentState {
                 module: shader,
                 entry_point: "fs_main",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::LineList,
@@ -78,7 +78,7 @@ impl Example {
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
-                color_formats: &[Some(config.format)],
+                color_formats: &[Some(config.view_formats[0])],
                 depth_stencil: None,
                 sample_count,
                 multiview: None,
@@ -106,7 +106,7 @@ impl Example {
             mip_level_count: 1,
             sample_count,
             dimension: wgpu::TextureDimension::D2,
-            format: config.format,
+            format: config.view_formats[0],
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
             view_formats: &[],
@@ -131,7 +131,9 @@ impl framework::Example for Example {
     ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
 
-        let sample_flags = _adapter.get_texture_format_features(config.format).flags;
+        let sample_flags = _adapter
+            .get_texture_format_features(config.view_formats[0])
+            .flags;
 
         let max_sample_count = {
             if sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X16) {

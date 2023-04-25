@@ -128,7 +128,7 @@ pub struct Interface {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
+#[error("Buffer usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingBufferUsageError {
     pub(crate) actual: wgt::BufferUsages,
     pub(crate) expected: wgt::BufferUsages,
@@ -148,7 +148,7 @@ pub fn check_buffer_usage(
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("texture usage is {actual:?} which does not contain required usage {expected:?}")]
+#[error("Texture usage is {actual:?} which does not contain required usage {expected:?}")]
 pub struct MissingTextureUsageError {
     pub(crate) actual: wgt::TextureUsages,
     pub(crate) expected: wgt::TextureUsages,
@@ -168,75 +168,79 @@ pub fn check_texture_usage(
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindingError {
-    #[error("binding is missing from the pipeline layout")]
+    #[error("Binding is missing from the pipeline layout")]
     Missing,
-    #[error("visibility flags don't include the shader stage")]
+    #[error("Visibility flags don't include the shader stage")]
     Invisible,
     #[error("The shader requires the load/store access flags {required:?} but only {allowed:?} is allowed")]
     WrongUsage {
         required: GlobalUse,
         allowed: GlobalUse,
     },
-    #[error("type on the shader side does not match the pipeline binding")]
+    #[error("Type on the shader side does not match the pipeline binding")]
     WrongType,
-    #[error("storage class {binding:?} doesn't match the shader {shader:?}")]
+    #[error("Storage class {binding:?} doesn't match the shader {shader:?}")]
     WrongAddressSpace {
         binding: naga::AddressSpace,
         shader: naga::AddressSpace,
     },
-    #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
+    #[error("Buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
     WrongBufferSize(wgt::BufferSize),
-    #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the binding {binding:?}")]
+    #[error("View dimension {dim:?} (is array: {is_array}) doesn't match the binding {binding:?}")]
     WrongTextureViewDimension {
         dim: naga::ImageDimension,
         is_array: bool,
         binding: BindingType,
     },
-    #[error("texture class {binding:?} doesn't match the shader {shader:?}")]
+    #[error("Texture class {binding:?} doesn't match the shader {shader:?}")]
     WrongTextureClass {
         binding: naga::ImageClass,
         shader: naga::ImageClass,
     },
-    #[error("comparison flag doesn't match the shader")]
+    #[error("Comparison flag doesn't match the shader")]
     WrongSamplerComparison,
-    #[error("derived bind group layout type is not consistent between stages")]
+    #[error("Derived bind group layout type is not consistent between stages")]
     InconsistentlyDerivedType,
-    #[error("texture format {0:?} is not supported for storage use")]
+    #[error("Texture format {0:?} is not supported for storage use")]
     BadStorageFormat(wgt::TextureFormat),
     #[error(
-        "storage texture usage {0:?} doesn't have a matching supported `StorageTextureAccess`"
+        "Storage texture usage {0:?} doesn't have a matching supported `StorageTextureAccess`"
     )]
     UnsupportedTextureStorageAccess(GlobalUse),
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum FilteringError {
-    #[error("integer textures can't be sampled with a filtering sampler")]
+    #[error("Integer textures can't be sampled with a filtering sampler")]
     Integer,
-    #[error("non-filterable float textures can't be sampled with a filtering sampler")]
+    #[error("Non-filterable float textures can't be sampled with a filtering sampler")]
     Float,
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum InputError {
-    #[error("input is not provided by the earlier stage in the pipeline")]
+    #[error("Input is not provided by the earlier stage in the pipeline")]
     Missing,
-    #[error("input type is not compatible with the provided {0}")]
+    #[error("Input type is not compatible with the provided {0}")]
     WrongType(NumericType),
-    #[error("input interpolation doesn't match provided {0:?}")]
+    #[error("Input interpolation doesn't match provided {0:?}")]
     InterpolationMismatch(Option<naga::Interpolation>),
-    #[error("input sampling doesn't match provided {0:?}")]
+    #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum StageError {
-    #[error("shader module is invalid")]
+    #[error("Shader module is invalid")]
     InvalidModule,
     #[error(
-        "shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
+        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
     )]
     InvalidWorkgroupSize {
         current: [u32; 3],
@@ -244,27 +248,27 @@ pub enum StageError {
         limit: [u32; 3],
         total: u32,
     },
-    #[error("shader uses {used} inter-stage components above the limit of {limit}")]
+    #[error("Shader uses {used} inter-stage components above the limit of {limit}")]
     TooManyVaryings { used: u32, limit: u32 },
-    #[error("unable to find entry point '{0}'")]
+    #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
-    #[error("shader global {0:?} is not available in the layout pipeline layout")]
+    #[error("Shader global {0:?} is not available in the layout pipeline layout")]
     Binding(naga::ResourceBinding, #[source] BindingError),
-    #[error("unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
+    #[error("Unable to filter the texture ({texture:?}) by the sampler ({sampler:?})")]
     Filtering {
         texture: naga::ResourceBinding,
         sampler: naga::ResourceBinding,
         #[source]
         error: FilteringError,
     },
-    #[error("location[{location}] {var} is not provided by the previous stage outputs")]
+    #[error("Location[{location}] {var} is not provided by the previous stage outputs")]
     Input {
         location: wgt::ShaderLocation,
         var: InterfaceVar,
         #[source]
         error: InputError,
     },
-    #[error("location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
+    #[error("Location[{location}] is provided by the previous stage output but is not consumed as input by this stage.")]
     InputNotConsumed { location: wgt::ShaderLocation },
 }
 
@@ -746,7 +750,7 @@ impl NumericType {
             Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRg11Unorm | Tf::EacRg11Snorm => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Float)
             }
-            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
+            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbFloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
                 (NumericDimension::Vector(Vs::Tri), Sk::Float)
             }
             Tf::Astc {

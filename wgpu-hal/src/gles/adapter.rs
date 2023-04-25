@@ -315,10 +315,11 @@ impl super::Adapter {
                 && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
-        downlevel_flags.set(
-            wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
-            extensions.contains("EXT_texture_filter_anisotropic"),
-        );
+        if extensions.contains("EXT_texture_filter_anisotropic") {
+            let max_aniso =
+                unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_MAX_ANISOTROPY_EXT) } as u32;
+            downlevel_flags.set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, max_aniso >= 16);
+        }
         downlevel_flags.set(
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
             !(cfg!(target_arch = "wasm32") || is_angle),
@@ -396,11 +397,11 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR);
+            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
             features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
         } else {
             features.set(
-                wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR,
+                wgt::Features::TEXTURE_COMPRESSION_ASTC,
                 extensions.contains("GL_KHR_texture_compression_astc_ldr"),
             );
             features.set(
@@ -743,7 +744,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         let bcn_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_BC, filterable);
         let etc2_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ETC2, filterable);
-        let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_LDR, filterable);
+        let astc_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC, filterable);
         let astc_hdr_features = feature_fn(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR, filterable);
 
         let private_caps_fn = |f, caps| {
@@ -830,7 +831,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc4RSnorm
             | Tf::Bc5RgUnorm
             | Tf::Bc5RgSnorm
-            | Tf::Bc6hRgbSfloat
+            | Tf::Bc6hRgbFloat
             | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => bcn_features,

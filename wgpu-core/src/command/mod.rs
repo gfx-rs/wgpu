@@ -328,10 +328,11 @@ impl<C: Clone> BasePass<C> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CommandEncoderError {
-    #[error("command encoder is invalid")]
+    #[error("Command encoder is invalid")]
     Invalid,
-    #[error("command encoder must be active")]
+    #[error("Command encoder must be active")]
     NotRecording,
 }
 

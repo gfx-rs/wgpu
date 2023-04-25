@@ -205,7 +205,7 @@ impl Context {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
             .0
@@ -220,7 +220,7 @@ impl Context {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
             .0
@@ -299,12 +299,13 @@ impl Context {
         self.handle_error(sink_mutex, cause, "", None, string)
     }
 
+    #[track_caller]
     fn handle_error_fatal(
         &self,
         cause: impl Error + Send + Sync + 'static,
-        string: &'static str,
+        operation: &'static str,
     ) -> ! {
-        panic!("Error in {string}: {cause}");
+        panic!("Error in {operation}: {f}", f = self.format_error(&cause));
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
@@ -1548,9 +1549,8 @@ impl crate::Context for Context {
         (id, ())
     }
 
-    fn surface_drop(&self, _surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
-        //TODO: swapchain needs to hold the surface alive
-        //self.0.surface_drop(*surface)
+    fn surface_drop(&self, surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
+        self.0.surface_drop(*surface)
     }
 
     fn adapter_drop(&self, adapter: &Self::AdapterId, _adapter_data: &Self::AdapterData) {
@@ -2238,13 +2238,15 @@ impl crate::Context for Context {
         }
     }
 
-    fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
+    fn queue_submit<I: Iterator<Item = (Self::CommandBufferId, Self::CommandBufferData)>>(
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         command_buffers: I,
     ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
-        let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
+        let temp_command_buffers = command_buffers
+            .map(|(i, _)| i)
+            .collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
         let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers))
@@ -2944,9 +2946,11 @@ impl crate::Context for Context {
         &self,
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
+        render_bundles: Box<
+            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
+        >,
     ) {
-        let temp_render_bundles = render_bundles.collect::<SmallVec<[_; 4]>>();
+        let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
         unsafe {
             wgpu_render_pass_execute_bundles(
                 pass_data,

@@ -1,7 +1,5 @@
 #![cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 
-use std::num::NonZeroU32;
-
 use crate::common::{fail_if, initialize_test, TestParameters};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
@@ -164,8 +162,6 @@ async fn image_bitmap_import() {
 
                 // If the test is suppoed to be valid call to copyExternal.
                 let mut valid = true;
-                // If the result is incorrect
-                let mut correct = true;
                 match case {
                     TestCase::Normal => {}
                     TestCase::FlipY => {
@@ -246,7 +242,6 @@ async fn image_bitmap_import() {
                         dest_layers = 2;
                     }
                     TestCase::SecondSliceCopy => {
-                        correct = false; // TODO: what?
                         dest_origin.z = 1;
                         dest_data_layer = 1;
                         dest_layers = 2;
@@ -314,7 +309,7 @@ async fn image_bitmap_import() {
                         buffer: &readback_buffer,
                         layout: wgpu::ImageDataLayout {
                             offset: 0,
-                            bytes_per_row: Some(NonZeroU32::new(256).unwrap()),
+                            bytes_per_row: Some(256),
                             rows_per_image: None,
                         },
                     },
@@ -338,7 +333,7 @@ async fn image_bitmap_import() {
                 let gpu_image_cropped =
                     image::imageops::crop_imm(&gpu_image, 0, 0, 3, 3).to_image();
 
-                if valid && correct {
+                if valid {
                     assert_eq!(
                         raw_image, gpu_image_cropped,
                         "Failed on test case {case:?} {source:?}"

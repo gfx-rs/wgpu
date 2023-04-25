@@ -15,37 +15,38 @@ use thiserror::Error;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum DrawError {
-    #[error("blend constant needs to be set")]
+    #[error("Blend constant needs to be set")]
     MissingBlendConstant,
-    #[error("render pipeline must be set")]
+    #[error("Render pipeline must be set")]
     MissingPipeline,
-    #[error("vertex buffer {index} must be set")]
+    #[error("Vertex buffer {index} must be set")]
     MissingVertexBuffer { index: u32 },
-    #[error("index buffer must be set")]
+    #[error("Index buffer must be set")]
     MissingIndexBuffer,
-    #[error("the pipeline layout, associated with the current render pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
+    #[error("The pipeline layout, associated with the current render pipeline, contains a bind group layout at index {index} which is incompatible with the bind group layout associated with the bind group at {index}")]
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
-    #[error("vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
+    #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {
         last_vertex: u32,
         vertex_limit: u32,
         slot: u32,
     },
-    #[error("instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
+    #[error("Instance {last_instance} extends beyond limit {instance_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Instance` step-rate vertex buffer?")]
     InstanceBeyondLimit {
         last_instance: u32,
         instance_limit: u32,
         slot: u32,
     },
-    #[error("index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
+    #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u32, index_limit: u32 },
     #[error(
-        "pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
+        "Pipeline index format ({pipeline:?}) and buffer index format ({buffer:?}) do not match"
     )]
     UnmatchedIndexFormats {
         pipeline: wgt::IndexFormat,
@@ -58,28 +59,29 @@ pub enum DrawError {
 /// Error encountered when encoding a render command.
 /// This is the shared error set between render bundles and passes.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RenderCommandError {
-    #[error("bind group {0:?} is invalid")]
+    #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
-    #[error("render bundle {0:?} is invalid")]
+    #[error("Render bundle {0:?} is invalid")]
     InvalidRenderBundle(id::RenderBundleId),
-    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
+    #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u8, max: u32 },
-    #[error("dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
+    #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
-    #[error("number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
+    #[error("Number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
     InvalidDynamicOffsetCount { actual: usize, expected: usize },
-    #[error("render pipeline {0:?} is invalid")]
+    #[error("Render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
     #[error("Render pipeline targets are incompatible with render pass")]
     IncompatiblePipelineTargets(#[from] crate::device::RenderPassCompatibilityError),
-    #[error("pipeline writes to depth/stencil, while the pass has read-only depth/stencil")]
+    #[error("Pipeline writes to depth/stencil, while the pass has read-only depth/stencil")]
     IncompatiblePipelineRods,
     #[error(transparent)]
     UsageConflict(#[from] UsageConflict),
-    #[error("buffer {0:?} is destroyed")]
+    #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),

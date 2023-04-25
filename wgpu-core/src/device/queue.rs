@@ -18,7 +18,7 @@ use crate::{
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{iter, mem, num::NonZeroU32, ptr};
+use std::{iter, mem, ptr};
 use thiserror::Error;
 
 /// Number of command buffers that we generate from the same pool
@@ -284,10 +284,11 @@ impl<A: hal::Api> StagingBuffer<A> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("queue is invalid")]
+#[error("Queue is invalid")]
 pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueueWriteError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
@@ -298,20 +299,21 @@ pub enum QueueWriteError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueueSubmitError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
-    #[error("buffer {0:?} is destroyed")]
+    #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
-    #[error("texture {0:?} is destroyed")]
+    #[error("Texture {0:?} is destroyed")]
     DestroyedTexture(id::TextureId),
     #[error(transparent)]
     Unmap(#[from] BufferAccessError),
     #[error("Buffer {0:?} is still mapped")]
     BufferStillMapped(id::BufferId),
-    #[error("surface output was dropped before the command buffer got submitted")]
+    #[error("Surface output was dropped before the command buffer got submitted")]
     SurfaceOutputDropped,
-    #[error("surface was unconfigured before the command buffer got submitted")]
+    #[error("Surface was unconfigured before the command buffer got submitted")]
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
@@ -649,15 +651,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let width_blocks = size.width / block_width;
         let height_blocks = size.height / block_height;
 
-        let block_rows_per_image = match data_layout.rows_per_image {
-            Some(rows_per_image) => rows_per_image.get(),
-            None => {
-                // doesn't really matter because we need this only if we copy
-                // more than one layer, and then we validate for this being not
-                // None
-                size.height
-            }
-        };
+        let block_rows_per_image = data_layout.rows_per_image.unwrap_or(
+            // doesn't really matter because we need this only if we copy
+            // more than one layer, and then we validate for this being not
+            // None
+            size.height,
+        );
 
         let block_size = dst
             .desc
@@ -667,7 +666,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let bytes_per_row_alignment =
             get_lowest_common_denom(device.alignments.buffer_copy_pitch.get() as u32, block_size);
         let stage_bytes_per_row =
-            hal::auxil::align_to(block_size * width_blocks, bytes_per_row_alignment);
+            wgt::math::align_to(block_size * width_blocks, bytes_per_row_alignment);
 
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
@@ -738,11 +737,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_raw()
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        let bytes_per_row = if let Some(bytes_per_row) = data_layout.bytes_per_row {
-            bytes_per_row.get()
-        } else {
-            width_blocks * block_size
-        };
+        let bytes_per_row = data_layout
+            .bytes_per_row
+            .unwrap_or(width_blocks * block_size);
 
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
@@ -796,8 +793,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     offset: rel_array_layer as u64
                         * block_rows_per_image as u64
                         * stage_bytes_per_row as u64,
-                    bytes_per_row: NonZeroU32::new(stage_bytes_per_row),
-                    rows_per_image: NonZeroU32::new(block_rows_per_image),
+                    bytes_per_row: Some(stage_bytes_per_row),
+                    rows_per_image: Some(block_rows_per_image),
                 },
                 texture_base,
                 size: hal_copy_size,
@@ -809,8 +806,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         unsafe {
-            encoder
-                .transition_textures(transition.map(|pending| pending.into_hal(dst)).into_iter());
+            encoder.transition_textures(transition.map(|pending| pending.into_hal(dst)));
             encoder.transition_buffers(iter::once(barrier));
             encoder.copy_buffer_to_texture(&staging_buffer.raw, dst_raw, regions);
         }

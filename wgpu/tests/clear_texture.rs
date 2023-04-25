@@ -64,7 +64,7 @@ static TEXTURE_FORMATS_BC: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Bc5RgUnorm,
     wgpu::TextureFormat::Bc5RgSnorm,
     wgpu::TextureFormat::Bc6hRgbUfloat,
-    wgpu::TextureFormat::Bc6hRgbSfloat,
+    wgpu::TextureFormat::Bc6hRgbFloat,
     wgpu::TextureFormat::Bc7RgbaUnorm,
     wgpu::TextureFormat::Bc7RgbaUnormSrgb,
 ];
@@ -83,7 +83,7 @@ static TEXTURE_FORMATS_ETC2: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::EacRg11Snorm,
 ];
 
-// needs TEXTURE_COMPRESSION_ASTC_LDR
+// needs TEXTURE_COMPRESSION_ASTC
 use wgpu::{AstcBlock, AstcChannel};
 static TEXTURE_FORMATS_ASTC: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Astc {
@@ -397,7 +397,7 @@ fn clear_texture_bc() {
 fn clear_texture_astc() {
     initialize_test(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC_LDR)
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC)
             .limits(wgpu::Limits {
                 max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
                 ..wgpu::Limits::downlevel_defaults()

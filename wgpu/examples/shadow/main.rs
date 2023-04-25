@@ -210,7 +210,7 @@ impl framework::Example for Example {
     }
 
     fn init(
-        sc_desc: &wgpu::SurfaceConfiguration,
+        config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
@@ -593,7 +593,7 @@ impl framework::Example for Example {
                 push_constant_ranges: &[],
             });
 
-            let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+            let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
             let forward_uniforms = GlobalUniforms {
                 proj: mx_total.to_cols_array_2d(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
@@ -644,7 +644,7 @@ impl framework::Example for Example {
                     } else {
                         "fs_main_without_storage"
                     },
-                    targets: &[Some(sc_desc.format.into())],
+                    targets: &[Some(config.view_formats[0].into())],
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,
@@ -669,7 +669,7 @@ impl framework::Example for Example {
             }
         };
 
-        let forward_depth = Self::create_depth_texture(sc_desc, device);
+        let forward_depth = Self::create_depth_texture(config, device);
 
         Example {
             entities,

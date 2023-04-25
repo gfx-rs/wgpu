@@ -235,10 +235,6 @@ impl<A: HalApi> Adapter<A> {
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(
-            wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS,
-            caps.contains(Tfc::STORAGE_ATOMIC),
-        );
-        flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
             caps.contains(Tfc::STORAGE_READ_WRITE),
         );
@@ -369,39 +365,42 @@ impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum IsSurfaceSupportedError {
-    #[error("invalid adapter")]
+    #[error("Invalid adapter")]
     InvalidAdapter,
-    #[error("invalid surface")]
+    #[error("Invalid surface")]
     InvalidSurface,
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum GetSurfaceSupportError {
-    #[error("invalid adapter")]
+    #[error("Invalid adapter")]
     InvalidAdapter,
-    #[error("invalid surface")]
+    #[error("Invalid surface")]
     InvalidSurface,
-    #[error("surface is not supported by the adapter")]
+    #[error("Surface is not supported by the adapter")]
     Unsupported,
 }
 
 #[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
+#[non_exhaustive]
 pub enum RequestDeviceError {
-    #[error("parent adapter is invalid")]
+    #[error("Parent adapter is invalid")]
     InvalidAdapter,
-    #[error("connection to device was lost during initialization")]
+    #[error("Connection to device was lost during initialization")]
     DeviceLost,
-    #[error("device initialization failed due to implementation specific errors")]
+    #[error("Device initialization failed due to implementation specific errors")]
     Internal,
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
-    #[error("device has no queue supporting graphics")]
+    #[error("Device has no queue supporting graphics")]
     NoGraphicsQueue,
-    #[error("not enough memory left")]
+    #[error("Not enough memory left")]
     OutOfMemory,
-    #[error("unsupported features were requested: {0:?}")]
+    #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }
 
@@ -426,14 +425,15 @@ impl<I: Clone> AdapterInputs<'_, I> {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("adapter is invalid")]
+#[error("Adapter is invalid")]
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RequestAdapterError {
-    #[error("no suitable adapter found")]
+    #[error("No suitable adapter found")]
     NotFound,
-    #[error("surface {0:?} is invalid")]
+    #[error("Surface {0:?} is invalid")]
     InvalidSurface(SurfaceId),
 }
 
@@ -520,7 +520,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
         id_in: Input<G, SurfaceId>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_canvas");
@@ -547,7 +547,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
         id_in: Input<G, SurfaceId>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
@@ -631,7 +631,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Surface::drop");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
-        self.instance.destroy_surface(surface.unwrap());
+        let mut surface = surface.unwrap();
+
+        fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
+            global: &Global<G>,
+            surface: &mut HalSurface<A>,
+            present: &Presentation,
+        ) {
+            let hub = HalApi::hub(global);
+            hub.surface_unconfigure(present.device_id.value, surface);
+        }
+
+        if let Some(present) = surface.presentation.take() {
+            match present.backend() {
+                #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                Backend::Vulkan => unconfigure(self, surface.vulkan.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                Backend::Metal => unconfigure(self, surface.metal.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "dx12", windows))]
+                Backend::Dx12 => unconfigure(self, surface.dx12.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "dx11", windows))]
+                Backend::Dx11 => unconfigure(self, surface.dx11.as_mut().unwrap(), &present),
+                #[cfg(feature = "gles")]
+                Backend::Gl => unconfigure(self, surface.gl.as_mut().unwrap(), &present),
+                _ => unreachable!(),
+            }
+        }
+
+        self.instance.destroy_surface(surface);
     }
 
     fn enumerate<A: HalApi>(

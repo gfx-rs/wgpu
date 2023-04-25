@@ -173,8 +173,9 @@ async fn setup<E: Example>(title: &str) -> Setup {
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
                 log::info!("Creating surface from OffscreenCanvas");
-                instance
-                    .create_surface_from_offscreen_canvas(&offscreen_canvas_setup.offscreen_canvas)
+                instance.create_surface_from_offscreen_canvas(
+                    offscreen_canvas_setup.offscreen_canvas.clone(),
+                )
             } else {
                 instance.create_surface(&window)
             }
@@ -275,6 +276,8 @@ fn start<E: Example>(
     let mut config = surface
         .get_default_config(&adapter, size.width, size.height)
         .expect("Surface isn't supported by the adapter.");
+    let surface_view_format = config.format.add_srgb_suffix();
+    config.view_formats.push(surface_view_format);
     surface.configure(&device, &config);
 
     log::info!("Initializing the example...");
@@ -369,9 +372,10 @@ fn start<E: Example>(
                             .expect("Failed to acquire next surface texture!")
                     }
                 };
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
+                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(surface_view_format),
+                    ..wgpu::TextureViewDescriptor::default()
+                });
 
                 example.render(&view, &device, &queue, &spawner);
 
@@ -504,7 +508,7 @@ pub struct FrameworkRefTest {
 #[cfg(test)]
 #[allow(dead_code)]
 pub fn test<E: Example>(mut params: FrameworkRefTest) {
-    use std::{mem, num::NonZeroU32};
+    use std::mem;
 
     assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
@@ -547,7 +551,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     height: params.height,
                     present_mode: wgpu::PresentMode::Fifo,
                     alpha_mode: wgpu::CompositeAlphaMode::Auto,
-                    view_formats: vec![wgpu::TextureFormat::Rgba8Unorm],
+                    view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
                 },
                 &ctx.adapter,
                 &ctx.device,
@@ -592,7 +596,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                     buffer: &dst_buffer,
                     layout: wgpu::ImageDataLayout {
                         offset: 0,
-                        bytes_per_row: NonZeroU32::new(params.width * 4),
+                        bytes_per_row: Some(params.width * 4),
                         rows_per_image: None,
                     },
                 },

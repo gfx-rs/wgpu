@@ -151,7 +151,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
                 entry_point: "main_fs",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,

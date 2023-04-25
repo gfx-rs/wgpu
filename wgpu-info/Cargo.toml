@@ -12,4 +12,5 @@ publish = false
 
 [dependencies]
 env_logger.workspace = true
+num-traits.workspace = true
 wgpu.workspace = true

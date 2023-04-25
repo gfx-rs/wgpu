@@ -16,7 +16,7 @@ type ShaderStage<'a> = (
     naga::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::Api>,
 );
-type NameBindingMap = fxhash::FxHashMap<String, (super::BindingRegister, u8)>;
+type NameBindingMap = rustc_hash::FxHashMap<String, (super::BindingRegister, u8)>;
 
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
@@ -864,14 +864,17 @@ impl crate::Device<super::Api> for super::Device {
             unsafe { gl.sampler_parameter_f32_slice(raw, glow::TEXTURE_BORDER_COLOR, &border) };
         }
 
-        if let Some(ref range) = desc.lod_clamp {
-            unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MIN_LOD, range.start) };
-            unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_LOD, range.end) };
-        }
+        unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MIN_LOD, desc.lod_clamp.start) };
+        unsafe { gl.sampler_parameter_f32(raw, glow::TEXTURE_MAX_LOD, desc.lod_clamp.end) };
 
-        if let Some(anisotropy) = desc.anisotropy_clamp {
+        // If clamp is not 1, we know anisotropy is supported up to 16x
+        if desc.anisotropy_clamp != 1 {
             unsafe {
-                gl.sampler_parameter_i32(raw, glow::TEXTURE_MAX_ANISOTROPY, anisotropy.get() as i32)
+                gl.sampler_parameter_i32(
+                    raw,
+                    glow::TEXTURE_MAX_ANISOTROPY,
+                    desc.anisotropy_clamp as i32,
+                )
             };
         }
 
