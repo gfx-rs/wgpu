@@ -193,9 +193,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.1.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c70beb79cbb5ce9c4f8e20849978f34225931f665bb49efa6982875a4d5facb3"
+checksum = "24a6904aef64d73cf10ab17ebace7befb918b82164785cb89907993be7f83813"
 
 [[package]]
 name = "block"
@@ -3078,7 +3078,7 @@ version = "0.16.0"
 dependencies = [
  "arrayvec 0.7.2",
  "async-executor",
- "bitflags 2.1.0",
+ "bitflags 2.2.1",
  "bytemuck",
  "cfg-if",
  "console_error_panic_hook",
@@ -3094,7 +3094,7 @@ dependencies = [
  "nanorand",
  "noise",
  "obj",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "png",
  "pollster",
  "profiling",
@@ -3118,11 +3118,11 @@ version = "0.16.0"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
- "bitflags 2.1.0",
+ "bitflags 2.2.1",
  "codespan-reporting",
  "log",
  "naga",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "profiling",
  "raw-window-handle 0.5.2",
  "ron",
@@ -3143,7 +3143,7 @@ dependencies = [
  "arrayvec 0.7.2",
  "ash",
  "bit-set",
- "bitflags 2.1.0",
+ "bitflags 2.2.1",
  "block",
  "core-graphics-types",
  "d3d12",
@@ -3163,7 +3163,7 @@ dependencies = [
  "metal",
  "naga",
  "objc",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "profiling",
  "range-alloc",
  "raw-window-handle 0.5.2",
@@ -3191,7 +3191,7 @@ dependencies = [
 name = "wgpu-types"
 version = "0.16.0"
 dependencies = [
- "bitflags 2.1.0",
+ "bitflags 2.2.1",
  "js-sys",
  "serde",
  "serde_json",
