@@ -1,6 +1,5 @@
 use crate::common::{initialize_test, TestParameters};
 use std::borrow::Cow;
-use wasm_bindgen_test::wasm_bindgen_test;
 
 #[test]
 fn occlusion_query() {
