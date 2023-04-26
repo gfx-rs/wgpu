@@ -5,135 +5,125 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
 #[wasm_bindgen_test]
 fn occlusion_query() {
-    initialize_test(
-        TestParameters::default().backend_failure(wgpu::Backends::GL),
-        |ctx| {
-            // Create depth texture
-            let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+    initialize_test(TestParameters::default(), |ctx| {
+        // Create depth texture
+        let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 64,
+                height: 64,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Setup pipeline using a simple shader with hardcoded vertices
+        let shader = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
-                size: wgpu::Extent3d {
-                    width: 64,
-                    height: 64,
-                    depth_or_array_layers: 1,
+                source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            });
+        let pipeline = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: None,
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &[],
                 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
+                fragment: None,
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
             });
-            let depth_texture_view =
-                depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            // Setup pipeline using a simple shader with hardcoded vertices
-            let shader = ctx
-                .device
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-                });
-            let pipeline = ctx
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: None,
-                    layout: None,
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: "vs_main",
-                        buffers: &[],
-                    },
-                    fragment: None,
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: Some(wgpu::DepthStencilState {
-                        format: wgpu::TextureFormat::Depth32Float,
-                        depth_write_enabled: true,
-                        depth_compare: wgpu::CompareFunction::Less,
-                        stencil: wgpu::StencilState::default(),
-                        bias: wgpu::DepthBiasState::default(),
+        // Create occlusion query set
+        let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: None,
+            ty: wgpu::QueryType::Occlusion,
+            count: 3,
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
                     }),
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
-                });
-
-            // Create occlusion query set
-            let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
-                label: None,
-                ty: wgpu::QueryType::Occlusion,
-                count: 3,
+                    stencil_ops: None,
+                }),
+                occlusion_query_set: Some(&query_set),
             });
+            render_pass.set_pipeline(&pipeline);
 
-            let mut encoder = ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-            {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &depth_texture_view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
-                        }),
-                        stencil_ops: None,
-                    }),
-                    occlusion_query_set: Some(&query_set),
-                });
-                render_pass.set_pipeline(&pipeline);
+            // Not occluded (z = 1.0, nothing drawn yet)
+            render_pass.begin_occlusion_query(0);
+            render_pass.draw(4..7, 0..1);
+            render_pass.end_occlusion_query();
 
-                // Not occluded (z = 1.0, nothing drawn yet)
-                render_pass.begin_occlusion_query(0);
-                render_pass.draw(4..7, 0..1);
-                render_pass.end_occlusion_query();
+            // Not occluded (z = 0.0)
+            render_pass.begin_occlusion_query(1);
+            render_pass.draw(0..3, 0..1);
+            render_pass.end_occlusion_query();
 
-                // Not occluded (z = 0.0)
-                render_pass.begin_occlusion_query(1);
-                render_pass.draw(0..3, 0..1);
-                render_pass.end_occlusion_query();
+            // Occluded (z = 1.0)
+            render_pass.begin_occlusion_query(2);
+            render_pass.draw(4..7, 0..1);
+            render_pass.end_occlusion_query();
+        }
 
-                // Occluded (z = 1.0)
-                render_pass.begin_occlusion_query(2);
-                render_pass.draw(4..7, 0..1);
-                render_pass.end_occlusion_query();
-            }
+        // Resolve query set to buffer
+        let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: std::mem::size_of::<u64>() as u64 * 3,
+            usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
 
-            // Resolve query set to buffer
-            let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: std::mem::size_of::<u64>() as u64 * 3,
-                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            });
-            encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
+        let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: query_buffer.size(),
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        encoder.copy_buffer_to_buffer(&query_buffer, 0, &staging_buffer, 0, query_buffer.size());
 
-            let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: query_buffer.size(),
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            encoder.copy_buffer_to_buffer(
-                &query_buffer,
-                0,
-                &staging_buffer,
-                0,
-                query_buffer.size(),
-            );
+        ctx.queue.submit(Some(encoder.finish()));
 
-            ctx.queue.submit(Some(encoder.finish()));
+        staging_buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, |_| ());
+        ctx.device.poll(wgpu::Maintain::Wait);
+        let query_buffer_view = staging_buffer.slice(..).get_mapped_range();
+        let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
-            staging_buffer
-                .slice(..)
-                .map_async(wgpu::MapMode::Read, |_| ());
-            ctx.device.poll(wgpu::Maintain::Wait);
-            let query_buffer_view = staging_buffer.slice(..).get_mapped_range();
-            let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
-
-            // WebGPU only defines query results as zero/non-zero
-            assert_ne!(query_data[0], 0);
-            assert_ne!(query_data[1], 0);
-            assert_eq!(query_data[2], 0);
-        },
-    )
+        // WebGPU only defines query results as zero/non-zero
+        assert_ne!(query_data[0], 0);
+        assert_ne!(query_data[1], 0);
+        assert_eq!(query_data[2], 0);
+    })
 }

@@ -526,6 +526,10 @@ impl crate::Device<super::Api> for super::Device {
                     map_flags |= glow::MAP_COHERENT_BIT;
                 }
             }
+            // TODO: may also be required for other calls involving `buffer_sub_data_u8_slice` (e.g. copy buffer to buffer and clear buffer)
+            if desc.usage.intersects(crate::BufferUses::QUERY_RESOLVE) {
+                map_flags |= glow::DYNAMIC_STORAGE_BIT;
+            }
             unsafe { gl.buffer_storage(target, raw_size, None, map_flags) };
         } else {
             assert!(!is_coherent);

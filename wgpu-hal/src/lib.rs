@@ -717,6 +717,8 @@ bitflags::bitflags! {
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
+        /// A buffer used to store query results.
+        const QUERY_RESOLVE = 1 << 10;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
