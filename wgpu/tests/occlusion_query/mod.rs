@@ -3,7 +3,6 @@ use std::borrow::Cow;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[test]
-#[wasm_bindgen_test]
 fn occlusion_query() {
     initialize_test(TestParameters::default(), |ctx| {
         // Create depth texture

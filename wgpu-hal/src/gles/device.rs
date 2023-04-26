@@ -1241,7 +1241,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::QuerySet {
             queries: queries.into_boxed_slice(),
             target: match desc.ty {
-                wgt::QueryType::Occlusion => glow::ANY_SAMPLES_PASSED,
+                wgt::QueryType::Occlusion => glow::ANY_SAMPLES_PASSED_CONSERVATIVE,
                 _ => unimplemented!(),
             },
         })
