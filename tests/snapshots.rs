@@ -640,6 +640,11 @@ fn convert_spv_all() {
     convert_spv("degrees", false, Targets::empty());
     convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
     convert_spv("binding-arrays.static", true, Targets::WGSL);
+    convert_spv(
+        "do-while",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
 }
 
 #[cfg(feature = "glsl-in")]

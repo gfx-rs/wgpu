@@ -1,0 +1,37 @@
+// language: metal2.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void fb1_(
+    thread bool& cond
+) {
+    bool loop_init = true;
+    while(true) {
+        if (!loop_init) {
+            bool _e6 = cond;
+            bool unnamed = !(_e6);
+            if (!(cond)) {
+                break;
+            }
+        }
+        loop_init = false;
+        continue;
+    }
+    return;
+}
+
+void main_1(
+) {
+    bool param = {};
+    param = false;
+    fb1_(param);
+    return;
+}
+
+fragment void main_(
+) {
+    main_1();
+}
