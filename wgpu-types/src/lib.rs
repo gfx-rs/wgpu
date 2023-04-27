@@ -2025,6 +2025,8 @@ pub enum TextureFormat {
     /// Special depth format with 32 bit floating point depth.
     Depth32Float,
     /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
+    ///
+    /// [`Features::DEPTH32FLOAT_STENCIL8`] must be enabled to use this texture format.
     Depth32FloatStencil8,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
