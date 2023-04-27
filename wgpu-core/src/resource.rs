@@ -523,7 +523,7 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
-    #[error("Texture format {0:?} can't be used due to missing features.")]
+    #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
