@@ -1,6 +1,4 @@
-use super::{
-    constants::ConstantSolver, context::Context, Error, ErrorKind, Frontend, Result, Span,
-};
+use super::{constants::ConstantSolver, context::Context, Error, ErrorKind, Result, Span};
 use crate::{
     proc::ResolveContext, Bytes, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
     TypeInner, VectorSize,
@@ -226,7 +224,7 @@ pub const fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
     })
 }
 
-impl Frontend {
+impl Context<'_> {
     /// Resolves the types of the expressions until `expr` (inclusive)
     ///
     /// This needs to be done before the [`typifier`] can be queried for
@@ -240,16 +238,11 @@ impl Frontend {
     ///
     /// [`typifier`]: Context::typifier
     /// [`resolve_type`]: Self::resolve_type
-    pub(crate) fn typifier_grow(
-        &self,
-        ctx: &mut Context,
-        expr: Handle<Expression>,
-        meta: Span,
-    ) -> Result<()> {
-        let resolve_ctx = ResolveContext::with_locals(&self.module, &ctx.locals, &ctx.arguments);
+    pub(crate) fn typifier_grow(&mut self, expr: Handle<Expression>, meta: Span) -> Result<()> {
+        let resolve_ctx = ResolveContext::with_locals(self.module, &self.locals, &self.arguments);
 
-        ctx.typifier
-            .grow(expr, &ctx.expressions, &resolve_ctx)
+        self.typifier
+            .grow(expr, &self.expressions, &resolve_ctx)
             .map_err(|error| Error {
                 kind: ErrorKind::SemanticError(format!("Can't resolve type: {error:?}").into()),
                 meta,
@@ -263,14 +256,13 @@ impl Frontend {
     ///
     /// [`typifier`]: Context::typifier
     /// [`typifier_grow`]: Self::typifier_grow
-    pub(crate) fn resolve_type<'b>(
-        &'b self,
-        ctx: &'b mut Context,
+    pub(crate) fn resolve_type(
+        &mut self,
         expr: Handle<Expression>,
         meta: Span,
-    ) -> Result<&'b TypeInner> {
-        self.typifier_grow(ctx, expr, meta)?;
-        Ok(ctx.typifier.get(expr, &self.module.types))
+    ) -> Result<&TypeInner> {
+        self.typifier_grow(expr, meta)?;
+        Ok(self.typifier.get(expr, &self.module.types))
     }
 
     /// Gets the type handle for the result of the `expr` expression
@@ -290,25 +282,23 @@ impl Frontend {
     /// [`resolve_type`]: Self::resolve_type
     pub(crate) fn resolve_type_handle(
         &mut self,
-        ctx: &mut Context,
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<Handle<Type>> {
-        self.typifier_grow(ctx, expr, meta)?;
-        Ok(ctx.typifier.register_type(expr, &mut self.module.types))
+        self.typifier_grow(expr, meta)?;
+        Ok(self.typifier.register_type(expr, &mut self.module.types))
     }
 
     /// Invalidates the cached type resolution for `expr` forcing a recomputation
-    pub(crate) fn invalidate_expression<'b>(
-        &'b self,
-        ctx: &'b mut Context,
+    pub(crate) fn invalidate_expression(
+        &mut self,
         expr: Handle<Expression>,
         meta: Span,
     ) -> Result<()> {
-        let resolve_ctx = ResolveContext::with_locals(&self.module, &ctx.locals, &ctx.arguments);
+        let resolve_ctx = ResolveContext::with_locals(self.module, &self.locals, &self.arguments);
 
-        ctx.typifier
-            .invalidate(expr, &ctx.expressions, &resolve_ctx)
+        self.typifier
+            .invalidate(expr, &self.expressions, &resolve_ctx)
             .map_err(|error| Error {
                 kind: ErrorKind::SemanticError(format!("Can't resolve type: {error:?}").into()),
                 meta,
@@ -317,13 +307,12 @@ impl Frontend {
 
     pub(crate) fn solve_constant(
         &mut self,
-        ctx: &Context,
         root: Handle<Expression>,
         meta: Span,
     ) -> Result<Handle<Expression>> {
         let mut solver = ConstantSolver {
             types: &mut self.module.types,
-            expressions: &ctx.expressions,
+            expressions: &self.expressions,
             constants: &mut self.module.constants,
             const_expressions: &mut self.module.const_expressions,
         };

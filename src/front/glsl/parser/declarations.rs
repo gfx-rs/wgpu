@@ -13,8 +13,8 @@ use crate::{
         Error, ErrorKind, Frontend, Span,
     },
     proc::Alignment,
-    AddressSpace, Block, Expression, FunctionResult, Handle, ScalarKind, Statement, StructMember,
-    Type, TypeInner,
+    AddressSpace, Expression, FunctionResult, Handle, ScalarKind, Statement, StructMember, Type,
+    TypeInner,
 };
 
 use super::{DeclarationContext, ParsingContext, Result};
@@ -73,10 +73,9 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         frontend: &mut Frontend,
         global_ctx: &mut Context,
-        global_body: &mut Block,
     ) -> Result<()> {
         if self
-            .parse_declaration(frontend, global_ctx, global_body, true)?
+            .parse_declaration(frontend, global_ctx, true)?
             .is_none()
         {
             let token = self.bump(frontend)?;
@@ -103,7 +102,6 @@ impl<'source> ParsingContext<'source> {
         frontend: &mut Frontend,
         ty: Handle<Type>,
         ctx: &mut Context,
-        body: &mut Block,
     ) -> Result<(Handle<Expression>, Span)> {
         // initializer:
         //     assignment_expression
@@ -118,10 +116,9 @@ impl<'source> ParsingContext<'source> {
             let mut components = Vec::new();
             loop {
                 // The type expected to be parsed inside the initializer list
-                let new_ty =
-                    element_or_member_type(ty, components.len(), &mut frontend.module.types);
+                let new_ty = element_or_member_type(ty, components.len(), &mut ctx.module.types);
 
-                components.push(self.parse_initializer(frontend, new_ty, ctx, body)?.0);
+                components.push(self.parse_initializer(frontend, new_ty, ctx)?.0);
 
                 let token = self.bump(frontend)?;
                 match token.value {
@@ -150,18 +147,17 @@ impl<'source> ParsingContext<'source> {
             }
 
             Ok((
-                ctx.add_expression(Expression::Compose { ty, components }, meta, body),
+                ctx.add_expression(Expression::Compose { ty, components }, meta)?,
                 meta,
             ))
         } else {
             let mut stmt = ctx.stmt_ctx();
-            let expr = self.parse_assignment(frontend, ctx, &mut stmt, body)?;
-            let (mut init, init_meta) =
-                ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs, body)?;
+            let expr = self.parse_assignment(frontend, ctx, &mut stmt)?;
+            let (mut init, init_meta) = ctx.lower_expect(stmt, frontend, expr, ExprPos::Rhs)?;
 
-            let scalar_components = scalar_components(&frontend.module.types[ty].inner);
+            let scalar_components = scalar_components(&ctx.module.types[ty].inner);
             if let Some((kind, width)) = scalar_components {
-                ctx.implicit_conversion(frontend, &mut init, init_meta, kind, width, body)?;
+                ctx.implicit_conversion(&mut init, init_meta, kind, width)?;
             }
 
             Ok((init, init_meta))
@@ -223,19 +219,17 @@ impl<'source> ParsingContext<'source> {
             // parse an array specifier if it exists
             // NOTE: unlike other parse methods this one doesn't expect an array specifier and
             // returns Ok(None) rather than an error if there is not one
-            self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
+            self.parse_array_specifier(frontend, ctx.ctx, &mut meta, &mut ty)?;
 
             let init = self
                 .bump_if(frontend, TokenValue::Assign)
                 .map::<Result<_>, _>(|_| {
-                    let (mut expr, init_meta) =
-                        self.parse_initializer(frontend, ty, ctx.ctx, ctx.body)?;
+                    let (mut expr, init_meta) = self.parse_initializer(frontend, ty, ctx.ctx)?;
 
-                    let scalar_components = scalar_components(&frontend.module.types[ty].inner);
+                    let scalar_components = scalar_components(&ctx.ctx.module.types[ty].inner);
                     if let Some((kind, width)) = scalar_components {
-                        ctx.ctx.implicit_conversion(
-                            frontend, &mut expr, init_meta, kind, width, ctx.body,
-                        )?;
+                        ctx.ctx
+                            .implicit_conversion(&mut expr, init_meta, kind, width)?;
                     }
 
                     meta.subsume(init_meta);
@@ -247,7 +241,7 @@ impl<'source> ParsingContext<'source> {
             let is_const = ctx.qualifiers.storage.0 == StorageQualifier::Const;
             let maybe_const_expr = if ctx.external {
                 if let Some((root, meta)) = init {
-                    match frontend.solve_constant(ctx.ctx, root, meta) {
+                    match ctx.ctx.solve_constant(root, meta) {
                         Ok(res) => Some(res),
                         // If the declaration is external (global scope) and is constant qualified
                         // then the initializer must be a constant expression
@@ -264,8 +258,8 @@ impl<'source> ParsingContext<'source> {
             let pointer = ctx.add_var(frontend, ty, name, maybe_const_expr, meta)?;
 
             if let Some((value, _)) = init.filter(|_| maybe_const_expr.is_none()) {
-                ctx.flush_expressions();
-                ctx.body.push(Statement::Store { pointer, value }, meta);
+                ctx.ctx.emit_restart();
+                ctx.ctx.body.push(Statement::Store { pointer, value }, meta);
             }
 
             let token = self.bump(frontend)?;
@@ -292,7 +286,6 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         frontend: &mut Frontend,
         ctx: &mut Context,
-        body: &mut Block,
         external: bool,
     ) -> Result<Option<Span>> {
         //declaration:
@@ -308,12 +301,12 @@ impl<'source> ParsingContext<'source> {
         //    type_qualifier IDENTIFIER identifier_list SEMICOLON
 
         if self.peek_type_qualifier(frontend) || self.peek_type_name(frontend) {
-            let mut qualifiers = self.parse_type_qualifiers(frontend)?;
+            let mut qualifiers = self.parse_type_qualifiers(frontend, ctx)?;
 
             if self.peek_type_name(frontend) {
                 // This branch handles variables and function prototypes and if
                 // external is true also function definitions
-                let (ty, mut meta) = self.parse_type(frontend)?;
+                let (ty, mut meta) = self.parse_type(frontend, ctx)?;
 
                 let token = self.bump(frontend)?;
                 let token_fallthrough = match token.value {
@@ -323,11 +316,10 @@ impl<'source> ParsingContext<'source> {
                             self.bump(frontend)?;
 
                             let result = ty.map(|ty| FunctionResult { ty, binding: None });
-                            let mut body = Block::new();
 
-                            let mut context = Context::new(frontend, &mut body);
+                            let mut context = Context::new(frontend, ctx.module)?;
 
-                            self.parse_function_args(frontend, &mut context, &mut body)?;
+                            self.parse_function_args(frontend, &mut context)?;
 
                             let end_meta = self.expect(frontend, TokenValue::RightParen)?.meta;
                             meta.subsume(end_meta);
@@ -350,11 +342,10 @@ impl<'source> ParsingContext<'source> {
                                         token.meta,
                                         frontend,
                                         &mut context,
-                                        &mut body,
                                         &mut None,
                                     )?;
 
-                                    frontend.add_function(context, name, result, body, meta);
+                                    frontend.add_function(context, name, result, meta);
 
                                     Ok(Some(meta))
                                 }
@@ -395,7 +386,6 @@ impl<'source> ParsingContext<'source> {
                         qualifiers,
                         external,
                         ctx,
-                        body,
                     };
 
                     self.backtrack(token_fallthrough)?;
@@ -420,7 +410,6 @@ impl<'source> ParsingContext<'source> {
                             self.parse_block_declaration(
                                 frontend,
                                 ctx,
-                                body,
                                 &mut qualifiers,
                                 ty_name,
                                 token.meta,
@@ -428,7 +417,7 @@ impl<'source> ParsingContext<'source> {
                             .map(Some)
                         } else {
                             if qualifiers.invariant.take().is_some() {
-                                frontend.make_variable_invariant(ctx, body, &ty_name, token.meta);
+                                frontend.make_variable_invariant(ctx, &ty_name, token.meta)?;
 
                                 qualifiers.unused_errors(&mut frontend.errors);
                                 self.expect(frontend, TokenValue::Semicolon)?;
@@ -501,9 +490,9 @@ impl<'source> ParsingContext<'source> {
                         }
                     };
 
-                    let (ty, meta) = self.parse_type_non_void(frontend)?;
+                    let (ty, meta) = self.parse_type_non_void(frontend, ctx)?;
 
-                    match frontend.module.types[ty].inner {
+                    match ctx.module.types[ty].inner {
                         TypeInner::Scalar {
                             kind: ScalarKind::Float | ScalarKind::Sint,
                             ..
@@ -529,7 +518,6 @@ impl<'source> ParsingContext<'source> {
         &mut self,
         frontend: &mut Frontend,
         ctx: &mut Context,
-        body: &mut Block,
         qualifiers: &mut TypeQualifiers,
         ty_name: String,
         mut meta: Span,
@@ -549,10 +537,10 @@ impl<'source> ParsingContext<'source> {
         };
 
         let mut members = Vec::new();
-        let span = self.parse_struct_declaration_list(frontend, &mut members, layout)?;
+        let span = self.parse_struct_declaration_list(frontend, ctx, &mut members, layout)?;
         self.expect(frontend, TokenValue::RightBrace)?;
 
-        let mut ty = frontend.module.types.insert(
+        let mut ty = ctx.module.types.insert(
             Type {
                 name: Some(ty_name),
                 inner: TypeInner::Struct {
@@ -567,7 +555,7 @@ impl<'source> ParsingContext<'source> {
         let name = match token.value {
             TokenValue::Semicolon => None,
             TokenValue::Identifier(name) => {
-                self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
+                self.parse_array_specifier(frontend, ctx, &mut meta, &mut ty)?;
 
                 self.expect(frontend, TokenValue::Semicolon)?;
 
@@ -586,7 +574,6 @@ impl<'source> ParsingContext<'source> {
 
         let global = frontend.add_global_var(
             ctx,
-            body,
             VarDeclaration {
                 qualifiers,
                 ty,
@@ -608,7 +595,7 @@ impl<'source> ParsingContext<'source> {
                 entry_arg: None,
                 mutable: true,
             };
-            ctx.add_global(frontend, &k, lookup, body);
+            ctx.add_global(&k, lookup)?;
 
             frontend.global_variables.push((k, lookup));
         }
@@ -620,6 +607,7 @@ impl<'source> ParsingContext<'source> {
     pub fn parse_struct_declaration_list(
         &mut self,
         frontend: &mut Frontend,
+        ctx: &mut Context,
         members: &mut Vec<StructMember>,
         layout: StructLayout,
     ) -> Result<u32> {
@@ -629,12 +617,12 @@ impl<'source> ParsingContext<'source> {
         loop {
             // TODO: type_qualifier
 
-            let (base_ty, mut meta) = self.parse_type_non_void(frontend)?;
+            let (base_ty, mut meta) = self.parse_type_non_void(frontend, ctx)?;
 
             loop {
                 let (name, name_meta) = self.expect_ident(frontend)?;
                 let mut ty = base_ty;
-                self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
+                self.parse_array_specifier(frontend, ctx, &mut meta, &mut ty)?;
 
                 meta.subsume(name_meta);
 
@@ -642,7 +630,7 @@ impl<'source> ParsingContext<'source> {
                     ty,
                     meta,
                     layout,
-                    &mut frontend.module.types,
+                    &mut ctx.module.types,
                     &mut frontend.errors,
                 );
 

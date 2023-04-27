@@ -5,9 +5,9 @@ use super::{
     Frontend, Result, Span,
 };
 use crate::{
-    AddressSpace, Binding, Block, BuiltIn, Constant, Expression, GlobalVariable, Handle,
-    Interpolation, LocalVariable, ResourceBinding, ScalarKind, ShaderStage, SwizzleComponent, Type,
-    TypeInner, VectorSize,
+    AddressSpace, Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
+    LocalVariable, ResourceBinding, ScalarKind, ShaderStage, SwizzleComponent, Type, TypeInner,
+    VectorSize,
 };
 
 pub struct VarDeclaration<'a, 'key> {
@@ -40,12 +40,11 @@ impl Frontend {
     fn add_builtin(
         &mut self,
         ctx: &mut Context,
-        body: &mut Block,
         name: &str,
         data: BuiltInData,
         meta: Span,
-    ) -> Option<VariableReference> {
-        let ty = self.module.types.insert(
+    ) -> Result<Option<VariableReference>> {
+        let ty = ctx.module.types.insert(
             Type {
                 name: None,
                 inner: data.inner,
@@ -53,7 +52,7 @@ impl Frontend {
             meta,
         );
 
-        let handle = self.module.global_variables.append(
+        let handle = ctx.module.global_variables.append(
             GlobalVariable {
                 name: Some(name.into()),
                 space: AddressSpace::Private,
@@ -81,7 +80,7 @@ impl Frontend {
             },
         ));
 
-        let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta, body);
+        let expr = ctx.add_expression(Expression::GlobalVariable(handle), meta)?;
 
         let var = VariableReference {
             expr,
@@ -93,18 +92,17 @@ impl Frontend {
 
         ctx.symbol_table.add_root(name.into(), var.clone());
 
-        Some(var)
+        Ok(Some(var))
     }
 
     pub(crate) fn lookup_variable(
         &mut self,
         ctx: &mut Context,
-        body: &mut Block,
         name: &str,
         meta: Span,
-    ) -> Option<VariableReference> {
+    ) -> Result<Option<VariableReference>> {
         if let Some(var) = ctx.symbol_table.lookup(name).cloned() {
-            return Some(var);
+            return Ok(Some(var));
         }
 
         let data = match name {
@@ -182,7 +180,7 @@ impl Frontend {
                 storage: StorageQualifier::Output,
             },
             "gl_ClipDistance" | "gl_CullDistance" => {
-                let base = self.module.types.insert(
+                let base = ctx.module.types.insert(
                     Type {
                         name: None,
                         inner: TypeInner::Scalar {
@@ -217,7 +215,7 @@ impl Frontend {
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,
                     "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
-                    _ => return None,
+                    _ => return Ok(None),
                 };
 
                 BuiltInData {
@@ -232,17 +230,16 @@ impl Frontend {
             }
         };
 
-        self.add_builtin(ctx, body, name, data, meta)
+        self.add_builtin(ctx, name, data, meta)
     }
 
     pub(crate) fn make_variable_invariant(
         &mut self,
         ctx: &mut Context,
-        body: &mut Block,
         name: &str,
         meta: Span,
-    ) {
-        if let Some(var) = self.lookup_variable(ctx, body, name, meta) {
+    ) -> Result<()> {
+        if let Some(var) = self.lookup_variable(ctx, name, meta)? {
             if let Some(index) = var.entry_arg {
                 if let Binding::BuiltIn(BuiltIn::Position { ref mut invariant }) =
                     self.entry_args[index].binding
@@ -251,19 +248,19 @@ impl Frontend {
                 }
             }
         }
+        Ok(())
     }
 
     pub(crate) fn field_selection(
         &mut self,
         ctx: &mut Context,
         pos: ExprPos,
-        body: &mut Block,
         expression: Handle<Expression>,
         name: &str,
         meta: Span,
     ) -> Result<Handle<Expression>> {
-        let (ty, is_pointer) = match *self.resolve_type(ctx, expression, meta)? {
-            TypeInner::Pointer { base, .. } => (&self.module.types[base].inner, true),
+        let (ty, is_pointer) = match *ctx.resolve_type(expression, meta)? {
+            TypeInner::Pointer { base, .. } => (&ctx.module.types[base].inner, true),
             ref ty => (ty, false),
         };
         match *ty {
@@ -281,12 +278,11 @@ impl Frontend {
                         index: index as u32,
                     },
                     meta,
-                    body,
-                );
+                )?;
 
                 Ok(match pos {
                     ExprPos::Rhs if is_pointer => {
-                        ctx.add_expression(Expression::Load { pointer }, meta, body)
+                        ctx.add_expression(Expression::Load { pointer }, meta)?
                     }
                     _ => pointer,
                 })
@@ -358,19 +354,17 @@ impl Frontend {
                                             pointer: expression,
                                         },
                                         meta,
-                                        body,
-                                    );
+                                    )?;
                                 }
                                 _ => {}
                             };
-                            return Ok(ctx.add_expression(
+                            return ctx.add_expression(
                                 Expression::AccessIndex {
                                     base: expression,
                                     index: pattern[0].index(),
                                 },
                                 meta,
-                                body,
-                            ));
+                            );
                         }
                         2 => VectorSize::Bi,
                         3 => VectorSize::Tri,
@@ -396,8 +390,7 @@ impl Frontend {
                                 pointer: expression,
                             },
                             meta,
-                            body,
-                        );
+                        )?;
                     }
 
                     Ok(ctx.add_expression(
@@ -407,8 +400,7 @@ impl Frontend {
                             pattern,
                         },
                         meta,
-                        body,
-                    ))
+                    )?)
                 } else {
                     Err(Error {
                         kind: ErrorKind::SemanticError(
@@ -430,7 +422,6 @@ impl Frontend {
     pub(crate) fn add_global_var(
         &mut self,
         ctx: &mut Context,
-        body: &mut Block,
         VarDeclaration {
             qualifiers,
             mut ty,
@@ -449,7 +440,7 @@ impl Frontend {
                     .uint_layout_qualifier("location", &mut self.errors)
                     .unwrap_or(0);
                 let interpolation = qualifiers.interpolation.take().map(|(i, _)| i).or_else(|| {
-                    let kind = self.module.types[ty].inner.scalar_kind()?;
+                    let kind = ctx.module.types[ty].inner.scalar_kind()?;
                     Some(match kind {
                         ScalarKind::Float => Interpolation::Perspective,
                         _ => Interpolation::Flat,
@@ -457,7 +448,7 @@ impl Frontend {
                 });
                 let sampling = qualifiers.sampling.take().map(|(s, _)| s);
 
-                let handle = self.module.global_variables.append(
+                let handle = ctx.module.global_variables.append(
                     GlobalVariable {
                         name: name.clone(),
                         space: AddressSpace::Private,
@@ -501,7 +492,7 @@ impl Frontend {
                     ty,
                     init,
                 };
-                let handle = self.module.constants.fetch_or_append(constant, meta);
+                let handle = ctx.module.constants.fetch_or_append(constant, meta);
 
                 let lookup = GlobalLookup {
                     kind: GlobalLookupKind::Constant(handle, ty),
@@ -518,7 +509,7 @@ impl Frontend {
                             *access = allowed_access;
                         }
                     }
-                    AddressSpace::Uniform => match self.module.types[ty].inner {
+                    AddressSpace::Uniform => match ctx.module.types[ty].inner {
                         TypeInner::Image {
                             class,
                             dim,
@@ -547,7 +538,7 @@ impl Frontend {
                                     _ => unreachable!(),
                                 }
 
-                                ty = self.module.types.insert(
+                                ty = ctx.module.types.insert(
                                     Type {
                                         name: None,
                                         inner: TypeInner::Image {
@@ -593,7 +584,7 @@ impl Frontend {
                     _ => None,
                 };
 
-                let handle = self.module.global_variables.append(
+                let handle = ctx.module.global_variables.append(
                     GlobalVariable {
                         name: name.clone(),
                         space,
@@ -615,7 +606,7 @@ impl Frontend {
         };
 
         if let Some(name) = name {
-            ctx.add_global(self, &name, lookup, body);
+            ctx.add_global(&name, lookup)?;
 
             self.global_variables.push((name, lookup));
         }
@@ -628,7 +619,6 @@ impl Frontend {
     pub(crate) fn add_local_var(
         &mut self,
         ctx: &mut Context,
-        body: &mut Block,
         decl: VarDeclaration,
     ) -> Result<Handle<Expression>> {
         let storage = decl.qualifiers.storage;
@@ -652,7 +642,7 @@ impl Frontend {
             },
             decl.meta,
         );
-        let expr = ctx.add_expression(Expression::LocalVariable(handle), decl.meta, body);
+        let expr = ctx.add_expression(Expression::LocalVariable(handle), decl.meta)?;
 
         if let Some(name) = decl.name {
             let maybe_var = ctx.add_local_var(name.clone(), expr, mutable);

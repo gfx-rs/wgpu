@@ -9,7 +9,7 @@ use super::{
     variables::{GlobalOrConstant, VarDeclaration},
     Frontend, Result,
 };
-use crate::{arena::Handle, proc::U32EvalError, Block, Expression, Span, Type};
+use crate::{arena::Handle, proc::U32EvalError, Expression, Module, Span, Type};
 use pp_rs::token::{PreprocessorError, Token as PPToken, TokenValue as PPTokenValue};
 use std::iter::Peekable;
 
@@ -162,13 +162,14 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    pub fn parse(&mut self, frontend: &mut Frontend) -> Result<()> {
+    pub fn parse(&mut self, frontend: &mut Frontend) -> Result<Module> {
+        let mut module = Module::default();
+
         // Body and expression arena for global initialization
-        let mut body = Block::new();
-        let mut ctx = Context::new(frontend, &mut body);
+        let mut ctx = Context::new(frontend, &mut module)?;
 
         while self.peek(frontend).is_some() {
-            self.parse_external_declaration(frontend, &mut ctx, &mut body)?;
+            self.parse_external_declaration(frontend, &mut ctx)?;
         }
 
         // Add an `EntryPoint` to `parser.module` for `main`, if a
@@ -177,8 +178,8 @@ impl<'source> ParsingContext<'source> {
             for decl in declaration.overloads.iter() {
                 if let FunctionKind::Call(handle) = decl.kind {
                     if decl.defined && decl.parameters.is_empty() {
-                        frontend.add_entry_point(handle, body, ctx.expressions);
-                        return Ok(());
+                        frontend.add_entry_point(handle, ctx)?;
+                        return Ok(module);
                     }
                 }
             }
@@ -190,10 +191,14 @@ impl<'source> ParsingContext<'source> {
         })
     }
 
-    fn parse_uint_constant(&mut self, frontend: &mut Frontend) -> Result<(u32, Span)> {
-        let (const_expr, meta) = self.parse_constant_expression(frontend)?;
+    fn parse_uint_constant(
+        &mut self,
+        frontend: &mut Frontend,
+        ctx: &mut Context,
+    ) -> Result<(u32, Span)> {
+        let (const_expr, meta) = self.parse_constant_expression(frontend, ctx.module)?;
 
-        let res = frontend.module.to_ctx().eval_expr_to_u32(const_expr);
+        let res = ctx.module.to_ctx().eval_expr_to_u32(const_expr);
 
         let int = match res {
             Ok(value) => Ok(value),
@@ -213,16 +218,15 @@ impl<'source> ParsingContext<'source> {
     fn parse_constant_expression(
         &mut self,
         frontend: &mut Frontend,
+        module: &mut Module,
     ) -> Result<(Handle<Expression>, Span)> {
-        let mut block = Block::new();
-
-        let mut ctx = Context::new(frontend, &mut block);
+        let mut ctx = Context::new(frontend, module)?;
 
         let mut stmt_ctx = ctx.stmt_ctx();
-        let expr = self.parse_conditional(frontend, &mut ctx, &mut stmt_ctx, &mut block, None)?;
-        let (root, meta) = ctx.lower_expect(stmt_ctx, frontend, expr, ExprPos::Rhs, &mut block)?;
+        let expr = self.parse_conditional(frontend, &mut ctx, &mut stmt_ctx, None)?;
+        let (root, meta) = ctx.lower_expect(stmt_ctx, frontend, expr, ExprPos::Rhs)?;
 
-        Ok((frontend.solve_constant(&ctx, root, meta)?, meta))
+        Ok((ctx.solve_constant(root, meta)?, meta))
     }
 }
 
@@ -387,16 +391,14 @@ impl Frontend {
     }
 }
 
-pub struct DeclarationContext<'ctx, 'qualifiers> {
+pub struct DeclarationContext<'ctx, 'qualifiers, 'a> {
     qualifiers: TypeQualifiers<'qualifiers>,
     /// Indicates a global declaration
     external: bool,
-
-    ctx: &'ctx mut Context,
-    body: &'ctx mut Block,
+    ctx: &'ctx mut Context<'a>,
 }
 
-impl<'ctx, 'qualifiers> DeclarationContext<'ctx, 'qualifiers> {
+impl<'ctx, 'qualifiers, 'a> DeclarationContext<'ctx, 'qualifiers, 'a> {
     fn add_var(
         &mut self,
         frontend: &mut Frontend,
@@ -415,24 +417,14 @@ impl<'ctx, 'qualifiers> DeclarationContext<'ctx, 'qualifiers> {
 
         match self.external {
             true => {
-                let global = frontend.add_global_var(self.ctx, self.body, decl)?;
+                let global = frontend.add_global_var(self.ctx, decl)?;
                 let expr = match global {
                     GlobalOrConstant::Global(handle) => Expression::GlobalVariable(handle),
                     GlobalOrConstant::Constant(handle) => Expression::Constant(handle),
                 };
-                Ok(self.ctx.add_expression(expr, meta, self.body))
+                Ok(self.ctx.add_expression(expr, meta)?)
             }
-            false => frontend.add_local_var(self.ctx, self.body, decl),
+            false => frontend.add_local_var(self.ctx, decl),
         }
-    }
-
-    /// Emits all the expressions captured by the emitter and starts the emitter again
-    ///
-    /// Alias to [`emit_restart`] with the declaration body
-    ///
-    /// [`emit_restart`]: Context::emit_restart
-    #[inline]
-    fn flush_expressions(&mut self) {
-        self.ctx.emit_restart(self.body);
     }
 }

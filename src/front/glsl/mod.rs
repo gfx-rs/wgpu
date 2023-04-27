@@ -175,8 +175,6 @@ pub struct Frontend {
     layouter: Layouter,
 
     errors: Vec<Error>,
-
-    module: Module,
 }
 
 impl Frontend {
@@ -188,10 +186,6 @@ impl Frontend {
         self.global_variables.clear();
         self.entry_args.clear();
         self.layouter.clear();
-
-        // This is necessary because if the last parsing errored out, the module
-        // wouldn't have been taken
-        self.module = Module::default();
     }
 
     /// Parses a shader either outputting a shader [`Module`](Module) or a list
@@ -208,14 +202,18 @@ impl Frontend {
         let lexer = lex::Lexer::new(source, &options.defines);
         let mut ctx = ParsingContext::new(lexer);
 
-        if let Err(e) = ctx.parse(self) {
-            self.errors.push(e);
-        }
-
-        if self.errors.is_empty() {
-            Ok(std::mem::take(&mut self.module))
-        } else {
-            Err(std::mem::take(&mut self.errors))
+        match ctx.parse(self) {
+            Ok(module) => {
+                if self.errors.is_empty() {
+                    Ok(module)
+                } else {
+                    Err(std::mem::take(&mut self.errors))
+                }
+            }
+            Err(e) => {
+                self.errors.push(e);
+                Err(std::mem::take(&mut self.errors))
+            }
         }
     }
 
