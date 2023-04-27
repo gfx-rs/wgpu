@@ -270,7 +270,7 @@ bitflags::bitflags! {
 
         /// Allows shaders to acquire the FP16 ability
         ///
-        /// Note: this is not supported in naga yet，only through spir-v passthrough right now.
+        /// Note: this is not supported in `naga` yet，only through `spirv-passthrough` right now.
         ///
         /// Supported Platforms:
         /// - Vulkan
@@ -728,7 +728,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_F64 = 1 << 59;
-        /// Allows shaders to use i16. Not currently supported in naga, only available through `spirv-passthrough`.
+        /// Allows shaders to use i16. Not currently supported in `naga`, only available through `spirv-passthrough`.
         ///
         /// Supported platforms:
         /// - Vulkan
