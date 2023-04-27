@@ -551,7 +551,11 @@ impl<'function> BlockContext<'function> {
                             crate::Span::default(),
                         )
                     }
-                    super::BodyFragment::Loop { body, continuing } => {
+                    super::BodyFragment::Loop {
+                        body,
+                        continuing,
+                        break_if,
+                    } => {
                         let body = lower_impl(blocks, bodies, body);
                         let continuing = lower_impl(blocks, bodies, continuing);
 
@@ -559,7 +563,7 @@ impl<'function> BlockContext<'function> {
                             crate::Statement::Loop {
                                 body,
                                 continuing,
-                                break_if: None,
+                                break_if,
                             },
                             crate::Span::default(),
                         )

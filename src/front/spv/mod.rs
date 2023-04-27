@@ -388,6 +388,11 @@ enum BodyFragment {
     Loop {
         body: BodyIndex,
         continuing: BodyIndex,
+
+        /// If the SPIR-V loop's back-edge branch is conditional, this is the
+        /// expression that must be `false` for the back-edge to be taken, with
+        /// `true` being for the "loop merge" (which breaks out of the loop).
+        break_if: Option<Handle<crate::Expression>>,
     },
     Switch {
         selector: Handle<crate::Expression>,
@@ -429,7 +434,7 @@ struct PhiExpression {
     expressions: Vec<(spirv::Word, spirv::Word)>,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum MergeBlockInformation {
     LoopMerge,
     LoopContinue,
@@ -3097,35 +3102,121 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         get_expr_handle!(condition_id, lexp)
                     };
 
+                    // HACK(eddyb) Naga doesn't seem to have this helper,
+                    // so it's declared on the fly here for convenience.
+                    #[derive(Copy, Clone)]
+                    struct BranchTarget {
+                        label_id: spirv::Word,
+                        merge_info: Option<MergeBlockInformation>,
+                    }
+                    let branch_target = |label_id| BranchTarget {
+                        label_id,
+                        merge_info: ctx.mergers.get(&label_id).copied(),
+                    };
+
+                    let true_target = branch_target(self.next()?);
+                    let false_target = branch_target(self.next()?);
+
+                    // Consume branch weights
+                    for _ in 4..inst.wc {
+                        let _ = self.next()?;
+                    }
+
+                    // Handle `OpBranchConditional`s used at the end of a loop
+                    // body's "continuing" section as a "conditional backedge",
+                    // i.e. a `do`-`while` condition, or `break if` in WGSL.
+
+                    // HACK(eddyb) this has to go to the parent *twice*, because
+                    // `OpLoopMerge` left the "continuing" section nested in the
+                    // loop body in terms of `parent`, but not `BodyFragment`.
+                    let parent_body_idx = ctx.bodies[body_idx].parent;
+                    let parent_parent_body_idx = ctx.bodies[parent_body_idx].parent;
+                    match ctx.bodies[parent_parent_body_idx].data[..] {
+                        // The `OpLoopMerge`'s `continuing` block and the loop's
+                        // backedge block may not be the same, but they'll both
+                        // belong to the same body.
+                        [.., BodyFragment::Loop {
+                            body: loop_body_idx,
+                            continuing: loop_continuing_idx,
+                            break_if: ref mut break_if_slot @ None,
+                        }] if body_idx == loop_continuing_idx => {
+                            // Try both orderings of break-vs-backedge, because
+                            // SPIR-V is symmetrical here, unlike WGSL `break if`.
+                            let break_if_cond = [true, false].into_iter().find_map(|true_breaks| {
+                                let (break_candidate, backedge_candidate) = if true_breaks {
+                                    (true_target, false_target)
+                                } else {
+                                    (false_target, true_target)
+                                };
+
+                                if break_candidate.merge_info
+                                    != Some(MergeBlockInformation::LoopMerge)
+                                {
+                                    return None;
+                                }
+
+                                // HACK(eddyb) since Naga doesn't explicitly track
+                                // backedges, this is checking for the outcome of
+                                // `OpLoopMerge` below (even if it looks weird).
+                                let backedge_candidate_is_backedge =
+                                    backedge_candidate.merge_info.is_none()
+                                        && ctx.body_for_label.get(&backedge_candidate.label_id)
+                                            == Some(&loop_body_idx);
+                                if !backedge_candidate_is_backedge {
+                                    return None;
+                                }
+
+                                Some(if true_breaks {
+                                    condition
+                                } else {
+                                    ctx.expressions.append(
+                                        crate::Expression::Unary {
+                                            op: crate::UnaryOperator::Not,
+                                            expr: condition,
+                                        },
+                                        span,
+                                    )
+                                })
+                            });
+
+                            if let Some(break_if_cond) = break_if_cond {
+                                *break_if_slot = Some(break_if_cond);
+
+                                // This `OpBranchConditional` ends the "continuing"
+                                // section of the loop body as normal, with the
+                                // `break if` condition having been stashed above.
+                                break None;
+                            }
+                        }
+                        _ => {}
+                    }
+
                     block.extend(emitter.finish(ctx.expressions));
                     ctx.blocks.insert(block_id, block);
                     let body = &mut ctx.bodies[body_idx];
                     body.data.push(BodyFragment::BlockId(block_id));
 
-                    let true_id = self.next()?;
-                    let false_id = self.next()?;
-
-                    let same_target = true_id == false_id;
+                    let same_target = true_target.label_id == false_target.label_id;
 
                     // Start a body block for the `accept` branch.
                     let accept = ctx.bodies.len();
                     let mut accept_block = Body::with_parent(body_idx);
 
-                    // If the `OpBranchConditional`target is somebody else's
+                    // If the `OpBranchConditional` target is somebody else's
                     // merge or continue block, then put a `Break` or `Continue`
                     // statement in this new body block.
-                    if let Some(info) = ctx.mergers.get(&true_id) {
+                    if let Some(info) = true_target.merge_info {
                         merger(
                             match same_target {
                                 true => &mut ctx.bodies[body_idx],
                                 false => &mut accept_block,
                             },
-                            info,
+                            &info,
                         )
                     } else {
                         // Note the body index for the block we're branching to.
                         let prev = ctx.body_for_label.insert(
-                            true_id,
+                            true_target.label_id,
                             match same_target {
                                 true => body_idx,
                                 false => accept,
@@ -3144,10 +3235,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let reject = ctx.bodies.len();
                     let mut reject_block = Body::with_parent(body_idx);
 
-                    if let Some(info) = ctx.mergers.get(&false_id) {
-                        merger(&mut reject_block, info)
+                    if let Some(info) = false_target.merge_info {
+                        merger(&mut reject_block, &info)
                     } else {
-                        let prev = ctx.body_for_label.insert(false_id, reject);
+                        let prev = ctx.body_for_label.insert(false_target.label_id, reject);
                         debug_assert!(prev.is_none());
                     }
 
@@ -3159,11 +3250,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         accept,
                         reject,
                     });
-
-                    // Consume branch weights
-                    for _ in 4..inst.wc {
-                        let _ = self.next()?;
-                    }
 
                     return Ok(());
                 }
@@ -3334,6 +3420,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     parent_body.data.push(BodyFragment::Loop {
                         body: loop_body_idx,
                         continuing: continue_idx,
+                        break_if: None,
                     });
                     body_idx = loop_body_idx;
                 }
