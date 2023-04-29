@@ -427,9 +427,22 @@ impl<A: HalApi> Resource<BufferId> for Buffer<A> {
 #[derive(Debug)]
 pub struct StagingBuffer<A: HalApi> {
     pub(crate) raw: Mutex<Option<A::Buffer>>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) size: wgt::BufferAddress,
     pub(crate) is_coherent: bool,
     pub(crate) info: ResourceInfo<StagingBufferId>,
+}
+
+impl<A: HalApi> Drop for StagingBuffer<A> {
+    fn drop(&mut self) {
+        log::info!("Destroying StagingBuffer {:?}", self.info.label());
+        if let Some(raw) = self.raw.lock().take() {
+            unsafe {
+                use hal::Device;
+                self.device.raw.as_ref().unwrap().destroy_buffer(raw);
+            }
+        }
+    }
 }
 
 impl<A: HalApi> Resource<StagingBufferId> for StagingBuffer<A> {
@@ -801,7 +814,7 @@ impl<A: HalApi> Drop for TextureView<A> {
 pub enum CreateTextureViewError {
     #[error("Parent texture is invalid or destroyed")]
     InvalidTexture,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left to create texture view")]
     OutOfMemory,
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {

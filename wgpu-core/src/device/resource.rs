@@ -124,7 +124,7 @@ impl<A: HalApi> Drop for Device<A> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateDeviceError {
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left to create device")]
     OutOfMemory,
     #[error("Failed to create internal buffer for initializing textures")]
     FailedToCreateZeroBuffer(#[from] DeviceError),

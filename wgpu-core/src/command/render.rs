@@ -532,7 +532,7 @@ pub enum RenderPassErrorInner {
     },
     #[error("Surface texture is dropped before the render pass is finished")]
     SurfaceTextureDropped,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left for render pass")]
     OutOfMemory,
     #[error("Unable to clear non-present/read-only depth")]
     InvalidDepthOps,

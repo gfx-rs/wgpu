@@ -406,7 +406,7 @@ pub enum RequestDeviceError {
     LimitsExceeded(#[from] FailedLimit),
     #[error("Device has no queue supporting graphics")]
     NoGraphicsQueue,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left to request device")]
     OutOfMemory,
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),

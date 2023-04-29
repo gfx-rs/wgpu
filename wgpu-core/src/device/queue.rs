@@ -260,7 +260,7 @@ impl<A: HalApi> PendingWrites<A> {
 }
 
 fn prepare_staging_buffer<A: HalApi>(
-    device: &A::Device,
+    device: &Arc<Device<A>>,
     size: wgt::BufferAddress,
 ) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
     profiling::scope!("prepare_staging_buffer");
@@ -271,11 +271,12 @@ fn prepare_staging_buffer<A: HalApi>(
         memory_flags: hal::MemoryFlags::TRANSIENT,
     };
 
-    let buffer = unsafe { device.create_buffer(&stage_desc)? };
-    let mapping = unsafe { device.map_buffer(&buffer, 0..size) }?;
+    let buffer = unsafe { device.raw.as_ref().unwrap().create_buffer(&stage_desc)? };
+    let mapping = unsafe { device.raw.as_ref().unwrap().map_buffer(&buffer, 0..size) }?;
 
     let staging_buffer = StagingBuffer {
         raw: Mutex::new(Some(buffer)),
+        device: device.clone(),
         size,
         info: ResourceInfo::new("<StagingBuffer>"),
         is_coherent: mapping.is_coherent,
@@ -375,8 +376,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device.raw.as_ref().unwrap(), data_size)?;
+        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(&device, data_size)?;
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
@@ -423,7 +423,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
 
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device.raw.as_ref().unwrap(), buffer_size.get())?;
+            prepare_staging_buffer(&device, buffer_size.get())?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let (id, _) = fid.assign(staging_buffer);
@@ -793,8 +793,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device.raw.as_ref().unwrap(), stage_size)?;
+        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(&device, stage_size)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
@@ -1095,10 +1094,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .devices
                 .get(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
-            device.temp_suspected.lock().clear();
 
             let mut fence = device.fence.write();
             let fence = fence.as_mut().unwrap();
+            device.temp_suspected.lock().clear();
 
             let submit_index = device
                 .active_submission_index
