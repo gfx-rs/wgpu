@@ -402,7 +402,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         let mut active_index = self.active.iter().position(|a| a.index == last_done);
         while let Some(index) = active_index {
             let a = self.active.remove(index);
-            log::trace!("Active submission {} is done", a.index);
+            log::info!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
             for encoder in a.encoders {

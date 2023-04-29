@@ -152,10 +152,10 @@ pub struct CommandBuffer<A: HalApi> {
 
 impl<A: HalApi> Drop for CommandBuffer<A> {
     fn drop(&mut self) {
-        log::info!("Destroying CommandBuffer {:?}", self.info.label());
         if self.data.lock().is_none() {
             return;
         }
+        log::info!("Destroying CommandBuffer {:?}", self.info.label());
         let mut baked = self.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());
@@ -293,6 +293,10 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands<A> {
+        log::info!(
+            "Extracting BackedCommands from CommandBuffer {:?}",
+            self.info.label()
+        );
         let data = self.data.lock().take().unwrap();
         BakedCommands {
             encoder: data.encoder.raw,
