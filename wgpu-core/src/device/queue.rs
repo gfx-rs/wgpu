@@ -1095,6 +1095,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .devices
                 .get(queue_id)
                 .map_err(|_| DeviceError::Invalid)?;
+            device.temp_suspected.lock().clear();
 
             let mut fence = device.fence.write();
             let fence = fence.as_mut().unwrap();

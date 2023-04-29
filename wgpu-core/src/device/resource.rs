@@ -274,7 +274,6 @@ impl<A: HalApi> Device<A> {
             life_tracker
                 .suspected_resources
                 .extend(&self.temp_suspected.lock());
-            self.temp_suspected.lock().clear();
 
             life_tracker.triage_suspected(
                 hub,
