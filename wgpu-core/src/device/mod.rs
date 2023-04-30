@@ -4246,20 +4246,94 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, Some(error))
     }
 
+    // Private helper for texture property getters
+    fn texture_get_desc_then<A: HalApi, T, F: FnOnce(&wgt::TextureDescriptor<(), Vec<TextureFormat>>) -> T>(
+        &self,
+        id: id::TextureId,
+        descriptor_callback: F,
+    ) -> Result<T, resource::TextureAccessError> {
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (guard, _) = hub.textures.read(&mut token);
+
+        let texture = guard
+            .get(id)
+            .map_err(|_| resource::TextureAccessError::Invalid)?;
+
+        Ok(descriptor_callback(&texture.desc))
+    }
+
+    pub fn texture_get_depth_or_array_layers<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<u32, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, u32, _>(id,
+            |desc| desc.size.depth_or_array_layers
+        )
+    }
+
+    pub fn texture_get_dimension<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<wgt::TextureDimension, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, _, _>(id,
+            |desc| desc.dimension
+        )
+    }
+
+    pub fn texture_get_format<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<TextureFormat, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, _, _>(id,
+            |desc| desc.format
+        )
+    }
+
     pub fn texture_get_width<A: HalApi>(
         &self,
         id: id::TextureId,
     ) -> Result<u32, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, u32, _>(id,
+            |desc| desc.size.width
+        )
+    }
 
-        let hub = A::hub(self);
-        let mut token = Token::root();
-        let (texture_guard, _) = hub.textures.read(&mut token);
+    pub fn texture_get_height<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<u32, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, u32, _>(id,
+            |desc| desc.size.height
+        )
+    }
 
-        let texture = texture_guard
-            .get(id)
-            .map_err(|_| resource::TextureAccessError::Invalid)?;
+    pub fn texture_get_mip_level_count<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<u32, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, u32, _>(id,
+            |desc| desc.mip_level_count
+        )
+    }
 
-        Ok(texture.desc.size.width)
+    pub fn texture_get_sample_count<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<u32, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, u32, _>(id,
+            |desc| desc.sample_count
+        )
+    }
+
+    pub fn texture_get_usage<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<wgt::TextureUsages, resource::TextureAccessError> {
+        self.texture_get_desc_then::<A, wgt::TextureUsages, _>(id,
+            |desc| desc.usage
+        )
     }
 
     pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {
