@@ -247,7 +247,7 @@ impl TlasPackage {
     }
 
     /// Get the binding resource for the underling acceleration structure, to be used in a
-    pub fn as_binding<'a>(&'a self) -> BindingResource<'a> {
+    pub fn as_binding(&self) -> BindingResource {
         BindingResource::AccelerationStructure(&self.tlas)
     }
 

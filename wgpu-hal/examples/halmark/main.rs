@@ -395,7 +395,7 @@ impl<A: hal::Api> Example<A> {
             buffer
         };
 
-        let local_alignment = hal::auxil::align_to(
+        let local_alignment = wgt::math::align_to(
             mem::size_of::<Locals>() as u32,
             capabilities.limits.min_uniform_buffer_offset_alignment,
         );

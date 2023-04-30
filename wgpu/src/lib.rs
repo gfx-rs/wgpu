@@ -581,7 +581,7 @@ impl ComputePipeline {
 pub struct CommandBuffer {
     context: Arc<C>,
     id: Option<ObjectId>,
-    data: Box<Data>,
+    data: Option<Box<Data>>,
 }
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
@@ -589,7 +589,7 @@ impl Drop for CommandBuffer {
     fn drop(&mut self) {
         if !thread::panicking() {
             if let Some(ref id) = self.id {
-                self.context.command_buffer_drop(id, self.data.as_ref());
+                self.context.command_buffer_drop(id, &self.data.take());
             }
         }
     }
@@ -952,7 +952,8 @@ static_assertions::assert_impl_all!(Maintain: Send, Sync);
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
-    /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
+    /// Format of the texture view. Either must be the same as the texture format or in the list
+    /// of `view_formats` in the texture's descriptor.
     pub format: Option<TextureFormat>,
     /// The dimension of the texture view. For 1D textures, this must be `D1`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `D3`
@@ -1560,7 +1561,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
         let surface = unsafe {
             self.context
@@ -1582,7 +1583,7 @@ impl Instance {
     /// # Safety
     ///
     /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(all(feature = "dx12", windows))]
+    #[cfg(target_os = "windows")]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -1614,7 +1615,7 @@ impl Instance {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, CreateSurfaceError> {
         let surface = self
             .context
@@ -1631,9 +1632,9 @@ impl Instance {
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             data: Box::new(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::from(surface),
+            id: ObjectId::UNUSED,
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(()),
+            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
@@ -1650,7 +1651,7 @@ impl Instance {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, CreateSurfaceError> {
         let surface = self
             .context
@@ -1667,9 +1668,9 @@ impl Instance {
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             data: Box::new(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::from(surface),
+            id: ObjectId::UNUSED,
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(()),
+            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
@@ -2756,7 +2757,7 @@ impl CommandEncoder {
         CommandBuffer {
             context: Arc::clone(&self.context),
             id: Some(id),
-            data,
+            data: Some(data),
         }
     }
 
@@ -3240,7 +3241,11 @@ impl<'a> RenderPass<'a> {
             &*self.parent.context,
             &mut self.id,
             self.data.as_mut(),
-            Box::new(render_bundles.into_iter().map(|rb| &rb.id)),
+            Box::new(
+                render_bundles
+                    .into_iter()
+                    .map(|rb| (&rb.id, rb.data.as_ref())),
+            ),
         )
     }
 }
@@ -3304,7 +3309,7 @@ impl<'a> RenderPass<'a> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// The count buffer is read to determine how many draws to issue.
     ///
-    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
     /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
@@ -3346,7 +3351,7 @@ impl<'a> RenderPass<'a> {
     /// Dispatches multiple draw calls from the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
     ///
-    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
     /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
@@ -4050,7 +4055,7 @@ impl Queue {
             Box::new(
                 command_buffers
                     .into_iter()
-                    .map(|mut comb| comb.id.take().unwrap()),
+                    .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap())),
             ),
         );
 
@@ -4259,8 +4264,41 @@ impl Surface {
 #[cfg(feature = "expose-ids")]
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Id<T>(core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+
+#[cfg(feature = "expose-ids")]
+impl<T> Clone for Id<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl<T> Copy for Id<T> {}
+
+#[cfg(feature = "expose-ids")]
+impl<T> Debug for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_tuple("Id").field(&self.0).finish()
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl<T> PartialEq for Id<T> {
+    fn eq(&self, other: &Id<T>) -> bool {
+        self.0 == other.0
+    }
+}
+
+#[cfg(feature = "expose-ids")]
+impl<T> Eq for Id<T> {}
+
+#[cfg(feature = "expose-ids")]
+impl<T> std::hash::Hash for Id<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
 
 #[cfg(feature = "expose-ids")]
 impl Adapter {

@@ -120,6 +120,7 @@ where
 
 //Note: `Clone` would require `WithSpan: Clone`.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CreateShaderModuleError {
     #[cfg(feature = "wgsl")]
     #[error(transparent)]
@@ -169,6 +170,7 @@ pub struct ProgrammableStageDescriptor<'a> {
 pub type ImplicitBindGroupCount = u8;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ImplicitLayoutError {
     #[error("Missing IDs for deriving {0} bind groups")]
     MissingIds(ImplicitBindGroupCount),
@@ -193,6 +195,7 @@ pub struct ComputePipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -288,6 +291,7 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ColorStateError {
     #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
@@ -309,6 +313,7 @@ pub enum ColorStateError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DepthStencilStateError {
     #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
@@ -321,6 +326,7 @@ pub enum DepthStencilStateError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
@@ -382,6 +388,7 @@ pub enum CreateRenderPipelineError {
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineFlags: u32 {
         const BLEND_CONSTANT = 1 << 0;
         const STENCIL_REFERENCE = 1 << 1;

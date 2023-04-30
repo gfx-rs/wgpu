@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
+pub mod math;
 
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not
@@ -42,9 +43,7 @@ macro_rules! impl_bitflags {
                 D: serde::Deserializer<'de>,
             {
                 let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
-                // Note: newer version of bitflags replaced from_bits_unchecked with
-                // from_bits_retain which is not marked as unsafe (same implementation).
-                Ok(unsafe { $name::from_bits_unchecked(value) })
+                Ok($name::from_bits_retain(value))
             }
         }
 
@@ -132,10 +131,12 @@ pub enum PowerPreference {
 bitflags::bitflags! {
     /// Represents the backends that wgpu will use.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Backends: u32 {
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
-        /// Currently unsupported
+        /// Supported on Linux/Android, the web through webassembly via WebGL, and Windows and
+        /// macOS/iOS via ANGLE
         const GL = 1 << Backend::Gl as u32;
         /// Supported on macOS/iOS
         const METAL = 1 << Backend::Metal as u32;
@@ -148,15 +149,15 @@ bitflags::bitflags! {
         /// All the apis that wgpu offers first tier of support for.
         ///
         /// Vulkan + Metal + DX12 + Browser WebGPU
-        const PRIMARY = Self::VULKAN.bits
-            | Self::METAL.bits
-            | Self::DX12.bits
-            | Self::BROWSER_WEBGPU.bits;
+        const PRIMARY = Self::VULKAN.bits()
+            | Self::METAL.bits()
+            | Self::DX12.bits()
+            | Self::BROWSER_WEBGPU.bits();
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
         /// OpenGL + DX11
-        const SECONDARY = Self::GL.bits | Self::DX11.bits;
+        const SECONDARY = Self::GL.bits() | Self::DX11.bits();
     }
 }
 
@@ -213,6 +214,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(transparent)]
     #[derive(Default)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Features: u64 {
         //
         // ---- Start numbering at 1 << 0 ----
@@ -294,7 +296,16 @@ bitflags::bitflags! {
         // ? const FLOAT32_BLENDABLE = 1 << 20; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << 21; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << 22; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // TODO const RG11B10UFLOAT_RENDERABLE = 1 << 23;
+
+        /// Allows for usage of textures of format [`TextureFormat::Rg11b10Float`] as a render target
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const RG11B10UFLOAT_RENDERABLE = 1 << 23;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
@@ -1158,6 +1169,7 @@ bitflags::bitflags! {
     ///
     /// You can check whether a set of flags is compliant through the
     /// [`DownlevelCapabilities::is_webgpu_compliant()`] function.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         ///
@@ -1262,7 +1274,7 @@ impl DownlevelFlags {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
         // WebGPU doesn't actually require aniso
-        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits)
+        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits())
     }
 }
 
@@ -1362,6 +1374,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUShaderStageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpushaderstageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ShaderStages: u32 {
         /// Binding is not visible from any shader stage.
         const NONE = 0;
@@ -1372,7 +1385,7 @@ bitflags::bitflags! {
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
-        const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
+        const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
     }
 }
 
@@ -1640,7 +1653,7 @@ pub enum PrimitiveTopology {
     TriangleList = 3,
     /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
     ///
-    /// Vertices `0 1 2 3 4 5` creates four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
+    /// Vertices `0 1 2 3 4 5` create four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
     TriangleStrip = 4,
 }
 
@@ -1787,6 +1800,7 @@ impl Default for MultisampleState {
 bitflags::bitflags! {
     /// Feature flags for a texture format.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureFormatFeatureFlags: u32 {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
@@ -2109,7 +2123,7 @@ pub enum TextureFormat {
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc6hRgbSfloat,
+    Bc6hRgbFloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -2267,7 +2281,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "bc5-rg-unorm" => TextureFormat::Bc5RgUnorm,
                     "bc5-rg-snorm" => TextureFormat::Bc5RgSnorm,
                     "bc6h-rgb-ufloat" => TextureFormat::Bc6hRgbUfloat,
-                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbSfloat,
+                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbFloat,
                     "bc7-rgba-unorm" => TextureFormat::Bc7RgbaUnorm,
                     "bc7-rgba-unorm-srgb" => TextureFormat::Bc7RgbaUnormSrgb,
                     "etc2-rgb8unorm" => TextureFormat::Etc2Rgb8Unorm,
@@ -2393,7 +2407,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Bc5RgUnorm => "bc5-rg-unorm",
             TextureFormat::Bc5RgSnorm => "bc5-rg-snorm",
             TextureFormat::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
-            TextureFormat::Bc6hRgbSfloat => "bc6h-rgb-float",
+            TextureFormat::Bc6hRgbFloat => "bc6h-rgb-float",
             TextureFormat::Bc7RgbaUnorm => "bc7-rgba-unorm",
             TextureFormat::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
             TextureFormat::Etc2Rgb8Unorm => "etc2-rgb8unorm",
@@ -2583,7 +2597,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => (4, 4),
 
@@ -2687,7 +2701,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Features::TEXTURE_COMPRESSION_BC,
 
@@ -2712,7 +2726,7 @@ impl TextureFormat {
     /// Returns the format features guaranteed by the WebGPU spec.
     ///
     /// Additional features are available if `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
-    pub fn guaranteed_format_features(&self) -> TextureFormatFeatures {
+    pub fn guaranteed_format_features(&self, device_features: Features) -> TextureFormatFeatures {
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
         let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
@@ -2724,6 +2738,11 @@ impl TextureFormat {
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
         let all_flags = TextureUsages::all();
+        let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
+            attachment
+        } else {
+            basic
+        };
 
         #[rustfmt::skip] // lets make a nice table
         let (
@@ -2755,7 +2774,7 @@ impl TextureFormat {
             Self::Bgra8Unorm =>           (msaa_resolve, attachment),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
-            Self::Rg11b10Float =>         (        msaa,      basic),
+            Self::Rg11b10Float =>         (        msaa,   rg11b10f),
             Self::Rg32Uint =>             (        noaa,  all_flags),
             Self::Rg32Sint =>             (        noaa,  all_flags),
             Self::Rg32Float =>            (        noaa,  all_flags),
@@ -2793,7 +2812,7 @@ impl TextureFormat {
             Self::Bc5RgUnorm =>           (        noaa,      basic),
             Self::Bc5RgSnorm =>           (        noaa,      basic),
             Self::Bc6hRgbUfloat =>        (        noaa,      basic),
-            Self::Bc6hRgbSfloat =>        (        noaa,      basic),
+            Self::Bc6hRgbFloat =>         (        noaa,      basic),
             Self::Bc7RgbaUnorm =>         (        noaa,      basic),
             Self::Bc7RgbaUnormSrgb =>     (        noaa,      basic),
 
@@ -2899,7 +2918,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Some(float),
 
@@ -2983,7 +3002,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Some(16),
 
@@ -3293,7 +3312,7 @@ fn texture_format_serialize() {
         "\"bc6h-rgb-ufloat\"".to_string()
     );
     assert_eq!(
-        serde_json::to_string(&TextureFormat::Bc6hRgbSfloat).unwrap(),
+        serde_json::to_string(&TextureFormat::Bc6hRgbFloat).unwrap(),
         "\"bc6h-rgb-float\"".to_string()
     );
     assert_eq!(
@@ -3586,7 +3605,7 @@ fn texture_format_deserialize() {
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bc6h-rgb-float\"").unwrap(),
-        TextureFormat::Bc6hRgbSfloat
+        TextureFormat::Bc6hRgbFloat
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bc7-rgba-unorm\"").unwrap(),
@@ -3644,6 +3663,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUColorWriteFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ColorWrites: u32 {
         /// Enable red channel writes
         const RED = 1 << 0;
@@ -3654,9 +3674,9 @@ bitflags::bitflags! {
         /// Enable alpha channel writes
         const ALPHA = 1 << 3;
         /// Enable red, green, and blue channel writes
-        const COLOR = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits;
+        const COLOR = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits();
         /// Enable writes to all channels.
-        const ALL = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits | Self::ALPHA.bits;
+        const ALL = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits() | Self::ALPHA.bits();
     }
 }
 
@@ -4204,6 +4224,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUsages: u32 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
@@ -4233,10 +4254,12 @@ bitflags::bitflags! {
         const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 1 << 8;
+        /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
+        const QUERY_RESOLVE = 1 << 9;
         /// Allows a buffer to be used as input for a bottom level acceleration structure build
-        const BLAS_INPUT = 1 << 9;
+        const BLAS_INPUT = 1 << 10;
         /// Allows a buffer to be used as input for a top level acceleration structure build
-        const TLAS_INPUT = 1 << 10;
+        const TLAS_INPUT = 1 << 11;
     }
 }
 
@@ -4426,6 +4449,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUTextureUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gputextureusageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
@@ -5168,9 +5192,15 @@ impl<L> CommandBufferDescriptor<L> {
 pub struct RenderBundleDepthStencil {
     /// Format of the attachment.
     pub format: TextureFormat,
-    /// True if the depth aspect is used but not modified.
+    /// If the depth aspect of the depth stencil attachment is going to be written to.
+    ///
+    /// This must match the [`RenderPassDepthStencilAttachment::depth_ops`] of the renderpass this render bundle is executed in.
+    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
     pub depth_read_only: bool,
-    /// True if the stencil aspect is used but not modified.
+    /// If the stencil aspect of the depth stencil attachment is going to be written to.
+    ///
+    /// This must match the [`RenderPassDepthStencilAttachment::stencil_ops`] of the renderpass this render bundle is executed in.
+    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
     pub stencil_read_only: bool,
 }
 
@@ -6016,6 +6046,7 @@ bitflags::bitflags! {
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineStatisticsTypes : u8 {
         /// Amount of times the vertex shader is ran. Accounts for
         /// the vertex cache when doing indexed rendering.
@@ -6267,6 +6298,7 @@ impl<L> CreateTlasDescriptor<L> {
 
 bitflags::bitflags!(
     /// Flags for acceleration structures
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureFlags: u8 {
         /// Allow for incremental updates (no change in size)
         const ALLOW_UPDATE = 1 << 0;
@@ -6284,6 +6316,7 @@ impl_bitflags!(AccelerationStructureFlags);
 
 bitflags::bitflags!(
     /// Flags for acceleration structure geometries
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureGeometryFlags: u8 {
         /// Is OPAQUE
         const OPAQUE = 1 << 0;

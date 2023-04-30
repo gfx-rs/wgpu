@@ -13,8 +13,8 @@ use crate::{
     FastHashSet,
 };
 
-use hal::{auxil::align_to, CommandEncoder, Device};
-use wgt::BufferUsages;
+use hal::{CommandEncoder, Device};
+use wgt::{math::align_to, BufferUsages};
 
 use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
 

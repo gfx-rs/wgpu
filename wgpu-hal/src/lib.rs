@@ -591,6 +591,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
 
 bitflags!(
     /// Instance initialization flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct InstanceFlags: u32 {
         /// Generate debug information in shaders and objects.
         const DEBUG = 1 << 0;
@@ -601,6 +602,7 @@ bitflags!(
 
 bitflags!(
     /// Pipeline layout creation flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
         /// Include support for base vertex/instance drawing.
         const BASE_VERTEX_INSTANCE = 1 << 0;
@@ -611,6 +613,7 @@ bitflags!(
 
 bitflags!(
     /// Pipeline layout creation flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BindGroupLayoutFlags: u32 {
         /// Allows for bind group binding arrays to be shorter than the array in the BGL.
         const PARTIALLY_BOUND = 1 << 0;
@@ -619,6 +622,7 @@ bitflags!(
 
 bitflags!(
     /// Texture format capability flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureFormatCapabilities: u32 {
         /// Format can be sampled.
         const SAMPLED = 1 << 0;
@@ -662,6 +666,7 @@ bitflags!(
 
 bitflags!(
     /// Texture format capability flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FormatAspects: u8 {
         const COLOR = 1 << 0;
         const DEPTH = 1 << 1;
@@ -710,6 +715,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
 }
 
 bitflags!(
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct MemoryFlags: u32 {
         const TRANSIENT = 1 << 0;
         const PREFER_COHERENT = 1 << 1;
@@ -719,6 +725,7 @@ bitflags!(
 //TODO: it's not intuitive for the backends to consider `LOAD` being optional.
 
 bitflags!(
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct AttachmentOps: u8 {
         const LOAD = 1 << 0;
         const STORE = 1 << 1;
@@ -727,6 +734,7 @@ bitflags!(
 
 bitflags::bitflags! {
     /// Similar to `wgt::BufferUsages` but for internal use.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUses: u16 {
         /// The argument to a read-only mapping.
         const MAP_READ = 1 << 0;
@@ -752,22 +760,21 @@ bitflags::bitflags! {
         const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 11;
         const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
         /// The combination of states that a buffer may be in _at the same time_.
-        const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
-            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
-            Self::STORAGE_READ.bits | Self::INDIRECT.bits |
-            Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits;
+        const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
+            Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
+            Self::STORAGE_READ.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
         /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits |
-            Self::STORAGE_READ_WRITE.bits | Self::ACCELERATION_STRUCTURE_SCRATCH.bits;
+        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits | Self::MAP_WRITE.bits;
+        const ORDERED = Self::INCLUSIVE.bits() | Self::MAP_WRITE.bits();
     }
 }
 
 bitflags::bitflags! {
     /// Similar to `wgt::TextureUsages` but for internal use.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUses: u16 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
@@ -790,13 +797,13 @@ bitflags::bitflags! {
         /// Read-write or write-only storage buffer usage.
         const STORAGE_READ_WRITE = 1 << 9;
         /// The combination of states that a texture may be in _at the same time_.
-        const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_READ_WRITE.bits | Self::PRESENT.bits;
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
+        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 10;
@@ -1466,6 +1473,7 @@ pub type AccelerationStructureBuildFlags = wgt::AccelerationStructureFlags;
 pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureUses: u8 {
         // For blas used as input for tlas
         const BUILD_INPUT = 1 << 0;

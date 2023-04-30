@@ -79,6 +79,7 @@ impl Default for TestParameters {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FailureReasons: u8 {
         const BACKEND = 1 << 0;
         const VENDOR = 1 << 1;
@@ -357,7 +358,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         let canvas = create_html_canvas();
 
         let surface = instance
-            .create_surface_from_canvas(&canvas)
+            .create_surface_from_canvas(canvas.clone())
             .expect("could not create surface from canvas");
 
         surface_guard = SurfaceGuard { canvas };

@@ -695,6 +695,7 @@ impl RenderBundleEncoder {
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateRenderBundleError {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
@@ -704,6 +705,7 @@ pub enum CreateRenderBundleError {
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ExecutionError {
     #[error("Buffer {0:?} is destroyed")]
     DestroyedBuffer(id::BufferId),
