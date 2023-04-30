@@ -65,6 +65,9 @@ If you are looking for a wgpu tutorial, look at the following:
 
 To use wgpu in C/C++, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native).
 
+If you are looking for a wgpu C++ tutorial, look at the following:
+- https://eliemichel.github.io/LearnWebGPU/
+
 ### Others
 
 If you want to use wgpu in other languages, there are many bindings to wgpu-native from languages such as Python, D, Julia, Kotlin, and more. See [the list](https://github.com/gfx-rs/wgpu-native#bindings).
