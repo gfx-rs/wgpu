@@ -18,7 +18,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{CommandEncoder as _, Device as _};
+use hal::{CommandEncoder as _, Device as _, Texture as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -4244,6 +4244,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
+    }
+
+    pub fn texture_get_width<A: HalApi>(
+        &self,
+        id: id::TextureId,
+    ) -> Result<u32, resource::DestroyError> {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (texture_guard, _) = hub.textures.read(&mut token);
+
+        let texture = texture_guard
+            .get(id)
+            .map_err(|_| resource::DestroyError::Invalid)?;
+        
+        match texture.inner {
+            resource::TextureInner::Native { ref raw } => {
+                let raw = raw.as_ref().ok_or(resource::DestroyError::AlreadyDestroyed)?;
+                unsafe {
+                    Ok(raw.get_size().width)
+                }
+            }
+            resource::TextureInner::Surface { .. } => {
+                // TODO
+                Err(resource::DestroyError::Invalid)
+            }
+        }
     }
 
     pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {

@@ -411,3 +411,13 @@ impl crate::CommandEncoder<Api> for Encoder {
     unsafe fn dispatch(&mut self, count: [u32; 3]) {}
     unsafe fn dispatch_indirect(&mut self, buffer: &Resource, offset: wgt::BufferAddress) {}
 }
+
+impl crate::Texture<Api> for Resource {
+    unsafe fn get_size(&self) -> wgt::Extent3d {
+        wgt::Extent3d{
+            width: 0,
+            height: 0,
+            depth_or_array_layers: 0,
+        }
+    }
+}

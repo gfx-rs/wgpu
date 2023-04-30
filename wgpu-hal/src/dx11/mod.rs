@@ -8,6 +8,7 @@ mod command;
 mod device;
 mod instance;
 mod library;
+mod texture;
 
 #[derive(Clone)]
 pub struct Api;

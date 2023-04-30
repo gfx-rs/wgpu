@@ -19,6 +19,7 @@ mod conv;
 mod device;
 mod surface;
 mod time;
+mod texture;
 
 use std::{
     fmt, iter, ops,

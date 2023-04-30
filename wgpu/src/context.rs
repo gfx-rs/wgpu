@@ -321,6 +321,7 @@ pub trait Context: Debug + Send + Sized + Sync {
     fn buffer_drop(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData);
     fn texture_destroy(&self, texture: &Self::TextureId, texture_data: &Self::TextureData);
     fn texture_drop(&self, texture: &Self::TextureId, texture_data: &Self::TextureData);
+    fn texture_get_width(&self, texture: &Self::TextureId, texture_data: &Self::TextureData) -> u32;
     fn texture_view_drop(
         &self,
         texture_view: &Self::TextureViewId,
@@ -1291,6 +1292,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
     fn buffer_drop(&self, buffer: &ObjectId, buffer_data: &crate::Data);
     fn texture_destroy(&self, buffer: &ObjectId, buffer_data: &crate::Data);
     fn texture_drop(&self, texture: &ObjectId, texture_data: &crate::Data);
+    fn texture_get_width(&self, texture: &ObjectId, texture_data: &crate::Data) -> u32;
     fn texture_view_drop(&self, texture_view: &ObjectId, texture_view_data: &crate::Data);
     fn sampler_drop(&self, sampler: &ObjectId, sampler_data: &crate::Data);
     fn query_set_drop(&self, query_set: &ObjectId, query_set_data: &crate::Data);
@@ -2407,6 +2409,12 @@ where
         let texture = <T::TextureId>::from(*texture);
         let texture_data = downcast_ref(texture_data);
         Context::texture_drop(self, &texture, texture_data)
+    }
+
+    fn texture_get_width(&self, texture: &ObjectId, texture_data: &crate::Data) -> u32 {
+        let texture = <T::TextureId>::from(*texture);
+        let texture_data = downcast_ref(texture_data);
+        Context::texture_get_width(self, &texture, texture_data)
     }
 
     fn texture_view_drop(&self, texture_view: &ObjectId, texture_view_data: &crate::Data) {

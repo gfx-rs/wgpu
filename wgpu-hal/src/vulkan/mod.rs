@@ -30,6 +30,7 @@ mod command;
 mod conv;
 mod device;
 mod instance;
+mod texture;
 
 use std::{borrow::Borrow, ffi::CStr, fmt, num::NonZeroU32, sync::Arc};
 

@@ -69,6 +69,7 @@ mod command;
 mod conv;
 mod device;
 mod queue;
+mod texture;
 
 use crate::{CopyExtent, TextureDescriptor};
 

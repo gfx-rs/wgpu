@@ -43,6 +43,7 @@ mod shader_compilation;
 mod suballocation;
 mod types;
 mod view;
+mod texture;
 
 use crate::auxil::{self, dxgi::result::HResult as _};
 
