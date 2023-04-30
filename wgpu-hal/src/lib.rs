@@ -164,7 +164,7 @@ pub trait Api: Clone + Sized {
     type CommandBuffer: Send + Sync + fmt::Debug;
 
     type Buffer: fmt::Debug + Send + Sync + 'static;
-    type Texture: Texture<Self>;
+    type Texture: fmt::Debug + Send + Sync + 'static;
     type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
     type TextureView: fmt::Debug + Send + Sync;
     type Sampler: fmt::Debug + Send + Sync;
@@ -548,10 +548,6 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
 
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
-}
-
-pub trait Texture<A: Api>: Send + Sync + fmt::Debug + 'static {
-    unsafe fn get_size(&self) -> wgt::Extent3d;
 }
 
 bitflags!(

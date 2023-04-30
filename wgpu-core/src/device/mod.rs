@@ -18,7 +18,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{CommandEncoder as _, Device as _, Texture as _};
+use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -4258,19 +4258,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let texture = texture_guard
             .get(id)
             .map_err(|_| resource::DestroyError::Invalid)?;
-        
-        match texture.inner {
-            resource::TextureInner::Native { ref raw } => {
-                let raw = raw.as_ref().ok_or(resource::DestroyError::AlreadyDestroyed)?;
-                unsafe {
-                    Ok(raw.get_size().width)
-                }
-            }
-            resource::TextureInner::Surface { .. } => {
-                // TODO
-                Err(resource::DestroyError::Invalid)
-            }
-        }
+
+        Ok(texture.desc.size.width)
     }
 
     pub fn texture_view_label<A: HalApi>(&self, id: id::TextureViewId) -> String {

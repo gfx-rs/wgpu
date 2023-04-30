@@ -1580,17 +1580,6 @@ impl crate::Context for Context {
         wgc::gfx_select!(texture => global.texture_drop(*texture, false))
     }
 
-    fn texture_get_width(&self, texture: &Self::TextureId, texture_data: &Self::TextureData) -> u32 {
-        let global = &self.0;
-        match wgc::gfx_select!(texture => global.texture_get_width(*texture)) {
-            Ok(width) => width,
-            Err(cause) => {
-                self.handle_error_nolabel(&texture_data.error_sink, cause, "Texture::get_width");
-                0
-            }
-        }
-    }
-
     fn texture_view_drop(
         &self,
         texture_view: &Self::TextureViewId,
