@@ -570,7 +570,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         dest: crate::ImageCopyTextureTagged,
         size: wgt::Extent3d,
     );
-    fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
+    fn queue_submit<I: Iterator<Item = (Self::CommandBufferId, Self::CommandBufferData)>>(
         &self,
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
@@ -987,7 +987,9 @@ pub trait Context: Debug + Send + Sized + Sync {
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
+        render_bundles: Box<
+            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
+        >,
     );
 }
 
@@ -1002,7 +1004,7 @@ pub struct ObjectId {
 }
 
 impl ObjectId {
-    const UNUSED: Self = ObjectId {
+    pub(crate) const UNUSED: Self = ObjectId {
         id: None,
         #[cfg(feature = "expose-ids")]
         global_id: None,
@@ -1025,6 +1027,7 @@ impl ObjectId {
         }
     }
 
+    #[allow(dead_code)]
     pub fn id(&self) -> NonZeroU64 {
         self.id.unwrap()
     }
@@ -1038,7 +1041,7 @@ impl ObjectId {
 
 static_assertions::assert_impl_all!(ObjectId: Send, Sync);
 
-fn downcast_ref<T: Debug + Send + Sync + 'static>(data: &crate::Data) -> &T {
+pub(crate) fn downcast_ref<T: Debug + Send + Sync + 'static>(data: &crate::Data) -> &T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &*(data as *const dyn Any as *const T) }
@@ -1501,7 +1504,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = ObjectId> + 'a>,
+        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
     ) -> (ObjectId, Arc<crate::Data>);
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
@@ -1902,7 +1905,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = &'a ObjectId> + 'a>,
+        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
     );
 }
 
@@ -2902,11 +2905,14 @@ where
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = ObjectId> + 'a>,
+        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
     ) -> (ObjectId, Arc<crate::Data>) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
-        let command_buffers = command_buffers.into_iter().map(<T::CommandBufferId>::from);
+        let command_buffers = command_buffers.into_iter().map(|(id, data)| {
+            let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
+            (<T::CommandBufferId>::from(id), command_buffer_data)
+        });
         let (submission_index, data) =
             Context::queue_submit(self, &queue, queue_data, command_buffers);
         (submission_index.into(), Arc::new(data) as _)
@@ -3843,15 +3849,14 @@ where
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = &'a ObjectId> + 'a>,
+        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
     ) {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let render_bundles = Box::new(
-            render_bundles
-                .into_iter()
-                .map(|id| <T::RenderBundleId>::from(*id)),
-        );
+        let render_bundles = Box::new(render_bundles.into_iter().map(|(id, data)| {
+            let render_bundle_data: &<T as Context>::RenderBundleData = downcast_ref(data);
+            (<T::RenderBundleId>::from(*id), render_bundle_data)
+        }));
         Context::render_pass_execute_bundles(self, &mut pass, pass_data, render_bundles)
     }
 }

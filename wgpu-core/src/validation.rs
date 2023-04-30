@@ -168,6 +168,7 @@ pub fn check_texture_usage(
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindingError {
     #[error("Binding is missing from the pipeline layout")]
     Missing,
@@ -211,6 +212,7 @@ pub enum BindingError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum FilteringError {
     #[error("Integer textures can't be sampled with a filtering sampler")]
     Integer,
@@ -219,6 +221,7 @@ pub enum FilteringError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum InputError {
     #[error("Input is not provided by the earlier stage in the pipeline")]
     Missing,
@@ -232,6 +235,7 @@ pub enum InputError {
 
 /// Errors produced when validating a programmable stage of a pipeline.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum StageError {
     #[error("Shader module is invalid")]
     InvalidModule,
@@ -746,7 +750,7 @@ impl NumericType {
             Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRg11Unorm | Tf::EacRg11Snorm => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Float)
             }
-            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
+            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbFloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
                 (NumericDimension::Vector(Vs::Tri), Sk::Float)
             }
             Tf::Astc {

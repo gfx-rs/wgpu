@@ -620,10 +620,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.state.dirty_vbuf_mask = 0;
         self.state.active_first_instance = 0;
         self.state.color_targets.clear();
-        for index in 0..self.state.vertex_attributes.len() {
+        for vat in &self.state.vertex_attributes {
             self.cmd_buffer
                 .commands
-                .push(C::UnsetVertexAttribute(index as u32));
+                .push(C::UnsetVertexAttribute(vat.location));
         }
         self.state.vertex_attributes.clear();
         self.state.primitive = super::PrimitiveState::default();
@@ -761,10 +761,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 });
             }
         } else {
-            for index in 0..self.state.vertex_attributes.len() {
+            for vat in &self.state.vertex_attributes {
                 self.cmd_buffer
                     .commands
-                    .push(C::UnsetVertexAttribute(index as u32));
+                    .push(C::UnsetVertexAttribute(vat.location));
             }
             self.state.vertex_attributes.clear();
 

@@ -393,6 +393,13 @@ impl super::Queue {
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
+                    let z_offset =
+                        if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY = dst_target {
+                            copy.dst_base.array_layer as i32
+                        } else {
+                            copy.dst_base.origin.z as i32
+                        };
+
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_3d_with_image_bitmap(
@@ -400,7 +407,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -415,7 +422,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -430,7 +437,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                copy.dst_base.origin.z as i32,
+                                z_offset,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -442,6 +449,12 @@ impl super::Queue {
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
                 } else {
+                    let dst_target = if let glow::TEXTURE_CUBE_MAP = dst_target {
+                        CUBEMAP_FACES[copy.dst_base.array_layer as usize]
+                    } else {
+                        dst_target
+                    };
+
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
                             gl.tex_sub_image_2d_with_image_bitmap_and_width_and_height(
@@ -549,7 +562,13 @@ impl super::Queue {
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            copy.dst_base.origin.z as i32,
+                            if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
+                                dst_target
+                            {
+                                copy.dst_base.array_layer as i32
+                            } else {
+                                copy.dst_base.origin.z as i32
+                            },
                             copy.src_base.origin.x as i32,
                             copy.src_base.origin.y as i32,
                             copy.size.width as i32,
@@ -610,90 +629,46 @@ impl super::Queue {
                             glow::PixelUnpackData::Slice(src_data)
                         }
                     };
-                    match dst_target {
-                        glow::TEXTURE_3D => {
-                            unsafe {
-                                gl.tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.origin.z as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_2D_ARRAY => {
-                            unsafe {
-                                gl.tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.array_layer as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_2D => {
-                            unsafe {
-                                gl.tex_sub_image_2d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_CUBE_MAP => {
-                            unsafe {
-                                gl.tex_sub_image_2d(
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize],
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_CUBE_MAP_ARRAY => {
-                            //Note: not sure if this is correct!
-                            unsafe {
-                                gl.tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.origin.z as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.external,
-                                    format_desc.data_type,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        _ => unreachable!(),
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.tex_sub_image_3d(
+                                dst_target,
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
+                                    dst_target
+                                {
+                                    copy.texture_base.array_layer as i32
+                                } else {
+                                    copy.texture_base.origin.z as i32
+                                },
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                unpack_data,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.tex_sub_image_2d(
+                                if let glow::TEXTURE_CUBE_MAP = dst_target {
+                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
+                                } else {
+                                    dst_target
+                                },
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.external,
+                                format_desc.data_type,
+                                unpack_data,
+                            )
+                        };
                     }
                 } else {
                     let bytes_per_row = copy
@@ -730,54 +705,44 @@ impl super::Queue {
                         }
                     };
 
-                    match dst_target {
-                        glow::TEXTURE_3D
-                        | glow::TEXTURE_CUBE_MAP_ARRAY
-                        | glow::TEXTURE_2D_ARRAY => {
-                            unsafe {
-                                gl.compressed_tex_sub_image_3d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.texture_base.origin.z as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    copy.size.depth as i32,
-                                    format_desc.internal,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_2D => {
-                            unsafe {
-                                gl.compressed_tex_sub_image_2d(
-                                    dst_target,
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.internal,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        glow::TEXTURE_CUBE_MAP => {
-                            unsafe {
-                                gl.compressed_tex_sub_image_2d(
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize],
-                                    copy.texture_base.mip_level as i32,
-                                    copy.texture_base.origin.x as i32,
-                                    copy.texture_base.origin.y as i32,
-                                    copy.size.width as i32,
-                                    copy.size.height as i32,
-                                    format_desc.internal,
-                                    unpack_data,
-                                )
-                            };
-                        }
-                        _ => unreachable!(),
+                    if is_layered_target(dst_target) {
+                        unsafe {
+                            gl.compressed_tex_sub_image_3d(
+                                dst_target,
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
+                                    dst_target
+                                {
+                                    copy.texture_base.array_layer as i32
+                                } else {
+                                    copy.texture_base.origin.z as i32
+                                },
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                copy.size.depth as i32,
+                                format_desc.internal,
+                                unpack_data,
+                            )
+                        };
+                    } else {
+                        unsafe {
+                            gl.compressed_tex_sub_image_2d(
+                                if let glow::TEXTURE_CUBE_MAP = dst_target {
+                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
+                                } else {
+                                    dst_target
+                                },
+                                copy.texture_base.mip_level as i32,
+                                copy.texture_base.origin.x as i32,
+                                copy.texture_base.origin.y as i32,
+                                copy.size.width as i32,
+                                copy.size.height as i32,
+                                format_desc.internal,
+                                unpack_data,
+                            )
+                        };
                     }
                 }
                 if unbind_unpack_buffer {

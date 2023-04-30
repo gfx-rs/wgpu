@@ -288,6 +288,7 @@ impl<A: hal::Api> StagingBuffer<A> {
 pub struct InvalidQueue;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueueWriteError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
@@ -298,6 +299,7 @@ pub enum QueueWriteError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum QueueSubmitError {
     #[error(transparent)]
     Queue(#[from] DeviceError),
@@ -664,7 +666,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let bytes_per_row_alignment =
             get_lowest_common_denom(device.alignments.buffer_copy_pitch.get() as u32, block_size);
         let stage_bytes_per_row =
-            hal::auxil::align_to(block_size * width_blocks, bytes_per_row_alignment);
+            wgt::math::align_to(block_size * width_blocks, bytes_per_row_alignment);
 
         let block_rows_in_copy =
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;

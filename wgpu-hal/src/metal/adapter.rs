@@ -221,7 +221,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc5RgUnorm
             | Tf::Bc5RgSnorm
             | Tf::Bc6hRgbUfloat
-            | Tf::Bc6hRgbSfloat
+            | Tf::Bc6hRgbFloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => {
                 if pc.format_bc {
@@ -800,6 +800,8 @@ impl super::PrivateCapabilities {
         );
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
+        features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
+
         features
     }
 
@@ -939,7 +941,7 @@ impl super::PrivateCapabilities {
             Tf::Bc4RSnorm => BC4_RSnorm,
             Tf::Bc5RgUnorm => BC5_RGUnorm,
             Tf::Bc5RgSnorm => BC5_RGSnorm,
-            Tf::Bc6hRgbSfloat => BC6H_RGBFloat,
+            Tf::Bc6hRgbFloat => BC6H_RGBFloat,
             Tf::Bc6hRgbUfloat => BC6H_RGBUfloat,
             Tf::Bc7RgbaUnorm => BC7_RGBAUnorm,
             Tf::Bc7RgbaUnormSrgb => BC7_RGBAUnorm_sRGB,

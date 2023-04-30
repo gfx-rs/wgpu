@@ -22,33 +22,33 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["wgpu developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.15"
+version = "0.16"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.15"
+version = "0.16"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.15"
+version = "0.16"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "9742f1616c3e3dd2cc9a5880616fc886c391bb9f"
-version = "0.11.0"
+rev = "b99d58ea435090e561377949f428bce2c18451bb"
+version = "0.12.0"
 
 [workspace.dependencies]
 arrayvec = "0.7"
-async-executor = "1.0"
-bitflags = "1"
+async-executor = "1"
+bitflags = "2"
 bit-vec = "0.6"
 bytemuck = "1.13"
 cargo-run-wasm = "0.3.2"
@@ -61,7 +61,8 @@ futures-intrusive = "0.4"
 rustc-hash = "1.1.0"
 glam = "0.21.3"
 image = { version = "0.24", default-features = false, features = ["png"] }
-libloading = "0.7"
+# libloading 0.8 switches from `winapi` to `windows-sys`; permit either
+libloading = ">=0.7,<0.9"
 libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false }
@@ -72,18 +73,18 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
-png = "0.17.5"
+png = "0.17.8"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
 renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
-serde_json = "1.0.94"
+serde_json = "1.0.96"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.15", path = "./wgpu" }
+wgpu = { version = "0.16", path = "./wgpu" }
 winit = "0.27.1"
 
 # Metal dependencies
