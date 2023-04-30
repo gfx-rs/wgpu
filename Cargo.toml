@@ -135,7 +135,7 @@ wgpu-core = { path = "./wgpu-core" }
 wgpu-types = { path = "./wgpu-types" }
 
 [patch."https://github.com/gfx-rs/naga"]
-naga = { path = "../naga" }
+#naga = { path = "../naga" }
 
 [patch."https://github.com/zakarumych/gpu-descriptor"]
 #gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }
@@ -144,7 +144,7 @@ naga = { path = "../naga" }
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
 
 [patch.crates-io]
-naga = { path = "../naga" }
+#naga = { path = "../naga" }
 #glow = { path = "../glow" }
 #d3d12 = { path = "../d3d12-rs" }
 metal = { path = "../metal-rs" }
