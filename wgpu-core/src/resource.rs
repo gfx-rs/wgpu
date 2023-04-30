@@ -453,6 +453,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum TextureAccessError {
+    #[error("Texture is invalid")]
+    Invalid,
+    #[error("Texture is destroyed")]
+    Destroyed,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum TextureErrorDimension {
     X,

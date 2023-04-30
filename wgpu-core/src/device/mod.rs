@@ -4249,15 +4249,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn texture_get_width<A: HalApi>(
         &self,
         id: id::TextureId,
-    ) -> Result<u32, resource::DestroyError> {
+    ) -> Result<u32, resource::TextureAccessError> {
+
         let hub = A::hub(self);
         let mut token = Token::root();
-
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let texture = texture_guard
             .get(id)
-            .map_err(|_| resource::DestroyError::Invalid)?;
+            .map_err(|_| resource::TextureAccessError::Invalid)?;
 
         Ok(texture.desc.size.width)
     }
