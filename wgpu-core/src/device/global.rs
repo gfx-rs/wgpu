@@ -2492,12 +2492,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 let raw_buf = buffer.raw.as_ref().ok_or(BufferAccessError::Destroyed)?;
 
-                buffer.info.use_at(
-                    device
-                        .active_submission_index
-                        .load(Ordering::Relaxed)
-                        + 1,
-                );
+                buffer
+                    .info
+                    .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
                 let region = wgt::BufferSize::new(buffer.size).map(|size| hal::BufferCopy {
                     src_offset: 0,
                     dst_offset: 0,

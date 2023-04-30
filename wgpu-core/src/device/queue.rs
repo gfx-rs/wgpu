@@ -561,12 +561,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
 
-        dst.info.use_at(
-            device
-                .active_submission_index
-                .load(Ordering::Relaxed)
-                + 1,
-        );
+        dst.info
+            .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let region = wgt::BufferSize::new(src_buffer_size).map(|size| hal::BufferCopy {
             src_offset: 0,
@@ -772,12 +768,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        dst.info.use_at(
-            device
-                .active_submission_index
-                .load(Ordering::Relaxed)
-                + 1,
-        );
+        dst.info
+            .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let dst_raw = dst
             .inner
@@ -1042,12 +1034,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
 
-        dst.info.use_at(
-            device
-                .active_submission_index
-                .load(Ordering::Relaxed)
-                + 1,
-        );
+        dst.info
+            .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
         let dst_raw = dst
             .inner
