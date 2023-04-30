@@ -1616,9 +1616,9 @@ impl Instance {
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             data: Box::new(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::from(surface),
+            id: ObjectId::UNUSED,
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(()),
+            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
@@ -1652,9 +1652,9 @@ impl Instance {
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             data: Box::new(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::from(surface),
+            id: ObjectId::UNUSED,
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(()),
+            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
