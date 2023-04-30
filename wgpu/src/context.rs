@@ -1004,7 +1004,7 @@ pub struct ObjectId {
 }
 
 impl ObjectId {
-    const UNUSED: Self = ObjectId {
+    pub(crate) const UNUSED: Self = ObjectId {
         id: None,
         #[cfg(feature = "expose-ids")]
         global_id: None,

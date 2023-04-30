@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### WebGPU
+
+* Fix crash when calling `create_surface_from_canvas`. By @grovesNL in [#3718](https://github.com/gfx-rs/wgpu/pull/3718)
+
 ## v0.16.0 (2023-04-19)
 
 ### Major changes

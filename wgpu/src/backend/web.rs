@@ -63,19 +63,6 @@ impl<T> From<Identified<T>> for ObjectId {
     }
 }
 
-#[allow(unused_variables)]
-impl<T> From<(Identified<T>, Sendable<T>)> for ObjectId {
-    fn from((id, _data): (Identified<T>, Sendable<T>)) -> Self {
-        Self::new(
-            // TODO: the ID isn't used, so we hardcode it to 1 for now until we rework this
-            // API.
-            core::num::NonZeroU64::new(1).unwrap(),
-            #[cfg(feature = "expose-ids")]
-            id.0,
-        )
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
 unsafe impl<T> Send for Sendable<T> {}
