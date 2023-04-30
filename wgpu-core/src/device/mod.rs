@@ -31,7 +31,7 @@ pub const SHADER_STAGE_COUNT: usize = 3;
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
-const CLEANUP_WAIT_MS: u32 = 1000;
+const CLEANUP_WAIT_MS: u32 = 5000;
 
 const IMPLICIT_FAILURE: &str = "failed implicit";
 const EP_FAILURE: &str = "EP is invalid";

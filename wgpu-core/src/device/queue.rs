@@ -564,7 +564,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info.use_at(
             device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed)
+                .load(Ordering::Relaxed)
                 + 1,
         );
 
@@ -775,7 +775,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info.use_at(
             device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed)
+                .load(Ordering::Relaxed)
                 + 1,
         );
 
@@ -1045,7 +1045,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info.use_at(
             device
                 .active_submission_index
-                .fetch_add(1, Ordering::Relaxed)
+                .load(Ordering::Relaxed)
                 + 1,
         );
 
