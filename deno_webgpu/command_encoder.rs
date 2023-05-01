@@ -175,6 +175,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
         label: label.map(Cow::from),
         color_attachments: Cow::from(color_attachments),
         depth_stencil_attachment: processed_depth_stencil_attachment.as_ref(),
+        timestamp_writes: None,
     };
 
     let render_pass = wgpu_core::command::RenderPass::new(command_encoder_resource.1, &descriptor);
@@ -200,6 +201,7 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
 
     let descriptor = wgpu_core::command::ComputePassDescriptor {
         label: label.map(Cow::from),
+        timestamp_writes: None,
     };
 
     let compute_pass =

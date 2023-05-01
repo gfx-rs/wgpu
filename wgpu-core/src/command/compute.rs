@@ -95,7 +95,7 @@ pub enum ComputeCommand {
 pub struct ComputePass {
     base: BasePass<ComputeCommand>,
     parent_id: id::CommandEncoderId,
-    timestamp_writes: Vec<ComputePassTimestampWrite>,
+    timestamp_writes: Option<ComputePassTimestampWrites>,
 
     // Resource binding dedupe state.
     #[cfg_attr(feature = "serial-pass", serde(skip))]
@@ -109,7 +109,7 @@ impl ComputePass {
         Self {
             base: BasePass::new(&desc.label),
             parent_id,
-            timestamp_writes: desc.timestamp_writes.iter().cloned().collect(),
+            timestamp_writes: desc.timestamp_writes.cloned(),
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -138,36 +138,25 @@ impl fmt::Debug for ComputePass {
     }
 }
 
-/// Location to write a timestamp to (beginning or end of the pass).
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
-#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
-pub enum ComputePassTimestampLocation {
-    Beginning = 0,
-    End = 1,
-}
-
-/// Describes the writing of a single timestamp value.
+/// Describes the writing of timestamp values in a compute pass.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct ComputePassTimestampWrite {
-    /// The query set to write the timestamp to.
+pub struct ComputePassTimestampWrites {
+    /// The query set to write the timestamps to.
     pub query_set: id::QuerySetId,
-    /// The index of the query within the query set to write the timestamp to.
-    pub query_index: u32,
-    /// The location of the timestamp
-    pub location: ComputePassTimestampLocation,
+    /// The index of the query at which the start timestamp of the pass is written if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query at which the end timestamp of the pass is written if any.
+    pub end_of_pass_write_index: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
     /// Defines where and when timestamp values will be written for this pass.
-    pub timestamp_writes: Cow<'a, [ComputePassTimestampWrite]>,
+    pub timestamp_writes: Option<&'a ComputePassTimestampWrites>,
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
@@ -358,7 +347,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.command_encoder_run_compute_pass_impl::<A>(
             encoder_id,
             pass.base.as_ref(),
-            &pass.timestamp_writes,
+            pass.timestamp_writes.as_ref(),
         )
     }
 
@@ -367,7 +356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         base: BasePassRef<ComputeCommand>,
-        timestamp_writes: &[ComputePassTimestampWrite],
+        timestamp_writes: Option<&ComputePassTimestampWrites>,
     ) -> Result<(), ComputePassError> {
         profiling::scope!("CommandEncoder::run_compute_pass");
         let init_scope = PassErrorScope::Pass(encoder_id);
@@ -415,29 +404,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut string_offset = 0;
         let mut active_query = None;
 
-        let hal_timestamp_writes = timestamp_writes
-            .iter()
-            .map(|tw| {
-                let query_set: &resource::QuerySet<A> = cmd_buf
-                    .trackers
-                    .query_sets
-                    .add_single(&*query_set_guard, tw.query_set)
-                    .ok_or(ComputePassErrorInner::InvalidQuerySet(tw.query_set))
-                    .map_pass_err(init_scope)
-                    .unwrap();
+        let timestamp_writes = if let Some(tw) = timestamp_writes {
+            let query_set: &resource::QuerySet<A> = cmd_buf
+                .trackers
+                .query_sets
+                .add_single(&*query_set_guard, tw.query_set)
+                .ok_or(ComputePassErrorInner::InvalidQuerySet(tw.query_set))
+                .map_pass_err(init_scope)?;
 
-                hal::ComputePassTimestampWrite {
-                    query_set: &query_set.raw,
-                    query_index: tw.query_index,
-                    location: match tw.location {
-                        ComputePassTimestampLocation::Beginning => {
-                            hal::ComputePassTimestampLocation::BEGINNING
-                        }
-                        ComputePassTimestampLocation::End => hal::ComputePassTimestampLocation::END,
-                    },
-                }
+            Some(hal::ComputePassTimestampWrites {
+                query_set: &query_set.raw,
+                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                end_of_pass_write_index: tw.end_of_pass_write_index,
             })
-            .collect::<Vec<_>>();
+        } else {
+            None
+        };
 
         cmd_buf.trackers.set_size(
             Some(&*buffer_guard),
@@ -453,7 +435,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hal_desc = hal::ComputePassDescriptor {
             label: base.label,
-            timestamp_writes: &hal_timestamp_writes,
+            timestamp_writes,
         };
 
         unsafe {

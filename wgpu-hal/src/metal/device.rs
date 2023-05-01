@@ -8,7 +8,7 @@ use std::{
 
 use super::conv;
 use crate::auxil::map_naga_stage;
-use metal::{foreign_types::ForeignTypeRef, MTLCounterSampleBufferDescriptor};
+use metal::foreign_types::ForeignTypeRef;
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 

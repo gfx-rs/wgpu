@@ -777,7 +777,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<'_, super::Api>) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };

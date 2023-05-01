@@ -1812,30 +1812,21 @@ impl crate::Context for Context {
         _encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
-        let timestamp_writes = desc
-            .timestamp_writes
-            .as_ref()
-            .iter()
-            .map(|t| wgc::command::ComputePassTimestampWrite {
-                query_set: t.query_set.id.into(),
-                query_index: t.query_index,
-                location: match t.location {
-                    crate::ComputePassTimestampLocation::Beginning => {
-                        wgc::command::ComputePassTimestampLocation::Beginning
-                    }
-                    crate::ComputePassTimestampLocation::End => {
-                        wgc::command::ComputePassTimestampLocation::End
-                    }
-                },
-            })
-            .collect::<Vec<_>>();
+        let timestamp_writes =
+            desc.timestamp_writes
+                .as_ref()
+                .map(|tw| wgc::command::ComputePassTimestampWrites {
+                    query_set: tw.query_set.id.into(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                });
         (
             Unused,
             wgc::command::ComputePass::new(
                 *encoder,
                 &wgc::command::ComputePassDescriptor {
                     label: desc.label.map(Borrowed),
-                    timestamp_writes: Borrowed(&timestamp_writes),
+                    timestamp_writes: timestamp_writes.as_ref(),
                 },
             ),
         )
@@ -1899,23 +1890,14 @@ impl crate::Context for Context {
             }
         });
 
-        let timestamp_writes = desc
-            .timestamp_writes
-            .as_ref()
-            .iter()
-            .map(|t| wgc::command::RenderPassTimestampWrite {
-                query_set: t.query_set.id.into(),
-                query_index: t.query_index,
-                location: match t.location {
-                    crate::RenderPassTimestampLocation::Beginning => {
-                        wgc::command::RenderPassTimestampLocation::Beginning
-                    }
-                    crate::RenderPassTimestampLocation::End => {
-                        wgc::command::RenderPassTimestampLocation::End
-                    }
-                },
-            })
-            .collect::<Vec<_>>();
+        let timestamp_writes =
+            desc.timestamp_writes
+                .as_ref()
+                .map(|tw| wgc::command::RenderPassTimestampWrites {
+                    query_set: tw.query_set.id.into(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                });
 
         (
             Unused,
@@ -1925,7 +1907,7 @@ impl crate::Context for Context {
                     label: desc.label.map(Borrowed),
                     color_attachments: Borrowed(&colors),
                     depth_stencil_attachment: depth_stencil.as_ref(),
-                    timestamp_writes: Borrowed(&timestamp_writes),
+                    timestamp_writes: timestamp_writes.as_ref(),
                 },
             ),
         )

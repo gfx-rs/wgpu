@@ -138,18 +138,6 @@ async fn execute_gpu_inner(
         }],
     });
 
-    let beginning = wgpu::ComputePassTimestampWrite {
-        query_set: &query_set,
-        query_index: 0,
-        location: wgpu::ComputePassTimestampLocation::Beginning,
-    };
-
-    let end = wgpu::ComputePassTimestampWrite {
-        query_set: &query_set,
-        query_index: 1,
-        location: wgpu::ComputePassTimestampLocation::End,
-    };
-
     // A command encoder executes one or many pipelines.
     // It is to WebGPU what a command buffer is to Vulkan.
     let mut encoder =
@@ -157,7 +145,11 @@ async fn execute_gpu_inner(
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
-            timestamp_writes: &vec![beginning, end],
+            timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                query_set: &query_set,
+                beginning_of_pass_write_index: Some(0),
+                end_of_pass_write_index: Some(1),
+            }),
         });
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
@@ -168,13 +160,26 @@ async fn execute_gpu_inner(
     // Will copy data from storage buffer on GPU to staging buffer on CPU.
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
-    let destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("destination buffer"),
+    let query_resolve_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("query resolve buffer"),
+        size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
+        mapped_at_creation: false,
+    });
+    let query_destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("query dest buffer"),
         size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
-    encoder.resolve_query_set(&query_set, 0..NUM_SAMPLES as u32, &destination_buffer, 0);
+    encoder.resolve_query_set(&query_set, 0..NUM_SAMPLES as u32, &query_resolve_buffer, 0);
+    encoder.copy_buffer_to_buffer(
+        &query_resolve_buffer,
+        0,
+        &query_destination_buffer,
+        0,
+        query_resolve_buffer.size(),
+    );
 
     // Submits command encoder for processing
     queue.submit(Some(encoder.finish()));
@@ -212,11 +217,11 @@ async fn execute_gpu_inner(
         None
     };
 
-    destination_buffer
+    query_destination_buffer
         .slice(..)
         .map_async(wgpu::MapMode::Read, |_| ());
     device.poll(wgpu::Maintain::Wait);
-    resolve_timestamps(&destination_buffer, timestamp_period);
+    resolve_timestamps(&query_destination_buffer, timestamp_period);
 
     res
 }

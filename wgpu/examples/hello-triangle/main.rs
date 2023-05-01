@@ -90,8 +90,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     surface.configure(&device, &config);
 
-    let destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("destination buffer"),
+    let query_resolve_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("query resolve buffer"),
+        size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
+        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
+        mapped_at_creation: false,
+    });
+    let query_destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("query dest buffer"),
         size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
@@ -139,18 +145,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             },
                         })],
                         depth_stencil_attachment: None,
-                        timestamp_writes: &[
-                            wgpu::RenderPassTimestampWrite {
-                                query_set: &query_set,
-                                query_index: 0,
-                                location: wgpu::RenderPassTimestampLocation::Beginning,
-                            },
-                            wgpu::RenderPassTimestampWrite {
-                                query_set: &query_set,
-                                query_index: 1,
-                                location: wgpu::RenderPassTimestampLocation::End,
-                            },
-                        ],
+                        timestamp_writes: Some(wgpu::RenderPassTimestampWrites {
+                            query_set: &query_set,
+                            beginning_of_pass_write_index: Some(0),
+                            end_of_pass_write_index: Some(1),
+                        }),
                     });
                     rpass.set_pipeline(&render_pipeline);
                     rpass.draw(0..3, 0..1);
@@ -159,17 +158,24 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 encoder.resolve_query_set(
                     &query_set,
                     0..NUM_SAMPLES as u32,
-                    &destination_buffer,
+                    &query_resolve_buffer,
                     0,
+                );
+                encoder.copy_buffer_to_buffer(
+                    &query_resolve_buffer,
+                    0,
+                    &query_destination_buffer,
+                    0,
+                    query_resolve_buffer.size(),
                 );
                 queue.submit(Some(encoder.finish()));
                 frame.present();
 
-                destination_buffer
+                query_destination_buffer
                     .slice(..)
                     .map_async(wgpu::MapMode::Read, |_| ());
                 device.poll(wgpu::Maintain::Wait);
-                resolve_timestamps(&destination_buffer, timestamp_period);
+                resolve_timestamps(&query_destination_buffer, timestamp_period);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

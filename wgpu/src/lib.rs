@@ -828,36 +828,23 @@ impl<V: Default> Default for Operations<V> {
     }
 }
 
-/// Describes the location of a timestamp in a render pass.
-///
-/// For use with [`RenderPassTimestampWrite`].
-///
-/// Corresponds to [WebGPU `GPURenderPassTimestampLocation`](
-/// https://gpuweb.github.io/gpuweb/#enumdef-gpurenderpasstimestamplocation).
-#[derive(Clone, Debug)]
-pub enum RenderPassTimestampLocation {
-    /// The timestamp is at the start of the render pass.
-    Beginning,
-    /// The timestamp is at the end of the render pass.
-    End,
-}
-
 /// Describes the timestamp writes of a render pass.
 ///
 /// For use with [`RenderPassDescriptor`].
+/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
 ///
 /// Corresponds to [WebGPU `GPURenderPassTimestampWrite`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrite).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrites).
 #[derive(Clone, Debug)]
-pub struct RenderPassTimestampWrite<'a> {
+pub struct RenderPassTimestampWrites<'a> {
     /// The query set to write to.
     pub query_set: &'a QuerySet,
-    /// The index of the query to write to.
-    pub query_index: u32,
-    /// The location of the timestamp.
-    pub location: RenderPassTimestampLocation,
+    /// The index of the query at which the start timestamp of the pass is written if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query at which the end timestamp of the pass is written if any.
+    pub end_of_pass_write_index: Option<u32>,
 }
-static_assertions::assert_impl_all!(RenderPassTimestampWrite: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
 
 /// Describes a color attachment to a [`RenderPass`].
 ///
@@ -1117,8 +1104,10 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
-    /// A sequence of RenderPassTimestampWrite values define where and when timestamp values will be written for this pass.
-    pub timestamp_writes: &'desc [RenderPassTimestampWrite<'desc>],
+    /// Defines which timestamp values will be written for this pass, and where to write them to.
+    ///
+    /// Requires `Features::TIMESTAMP_QUERY` to be enabled.
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
 }
 static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 
@@ -1203,36 +1192,23 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 
-/// Describes the location of a timestamp in a compute pass.
-///
-/// For use with [`ComputePassTimestampWrite`].
-///
-/// Corresponds to [WebGPU `GPUComputePassTimestampLocation`](
-/// https://gpuweb.github.io/gpuweb/#enumdef-gpucomputepasstimestamplocation).
-#[derive(Clone, Debug)]
-pub enum ComputePassTimestampLocation {
-    /// The timestamp is at the start of the compute pass.
-    Beginning,
-    /// The timestamp is at the end of the compute pass.
-    End,
-}
-
 /// Describes the timestamp writes of a compute pass.
 ///
 /// For use with [`ComputePassDescriptor`].
+/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
 ///
 /// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrite).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrites).
 #[derive(Clone, Debug)]
-pub struct ComputePassTimestampWrite<'a> {
+pub struct ComputePassTimestampWrites<'a> {
     /// The query set to write to.
     pub query_set: &'a QuerySet,
-    /// The index of the query to write to.
-    pub query_index: u32,
-    /// The location of the timestamp.
-    pub location: ComputePassTimestampLocation,
+    /// The index of the query at which the start timestamp of the pass is written if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query at which the end timestamp of the pass is written if any.
+    pub end_of_pass_write_index: Option<u32>,
 }
-static_assertions::assert_impl_all!(ComputePassTimestampWrite: Send, Sync);
+static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
 
 /// Describes the attachments of a compute pass.
 ///
@@ -1244,8 +1220,10 @@ static_assertions::assert_impl_all!(ComputePassTimestampWrite: Send, Sync);
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
-    /// A sequence of ComputePassTimestampWrite values define where and when timestamp values will be written for this pass.
-    pub timestamp_writes: &'a [ComputePassTimestampWrite<'a>],
+    /// Defines which timestamp values will be written for this pass, and where to write them to.
+    ///
+    /// Requires `Features::TIMESTAMP_QUERY` to be enabled.
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
 }
 static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
 

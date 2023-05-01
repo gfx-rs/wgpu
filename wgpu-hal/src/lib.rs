@@ -1261,18 +1261,22 @@ pub struct DepthStencilAttachment<'a, A: Api> {
     pub clear_value: (f32, u32),
 }
 
-bitflags!(
-    pub struct RenderPassTimestampLocation: u8 {
-        const BEGINNING = 1 << 0;
-        const END = 1 << 1;
-    }
-);
-
-#[derive(Clone, Debug)]
-pub struct RenderPassTimestampWrite<'a, A: Api> {
+#[derive(Debug)]
+pub struct RenderPassTimestampWrites<'a, A: Api> {
     pub query_set: &'a A::QuerySet,
-    pub query_index: u32,
-    pub location: RenderPassTimestampLocation,
+    pub beginning_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for RenderPassTimestampWrites<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1283,27 +1287,31 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
-    pub timestamp_writes: &'a [RenderPassTimestampWrite<'a, A>],
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'a, A>>,
 }
 
-bitflags!(
-    pub struct ComputePassTimestampLocation: u8 {
-        const BEGINNING = 1 << 0;
-        const END = 1 << 1;
-    }
-);
-
-#[derive(Clone, Debug)]
-pub struct ComputePassTimestampWrite<'a, A: Api> {
+#[derive(Debug)]
+pub struct ComputePassTimestampWrites<'a, A: Api> {
     pub query_set: &'a A::QuerySet,
-    pub query_index: u32,
-    pub location: ComputePassTimestampLocation,
+    pub beginning_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for ComputePassTimestampWrites<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct ComputePassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
-    pub timestamp_writes: &'a [ComputePassTimestampWrite<'a, A>],
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
 }
 
 /// Stores if any API validation error has occurred in this process

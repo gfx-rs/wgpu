@@ -439,23 +439,24 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 }
             }
 
-            let sba_descriptor = descriptor
-                .sample_buffer_attachments()
-                .object_at(0 as _) //TODO: move inside
-                .unwrap();
-            for (_i, at) in desc.timestamp_writes.iter().enumerate() {
-                //Problem here is that we can't attach the same counter sample buffer
-                //to the pass descriptor twice.
-                sba_descriptor
-                    .set_sample_buffer(at.query_set.counter_sample_buffer.as_ref().unwrap());
-                match at.location {
-                    crate::RenderPassTimestampLocation::BEGINNING => {
-                        sba_descriptor.set_start_of_vertex_sample_index(at.query_index as _);
-                    }
-                    crate::RenderPassTimestampLocation::END => {
-                        sba_descriptor.set_end_of_fragment_sample_index(at.query_index as _);
-                    }
-                    _ => {}
+            if let Some(timestamp_writes) = &desc.timestamp_writes {
+                let sba_descriptor = descriptor
+                    .sample_buffer_attachments()
+                    .object_at(0 as _)
+                    .unwrap();
+                sba_descriptor.set_sample_buffer(
+                    timestamp_writes
+                        .query_set
+                        .counter_sample_buffer
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                if let Some(start_index) = timestamp_writes.beginning_of_pass_write_index {
+                    sba_descriptor.set_start_of_vertex_sample_index(start_index as _);
+                }
+                if let Some(end_index) = timestamp_writes.end_of_pass_write_index {
+                    sba_descriptor.set_end_of_fragment_sample_index(end_index as _);
                 }
             }
 
@@ -947,23 +948,24 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::ComputePassDescriptor::new();
 
-            let sba_descriptor = descriptor
-                .sample_buffer_attachments()
-                .object_at(0 as _) //TODO: move inside
-                .unwrap();
-            for (_i, at) in desc.timestamp_writes.iter().enumerate() {
-                //Problem here is that we can't attach the same counter sample buffer
-                //to the pass descriptor twice.
-                sba_descriptor
-                    .set_sample_buffer(at.query_set.counter_sample_buffer.as_ref().unwrap());
-                match at.location {
-                    crate::ComputePassTimestampLocation::BEGINNING => {
-                        sba_descriptor.set_start_of_encoder_sample_index(at.query_index as _);
-                    }
-                    crate::ComputePassTimestampLocation::END => {
-                        sba_descriptor.set_end_of_encoder_sample_index(at.query_index as _);
-                    }
-                    _ => {}
+            if let Some(timestamp_writes) = &desc.timestamp_writes {
+                let sba_descriptor = descriptor
+                    .sample_buffer_attachments()
+                    .object_at(0 as _)
+                    .unwrap();
+                sba_descriptor.set_sample_buffer(
+                    timestamp_writes
+                        .query_set
+                        .counter_sample_buffer
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                if let Some(start_index) = timestamp_writes.beginning_of_pass_write_index {
+                    sba_descriptor.set_start_of_encoder_sample_index(start_index as _);
+                }
+                if let Some(end_index) = timestamp_writes.end_of_pass_write_index {
+                    sba_descriptor.set_end_of_encoder_sample_index(end_index as _);
                 }
             }
 
