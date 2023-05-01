@@ -3394,6 +3394,8 @@ pub enum DeviceError {
     Lost,
     #[error("Not enough memory left")]
     OutOfMemory,
+    #[error("Creation of a resource failed for a reason other than running out of memory.")]
+    ResourceCreationFailed,
 }
 
 impl From<hal::DeviceError> for DeviceError {
@@ -3401,6 +3403,7 @@ impl From<hal::DeviceError> for DeviceError {
         match error {
             hal::DeviceError::Lost => DeviceError::Lost,
             hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
         }
     }
 }

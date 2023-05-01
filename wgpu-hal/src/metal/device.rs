@@ -1110,16 +1110,24 @@ impl crate::Device<super::Api> for super::Device {
                     }
 
                     let counter_sets = device.counter_sets();
-                    let timestamp_counter = counter_sets
-                        .iter()
-                        .find(|cs| cs.name() == "timestamp")
-                        //TODO: better error type?
-                        .ok_or(crate::DeviceError::OutOfMemory)?;
+                    let timestamp_counter =
+                        match counter_sets.iter().find(|cs| cs.name() == "timestamp") {
+                            Some(counter) => counter,
+                            None => {
+                                log::error!("Failed to obtain timestamp counter set.");
+                                return Err(crate::DeviceError::ResourceCreationFailed);
+                            }
+                        };
                     csb_desc.set_counter_set(timestamp_counter);
 
-                    let counter_sample_buffer = device
-                        .new_counter_sample_buffer_with_descriptor(&csb_desc)
-                        .map_err(|_| crate::DeviceError::OutOfMemory)?;
+                    let counter_sample_buffer =
+                        match device.new_counter_sample_buffer_with_descriptor(&csb_desc) {
+                            Ok(buffer) => buffer,
+                            Err(err) => {
+                                log::error!("Failed to create counter sample buffer: {:?}", err);
+                                return Err(crate::DeviceError::ResourceCreationFailed);
+                            }
+                        };
 
                     Ok(super::QuerySet {
                         raw_buffer: destination_buffer,
