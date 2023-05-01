@@ -282,18 +282,21 @@ pub struct Adapter {
 
 pub struct Queue {
     raw: Arc<Mutex<metal::CommandQueue>>,
+    timestamp_period: f32,
 }
 
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
 impl Queue {
-    pub unsafe fn queue_from_raw(raw: metal::CommandQueue) -> Self {
+    pub unsafe fn queue_from_raw(raw: metal::CommandQueue, timestamp_period: f32) -> Self {
         Self {
             raw: Arc::new(Mutex::new(raw)),
+            timestamp_period,
         }
     }
 }
+
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -403,21 +406,7 @@ impl crate::Queue<Api> for Queue {
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
-        let queue = self.raw.lock();
-        let (mut cpu_timestamp0, mut gpu_timestamp0) = (0_u64, 0_u64);
-        let device = queue.device().to_owned();
-        device.sample_timestamps(&mut cpu_timestamp0, &mut gpu_timestamp0);
-        if cpu_timestamp0 == 0 || gpu_timestamp0 == 0 {
-            return 1.0;
-        }
-
-        let command_buffer = queue.new_command_buffer();
-        command_buffer.commit();
-        command_buffer.wait_until_scheduled();
-        let (mut cpu_timestamp1, mut gpu_timestamp1) = (0_u64, 0_u64);
-        device.sample_timestamps(&mut cpu_timestamp1, &mut gpu_timestamp1);
-
-        (cpu_timestamp1 - cpu_timestamp0) as f32 / (gpu_timestamp1 - gpu_timestamp0) as f32
+        self.timestamp_period
     }
 }
 

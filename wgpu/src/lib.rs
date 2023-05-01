@@ -4095,6 +4095,10 @@ impl Queue {
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
     ///
     /// Returns zero if timestamp queries are unsupported.
+    ///
+    /// TODO: https://github.com/gfx-rs/wgpu/issues/3741
+    /// Timestamp values are supposed to represent nanosecond values, see https://gpuweb.github.io/gpuweb/#timestamp
+    /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required currently.
     pub fn get_timestamp_period(&self) -> f32 {
         DynContext::queue_get_timestamp_period(&*self.context, &self.id, self.data.as_ref())
     }

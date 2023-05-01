@@ -2515,7 +2515,8 @@ impl crate::context::Context for Context {
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
     ) -> f32 {
-        1.0 //TODO
+        // Timestamp values are always in nanoseconds, see https://gpuweb.github.io/gpuweb/#timestamp
+        1.0
     }
 
     fn queue_on_submitted_work_done(
