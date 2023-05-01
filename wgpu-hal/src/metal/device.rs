@@ -326,8 +326,6 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        use foreign_types::ForeignTypeRef;
-
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 
         objc::rc::autoreleasepool(|| {

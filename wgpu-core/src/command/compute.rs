@@ -29,7 +29,7 @@ use serde::Serialize;
 
 use thiserror::Error;
 
-use std::{borrow::Cow, fmt, mem, str};
+use std::{fmt, mem, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]

@@ -18,7 +18,7 @@ use crate::{
     id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource::{self, Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
+    resource::{Buffer, QuerySet, Texture, TextureView, TextureViewNotRenderableReason},
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -1113,7 +1113,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         };
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
-            let query_set: &resource::QuerySet<A> = cmd_buf
+            let query_set = cmd_buf
                 .trackers
                 .query_sets
                 .add_single(&*query_set_guard, tw.query_set)
@@ -2061,7 +2061,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
                             .map_pass_err(scope)?;
 
-                        let query_set: &resource::QuerySet<A> = cmd_buf
+                        let query_set = cmd_buf
                             .trackers
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
@@ -2083,7 +2083,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
-                        let query_set: &resource::QuerySet<A> = cmd_buf
+                        let query_set = cmd_buf
                             .trackers
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
