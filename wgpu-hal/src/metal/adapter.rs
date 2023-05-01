@@ -768,7 +768,13 @@ impl super::PrivateCapabilities {
             } else {
                 None
             },
-            supports_timestamp_period: version.at_least((10, 15), (14, 0), os_is_mac),
+            support_timestamp_query: version.at_least((11, 0), (14, 0), os_is_mac)
+                && device
+                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary),
+            support_timestamp_query_in_passes: version.at_least((11, 0), (14, 0), os_is_mac)
+                && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary)
+                && device
+                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary),
         }
     }
 
@@ -796,12 +802,12 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::MULTI_DRAW_INDIRECT;
 
-        if self.supports_timestamp_period {
-            features.insert(F::TIMESTAMP_QUERY);
-            // TODO: if not on apple silicon, we can do timestamps within pass.
-            //features.insert(F::TIMESTAMP_QUERY_INSIDE_PASSES);
-        }
-
+        features.set(F::TIMESTAMP_QUERY, self.support_timestamp_query);
+        // TODO: Not yet implemented.
+        // features.set(
+        //     F::TIMESTAMP_QUERY_INSIDE_PASSES,
+        //     self.support_timestamp_query_in_passes,
+        // );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);

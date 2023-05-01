@@ -233,7 +233,8 @@ struct PrivateCapabilities {
     supports_preserve_invariance: bool,
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
-    supports_timestamp_period: bool,
+    support_timestamp_query: bool,
+    support_timestamp_query_in_passes: bool,
 }
 
 #[derive(Clone, Debug)]
