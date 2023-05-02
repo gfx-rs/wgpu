@@ -244,10 +244,7 @@ impl<W: Write> Writer<W> {
         for (index, arg) in func.arguments.iter().enumerate() {
             // Write argument attribute if a binding is present
             if let Some(ref binding) = arg.binding {
-                self.write_attributes(&map_binding_to_attribute(
-                    binding,
-                    module.types[arg.ty].inner.scalar_kind(),
-                ))?;
+                self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             // Write argument name
             let argument_name = match func_ctx.ty {
@@ -274,10 +271,7 @@ impl<W: Write> Writer<W> {
         if let Some(ref result) = func.result {
             write!(self.out, " -> ")?;
             if let Some(ref binding) = result.binding {
-                self.write_attributes(&map_binding_to_attribute(
-                    binding,
-                    module.types[result.ty].inner.scalar_kind(),
-                ))?;
+                self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             self.write_type(module, result.ty)?;
         }
@@ -401,10 +395,7 @@ impl<W: Write> Writer<W> {
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = member.binding {
-                self.write_attributes(&map_binding_to_attribute(
-                    binding,
-                    module.types[member.ty].inner.scalar_kind(),
-                ))?;
+                self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
@@ -1941,10 +1932,7 @@ const fn address_space_str(
     )
 }
 
-fn map_binding_to_attribute(
-    binding: &crate::Binding,
-    scalar_kind: Option<crate::ScalarKind>,
-) -> Vec<Attribute> {
+fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
     match *binding {
         crate::Binding::BuiltIn(built_in) => {
             if let crate::BuiltIn::Position { invariant: true } = built_in {
@@ -1957,12 +1945,9 @@ fn map_binding_to_attribute(
             location,
             interpolation,
             sampling,
-        } => match scalar_kind {
-            Some(crate::ScalarKind::Float) => vec![
-                Attribute::Location(location),
-                Attribute::Interpolate(interpolation, sampling),
-            ],
-            _ => vec![Attribute::Location(location)],
-        },
+        } => vec![
+            Attribute::Location(location),
+            Attribute::Interpolate(interpolation, sampling),
+        ],
     }
 }
