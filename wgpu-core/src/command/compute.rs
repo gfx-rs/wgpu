@@ -38,7 +38,7 @@ use std::{fmt, mem, str};
 )]
 pub enum ComputeCommand {
     SetBindGroup {
-        index: u8,
+        index: u32,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
     },
@@ -163,7 +163,7 @@ pub enum ComputePassErrorInner {
     #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
-    BindGroupIndexOutOfRange { index: u8, max: u32 },
+    BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
     #[error("QuerySet {0:?} is invalid")]
@@ -407,7 +407,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
-                    if (index as u32) >= max_bind_groups {
+                    if index >= max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
                             index,
                             max: max_bind_groups,
@@ -464,7 +464,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe {
                                 raw.set_bind_group(
                                     pipeline_layout,
-                                    index as u32 + i as u32,
+                                    index + i as u32,
                                     raw_bg,
                                     &e.dynamic_offsets,
                                 );
@@ -816,7 +816,7 @@ pub mod compute_ffi {
         }
 
         pass.base.commands.push(ComputeCommand::SetBindGroup {
-            index: index.try_into().unwrap(),
+            index,
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
