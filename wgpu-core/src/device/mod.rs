@@ -3704,6 +3704,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
+        fid.assign_error(label.borrow_or_default(), &mut token);
+    }
+
+    pub fn create_render_bundle_error<A: HalApi>(
+        &self,
+        id_in: Input<G, id::RenderBundleId>,
+        label: Label,
+    ) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.render_bundles.prepare(id_in);
+
         let (_, mut token) = hub.devices.read(&mut token);
         fid.assign_error(label.borrow_or_default(), &mut token);
     }
@@ -3716,7 +3728,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let fid = hub.textures.prepare(id_in);
 
-        let (_, mut token) = hub.devices.read(&mut token);
         fid.assign_error(label.borrow_or_default(), &mut token);
     }
 

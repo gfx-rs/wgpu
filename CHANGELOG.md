@@ -163,6 +163,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
 - Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
 - On Web, the size of the canvas is adjusted when using `Surface::configure()`. If the canvas was given an explicit size (via CSS), this will not affect the visual size of the canvas. By @daxpedda in [#3690](https://github.com/gfx-rs/wgpu/pull/3690)
+- Added `Global::create_render_bundle_error`. By @jimblandy in [#3746](https://github.com/gfx-rs/wgpu/pull/3746)
 
 #### WebGPU
 
