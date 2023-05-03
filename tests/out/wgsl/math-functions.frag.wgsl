@@ -1,8 +1,8 @@
 fn main_1() {
-    var a: vec4<f32>;
-    var b: vec4<f32>;
+    var a: vec4<f32> = vec4(1.0);
+    var b: vec4<f32> = vec4(2.0);
     var m: mat4x4<f32>;
-    var i: i32;
+    var i: i32 = 5;
     var ceilOut: vec4<f32>;
     var roundOut: vec4<f32>;
     var floorOut: vec4<f32>;
@@ -48,14 +48,11 @@ fn main_1() {
     var smoothStepVector: vec4<f32>;
     var smoothStepMixed: vec4<f32>;
 
-    a = vec4(1.0);
-    b = vec4(2.0);
     let _e6 = a;
     let _e7 = b;
     let _e8 = a;
     let _e9 = b;
     m = mat4x4<f32>(vec4<f32>(_e6.x, _e6.y, _e6.z, _e6.w), vec4<f32>(_e7.x, _e7.y, _e7.z, _e7.w), vec4<f32>(_e8.x, _e8.y, _e8.z, _e8.w), vec4<f32>(_e9.x, _e9.y, _e9.z, _e9.w));
-    i = 5;
     let _e35 = a;
     ceilOut = ceil(_e35);
     let _e39 = a;

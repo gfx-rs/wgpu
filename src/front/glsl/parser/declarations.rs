@@ -75,7 +75,7 @@ impl<'source> ParsingContext<'source> {
         global_ctx: &mut Context,
     ) -> Result<()> {
         if self
-            .parse_declaration(frontend, global_ctx, true)?
+            .parse_declaration(frontend, global_ctx, true, false)?
             .is_none()
         {
             let token = self.bump(frontend)?;
@@ -246,18 +246,23 @@ impl<'source> ParsingContext<'source> {
                 })
                 .transpose()?;
 
-            let maybe_const_expr = if is_global_const {
-                init
+            let (decl_initializer, late_initializer) = if is_global_const {
+                (init, None)
             } else if ctx.external {
-                init.and_then(|expr| ctx.ctx.lift_up_const_expression(expr).ok())
+                let decl_initializer =
+                    init.and_then(|expr| ctx.ctx.lift_up_const_expression(expr).ok());
+                (decl_initializer, None)
             } else {
-                None
-                // init.filter(|expr| ctx.ctx.expressions.is_const(*expr))
+                let decl_initializer = init.filter(|expr| ctx.ctx.expressions.is_const(*expr));
+                let late_initializer = (decl_initializer.is_none() || ctx.is_inside_loop)
+                    .then_some(init)
+                    .flatten();
+                (decl_initializer, late_initializer)
             };
 
-            let pointer = ctx.add_var(frontend, ty, name, maybe_const_expr, meta)?;
+            let pointer = ctx.add_var(frontend, ty, name, decl_initializer, meta)?;
 
-            if let Some(value) = init.filter(|_| maybe_const_expr.is_none()) {
+            if let Some(value) = late_initializer {
                 ctx.ctx.emit_restart();
                 ctx.ctx.body.push(Statement::Store { pointer, value }, meta);
             }
@@ -287,6 +292,7 @@ impl<'source> ParsingContext<'source> {
         frontend: &mut Frontend,
         ctx: &mut Context,
         external: bool,
+        is_inside_loop: bool,
     ) -> Result<Option<Span>> {
         //declaration:
         //    function_prototype  SEMICOLON
@@ -343,6 +349,7 @@ impl<'source> ParsingContext<'source> {
                                         frontend,
                                         &mut context,
                                         &mut None,
+                                        false,
                                     )?;
 
                                     frontend.add_function(context, name, result, meta);
@@ -385,6 +392,7 @@ impl<'source> ParsingContext<'source> {
                     let mut ctx = DeclarationContext {
                         qualifiers,
                         external,
+                        is_inside_loop,
                         ctx,
                     };
 

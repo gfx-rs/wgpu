@@ -8,11 +8,9 @@ const NUM_VECS: i32 = 42;
 var<uniform> global: Data;
 
 fn function() -> vec4<f32> {
-    var sum: vec4<f32>;
-    var i: i32;
+    var sum: vec4<f32> = vec4(0.0);
+    var i: i32 = 0;
 
-    sum = vec4(0.0);
-    i = 0;
     loop {
         let _e9 = i;
         if !((_e9 < NUM_VECS)) {

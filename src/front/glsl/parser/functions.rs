@@ -41,10 +41,11 @@ impl<'source> ParsingContext<'source> {
         frontend: &mut Frontend,
         ctx: &mut Context,
         terminator: &mut Option<usize>,
+        is_inside_loop: bool,
     ) -> Result<Option<Span>> {
         // Type qualifiers always identify a declaration statement
         if self.peek_type_qualifier(frontend) {
-            return self.parse_declaration(frontend, ctx, false);
+            return self.parse_declaration(frontend, ctx, false, is_inside_loop);
         }
 
         // Type names can identify either declaration statements or type constructors
@@ -60,7 +61,7 @@ impl<'source> ParsingContext<'source> {
             self.backtrack(token)?;
 
             if declaration {
-                return self.parse_declaration(frontend, ctx, false);
+                return self.parse_declaration(frontend, ctx, false, is_inside_loop);
             }
         }
 
@@ -132,7 +133,9 @@ impl<'source> ParsingContext<'source> {
                 self.expect(frontend, TokenValue::RightParen)?;
 
                 let accept = ctx.new_body(|ctx| {
-                    if let Some(more_meta) = self.parse_statement(frontend, ctx, &mut None)? {
+                    if let Some(more_meta) =
+                        self.parse_statement(frontend, ctx, &mut None, is_inside_loop)?
+                    {
                         meta.subsume(more_meta);
                     }
                     Ok(())
@@ -140,7 +143,9 @@ impl<'source> ParsingContext<'source> {
 
                 let reject = ctx.new_body(|ctx| {
                     if self.bump_if(frontend, TokenValue::Else).is_some() {
-                        if let Some(more_meta) = self.parse_statement(frontend, ctx, &mut None)? {
+                        if let Some(more_meta) =
+                            self.parse_statement(frontend, ctx, &mut None, is_inside_loop)?
+                        {
                             meta.subsume(more_meta);
                         }
                     }
@@ -252,7 +257,12 @@ impl<'source> ParsingContext<'source> {
                                     break
                                 }
                                 _ => {
-                                    self.parse_statement(frontend, ctx, &mut case_terminator)?;
+                                    self.parse_statement(
+                                        frontend,
+                                        ctx,
+                                        &mut case_terminator,
+                                        is_inside_loop,
+                                    )?;
                                 }
                             }
                         }
@@ -347,7 +357,7 @@ impl<'source> ParsingContext<'source> {
 
                     meta.subsume(expr_meta);
 
-                    if let Some(body_meta) = self.parse_statement(frontend, ctx, &mut None)? {
+                    if let Some(body_meta) = self.parse_statement(frontend, ctx, &mut None, true)? {
                         meta.subsume(body_meta);
                     }
                     Ok(())
@@ -369,7 +379,7 @@ impl<'source> ParsingContext<'source> {
 
                 let loop_body = ctx.new_body(|ctx| {
                     let mut terminator = None;
-                    self.parse_statement(frontend, ctx, &mut terminator)?;
+                    self.parse_statement(frontend, ctx, &mut terminator, true)?;
 
                     let mut stmt = ctx.stmt_ctx();
 
@@ -425,7 +435,7 @@ impl<'source> ParsingContext<'source> {
 
                 if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
                     if self.peek_type_name(frontend) || self.peek_type_qualifier(frontend) {
-                        self.parse_declaration(frontend, ctx, false)?;
+                        self.parse_declaration(frontend, ctx, false, false)?;
                     } else {
                         let mut stmt = ctx.stmt_ctx();
                         let expr = self.parse_expression(frontend, ctx, &mut stmt)?;
@@ -508,7 +518,7 @@ impl<'source> ParsingContext<'source> {
                 meta.subsume(self.expect(frontend, TokenValue::RightParen)?.meta);
 
                 let loop_body = ctx.with_body(loop_body, |ctx| {
-                    if let Some(stmt_meta) = self.parse_statement(frontend, ctx, &mut None)? {
+                    if let Some(stmt_meta) = self.parse_statement(frontend, ctx, &mut None, true)? {
                         meta.subsume(stmt_meta);
                     }
                     Ok(())
@@ -533,8 +543,13 @@ impl<'source> ParsingContext<'source> {
                 let mut block_terminator = None;
 
                 let block = ctx.new_body(|ctx| {
-                    let block_meta =
-                        self.parse_compound_statement(meta, frontend, ctx, &mut block_terminator)?;
+                    let block_meta = self.parse_compound_statement(
+                        meta,
+                        frontend,
+                        ctx,
+                        &mut block_terminator,
+                        is_inside_loop,
+                    )?;
                     meta.subsume(block_meta);
                     Ok(())
                 })?;
@@ -568,6 +583,7 @@ impl<'source> ParsingContext<'source> {
         frontend: &mut Frontend,
         ctx: &mut Context,
         terminator: &mut Option<usize>,
+        is_inside_loop: bool,
     ) -> Result<Span> {
         ctx.symbol_table.push_scope();
 
@@ -580,7 +596,7 @@ impl<'source> ParsingContext<'source> {
                 break;
             }
 
-            let stmt = self.parse_statement(frontend, ctx, terminator)?;
+            let stmt = self.parse_statement(frontend, ctx, terminator, is_inside_loop)?;
 
             if let Some(stmt_meta) = stmt {
                 meta.subsume(stmt_meta);

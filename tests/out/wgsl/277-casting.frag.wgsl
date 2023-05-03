@@ -1,7 +1,6 @@
 fn main_1() {
-    var a: f32;
+    var a: f32 = 1.0;
 
-    a = 1.0;
     return;
 }
 

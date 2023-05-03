@@ -395,6 +395,7 @@ pub struct DeclarationContext<'ctx, 'qualifiers, 'a> {
     qualifiers: TypeQualifiers<'qualifiers>,
     /// Indicates a global declaration
     external: bool,
+    is_inside_loop: bool,
     ctx: &'ctx mut Context<'a>,
 }
 
