@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Documentation
+
+#### General
+
+- Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
+
 ### Bug Fixes
 
 #### General
