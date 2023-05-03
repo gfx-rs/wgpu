@@ -574,8 +574,9 @@ static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
         if !thread::panicking() {
-            if let Some(ref id) = self.id {
-                self.context.command_buffer_drop(id, &self.data.take());
+            if let Some(id) = self.id.take() {
+                self.context
+                    .command_buffer_drop(&id, self.data.take().unwrap().as_ref());
             }
         }
     }
@@ -1616,9 +1617,9 @@ impl Instance {
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             data: Box::new(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::from(surface),
+            id: ObjectId::UNUSED,
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(()),
+            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }
@@ -1652,9 +1653,9 @@ impl Instance {
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             data: Box::new(surface),
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            id: ObjectId::from(surface),
+            id: ObjectId::UNUSED,
             #[cfg(all(target_arch = "wasm32", not(feature = "webgl")))]
-            data: Box::new(()),
+            data: Box::new(surface.1),
             config: Mutex::new(None),
         })
     }

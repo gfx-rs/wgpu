@@ -42,7 +42,16 @@ Bottom level categories:
 
 ### Documentation
 
+#### General
+
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
+
+### Bug Fixes
+
+#### General
+
+- Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
+
 
 ## v0.16.0 (2023-04-19)
 

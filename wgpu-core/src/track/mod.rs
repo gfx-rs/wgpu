@@ -301,7 +301,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
         write!(
             f,
             "conflicting usages. Current usage {current:?} and new usage {new:?}. \
-            {exclusive:?} is an exclusive usage and cannot be used with any other\
+            {exclusive:?} is an exclusive usage and cannot be used with any other \
             usages within the usage scope (renderpass or compute dispatch)"
         )
     }
