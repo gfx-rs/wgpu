@@ -42,6 +42,10 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### General
+
+- Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
+
 #### WebGPU
 
 * Fix crash when calling `create_surface_from_canvas`. By @grovesNL in [#3718](https://github.com/gfx-rs/wgpu/pull/3718)
