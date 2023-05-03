@@ -531,10 +531,8 @@ impl Frontend {
         }
 
         // Check if the passed arguments require any special variations
-        let mut variations = builtin_required_variations(
-            args.iter()
-                .map(|&(expr, _)| ctx.typifier.get(expr, &ctx.module.types)),
-        );
+        let mut variations =
+            builtin_required_variations(args.iter().map(|&(expr, _)| ctx.get_type(expr)));
 
         // Initiate the declaration if it wasn't previously initialized and inject builtins
         let declaration = self.lookup_function.entry(name.clone()).or_insert_with(|| {
@@ -592,7 +590,7 @@ impl Frontend {
                 ctx.typifier_grow(call_argument.0, call_argument.1)?;
 
                 let overload_param_ty = &ctx.module.types[*overload_parameter].inner;
-                let call_arg_ty = ctx.typifier.get(call_argument.0, &ctx.module.types);
+                let call_arg_ty = ctx.get_type(call_argument.0);
 
                 log::trace!(
                     "Testing parameter {}\n\tOverload = {:?}\n\tCall = {:?}",
@@ -937,7 +935,7 @@ impl Frontend {
         ctx.typifier_grow(call_argument.0, call_argument.1)?;
 
         let overload_param_ty = &ctx.module.types[parameter_ty].inner;
-        let call_arg_ty = ctx.typifier.get(call_argument.0, &ctx.module.types);
+        let call_arg_ty = ctx.get_type(call_argument.0);
         let needs_conversion = call_arg_ty != overload_param_ty;
 
         let arg_scalar_comps = scalar_components(call_arg_ty);

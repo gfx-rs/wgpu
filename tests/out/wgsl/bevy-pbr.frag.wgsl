@@ -157,9 +157,9 @@ fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
     k = (_e55 / (_e56 + (_e57 * _e58)));
     let _e63 = k;
     let _e64 = k;
-    d = ((_e63 * _e64) * (1.0 / PI));
-    let _e70 = d;
-    return _e70;
+    d = ((_e63 * _e64) * 0.31830987);
+    let _e71 = d;
+    return _e71;
 }
 
 fn V_SmithGGXCorrelated(roughness_2: f32, NoV: f32, NoL: f32) -> f32 {
@@ -247,7 +247,7 @@ fn fresnel(f0_3: vec3<f32>, LoH: f32) -> vec3<f32> {
     LoH_1 = LoH;
     let _e49 = f0_4;
     let _e62 = f0_4;
-    f90_4 = clamp(dot(_e62, vec3((50.0 * 0.33))), 0.0, 1.0);
+    f90_4 = clamp(dot(_e62, vec3(16.5)), 0.0, 1.0);
     let _e75 = f0_4;
     let _e76 = f90_4;
     let _e77 = LoH_1;
@@ -321,7 +321,7 @@ fn Fd_Burley(roughness_6: f32, NoV_4: f32, NoL_4: f32, LoH_4: f32) -> f32 {
     viewScatter = _e72;
     let _e74 = lightScatter;
     let _e75 = viewScatter;
-    return ((_e74 * _e75) * (1.0 / PI));
+    return ((_e74 * _e75) * 0.31830987);
 }
 
 fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3<f32> {
@@ -337,8 +337,8 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     f0_8 = f0_7;
     perceptual_roughness_1 = perceptual_roughness;
     NoV_7 = NoV_6;
-    c0_ = vec4<f32>(-(1.0), -(0.0275), -(0.572), 0.022);
-    c1_ = vec4<f32>(1.0, 0.0425, 1.04, -(0.04));
+    c0_ = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    c1_ = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
     let _e62 = perceptual_roughness_1;
     let _e64 = c0_;
     let _e66 = c1_;
@@ -353,10 +353,10 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     let _e94 = NoV_7;
     let _e98 = r;
     let _e101 = r;
-    a004_ = ((min((_e83.x * _e85.x), exp2((-(9.28) * _e94))) * _e98.x) + _e101.y);
+    a004_ = ((min((_e83.x * _e85.x), exp2((-9.28 * _e94))) * _e98.x) + _e101.y);
     let _e109 = a004_;
     let _e112 = r;
-    AB = ((vec2<f32>(-(1.04), 1.04) * vec2(_e109)) + _e112.zw);
+    AB = ((vec2<f32>(-1.04, 1.04) * vec2(_e109)) + _e112.zw);
     let _e116 = f0_8;
     let _e117 = AB;
     let _e121 = AB;
@@ -934,6 +934,6 @@ fn main(@location(0) v_WorldPosition: vec3<f32>, @location(1) v_WorldNormal: vec
     v_WorldTangent_1 = v_WorldTangent;
     gl_FrontFacing = param;
     main_1();
-    let _e72 = o_Target;
-    return FragmentOutput(_e72);
+    let _e69 = o_Target;
+    return FragmentOutput(_e69);
 }

@@ -17,7 +17,7 @@ fn main_1() {
 
     let _e9 = testBuffer.data[0];
     a = _e9;
-    testBuffer.data[1] = u32(2);
+    testBuffer.data[1] = 2u;
     let _e19 = testBufferReadOnly.data[0];
     b = _e19;
     return;

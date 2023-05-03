@@ -11,25 +11,24 @@ fn collatz_iterations(n: u32) -> u32 {
     var i: u32;
 
     n_1 = n;
-    i = u32(0);
+    i = 0u;
     loop {
         let _e7 = n_1;
-        if !((_e7 != u32(1))) {
+        if !((_e7 != 1u)) {
             break;
         }
         {
             let _e14 = n_1;
             let _e15 = f32(_e14);
-            let _e17 = f32(2);
-            if ((_e15 - (floor((_e15 / _e17)) * _e17)) == f32(0)) {
+            if ((_e15 - (floor((_e15 / 2.0)) * 2.0)) == 0.0) {
                 {
                     let _e25 = n_1;
-                    n_1 = (_e25 / u32(2));
+                    n_1 = (_e25 / 2u);
                 }
             } else {
                 {
                     let _e30 = n_1;
-                    n_1 = ((u32(3) * _e30) + u32(1));
+                    n_1 = ((3u * _e30) + 1u);
                 }
             }
             let _e36 = i;

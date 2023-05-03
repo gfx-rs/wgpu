@@ -14,7 +14,7 @@ fn main_1() {
     let _e8 = (_e6 - 1);
     scalar = _e8;
     scalar_target = _e8;
-    vec = vec2(u32(1));
+    vec = vec2(1u);
     let _e14 = vec;
     vec = (_e14 - vec2(1u));
     vec_target = _e14;
@@ -22,8 +22,7 @@ fn main_1() {
     let _e21 = (_e18 + vec2(1u));
     vec = _e21;
     vec_target = _e21;
-    let _e24 = f32(1);
-    mat = mat4x3<f32>(vec3<f32>(_e24, 0.0, 0.0), vec3<f32>(0.0, _e24, 0.0), vec3<f32>(0.0, 0.0, _e24), vec3<f32>(0.0, 0.0, 0.0));
+    mat = mat4x3<f32>(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 0.0, 0.0));
     let _e32 = mat;
     let _e34 = vec3(1.0);
     mat = (_e32 + mat4x3<f32>(_e34, _e34, _e34, _e34));

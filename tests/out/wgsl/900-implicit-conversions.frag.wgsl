@@ -56,8 +56,8 @@ fn implicit_dims_3(v_6: vec4<f32>) {
 
 fn main_1() {
     exact_1(1);
-    implicit(f32(1u));
-    implicit_dims_2(vec3<f32>(vec3(1)));
+    implicit(1.0);
+    implicit_dims_2(vec3<f32>(1.0, 1.0, 1.0));
     return;
 }
 

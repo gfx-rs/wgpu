@@ -14,7 +14,7 @@ struct FragmentOutput {
     @location(0) o_color: vec4<f32>,
 }
 
-const strct: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
+const strct: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4(0u), vec4(1u)));
 
 var<private> global: f32;
 @group(0) @binding(0) 
@@ -289,7 +289,7 @@ fn testStructConstructor() {
 fn testNonScalarToScalarConstructor() {
     var f: f32;
 
-    f = f32(mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0))[0].x);
+    f = 1.0;
     return;
 }
 
@@ -308,7 +308,7 @@ fn testNonImplicitCastVectorCast() {
     var a_18: u32;
     var b_16: vec4<i32>;
 
-    a_18 = u32(1);
+    a_18 = 1u;
     let _e3 = a_18;
     b_16 = vec4(i32(_e3));
     return;
@@ -332,7 +332,7 @@ fn ternary(a_20: bool) {
     a_21 = a_20;
     let _e3 = a_21;
     if _e3 {
-        local = u32(0);
+        local = 0u;
     } else {
         local = 1u;
     }
@@ -342,7 +342,7 @@ fn ternary(a_20: bool) {
     if _e10 {
         local_1 = 0u;
     } else {
-        local_1 = u32(1);
+        local_1 = 1u;
     }
     let _e15 = local_1;
     c_1 = _e15;
@@ -354,7 +354,7 @@ fn ternary(a_20: bool) {
             if _e19 {
                 local_2 = 2u;
             } else {
-                local_2 = u32(3);
+                local_2 = 3u;
             }
             let _e24 = local_2;
             local_3 = _e24;
@@ -364,7 +364,7 @@ fn ternary(a_20: bool) {
         let _e27 = local_3;
         local_4 = _e27;
     } else {
-        local_4 = u32(5);
+        local_4 = 5u;
     }
     let _e31 = local_4;
     nested = _e31;
@@ -396,7 +396,7 @@ fn testConstantLength(a_24: array<f32, 4>) {
     var len_1: i32;
 
     a_25 = a_24;
-    len_1 = i32(4u);
+    len_1 = 4;
     return;
 }
 
@@ -417,18 +417,17 @@ fn testSwizzleWrites(a_27: vec3<f32>) {
 
     a_28 = a_27;
     let _e6 = a_28;
-    let _e11 = vec2<f32>(3.0, 4.0);
-    a_28.z = _e11.x;
-    a_28.x = _e11.y;
+    a_28.z = 3.0;
+    a_28.x = 4.0;
+    let _e14 = a_28;
     let _e16 = a_28;
-    let _e18 = a_28;
-    let _e21 = (_e18.xy * 5.0);
-    a_28.x = _e21.x;
-    a_28.y = _e21.y;
-    let _e26 = a_28;
-    let _e30 = (_e26.zy + vec2(1.0));
-    a_28.z = _e30.x;
-    a_28.y = _e30.y;
+    let _e19 = (_e16.xy * 5.0);
+    a_28.x = _e19.x;
+    a_28.y = _e19.y;
+    let _e24 = a_28;
+    let _e28 = (_e24.zy + vec2(1.0));
+    a_28.z = _e28.x;
+    a_28.y = _e28.y;
     return;
 }
 
@@ -441,17 +440,16 @@ fn main_1() {
     let _e8 = local_6;
     global = _e8;
     let _e9 = o_color;
-    let _e12 = vec4(1.0);
-    o_color.x = _e12.x;
-    o_color.y = _e12.y;
-    o_color.z = _e12.z;
-    o_color.w = _e12.w;
+    o_color.x = 1.0;
+    o_color.y = 1.0;
+    o_color.z = 1.0;
+    o_color.w = 1.0;
     return;
 }
 
 @fragment 
 fn main() -> FragmentOutput {
     main_1();
-    let _e17 = o_color;
-    return FragmentOutput(_e17);
+    let _e9 = o_color;
+    return FragmentOutput(_e9);
 }

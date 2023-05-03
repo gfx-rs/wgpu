@@ -9,7 +9,7 @@ fn CalcShadowPCF1_(T_P_t_TextureDepth: texture_depth_2d, S_P_t_TextureDepth: sam
     let _e9 = t_ProjCoord_1;
     let _e10 = _e9.xyz;
     let _e13 = textureSampleCompare(T_P_t_TextureDepth, S_P_t_TextureDepth, _e10.xy, _e10.z);
-    t_Res = (_e6 + (_e13 * (1.0 / 5.0)));
+    t_Res = (_e6 + (_e13 * 0.2));
     let _e19 = t_Res;
     return _e19;
 }

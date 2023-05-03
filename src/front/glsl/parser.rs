@@ -166,7 +166,7 @@ impl<'source> ParsingContext<'source> {
         let mut module = Module::default();
 
         // Body and expression arena for global initialization
-        let mut ctx = Context::new(frontend, &mut module)?;
+        let mut ctx = Context::new(frontend, &mut module, false)?;
 
         while self.peek(frontend).is_some() {
             self.parse_external_declaration(frontend, &mut ctx)?;
@@ -220,13 +220,13 @@ impl<'source> ParsingContext<'source> {
         frontend: &mut Frontend,
         module: &mut Module,
     ) -> Result<(Handle<Expression>, Span)> {
-        let mut ctx = Context::new(frontend, module)?;
+        let mut ctx = Context::new(frontend, module, true)?;
 
         let mut stmt_ctx = ctx.stmt_ctx();
         let expr = self.parse_conditional(frontend, &mut ctx, &mut stmt_ctx, None)?;
         let (root, meta) = ctx.lower_expect(stmt_ctx, frontend, expr, ExprPos::Rhs)?;
 
-        Ok((ctx.eval_constant(root, meta)?, meta))
+        Ok((root, meta))
     }
 }
 

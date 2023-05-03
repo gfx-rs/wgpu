@@ -71,15 +71,17 @@ pub struct Context<'a> {
     pub symbol_table: crate::front::SymbolTable<String, VariableReference>,
     pub samplers: FastHashMap<Handle<Expression>, Handle<Expression>>,
 
+    pub const_typifier: Typifier,
     pub typifier: Typifier,
     emitter: Emitter,
     stmt_ctx: Option<StmtContext>,
     pub body: Block,
     pub module: &'a mut crate::Module,
+    pub is_const: bool,
 }
 
 impl<'a> Context<'a> {
-    pub fn new(frontend: &Frontend, module: &'a mut crate::Module) -> Result<Self> {
+    pub fn new(frontend: &Frontend, module: &'a mut crate::Module, is_const: bool) -> Result<Self> {
         let mut this = Context {
             expressions: Arena::new(),
             locals: Arena::new(),
@@ -91,11 +93,13 @@ impl<'a> Context<'a> {
             symbol_table: crate::front::SymbolTable::default(),
             samplers: FastHashMap::default(),
 
+            const_typifier: Typifier::new(),
             typifier: Typifier::new(),
             emitter: Emitter::default(),
             stmt_ctx: Some(StmtContext::new()),
             body: Block::new(),
             module,
+            is_const: false,
         };
 
         this.emit_start();
@@ -103,6 +107,7 @@ impl<'a> Context<'a> {
         for &(ref name, lookup) in frontend.global_variables.iter() {
             this.add_global(name, lookup)?
         }
+        this.is_const = is_const;
 
         Ok(this)
     }
@@ -241,15 +246,43 @@ impl<'a> Context<'a> {
     }
 
     pub fn add_expression(&mut self, expr: Expression, meta: Span) -> Result<Handle<Expression>> {
-        let needs_pre_emit = expr.needs_pre_emit();
-        if needs_pre_emit {
-            self.emit_end();
+        let mut append = |arena: &mut Arena<Expression>, expr: Expression, span| {
+            let is_running = self.emitter.is_running();
+            let needs_pre_emit = expr.needs_pre_emit();
+            if is_running && needs_pre_emit {
+                self.body.extend(self.emitter.finish(arena));
+            }
+            let h = arena.append(expr, span);
+            if is_running && needs_pre_emit {
+                self.emitter.start(arena);
+            }
+            h
+        };
+
+        let (expressions, const_expressions) = if self.is_const {
+            (&mut self.module.const_expressions, None)
+        } else {
+            (&mut self.expressions, Some(&self.module.const_expressions))
+        };
+
+        let mut eval = crate::proc::ConstantEvaluator {
+            types: &mut self.module.types,
+            constants: &self.module.constants,
+            expressions,
+            const_expressions,
+            append: (!self.is_const).then_some(&mut append),
+        };
+
+        let res = eval.try_eval_and_append(&expr, meta).map_err(|e| Error {
+            kind: e.into(),
+            meta,
+        });
+
+        match res {
+            Ok(expr) => Ok(expr),
+            Err(e) if self.is_const => Err(e),
+            Err(_) => Ok(append(&mut self.expressions, expr, meta)),
         }
-        let handle = self.expressions.append(expr, meta);
-        if needs_pre_emit {
-            self.emit_start();
-        }
-        Ok(handle)
     }
 
     /// Add variable to current scope
@@ -513,13 +546,16 @@ impl<'a> Context<'a> {
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
-                let (index, index_meta) =
-                    self.lower_expect_inner(stmt, frontend, index, ExprPos::Rhs)?;
+                let (index, _) = self.lower_expect_inner(stmt, frontend, index, ExprPos::Rhs)?;
                 let maybe_constant_index = match pos {
                     // Don't try to generate `AccessIndex` if in a LHS position, since it
                     // wouldn't produce a pointer.
                     ExprPos::Lhs => None,
-                    _ => self.eval_constant(index, index_meta).ok(),
+                    _ => self
+                        .module
+                        .to_ctx()
+                        .eval_expr_to_u32_from(index, &self.expressions)
+                        .ok(),
                 };
 
                 let base = self
@@ -532,15 +568,7 @@ impl<'a> Context<'a> {
                     .0;
 
                 let pointer = maybe_constant_index
-                    .and_then(|const_expr| {
-                        Some(self.add_expression(
-                            Expression::AccessIndex {
-                                base,
-                                index: self.module.to_ctx().eval_expr_to_u32(const_expr).ok()?,
-                            },
-                            meta,
-                        ))
-                    })
+                    .map(|index| self.add_expression(Expression::AccessIndex { base, index }, meta))
                     .unwrap_or_else(|| {
                         self.add_expression(Expression::Access { base, index }, meta)
                     })?;
@@ -582,8 +610,8 @@ impl<'a> Context<'a> {
                 self.typifier_grow(left, left_meta)?;
                 self.typifier_grow(right, right_meta)?;
 
-                let left_inner = self.typifier.get(left, &self.module.types);
-                let right_inner = self.typifier.get(right, &self.module.types);
+                let left_inner = self.get_type(left);
+                let right_inner = self.get_type(right);
 
                 match (left_inner, right_inner) {
                     (
@@ -1010,7 +1038,13 @@ impl<'a> Context<'a> {
                 _ if var.load => {
                     self.add_expression(Expression::Load { pointer: var.expr }, meta)?
                 }
-                ExprPos::Rhs => var.expr,
+                ExprPos::Rhs => {
+                    if let Some((constant, _)) = self.is_const.then_some(var.constant).flatten() {
+                        self.add_expression(Expression::Constant(constant), meta)?
+                    } else {
+                        var.expr
+                    }
+                }
             },
             HirExprKind::Call(ref call) if pos != ExprPos::Lhs => {
                 let maybe_expr = frontend.function_or_constructor_call(
