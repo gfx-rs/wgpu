@@ -574,8 +574,9 @@ static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
         if !thread::panicking() {
-            if let Some(ref id) = self.id {
-                self.context.command_buffer_drop(id, &self.data.take());
+            if let Some(id) = self.id.take() {
+                self.context
+                    .command_buffer_drop(&id, self.data.take().unwrap().as_ref());
             }
         }
     }
