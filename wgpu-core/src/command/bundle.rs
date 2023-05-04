@@ -306,7 +306,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
 
                     let max_bind_groups = device.limits.max_bind_groups;
-                    if (index as u32) >= max_bind_groups {
+                    if index >= max_bind_groups {
                         return Err(RenderCommandError::BindGroupIndexOutOfRange {
                             index,
                             max: max_bind_groups,
@@ -789,7 +789,7 @@ impl<A: HalApi> RenderBundle<A> {
                                 .raw
                                 .as_ref()
                                 .unwrap(),
-                            index as u32,
+                            index,
                             bind_group.raw.as_ref().unwrap(),
                             &offsets[..num_dynamic_offsets as usize],
                         )
@@ -1232,7 +1232,7 @@ impl<A: HalApi> State<A> {
 
     fn set_bind_group(
         &mut self,
-        slot: u8,
+        slot: u32,
         bind_group_id: id::BindGroupId,
         layout_id: id::Valid<id::BindGroupLayoutId>,
         dynamic_offsets: Range<usize>,
@@ -1375,7 +1375,7 @@ impl<A: HalApi> State<A> {
                         contents.is_dirty = false;
                         let offsets = &contents.dynamic_offsets;
                         return Some(RenderCommand::SetBindGroup {
-                            index: i as u8,
+                            index: i.try_into().unwrap(),
                             bind_group_id: contents.bind_group_id,
                             num_dynamic_offsets: (offsets.end - offsets.start) as u8,
                         });
@@ -1479,7 +1479,7 @@ pub mod bundle_ffi {
         }
 
         bundle.base.commands.push(RenderCommand::SetBindGroup {
-            index: index.try_into().unwrap(),
+            index,
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
