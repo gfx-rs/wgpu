@@ -3,7 +3,7 @@ name: Publish
 on:
   push:
     branches:
-      - gecko
+      - trunk
 
 env:
   CARGO_INCREMENTAL: false
@@ -21,10 +21,12 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust WASM target
-        run: rustup target add wasm32-unknown-unknown
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli --version=0.2.83
+        run: cargo install wasm-bindgen-cli --version=0.2.84
 
       - name: Build WebGPU examples
         run: cargo build --package wgpu --release --target wasm32-unknown-unknown --examples
