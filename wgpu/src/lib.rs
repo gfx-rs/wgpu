@@ -1106,7 +1106,7 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
     /// Defines which timestamp values will be written for this pass, and where to write them to.
     ///
-    /// Requires `Features::TIMESTAMP_QUERY` to be enabled.
+    /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
     pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
 }
 static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
@@ -1222,7 +1222,7 @@ pub struct ComputePassDescriptor<'a> {
     pub label: Label<'a>,
     /// Defines which timestamp values will be written for this pass, and where to write them to.
     ///
-    /// Requires `Features::TIMESTAMP_QUERY` to be enabled.
+    /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
     pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
 }
 static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
