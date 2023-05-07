@@ -21,9 +21,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust WASM target
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+        run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli --version=0.2.84
