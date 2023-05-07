@@ -2,16 +2,19 @@
 
 use std::borrow::Cow;
 
+use wgc::command::RenderBundleEncoderDescriptor;
 use wgpu::util::DeviceExt;
 
 // Queries:
+// * encoder timestamp start
+// * encoder timestamp end
 // * render start
 // * render in-between (optional)
 // * render end
 // * compute start
 // * compute in-between (optional)
 // * compute end
-const NUM_QUERIES: usize = 6;
+const NUM_QUERIES: usize = 8;
 
 struct Queries {
     set: wgpu::QuerySet,
@@ -74,8 +77,13 @@ impl Queries {
             };
 
             println!(
+                "Elapsed time render + compute: {:.2} μs",
+                elapsed_us(timestamps[0], timestamps[1])
+            );
+
+            println!(
                 "Elapsed time render pass: {:.2} μs",
-                elapsed_us(timestamps[0], timestamps[2])
+                elapsed_us(timestamps[2], timestamps[4])
             );
             if device
                 .features()
@@ -83,13 +91,13 @@ impl Queries {
             {
                 println!(
                     "Elapsed time first triangle: {:.2} μs",
-                    elapsed_us(timestamps[1], timestamps[2])
+                    elapsed_us(timestamps[3], timestamps[4])
                 );
             }
 
             println!(
                 "Elapsed time compute pass: {:.2} μs",
-                elapsed_us(timestamps[3], timestamps[5])
+                elapsed_us(timestamps[5], timestamps[7])
             );
             if device
                 .features()
@@ -97,7 +105,7 @@ impl Queries {
             {
                 println!(
                     "Elapsed time first compute: {:.2} μs",
-                    elapsed_us(timestamps[3], timestamps[3])
+                    elapsed_us(timestamps[5], timestamps[6])
                 );
             }
         }
@@ -155,11 +163,15 @@ async fn run() {
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
+    encoder.write_timestamp(&queries.set, 0);
+
     // Render two triangles and profile it.
-    render_pass(&device, &shader, &mut encoder, &queries.set, 0);
+    render_pass(&device, &shader, &mut encoder, &queries.set, 2);
 
     // Compute a hash function on a single thread a bunch of time and profile it.
-    compute_pass(&device, &shader, &mut encoder, &queries.set, 3);
+    compute_pass(&device, &shader, &mut encoder, &queries.set, 5);
+
+    encoder.write_timestamp(&queries.set, 1);
 
     queries.resolve(&mut encoder);
     queue.submit(Some(encoder.finish()));

@@ -254,7 +254,7 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Vulkan
         /// - DX12
-        /// - Metal
+        /// - Metal - TODO: Not yet supported on command encoder.
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;

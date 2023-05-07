@@ -321,7 +321,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             _ => {}
         }
     }
-    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {}
+    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {
+        // TODO: If MTLCounterSamplingPoint::AtDrawBoundary/AtBlitBoundary/AtDispatchBoundary is supported,
+        //       we don't need to insert a new encoder, but can instead use respective current one.
+        //let encoder = self.enter_any().unwrap_or_else(|| self.enter_blit());
+
+        // TODO: Otherwise, we need to create a new blit command encoder with a descriptor that inserts the timestamps.
+        // Note that as of writing creating a new encoder is not exposed by the metal crate.
+        // https://developer.apple.com/documentation/metal/mtlcommandbuffer/3564431-makeblitcommandencoder
+    }
+
     unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {
         let encoder = self.enter_blit();
         let raw_range = metal::NSRange {
