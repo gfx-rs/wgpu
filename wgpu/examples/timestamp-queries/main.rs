@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 
-use wgc::command::RenderBundleEncoderDescriptor;
 use wgpu::util::DeviceExt;
 
 // Queries:
@@ -71,9 +70,9 @@ impl Queries {
             let timestamps: &[u64] = bytemuck::cast_slice(&timestamp_view);
             println!("Raw timestamp buffer contents: {:?}", timestamps);
 
-            let elapsed_us = |start, end| {
+            let elapsed_us = |start, end: u64| {
                 let period = queue.get_timestamp_period();
-                (end - start) as f64 * period as f64 / 1000.0
+                end.wrapping_sub(start) as f64 * period as f64 / 1000.0
             };
 
             println!(
@@ -122,13 +121,13 @@ async fn run() {
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
-        .expect("Failed to request adapter");
+        .expect("Failed to request adapter.");
 
     // Check timestamp features.
     if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
-        println!("Adapter supports timestamp queries");
+        println!("Adapter supports timestamp queries.");
     } else {
-        println!("Adapter does not support timestamp queries, aborting");
+        println!("Adapter does not support timestamp queries, aborting.");
         return;
     }
     let mut features = wgpu::Features::empty() | wgpu::Features::TIMESTAMP_QUERY;
@@ -136,7 +135,10 @@ async fn run() {
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
     {
+        println!("Adapter supports timestamp queries within passes.");
         features |= wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
+    } else {
+        println!("Adapter does not support timestamp queries within passes.");
     }
 
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
