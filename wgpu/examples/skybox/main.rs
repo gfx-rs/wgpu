@@ -442,7 +442,7 @@ impl framework::Example for Skybox {
                     }),
                     stencil_ops: None,
                 }),
-                timestamp_writes: &[],
+                timestamp_writes: None,
             });
 
             rpass.set_bind_group(0, &self.bind_group, &[]);

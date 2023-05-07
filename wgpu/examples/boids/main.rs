@@ -286,7 +286,7 @@ impl framework::Example for Example {
             label: None,
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
-            timestamp_writes: &[],
+            timestamp_writes: None,
         };
 
         // get command encoder
@@ -298,7 +298,7 @@ impl framework::Example for Example {
             // compute pass
             let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,
-                timestamp_writes: &[],
+                timestamp_writes: None,
             });
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);

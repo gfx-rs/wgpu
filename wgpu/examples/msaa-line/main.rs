@@ -303,7 +303,7 @@ impl framework::Example for Example {
                     label: None,
                     color_attachments: &[Some(rpass_color_attachment)],
                     depth_stencil_attachment: None,
-                    timestamp_writes: &[],
+                    timestamp_writes: None,
                 })
                 .execute_bundles(iter::once(&self.bundle));
         }

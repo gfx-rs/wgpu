@@ -7,8 +7,7 @@ use crate::{
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
-        StateChange,
+        CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
     },
     device::{MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
@@ -123,7 +122,10 @@ impl ComputePass {
 
     #[cfg(feature = "trace")]
     pub fn into_command(self) -> crate::device::trace::Command {
-        crate::device::trace::Command::RunComputePass { base: self.base }
+        crate::device::trace::Command::RunComputePass {
+            base: self.base,
+            timestamp_writes: self.timestamp_writes,
+        }
     }
 }
 
@@ -383,6 +385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ref mut list) = cmd_buf.commands {
             list.push(crate::device::trace::Command::RunComputePass {
                 base: BasePass::from_ref(base),
+                timestamp_writes: timestamp_writes.cloned(),
             });
         }
 

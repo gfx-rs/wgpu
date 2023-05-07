@@ -251,6 +251,7 @@ impl RenderPass {
             base: self.base,
             target_colors: self.color_targets.into_iter().collect(),
             target_depth_stencil: self.depth_stencil_target,
+            timestamp_writes: self.timestamp_writes,
         }
     }
 
@@ -1116,7 +1117,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             let query_set = cmd_buf
                 .trackers
                 .query_sets
-                .add_single(&*query_set_guard, tw.query_set)
+                .add_single(query_set_guard, tw.query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
 
             if let Some(index) = tw.beginning_of_pass_write_index {
@@ -1298,6 +1299,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base: BasePass::from_ref(base),
                     target_colors: color_attachments.to_vec(),
                     target_depth_stencil: depth_stencil_attachment.cloned(),
+                    timestamp_writes: timestamp_writes.cloned(),
                 });
             }
 

@@ -144,7 +144,7 @@ fn pass_reset_vertex_buffer() {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: &[],
+            timestamp_writes: None,
         });
 
         double_rpass.set_pipeline(&double_pipeline);
@@ -178,7 +178,7 @@ fn pass_reset_vertex_buffer() {
                 },
             })],
             depth_stencil_attachment: None,
-            timestamp_writes: &[],
+            timestamp_writes: None,
         });
 
         single_rpass.set_pipeline(&single_pipeline);

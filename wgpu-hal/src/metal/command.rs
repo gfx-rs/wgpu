@@ -448,7 +448,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 }
             }
 
-            if let Some(timestamp_writes) = &desc.timestamp_writes {
+            if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
                 let sba_descriptor = descriptor
                     .sample_buffer_attachments()
                     .object_at(0 as _)
@@ -957,7 +957,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::ComputePassDescriptor::new();
 
-            if let Some(timestamp_writes) = &desc.timestamp_writes {
+            if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
                 let sba_descriptor = descriptor
                     .sample_buffer_attachments()
                     .object_at(0 as _)

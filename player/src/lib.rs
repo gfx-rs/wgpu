@@ -119,20 +119,29 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 trace::Command::InsertDebugMarker(marker) => self
                     .command_encoder_insert_debug_marker::<A>(encoder, &marker)
                     .unwrap(),
-                trace::Command::RunComputePass { base } => {
-                    self.command_encoder_run_compute_pass_impl::<A>(encoder, base.as_ref())
-                        .unwrap();
+                trace::Command::RunComputePass {
+                    base,
+                    timestamp_writes,
+                } => {
+                    self.command_encoder_run_compute_pass_impl::<A>(
+                        encoder,
+                        base.as_ref(),
+                        timestamp_writes.as_ref(),
+                    )
+                    .unwrap();
                 }
                 trace::Command::RunRenderPass {
                     base,
                     target_colors,
                     target_depth_stencil,
+                    timestamp_writes,
                 } => {
                     self.command_encoder_run_render_pass_impl::<A>(
                         encoder,
                         base.as_ref(),
                         &target_colors,
                         target_depth_stencil.as_ref(),
+                        timestamp_writes.as_ref(),
                     )
                     .unwrap();
                 }

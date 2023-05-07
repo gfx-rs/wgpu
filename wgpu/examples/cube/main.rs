@@ -379,7 +379,7 @@ impl framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: &[],
+                timestamp_writes: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);

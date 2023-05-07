@@ -135,7 +135,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
                                 },
                             })],
                             depth_stencil_attachment: None,
-                            timestamp_writes: &[],
+                            timestamp_writes: None,
                         });
                     }
 

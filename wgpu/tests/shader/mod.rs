@@ -326,7 +326,7 @@ fn shader_input_output_test(
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some(&format!("cpass {test_name}")),
-            timestamp_writes: &[],
+            timestamp_writes: None,
         });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bg, &[]);

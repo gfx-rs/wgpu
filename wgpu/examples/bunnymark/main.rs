@@ -339,7 +339,7 @@ impl framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: &[],
+                timestamp_writes: None,
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.global_group, &[]);
