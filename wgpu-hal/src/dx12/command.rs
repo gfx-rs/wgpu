@@ -1103,7 +1103,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass<'a>(
+        &mut self,
+        desc: &crate::ComputePassDescriptor<'a, super::Api>,
+    ) {
         unsafe { self.begin_pass(super::PassKind::Compute, desc.label) };
     }
     unsafe fn end_compute_pass(&mut self) {

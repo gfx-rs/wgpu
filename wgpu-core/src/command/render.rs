@@ -6,8 +6,8 @@ use crate::{
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryResetMap,
-        QueryUseError, RenderCommand, RenderCommandError, StateChange,
+        CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryUseError,
+        RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, MissingDownlevelFlags, MissingFeatures,
@@ -1119,6 +1119,17 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 .add_single(&*query_set_guard, tw.query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
 
+            if let Some(index) = tw.beginning_of_pass_write_index {
+                cmd_buf
+                    .pending_query_resets
+                    .use_query_set(tw.query_set, query_set, index);
+            }
+            if let Some(index) = tw.end_of_pass_write_index {
+                cmd_buf
+                    .pending_query_resets
+                    .use_query_set(tw.query_set, query_set, index);
+            }
+
             Some(hal::RenderPassTimestampWrites {
                 query_set: &query_set.raw,
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
@@ -1268,7 +1279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (scope, query_reset_state, pending_discard_init_fixups) = {
+        let (scope, pending_discard_init_fixups) = {
             let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
             // Spell out the type, to placate rust-analyzer.
@@ -1349,7 +1360,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut dynamic_offset_count = 0;
             let mut string_offset = 0;
             let mut active_query = None;
-            let mut query_reset_state = QueryResetMap::new();
 
             for command in base.commands {
                 match *command {
@@ -2073,7 +2083,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut query_reset_state),
+                                Some(&mut cmd_buf.pending_query_resets),
                             )
                             .map_pass_err(scope)?;
                     }
@@ -2095,7 +2105,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut query_reset_state),
+                                Some(&mut cmd_buf.pending_query_resets),
                                 &mut active_query,
                             )
                             .map_pass_err(scope)?;
@@ -2192,7 +2202,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
 
             cmd_buf.encoder.close();
-            (trackers, query_reset_state, pending_discard_init_fixups)
+            (trackers, pending_discard_init_fixups)
         };
 
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -2212,7 +2222,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &device_guard[cmd_buf.device_id.value],
             );
 
-            query_reset_state
+            cmd_buf
+                .pending_query_resets
                 .reset_queries(
                     transit,
                     &query_set_guard,

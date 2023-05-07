@@ -7,7 +7,8 @@ use crate::{
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError, StateChange,
+        CommandEncoderStatus, MapPassErr, PassErrorScope, QueryUseError,
+        StateChange,
     },
     device::{MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
@@ -411,6 +412,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .add_single(&*query_set_guard, tw.query_set)
                 .ok_or(ComputePassErrorInner::InvalidQuerySet(tw.query_set))
                 .map_pass_err(init_scope)?;
+
+            // Unlike in render passes we can't delay resetting the query sets since
+            // there is no auxillary pass.
+            let range = if let (Some(index_a), Some(index_b)) =
+                (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
+            {
+                Some(index_a.min(index_b)..index_a.max(index_b) + 1)
+            } else {
+                tw.beginning_of_pass_write_index
+                    .or(tw.end_of_pass_write_index)
+                    .map(|i| i..i + 1)
+            };
+            // Range should always be Some, both values being None should lead to a validation err.r
+            // But no point in erroring over that nuance here!
+            if let Some(range) = range {
+                unsafe {
+                    raw.reset_queries(&query_set.raw, range);
+                }
+            }
 
             Some(hal::ComputePassTimestampWrites {
                 query_set: &query_set.raw,

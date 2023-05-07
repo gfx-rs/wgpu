@@ -15,7 +15,7 @@ use thiserror::Error;
 use wgt::BufferAddress;
 
 #[derive(Debug)]
-pub(super) struct QueryResetMap<A: hal::Api> {
+pub(crate) struct QueryResetMap<A: hal::Api> {
     map: FastHashMap<Index, (Vec<bool>, Epoch)>,
     _phantom: PhantomData<A>,
 }
@@ -43,12 +43,12 @@ impl<A: hal::Api> QueryResetMap<A> {
     }
 
     pub fn reset_queries(
-        self,
+        &mut self,
         raw_encoder: &mut A::CommandEncoder,
         query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
         backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
-        for (query_set_id, (state, epoch)) in self.map.into_iter() {
+        for (query_set_id, (state, epoch)) in self.map.drain() {
             let id = Id::zip(query_set_id, epoch, backend);
             let query_set = query_set_storage.get(id).map_err(|_| id)?;
 
