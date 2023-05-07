@@ -20,6 +20,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Remove hardcoded MSRV
+        # Okay to build examples using the latest Rust.
+        # Fixes issues building wasm-bindgen-cli
+        run: rm -f rust-toolchain
+
       - name: Install Rust WASM target
         run: rustup target add wasm32-unknown-unknown
 
