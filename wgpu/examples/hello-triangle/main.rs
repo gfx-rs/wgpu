@@ -5,8 +5,6 @@ use winit::{
     window::Window,
 };
 
-const NUM_SAMPLES: usize = 2;
-
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let size = window.inner_size();
 
@@ -42,12 +40,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
-
-    let query_set = device.create_query_set(&wgpu::QuerySetDescriptor {
-        label: Some("Timestamp query set"),
-        count: NUM_SAMPLES as u32,
-        ty: wgpu::QueryType::Timestamp,
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -90,26 +82,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     surface.configure(&device, &config);
 
-    let query_resolve_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("query resolve buffer"),
-        size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
-        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
-        mapped_at_creation: false,
-    });
-    let query_destination_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("query dest buffer"),
-        size: (std::mem::size_of::<u64>() * NUM_SAMPLES as usize) as wgpu::BufferAddress,
-        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        mapped_at_creation: false,
-    });
-
-    let timestamp_period = queue.get_timestamp_period();
-
     event_loop.run(move |event, _, control_flow| {
         // Have the closure take ownership of the resources.
         // `event_loop.run` never returns, therefore we must do this to ensure
         // the resources are properly cleaned up.
-        let _ = (&instance, &adapter, &shader, &pipeline_layout, &query_set);
+        let _ = (&instance, &adapter, &shader, &pipeline_layout);
 
         *control_flow = ControlFlow::Wait;
         match event {
@@ -145,37 +122,16 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             },
                         })],
                         depth_stencil_attachment: None,
-                        timestamp_writes: Some(wgpu::RenderPassTimestampWrites {
-                            query_set: &query_set,
-                            beginning_of_pass_write_index: Some(0),
-                            end_of_pass_write_index: Some(1),
-                        }),
+                        timestamp_writes: None,
                     });
                     rpass.set_pipeline(&render_pipeline);
                     rpass.draw(0..3, 0..1);
                 }
 
-                encoder.resolve_query_set(
-                    &query_set,
-                    0..NUM_SAMPLES as u32,
-                    &query_resolve_buffer,
-                    0,
-                );
-                encoder.copy_buffer_to_buffer(
-                    &query_resolve_buffer,
-                    0,
-                    &query_destination_buffer,
-                    0,
-                    query_resolve_buffer.size(),
-                );
                 queue.submit(Some(encoder.finish()));
                 frame.present();
 
-                query_destination_buffer
-                    .slice(..)
-                    .map_async(wgpu::MapMode::Read, |_| ());
                 device.poll(wgpu::Maintain::Wait);
-                resolve_timestamps(&query_destination_buffer, timestamp_period);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
@@ -184,19 +140,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             _ => {}
         }
     });
-}
-
-fn resolve_timestamps(destination_buffer: &wgpu::Buffer, timestamp_period: f32) {
-    {
-        let timestamp_view = destination_buffer
-            .slice(..(std::mem::size_of::<u64>() * 2) as wgpu::BufferAddress)
-            .get_mapped_range();
-
-        let timestamps: &[u64] = bytemuck::cast_slice(&timestamp_view);
-        let elapsed_ns = (timestamps[1] - timestamps[0]) as f64 * timestamp_period as f64;
-        log::info!("Elapsed time: {:.2} μs", elapsed_ns / 1000.0);
-    }
-    destination_buffer.unmap();
 }
 
 fn main() {
