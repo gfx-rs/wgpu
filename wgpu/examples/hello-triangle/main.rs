@@ -130,8 +130,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
                 queue.submit(Some(encoder.finish()));
                 frame.present();
-
-                device.poll(wgpu::Maintain::Wait);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

@@ -160,7 +160,7 @@ async fn execute_gpu_inner(
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
-    let res = if let Some(Ok(())) = receiver.receive().await {
+    if let Some(Ok(())) = receiver.receive().await {
         // Gets contents of buffer
         let data = buffer_slice.get_mapped_range();
         // Since contents are got in bytes, this converts these bytes back to u32
@@ -178,12 +178,8 @@ async fn execute_gpu_inner(
         // Returns data from buffer
         Some(result)
     } else {
-        None
-    };
-
-    device.poll(wgpu::Maintain::Wait);
-
-    res
+        panic!("failed to run compute on gpu!")
+    }
 }
 
 fn main() {
