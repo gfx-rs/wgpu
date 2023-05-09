@@ -128,7 +128,7 @@ void test_matrix_within_array_within_struct_accesses(
     t_1 = MatCx2InArray {const_type_15_};
     int _e66 = idx_1;
     idx_1 = _e66 + 1;
-    for(int _i=0; _i<2; ++_i) t_1.am.inner[_i] = const_type_15_.inner[_i];
+    t_1.am = const_type_15_;
     t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
     t_1.am.inner[0][0] = metal::float2(9.0);
     int _e93 = idx_1;
@@ -167,7 +167,7 @@ void assign_through_ptr_fn(
 void assign_array_through_ptr_fn(
     thread type_26& foo_2
 ) {
-    for(int _i=0; _i<2; ++_i) foo_2.inner[_i] = type_26 {metal::float4(1.0), metal::float4(2.0)}.inner[_i];
+    foo_2 = type_26 {metal::float4(1.0), metal::float4(2.0)};
     return;
 }
 
@@ -197,7 +197,7 @@ vertex foo_vertOutput foo_vert(
     int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
     float _e34 = read_from_private(foo);
-    for(int _i=0; _i<5; ++_i) c2_.inner[_i] = type_22 {a_1, static_cast<int>(b), 3, 4, 5}.inner[_i];
+    c2_ = type_22 {a_1, static_cast<int>(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
     int value = c2_.inner[vi];
     float _e48 = test_arr_as_arg(const_type_19_);
@@ -215,7 +215,7 @@ fragment foo_fragOutput foo_frag(
 ) {
     bar._matrix[1].z = 1.0;
     bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
-    for(int _i=0; _i<2; ++_i) bar.arr.inner[_i] = type_9 {metal::uint2(0u), metal::uint2(1u)}.inner[_i];
+    bar.arr = type_9 {metal::uint2(0u), metal::uint2(1u)};
     bar.data[1].value = 1;
     qux = const_type_12_;
     return foo_fragOutput { metal::float4(0.0) };
@@ -231,7 +231,7 @@ kernel void assign_through_ptr(
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     type_26 arr = {};
-    for(int _i=0; _i<2; ++_i) arr.inner[_i] = type_26 {metal::float4(6.0), metal::float4(7.0)}.inner[_i];
+    arr = type_26 {metal::float4(6.0), metal::float4(7.0)};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
     return;

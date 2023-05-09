@@ -2954,31 +2954,17 @@ impl<W: Write> Writer<W> {
         context: &StatementContext,
     ) -> BackendResult {
         let pointer_inner = context.expression.resolve_type(pointer);
-        let (array_size, is_atomic) = match *pointer_inner {
+        let is_atomic = match *pointer_inner {
             crate::TypeInner::Pointer { base, .. } => {
                 match context.expression.module.types[base].inner {
-                    crate::TypeInner::Array {
-                        size: crate::ArraySize::Constant(ch),
-                        ..
-                    } => (Some(ch), false),
-                    crate::TypeInner::Atomic { .. } => (None, true),
-                    _ => (None, false),
+                    crate::TypeInner::Atomic { .. } => true,
+                    _ => false,
                 }
             }
-            _ => (None, false),
+            _ => false,
         };
 
-        // we can't assign fixed-size arrays
-        if let Some(const_handle) = array_size {
-            let size = context.expression.module.constants[const_handle]
-                .to_array_length()
-                .unwrap();
-            write!(self.out, "{level}for(int _i=0; _i<{size}; ++_i) ")?;
-            self.put_access_chain(pointer, policy, &context.expression)?;
-            write!(self.out, ".{WRAPPED_ARRAY_FIELD}[_i] = ")?;
-            self.put_expression(value, &context.expression, true)?;
-            writeln!(self.out, ".{WRAPPED_ARRAY_FIELD}[_i];")?;
-        } else if is_atomic {
+        if is_atomic {
             write!(
                 self.out,
                 "{level}{NAMESPACE}::atomic_store_explicit({ATOMIC_REFERENCE}"
