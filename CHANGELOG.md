@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### Misc Breaking Changes
+
+- Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+
 ### Documentation
 
 #### General
