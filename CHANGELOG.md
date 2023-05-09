@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.11.1 (2023-05-18)
+
+#### SPV-IN
+
+- Convert conditional backedges to `break if`. ([#2290](https://github.com/gfx-rs/naga/pull/2290)) **@eddyb**
+
 ## v0.11 (2023-01-25)
 
 - Move to the Rust 2021 edition ([#2085](https://github.com/gfx-rs/naga/pull/2085)) **@ErichDonGubler**
