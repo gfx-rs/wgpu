@@ -1307,9 +1307,9 @@ pub struct AdapterInfo {
     ///
     /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
     /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
-    pub vendor: usize,
+    pub vendor: u32,
     /// PCI id of the adapter
-    pub device: usize,
+    pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
     /// Driver name
