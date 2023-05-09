@@ -88,10 +88,10 @@ void test_matrix_within_array_within_struct_accesses() {
     int _e58 = idx_1;
     int _e60 = idx_1;
     float unnamed_14 = _group_0_binding_3_vs.am[0][_e58][_e60];
-    t_1 = MatCx2InArray(mat4x2[2](mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0)), mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0))));
+    t_1 = MatCx2InArray(mat4x2[2](mat4x2(0.0), mat4x2(0.0)));
     int _e66 = idx_1;
     idx_1 = (_e66 + 1);
-    t_1.am = mat4x2[2](mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0)), mat4x2(vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 0.0)));
+    t_1.am = mat4x2[2](mat4x2(0.0), mat4x2(0.0));
     t_1.am[0] = mat4x2(vec2(8.0), vec2(7.0), vec2(6.0), vec2(5.0));
     t_1.am[0][0] = vec2(9.0);
     int _e93 = idx_1;

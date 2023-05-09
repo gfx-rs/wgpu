@@ -11,19 +11,6 @@ struct Foo {
     int _end_pad_2;
 };
 
-Foo ConstructFoo(float4 arg0, int arg1) {
-    Foo ret = (Foo)0;
-    ret.a = arg0;
-    ret.b = arg1;
-    return ret;
-}
-
-typedef Foo ret_Constructarray3_Foo_[3];
-ret_Constructarray3_Foo_ Constructarray3_Foo_(Foo arg0, Foo arg1, Foo arg2) {
-    Foo ret[3] = { arg0, arg1, arg2 };
-    return ret;
-}
-
 float4 builtins()
 {
     int s1_ = (true ? 1 : 0);
@@ -65,6 +52,13 @@ float3 bool_cast(float3 x)
     return float3(y);
 }
 
+Foo ConstructFoo(float4 arg0, int arg1) {
+    Foo ret = (Foo)0;
+    ret.a = arg0;
+    ret.b = arg1;
+    return ret;
+}
+
 typedef int ret_Constructarray4_int_[4];
 ret_Constructarray4_int_ Constructarray4_int_(int arg0, int arg1, int arg2, int arg3) {
     int ret[4] = { arg0, arg1, arg2, arg3 };
@@ -81,14 +75,14 @@ float constructors()
     uint2 unnamed = (0u).xx;
     float2x2 unnamed_1 = float2x2((0.0).xx, (0.0).xx);
     int unnamed_2[4] = Constructarray4_int_(0, 1, 2, 3);
-    bool unnamed_3 = bool(false);
-    int unnamed_4 = int(0);
-    uint unnamed_5 = uint(0u);
-    float unnamed_6 = float(0.0);
-    uint2 unnamed_7 = uint2(uint2(0u, 0u));
-    float2x3 unnamed_8 = float2x3(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    uint2 unnamed_9 = asuint(uint2(0u, 0u));
-    float2x3 unnamed_10 = asfloat(float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
+    bool unnamed_3 = bool((bool)0);
+    int unnamed_4 = int((int)0);
+    uint unnamed_5 = uint((uint)0);
+    float unnamed_6 = float((float)0);
+    uint2 unnamed_7 = uint2((uint2)0);
+    float2x3 unnamed_8 = float2x3((float2x3)0);
+    uint2 unnamed_9 = asuint((uint2)0);
+    float2x3 unnamed_10 = asfloat((float2x3)0);
     float _expr71 = foo.a.x;
     return _expr71;
 }
@@ -169,13 +163,13 @@ void arithmetic()
     uint2 unnamed_78 = ((2u).xx % (1u).xx);
     float2 unnamed_79 = fmod((2.0).xx, (1.0).xx);
     float2 unnamed_80 = fmod((2.0).xx, (1.0).xx);
-    float3x3 unnamed_81 = (float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) + float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    float3x3 unnamed_82 = (float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) - float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    float3x3 unnamed_83 = mul(1.0, float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    float3x3 unnamed_84 = mul(float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), 2.0);
-    float3 unnamed_85 = mul((1.0).xxxx, float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
-    float4 unnamed_86 = mul(float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), (2.0).xxx);
-    float3x3 unnamed_87 = mul(float3x4(float4(0.0, 0.0, 0.0, 0.0), float4(0.0, 0.0, 0.0, 0.0), float4(0.0, 0.0, 0.0, 0.0)), float4x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
+    float3x3 unnamed_81 = ((float3x3)0 + (float3x3)0);
+    float3x3 unnamed_82 = ((float3x3)0 - (float3x3)0);
+    float3x3 unnamed_83 = mul(1.0, (float3x3)0);
+    float3x3 unnamed_84 = mul((float3x3)0, 2.0);
+    float3 unnamed_85 = mul((1.0).xxxx, (float4x3)0);
+    float4 unnamed_86 = mul((float4x3)0, (2.0).xxx);
+    float3x3 unnamed_87 = mul((float3x4)0, (float4x3)0);
 }
 
 void bit()
@@ -278,7 +272,7 @@ void assignment()
     a_1 = (_expr32 + 1);
     int _expr35 = a_1;
     a_1 = (_expr35 - 1);
-    vec0_ = int3(0, 0, 0);
+    vec0_ = (int3)0;
     int _expr42 = vec0_.y;
     vec0_.y = (_expr42 + 1);
     int _expr47 = vec0_.y;

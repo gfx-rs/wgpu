@@ -92,8 +92,8 @@ void test_msl_packed_vec3_()
     float3 unnamed = data.v3_;
     float2 unnamed_1 = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    float3 unnamed_2 = mul(float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)), data.v3_);
-    float3 unnamed_3 = mul(data.v3_, float3x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
+    float3 unnamed_2 = mul((float3x3)0, data.v3_);
+    float3 unnamed_3 = mul(data.v3_, (float3x3)0);
     float3 unnamed_4 = (data.v3_ * 2.0);
     float3 unnamed_5 = (2.0 * data.v3_);
 }

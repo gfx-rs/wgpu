@@ -312,6 +312,7 @@ impl crate::Expression {
     pub const fn needs_pre_emit(&self) -> bool {
         match *self {
             Self::Constant(_)
+            | Self::ZeroValue(_)
             | Self::FunctionArgument(_)
             | Self::GlobalVariable(_)
             | Self::LocalVariable(_) => true,

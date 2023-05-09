@@ -58,10 +58,10 @@ float constructors() {
     int unnamed_4 = int(0);
     uint unnamed_5 = uint(0u);
     float unnamed_6 = float(0.0);
-    uvec2 unnamed_7 = uvec2(uvec2(0u, 0u));
-    mat2x3 unnamed_8 = mat2x3(mat2x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
-    uvec2 unnamed_9 = uvec2(0u, 0u);
-    mat2x3 unnamed_10 = mat2x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
+    uvec2 unnamed_7 = uvec2(uvec2(0u));
+    mat2x3 unnamed_8 = mat2x3(mat2x3(0.0));
+    uvec2 unnamed_9 = uvec2(0u);
+    mat2x3 unnamed_10 = mat2x3(0.0);
     float _e71 = foo.a.x;
     return _e71;
 }
@@ -140,13 +140,13 @@ void arithmetic() {
     uvec2 unnamed_78 = (uvec2(2u) % uvec2(1u));
     vec2 unnamed_79 = (vec2(2.0) - vec2(1.0) * trunc(vec2(2.0) / vec2(1.0)));
     vec2 unnamed_80 = (vec2(2.0) - vec2(1.0) * trunc(vec2(2.0) / vec2(1.0)));
-    mat3x3 unnamed_81 = (mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) + mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
-    mat3x3 unnamed_82 = (mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) - mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
-    mat3x3 unnamed_83 = (mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) * 1.0);
-    mat3x3 unnamed_84 = (2.0 * mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
-    vec3 unnamed_85 = (mat4x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) * vec4(1.0));
-    vec4 unnamed_86 = (vec3(2.0) * mat4x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
-    mat3x3 unnamed_87 = (mat4x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) * mat3x4(vec4(0.0, 0.0, 0.0, 0.0), vec4(0.0, 0.0, 0.0, 0.0), vec4(0.0, 0.0, 0.0, 0.0)));
+    mat3x3 unnamed_81 = (mat3x3(0.0) + mat3x3(0.0));
+    mat3x3 unnamed_82 = (mat3x3(0.0) - mat3x3(0.0));
+    mat3x3 unnamed_83 = (mat3x3(0.0) * 1.0);
+    mat3x3 unnamed_84 = (2.0 * mat3x3(0.0));
+    vec3 unnamed_85 = (mat4x3(0.0) * vec4(1.0));
+    vec4 unnamed_86 = (vec3(2.0) * mat4x3(0.0));
+    mat3x3 unnamed_87 = (mat4x3(0.0) * mat3x4(0.0));
 }
 
 void bit() {
@@ -245,7 +245,7 @@ void assignment() {
     a_1 = (_e32 + 1);
     int _e35 = a_1;
     a_1 = (_e35 - 1);
-    vec0_ = ivec3(0, 0, 0);
+    vec0_ = ivec3(0);
     int _e42 = vec0_.y;
     vec0_.y = (_e42 + 1);
     int _e47 = vec0_.y;

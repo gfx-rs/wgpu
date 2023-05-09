@@ -4,7 +4,6 @@
 
 using metal::uint;
 
-constant metal::int2 const_type_1_ = {0, 0};
 
 fragment void main_(
 ) {
@@ -15,7 +14,7 @@ fragment void main_(
     metal::float4 d = ((v) * 0.017453292519943295474);
     metal::float4 e = metal::saturate(v);
     metal::float4 g = metal::refract(v, v, 1.0);
-    int const_dot = ( + const_type_1_.x * const_type_1_.x + const_type_1_.y * const_type_1_.y);
+    int const_dot = ( + metal::int2 {}.x * metal::int2 {}.x + metal::int2 {}.y * metal::int2 {}.y);
     uint _e13 = metal::abs(0u);
     uint first_leading_bit_abs = metal::select(31 - metal::clz(_e13), uint(-1), _e13 == 0 || _e13 == -1);
     int flb_a = metal::select(31 - metal::clz(metal::select(-1, ~-1, -1 < 0)), int(-1), -1 == 0 || -1 == -1);

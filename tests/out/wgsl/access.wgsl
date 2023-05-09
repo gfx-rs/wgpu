@@ -93,10 +93,10 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e58 = idx_1;
     let _e60 = idx_1;
     _ = nested_mat_cx2_.am[0][_e58][_e60];
-    t_1 = MatCx2InArray(array<mat4x2<f32>,2>(mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0)), mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0))));
+    t_1 = MatCx2InArray(array<mat4x2<f32>,2>());
     let _e66 = idx_1;
     idx_1 = (_e66 + 1);
-    t_1.am = array<mat4x2<f32>,2>(mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0)), mat4x2<f32>(vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0), vec2<f32>(0.0, 0.0)));
+    t_1.am = array<mat4x2<f32>,2>();
     t_1.am[0] = mat4x2<f32>(vec2<f32>(8.0), vec2<f32>(7.0), vec2<f32>(6.0), vec2<f32>(5.0));
     t_1.am[0][0] = vec2<f32>(9.0);
     let _e93 = idx_1;
@@ -151,7 +151,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     c2_ = array<i32,5>(a_1, i32(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     let value = c2_[vi];
-    let _e48 = test_arr_as_arg(array<array<f32,10>,5>(array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), array<f32,10>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    let _e48 = test_arr_as_arg(array<array<f32,10>,5>());
     return vec4<f32>((_matrix * vec4<f32>(vec4<i32>(value))), 2.0);
 }
 
@@ -161,7 +161,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
     bar._matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
     bar.arr = array<vec2<u32>,2>(vec2<u32>(0u), vec2<u32>(1u));
     bar.data[1].value = 1;
-    qux = vec2<i32>(0, 0);
+    qux = vec2<i32>();
     return vec4<f32>(0.0);
 }
 

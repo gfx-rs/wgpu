@@ -59,12 +59,6 @@ struct type_26 {
 };
 constant metal::uint3 const_type_1_ = {0u, 0u, 0u};
 constant GlobalConst const_GlobalConst = {0u, {}, const_type_1_, 0};
-constant metal::float2 const_type_13_ = {0.0, 0.0};
-constant metal::float4x2 const_type_14_ = {const_type_13_, const_type_13_, const_type_13_, const_type_13_};
-constant type_15 const_type_15_ = {const_type_14_, const_type_14_};
-constant type_18 const_type_18_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-constant type_19 const_type_19_ = {const_type_18_, const_type_18_, const_type_18_, const_type_18_, const_type_18_};
-constant metal::int2 const_type_12_ = {0, 0};
 
 void test_matrix_within_struct_accesses(
     constant Baz& baz
@@ -125,10 +119,10 @@ void test_matrix_within_array_within_struct_accesses(
     int _e58 = idx_1;
     int _e60 = idx_1;
     float unnamed_14 = nested_mat_cx2_.am.inner[0][_e58][_e60];
-    t_1 = MatCx2InArray {const_type_15_};
+    t_1 = MatCx2InArray {type_15 {}};
     int _e66 = idx_1;
     idx_1 = _e66 + 1;
-    t_1.am = const_type_15_;
+    t_1.am = type_15 {};
     t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
     t_1.am.inner[0][0] = metal::float2(9.0);
     int _e93 = idx_1;
@@ -200,7 +194,7 @@ vertex foo_vertOutput foo_vert(
     c2_ = type_22 {a_1, static_cast<int>(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
     int value = c2_.inner[vi];
-    float _e48 = test_arr_as_arg(const_type_19_);
+    float _e48 = test_arr_as_arg(type_19 {});
     return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value)), 2.0) };
 }
 
@@ -217,7 +211,7 @@ fragment foo_fragOutput foo_frag(
     bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
     bar.arr = type_9 {metal::uint2(0u), metal::uint2(1u)};
     bar.data[1].value = 1;
-    qux = const_type_12_;
+    qux = metal::int2 {};
     return foo_fragOutput { metal::float4(0.0) };
 }
 

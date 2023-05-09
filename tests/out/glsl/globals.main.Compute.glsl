@@ -44,8 +44,8 @@ void test_msl_packed_vec3_() {
     vec3 unnamed = data.v3_;
     vec2 unnamed_1 = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    vec3 unnamed_2 = (data.v3_ * mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)));
-    vec3 unnamed_3 = (mat3x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0)) * data.v3_);
+    vec3 unnamed_2 = (data.v3_ * mat3x3(0.0));
+    vec3 unnamed_3 = (mat3x3(0.0) * data.v3_);
     vec3 unnamed_4 = (data.v3_ * 2.0);
     vec3 unnamed_5 = (2.0 * data.v3_);
 }

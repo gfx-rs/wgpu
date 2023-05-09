@@ -32,8 +32,6 @@ struct type_14 {
 struct type_15 {
     type_14 inner[2];
 };
-constant metal::float3 const_type_4_ = {0.0, 0.0, 0.0};
-constant metal::float3x3 const_type_17_ = {const_type_4_, const_type_4_, const_type_4_};
 
 void test_msl_packed_vec3_as_arg(
     metal::float3 arg
@@ -55,8 +53,8 @@ void test_msl_packed_vec3_(
     metal::float3 unnamed = data.v3_;
     metal::float2 unnamed_1 = metal::float3(data.v3_).zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    metal::float3 unnamed_2 = metal::float3(data.v3_) * const_type_17_;
-    metal::float3 unnamed_3 = const_type_17_ * metal::float3(data.v3_);
+    metal::float3 unnamed_2 = metal::float3(data.v3_) * metal::float3x3 {};
+    metal::float3 unnamed_3 = metal::float3x3 {} * metal::float3(data.v3_);
     metal::float3 unnamed_4 = data.v3_ * 2.0;
     metal::float3 unnamed_5 = 2.0 * data.v3_;
 }

@@ -83,16 +83,16 @@ void test_textureStore_3d(ivec3 coords_14, vec4 value_4) {
 
 void main() {
     vec4 _e2 = test_textureLoad_1d(0, 0);
-    vec4 _e5 = test_textureLoad_2d(ivec2(0, 0), 0);
-    vec4 _e9 = test_textureLoad_2d_array_u(ivec2(0, 0), 0u, 0);
-    vec4 _e13 = test_textureLoad_2d_array_s(ivec2(0, 0), 0, 0);
-    vec4 _e16 = test_textureLoad_3d(ivec3(0, 0, 0), 0);
-    vec4 _e19 = test_textureLoad_multisampled_2d(ivec2(0, 0), 0);
-    test_textureStore_1d(0, vec4(0.0, 0.0, 0.0, 0.0));
-    test_textureStore_2d(ivec2(0, 0), vec4(0.0, 0.0, 0.0, 0.0));
-    test_textureStore_2d_array_u(ivec2(0, 0), 0u, vec4(0.0, 0.0, 0.0, 0.0));
-    test_textureStore_2d_array_s(ivec2(0, 0), 0, vec4(0.0, 0.0, 0.0, 0.0));
-    test_textureStore_3d(ivec3(0, 0, 0), vec4(0.0, 0.0, 0.0, 0.0));
+    vec4 _e5 = test_textureLoad_2d(ivec2(0), 0);
+    vec4 _e9 = test_textureLoad_2d_array_u(ivec2(0), 0u, 0);
+    vec4 _e13 = test_textureLoad_2d_array_s(ivec2(0), 0, 0);
+    vec4 _e16 = test_textureLoad_3d(ivec3(0), 0);
+    vec4 _e19 = test_textureLoad_multisampled_2d(ivec2(0), 0);
+    test_textureStore_1d(0, vec4(0.0));
+    test_textureStore_2d(ivec2(0), vec4(0.0));
+    test_textureStore_2d_array_u(ivec2(0), 0u, vec4(0.0));
+    test_textureStore_2d_array_s(ivec2(0), 0, vec4(0.0));
+    test_textureStore_3d(ivec3(0), vec4(0.0));
     _fs2p_location0 = vec4(0.0, 0.0, 0.0, 0.0);
     return;
 }

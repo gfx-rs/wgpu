@@ -199,12 +199,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     _ => return Err(Error::TypeNotInferrable(ty_span)),
                 };
 
-                return match ctx.create_zero_value_constant(ty) {
-                    Some(constant) => {
-                        Ok(ctx.interrupt_emitter(crate::Expression::Constant(constant), span))
-                    }
-                    None => Err(Error::TypeNotConstructible(ty_span)),
-                };
+                return Ok(ctx.interrupt_emitter(crate::Expression::ZeroValue(ty), span));
             }
 
             // Scalar constructor & conversion (scalar -> scalar)

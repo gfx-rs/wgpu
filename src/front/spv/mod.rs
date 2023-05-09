@@ -1324,14 +1324,17 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::NoLine => inst.expect(1)?,
                 Op::Undef => {
                     inst.expect(3)?;
-                    let (type_id, id, handle) =
-                        self.parse_null_constant(inst, ctx.type_arena, ctx.const_arena)?;
+                    let type_id = self.next()?;
+                    let id = self.next()?;
+                    let type_lookup = self.lookup_type.lookup(type_id)?;
+                    let ty = type_lookup.handle;
+
                     self.lookup_expression.insert(
                         id,
                         LookupExpression {
                             handle: ctx
                                 .expressions
-                                .append(crate::Expression::Constant(handle), span),
+                                .append(crate::Expression::ZeroValue(ty), span),
                             type_id,
                             block_id,
                         },

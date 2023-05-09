@@ -12,7 +12,7 @@ void main() {
     vec4 d = radians(v);
     vec4 e = clamp(v, vec4(0.0), vec4(1.0));
     vec4 g = refract(v, v, 1.0);
-    int const_dot = ( + ivec2(0, 0).x * ivec2(0, 0).x + ivec2(0, 0).y * ivec2(0, 0).y);
+    int const_dot = ( + ivec2(0).x * ivec2(0).x + ivec2(0).y * ivec2(0).y);
     uint first_leading_bit_abs = uint(findMSB(uint(abs(int(0u)))));
     int flb_a = findMSB(-1);
     ivec2 flb_b = findMSB(ivec2(-1));

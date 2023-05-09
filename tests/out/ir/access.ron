@@ -263,7 +263,7 @@
             name: None,
             inner: Array(
                 base: 24,
-                size: Constant(26),
+                size: Constant(22),
                 stride: 40,
             ),
         ),
@@ -290,7 +290,7 @@
             name: None,
             inner: Array(
                 base: 3,
-                size: Constant(26),
+                size: Constant(22),
                 stride: 4,
             ),
         ),
@@ -503,49 +503,6 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
-                value: Float(0.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 18,
-                components: [
-                    20,
-                    20,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 19,
-                components: [
-                    21,
-                    21,
-                    21,
-                    21,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 20,
-                components: [
-                    22,
-                    22,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
                 value: Float(8.0),
             ),
         ),
@@ -586,6 +543,14 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
+                value: Float(0.0),
+            ),
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Scalar(
+                width: 4,
                 value: Uint(3),
             ),
         ),
@@ -619,50 +584,6 @@
             inner: Scalar(
                 width: 4,
                 value: Sint(42),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 24,
-                components: [
-                    20,
-                    20,
-                    20,
-                    20,
-                    20,
-                    20,
-                    20,
-                    20,
-                    20,
-                    20,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 25,
-                components: [
-                    34,
-                    34,
-                    34,
-                    34,
-                    34,
-                ],
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Composite(
-                ty: 17,
-                components: [
-                    3,
-                    3,
-                ],
             ),
         ),
         (
@@ -1430,7 +1351,7 @@
                 Load(
                     pointer: 62,
                 ),
-                Constant(23),
+                ZeroValue(20),
                 Compose(
                     ty: 21,
                     components: [
@@ -1451,7 +1372,7 @@
                     base: 66,
                     index: 0,
                 ),
-                Constant(23),
+                ZeroValue(20),
                 AccessIndex(
                     base: 66,
                     index: 0,
@@ -1461,12 +1382,12 @@
                     base: 72,
                     index: 0,
                 ),
-                Constant(24),
+                Constant(20),
                 Splat(
                     size: Bi,
                     value: 75,
                 ),
-                Constant(25),
+                Constant(21),
                 Splat(
                     size: Bi,
                     value: 77,
@@ -1927,12 +1848,12 @@
             local_variables: [],
             expressions: [
                 FunctionArgument(0),
-                Constant(27),
+                Constant(23),
                 AccessIndex(
                     base: 1,
                     index: 4,
                 ),
-                Constant(28),
+                Constant(24),
                 AccessIndex(
                     base: 3,
                     index: 9,
@@ -1968,7 +1889,7 @@
             local_variables: [],
             expressions: [
                 FunctionArgument(0),
-                Constant(37),
+                Constant(31),
             ],
             named_expressions: {
                 1: "p",
@@ -2071,7 +1992,7 @@
                 ],
                 expressions: [
                     FunctionArgument(0),
-                    Constant(20),
+                    Constant(25),
                     LocalVariable(1),
                     Load(
                         pointer: 3,
@@ -2093,7 +2014,7 @@
                     Load(
                         pointer: 10,
                     ),
-                    Constant(29),
+                    Constant(26),
                     GlobalVariable(2),
                     AccessIndex(
                         base: 13,
@@ -2121,7 +2042,7 @@
                         index: 5,
                     ),
                     ArrayLength(21),
-                    Constant(30),
+                    Constant(27),
                     Binary(
                         op: Subtract,
                         left: 22,
@@ -2162,9 +2083,9 @@
                         kind: Sint,
                         convert: Some(4),
                     ),
-                    Constant(31),
-                    Constant(27),
-                    Constant(26),
+                    Constant(28),
+                    Constant(23),
+                    Constant(22),
                     Compose(
                         ty: 28,
                         components: [
@@ -2176,7 +2097,7 @@
                         ],
                     ),
                     LocalVariable(2),
-                    Constant(32),
+                    Constant(29),
                     Binary(
                         op: Add,
                         left: 1,
@@ -2186,7 +2107,7 @@
                         base: 41,
                         index: 43,
                     ),
-                    Constant(33),
+                    Constant(30),
                     Access(
                         base: 41,
                         index: 1,
@@ -2194,7 +2115,7 @@
                     Load(
                         pointer: 46,
                     ),
-                    Constant(35),
+                    ZeroValue(25),
                     CallResult(4),
                     Splat(
                         size: Quad,
@@ -2381,7 +2302,7 @@
                         base: 7,
                         index: 0,
                     ),
-                    Constant(20),
+                    Constant(25),
                     Splat(
                         size: Tri,
                         value: 9,
@@ -2420,7 +2341,7 @@
                         size: Bi,
                         value: 20,
                     ),
-                    Constant(32),
+                    Constant(29),
                     Splat(
                         size: Bi,
                         value: 22,
@@ -2448,8 +2369,8 @@
                     ),
                     Constant(7),
                     GlobalVariable(4),
-                    Constant(36),
-                    Constant(20),
+                    ZeroValue(17),
+                    Constant(25),
                     Splat(
                         size: Quad,
                         value: 33,
@@ -2557,7 +2478,7 @@
                         size: Quad,
                         value: 1,
                     ),
-                    Constant(25),
+                    Constant(21),
                     Splat(
                         size: Quad,
                         value: 3,

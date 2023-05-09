@@ -18,18 +18,6 @@ constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
 constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
 constant metal::float4 v_f32_half = {0.5, 0.5, 0.5, 0.5};
 constant metal::int4 v_i32_one = {1, 1, 1, 1};
-constant metal::uint2 const_type_12_ = {0u, 0u};
-constant metal::float2 const_type_4_ = {0.0, 0.0};
-constant metal::float2x2 const_type_8_ = {const_type_4_, const_type_4_};
-constant metal::float4 const_type = {0.0, 0.0, 0.0, 0.0};
-constant Foo const_Foo = {const_type, 0};
-constant type_13 const_type_13_ = {const_Foo, const_Foo, const_Foo};
-constant metal::float3 const_type_5_ = {0.0, 0.0, 0.0};
-constant metal::float2x3 const_type_15_ = {const_type_5_, const_type_5_};
-constant metal::float3x3 const_type_16_ = {const_type_5_, const_type_5_, const_type_5_};
-constant metal::float4x3 const_type_17_ = {const_type_5_, const_type_5_, const_type_5_, const_type_5_};
-constant metal::float3x4 const_type_18_ = {const_type, const_type, const_type};
-constant metal::int3 const_type_19_ = {0, 0, 0};
 
 metal::float4 builtins(
 ) {
@@ -81,14 +69,14 @@ float constructors(
     metal::uint2 unnamed = metal::uint2(0u);
     metal::float2x2 unnamed_1 = metal::float2x2(metal::float2(0.0), metal::float2(0.0));
     type_14 unnamed_2 = type_14 {0, 1, 2, 3};
-    bool unnamed_3 = static_cast<bool>(false);
-    int unnamed_4 = static_cast<int>(0);
-    uint unnamed_5 = static_cast<uint>(0u);
-    float unnamed_6 = static_cast<float>(0.0);
-    metal::uint2 unnamed_7 = static_cast<metal::uint2>(const_type_12_);
-    metal::float2x3 unnamed_8 = metal::float2x3(const_type_15_);
-    metal::uint2 unnamed_9 = as_type<metal::uint2>(const_type_12_);
-    metal::float2x3 unnamed_10 = metal::float2x3(const_type_15_);
+    bool unnamed_3 = static_cast<bool>(bool {});
+    int unnamed_4 = static_cast<int>(int {});
+    uint unnamed_5 = static_cast<uint>(uint {});
+    float unnamed_6 = static_cast<float>(float {});
+    metal::uint2 unnamed_7 = static_cast<metal::uint2>(metal::uint2 {});
+    metal::float2x3 unnamed_8 = metal::float2x3(metal::float2x3 {});
+    metal::uint2 unnamed_9 = as_type<metal::uint2>(metal::uint2 {});
+    metal::float2x3 unnamed_10 = metal::float2x3(metal::float2x3 {});
     float _e71 = foo.a.x;
     return _e71;
 }
@@ -169,13 +157,13 @@ void arithmetic(
     metal::uint2 unnamed_78 = metal::uint2(2u) % metal::uint2(1u);
     metal::float2 unnamed_79 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
     metal::float2 unnamed_80 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
-    metal::float3x3 unnamed_81 = const_type_16_ + const_type_16_;
-    metal::float3x3 unnamed_82 = const_type_16_ - const_type_16_;
-    metal::float3x3 unnamed_83 = const_type_16_ * 1.0;
-    metal::float3x3 unnamed_84 = 2.0 * const_type_16_;
-    metal::float3 unnamed_85 = const_type_17_ * metal::float4(1.0);
-    metal::float4 unnamed_86 = metal::float3(2.0) * const_type_17_;
-    metal::float3x3 unnamed_87 = const_type_17_ * const_type_18_;
+    metal::float3x3 unnamed_81 = metal::float3x3 {} + metal::float3x3 {};
+    metal::float3x3 unnamed_82 = metal::float3x3 {} - metal::float3x3 {};
+    metal::float3x3 unnamed_83 = metal::float3x3 {} * 1.0;
+    metal::float3x3 unnamed_84 = 2.0 * metal::float3x3 {};
+    metal::float3 unnamed_85 = metal::float4x3 {} * metal::float4(1.0);
+    metal::float4 unnamed_86 = metal::float3(2.0) * metal::float4x3 {};
+    metal::float3x3 unnamed_87 = metal::float4x3 {} * metal::float3x4 {};
 }
 
 void bit(
@@ -277,7 +265,7 @@ void assignment(
     a_1 = _e32 + 1;
     int _e35 = a_1;
     a_1 = _e35 - 1;
-    vec0_ = const_type_19_;
+    vec0_ = metal::int3 {};
     int _e42 = vec0_.y;
     vec0_.y = _e42 + 1;
     int _e47 = vec0_.y;

@@ -10,9 +10,6 @@ struct DefaultConstructible {
     }
 };
 
-constant metal::int2 const_type_4_ = {0, 0};
-constant metal::int3 const_type_8_ = {0, 0, 0};
-constant metal::float4 const_type_2_ = {0.0, 0.0, 0.0, 0.0};
 
 metal::float4 test_textureLoad_1d(
     int coords,
@@ -180,15 +177,15 @@ fragment fragment_shaderOutput fragment_shader(
 , metal::texture3d<float, metal::access::write> image_storage_3d [[user(fake0)]]
 ) {
     metal::float4 _e2 = test_textureLoad_1d(0, 0, image_1d);
-    metal::float4 _e5 = test_textureLoad_2d(const_type_4_, 0, image_2d);
-    metal::float4 _e9 = test_textureLoad_2d_array_u(const_type_4_, 0u, 0, image_2d_array);
-    metal::float4 _e13 = test_textureLoad_2d_array_s(const_type_4_, 0, 0, image_2d_array);
-    metal::float4 _e16 = test_textureLoad_3d(const_type_8_, 0, image_3d);
-    metal::float4 _e19 = test_textureLoad_multisampled_2d(const_type_4_, 0, image_multisampled_2d);
-    test_textureStore_1d(0, const_type_2_, image_storage_1d);
-    test_textureStore_2d(const_type_4_, const_type_2_, image_storage_2d);
-    test_textureStore_2d_array_u(const_type_4_, 0u, const_type_2_, image_storage_2d_array);
-    test_textureStore_2d_array_s(const_type_4_, 0, const_type_2_, image_storage_2d_array);
-    test_textureStore_3d(const_type_8_, const_type_2_, image_storage_3d);
+    metal::float4 _e5 = test_textureLoad_2d(metal::int2 {}, 0, image_2d);
+    metal::float4 _e9 = test_textureLoad_2d_array_u(metal::int2 {}, 0u, 0, image_2d_array);
+    metal::float4 _e13 = test_textureLoad_2d_array_s(metal::int2 {}, 0, 0, image_2d_array);
+    metal::float4 _e16 = test_textureLoad_3d(metal::int3 {}, 0, image_3d);
+    metal::float4 _e19 = test_textureLoad_multisampled_2d(metal::int2 {}, 0, image_multisampled_2d);
+    test_textureStore_1d(0, metal::float4 {}, image_storage_1d);
+    test_textureStore_2d(metal::int2 {}, metal::float4 {}, image_storage_2d);
+    test_textureStore_2d_array_u(metal::int2 {}, 0u, metal::float4 {}, image_storage_2d_array);
+    test_textureStore_2d_array_s(metal::int2 {}, 0, metal::float4 {}, image_storage_2d_array);
+    test_textureStore_3d(metal::int3 {}, metal::float4 {}, image_storage_3d);
     return fragment_shaderOutput { metal::float4(0.0, 0.0, 0.0, 0.0) };
 }
