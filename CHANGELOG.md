@@ -1,5 +1,76 @@
 # Change Log
 
+## v0.12 (2023-04-19)
+
+#### GENERAL
+
+- Allow `array_index` to be unsigned. ([#2298](https://github.com/gfx-rs/naga/pull/2298)) **@daxpedda**
+- Add ray query support. ([#2256](https://github.com/gfx-rs/naga/pull/2256)) **@kvark**
+- Add partial derivative builtins. ([#2277](https://github.com/gfx-rs/naga/pull/2277)) **@evahop**
+- Skip `gl_PerVertex` unused builtins in the SPIR-V frontend. ([#2272](https://github.com/gfx-rs/naga/pull/2272)) **@teoxoy**
+- Differentiate between `i32` and `u32` in switch statement cases. ([#2269](https://github.com/gfx-rs/naga/pull/2269)) **@evahop**
+- Fix zero initialization of workgroup memory. ([#2259](https://github.com/gfx-rs/naga/pull/2259)) **@teoxoy**
+- Add `countTrailingZeros`. ([#2243](https://github.com/gfx-rs/naga/pull/2243)) **@gents83**
+- Fix texture built-ins where u32 was expected. ([#2245](https://github.com/gfx-rs/naga/pull/2245)) **@evahop**
+- Add `countLeadingZeros`. ([#2226](https://github.com/gfx-rs/naga/pull/2226)) **@evahop**
+- [glsl/hlsl-out] Write sizes of arrays behind pointers in function arguments. ([#2250](https://github.com/gfx-rs/naga/pull/2250)) **@pluiedev**
+
+#### VALIDATOR
+
+- Validate vertex stage returns the position built-in. ([#2264](https://github.com/gfx-rs/naga/pull/2264)) **@teoxoy**
+- Enforce discard is only used in the fragment stage. ([#2262](https://github.com/gfx-rs/naga/pull/2262)) **@Uriopass**
+- Add `Capabilities::MULTISAMPLED_SHADING`. ([#2255](https://github.com/gfx-rs/naga/pull/2255)) **@teoxoy**
+- Add `Capabilities::EARLY_DEPTH_TEST`. ([#2255](https://github.com/gfx-rs/naga/pull/2255)) **@teoxoy**
+- Add `Capabilities::MULTIVIEW`. ([#2255](https://github.com/gfx-rs/naga/pull/2255)) **@teoxoy**
+- Improve forward declaration validation. ([#2232](https://github.com/gfx-rs/naga/pull/2232)) **@JCapucho**
+
+#### WGSL-IN
+
+- Use `alias` instead of `type` for type aliases. ([#2299](https://github.com/gfx-rs/naga/pull/2299)) **@FL33TW00D**
+- Add predeclared vector and matrix type aliases. ([#2251](https://github.com/gfx-rs/naga/pull/2251)) **@evahop**
+- Improve invalid assignment diagnostic. ([#2233](https://github.com/gfx-rs/naga/pull/2233)) **@SparkyPotato**
+- Expect semicolons wherever required. ([#2233](https://github.com/gfx-rs/naga/pull/2233)) **@SparkyPotato**
+- Fix panic on invalid zero array size. ([#2233](https://github.com/gfx-rs/naga/pull/2233)) **@SparkyPotato**
+- Check for leading `{` while parsing a block. ([#2233](https://github.com/gfx-rs/naga/pull/2233)) **@SparkyPotato**
+
+#### SPV-IN
+
+- Don't apply interpolation to fragment shaders outputs. ([#2239](https://github.com/gfx-rs/naga/pull/2239)) **@JCapucho**
+
+#### GLSL-IN
+
+- Add switch implicit type conversion. ([#2273](https://github.com/gfx-rs/naga/pull/2273)) **@evahop**
+- Document some fields of `naga::front::glsl::context::Context`. ([#2244](https://github.com/gfx-rs/naga/pull/2244)) **@jimblandy**
+- Perform output parameters implicit casts. ([#2063](https://github.com/gfx-rs/naga/pull/2063)) **@JCapucho**
+- Add `not` vector relational builtin. ([#2227](https://github.com/gfx-rs/naga/pull/2227)) **@JCapucho**
+- Add double overloads for relational vector builtins. ([#2227](https://github.com/gfx-rs/naga/pull/2227)) **@JCapucho**
+- Add bool overloads for relational vector builtins. ([#2227](https://github.com/gfx-rs/naga/pull/2227)) **@JCapucho**
+
+#### SPV-OUT
+
+- Fix invalid spirv being generated from integer dot products. ([#2291](https://github.com/gfx-rs/naga/pull/2291)) **@PyryM**
+- Fix adding illegal decorators on fragment outputs. ([#2286](https://github.com/gfx-rs/naga/pull/2286)) **@Wumpf**
+- Fix `countLeadingZeros` impl. ([#2258](https://github.com/gfx-rs/naga/pull/2258)) **@teoxoy**
+- Cache constant composites. ([#2257](https://github.com/gfx-rs/naga/pull/2257)) **@evahop**
+- Support SPIR-V version 1.4. ([#2230](https://github.com/gfx-rs/naga/pull/2230)) **@kvark**
+
+#### MSL-OUT
+
+- Replace `per_stage_map` with `per_entry_point_map` ([#2237](https://github.com/gfx-rs/naga/pull/2237)) **@armansito**
+- Update `firstLeadingBit` for signed integers ([#2235](https://github.com/gfx-rs/naga/pull/2235)) **@evahop**
+
+#### HLSL-OUT
+
+- Use `Interlocked<op>` intrinsic for atomic integers (#2294) ([#2294](https://github.com/gfx-rs/naga/pull/2294)) **@ErichDonGubler**
+- Document storage access generation. ([#2295](https://github.com/gfx-rs/naga/pull/2295)) **@jimblandy**
+- Emit constructor functions for arrays. ([#2281](https://github.com/gfx-rs/naga/pull/2281)) **@ErichDonGubler**
+- Clear `named_expressions` inserted by duplicated blocks. ([#2116](https://github.com/gfx-rs/naga/pull/2116)) **@teoxoy**
+
+#### GLSL-OUT
+
+- Skip `invariant` for `gl_FragCoord` on WebGL2. ([#2254](https://github.com/gfx-rs/naga/pull/2254)) **@grovesNL**
+- Inject default `gl_PointSize = 1.0` in vertex shaders if `FORCE_POINT_SIZE` option was set. ([#2223](https://github.com/gfx-rs/naga/pull/2223)) **@REASY**
+
 ## v0.11 (2023-01-25)
 
 - Move to the Rust 2021 edition ([#2085](https://github.com/gfx-rs/naga/pull/2085)) **@ErichDonGubler**
