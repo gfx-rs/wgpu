@@ -71,6 +71,7 @@ impl<'a> ConstantSolver<'a> {
         let span = self.expressions.get_span(expr);
         match self.expressions[expr] {
             Expression::Constant(constant) => Ok(constant),
+            Expression::ZeroValue(ty) => self.register_zero_constant(ty, span),
             Expression::AccessIndex { base, index } => self.access(base, index as usize),
             Expression::Access { base, index } => {
                 let index = self.solve(index)?;
@@ -542,6 +543,106 @@ impl<'a> ConstantSolver<'a> {
                 ConstantInner::Composite { ty, components }
             }
             _ => return Err(ConstantSolvingError::InvalidBinaryOpArgs),
+        };
+
+        Ok(self.register_constant(inner, span))
+    }
+
+    fn register_zero_constant(
+        &mut self,
+        ty: Handle<Type>,
+        span: crate::Span,
+    ) -> Result<Handle<Constant>, ConstantSolvingError> {
+        let inner = match self.types[ty].inner {
+            TypeInner::Scalar { kind, width } => {
+                let value = match kind {
+                    ScalarKind::Sint => ScalarValue::Sint(0),
+                    ScalarKind::Uint => ScalarValue::Uint(0),
+                    ScalarKind::Float => ScalarValue::Float(1.0),
+                    ScalarKind::Bool => ScalarValue::Bool(false),
+                };
+                ConstantInner::Scalar { width, value }
+            }
+            TypeInner::Vector { size, kind, width } => {
+                let element_type = self.types.insert(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Scalar { kind, width },
+                    },
+                    span,
+                );
+                let element = self.register_zero_constant(element_type, span)?;
+                let components = std::iter::repeat(element)
+                    .take(size as u8 as usize)
+                    .collect();
+                ConstantInner::Composite { ty, components }
+            }
+            TypeInner::Matrix {
+                columns,
+                rows,
+                width,
+            } => {
+                let column_type = self.types.insert(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Vector {
+                            size: rows,
+                            kind: ScalarKind::Float,
+                            width,
+                        },
+                    },
+                    span,
+                );
+                let column = self.register_zero_constant(column_type, span)?;
+                let components = std::iter::repeat(column)
+                    .take(columns as u8 as usize)
+                    .collect();
+                ConstantInner::Composite { ty, components }
+            }
+            TypeInner::Array { base, size, .. } => {
+                let length = match size {
+                    crate::ArraySize::Constant(handle) => match self.constants[handle].inner {
+                        ConstantInner::Scalar {
+                            value: ScalarValue::Uint(length),
+                            ..
+                        } => length as usize,
+                        ConstantInner::Scalar {
+                            value: ScalarValue::Sint(length),
+                            ..
+                        } => {
+                            if length < 0 {
+                                return Err(ConstantSolvingError::InvalidArrayLengthArg);
+                            }
+                            length as usize
+                        }
+                        _ => return Err(ConstantSolvingError::InvalidArrayLengthArg),
+                    },
+                    crate::ArraySize::Dynamic => {
+                        return Err(ConstantSolvingError::ArrayLengthDynamic)
+                    }
+                };
+                let element = self.register_zero_constant(base, span)?;
+                let components = std::iter::repeat(element)
+                    .take(length as u8 as usize)
+                    .collect();
+                ConstantInner::Composite { ty, components }
+            }
+            TypeInner::Struct { ref members, .. } => {
+                // Make a copy of the member types, for the borrow checker.
+                let types: Vec<Handle<Type>> = members.iter().map(|member| member.ty).collect();
+                let mut components = vec![];
+                for member_ty in types {
+                    let value = self.register_zero_constant(member_ty, span)?;
+                    components.push(value);
+                }
+                ConstantInner::Composite { ty, components }
+            }
+            ref inner => {
+                return Err(ConstantSolvingError::NotImplemented(format!(
+                    "zero-value construction for types: {:?}",
+                    inner
+                )));
+            }
         };
 
         Ok(self.register_constant(inner, span))

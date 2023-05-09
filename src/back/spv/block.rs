@@ -358,6 +358,7 @@ impl<'w> BlockContext<'w> {
                 self.writer.global_variables[handle.index()].access_id
             }
             crate::Expression::Constant(handle) => self.writer.constant_ids[handle.index()],
+            crate::Expression::ZeroValue(_) => self.writer.write_constant_null(result_type_id),
             crate::Expression::Splat { size, value } => {
                 let value_id = self.cached[value];
                 let components = [value_id; 4];

@@ -1333,6 +1333,17 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{coco}")?;
             }
+            crate::Expression::ZeroValue(ty) => {
+                let ty_name = TypeContext {
+                    handle: ty,
+                    module: context.module,
+                    names: &self.names,
+                    access: crate::StorageAccess::empty(),
+                    binding: None,
+                    first_time: false,
+                };
+                write!(self.out, "{ty_name} {{}}")?;
+            }
             crate::Expression::Splat { size, value } => {
                 let scalar_kind = match *context.resolve_type(value) {
                     crate::TypeInner::Scalar { kind, .. } => kind,

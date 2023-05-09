@@ -1104,6 +1104,10 @@ impl<W: Write> Writer<W> {
         // subscripting.
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
+            Expression::ZeroValue(ty) => {
+                self.write_type(module, ty)?;
+                write!(self.out, "()")?;
+            }
             Expression::Compose { ty, ref components } => {
                 self.write_type(module, ty)?;
                 write!(self.out, "(")?;

@@ -2057,6 +2057,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
+            Expression::ZeroValue(ty) => self.write_default_init(module, ty)?,
             Expression::Compose { ty, ref components } => {
                 match module.types[ty].inner {
                     TypeInner::Struct { .. } | TypeInner::Array { .. } => {

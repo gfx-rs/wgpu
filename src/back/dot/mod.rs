@@ -397,6 +397,8 @@ fn write_function_expressions(
     for (handle, expression) in fun.expressions.iter() {
         use crate::Expression as E;
         let (label, color_id) = match *expression {
+            E::Constant(_) => ("Constant".into(), 2),
+            E::ZeroValue(_) => ("ZeroValue".into(), 2),
             E::Access { base, index } => {
                 edges.insert("base", base);
                 edges.insert("index", index);
@@ -406,7 +408,6 @@ fn write_function_expressions(
                 edges.insert("base", base);
                 (format!("AccessIndex[{index}]").into(), 1)
             }
-            E::Constant(_) => ("Constant".into(), 2),
             E::Splat { size, value } => {
                 edges.insert("value", value);
                 (format!("Splat{size:?}").into(), 3)

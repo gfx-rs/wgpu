@@ -2267,6 +2267,9 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // Constants are delegated to `write_constant`
             Expression::Constant(constant) => self.write_constant(constant)?,
+            Expression::ZeroValue(ty) => {
+                self.write_zero_init_value(ty)?;
+            }
             // `Splat` needs to actually write down a vector, it's not always inferred in GLSL.
             Expression::Splat { size: _, value } => {
                 let resolved = ctx.info[expr].ty.inner_with(&self.module.types);

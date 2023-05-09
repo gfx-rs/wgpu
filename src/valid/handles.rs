@@ -256,6 +256,9 @@ impl super::Validator {
             crate::Expression::Constant(constant) => {
                 validate_constant(constant)?;
             }
+            crate::Expression::ZeroValue(ty) => {
+                validate_type(ty)?;
+            }
             crate::Expression::Splat { value, .. } => {
                 handle.check_dep(value)?;
             }

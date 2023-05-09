@@ -430,6 +430,7 @@ impl<'a> ResolveContext<'a> {
                 }
                 crate::ConstantInner::Composite { ty, components: _ } => TypeResolution::Handle(ty),
             },
+            crate::Expression::ZeroValue(ty) => TypeResolution::Handle(ty),
             crate::Expression::Splat { size, value } => match *past(value)?.inner_with(types) {
                 Ti::Scalar { kind, width } => {
                     TypeResolution::Value(Ti::Vector { size, kind, width })

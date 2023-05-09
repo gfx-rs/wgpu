@@ -75,7 +75,7 @@ of `Statement`s and other `Expression`s.
 
 Naga's rules for when `Expression`s are evaluated are as follows:
 
--   [`Constant`](Expression::Constant) expressions are considered to be
+-   [`Constant`] and [`ZeroValue`] expressions are considered to be
     implicitly evaluated before execution begins.
 
 -   [`FunctionArgument`] and [`LocalVariable`] expressions are considered
@@ -174,6 +174,7 @@ tree.
 [`RayQueryProceedResult`]: Expression::RayQueryProceedResult
 [`CallResult`]: Expression::CallResult
 [`Constant`]: Expression::Constant
+[`ZeroValue`]: Expression::ZeroValue
 [`Derivative`]: Expression::Derivative
 [`FunctionArgument`]: Expression::FunctionArgument
 [`GlobalVariable`]: Expression::GlobalVariable
@@ -1189,6 +1190,11 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Expression {
+    /// Constant value.
+    Constant(Handle<Constant>),
+    /// Zero value of a type.
+    ZeroValue(Handle<Type>),
+
     /// Array access with a computed index.
     ///
     /// ## Typing rules
@@ -1247,8 +1253,6 @@ pub enum Expression {
         base: Handle<Expression>,
         index: u32,
     },
-    /// Constant value.
-    Constant(Handle<Constant>),
     /// Splat scalar into a vector.
     Splat {
         size: VectorSize,
