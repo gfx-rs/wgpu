@@ -253,6 +253,7 @@ impl super::Validator {
             crate::Expression::AccessIndex { base, .. } => {
                 handle.check_dep(base)?;
             }
+            crate::Expression::Literal(_value) => {}
             crate::Expression::Constant(constant) => {
                 validate_constant(constant)?;
             }

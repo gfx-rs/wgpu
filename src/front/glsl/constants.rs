@@ -72,6 +72,7 @@ impl<'a> ConstantSolver<'a> {
         match self.expressions[expr] {
             Expression::Constant(constant) => Ok(constant),
             Expression::ZeroValue(ty) => self.register_zero_constant(ty, span),
+            Expression::Literal(literal) => Ok(self.register_literal(literal, span)),
             Expression::AccessIndex { base, index } => self.access(base, index as usize),
             Expression::Access { base, index } => {
                 let index = self.solve(index)?;
@@ -646,6 +647,18 @@ impl<'a> ConstantSolver<'a> {
         };
 
         Ok(self.register_constant(inner, span))
+    }
+
+    fn register_literal(&mut self, literal: crate::Literal, span: crate::Span) -> Handle<Constant> {
+        let (width, value) = match literal {
+            crate::Literal::F64(n) => (8, ScalarValue::Float(n)),
+            crate::Literal::F32(n) => (4, ScalarValue::Float(n as f64)),
+            crate::Literal::U32(n) => (4, ScalarValue::Uint(n as u64)),
+            crate::Literal::I32(n) => (4, ScalarValue::Sint(n as i64)),
+            crate::Literal::Bool(b) => (1, ScalarValue::Bool(b)),
+        };
+
+        self.register_constant(ConstantInner::Scalar { width, value }, span)
     }
 
     fn register_constant(&mut self, inner: ConstantInner, span: crate::Span) -> Handle<Constant> {

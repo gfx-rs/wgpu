@@ -117,12 +117,9 @@ impl<'w> BlockContext<'w> {
     ) -> spirv::Word {
         let width = 4;
         let query_id = self.cached[query];
-        let intersection_id = self.writer.get_constant_scalar(
-            crate::ScalarValue::Uint(
-                spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
-            ),
-            width,
-        );
+        let intersection_id = self.writer.get_constant_scalar(crate::Literal::U32(
+            spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as _,
+        ));
 
         let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,

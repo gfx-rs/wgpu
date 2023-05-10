@@ -75,8 +75,8 @@ of `Statement`s and other `Expression`s.
 
 Naga's rules for when `Expression`s are evaluated are as follows:
 
--   [`Constant`] and [`ZeroValue`] expressions are considered to be
-    implicitly evaluated before execution begins.
+-   [`Literal`], [`Constant`], and [`ZeroValue`] expressions are
+    considered to be implicitly evaluated before execution begins.
 
 -   [`FunctionArgument`] and [`LocalVariable`] expressions are considered
     implicitly evaluated upon entry to the function to which they belong.
@@ -175,6 +175,7 @@ tree.
 [`CallResult`]: Expression::CallResult
 [`Constant`]: Expression::Constant
 [`ZeroValue`]: Expression::ZeroValue
+[`Literal`]: Expression::Literal
 [`Derivative`]: Expression::Derivative
 [`FunctionArgument`]: Expression::FunctionArgument
 [`GlobalVariable`]: Expression::GlobalVariable
@@ -792,6 +793,18 @@ pub struct Constant {
     pub inner: ConstantInner,
 }
 
+#[derive(Debug, Clone, Copy, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum Literal {
+    F64(f64),
+    F32(f32),
+    U32(u32),
+    I32(i32),
+    Bool(bool),
+}
+
 /// A literal scalar value, used in constants.
 #[derive(Debug, Clone, Copy, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1190,6 +1203,8 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum Expression {
+    /// Literal.
+    Literal(Literal),
     /// Constant value.
     Constant(Handle<Constant>),
     /// Zero value of a type.

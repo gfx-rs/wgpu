@@ -901,9 +901,7 @@ impl<'w> BlockContext<'w> {
                     depth_id,
                 );
 
-                let zero_id = self
-                    .writer
-                    .get_constant_scalar(crate::ScalarValue::Float(0.0), 4);
+                let zero_id = self.writer.get_constant_scalar(crate::Literal::F32(0.0));
 
                 mask |= spirv::ImageOperands::LOD;
                 inst.add_operand(mask.bits());

@@ -540,8 +540,7 @@ impl Writer {
                         );
                         iface.varying_ids.push(varying_id);
 
-                        let default_value_id =
-                            self.get_constant_scalar(crate::ScalarValue::Float(1.0), 4);
+                        let default_value_id = self.get_constant_scalar(crate::Literal::F32(1.0));
                         prelude
                             .body
                             .push(Instruction::store(varying_id, default_value_id, None));
@@ -937,7 +936,7 @@ impl Writer {
             }
             LocalType::BindingArray { base, size } => {
                 let inner_ty = self.get_type_id(LookupType::Handle(base));
-                let scalar_id = self.get_constant_scalar(crate::ScalarValue::Uint(size), 4);
+                let scalar_id = self.get_constant_scalar(crate::Literal::U32(size));
                 Instruction::type_array(id, inner_ty, scalar_id)
             }
             LocalType::PointerToBindingArray { base, size, space } => {
@@ -1108,20 +1107,29 @@ impl Writer {
     }
 
     pub(super) fn get_index_constant(&mut self, index: Word) -> Word {
-        self.get_constant_scalar(crate::ScalarValue::Uint(index as _), 4)
+        self.get_constant_scalar(crate::Literal::U32(index))
     }
 
-    pub(super) fn get_constant_scalar(
+    pub(super) fn get_constant_scalar_with(
         &mut self,
-        value: crate::ScalarValue,
+        value: u8,
+        kind: crate::ScalarKind,
         width: crate::Bytes,
-    ) -> Word {
-        let scalar = CachedConstant::Scalar { value, width };
+    ) -> Result<Word, Error> {
+        Ok(
+            self.get_constant_scalar(crate::Literal::new(value, kind, width).ok_or(
+                Error::Validation("Unexpected kind and/or width for Literal"),
+            )?),
+        )
+    }
+
+    pub(super) fn get_constant_scalar(&mut self, value: crate::Literal) -> Word {
+        let scalar = CachedConstant::Literal(value);
         if let Some(&id) = self.cached_constants.get(&scalar) {
             return id;
         }
         let id = self.id_gen.next();
-        self.write_constant_scalar(id, &value, width, None);
+        self.write_constant_scalar(id, &value, None);
         self.cached_constants.insert(scalar, id);
         id
     }
@@ -1129,8 +1137,7 @@ impl Writer {
     fn write_constant_scalar(
         &mut self,
         id: Word,
-        value: &crate::ScalarValue,
-        width: crate::Bytes,
+        value: &crate::Literal,
         debug_name: Option<&String>,
     ) {
         if self.flags.contains(WriterFlags::DEBUG) {
@@ -1141,56 +1148,19 @@ impl Writer {
         let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
             kind: value.scalar_kind(),
-            width,
+            width: value.width(),
             pointer_space: None,
         }));
-        let (solo, pair);
         let instruction = match *value {
-            crate::ScalarValue::Sint(val) => {
-                let words = match width {
-                    4 => {
-                        solo = [val as u32];
-                        &solo[..]
-                    }
-                    8 => {
-                        pair = [val as u32, (val >> 32) as u32];
-                        &pair
-                    }
-                    _ => unreachable!(),
-                };
-                Instruction::constant(type_id, id, words)
+            crate::Literal::F64(value) => {
+                let bits = value.to_bits();
+                Instruction::constant_64bit(type_id, id, bits as u32, (bits >> 32) as u32)
             }
-            crate::ScalarValue::Uint(val) => {
-                let words = match width {
-                    4 => {
-                        solo = [val as u32];
-                        &solo[..]
-                    }
-                    8 => {
-                        pair = [val as u32, (val >> 32) as u32];
-                        &pair
-                    }
-                    _ => unreachable!(),
-                };
-                Instruction::constant(type_id, id, words)
-            }
-            crate::ScalarValue::Float(val) => {
-                let words = match width {
-                    4 => {
-                        solo = [(val as f32).to_bits()];
-                        &solo[..]
-                    }
-                    8 => {
-                        let bits = f64::to_bits(val);
-                        pair = [bits as u32, (bits >> 32) as u32];
-                        &pair
-                    }
-                    _ => unreachable!(),
-                };
-                Instruction::constant(type_id, id, words)
-            }
-            crate::ScalarValue::Bool(true) => Instruction::constant_true(type_id, id),
-            crate::ScalarValue::Bool(false) => Instruction::constant_false(type_id, id),
+            crate::Literal::F32(value) => Instruction::constant_32bit(type_id, id, value.to_bits()),
+            crate::Literal::U32(value) => Instruction::constant_32bit(type_id, id, value),
+            crate::Literal::I32(value) => Instruction::constant_32bit(type_id, id, value as u32),
+            crate::Literal::Bool(true) => Instruction::constant_true(type_id, id),
+            crate::Literal::Bool(false) => Instruction::constant_false(type_id, id),
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);
@@ -1598,7 +1568,7 @@ impl Writer {
                     substitute_inner_type_lookup =
                         Some(LookupType::Local(LocalType::PointerToBindingArray {
                             base,
-                            size: remapped_binding_array_size as u64,
+                            size: remapped_binding_array_size,
                             space: global_variable.space,
                         }))
                 }
@@ -1812,13 +1782,16 @@ impl Writer {
             match constant.inner {
                 crate::ConstantInner::Composite { .. } => continue,
                 crate::ConstantInner::Scalar { width, ref value } => {
+                    let literal = crate::Literal::from_scalar(*value, width).ok_or(
+                        Error::Validation("Unexpected kind and/or width for Literal"),
+                    )?;
                     self.constant_ids[handle.index()] = match constant.name {
                         Some(ref name) => {
                             let id = self.id_gen.next();
-                            self.write_constant_scalar(id, value, width, Some(name));
+                            self.write_constant_scalar(id, &literal, Some(name));
                             id
                         }
-                        None => self.get_constant_scalar(*value, width),
+                        None => self.get_constant_scalar(literal),
                     };
                 }
             }

@@ -1103,6 +1103,19 @@ impl<W: Write> Writer<W> {
         // `postfix_expression` forms for member/component access and
         // subscripting.
         match *expression {
+            Expression::Literal(literal) => {
+                match literal {
+                    // Floats are written using `Debug` instead of `Display` because it always appends the
+                    // decimal part even it's zero
+                    crate::Literal::F64(_) => {
+                        return Err(Error::Custom("unsupported f64 literal".to_string()));
+                    }
+                    crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
+                    crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
+                    crate::Literal::I32(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                }
+            }
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::ZeroValue(ty) => {
                 self.write_type(module, ty)?;

@@ -492,8 +492,7 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             // always uniform
-            E::Constant(_) => Uniformity::new(),
-            E::ZeroValue(_) => Uniformity::new(),
+            E::Literal(_) | E::Constant(_) | E::ZeroValue(_) => Uniformity::new(),
             E::Splat { size: _, value } => Uniformity {
                 non_uniform_result: self.add_ref(value),
                 requirements: UniformityRequirements::empty(),

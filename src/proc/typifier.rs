@@ -421,6 +421,7 @@ impl<'a> ResolveContext<'a> {
                     }
                 }
             }
+            crate::Expression::Literal(lit) => TypeResolution::Value(lit.ty_inner()),
             crate::Expression::Constant(h) => match self.constants[h].inner {
                 crate::ConstantInner::Scalar { width, ref value } => {
                     TypeResolution::Value(Ti::Scalar {

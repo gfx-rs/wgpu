@@ -1344,6 +1344,31 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "{ty_name} {{}}")?;
             }
+            crate::Expression::Literal(literal) => match literal {
+                crate::Literal::F64(_) => {
+                    return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
+                }
+                crate::Literal::F32(value) => {
+                    if value.is_infinite() {
+                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        write!(self.out, "{sign}INFINITY")?;
+                    } else if value.is_nan() {
+                        write!(self.out, "NAN")?;
+                    } else {
+                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
+                        write!(self.out, "{value}{suffix}")?;
+                    }
+                }
+                crate::Literal::U32(value) => {
+                    write!(self.out, "{value}u")?;
+                }
+                crate::Literal::I32(value) => {
+                    write!(self.out, "{value}")?;
+                }
+                crate::Literal::Bool(value) => {
+                    write!(self.out, "{value}")?;
+                }
+            },
             crate::Expression::Splat { size, value } => {
                 let scalar_kind = match *context.resolve_type(value) {
                     crate::TypeInner::Scalar { kind, .. } => kind,

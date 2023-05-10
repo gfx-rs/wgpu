@@ -343,6 +343,14 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn constant_32bit(result_type_id: Word, id: Word, value: Word) -> Self {
+        Self::constant(result_type_id, id, &[value])
+    }
+
+    pub(super) fn constant_64bit(result_type_id: Word, id: Word, low: Word, high: Word) -> Self {
+        Self::constant(result_type_id, id, &[low, high])
+    }
+
     pub(super) fn constant(result_type_id: Word, id: Word, values: &[Word]) -> Self {
         let mut instruction = Self::new(Op::Constant);
         instruction.set_type(result_type_id);

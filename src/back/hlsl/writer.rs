@@ -2058,6 +2058,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         match *expression {
             Expression::Constant(constant) => self.write_constant(module, constant)?,
             Expression::ZeroValue(ty) => self.write_default_init(module, ty)?,
+            Expression::Literal(literal) => match literal {
+                // Floats are written using `Debug` instead of `Display` because it always appends the
+                // decimal part even it's zero
+                crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
+                crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
+                crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
+                crate::Literal::I32(value) => write!(self.out, "{}", value)?,
+                crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+            },
             Expression::Compose { ty, ref components } => {
                 match module.types[ty].inner {
                     TypeInner::Struct { .. } | TypeInner::Array { .. } => {

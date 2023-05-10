@@ -269,6 +269,7 @@ impl super::Validator {
                 }
                 ShaderStages::all()
             }
+            E::Literal(_value) => ShaderStages::all(),
             E::Constant(_handle) => ShaderStages::all(),
             E::ZeroValue(_type) => ShaderStages::all(),
             E::Splat { size: _, value } => match resolver[value] {
