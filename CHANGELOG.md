@@ -51,6 +51,7 @@ Bottom level categories:
 #### General
 
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
+- Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763). 
 
 ### Bug Fixes
 
