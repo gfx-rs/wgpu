@@ -174,10 +174,6 @@ pub struct Validator {
 pub enum ConstantError {
     #[error("The type doesn't match the constant")]
     InvalidType,
-    #[error("The component handle {0:?} can not be resolved")]
-    UnresolvedComponent(Handle<crate::Constant>),
-    #[error("The array size handle {0:?} can not be resolved")]
-    UnresolvedSize(Handle<crate::Constant>),
     #[error(transparent)]
     Compose(#[from] ComposeError),
 }
@@ -311,18 +307,6 @@ impl Validator {
                 }
             }
             crate::ConstantInner::Composite { ty, ref components } => {
-                match types[ty].inner {
-                    crate::TypeInner::Array {
-                        size: crate::ArraySize::Constant(size_handle),
-                        ..
-                    } if handle <= size_handle => {
-                        return Err(ConstantError::UnresolvedSize(size_handle));
-                    }
-                    _ => {}
-                }
-                if let Some(&comp) = components.iter().find(|&&comp| handle <= comp) {
-                    return Err(ConstantError::UnresolvedComponent(comp));
-                }
                 compose::validate_compose(
                     ty,
                     constants,
