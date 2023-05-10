@@ -1312,13 +1312,29 @@ pub enum DeviceType {
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
-    /// Vendor PCI id of the adapter
+    /// [`Backend`]-specific vendor ID of the adapter
     ///
-    /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
-    /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
-    pub vendor: usize,
-    /// PCI id of the adapter
-    pub device: usize,
+    /// This generally is a 16-bit PCI vendor ID in the least significant bytes of this field.
+    /// However, more significant bytes may be non-zero if the backend uses a different
+    /// representation.
+    ///
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::vendorID`] is used, which is
+    ///     a superset of PCI IDs.
+    ///
+    /// [`VkPhysicalDeviceProperties::vendorID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    pub vendor: u32,
+    /// [`Backend`]-specific device ID of the adapter
+    ///
+    ///
+    /// This generally is a 16-bit PCI device ID in the least significant bytes of this field.
+    /// However, more significant bytes may be non-zero if the backend uses a different
+    /// representation.
+    ///
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::deviceID`] is used, which is
+    ///    a superset of PCI IDs.
+    ///
+    /// [`VkPhysicalDeviceProperties::deviceID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
     /// Driver name

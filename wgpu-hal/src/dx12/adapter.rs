@@ -115,8 +115,8 @@ impl super::Adapter {
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
             name: device_name,
-            vendor: desc.VendorId as usize,
-            device: desc.DeviceId as usize,
+            vendor: desc.VendorId,
+            device: desc.DeviceId,
             device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
                 workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu

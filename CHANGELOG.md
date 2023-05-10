@@ -40,11 +40,18 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### Misc Breaking Changes
+
+- Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+
 ### Documentation
 
 #### General
 
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
+- Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763). 
 
 ### Bug Fixes
 
