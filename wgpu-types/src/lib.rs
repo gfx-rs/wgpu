@@ -1321,10 +1321,10 @@ pub struct AdapterInfo {
     /// However, more significant bytes may be non-zero if the backend uses a different
     /// representation.
     ///
-    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::vendorID`] is used, which is
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::deviceID`] is used, which is
     ///    a superset of PCI IDs.
     ///
-    /// [`VkPhysicalDeviceProperties::vendorID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    /// [`VkPhysicalDeviceProperties::deviceID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
     pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
