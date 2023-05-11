@@ -1680,18 +1680,25 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let index_handle = get_expr_handle!(index_id, index_lexp);
 
                     let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
-                        crate::TypeInner::Vector { size, .. } => size as usize,
+                        crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
 
+                    let make_index = |ctx: &mut BlockContext, index: u32| {
+                        ctx.expressions
+                            .append(crate::Expression::Literal(crate::Literal::U32(index)), span)
+                    };
+
+                    let index_expr = make_index(ctx, 0);
                     let mut handle = ctx.expressions.append(
                         crate::Expression::Access {
                             base: root_handle,
-                            index: self.index_constant_expressions[0],
+                            index: index_expr,
                         },
                         span,
                     );
-                    for &index_expr in self.index_constant_expressions[1..num_components].iter() {
+                    for index in 1..num_components {
+                        let index_expr = make_index(ctx, index);
                         let access_expr = ctx.expressions.append(
                             crate::Expression::Access {
                                 base: root_handle,
@@ -1741,31 +1748,21 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let root_handle = get_expr_handle!(composite_id, root_lexp);
                     let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
                     let index_lexp = self.lookup_expression.lookup(index_id)?;
-                    let mut index_handle = get_expr_handle!(index_id, index_lexp);
-                    let index_type = self.lookup_type.lookup(index_lexp.type_id)?.handle;
-
-                    // SPIR-V allows signed and unsigned indices but naga's is strict about
-                    // types and since the `index_constants` are all signed integers, we need
-                    // to cast the index to a signed integer if it's unsigned.
-                    if let Some(crate::ScalarKind::Uint) =
-                        ctx.type_arena[index_type].inner.scalar_kind()
-                    {
-                        index_handle = ctx.expressions.append(
-                            crate::Expression::As {
-                                expr: index_handle,
-                                kind: crate::ScalarKind::Sint,
-                                convert: None,
-                            },
-                            span,
-                        )
-                    }
+                    let index_handle = get_expr_handle!(index_id, index_lexp);
 
                     let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
-                        crate::TypeInner::Vector { size, .. } => size as usize,
+                        crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
-                    let mut components = Vec::with_capacity(num_components);
-                    for &index_expr in self.index_constant_expressions[..num_components].iter() {
+
+                    let make_index = |ctx: &mut BlockContext, index: u32| {
+                        ctx.expressions
+                            .append(crate::Expression::Literal(crate::Literal::U32(index)), span)
+                    };
+
+                    let mut components = Vec::with_capacity(num_components as usize);
+                    for index in 0..num_components {
+                        let index_expr = make_index(ctx, index);
                         let access_expr = ctx.expressions.append(
                             crate::Expression::Access {
                                 base: root_handle,
