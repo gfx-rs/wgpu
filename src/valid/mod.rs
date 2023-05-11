@@ -11,7 +11,7 @@ mod interface;
 mod r#type;
 
 #[cfg(feature = "validate")]
-use crate::arena::{Arena, UniqueArena};
+use crate::arena::UniqueArena;
 
 use crate::{
     arena::Handle,
@@ -296,10 +296,9 @@ impl Validator {
     fn validate_constant(
         &self,
         handle: Handle<crate::Constant>,
-        constants: &Arena<crate::Constant>,
-        types: &UniqueArena<crate::Type>,
+        gctx: crate::proc::GlobalCtx,
     ) -> Result<(), ConstantError> {
-        let con = &constants[handle];
+        let con = &gctx.constants[handle];
         match con.inner {
             crate::ConstantInner::Scalar { width, ref value } => {
                 if self.check_width(value.scalar_kind(), width).is_err() {
@@ -309,11 +308,10 @@ impl Validator {
             crate::ConstantInner::Composite { ty, ref components } => {
                 compose::validate_compose(
                     ty,
-                    constants,
-                    types,
+                    gctx,
                     components
                         .iter()
-                        .map(|&component| constants[component].inner.resolve_type()),
+                        .map(|&component| gctx.constants[component].inner.resolve_type()),
                 )?;
             }
         }
@@ -331,17 +329,15 @@ impl Validator {
         #[cfg(feature = "validate")]
         Self::validate_module_handles(module).map_err(|e| e.with_span())?;
 
-        self.layouter
-            .update(&module.types, &module.constants)
-            .map_err(|e| {
-                let handle = e.ty;
-                ValidationError::from(e).with_span_handle(handle, &module.types)
-            })?;
+        self.layouter.update(module.to_ctx()).map_err(|e| {
+            let handle = e.ty;
+            ValidationError::from(e).with_span_handle(handle, &module.types)
+        })?;
 
         #[cfg(feature = "validate")]
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, constant) in module.constants.iter() {
-                self.validate_constant(handle, &module.constants, &module.types)
+                self.validate_constant(handle, module.to_ctx())
                     .map_err(|source| {
                         ValidationError::Constant {
                             handle,
@@ -361,7 +357,7 @@ impl Validator {
 
         for (handle, ty) in module.types.iter() {
             let ty_info = self
-                .validate_type(handle, &module.types, &module.constants)
+                .validate_type(handle, module.to_ctx())
                 .map_err(|source| {
                     ValidationError::Type {
                         handle,
@@ -376,7 +372,7 @@ impl Validator {
 
         #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
-            self.validate_global_var(var, &module.types)
+            self.validate_global_var(var, module.to_ctx())
                 .map_err(|source| {
                     ValidationError::GlobalVariable {
                         handle: var_handle,

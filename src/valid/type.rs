@@ -1,8 +1,5 @@
 use super::Capabilities;
-use crate::{
-    arena::{Arena, Handle, UniqueArena},
-    proc::Alignment,
-};
+use crate::{arena::Handle, proc::Alignment};
 
 bitflags::bitflags! {
     /// Flags associated with [`Type`]s by [`Validator`].
@@ -246,11 +243,10 @@ impl super::Validator {
     pub(super) fn validate_type(
         &self,
         handle: Handle<crate::Type>,
-        types: &UniqueArena<crate::Type>,
-        constants: &Arena<crate::Constant>,
+        gctx: crate::proc::GlobalCtx,
     ) -> Result<TypeInfo, TypeError> {
         use crate::TypeInner as Ti;
-        Ok(match types[handle].inner {
+        Ok(match gctx.types[handle].inner {
             Ti::Scalar { kind, width } => {
                 self.check_width(kind, width)?;
                 let shareable = if kind.is_numeric() {
@@ -419,7 +415,7 @@ impl super::Validator {
 
                 let type_info_mask = match size {
                     crate::ArraySize::Constant(const_handle) => {
-                        let constant = &constants[const_handle];
+                        let constant = &gctx.constants[const_handle];
                         let length_is_positive = match *constant {
                             crate::Constant {
                                 specialization: Some(_),
@@ -535,7 +531,7 @@ impl super::Validator {
                         }
                     }
 
-                    let base_size = types[member.ty].inner.size(constants);
+                    let base_size = gctx.types[member.ty].inner.size(gctx);
                     min_offset = member.offset + base_size;
                     if min_offset > span {
                         return Err(TypeError::MemberOutOfBounds {
@@ -579,14 +575,14 @@ impl super::Validator {
                         }
                     };
 
-                    prev_struct_data = match types[member.ty].inner {
+                    prev_struct_data = match gctx.types[member.ty].inner {
                         crate::TypeInner::Struct { span, .. } => Some((span, member.offset)),
                         _ => None,
                     };
 
                     // The last field may be an unsized array.
                     if !base_info.flags.contains(TypeFlags::SIZED) {
-                        let is_array = match types[member.ty].inner {
+                        let is_array = match gctx.types[member.ty].inner {
                             crate::TypeInner::Array { .. } => true,
                             _ => false,
                         };
@@ -635,7 +631,7 @@ impl super::Validator {
 
                 if base_info.flags.contains(TypeFlags::DATA) {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
-                    match types[base].inner {
+                    match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };

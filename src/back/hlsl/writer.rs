@@ -877,7 +877,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size_hlsl(&module.types, &module.constants);
+            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx());
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;

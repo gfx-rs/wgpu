@@ -894,8 +894,7 @@ impl super::Validator {
     fn validate_local_var(
         &self,
         var: &crate::LocalVariable,
-        types: &UniqueArena<crate::Type>,
-        constants: &Arena<crate::Constant>,
+        gctx: crate::proc::GlobalCtx,
     ) -> Result<(), LocalVariableError> {
         log::debug!("var {:?}", var);
         let type_info = self
@@ -910,13 +909,13 @@ impl super::Validator {
         }
 
         if let Some(const_handle) = var.init {
-            match constants[const_handle].inner {
+            match gctx.constants[const_handle].inner {
                 crate::ConstantInner::Scalar { width, ref value } => {
                     let ty_inner = crate::TypeInner::Scalar {
                         width,
                         kind: value.scalar_kind(),
                     };
-                    if types[var.ty].inner != ty_inner {
+                    if gctx.types[var.ty].inner != ty_inner {
                         return Err(LocalVariableError::InitializerType);
                     }
                 }
@@ -942,7 +941,7 @@ impl super::Validator {
 
         #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
-            self.validate_local_var(var, &module.types, &module.constants)
+            self.validate_local_var(var, module.to_ctx())
                 .map_err(|source| {
                     FunctionError::LocalVariable {
                         handle: var_handle,

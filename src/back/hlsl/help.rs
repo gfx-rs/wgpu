@@ -347,12 +347,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
         module: &crate::Module,
         constructor: WrappedConstructor,
     ) -> BackendResult {
-        let name = crate::TypeInner::hlsl_type_id(
-            constructor.ty,
-            &module.types,
-            &module.constants,
-            &self.names,
-        )?;
+        let name = crate::TypeInner::hlsl_type_id(constructor.ty, module.to_ctx(), &self.names)?;
         write!(self.out, "Construct{name}")?;
         Ok(())
     }

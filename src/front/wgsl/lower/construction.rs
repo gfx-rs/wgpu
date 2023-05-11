@@ -471,9 +471,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         ctx.module.constants.fetch_or_append(size, Span::UNDEFINED),
                     ),
                     stride: {
-                        self.layouter
-                            .update(&ctx.module.types, &ctx.module.constants)
-                            .unwrap();
+                        self.layouter.update(ctx.module.to_ctx()).unwrap();
                         self.layouter[base].to_stride()
                     },
                 };
@@ -645,9 +643,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
                 };
 
-                self.layouter
-                    .update(&ctx.module.types, &ctx.module.constants)
-                    .unwrap();
+                self.layouter.update(ctx.module.to_ctx()).unwrap();
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Array {
                     base,
                     size,

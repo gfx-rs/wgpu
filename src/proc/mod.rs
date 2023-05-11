@@ -199,7 +199,7 @@ impl super::TypeInner {
     }
 
     /// Get the size of this type.
-    pub fn size(&self, constants: &super::Arena<super::Constant>) -> u32 {
+    pub fn size(&self, gctx: GlobalCtx) -> u32 {
         match *self {
             Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
             Self::Vector {
@@ -221,7 +221,7 @@ impl super::TypeInner {
             } => {
                 let count = match size {
                     super::ArraySize::Constant(handle) => {
-                        constants[handle].to_array_length().unwrap_or(1)
+                        gctx.constants[handle].to_array_length().unwrap_or(1)
                     }
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
@@ -575,16 +575,31 @@ impl super::ImageClass {
     }
 }
 
+impl crate::Module {
+    pub const fn to_ctx(&self) -> GlobalCtx<'_> {
+        GlobalCtx {
+            types: &self.types,
+            constants: &self.constants,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct GlobalCtx<'a> {
+    pub types: &'a crate::UniqueArena<crate::Type>,
+    pub constants: &'a crate::Arena<crate::Constant>,
+}
+
 #[test]
 fn test_matrix_size() {
-    let constants = crate::Arena::new();
+    let module = crate::Module::default();
     assert_eq!(
         crate::TypeInner::Matrix {
             columns: crate::VectorSize::Tri,
             rows: crate::VectorSize::Tri,
             width: 4
         }
-        .size(&constants),
+        .size(module.to_ctx()),
         48,
     );
 }

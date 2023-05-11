@@ -568,6 +568,13 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 }
 
 impl<'function> BlockContext<'function> {
+    pub(super) fn gctx(&self) -> crate::proc::GlobalCtx {
+        crate::proc::GlobalCtx {
+            types: self.type_arena,
+            constants: self.const_arena,
+        }
+    }
+
     /// Consumes the `BlockContext` producing a Ir [`Block`](crate::Block)
     fn lower(mut self) -> crate::Block {
         fn lower_impl(

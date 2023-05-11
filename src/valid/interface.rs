@@ -395,12 +395,12 @@ impl super::Validator {
     pub(super) fn validate_global_var(
         &self,
         var: &crate::GlobalVariable,
-        types: &UniqueArena<crate::Type>,
+        gctx: crate::proc::GlobalCtx,
     ) -> Result<(), GlobalVariableError> {
         use super::TypeFlags;
 
         log::debug!("var {:?}", var);
-        let inner_ty = match types[var.ty].inner {
+        let inner_ty = match gctx.types[var.ty].inner {
             // A binding array is (mostly) supposed to behave the same as a
             // series of individually bound resources, so we can (mostly)
             // validate a `binding_array<T>` as if it were just a plain `T`.
@@ -444,7 +444,7 @@ impl super::Validator {
                 )
             }
             crate::AddressSpace::Handle => {
-                match types[inner_ty].inner {
+                match gctx.types[inner_ty].inner {
                     crate::TypeInner::Image { class, .. } => match class {
                         crate::ImageClass::Storage {
                             format:

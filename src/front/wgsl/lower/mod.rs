@@ -343,7 +343,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     }
 
     fn format_typeinner(&self, inner: &crate::TypeInner) -> String {
-        inner.to_wgsl(&self.module.types, &self.module.constants)
+        inner.to_wgsl(self.module.to_ctx())
     }
 
     fn format_type(&self, handle: Handle<crate::Type>) -> String {
@@ -624,14 +624,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     if let Some(explicit) = explicit_ty {
                         if explicit != inferred_type {
                             let ty = &ctx.module.types[explicit];
-                            let explicit = ty.name.clone().unwrap_or_else(|| {
-                                ty.inner.to_wgsl(&ctx.module.types, &ctx.module.constants)
-                            });
+                            let explicit = ty
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
 
                             let ty = &ctx.module.types[inferred_type];
-                            let inferred = ty.name.clone().unwrap_or_else(|| {
-                                ty.inner.to_wgsl(&ctx.module.types, &ctx.module.constants)
-                            });
+                            let inferred = ty
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
 
                             return Err(Error::InitializationTypeMismatch(
                                 c.name.span,
@@ -2065,9 +2067,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, ctx.reborrow())?;
 
-            self.layouter
-                .update(&ctx.module.types, &ctx.module.constants)
-                .unwrap();
+            self.layouter.update(ctx.module.to_ctx()).unwrap();
 
             let member_min_size = self.layouter[ty].size;
             let member_min_alignment = self.layouter[ty].alignment;
@@ -2154,9 +2154,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Type::Array { base, size } => {
                 let base = self.resolve_ast_type(base, ctx.reborrow())?;
-                self.layouter
-                    .update(&ctx.module.types, &ctx.module.constants)
-                    .unwrap();
+                self.layouter.update(ctx.module.to_ctx()).unwrap();
 
                 crate::TypeInner::Array {
                     base,

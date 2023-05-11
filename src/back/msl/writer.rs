@@ -77,7 +77,7 @@ const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
 struct TypeContext<'a> {
     handle: Handle<crate::Type>,
-    module: &'a crate::Module,
+    gctx: proc::GlobalCtx<'a>,
     names: &'a FastHashMap<NameKey, String>,
     access: crate::StorageAccess,
     binding: Option<&'a super::ResolvedBinding>,
@@ -86,7 +86,7 @@ struct TypeContext<'a> {
 
 impl<'a> Display for TypeContext<'a> {
     fn fmt(&self, out: &mut Formatter<'_>) -> Result<(), FmtError> {
-        let ty = &self.module.types[self.handle];
+        let ty = &self.gctx.types[self.handle];
         if ty.needs_alias() && !self.first_time {
             let name = &self.names[&NameKey::Type(self.handle)];
             return write!(out, "{name}");
@@ -223,7 +223,7 @@ impl<'a> Display for TypeContext<'a> {
                 } else if let crate::ArraySize::Constant(size) = size {
                     let constant_ctx = ConstantContext {
                         handle: size,
-                        arena: &self.module.constants,
+                        arena: self.gctx.constants,
                         names: self.names,
                         first_time: false,
                     };
@@ -271,7 +271,7 @@ impl<'a> TypedGlobalVariable<'a> {
         };
         let ty_name = TypeContext {
             handle: var.ty,
-            module: self.module,
+            gctx: self.module.to_ctx(),
             names: self.names,
             access: storage_access,
             binding: self.binding,
@@ -399,7 +399,7 @@ fn should_pack_struct_member(
     }
 
     let ty_inner = &module.types[member.ty].inner;
-    let last_offset = member.offset + ty_inner.size(&module.constants);
+    let last_offset = member.offset + ty_inner.size(module.to_ctx());
     let next_offset = match members.get(index + 1) {
         Some(next) => next.offset,
         None => span,
@@ -1153,7 +1153,7 @@ impl<W: Write> Writer<W> {
             crate::TypeInner::Array { base, stride, .. } => (
                 context.module.types[base]
                     .inner
-                    .size(&context.module.constants),
+                    .size(context.module.to_ctx()),
                 stride,
             ),
             _ => return Err(Error::Validation),
@@ -1336,7 +1336,7 @@ impl<W: Write> Writer<W> {
             crate::Expression::ZeroValue(ty) => {
                 let ty_name = TypeContext {
                     handle: ty,
-                    module: context.module,
+                    gctx: context.module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
                     binding: None,
@@ -2459,7 +2459,7 @@ impl<W: Write> Writer<W> {
             TypeResolution::Handle(ty_handle) => {
                 let ty_name = TypeContext {
                     handle: ty_handle,
-                    module: context.module,
+                    gctx: context.module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
                     binding: None,
@@ -3155,7 +3155,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     let base_name = TypeContext {
                         handle: base,
-                        module,
+                        gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
                         binding: None,
@@ -3200,7 +3200,7 @@ impl<W: Write> Writer<W> {
                             writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
                         }
                         let ty_inner = &module.types[member.ty].inner;
-                        last_offset = member.offset + ty_inner.size(&module.constants);
+                        last_offset = member.offset + ty_inner.size(module.to_ctx());
 
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
 
@@ -3219,7 +3219,7 @@ impl<W: Write> Writer<W> {
                             None => {
                                 let base_name = TypeContext {
                                     handle: member.ty,
-                                    module,
+                                    gctx: module.to_ctx(),
                                     names: &self.names,
                                     access: crate::StorageAccess::empty(),
                                     binding: None,
@@ -3250,7 +3250,7 @@ impl<W: Write> Writer<W> {
                 _ => {
                     let ty_name = TypeContext {
                         handle,
-                        module,
+                        gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
                         binding: None,
@@ -3310,7 +3310,7 @@ impl<W: Write> Writer<W> {
                     let name = &self.names[&NameKey::Constant(handle)];
                     let ty_name = TypeContext {
                         handle: ty,
-                        module,
+                        gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
                         binding: None,
@@ -3450,7 +3450,7 @@ impl<W: Write> Writer<W> {
                 Some(ref result) => {
                     let ty_name = TypeContext {
                         handle: result.ty,
-                        module,
+                        gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
                         binding: None,
@@ -3468,7 +3468,7 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::FunctionArgument(fun_handle, index as u32)];
                 let param_type_name = TypeContext {
                     handle: arg.ty,
-                    module,
+                    gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
                     binding: None,
@@ -3517,7 +3517,7 @@ impl<W: Write> Writer<W> {
             for (local_handle, local) in fun.local_variables.iter() {
                 let ty_name = TypeContext {
                     handle: local.ty,
-                    module,
+                    gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
                     binding: None,
@@ -3714,7 +3714,7 @@ impl<W: Write> Writer<W> {
                     let name = &self.names[name_key];
                     let ty_name = TypeContext {
                         handle: ty,
-                        module,
+                        gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
                         binding: None,
@@ -3758,7 +3758,7 @@ impl<W: Write> Writer<W> {
                     for (name, ty, binding) in result_members {
                         let ty_name = TypeContext {
                             handle: ty,
-                            module,
+                            gctx: module.to_ctx(),
                             names: &self.names,
                             access: crate::StorageAccess::empty(),
                             binding: None,
@@ -3853,7 +3853,7 @@ impl<W: Write> Writer<W> {
 
                 let ty_name = TypeContext {
                     handle: ty,
-                    module,
+                    gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
                     binding: None,
@@ -4090,7 +4090,7 @@ impl<W: Write> Writer<W> {
                 let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
                 let ty_name = TypeContext {
                     handle: local.ty,
-                    module,
+                    gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
                     binding: None,

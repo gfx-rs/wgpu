@@ -1501,7 +1501,7 @@ impl Frontend {
                         offset: span,
                     });
 
-                    span += self.module.types[ty].inner.size(&self.module.constants);
+                    span += self.module.types[ty].inner.size(self.module.to_ctx());
 
                     let len = expressions.len();
                     let load = expressions.append(Expression::Load { pointer }, Default::default());

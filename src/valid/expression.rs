@@ -301,8 +301,7 @@ impl super::Validator {
             E::Compose { ref components, ty } => {
                 validate_compose(
                     ty,
-                    &module.constants,
-                    &module.types,
+                    module.to_ctx(),
                     components.iter().map(|&handle| info[handle].ty.clone()),
                 )?;
                 ShaderStages::all()

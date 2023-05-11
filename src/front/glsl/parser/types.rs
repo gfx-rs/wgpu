@@ -53,10 +53,7 @@ impl<'source> ParsingContext<'source> {
                 ArraySize::Constant(constant)
             };
 
-            frontend
-                .layouter
-                .update(&frontend.module.types, &frontend.module.constants)
-                .unwrap();
+            frontend.layouter.update(frontend.module.to_ctx()).unwrap();
             let stride = frontend.layouter[*ty].to_stride();
             *ty = frontend.module.types.insert(
                 Type {

@@ -2089,7 +2089,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_ty = self.lookup_type.lookup(result_type_id)?;
                     let inner = &ctx.type_arena[result_ty.handle].inner;
                     let kind = inner.scalar_kind().unwrap();
-                    let size = inner.size(ctx.const_arena) as u8;
+                    let size = inner.size(ctx.gctx()) as u8;
 
                     let left_cast = ctx.expressions.append(
                         crate::Expression::As {
@@ -4387,9 +4387,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let decor = self.future_decor.remove(&id).unwrap_or_default();
         let base = self.lookup_type.lookup(type_id)?.handle;
 
-        self.layouter
-            .update(&module.types, &module.constants)
-            .unwrap();
+        self.layouter.update(module.to_ctx()).unwrap();
 
         // HACK if the underlying type is an image or a sampler, let's assume
         //      that we're dealing with a binding-array
@@ -4470,9 +4468,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let decor = self.future_decor.remove(&id).unwrap_or_default();
         let base = self.lookup_type.lookup(type_id)?.handle;
 
-        self.layouter
-            .update(&module.types, &module.constants)
-            .unwrap();
+        self.layouter.update(module.to_ctx()).unwrap();
 
         // HACK same case as in `parse_type_array()`
         let inner = if let crate::TypeInner::Image { .. } | crate::TypeInner::Sampler { .. } =
@@ -4523,9 +4519,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .as_ref()
             .map_or(false, |decor| decor.storage_buffer);
 
-        self.layouter
-            .update(&module.types, &module.constants)
-            .unwrap();
+        self.layouter.update(module.to_ctx()).unwrap();
 
         let mut members = Vec::<crate::StructMember>::with_capacity(inst.wc as usize - 2);
         let mut member_lookups = Vec::with_capacity(members.capacity());
