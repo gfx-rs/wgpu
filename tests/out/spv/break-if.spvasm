@@ -8,17 +8,17 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %48 "main"
 OpExecutionMode %48 LocalSize 1 1 1
 %2 = OpTypeVoid
-%4 = OpTypeBool
-%3 = OpConstantTrue  %4
-%7 = OpTypeFunction %2
-%14 = OpTypePointer Function %4
-%15 = OpConstantNull  %4
-%17 = OpConstantNull  %4
-%21 = OpTypeFunction %2 %4
-%32 = OpConstantNull  %4
-%34 = OpConstantNull  %4
-%6 = OpFunction  %2  None %7
-%5 = OpLabel
+%3 = OpTypeBool
+%6 = OpTypeFunction %2
+%7 = OpConstantTrue  %3
+%14 = OpTypePointer Function %3
+%15 = OpConstantNull  %3
+%17 = OpConstantNull  %3
+%21 = OpTypeFunction %2 %3
+%32 = OpConstantNull  %3
+%34 = OpConstantNull  %3
+%5 = OpFunction  %2  None %6
+%4 = OpLabel
 OpBranch %8
 %8 = OpLabel
 OpBranch %9
@@ -28,12 +28,12 @@ OpBranch %11
 %11 = OpLabel
 OpBranch %12
 %12 = OpLabel
-OpBranchConditional %3 %10 %9
+OpBranchConditional %7 %10 %9
 %10 = OpLabel
 OpReturn
 OpFunctionEnd
 %20 = OpFunction  %2  None %21
-%19 = OpFunctionParameter  %4
+%19 = OpFunctionParameter  %3
 %18 = OpLabel
 %13 = OpVariable  %14  Function %15
 %16 = OpVariable  %14  Function %17
@@ -47,17 +47,17 @@ OpBranch %25
 OpBranch %26
 %26 = OpLabel
 OpStore %13 %19
-%27 = OpLoad  %4  %13
-%28 = OpLogicalNotEqual  %4  %19 %27
+%27 = OpLoad  %3  %13
+%28 = OpLogicalNotEqual  %3  %19 %27
 OpStore %16 %28
-%29 = OpLoad  %4  %16
-%30 = OpLogicalEqual  %4  %19 %29
+%29 = OpLoad  %3  %16
+%30 = OpLogicalEqual  %3  %19 %29
 OpBranchConditional %30 %24 %23
 %24 = OpLabel
 OpReturn
 OpFunctionEnd
 %37 = OpFunction  %2  None %21
-%36 = OpFunctionParameter  %4
+%36 = OpFunctionParameter  %3
 %35 = OpLabel
 %31 = OpVariable  %14  Function %32
 %33 = OpVariable  %14  Function %34
@@ -69,18 +69,18 @@ OpLoopMerge %40 %42 None
 OpBranch %41
 %41 = OpLabel
 OpStore %31 %36
-%43 = OpLoad  %4  %31
-%44 = OpLogicalNotEqual  %4  %36 %43
+%43 = OpLoad  %3  %31
+%44 = OpLogicalNotEqual  %3  %36 %43
 OpStore %33 %44
 OpBranch %42
 %42 = OpLabel
-%45 = OpLoad  %4  %33
-%46 = OpLogicalEqual  %4  %36 %45
+%45 = OpLoad  %3  %33
+%46 = OpLogicalEqual  %3  %36 %45
 OpBranchConditional %46 %40 %39
 %40 = OpLabel
 OpReturn
 OpFunctionEnd
-%48 = OpFunction  %2  None %7
+%48 = OpFunction  %2  None %6
 %47 = OpLabel
 OpBranch %49
 %49 = OpLabel

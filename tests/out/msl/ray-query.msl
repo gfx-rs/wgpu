@@ -46,7 +46,7 @@ metal::float3 get_torus_normal(
     RayIntersection intersection
 ) {
     metal::float3 local_point = intersection.world_to_object * metal::float4(world_point, 1.0);
-    metal::float2 point_on_guiding_line = metal::normalize(local_point.xy) * 2.4000000953674316;
+    metal::float2 point_on_guiding_line = metal::normalize(local_point.xy) * 2.4;
     metal::float3 world_point_on_guiding_line = intersection.object_to_world * metal::float4(point_on_guiding_line, 0.0, 1.0);
     return metal::normalize(world_point - world_point_on_guiding_line);
 }
@@ -57,7 +57,7 @@ kernel void main_(
 ) {
     _RayQuery rq = {};
     metal::float3 dir = metal::float3(0.0, 1.0, 0.0);
-    RayDesc _e12 = RayDesc {4u, 255u, 0.10000000149011612, 100.0, metal::float3(0.0), dir};
+    RayDesc _e12 = RayDesc {4u, 255u, 0.1, 100.0, metal::float3(0.0), dir};
     rq.intersector.assume_geometry_type(metal::raytracing::geometry_type::triangle);
     rq.intersector.set_opacity_cull_mode((_e12.flags & 64) != 0 ? metal::raytracing::opacity_cull_mode::opaque : (_e12.flags & 128) != 0 ? metal::raytracing::opacity_cull_mode::non_opaque : metal::raytracing::opacity_cull_mode::none);
     rq.intersector.force_opacity((_e12.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (_e12.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);

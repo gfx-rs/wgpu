@@ -1133,36 +1133,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let (expr, is_reference) = match *expr {
             ast::Expression::Literal(literal) => {
-                let inner = match literal {
-                    ast::Literal::Number(Number::F32(f)) => crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: crate::ScalarValue::Float(f as _),
-                    },
-                    ast::Literal::Number(Number::I32(i)) => crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: crate::ScalarValue::Sint(i as _),
-                    },
-                    ast::Literal::Number(Number::U32(u)) => crate::ConstantInner::Scalar {
-                        width: 4,
-                        value: crate::ScalarValue::Uint(u as _),
-                    },
+                let literal = match literal {
+                    ast::Literal::Number(Number::F32(f)) => crate::Literal::F32(f),
+                    ast::Literal::Number(Number::I32(i)) => crate::Literal::I32(i),
+                    ast::Literal::Number(Number::U32(u)) => crate::Literal::U32(u),
                     ast::Literal::Number(_) => {
                         unreachable!("got abstract numeric type when not expected");
                     }
-                    ast::Literal::Bool(b) => crate::ConstantInner::Scalar {
-                        width: 1,
-                        value: crate::ScalarValue::Bool(b),
-                    },
+                    ast::Literal::Bool(b) => crate::Literal::Bool(b),
                 };
-                let handle = ctx.module.constants.fetch_or_append(
-                    crate::Constant {
-                        name: None,
-                        specialization: None,
-                        inner,
-                    },
-                    Span::UNDEFINED,
-                );
-                let handle = ctx.interrupt_emitter(crate::Expression::Constant(handle), span);
+                let handle = ctx.interrupt_emitter(crate::Expression::Literal(literal), span);
                 return Ok(TypedExpression::non_reference(handle));
             }
             ast::Expression::Ident(ast::IdentExpr::Local(local)) => {
@@ -1264,35 +1244,54 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ));
                 }
 
-                if let crate::Expression::Constant(constant) = ctx.naga_expressions[index] {
-                    let span = ctx.naga_expressions.get_span(index);
-                    let index = match ctx.module.constants[constant].inner {
-                        crate::ConstantInner::Scalar {
-                            value: crate::ScalarValue::Uint(int),
-                            ..
-                        } => u32::try_from(int).map_err(|_| Error::BadU32Constant(span)),
-                        crate::ConstantInner::Scalar {
-                            value: crate::ScalarValue::Sint(int),
-                            ..
-                        } => u32::try_from(int).map_err(|_| Error::BadU32Constant(span)),
-                        _ => Err(Error::BadU32Constant(span)),
-                    }?;
+                match ctx.naga_expressions[index] {
+                    crate::Expression::Constant(constant) => {
+                        let span = ctx.naga_expressions.get_span(index);
+                        let index = match ctx.module.constants[constant].inner {
+                            crate::ConstantInner::Scalar {
+                                value: crate::ScalarValue::Uint(int),
+                                ..
+                            } => u32::try_from(int).map_err(|_| Error::BadU32Constant(span)),
+                            crate::ConstantInner::Scalar {
+                                value: crate::ScalarValue::Sint(int),
+                                ..
+                            } => u32::try_from(int).map_err(|_| Error::BadU32Constant(span)),
+                            _ => Err(Error::BadU32Constant(span)),
+                        }?;
 
-                    (
-                        crate::Expression::AccessIndex {
-                            base: expr.handle,
-                            index,
-                        },
-                        expr.is_reference,
-                    )
-                } else {
-                    (
+                        (
+                            crate::Expression::AccessIndex {
+                                base: expr.handle,
+                                index,
+                            },
+                            expr.is_reference,
+                        )
+                    }
+                    crate::Expression::Literal(literal) => {
+                        let span = ctx.naga_expressions.get_span(index);
+                        let index = match literal {
+                            crate::Literal::U32(n) => n,
+                            crate::Literal::I32(n) => {
+                                u32::try_from(n).map_err(|_| Error::BadU32Constant(span))?
+                            }
+                            _ => return Err(Error::BadU32Constant(span)),
+                        };
+
+                        (
+                            crate::Expression::AccessIndex {
+                                base: expr.handle,
+                                index,
+                            },
+                            expr.is_reference,
+                        )
+                    }
+                    _ => (
                         crate::Expression::Access {
                             base: expr.handle,
                             index,
                         },
                         expr.is_reference,
-                    )
+                    ),
                 }
             }
             ast::Expression::Member { base, ref field } => {

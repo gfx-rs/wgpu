@@ -42,40 +42,7 @@
         ray_desc: None,
         ray_intersection: None,
     ),
-    constants: [
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(1),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(2),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(3),
-            ),
-        ),
-    ],
+    constants: [],
     global_variables: [
         (
             name: Some("v_indices"),
@@ -121,12 +88,12 @@
             expressions: [
                 FunctionArgument(0),
                 LocalVariable(1),
-                Constant(1),
+                Literal(U32(0)),
                 LocalVariable(2),
                 Load(
                     pointer: 2,
                 ),
-                Constant(2),
+                Literal(U32(1)),
                 Binary(
                     op: Greater,
                     left: 5,
@@ -135,13 +102,13 @@
                 Load(
                     pointer: 2,
                 ),
-                Constant(3),
+                Literal(U32(2)),
                 Binary(
                     op: Modulo,
                     left: 8,
                     right: 9,
                 ),
-                Constant(1),
+                Literal(U32(0)),
                 Binary(
                     op: Equal,
                     left: 10,
@@ -150,13 +117,13 @@
                 Load(
                     pointer: 2,
                 ),
-                Constant(3),
+                Literal(U32(2)),
                 Binary(
                     op: Divide,
                     left: 13,
                     right: 14,
                 ),
-                Constant(4),
+                Literal(U32(3)),
                 Load(
                     pointer: 2,
                 ),
@@ -165,7 +132,7 @@
                     left: 16,
                     right: 17,
                 ),
-                Constant(2),
+                Literal(U32(1)),
                 Binary(
                     op: Add,
                     left: 18,
@@ -174,7 +141,7 @@
                 Load(
                     pointer: 4,
                 ),
-                Constant(2),
+                Literal(U32(1)),
                 Binary(
                     op: Add,
                     left: 21,

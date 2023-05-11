@@ -263,7 +263,7 @@
             name: None,
             inner: Array(
                 base: 24,
-                size: Constant(22),
+                size: Constant(8),
                 stride: 40,
             ),
         ),
@@ -290,7 +290,7 @@
             name: None,
             inner: Array(
                 base: 3,
-                size: Constant(22),
+                size: Constant(8),
                 stride: 4,
             ),
         ),
@@ -407,191 +407,7 @@
             specialization: None,
             inner: Scalar(
                 width: 4,
-                value: Float(1.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(2.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(3.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(6.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(5.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(4.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(9.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(90.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(10.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(20.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(30.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(40.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(8.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(7.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
                 value: Sint(5),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(4),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(9),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Float(0.0),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(3),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(2),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(3),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(1),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Sint(42),
-            ),
-        ),
-        (
-            name: None,
-            specialization: None,
-            inner: Scalar(
-                width: 4,
-                value: Uint(42),
             ),
         ),
     ],
@@ -677,7 +493,7 @@
                 ),
             ],
             expressions: [
-                Constant(7),
+                Literal(I32(1)),
                 LocalVariable(1),
                 Load(
                     pointer: 2,
@@ -701,7 +517,7 @@
                     base: 9,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 10,
                     index: 0,
@@ -729,12 +545,12 @@
                     base: 19,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 20,
                     index: 0,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 22,
                     index: 1,
@@ -747,7 +563,7 @@
                     base: 26,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 27,
                     index: 0,
@@ -774,7 +590,7 @@
                     base: 34,
                     index: 35,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 36,
                     index: 1,
@@ -804,17 +620,17 @@
                 Load(
                     pointer: 45,
                 ),
-                Constant(8),
+                Literal(F32(1.0)),
                 Splat(
                     size: Bi,
                     value: 47,
                 ),
-                Constant(9),
+                Literal(F32(2.0)),
                 Splat(
                     size: Bi,
                     value: 49,
                 ),
-                Constant(10),
+                Literal(F32(3.0)),
                 Splat(
                     size: Bi,
                     value: 51,
@@ -847,17 +663,17 @@
                     base: 55,
                     index: 0,
                 ),
-                Constant(11),
+                Literal(F32(6.0)),
                 Splat(
                     size: Bi,
                     value: 60,
                 ),
-                Constant(12),
+                Literal(F32(5.0)),
                 Splat(
                     size: Bi,
                     value: 62,
                 ),
-                Constant(13),
+                Literal(F32(4.0)),
                 Splat(
                     size: Bi,
                     value: 64,
@@ -874,12 +690,12 @@
                     base: 55,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 67,
                     index: 0,
                 ),
-                Constant(14),
+                Literal(F32(9.0)),
                 Splat(
                     size: Bi,
                     value: 70,
@@ -895,7 +711,7 @@
                     base: 72,
                     index: 73,
                 ),
-                Constant(15),
+                Literal(F32(90.0)),
                 Splat(
                     size: Bi,
                     value: 75,
@@ -904,22 +720,22 @@
                     base: 55,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 77,
                     index: 0,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 79,
                     index: 1,
                 ),
-                Constant(16),
+                Literal(F32(10.0)),
                 AccessIndex(
                     base: 55,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 83,
                     index: 0,
@@ -931,7 +747,7 @@
                     base: 85,
                     index: 86,
                 ),
-                Constant(17),
+                Literal(F32(20.0)),
                 AccessIndex(
                     base: 55,
                     index: 0,
@@ -943,12 +759,12 @@
                     base: 89,
                     index: 90,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 91,
                     index: 1,
                 ),
-                Constant(18),
+                Literal(F32(30.0)),
                 AccessIndex(
                     base: 55,
                     index: 0,
@@ -967,7 +783,7 @@
                     base: 97,
                     index: 98,
                 ),
-                Constant(19),
+                Literal(F32(40.0)),
             ],
             named_expressions: {},
             body: [
@@ -1181,7 +997,7 @@
                 ),
             ],
             expressions: [
-                Constant(7),
+                Literal(I32(1)),
                 LocalVariable(1),
                 Load(
                     pointer: 2,
@@ -1205,7 +1021,7 @@
                     base: 9,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 10,
                     index: 0,
@@ -1218,12 +1034,12 @@
                     base: 14,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 15,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 17,
                     index: 0,
@@ -1236,7 +1052,7 @@
                     base: 21,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 22,
                     index: 0,
@@ -1256,17 +1072,17 @@
                     base: 28,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 29,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 31,
                     index: 0,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 33,
                     index: 1,
@@ -1279,12 +1095,12 @@
                     base: 37,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 38,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 40,
                     index: 0,
@@ -1304,7 +1120,7 @@
                     base: 46,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 47,
                     index: 0,
@@ -1316,7 +1132,7 @@
                     base: 49,
                     index: 50,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 51,
                     index: 1,
@@ -1329,7 +1145,7 @@
                     base: 55,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 56,
                     index: 0,
@@ -1377,27 +1193,27 @@
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 72,
                     index: 0,
                 ),
-                Constant(20),
+                Literal(F32(8.0)),
                 Splat(
                     size: Bi,
                     value: 75,
                 ),
-                Constant(21),
+                Literal(F32(7.0)),
                 Splat(
                     size: Bi,
                     value: 77,
                 ),
-                Constant(11),
+                Literal(F32(6.0)),
                 Splat(
                     size: Bi,
                     value: 79,
                 ),
-                Constant(12),
+                Literal(F32(5.0)),
                 Splat(
                     size: Bi,
                     value: 81,
@@ -1415,17 +1231,17 @@
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 84,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 86,
                     index: 0,
                 ),
-                Constant(14),
+                Literal(F32(9.0)),
                 Splat(
                     size: Bi,
                     value: 89,
@@ -1434,7 +1250,7 @@
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 91,
                     index: 0,
@@ -1446,7 +1262,7 @@
                     base: 93,
                     index: 94,
                 ),
-                Constant(15),
+                Literal(F32(90.0)),
                 Splat(
                     size: Bi,
                     value: 96,
@@ -1455,32 +1271,32 @@
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 98,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 100,
                     index: 0,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 102,
                     index: 1,
                 ),
-                Constant(16),
+                Literal(F32(10.0)),
                 AccessIndex(
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 106,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 108,
                     index: 0,
@@ -1492,12 +1308,12 @@
                     base: 110,
                     index: 111,
                 ),
-                Constant(17),
+                Literal(F32(20.0)),
                 AccessIndex(
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 114,
                     index: 0,
@@ -1509,17 +1325,17 @@
                     base: 116,
                     index: 117,
                 ),
-                Constant(7),
+                Literal(I32(1)),
                 AccessIndex(
                     base: 118,
                     index: 1,
                 ),
-                Constant(18),
+                Literal(F32(30.0)),
                 AccessIndex(
                     base: 66,
                     index: 0,
                 ),
-                Constant(3),
+                Literal(I32(0)),
                 AccessIndex(
                     base: 122,
                     index: 0,
@@ -1538,7 +1354,7 @@
                     base: 126,
                     index: 127,
                 ),
-                Constant(19),
+                Literal(F32(40.0)),
             ],
             named_expressions: {},
             body: [
@@ -1848,12 +1664,12 @@
             local_variables: [],
             expressions: [
                 FunctionArgument(0),
-                Constant(23),
+                Literal(I32(4)),
                 AccessIndex(
                     base: 1,
                     index: 4,
                 ),
-                Constant(24),
+                Literal(I32(9)),
                 AccessIndex(
                     base: 3,
                     index: 9,
@@ -1889,7 +1705,7 @@
             local_variables: [],
             expressions: [
                 FunctionArgument(0),
-                Constant(31),
+                Literal(U32(42)),
             ],
             named_expressions: {
                 1: "p",
@@ -1917,12 +1733,12 @@
             local_variables: [],
             expressions: [
                 FunctionArgument(0),
-                Constant(8),
+                Literal(F32(1.0)),
                 Splat(
                     size: Quad,
                     value: 2,
                 ),
-                Constant(9),
+                Literal(F32(2.0)),
                 Splat(
                     size: Quad,
                     value: 4,
@@ -1992,12 +1808,12 @@
                 ],
                 expressions: [
                     FunctionArgument(0),
-                    Constant(25),
+                    Literal(F32(0.0)),
                     LocalVariable(1),
                     Load(
                         pointer: 3,
                     ),
-                    Constant(8),
+                    Literal(F32(1.0)),
                     GlobalVariable(2),
                     AccessIndex(
                         base: 6,
@@ -2014,7 +1830,7 @@
                     Load(
                         pointer: 10,
                     ),
-                    Constant(26),
+                    Literal(U32(3)),
                     GlobalVariable(2),
                     AccessIndex(
                         base: 13,
@@ -2042,7 +1858,7 @@
                         index: 5,
                     ),
                     ArrayLength(21),
-                    Constant(27),
+                    Literal(U32(2)),
                     Binary(
                         op: Subtract,
                         left: 22,
@@ -2068,7 +1884,7 @@
                         base: 30,
                         index: 5,
                     ),
-                    Constant(3),
+                    Literal(I32(0)),
                     AccessIndex(
                         base: 31,
                         index: 0,
@@ -2083,9 +1899,9 @@
                         kind: Sint,
                         convert: Some(4),
                     ),
-                    Constant(28),
-                    Constant(23),
-                    Constant(22),
+                    Literal(I32(3)),
+                    Literal(I32(4)),
+                    Literal(I32(5)),
                     Compose(
                         ty: 28,
                         components: [
@@ -2097,7 +1913,7 @@
                         ],
                     ),
                     LocalVariable(2),
-                    Constant(29),
+                    Literal(U32(1)),
                     Binary(
                         op: Add,
                         left: 1,
@@ -2107,7 +1923,7 @@
                         base: 41,
                         index: 43,
                     ),
-                    Constant(30),
+                    Literal(I32(42)),
                     Access(
                         base: 41,
                         index: 1,
@@ -2131,7 +1947,7 @@
                         left: 8,
                         right: 51,
                     ),
-                    Constant(9),
+                    Literal(F32(2.0)),
                     Compose(
                         ty: 26,
                         components: [
@@ -2287,7 +2103,7 @@
                         base: 1,
                         index: 0,
                     ),
-                    Constant(7),
+                    Literal(I32(1)),
                     AccessIndex(
                         base: 2,
                         index: 1,
@@ -2296,28 +2112,28 @@
                         base: 4,
                         index: 2,
                     ),
-                    Constant(8),
+                    Literal(F32(1.0)),
                     GlobalVariable(2),
                     AccessIndex(
                         base: 7,
                         index: 0,
                     ),
-                    Constant(25),
+                    Literal(F32(0.0)),
                     Splat(
                         size: Tri,
                         value: 9,
                     ),
-                    Constant(8),
+                    Literal(F32(1.0)),
                     Splat(
                         size: Tri,
                         value: 11,
                     ),
-                    Constant(9),
+                    Literal(F32(2.0)),
                     Splat(
                         size: Tri,
                         value: 13,
                     ),
-                    Constant(10),
+                    Literal(F32(3.0)),
                     Splat(
                         size: Tri,
                         value: 15,
@@ -2336,12 +2152,12 @@
                         base: 18,
                         index: 4,
                     ),
-                    Constant(1),
+                    Literal(U32(0)),
                     Splat(
                         size: Bi,
                         value: 20,
                     ),
-                    Constant(29),
+                    Literal(U32(1)),
                     Splat(
                         size: Bi,
                         value: 22,
@@ -2358,7 +2174,7 @@
                         base: 25,
                         index: 5,
                     ),
-                    Constant(7),
+                    Literal(I32(1)),
                     AccessIndex(
                         base: 26,
                         index: 1,
@@ -2367,10 +2183,10 @@
                         base: 28,
                         index: 0,
                     ),
-                    Constant(7),
+                    Literal(I32(1)),
                     GlobalVariable(4),
                     ZeroValue(17),
-                    Constant(25),
+                    Literal(F32(0.0)),
                     Splat(
                         size: Quad,
                         value: 33,
@@ -2473,12 +2289,12 @@
                     ),
                 ],
                 expressions: [
-                    Constant(11),
+                    Literal(F32(6.0)),
                     Splat(
                         size: Quad,
                         value: 1,
                     ),
-                    Constant(21),
+                    Literal(F32(7.0)),
                     Splat(
                         size: Quad,
                         value: 3,

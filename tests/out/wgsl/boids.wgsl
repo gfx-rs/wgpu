@@ -125,7 +125,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     vVel = (((_e112 + (_e113 * _e116)) + (_e119 * _e122)) + (_e125 * _e128));
     let _e131 = vVel;
     let _e133 = vVel;
-    vVel = (normalize(_e131) * clamp(length(_e133), 0.0, 0.10000000149011612));
+    vVel = (normalize(_e131) * clamp(length(_e133), 0.0, 0.1));
     let _e139 = vPos;
     let _e140 = vVel;
     let _e143 = params.deltaT;

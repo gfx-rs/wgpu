@@ -129,10 +129,10 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e19 = image_2d.sample(sampler_reg, tc, const_type_9_);
     metal::float4 _e20 = a;
     a = _e20 + _e19;
-    metal::float4 _e24 = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284));
+    metal::float4 _e24 = image_2d.sample(sampler_reg, tc, metal::level(2.3));
     metal::float4 _e25 = a;
     a = _e25 + _e24;
-    metal::float4 _e29 = image_2d.sample(sampler_reg, tc, metal::level(2.299999952316284), const_type_9_);
+    metal::float4 _e29 = image_2d.sample(sampler_reg, tc, metal::level(2.3), const_type_9_);
     metal::float4 _e30 = a;
     a = _e30 + _e29;
     metal::float4 _e35 = image_2d.sample(sampler_reg, tc, metal::bias(2.0), const_type_9_);
@@ -144,10 +144,10 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e47 = image_2d_array.sample(sampler_reg, tc, 0u, const_type_9_);
     metal::float4 _e48 = a;
     a = _e48 + _e47;
-    metal::float4 _e53 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.299999952316284));
+    metal::float4 _e53 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.3));
     metal::float4 _e54 = a;
     a = _e54 + _e53;
-    metal::float4 _e59 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.299999952316284), const_type_9_);
+    metal::float4 _e59 = image_2d_array.sample(sampler_reg, tc, 0u, metal::level(2.3), const_type_9_);
     metal::float4 _e60 = a;
     a = _e60 + _e59;
     metal::float4 _e66 = image_2d_array.sample(sampler_reg, tc, 0u, metal::bias(2.0), const_type_9_);
@@ -159,10 +159,10 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e78 = image_2d_array.sample(sampler_reg, tc, 0, const_type_9_);
     metal::float4 _e79 = a;
     a = _e79 + _e78;
-    metal::float4 _e84 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.299999952316284));
+    metal::float4 _e84 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.3));
     metal::float4 _e85 = a;
     a = _e85 + _e84;
-    metal::float4 _e90 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.299999952316284), const_type_9_);
+    metal::float4 _e90 = image_2d_array.sample(sampler_reg, tc, 0, metal::level(2.3), const_type_9_);
     metal::float4 _e91 = a;
     a = _e91 + _e90;
     metal::float4 _e97 = image_2d_array.sample(sampler_reg, tc, 0, metal::bias(2.0), const_type_9_);
@@ -171,7 +171,7 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e103 = image_cube_array.sample(sampler_reg, tc3_, 0u);
     metal::float4 _e104 = a;
     a = _e104 + _e103;
-    metal::float4 _e109 = image_cube_array.sample(sampler_reg, tc3_, 0u, metal::level(2.299999952316284));
+    metal::float4 _e109 = image_cube_array.sample(sampler_reg, tc3_, 0u, metal::level(2.3));
     metal::float4 _e110 = a;
     a = _e110 + _e109;
     metal::float4 _e116 = image_cube_array.sample(sampler_reg, tc3_, 0u, metal::bias(2.0));
@@ -180,7 +180,7 @@ fragment texture_sampleOutput texture_sample(
     metal::float4 _e122 = image_cube_array.sample(sampler_reg, tc3_, 0);
     metal::float4 _e123 = a;
     a = _e123 + _e122;
-    metal::float4 _e128 = image_cube_array.sample(sampler_reg, tc3_, 0, metal::level(2.299999952316284));
+    metal::float4 _e128 = image_cube_array.sample(sampler_reg, tc3_, 0, metal::level(2.3));
     metal::float4 _e129 = a;
     a = _e129 + _e128;
     metal::float4 _e135 = image_cube_array.sample(sampler_reg, tc3_, 0, metal::bias(2.0));

@@ -121,10 +121,10 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e19 = textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
     let _e20 = a;
     a = (_e20 + _e19);
-    let _e24 = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284);
+    let _e24 = textureSampleLevel(image_2d, sampler_reg, tc, 2.3);
     let _e25 = a;
     a = (_e25 + _e24);
-    let _e29 = textureSampleLevel(image_2d, sampler_reg, tc, 2.299999952316284, vec2<i32>(3, 1));
+    let _e29 = textureSampleLevel(image_2d, sampler_reg, tc, 2.3, vec2<i32>(3, 1));
     let _e30 = a;
     a = (_e30 + _e29);
     let _e35 = textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3, 1));
@@ -136,10 +136,10 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e47 = textureSample(image_2d_array, sampler_reg, tc, 0u, vec2<i32>(3, 1));
     let _e48 = a;
     a = (_e48 + _e47);
-    let _e53 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.299999952316284);
+    let _e53 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.3);
     let _e54 = a;
     a = (_e54 + _e53);
-    let _e59 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.299999952316284, vec2<i32>(3, 1));
+    let _e59 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, 2.3, vec2<i32>(3, 1));
     let _e60 = a;
     a = (_e60 + _e59);
     let _e66 = textureSampleBias(image_2d_array, sampler_reg, tc, 0u, 2.0, vec2<i32>(3, 1));
@@ -151,10 +151,10 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e78 = textureSample(image_2d_array, sampler_reg, tc, 0, vec2<i32>(3, 1));
     let _e79 = a;
     a = (_e79 + _e78);
-    let _e84 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0, 2.299999952316284);
+    let _e84 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0, 2.3);
     let _e85 = a;
     a = (_e85 + _e84);
-    let _e90 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0, 2.299999952316284, vec2<i32>(3, 1));
+    let _e90 = textureSampleLevel(image_2d_array, sampler_reg, tc, 0, 2.3, vec2<i32>(3, 1));
     let _e91 = a;
     a = (_e91 + _e90);
     let _e97 = textureSampleBias(image_2d_array, sampler_reg, tc, 0, 2.0, vec2<i32>(3, 1));
@@ -163,7 +163,7 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e103 = textureSample(image_cube_array, sampler_reg, tc3_, 0u);
     let _e104 = a;
     a = (_e104 + _e103);
-    let _e109 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0u, 2.299999952316284);
+    let _e109 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0u, 2.3);
     let _e110 = a;
     a = (_e110 + _e109);
     let _e116 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0u, 2.0);
@@ -172,7 +172,7 @@ fn texture_sample() -> @location(0) vec4<f32> {
     let _e122 = textureSample(image_cube_array, sampler_reg, tc3_, 0);
     let _e123 = a;
     a = (_e123 + _e122);
-    let _e128 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0, 2.299999952316284);
+    let _e128 = textureSampleLevel(image_cube_array, sampler_reg, tc3_, 0, 2.3);
     let _e129 = a;
     a = (_e129 + _e128);
     let _e135 = textureSampleBias(image_cube_array, sampler_reg, tc3_, 0, 2.0);

@@ -13,8 +13,8 @@ digraph Module {
 		ep0_e3 [ color="#fdb462" label="[4] Multiply" ]
 		ep0_e0 -> ep0_e3 [ label="right" ]
 		ep0_e2 -> ep0_e3 [ label="left" ]
-		ep0_e4 [ fillcolor="#ffffb3" label="[5] Constant" ]
-		ep0_e5 [ fillcolor="#ffffb3" label="[6] Constant" ]
+		ep0_e4 [ fillcolor="#ffffb3" label="[5] Literal" ]
+		ep0_e5 [ fillcolor="#ffffb3" label="[6] Literal" ]
 		ep0_e6 [ color="#bebada" label="[7] Compose" ]
 		{ ep0_e3 ep0_e4 ep0_e5 } -> ep0_e6
 		ep0_e7 [ color="#bebada" label="[8] Compose" ]
@@ -45,7 +45,7 @@ digraph Module {
 		ep1_e0 -> ep1_e3 [ label="coordinate" ]
 		ep1_e4 [ color="#8dd3c7" label="[5] AccessIndex[3]" ]
 		ep1_e3 -> ep1_e4 [ label="base" ]
-		ep1_e5 [ fillcolor="#ffffb3" label="[6] Constant" ]
+		ep1_e5 [ fillcolor="#ffffb3" label="[6] Literal" ]
 		ep1_e6 [ color="#fdb462" label="[7] Equal" ]
 		ep1_e5 -> ep1_e6 [ label="right" ]
 		ep1_e4 -> ep1_e6 [ label="left" ]
@@ -87,10 +87,10 @@ digraph Module {
 	subgraph cluster_ep2 {
 		label="Fragment/'fs_extra'"
 		node [ style=filled ]
-		ep2_e0 [ fillcolor="#ffffb3" label="[1] Constant" ]
-		ep2_e1 [ fillcolor="#ffffb3" label="[2] Constant" ]
-		ep2_e2 [ fillcolor="#ffffb3" label="[3] Constant" ]
-		ep2_e3 [ fillcolor="#ffffb3" label="[4] Constant" ]
+		ep2_e0 [ fillcolor="#ffffb3" label="[1] Literal" ]
+		ep2_e1 [ fillcolor="#ffffb3" label="[2] Literal" ]
+		ep2_e2 [ fillcolor="#ffffb3" label="[3] Literal" ]
+		ep2_e3 [ fillcolor="#ffffb3" label="[4] Literal" ]
 		ep2_e4 [ fillcolor="#bebada" label="[5] Compose" ]
 		{ ep2_e0 ep2_e1 ep2_e2 ep2_e3 } -> ep2_e4
 		ep2_s0 [ shape=square label="Root" ]
