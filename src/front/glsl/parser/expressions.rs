@@ -7,7 +7,7 @@ use crate::{
         token::{Token, TokenValue},
         Error, Frontend, Result, Span,
     },
-    ArraySize, BinaryOperator, Block, Constant, ConstantInner, Handle, ScalarValue, Type,
+    ArraySize, BinaryOperator, Block, Constant, ConstantInner, Handle, Literal, ScalarValue, Type,
     TypeInner, UnaryOperator,
 };
 
@@ -21,20 +21,30 @@ impl<'source> ParsingContext<'source> {
     ) -> Result<Handle<HirExpr>> {
         let mut token = self.bump(frontend)?;
 
-        let (width, value) = match token.value {
-            TokenValue::IntConstant(int) => (
-                (int.width / 8) as u8,
+        let literal = match token.value {
+            TokenValue::IntConstant(int) => {
+                if int.width != 32 {
+                    frontend.errors.push(Error {
+                        kind: ErrorKind::SemanticError("Unsupported non-32bit integer".into()),
+                        meta: token.meta,
+                    });
+                }
                 if int.signed {
-                    ScalarValue::Sint(int.value as i64)
+                    Literal::I32(int.value as i32)
                 } else {
-                    ScalarValue::Uint(int.value)
-                },
-            ),
-            TokenValue::FloatConstant(float) => (
-                (float.width / 8) as u8,
-                ScalarValue::Float(float.value as f64),
-            ),
-            TokenValue::BoolConstant(value) => (1, ScalarValue::Bool(value)),
+                    Literal::U32(int.value as u32)
+                }
+            }
+            TokenValue::FloatConstant(float) => {
+                if float.width != 32 {
+                    frontend.errors.push(Error {
+                        kind: ErrorKind::SemanticError("Unsupported floating-point value (expected single-precision floating-point number)".into()),
+                        meta: token.meta,
+                    });
+                }
+                Literal::F32(float.value)
+            }
+            TokenValue::BoolConstant(value) => Literal::Bool(value),
             TokenValue::LeftParen => {
                 let expr = self.parse_expression(frontend, ctx, stmt, body)?;
                 let meta = self.expect(frontend, TokenValue::RightParen)?.meta;
@@ -59,18 +69,9 @@ impl<'source> ParsingContext<'source> {
             }
         };
 
-        let handle = frontend.module.constants.fetch_or_append(
-            Constant {
-                name: None,
-                specialization: None,
-                inner: ConstantInner::Scalar { width, value },
-            },
-            token.meta,
-        );
-
         Ok(stmt.hir_exprs.append(
             HirExpr {
-                kind: HirExprKind::Constant(handle),
+                kind: HirExprKind::Literal(literal),
                 meta: token.meta,
             },
             Default::default(),

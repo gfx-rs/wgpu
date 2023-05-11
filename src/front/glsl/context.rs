@@ -9,9 +9,9 @@ use super::{
 };
 use crate::{
     front::{Emitter, Typifier},
-    AddressSpace, Arena, BinaryOperator, Block, Constant, Expression, FastHashMap,
-    FunctionArgument, Handle, LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Span,
-    Statement, Type, TypeInner, VectorSize,
+    AddressSpace, Arena, BinaryOperator, Block, Expression, FastHashMap, FunctionArgument, Handle,
+    Literal, LocalVariable, RelationalFunction, ScalarKind, ScalarValue, Span, Statement, Type,
+    TypeInner, VectorSize,
 };
 use std::{convert::TryFrom, ops::Index};
 
@@ -560,8 +560,8 @@ impl Context {
 
                 frontend.field_selection(self, pos, body, base, field, meta)?
             }
-            HirExprKind::Constant(constant) if pos != ExprPos::Lhs => {
-                self.add_expression(Expression::Constant(constant), meta, body)
+            HirExprKind::Literal(literal) if pos != ExprPos::Lhs => {
+                self.add_expression(Expression::Literal(literal), meta, body)
             }
             HirExprKind::Binary { left, op, right } if pos != ExprPos::Lhs => {
                 let (mut left, left_meta) =
@@ -1253,24 +1253,14 @@ impl Context {
                     self.add_expression(Expression::Load { pointer }, meta, body)
                 };
 
-                let make_constant_inner = |kind, width| {
-                    let value = match kind {
-                        ScalarKind::Sint => crate::ScalarValue::Sint(1),
-                        ScalarKind::Uint => crate::ScalarValue::Uint(1),
-                        ScalarKind::Float => crate::ScalarValue::Float(1.0),
-                        ScalarKind::Bool => return None,
-                    };
-
-                    Some(crate::ConstantInner::Scalar { width, value })
-                };
                 let res = match *frontend.resolve_type(self, left, meta)? {
                     TypeInner::Scalar { kind, width } => {
                         let ty = TypeInner::Scalar { kind, width };
-                        make_constant_inner(kind, width).map(|i| (ty, i, None, None))
+                        Literal::one(kind, width).map(|i| (ty, i, None, None))
                     }
                     TypeInner::Vector { size, kind, width } => {
                         let ty = TypeInner::Vector { size, kind, width };
-                        make_constant_inner(kind, width).map(|i| (ty, i, Some(size), None))
+                        Literal::one(kind, width).map(|i| (ty, i, Some(size), None))
                     }
                     TypeInner::Matrix {
                         columns,
@@ -1282,12 +1272,12 @@ impl Context {
                             rows,
                             width,
                         };
-                        make_constant_inner(ScalarKind::Float, width)
+                        Literal::one(ScalarKind::Float, width)
                             .map(|i| (ty, i, Some(rows), Some(columns)))
                     }
                     _ => None,
                 };
-                let (ty_inner, inner, rows, columns) = match res {
+                let (ty_inner, literal, rows, columns) = match res {
                     Some(res) => res,
                     None => {
                         frontend.errors.push(Error {
@@ -1300,15 +1290,7 @@ impl Context {
                     }
                 };
 
-                let constant_1 = frontend.module.constants.append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner,
-                    },
-                    Default::default(),
-                );
-                let mut right = self.add_expression(Expression::Constant(constant_1), meta, body);
+                let mut right = self.add_expression(Expression::Literal(literal), meta, body);
 
                 // Glsl allows pre/postfixes operations on vectors and matrices, so if the
                 // target is either of them change the right side of the addition to be splatted

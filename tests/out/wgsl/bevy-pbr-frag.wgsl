@@ -157,7 +157,7 @@ fn getDistanceAttenuation(distanceSquare: f32, inverseRangeSquared: f32) -> f32 
     let _e68 = attenuation;
     _ = distanceSquare_1;
     let _e73 = distanceSquare_1;
-    return ((_e68 * 1.0) / max(_e73, 0.0010000000474974513));
+    return ((_e68 * 1.0) / max(_e73, 0.001));
 }
 
 fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
@@ -331,13 +331,13 @@ fn fresnel(f0_3: vec3<f32>, LoH: f32) -> vec3<f32> {
     f0_4 = f0_3;
     LoH_1 = LoH;
     _ = f0_4;
-    _ = vec3<f32>((50.0 * 0.33000001311302185));
+    _ = vec3<f32>((50.0 * 0.33));
     let _e49 = f0_4;
-    _ = dot(_e49, vec3<f32>((50.0 * 0.33000001311302185)));
+    _ = dot(_e49, vec3<f32>((50.0 * 0.33)));
     _ = f0_4;
-    _ = vec3<f32>((50.0 * 0.33000001311302185));
+    _ = vec3<f32>((50.0 * 0.33));
     let _e62 = f0_4;
-    f90_4 = clamp(dot(_e62, vec3<f32>((50.0 * 0.33000001311302185))), 0.0, 1.0);
+    f90_4 = clamp(dot(_e62, vec3<f32>((50.0 * 0.33))), 0.0, 1.0);
     _ = f0_4;
     _ = f90_4;
     _ = LoH_1;
@@ -474,8 +474,8 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     f0_8 = f0_7;
     perceptual_roughness_1 = perceptual_roughness;
     NoV_7 = NoV_6;
-    c0_ = vec4<f32>(-(1.0), -(0.027499999850988388), -(0.5720000267028809), 0.02199999988079071);
-    c1_ = vec4<f32>(1.0, 0.042500000447034836, 1.0399999618530273, -(0.03999999910593033));
+    c0_ = vec4<f32>(-(1.0), -(0.0275), -(0.572), 0.022);
+    c1_ = vec4<f32>(1.0, 0.0425, 1.04, -(0.04));
     let _e62 = perceptual_roughness_1;
     let _e64 = c0_;
     let _e66 = c1_;
@@ -484,20 +484,20 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     let _e71 = r;
     _ = (_e69.x * _e71.x);
     let _e76 = NoV_7;
-    _ = (-(9.279999732971191) * _e76);
+    _ = (-(9.28) * _e76);
     let _e80 = NoV_7;
-    _ = exp2((-(9.279999732971191) * _e80));
+    _ = exp2((-(9.28) * _e80));
     let _e83 = r;
     let _e85 = r;
     let _e90 = NoV_7;
-    _ = (-(9.279999732971191) * _e90);
+    _ = (-(9.28) * _e90);
     let _e94 = NoV_7;
     let _e98 = r;
     let _e101 = r;
-    a004_ = ((min((_e83.x * _e85.x), exp2((-(9.279999732971191) * _e94))) * _e98.x) + _e101.y);
+    a004_ = ((min((_e83.x * _e85.x), exp2((-(9.28) * _e94))) * _e98.x) + _e101.y);
     let _e109 = a004_;
     let _e112 = r;
-    AB = ((vec2<f32>(-(1.0399999618530273), 1.0399999618530273) * vec2<f32>(_e109)) + _e112.zw);
+    AB = ((vec2<f32>(-(1.04), 1.04) * vec2<f32>(_e109)) + _e112.zw);
     let _e116 = f0_8;
     let _e117 = AB;
     let _e121 = AB;
@@ -522,7 +522,7 @@ fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
     perceptualRoughness_1 = perceptualRoughness;
     _ = perceptualRoughness_1;
     let _e45 = perceptualRoughness_1;
-    clampedPerceptualRoughness = clamp(_e45, 0.08900000154972076, 1.0);
+    clampedPerceptualRoughness = clamp(_e45, 0.089, 1.0);
     let _e50 = clampedPerceptualRoughness;
     let _e51 = clampedPerceptualRoughness;
     return (_e50 * _e51);
@@ -592,9 +592,9 @@ fn luminance(v_1: vec3<f32>) -> f32 {
     _ = (&global_7.emissive);
     v_2 = v_1;
     _ = v_2;
-    _ = vec3<f32>(0.2125999927520752, 0.7152000069618225, 0.0722000002861023);
+    _ = vec3<f32>(0.2126, 0.7152, 0.0722);
     let _e47 = v_2;
-    return dot(_e47, vec3<f32>(0.2125999927520752, 0.7152000069618225, 0.0722000002861023));
+    return dot(_e47, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
 fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
@@ -1177,13 +1177,13 @@ fn main_1() {
     _ = V_3;
     let _e183 = N_2;
     let _e184 = V_3;
-    NdotV_4 = max(dot(_e183, _e184), 0.0010000000474974513);
+    NdotV_4 = max(dot(_e183, _e184), 0.001);
     let _e190 = global_6.reflectance;
     let _e192 = global_6.reflectance;
     let _e195 = metallic;
     let _e199 = output_color;
     let _e201 = metallic;
-    F0_4 = (vec3<f32>((((0.1599999964237213 * _e190) * _e192) * (1.0 - _e195))) + (_e199.xyz * vec3<f32>(_e201)));
+    F0_4 = (vec3<f32>((((0.16 * _e190) * _e192) * (1.0 - _e195))) + (_e199.xyz * vec3<f32>(_e201)));
     let _e206 = output_color;
     let _e209 = metallic;
     diffuseColor_4 = (_e206.xyz * vec3<f32>((1.0 - _e209)));
