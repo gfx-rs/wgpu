@@ -1678,18 +1678,26 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
                     let index_lexp = self.lookup_expression.lookup(index_id)?;
                     let index_handle = get_expr_handle!(index_id, index_lexp);
+                    let index_type = self.lookup_type.lookup(index_lexp.type_id)?.handle;
 
                     let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
 
-                    let make_index = |ctx: &mut BlockContext, index: u32| {
-                        ctx.expressions
-                            .append(crate::Expression::Literal(crate::Literal::U32(index)), span)
+                    let mut make_index = |ctx: &mut BlockContext, index: u32| {
+                        make_index_literal(
+                            ctx,
+                            index,
+                            &mut block,
+                            &mut emitter,
+                            index_type,
+                            index_lexp.type_id,
+                            span,
+                        )
                     };
 
-                    let index_expr = make_index(ctx, 0);
+                    let index_expr = make_index(ctx, 0)?;
                     let mut handle = ctx.expressions.append(
                         crate::Expression::Access {
                             base: root_handle,
@@ -1698,7 +1706,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         span,
                     );
                     for index in 1..num_components {
-                        let index_expr = make_index(ctx, index);
+                        let index_expr = make_index(ctx, index)?;
                         let access_expr = ctx.expressions.append(
                             crate::Expression::Access {
                                 base: root_handle,
@@ -1749,20 +1757,24 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let root_type_lookup = self.lookup_type.lookup(root_lexp.type_id)?;
                     let index_lexp = self.lookup_expression.lookup(index_id)?;
                     let index_handle = get_expr_handle!(index_id, index_lexp);
+                    let index_type = self.lookup_type.lookup(index_lexp.type_id)?.handle;
 
                     let num_components = match ctx.type_arena[root_type_lookup.handle].inner {
                         crate::TypeInner::Vector { size, .. } => size as u32,
                         _ => return Err(Error::InvalidVectorType(root_type_lookup.handle)),
                     };
 
-                    let make_index = |ctx: &mut BlockContext, index: u32| {
-                        ctx.expressions
-                            .append(crate::Expression::Literal(crate::Literal::U32(index)), span)
-                    };
-
                     let mut components = Vec::with_capacity(num_components as usize);
                     for index in 0..num_components {
-                        let index_expr = make_index(ctx, index);
+                        let index_expr = make_index_literal(
+                            ctx,
+                            index,
+                            &mut block,
+                            &mut emitter,
+                            index_type,
+                            index_lexp.type_id,
+                            span,
+                        )?;
                         let access_expr = ctx.expressions.append(
                             crate::Expression::Access {
                                 base: root_handle,
@@ -5143,6 +5155,30 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         );
         Ok(())
     }
+}
+
+fn make_index_literal(
+    ctx: &mut BlockContext,
+    index: u32,
+    block: &mut crate::Block,
+    emitter: &mut super::Emitter,
+    index_type: Handle<crate::Type>,
+    index_type_id: spirv::Word,
+    span: crate::Span,
+) -> Result<Handle<crate::Expression>, Error> {
+    block.extend(emitter.finish(ctx.expressions));
+
+    let literal = match ctx.type_arena[index_type].inner.scalar_kind() {
+        Some(crate::ScalarKind::Uint) => crate::Literal::U32(index),
+        Some(crate::ScalarKind::Sint) => crate::Literal::I32(index as i32),
+        _ => return Err(Error::InvalidIndexType(index_type_id)),
+    };
+    let expr = ctx
+        .expressions
+        .append(crate::Expression::Literal(literal), span);
+
+    emitter.start(ctx.expressions);
+    Ok(expr)
 }
 
 pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, Error> {

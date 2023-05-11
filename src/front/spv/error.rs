@@ -78,6 +78,8 @@ pub enum Error {
     InvalidAccess(crate::Expression),
     #[error("invalid access index %{0}")]
     InvalidAccessIndex(spirv::Word),
+    #[error("invalid index type %{0}")]
+    InvalidIndexType(spirv::Word),
     #[error("invalid binding %{0}")]
     InvalidBinding(spirv::Word),
     #[error("invalid global var {0:?}")]
