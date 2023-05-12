@@ -8,7 +8,7 @@ struct Test {
 }
 
 struct Test2_ {
-    a: array<vec3<f32>,2>,
+    a: array<vec3<f32>, 2>,
     b: f32,
 }
 

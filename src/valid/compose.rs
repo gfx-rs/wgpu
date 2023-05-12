@@ -80,13 +80,12 @@ pub fn validate_compose(
         }
         Ti::Array {
             base,
-            size: crate::ArraySize::Constant(handle),
+            size: crate::ArraySize::Constant(count),
             stride: _,
         } => {
-            let count = gctx.constants[handle].to_array_length().unwrap();
-            if count as usize != component_resolutions.len() {
+            if count.get() as usize != component_resolutions.len() {
                 return Err(ComposeError::ComponentCount {
-                    expected: count,
+                    expected: count.get(),
                     given: component_resolutions.len() as u32,
                 });
             }

@@ -84,12 +84,9 @@ pub fn generate_null_constant(
         }
         crate::TypeInner::Array {
             base,
-            size: crate::ArraySize::Constant(handle),
+            size: crate::ArraySize::Constant(size),
             ..
         } => {
-            let size = constant_arena[handle]
-                .to_array_length()
-                .ok_or(Error::InvalidArraySize(handle))?;
             let inner = generate_null_constant(base, type_arena, constant_arena, span)?;
             let value = constant_arena.fetch_or_append(
                 crate::Constant {
@@ -101,7 +98,7 @@ pub fn generate_null_constant(
             );
             crate::ConstantInner::Composite {
                 ty,
-                components: vec![value; size as usize],
+                components: vec![value; size.get() as usize],
             }
         }
         ref other => {

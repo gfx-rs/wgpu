@@ -413,7 +413,7 @@ pub enum ScalarKind {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum ArraySize {
     /// The array size is constant.
-    Constant(Handle<Constant>),
+    Constant(std::num::NonZeroU32),
     /// The array size can change at runtime.
     Dynamic,
 }

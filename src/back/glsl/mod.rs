@@ -785,20 +785,9 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write the array size
         // Writes nothing if `ArraySize::Dynamic`
-        // Panics if `ArraySize::Constant` has a constant that isn't an sint or uint
         match size {
-            crate::ArraySize::Constant(const_handle) => {
-                match self.module.constants[const_handle].inner {
-                    crate::ConstantInner::Scalar {
-                        width: _,
-                        value: crate::ScalarValue::Uint(size),
-                    } => write!(self.out, "{size}")?,
-                    crate::ConstantInner::Scalar {
-                        width: _,
-                        value: crate::ScalarValue::Sint(size),
-                    } => write!(self.out, "{size}")?,
-                    _ => unreachable!(),
-                }
+            crate::ArraySize::Constant(size) => {
+                write!(self.out, "{size}")?;
             }
             crate::ArraySize::Dynamic => (),
         }

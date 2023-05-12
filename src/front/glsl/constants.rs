@@ -277,7 +277,13 @@ impl<'a> ConstantSolver<'a> {
                     }
                     ConstantInner::Composite { ty, .. } => match self.types[ty].inner {
                         TypeInner::Array { size, .. } => match size {
-                            crate::ArraySize::Constant(constant) => Ok(constant),
+                            crate::ArraySize::Constant(size) => Ok(self.register_constant(
+                                ConstantInner::Scalar {
+                                    width: 4,
+                                    value: ScalarValue::Uint(size.get() as u64),
+                                },
+                                span,
+                            )),
                             crate::ArraySize::Dynamic => {
                                 Err(ConstantSolvingError::ArrayLengthDynamic)
                             }
@@ -602,30 +608,13 @@ impl<'a> ConstantSolver<'a> {
             }
             TypeInner::Array { base, size, .. } => {
                 let length = match size {
-                    crate::ArraySize::Constant(handle) => match self.constants[handle].inner {
-                        ConstantInner::Scalar {
-                            value: ScalarValue::Uint(length),
-                            ..
-                        } => length as usize,
-                        ConstantInner::Scalar {
-                            value: ScalarValue::Sint(length),
-                            ..
-                        } => {
-                            if length < 0 {
-                                return Err(ConstantSolvingError::InvalidArrayLengthArg);
-                            }
-                            length as usize
-                        }
-                        _ => return Err(ConstantSolvingError::InvalidArrayLengthArg),
-                    },
+                    crate::ArraySize::Constant(size) => size.get(),
                     crate::ArraySize::Dynamic => {
                         return Err(ConstantSolvingError::ArrayLengthDynamic)
                     }
                 };
                 let element = self.register_zero_constant(base, span)?;
-                let components = std::iter::repeat(element)
-                    .take(length as u8 as usize)
-                    .collect();
+                let components = std::iter::repeat(element).take(length as usize).collect();
                 ConstantInner::Composite { ty, components }
             }
             TypeInner::Struct { ref members, .. } => {

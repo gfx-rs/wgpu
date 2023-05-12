@@ -1,7 +1,7 @@
 @group(0) @binding(0) 
-var global: binding_array<texture_2d<f32>,256u>;
+var global: binding_array<texture_2d<f32>, 256>;
 @group(0) @binding(1) 
-var global_1: binding_array<sampler,256u>;
+var global_1: binding_array<sampler, 256>;
 var<private> global_2: vec4<f32>;
 
 fn function() {

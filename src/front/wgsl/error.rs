@@ -240,6 +240,8 @@ pub enum Error<'a> {
     },
     FunctionReturnsVoid(Span),
     Other,
+    ExpectedArraySize(Span),
+    NonPositiveArrayLength(Span),
 }
 
 impl<'a> Error<'a> {
@@ -683,6 +685,17 @@ impl<'a> Error<'a> {
             Error::Other => ParseError {
                 message: "other error".to_string(),
                 labels: vec![],
+                notes: vec![],
+            },
+            Error::ExpectedArraySize(span) => ParseError {
+                message: "array element count must resolve to an integer scalar (u32 or i32)"
+                    .to_string(),
+                labels: vec![(span, "must resolve to u32/i32".into())],
+                notes: vec![],
+            },
+            Error::NonPositiveArrayLength(span) => ParseError {
+                message: "array element count must be greater than zero".to_string(),
+                labels: vec![(span, "must be positive".into())],
                 notes: vec![],
             },
         }

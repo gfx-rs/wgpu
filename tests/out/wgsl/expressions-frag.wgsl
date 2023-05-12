@@ -7,14 +7,14 @@ struct a_buf {
 }
 
 struct TestStruct {
-    array_: array<vec4<u32>,2u>,
+    array_: array<vec4<u32>, 2>,
 }
 
 struct FragmentOutput {
     @location(0) o_color: vec4<f32>,
 }
 
-const strct: TestStruct = TestStruct(array<vec4<u32>,2u>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
+const strct: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
 var<private> global: f32;
 @group(0) @binding(0) 
 var<storage, read_write> global_1: a_buf;
@@ -293,9 +293,9 @@ fn testNonScalarToScalarConstructor() {
 }
 
 fn testArrayConstructor() {
-    var tree_1: array<f32,1u>;
+    var tree_1: array<f32, 1>;
 
-    tree_1 = array<f32,1u>(0.0);
+    tree_1 = array<f32, 1>(0.0);
     return;
 }
 
@@ -390,8 +390,8 @@ fn testLength() {
     return;
 }
 
-fn testConstantLength(a_24: array<f32,4u>) {
-    var a_25: array<f32,4u>;
+fn testConstantLength(a_24: array<f32, 4>) {
+    var a_25: array<f32, 4>;
     var len_1: i32;
 
     _ = (&global_1.a);
@@ -403,7 +403,7 @@ fn testConstantLength(a_24: array<f32,4u>) {
 
 fn indexConstantNonConstantIndex(i: i32) {
     var i_1: i32;
-    var local_5: TestStruct = TestStruct(array<vec4<u32>,2u>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
+    var local_5: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
     var a_26: vec4<u32>;
 
     _ = (&global_1.a);
@@ -461,7 +461,7 @@ fn main_1() {
 @fragment 
 fn main() -> FragmentOutput {
     _ = (&global_1.a);
-    _ = TestStruct(array<vec4<u32>,2u>(vec4<u32>(u32(0)), vec4<u32>(u32(1))));
+    _ = TestStruct(array<vec4<u32>, 2>(vec4<u32>(u32(0)), vec4<u32>(u32(1))));
     main_1();
     let _e17 = o_color;
     return FragmentOutput(_e17);

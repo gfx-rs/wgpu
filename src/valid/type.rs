@@ -104,12 +104,8 @@ pub enum TypeError {
     InvalidData(Handle<crate::Type>),
     #[error("Base type {0:?} for the array is invalid")]
     InvalidArrayBaseType(Handle<crate::Type>),
-    #[error("The constant {0:?} can not be used for an array size")]
-    InvalidArraySizeConstant(Handle<crate::Constant>),
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
-    #[error("Array type {0:?} must have a length of one or more")]
-    NonPositiveArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} does not match the expected {expected}")]
     InvalidArrayStride { stride: u32, expected: u32 },
     #[error("Field '{0}' can't be dynamically-sized, has type {1:?}")]
@@ -414,52 +410,7 @@ impl super::Validator {
                 };
 
                 let type_info_mask = match size {
-                    crate::ArraySize::Constant(const_handle) => {
-                        let constant = &gctx.constants[const_handle];
-                        let length_is_positive = match *constant {
-                            crate::Constant {
-                                specialization: Some(_),
-                                ..
-                            } => {
-                                // Many of our back ends don't seem to support
-                                // specializable array lengths. If you want to try to make
-                                // this work, be sure to address all uses of
-                                // `Constant::to_array_length`, which ignores
-                                // specialization.
-                                return Err(TypeError::UnsupportedSpecializedArrayLength(
-                                    const_handle,
-                                ));
-                            }
-                            crate::Constant {
-                                inner:
-                                    crate::ConstantInner::Scalar {
-                                        width: _,
-                                        value: crate::ScalarValue::Uint(length),
-                                    },
-                                ..
-                            } => length > 0,
-                            // Accept a signed integer size to avoid
-                            // requiring an explicit uint
-                            // literal. Type inference should make
-                            // this unnecessary.
-                            crate::Constant {
-                                inner:
-                                    crate::ConstantInner::Scalar {
-                                        width: _,
-                                        value: crate::ScalarValue::Sint(length),
-                                    },
-                                ..
-                            } => length > 0,
-                            _ => {
-                                log::warn!("Array size {:?}", constant);
-                                return Err(TypeError::InvalidArraySizeConstant(const_handle));
-                            }
-                        };
-
-                        if !length_is_positive {
-                            return Err(TypeError::NonPositiveArrayLength(const_handle));
-                        }
-
+                    crate::ArraySize::Constant(_) => {
                         TypeFlags::DATA
                             | TypeFlags::SIZED
                             | TypeFlags::COPY

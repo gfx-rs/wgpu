@@ -642,7 +642,6 @@ impl<'source> ParsingContext<'source> {
                 meta,
                 layout,
                 &mut frontend.module.types,
-                &frontend.module.constants,
                 &mut frontend.errors,
             );
 

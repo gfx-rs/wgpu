@@ -5,22 +5,22 @@ struct FooStruct {
 
 const Foo_1: bool = true;
 
-var<workgroup> wg: array<f32,10u>;
+var<workgroup> wg: array<f32, 10>;
 var<workgroup> at_1: atomic<u32>;
 @group(0) @binding(1) 
 var<storage, read_write> alignment: FooStruct;
 @group(0) @binding(2) 
 var<storage> dummy: array<vec2<f32>>;
 @group(0) @binding(3) 
-var<uniform> float_vecs: array<vec4<f32>,20>;
+var<uniform> float_vecs: array<vec4<f32>, 20>;
 @group(0) @binding(4) 
 var<uniform> global_vec: vec3<f32>;
 @group(0) @binding(5) 
 var<uniform> global_mat: mat3x2<f32>;
 @group(0) @binding(6) 
-var<uniform> global_nested_arrays_of_matrices_2x4_: array<array<mat2x4<f32>,2>,2>;
+var<uniform> global_nested_arrays_of_matrices_2x4_: array<array<mat2x4<f32>, 2>, 2>;
 @group(0) @binding(7) 
-var<uniform> global_nested_arrays_of_matrices_4x2_: array<array<mat4x2<f32>,2>,2>;
+var<uniform> global_nested_arrays_of_matrices_4x2_: array<array<mat4x2<f32>, 2>, 2>;
 
 fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {
     return;

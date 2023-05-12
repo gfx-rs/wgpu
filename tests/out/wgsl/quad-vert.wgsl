@@ -1,8 +1,8 @@
 struct gl_PerVertex {
     @builtin(position) gl_Position: vec4<f32>,
     gl_PointSize: f32,
-    gl_ClipDistance: array<f32,1u>,
-    gl_CullDistance: array<f32,1u>,
+    gl_ClipDistance: array<f32, 1>,
+    gl_CullDistance: array<f32, 1>,
 }
 
 struct VertexOutput {
@@ -12,7 +12,7 @@ struct VertexOutput {
 
 var<private> v_uv: vec2<f32>;
 var<private> a_uv_1: vec2<f32>;
-var<private> perVertexStruct: gl_PerVertex = gl_PerVertex(vec4<f32>(0.0, 0.0, 0.0, 1.0), 1.0, array<f32,1u>(0.0), array<f32,1u>(0.0));
+var<private> perVertexStruct: gl_PerVertex = gl_PerVertex(vec4<f32>(0.0, 0.0, 0.0, 1.0), 1.0, array<f32, 1>(0.0), array<f32, 1>(0.0));
 var<private> a_pos_1: vec2<f32>;
 
 fn main_1() {

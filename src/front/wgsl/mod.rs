@@ -133,24 +133,7 @@ impl crate::TypeInner {
                 let member_type = &gctx.types[base];
                 let base = member_type.name.as_deref().unwrap_or("unknown");
                 match size {
-                    crate::ArraySize::Constant(size) => {
-                        let constant = &gctx.constants[size];
-                        let size = constant
-                            .name
-                            .clone()
-                            .unwrap_or_else(|| match constant.inner {
-                                crate::ConstantInner::Scalar {
-                                    value: crate::ScalarValue::Uint(size),
-                                    ..
-                                } => size.to_string(),
-                                crate::ConstantInner::Scalar {
-                                    value: crate::ScalarValue::Sint(size),
-                                    ..
-                                } => size.to_string(),
-                                _ => "?".to_string(),
-                            });
-                        format!("array<{base}, {size}>")
-                    }
+                    crate::ArraySize::Constant(size) => format!("array<{base}, {size}>"),
                     crate::ArraySize::Dynamic => format!("array<{base}>"),
                 }
             }
@@ -206,10 +189,7 @@ impl crate::TypeInner {
                 let member_type = &gctx.types[base];
                 let base = member_type.name.as_deref().unwrap_or("unknown");
                 match size {
-                    crate::ArraySize::Constant(size) => {
-                        let size = gctx.constants[size].name.as_deref().unwrap_or("unknown");
-                        format!("binding_array<{base}, {size}>")
-                    }
+                    crate::ArraySize::Constant(size) => format!("binding_array<{base}, {size}>"),
                     crate::ArraySize::Dynamic => format!("binding_array<{base}>"),
                 }
             }
@@ -220,19 +200,9 @@ impl crate::TypeInner {
 mod type_inner_tests {
     #[test]
     fn to_wgsl() {
+        use std::num::NonZeroU32;
+
         let mut types = crate::UniqueArena::new();
-        let mut constants = crate::Arena::new();
-        let c = constants.append(
-            crate::Constant {
-                name: Some("C".to_string()),
-                specialization: None,
-                inner: crate::ConstantInner::Scalar {
-                    width: 4,
-                    value: crate::ScalarValue::Uint(32),
-                },
-            },
-            Default::default(),
-        );
 
         let mytype1 = types.insert(
             crate::Type {
@@ -257,14 +227,14 @@ mod type_inner_tests {
 
         let gctx = crate::proc::GlobalCtx {
             types: &types,
-            constants: &constants,
+            constants: &crate::Arena::new(),
         };
         let array = crate::TypeInner::Array {
             base: mytype1,
             stride: 4,
-            size: crate::ArraySize::Constant(c),
+            size: crate::ArraySize::Constant(unsafe { NonZeroU32::new_unchecked(32) }),
         };
-        assert_eq!(array.to_wgsl(gctx), "array<MyType1, C>");
+        assert_eq!(array.to_wgsl(gctx), "array<MyType1, 32>");
 
         let mat = crate::TypeInner::Matrix {
             rows: crate::VectorSize::Quad,
@@ -307,9 +277,9 @@ mod type_inner_tests {
 
         let array = crate::TypeInner::BindingArray {
             base: mytype1,
-            size: crate::ArraySize::Constant(c),
+            size: crate::ArraySize::Constant(unsafe { NonZeroU32::new_unchecked(32) }),
         };
-        assert_eq!(array.to_wgsl(gctx), "binding_array<MyType1, C>");
+        assert_eq!(array.to_wgsl(gctx), "binding_array<MyType1, 32>");
     }
 }
 

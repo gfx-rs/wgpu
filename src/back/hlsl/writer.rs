@@ -824,15 +824,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         write!(self.out, "[")?;
 
-        // Write the array size
-        // Writes nothing if `ArraySize::Dynamic`
-        // Panics if `ArraySize::Constant` has a constant that isn't an sint or uint
         match size {
-            crate::ArraySize::Constant(const_handle) => {
-                let size = module.constants[const_handle].to_array_length().unwrap();
+            crate::ArraySize::Constant(size) => {
                 write!(self.out, "{size}")?;
             }
-            crate::ArraySize::Dynamic => {}
+            crate::ArraySize::Dynamic => unreachable!(),
         }
 
         write!(self.out, "]")?;

@@ -503,10 +503,9 @@ impl<W: Write> Writer<W> {
                 // array<A> -- Dynamic array
                 write!(self.out, "array<")?;
                 match size {
-                    crate::ArraySize::Constant(handle) => {
+                    crate::ArraySize::Constant(len) => {
                         self.write_type(module, base)?;
-                        write!(self.out, ",")?;
-                        self.write_constant(module, handle)?;
+                        write!(self.out, ", {len}")?;
                     }
                     crate::ArraySize::Dynamic => {
                         self.write_type(module, base)?;
@@ -518,10 +517,9 @@ impl<W: Write> Writer<W> {
                 // More info https://github.com/gpuweb/gpuweb/issues/2105
                 write!(self.out, "binding_array<")?;
                 match size {
-                    crate::ArraySize::Constant(handle) => {
+                    crate::ArraySize::Constant(len) => {
                         self.write_type(module, base)?;
-                        write!(self.out, ",")?;
-                        self.write_constant(module, handle)?;
+                        write!(self.out, ", {len}")?;
                     }
                     crate::ArraySize::Dynamic => {
                         self.write_type(module, base)?;

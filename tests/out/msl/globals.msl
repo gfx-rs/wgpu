@@ -10,7 +10,7 @@ struct _mslBufferSizes {
 
 constexpr constant bool Foo_1 = true;
 struct type_2 {
-    float inner[10u];
+    float inner[10];
 };
 struct FooStruct {
     metal::packed_float3 v3_;

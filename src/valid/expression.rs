@@ -244,9 +244,9 @@ impl super::Validator {
                         } => size as u32,
                         Ti::Matrix { columns, .. } => columns as u32,
                         Ti::Array {
-                            size: crate::ArraySize::Constant(handle),
+                            size: crate::ArraySize::Constant(len),
                             ..
-                        } => module.constants[handle].to_array_length().unwrap(),
+                        } => len.get(),
                         Ti::Array { .. } | Ti::BindingArray { .. } => u32::MAX, // can't statically know, but need run-time checks
                         Ti::Pointer { base, .. } if top_level => {
                             resolve_index_limit(module, top, &module.types[base].inner, false)?

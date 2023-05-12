@@ -221,13 +221,7 @@ impl<'a> Display for TypeContext<'a> {
                 {
                     write!(out, "{NAMESPACE}::array<{base_tyname}, {override_size}>")
                 } else if let crate::ArraySize::Constant(size) = size {
-                    let constant_ctx = ConstantContext {
-                        handle: size,
-                        arena: self.gctx.constants,
-                        names: self.names,
-                        first_time: false,
-                    };
-                    write!(out, "{NAMESPACE}::array<{base_tyname}, {constant_ctx}>")
+                    write!(out, "{NAMESPACE}::array<{base_tyname}, {size}>")
                 } else {
                     unreachable!("metal requires all arrays be constant sized");
                 }
@@ -2338,15 +2332,12 @@ impl<W: Write> Writer<W> {
                             // to convert from a wrapped struct to a raw array, e.g.
                             // `float gl_ClipDistance1 [[clip_distance]] [1];`.
                             if let crate::TypeInner::Array {
-                                size: crate::ArraySize::Constant(const_handle),
+                                size: crate::ArraySize::Constant(size),
                                 ..
                             } = context.module.types[member.ty].inner
                             {
-                                let size = context.module.constants[const_handle]
-                                    .to_array_length()
-                                    .unwrap();
                                 write!(self.out, "{comma} {{")?;
-                                for j in 0..size {
+                                for j in 0..size.get() {
                                     if j != 0 {
                                         write!(self.out, ",")?;
                                     }
@@ -3163,14 +3154,7 @@ impl<W: Write> Writer<W> {
                     };
 
                     match size {
-                        crate::ArraySize::Constant(const_handle) => {
-                            let coco = ConstantContext {
-                                handle: const_handle,
-                                arena: &module.constants,
-                                names: &self.names,
-                                first_time: false,
-                            };
-
+                        crate::ArraySize::Constant(size) => {
                             writeln!(self.out, "struct {name} {{")?;
                             writeln!(
                                 self.out,
@@ -3178,7 +3162,7 @@ impl<W: Write> Writer<W> {
                                 back::INDENT,
                                 base_name,
                                 WRAPPED_ARRAY_FIELD,
-                                coco
+                                size
                             )?;
                             writeln!(self.out, "}};")?;
                         }
@@ -3775,9 +3759,9 @@ impl<W: Write> Writer<W> {
 
                         let array_len = match module.types[ty].inner {
                             crate::TypeInner::Array {
-                                size: crate::ArraySize::Constant(handle),
+                                size: crate::ArraySize::Constant(size),
                                 ..
-                            } => module.constants[handle].to_array_length(),
+                            } => Some(size),
                             _ => None,
                         };
                         let resolved = options.resolve_local_binding(binding, out_mode)?;

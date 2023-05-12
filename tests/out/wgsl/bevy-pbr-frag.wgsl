@@ -20,8 +20,8 @@ struct CameraPosition {
 struct Lights {
     AmbientColor: vec4<f32>,
     NumLights: vec4<u32>,
-    PointLights: array<PointLight,10u>,
-    DirectionalLights: array<DirectionalLight,1u>,
+    PointLights: array<PointLight, 10>,
+    DirectionalLights: array<DirectionalLight, 1>,
 }
 
 struct StandardMaterial_base_color {

@@ -1,5 +1,5 @@
 struct Ah {
-    inner: array<f32,2>,
+    inner: array<f32, 2>,
 }
 
 @group(0) @binding(0) 

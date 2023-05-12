@@ -9,19 +9,19 @@ struct FragmentIn {
 @group(0) @binding(0) 
 var texture_array_unbounded: binding_array<texture_2d<f32>>;
 @group(0) @binding(1) 
-var texture_array_bounded: binding_array<texture_2d<f32>,5>;
+var texture_array_bounded: binding_array<texture_2d<f32>, 5>;
 @group(0) @binding(2) 
-var texture_array_2darray: binding_array<texture_2d_array<f32>,5>;
+var texture_array_2darray: binding_array<texture_2d_array<f32>, 5>;
 @group(0) @binding(3) 
-var texture_array_multisampled: binding_array<texture_multisampled_2d<f32>,5>;
+var texture_array_multisampled: binding_array<texture_multisampled_2d<f32>, 5>;
 @group(0) @binding(4) 
-var texture_array_depth: binding_array<texture_depth_2d,5>;
+var texture_array_depth: binding_array<texture_depth_2d, 5>;
 @group(0) @binding(5) 
-var texture_array_storage: binding_array<texture_storage_2d<rgba32float,write>,5>;
+var texture_array_storage: binding_array<texture_storage_2d<rgba32float,write>, 5>;
 @group(0) @binding(6) 
-var samp: binding_array<sampler,5>;
+var samp: binding_array<sampler, 5>;
 @group(0) @binding(7) 
-var samp_comp: binding_array<sampler_comparison,5>;
+var samp_comp: binding_array<sampler_comparison, 5>;
 @group(0) @binding(8) 
 var<uniform> uni: UniformIndex;
 

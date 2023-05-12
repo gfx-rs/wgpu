@@ -11,9 +11,9 @@ struct gen___atomic_compare_exchange_resultUint4_ {
 const SIZE: u32 = 128u;
 
 @group(0) @binding(0) 
-var<storage, read_write> arr_i32_: array<atomic<i32>,SIZE>;
+var<storage, read_write> arr_i32_: array<atomic<i32>, 128>;
 @group(0) @binding(1) 
-var<storage, read_write> arr_u32_: array<atomic<u32>,SIZE>;
+var<storage, read_write> arr_u32_: array<atomic<u32>, 128>;
 
 @compute @workgroup_size(1, 1, 1) 
 fn test_atomic_compare_exchange_i32_() {

@@ -1,5 +1,5 @@
 struct Data {
-    vecs: array<vec4<f32>,42u>,
+    vecs: array<vec4<f32>, 42>,
 }
 
 const NUM_VECS: i32 = 42;

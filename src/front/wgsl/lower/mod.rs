@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -2160,8 +2162,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     base,
                     size: match size {
                         ast::ArraySize::Constant(constant) => {
+                            let span = ctx.ast_expressions.get_span(constant);
                             let constant = self.constant(constant, ctx.reborrow())?;
-                            crate::ArraySize::Constant(constant)
+                            let size = ctx.module.constants[constant]
+                                .to_array_length()
+                                .ok_or(Error::ExpectedArraySize(span))?;
+                            let size =
+                                NonZeroU32::new(size).ok_or(Error::NonPositiveArrayLength(span))?;
+                            crate::ArraySize::Constant(size)
                         }
                         ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
                     },
@@ -2187,8 +2195,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     base,
                     size: match size {
                         ast::ArraySize::Constant(constant) => {
+                            let span = ctx.ast_expressions.get_span(constant);
                             let constant = self.constant(constant, ctx.reborrow())?;
-                            crate::ArraySize::Constant(constant)
+                            let size = ctx.module.constants[constant]
+                                .to_array_length()
+                                .ok_or(Error::ExpectedArraySize(span))?;
+                            let size =
+                                NonZeroU32::new(size).ok_or(Error::NonPositiveArrayLength(span))?;
+                            crate::ArraySize::Constant(size)
                         }
                         ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
                     },

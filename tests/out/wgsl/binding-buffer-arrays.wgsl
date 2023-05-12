@@ -11,7 +11,7 @@ struct FragmentIn {
 }
 
 @group(0) @binding(0) 
-var<storage> storage_array: binding_array<Foo,1>;
+var<storage> storage_array: binding_array<Foo, 1>;
 @group(0) @binding(10) 
 var<uniform> uni: UniformIndex;
 

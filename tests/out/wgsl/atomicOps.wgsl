@@ -1,16 +1,16 @@
 struct Struct {
     atomic_scalar: atomic<u32>,
-    atomic_arr: array<atomic<i32>,2>,
+    atomic_arr: array<atomic<i32>, 2>,
 }
 
 @group(0) @binding(0) 
 var<storage, read_write> storage_atomic_scalar: atomic<u32>;
 @group(0) @binding(1) 
-var<storage, read_write> storage_atomic_arr: array<atomic<i32>,2>;
+var<storage, read_write> storage_atomic_arr: array<atomic<i32>, 2>;
 @group(0) @binding(2) 
 var<storage, read_write> storage_struct: Struct;
 var<workgroup> workgroup_atomic_scalar: atomic<u32>;
-var<workgroup> workgroup_atomic_arr: array<atomic<i32>,2>;
+var<workgroup> workgroup_atomic_arr: array<atomic<i32>, 2>;
 var<workgroup> workgroup_struct: Struct;
 
 @compute @workgroup_size(2, 1, 1) 

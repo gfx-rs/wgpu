@@ -22,13 +22,13 @@ struct FragmentOutput {
 
 var<private> vert: VertexData;
 var<private> frag: FragmentData;
-var<private> in_array_2: array<vec4<f32>,2u>;
-var<private> out_array: array<vec4<f32>,2u>;
-var<private> array_2d: array<array<f32,2u>,2u>;
-var<private> array_toomanyd: array<array<array<array<array<array<array<f32,2u>,2u>,2u>,2u>,2u>,2u>,2u>;
+var<private> in_array_2: array<vec4<f32>, 2>;
+var<private> out_array: array<vec4<f32>, 2>;
+var<private> array_2d: array<array<f32, 2>, 2>;
+var<private> array_toomanyd: array<array<array<array<array<array<array<f32, 2>, 2>, 2>, 2>, 2>, 2>, 2>;
 
 fn main_1() {
-    var positions: array<vec3<f32>,2u>;
+    var positions: array<vec3<f32>, 2>;
     var strct: TestStruct;
     var from_input_array: vec4<f32>;
     var a_1: f32;
@@ -38,7 +38,7 @@ fn main_1() {
     _ = (&vert.a);
     _ = (&frag.position);
     _ = (&frag.a);
-    positions = array<vec3<f32>,2u>(vec3<f32>(-(1.0), 1.0, 0.0), vec3<f32>(-(1.0), -(1.0), 0.0));
+    positions = array<vec3<f32>, 2>(vec3<f32>(-(1.0), 1.0, 0.0), vec3<f32>(-(1.0), -(1.0), 0.0));
     strct = TestStruct(f32(1), f32(2));
     let _e35 = in_array_2[1];
     from_input_array = _e35;

@@ -199,7 +199,7 @@ impl super::TypeInner {
     }
 
     /// Get the size of this type.
-    pub fn size(&self, gctx: GlobalCtx) -> u32 {
+    pub fn size(&self, _gctx: GlobalCtx) -> u32 {
         match *self {
             Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
             Self::Vector {
@@ -220,9 +220,7 @@ impl super::TypeInner {
                 stride,
             } => {
                 let count = match size {
-                    super::ArraySize::Constant(handle) => {
-                        gctx.constants[handle].to_array_length().unwrap_or(1)
-                    }
+                    super::ArraySize::Constant(count) => count.get(),
                     // A dynamically-sized array has to have at least one element
                     super::ArraySize::Dynamic => 1,
                 };

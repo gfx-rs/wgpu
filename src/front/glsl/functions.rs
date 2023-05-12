@@ -1316,22 +1316,17 @@ impl Frontend {
         ),
     ) {
         match self.module.types[ty].inner {
+            // TODO: Better error reporting
+            // right now we just don't walk the array if the size isn't known at
+            // compile time and let validation catch it
             TypeInner::Array {
                 base,
-                size: crate::ArraySize::Constant(constant),
+                size: crate::ArraySize::Constant(size),
                 ..
             } => {
                 let mut location = match binding {
                     crate::Binding::Location { location, .. } => location,
                     crate::Binding::BuiltIn(_) => return,
-                };
-
-                // TODO: Better error reporting
-                // right now we just don't walk the array if the size isn't known at
-                // compile time and let validation catch it
-                let size = match self.module.constants[constant].to_array_length() {
-                    Some(val) => val,
-                    None => return f(name, pointer, ty, binding, expressions),
                 };
 
                 let interpolation =
@@ -1343,7 +1338,7 @@ impl Frontend {
                             _ => crate::Interpolation::Flat,
                         });
 
-                for index in 0..size {
+                for index in 0..size.get() {
                     let member_pointer = expressions.append(
                         Expression::AccessIndex {
                             base: pointer,

@@ -30,7 +30,7 @@ var<uniform> u_entity: Entity;
 @group(0) @binding(1) 
 var<storage> s_lights: array<Light>;
 @group(0) @binding(1) 
-var<uniform> u_lights: array<Light,10>;
+var<uniform> u_lights: array<Light, 10>;
 @group(0) @binding(2) 
 var t_shadow: texture_depth_2d_array;
 @group(0) @binding(3) 

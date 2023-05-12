@@ -5,7 +5,7 @@
 using metal::uint;
 
 struct type_5 {
-    float inner[1u];
+    float inner[1];
 };
 struct gl_PerVertex {
     metal::float4 gl_Position;

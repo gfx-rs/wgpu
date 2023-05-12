@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::{
     front::glsl::{
         ast::{FunctionCall, FunctionCallKind, HirExpr, HirExprKind},
@@ -7,8 +9,7 @@ use crate::{
         token::{Token, TokenValue},
         Error, Frontend, Result, Span,
     },
-    ArraySize, BinaryOperator, Block, Constant, ConstantInner, Handle, Literal, ScalarValue, Type,
-    TypeInner, UnaryOperator,
+    ArraySize, BinaryOperator, Block, Handle, Literal, Type, TypeInner, UnaryOperator,
 };
 
 impl<'source> ParsingContext<'source> {
@@ -137,24 +138,23 @@ impl<'source> ParsingContext<'source> {
             {
                 let span = frontend.module.types.get_span(handle);
 
-                let constant = frontend.module.constants.fetch_or_append(
-                    Constant {
-                        name: None,
-                        specialization: None,
-                        inner: ConstantInner::Scalar {
-                            width: 4,
-                            value: ScalarValue::Uint(args.len() as u64),
-                        },
-                    },
-                    Span::default(),
-                );
+                let size = u32::try_from(args.len())
+                    .ok()
+                    .and_then(NonZeroU32::new)
+                    .ok_or(Error {
+                        kind: ErrorKind::SemanticError(
+                            "There must be at least one argument".into(),
+                        ),
+                        meta,
+                    })?;
+
                 handle = frontend.module.types.insert(
                     Type {
                         name: None,
                         inner: TypeInner::Array {
                             stride,
                             base,
-                            size: ArraySize::Constant(constant),
+                            size: ArraySize::Constant(size),
                         },
                     },
                     span,

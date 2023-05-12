@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use crate::{
     front::glsl::{
         ast::{QualifierKey, QualifierValue, StorageQualifier, StructLayout, TypeQualifiers},
@@ -37,20 +39,13 @@ impl<'source> ParsingContext<'source> {
                 ArraySize::Dynamic
             } else {
                 let (value, constant_span) = self.parse_uint_constant(frontend)?;
-                let constant = frontend.module.constants.fetch_or_append(
-                    crate::Constant {
-                        name: None,
-                        specialization: None,
-                        inner: crate::ConstantInner::Scalar {
-                            width: 4,
-                            value: crate::ScalarValue::Uint(value as u64),
-                        },
-                    },
-                    constant_span,
-                );
+                let size = NonZeroU32::new(value).ok_or(Error {
+                    kind: ErrorKind::SemanticError("Array size must be greater than zero".into()),
+                    meta: constant_span,
+                })?;
                 let end_span = self.expect(frontend, TokenValue::RightBracket)?.meta;
                 span.subsume(end_span);
-                ArraySize::Constant(constant)
+                ArraySize::Constant(size)
             };
 
             frontend.layouter.update(frontend.module.to_ctx()).unwrap();

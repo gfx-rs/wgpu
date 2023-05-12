@@ -1359,8 +1359,11 @@ impl Context {
                                 size: crate::ArraySize::Constant(size),
                                 ..
                             } => {
-                                let mut array_length =
-                                    self.add_expression(Expression::Constant(size), meta, body);
+                                let mut array_length = self.add_expression(
+                                    Expression::Literal(Literal::U32(size.get())),
+                                    meta,
+                                    body,
+                                );
                                 self.forced_conversion(
                                     frontend,
                                     &mut array_length,

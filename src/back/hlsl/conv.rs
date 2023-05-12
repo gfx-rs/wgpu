@@ -53,9 +53,7 @@ impl crate::TypeInner {
             }
             Self::Array { base, size, stride } => {
                 let count = match size {
-                    crate::ArraySize::Constant(handle) => {
-                        gctx.constants[handle].to_array_length().unwrap_or(1)
-                    }
+                    crate::ArraySize::Constant(size) => size.get(),
                     // A dynamically-sized array has to have at least one element
                     crate::ArraySize::Dynamic => 1,
                 };
@@ -94,8 +92,7 @@ impl crate::TypeInner {
                 size: crate::ArraySize::Constant(size),
                 ..
             } => Cow::Owned(format!(
-                "array{}_{}_",
-                gctx.constants[size].to_array_length().unwrap(),
+                "array{size}_{}_",
                 Self::hlsl_type_id(base, gctx, names)?
             )),
             crate::TypeInner::Struct { .. } => {

@@ -1164,7 +1164,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         selections: &[spirv::Word],
         type_arena: &UniqueArena<crate::Type>,
         expressions: &mut Arena<crate::Expression>,
-        constants: &Arena<crate::Constant>,
         span: crate::Span,
     ) -> Result<Handle<crate::Expression>, Error> {
         let selection = match selections.first() {
@@ -1173,6 +1172,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         };
         let root_span = expressions.get_span(root_expr);
         let root_lookup = self.lookup_type.lookup(root_type_id)?;
+
         let (count, child_type_id) = match type_arena[root_lookup.handle].inner {
             crate::TypeInner::Struct { ref members, .. } => {
                 let child_member = self
@@ -1183,15 +1183,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             crate::TypeInner::Array { size, .. } => {
                 let size = match size {
-                    crate::ArraySize::Constant(handle) => match constants[handle] {
-                        crate::Constant {
-                            specialization: Some(_),
-                            ..
-                        } => return Err(Error::UnsupportedType(root_lookup.handle)),
-                        ref unspecialized => unspecialized
-                            .to_array_length()
-                            .ok_or(Error::InvalidArraySize(handle))?,
-                    },
+                    crate::ArraySize::Constant(size) => size.get(),
                     // A runtime sized array is not a composite type
                     crate::ArraySize::Dynamic => {
                         return Err(Error::InvalidAccessType(root_type_id))
@@ -1232,7 +1224,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             &selections[1..],
             type_arena,
             expressions,
-            constants,
             span,
         )?;
 
@@ -1892,7 +1883,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         &selections,
                         ctx.type_arena,
                         ctx.expressions,
-                        ctx.const_arena,
                         span,
                     )?;
 
@@ -3507,20 +3497,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let semantics_id = self.next()?;
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
                     let semantics_const = self.lookup_constant.lookup(semantics_id)?;
-                    let exec_scope = match ctx.const_arena[exec_scope_const.handle].inner {
-                        crate::ConstantInner::Scalar {
-                            value: crate::ScalarValue::Uint(raw),
-                            width: _,
-                        } => raw as u32,
-                        _ => return Err(Error::InvalidBarrierScope(exec_scope_id)),
-                    };
-                    let semantics = match ctx.const_arena[semantics_const.handle].inner {
-                        crate::ConstantInner::Scalar {
-                            value: crate::ScalarValue::Uint(raw),
-                            width: _,
-                        } => raw as u32,
-                        _ => return Err(Error::InvalidBarrierMemorySemantics(semantics_id)),
-                    };
+
+                    let exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+                    let semantics = resolve_constant(ctx.gctx(), semantics_const.handle)
+                        .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
+
                     if exec_scope == spirv::Scope::Workgroup as u32 {
                         let mut flags = crate::Barrier::empty();
                         flags.set(
@@ -4396,6 +4378,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let length_id = self.next()?;
         let length_const = self.lookup_constant.lookup(length_id)?;
 
+        let size = resolve_constant(module.to_ctx(), length_const.handle)
+            .and_then(NonZeroU32::new)
+            .ok_or(Error::InvalidArraySize(length_const.handle))?;
+
         let decor = self.future_decor.remove(&id).unwrap_or_default();
         let base = self.lookup_type.lookup(type_id)?.handle;
 
@@ -4437,12 +4423,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         {
             crate::TypeInner::BindingArray {
                 base,
-                size: crate::ArraySize::Constant(length_const.handle),
+                size: crate::ArraySize::Constant(size),
             }
         } else {
             crate::TypeInner::Array {
                 base,
-                size: crate::ArraySize::Constant(length_const.handle),
+                size: crate::ArraySize::Constant(size),
                 stride: match decor.array_stride {
                     Some(stride) => stride.get(),
                     None => self.layouter[base].to_stride(),
@@ -5179,6 +5165,13 @@ fn make_index_literal(
 
     emitter.start(ctx.expressions);
     Ok(expr)
+}
+
+fn resolve_constant(
+    gctx: crate::proc::GlobalCtx,
+    constant: Handle<crate::Constant>,
+) -> Option<u32> {
+    gctx.constants[constant].to_array_length()
 }
 
 pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, Error> {

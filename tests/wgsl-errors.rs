@@ -921,26 +921,52 @@ fn invalid_arrays() {
         })
     }
 
-    check_validation! {
+    check(
         "alias Bad = array<f32, true>;",
+        r###"error: array element count must resolve to an integer scalar (u32 or i32)
+  ┌─ wgsl:1:24
+  │
+1 │ alias Bad = array<f32, true>;
+  │                        ^^^^ must resolve to u32/i32
+
+"###,
+    );
+
+    check(
         r#"
             const length: f32 = 2.718;
             alias Bad = array<f32, length>;
-        "#:
-        Err(naga::valid::ValidationError::Type {
-            source: naga::valid::TypeError::InvalidArraySizeConstant(_),
-            ..
-        })
-    }
+        "#,
+        r###"error: array element count must resolve to an integer scalar (u32 or i32)
+  ┌─ wgsl:3:36
+  │
+3 │             alias Bad = array<f32, length>;
+  │                                    ^^^^^^ must resolve to u32/i32
 
-    check_validation! {
+"###,
+    );
+
+    check(
         "alias Bad = array<f32, 0>;",
-        "alias Bad = array<f32, -1>;":
-        Err(naga::valid::ValidationError::Type {
-            source: naga::valid::TypeError::NonPositiveArrayLength(_),
-            ..
-        })
-    }
+        r###"error: array element count must be greater than zero
+  ┌─ wgsl:1:24
+  │
+1 │ alias Bad = array<f32, 0>;
+  │                        ^ must be positive
+
+"###,
+    );
+
+    check(
+        "alias Bad = array<f32, -1>;",
+        r###"error: array element count must resolve to an integer scalar (u32 or i32)
+  ┌─ wgsl:1:24
+  │
+1 │ alias Bad = array<f32, -1>;
+  │                        ^^ must resolve to u32/i32
+
+"###,
+    );
 }
 
 #[test]

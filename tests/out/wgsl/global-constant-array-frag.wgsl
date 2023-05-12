@@ -1,15 +1,15 @@
-const array_: array<f32,2u> = array<f32,2u>(1.0, 2.0);
+const array_: array<f32, 2> = array<f32, 2>(1.0, 2.0);
 var<private> i: u32;
 
 fn main_1() {
-    var local: array<f32,2u> = array<f32,2u>(1.0, 2.0);
+    var local: array<f32, 2> = array<f32, 2>(1.0, 2.0);
 
     let _e2 = i;
 }
 
 @fragment 
 fn main() {
-    _ = array<f32,2u>(1.0, 2.0);
+    _ = array<f32, 2>(1.0, 2.0);
     main_1();
     return;
 }

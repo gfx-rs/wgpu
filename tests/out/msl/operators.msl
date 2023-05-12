@@ -12,7 +12,7 @@ struct type_13 {
     Foo inner[3];
 };
 struct type_14 {
-    int inner[4u];
+    int inner[4];
 };
 constant metal::float4 v_f32_one = {1.0, 1.0, 1.0, 1.0};
 constant metal::float4 v_f32_zero = {0.0, 0.0, 0.0, 0.0};
