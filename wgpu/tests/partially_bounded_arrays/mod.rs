@@ -48,7 +48,7 @@ fn partially_bounded_array() {
 
             let texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let size = std::mem::size_of::<f32>() as u64 * 4 as u64;
+            let size = std::mem::size_of::<f32>() as u64 * 4_u64;
             let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size,
