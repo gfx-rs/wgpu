@@ -669,7 +669,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         unsafe { self.begin_pass(super::PassKind::Render, desc.label) };
 
         // Start timestamp if any (before all other commands but after debug marker)
-        if let Some(timestamp_writes) = &desc.timestamp_writes {
+        if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
             if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
                 unsafe {
                     self.write_timestamp(timestamp_writes.query_set, index);
@@ -1136,7 +1136,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         unsafe { self.begin_pass(super::PassKind::Compute, desc.label) };
 
-        if let Some(timestamp_writes) = &desc.timestamp_writes {
+        if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
             if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
                 unsafe {
                     self.write_timestamp(timestamp_writes.query_set, index);
