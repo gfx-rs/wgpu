@@ -16,7 +16,9 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     callback_data_ptr: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _user_data: *mut c_void,
 ) -> vk::Bool32 {
+    const VUID_VKSWAPCHAINCREATEINFOKHR_IMAGEEXTENT_01274: i32 = 0x7cd0911d;
     use std::borrow::Cow;
+
     if thread::panicking() {
         return vk::FALSE;
     }
@@ -41,6 +43,12 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     } else {
         unsafe { CStr::from_ptr(cd.p_message) }.to_string_lossy()
     };
+
+    // Silence Vulkan Validation error "VUID-VkSwapchainCreateInfoKHR-imageExtent-01274"
+    // - it's a false positive due to the inherent racy-ness of surface resizing
+    if cd.message_id_number == VUID_VKSWAPCHAINCREATEINFOKHR_IMAGEEXTENT_01274 {
+        return vk::FALSE;
+    }
 
     let _ = std::panic::catch_unwind(|| {
         log::log!(
@@ -683,12 +691,12 @@ impl crate::Instance<super::Api> for super::Instance {
         // Detect if it's an Intel + NVidia configuration with Optimus
         let has_nvidia_dgpu = exposed_adapters.iter().any(|exposed| {
             exposed.info.device_type == wgt::DeviceType::DiscreteGpu
-                && exposed.info.vendor == db::nvidia::VENDOR as usize
+                && exposed.info.vendor == db::nvidia::VENDOR
         });
         if cfg!(target_os = "linux") && has_nvidia_dgpu && self.shared.has_nv_optimus {
             for exposed in exposed_adapters.iter_mut() {
                 if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
-                    && exposed.info.vendor == db::intel::VENDOR as usize
+                    && exposed.info.vendor == db::intel::VENDOR
                 {
                     // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
                     log::warn!(

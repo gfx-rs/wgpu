@@ -193,7 +193,7 @@ impl Example {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: config.format,
+            format: config.view_formats[0],
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -533,7 +533,7 @@ impl framework::Example for Example {
                 // Describes how the colour will be interpolated
                 // and assigned to the output attachment.
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
                             src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -593,7 +593,7 @@ impl framework::Example for Example {
             fragment: Some(wgpu::FragmentState {
                 module: &terrain_module,
                 entry_point: "fs_main",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Ccw,
@@ -616,7 +616,7 @@ impl framework::Example for Example {
             let mut encoder =
                 device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                     label: None,
-                    color_formats: &[Some(config.format)],
+                    color_formats: &[Some(config.view_formats[0])],
                     depth_stencil: Some(wgpu::RenderBundleDepthStencil {
                         format: wgpu::TextureFormat::Depth32Float,
                         depth_read_only: false,

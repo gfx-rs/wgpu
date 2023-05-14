@@ -12,12 +12,15 @@ use crate::{
     track::{TextureSelector, TextureTracker},
 };
 
-use hal::{auxil::align_to, CommandEncoder as _};
+use hal::CommandEncoder as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect};
+use wgt::{
+    math::align_to, BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect,
+};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,

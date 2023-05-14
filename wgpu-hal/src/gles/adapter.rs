@@ -170,7 +170,7 @@ impl super::Adapter {
 
         wgt::AdapterInfo {
             name: renderer_orig,
-            vendor: vendor_id as usize,
+            vendor: vendor_id,
             device: 0,
             device_type: inferred_device_type,
             driver: String::new(),
@@ -315,10 +315,11 @@ impl super::Adapter {
                 && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
-        downlevel_flags.set(
-            wgt::DownlevelFlags::ANISOTROPIC_FILTERING,
-            extensions.contains("EXT_texture_filter_anisotropic"),
-        );
+        if extensions.contains("EXT_texture_filter_anisotropic") {
+            let max_aniso =
+                unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_MAX_ANISOTROPY_EXT) } as u32;
+            downlevel_flags.set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, max_aniso >= 16);
+        }
         downlevel_flags.set(
             wgt::DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED,
             !(cfg!(target_arch = "wasm32") || is_angle),
@@ -830,7 +831,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Bc4RSnorm
             | Tf::Bc5RgUnorm
             | Tf::Bc5RgSnorm
-            | Tf::Bc6hRgbSfloat
+            | Tf::Bc6hRgbFloat
             | Tf::Bc6hRgbUfloat
             | Tf::Bc7RgbaUnorm
             | Tf::Bc7RgbaUnormSrgb => bcn_features,

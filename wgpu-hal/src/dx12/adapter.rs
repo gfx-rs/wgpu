@@ -115,8 +115,8 @@ impl super::Adapter {
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
             name: device_name,
-            vendor: desc.VendorId as usize,
-            device: desc.DeviceId as usize,
+            vendor: desc.VendorId,
+            device: desc.DeviceId,
             device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
                 workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu
@@ -223,7 +223,8 @@ impl super::Adapter {
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::PUSH_CONSTANTS
-            | wgt::Features::SHADER_PRIMITIVE_INDEX;
+            | wgt::Features::SHADER_PRIMITIVE_INDEX
+            | wgt::Features::RG11B10UFLOAT_RENDERABLE;
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,

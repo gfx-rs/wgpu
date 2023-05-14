@@ -44,7 +44,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
 
         profiling::scope!("IDXGIFactory1::EnumAdapters1");
         let mut adapter1 = d3d12::WeakPtr::<dxgi::IDXGIAdapter1>::null();
-        let hr = unsafe { factory.EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _) };
+        let hr = unsafe { factory.EnumAdapters1(cur_index, adapter1.mut_self()) };
 
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
             break;

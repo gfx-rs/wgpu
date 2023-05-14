@@ -53,7 +53,7 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 
 pub struct FailureCase {
     backends: Option<wgpu::Backends>,
-    vendor: Option<usize>,
+    vendor: Option<u32>,
     adapter: Option<String>,
     skip: bool,
 }
@@ -79,6 +79,7 @@ impl Default for TestParameters {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FailureReasons: u8 {
         const BACKEND = 1 << 0;
         const VENDOR = 1 << 1;
@@ -169,7 +170,7 @@ impl TestParameters {
     pub fn specific_failure(
         mut self,
         backends: Option<Backends>,
-        vendor: Option<usize>,
+        vendor: Option<u32>,
         device: Option<&'static str>,
         skip: bool,
     ) -> Self {
@@ -357,7 +358,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         let canvas = create_html_canvas();
 
         let surface = instance
-            .create_surface_from_canvas(&canvas)
+            .create_surface_from_canvas(canvas.clone())
             .expect("could not create surface from canvas");
 
         surface_guard = SurfaceGuard { canvas };

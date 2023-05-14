@@ -22,7 +22,7 @@ use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat, TextureViewDimension};
+use wgt::{BufferAddress, TextureFormat, TextureSampleType, TextureViewDimension};
 
 use std::{borrow::Cow, iter, mem, num::NonZeroU32, ops::Range, ptr};
 
@@ -84,6 +84,7 @@ pub(crate) struct RenderPassContext {
     pub multiview: Option<NonZeroU32>,
 }
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RenderPassCompatibilityError {
     #[error(
         "Incompatible color attachments at indices {indices:?}: the RenderPass uses textures with formats {expected:?} but the {ty:?} uses attachments with formats {actual:?}",
@@ -343,6 +344,7 @@ pub struct Device<A: HalApi> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateDeviceError {
     #[error("Not enough memory left")]
     OutOfMemory,
@@ -901,7 +903,10 @@ impl<A: HalApi> Device<A> {
         let missing_allowed_usages = desc.usage - format_features.allowed_usages;
         if !missing_allowed_usages.is_empty() {
             // detect downlevel incompatibilities
-            let wgpu_allowed_usages = desc.format.guaranteed_format_features().allowed_usages;
+            let wgpu_allowed_usages = desc
+                .format
+                .guaranteed_format_features(self.features)
+                .allowed_usages;
             let wgpu_missing_usages = desc.usage - wgpu_allowed_usages;
             return Err(CreateTextureError::InvalidFormatUsages(
                 missing_allowed_usages,
@@ -1333,36 +1338,64 @@ impl<A: HalApi> Device<A> {
             self.require_features(wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO)?;
         }
 
-        if desc.lod_min_clamp < 0.0 || desc.lod_max_clamp < desc.lod_min_clamp {
-            return Err(resource::CreateSamplerError::InvalidLodClamp(
-                desc.lod_min_clamp..desc.lod_max_clamp,
+        if desc.lod_min_clamp < 0.0 {
+            return Err(resource::CreateSamplerError::InvalidLodMinClamp(
+                desc.lod_min_clamp,
+            ));
+        }
+        if desc.lod_max_clamp < desc.lod_min_clamp {
+            return Err(resource::CreateSamplerError::InvalidLodMaxClamp {
+                lod_min_clamp: desc.lod_min_clamp,
+                lod_max_clamp: desc.lod_max_clamp,
+            });
+        }
+
+        if desc.anisotropy_clamp < 1 {
+            return Err(resource::CreateSamplerError::InvalidAnisotropy(
+                desc.anisotropy_clamp,
             ));
         }
 
-        let lod_clamp = if desc.lod_min_clamp > 0.0 || desc.lod_max_clamp < 32.0 {
-            Some(desc.lod_min_clamp..desc.lod_max_clamp)
-        } else {
-            None
-        };
+        if desc.anisotropy_clamp != 1 {
+            if !matches!(desc.min_filter, wgt::FilterMode::Linear) {
+                return Err(
+                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                        filter_type: resource::SamplerFilterErrorType::MinFilter,
+                        filter_mode: desc.min_filter,
+                        anisotropic_clamp: desc.anisotropy_clamp,
+                    },
+                );
+            }
+            if !matches!(desc.mag_filter, wgt::FilterMode::Linear) {
+                return Err(
+                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                        filter_type: resource::SamplerFilterErrorType::MagFilter,
+                        filter_mode: desc.mag_filter,
+                        anisotropic_clamp: desc.anisotropy_clamp,
+                    },
+                );
+            }
+            if !matches!(desc.mipmap_filter, wgt::FilterMode::Linear) {
+                return Err(
+                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                        filter_type: resource::SamplerFilterErrorType::MipmapFilter,
+                        filter_mode: desc.mipmap_filter,
+                        anisotropic_clamp: desc.anisotropy_clamp,
+                    },
+                );
+            }
+        }
 
-        let anisotropy_clamp = if let Some(clamp) = desc.anisotropy_clamp {
-            let clamp = clamp.get();
-            let valid_clamp =
-                clamp <= hal::MAX_ANISOTROPY && conv::is_power_of_two_u32(clamp as u32);
-            if !valid_clamp {
-                return Err(resource::CreateSamplerError::InvalidClamp(clamp));
-            }
-            if self
-                .downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
-            {
-                std::num::NonZeroU8::new(clamp)
-            } else {
-                None
-            }
+        let anisotropy_clamp = if self
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::ANISOTROPIC_FILTERING)
+        {
+            // Clamp anisotropy clamp to [1, 16] per the wgpu-hal interface
+            desc.anisotropy_clamp.min(16)
         } else {
-            None
+            // If it isn't supported, set this unconditionally to 1
+            1
         };
 
         //TODO: check for wgt::DownlevelFlags::COMPARISON_SAMPLERS
@@ -1373,7 +1406,7 @@ impl<A: HalApi> Device<A> {
             mag_filter: desc.mag_filter,
             min_filter: desc.min_filter,
             mipmap_filter: desc.mipmap_filter,
-            lod_clamp,
+            lod_clamp: desc.lod_min_clamp..desc.lod_max_clamp,
             compare: desc.compare,
             anisotropy_clamp,
             border_color: desc.border_color,
@@ -1687,6 +1720,16 @@ impl<A: HalApi> Device<A> {
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
                 ),
+                Bt::Texture {
+                    multisampled: true,
+                    sample_type: TextureSampleType::Float { filterable: true },
+                    ..
+                } => {
+                    return Err(binding_model::CreateBindGroupLayoutError::Entry {
+                        binding: entry.binding,
+                        error: binding_model::BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
+                    });
+                }
                 Bt::Texture { .. } => (
                     Some(wgt::Features::TEXTURE_BINDING_ARRAY),
                     WritableStorage::No,
@@ -2801,10 +2844,16 @@ impl<A: HalApi> Device<A> {
                     self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                 }
 
-                io.insert(
+                let previous = io.insert(
                     attribute.shader_location,
                     validation::InterfaceVar::vertex_attribute(attribute.format),
                 );
+
+                if previous.is_some() {
+                    return Err(pipeline::CreateRenderPipelineError::ShaderLocationClash(
+                        attribute.shader_location,
+                    ));
+                }
             }
             total_attributes += vb_state.attributes.len();
         }
@@ -3229,7 +3278,7 @@ impl<A: HalApi> Device<A> {
         if using_device_features || downlevel {
             Ok(adapter.get_texture_format_features(format))
         } else {
-            Ok(format.guaranteed_format_features())
+            Ok(format.guaranteed_format_features(self.features))
         }
     }
 
@@ -3678,6 +3727,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
+        fid.assign_error(label.borrow_or_default(), &mut token);
+    }
+
+    pub fn create_render_bundle_error<A: HalApi>(
+        &self,
+        id_in: Input<G, id::RenderBundleId>,
+        label: Label,
+    ) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.render_bundles.prepare(id_in);
+
         let (_, mut token) = hub.devices.read(&mut token);
         fid.assign_error(label.borrow_or_default(), &mut token);
     }
@@ -3690,7 +3751,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let fid = hub.textures.prepare(id_in);
 
-        let (_, mut token) = hub.devices.read(&mut token);
         fid.assign_error(label.borrow_or_default(), &mut token);
     }
 
@@ -5516,7 +5576,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if !caps.formats.contains(&config.format) {
                     break 'outer E::UnsupportedFormat {
                         requested: config.format,
-                        available: caps.formats.clone(),
+                        available: caps.formats,
                     };
                 }
                 if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {

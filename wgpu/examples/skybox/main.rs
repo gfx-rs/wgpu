@@ -207,7 +207,7 @@ impl framework::Example for Skybox {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_sky",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,
@@ -238,7 +238,7 @@ impl framework::Example for Skybox {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_entity",
-                targets: &[Some(config.format.into())],
+                targets: &[Some(config.view_formats[0].into())],
             }),
             primitive: wgpu::PrimitiveState {
                 front_face: wgpu::FrontFace::Cw,

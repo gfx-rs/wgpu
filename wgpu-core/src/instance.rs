@@ -365,6 +365,7 @@ impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum IsSurfaceSupportedError {
     #[error("Invalid adapter")]
     InvalidAdapter,
@@ -373,6 +374,7 @@ pub enum IsSurfaceSupportedError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum GetSurfaceSupportError {
     #[error("Invalid adapter")]
     InvalidAdapter,
@@ -384,6 +386,7 @@ pub enum GetSurfaceSupportError {
 
 #[derive(Clone, Debug, Error)]
 /// Error when requesting a device from the adaptor
+#[non_exhaustive]
 pub enum RequestDeviceError {
     #[error("Parent adapter is invalid")]
     InvalidAdapter,
@@ -426,6 +429,7 @@ impl<I: Clone> AdapterInputs<'_, I> {
 pub struct InvalidAdapter;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RequestAdapterError {
     #[error("No suitable adapter found")]
     NotFound,
@@ -516,7 +520,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
         id_in: Input<G, SurfaceId>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_canvas");
@@ -543,7 +547,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
         id_in: Input<G, SurfaceId>,
     ) -> Result<SurfaceId, hal::InstanceError> {
         profiling::scope!("Instance::create_surface_webgl_offscreen_canvas");
@@ -627,7 +631,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Surface::drop");
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
-        self.instance.destroy_surface(surface.unwrap());
+        let mut surface = surface.unwrap();
+
+        fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
+            global: &Global<G>,
+            surface: &mut HalSurface<A>,
+            present: &Presentation,
+        ) {
+            let hub = HalApi::hub(global);
+            hub.surface_unconfigure(present.device_id.value, surface);
+        }
+
+        if let Some(present) = surface.presentation.take() {
+            match present.backend() {
+                #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                Backend::Vulkan => unconfigure(self, surface.vulkan.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                Backend::Metal => unconfigure(self, surface.metal.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "dx12", windows))]
+                Backend::Dx12 => unconfigure(self, surface.dx12.as_mut().unwrap(), &present),
+                #[cfg(all(feature = "dx11", windows))]
+                Backend::Dx11 => unconfigure(self, surface.dx11.as_mut().unwrap(), &present),
+                #[cfg(feature = "gles")]
+                Backend::Gl => unconfigure(self, surface.gl.as_mut().unwrap(), &present),
+                _ => unreachable!(),
+            }
+        }
+
+        self.instance.destroy_surface(surface);
     }
 
     fn enumerate<A: HalApi>(

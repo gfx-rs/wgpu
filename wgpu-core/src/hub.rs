@@ -470,19 +470,58 @@ impl<T, I: id::TypedId> Storage<T, I> {
     }
 }
 
-/// Type system for enforcing the lock order on shared HUB structures.
-/// If type A implements `Access<B>`, that means we are allowed to proceed
-/// with locking resource `B` after we lock `A`.
+/// Type system for enforcing the lock order on [`Hub`] fields.
 ///
-/// The implementations basically describe the edges in a directed graph
-/// of lock transitions. As long as it doesn't have loops, we can have
-/// multiple concurrent paths on this graph (from multiple threads) without
-/// deadlocks, i.e. there is always a path whose next resource is not locked
-/// by some other path, at any time.
+/// If type `A` implements `Access<B>`, that means we are allowed to
+/// proceed with locking resource `B` after we lock `A`.
+///
+/// The implementations of `Access` basically describe the edges in an
+/// acyclic directed graph of lock transitions. As long as it doesn't have
+/// cycles, any number of threads can acquire locks along paths through
+/// the graph without deadlock. That is, if you look at each thread's
+/// lock acquisitions as steps along a path in the graph, then because
+/// there are no cycles in the graph, there must always be some thread
+/// that is able to acquire its next lock, or that is about to release
+/// a lock. (Assume that no thread just sits on its locks forever.)
+///
+/// Locks must be acquired in the following order:
+///
+/// - [`Adapter`]
+/// - [`Device`]
+/// - [`CommandBuffer`]
+/// - [`RenderBundle`]
+/// - [`PipelineLayout`]
+/// - [`BindGroupLayout`]
+/// - [`BindGroup`]
+/// - [`ComputePipeline`]
+/// - [`RenderPipeline`]
+/// - [`ShaderModule`]
+/// - [`Buffer`]
+/// - [`StagingBuffer`]
+/// - [`Texture`]
+/// - [`TextureView`]
+/// - [`Sampler`]
+/// - [`QuerySet`]
+///
+/// That is, you may only acquire a new lock on a `Hub` field if it
+/// appears in the list after all the other fields you're already
+/// holding locks for. When you are holding no locks, you can start
+/// anywhere.
+///
+/// It's fine to add more `Access` implementations as needed, as long
+/// as you do not introduce a cycle. In other words, as long as there
+/// is some ordering you can put the resource types in that respects
+/// the extant `Access` implementations, that's fine.
+///
+/// See the documentation for [`Hub`] for more details.
 pub trait Access<A> {}
 
 pub enum Root {}
-//TODO: establish an order instead of declaring all the pairs.
+
+// These impls are arranged so that the target types (that is, the `T`
+// in `Access<T>`) appear in locking order.
+//
+// TODO: establish an order instead of declaring all the pairs.
 impl Access<Instance> for Root {}
 impl Access<Surface> for Root {}
 impl Access<Surface> for Instance {}
@@ -491,6 +530,10 @@ impl<A: HalApi> Access<Adapter<A>> for Surface {}
 impl<A: HalApi> Access<Device<A>> for Root {}
 impl<A: HalApi> Access<Device<A>> for Surface {}
 impl<A: HalApi> Access<Device<A>> for Adapter<A> {}
+impl<A: HalApi> Access<CommandBuffer<A>> for Root {}
+impl<A: HalApi> Access<CommandBuffer<A>> for Device<A> {}
+impl<A: HalApi> Access<RenderBundle<A>> for Device<A> {}
+impl<A: HalApi> Access<RenderBundle<A>> for CommandBuffer<A> {}
 impl<A: HalApi> Access<PipelineLayout<A>> for Root {}
 impl<A: HalApi> Access<PipelineLayout<A>> for Device<A> {}
 impl<A: HalApi> Access<PipelineLayout<A>> for RenderBundle<A> {}
@@ -502,21 +545,11 @@ impl<A: HalApi> Access<BindGroup<A>> for Device<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for BindGroupLayout<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for PipelineLayout<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for CommandBuffer<A> {}
-impl<A: HalApi> Access<CommandBuffer<A>> for Root {}
-impl<A: HalApi> Access<CommandBuffer<A>> for Device<A> {}
-impl<A: HalApi> Access<RenderBundle<A>> for Device<A> {}
-impl<A: HalApi> Access<RenderBundle<A>> for CommandBuffer<A> {}
 impl<A: HalApi> Access<ComputePipeline<A>> for Device<A> {}
 impl<A: HalApi> Access<ComputePipeline<A>> for BindGroup<A> {}
 impl<A: HalApi> Access<RenderPipeline<A>> for Device<A> {}
 impl<A: HalApi> Access<RenderPipeline<A>> for BindGroup<A> {}
 impl<A: HalApi> Access<RenderPipeline<A>> for ComputePipeline<A> {}
-impl<A: HalApi> Access<QuerySet<A>> for Root {}
-impl<A: HalApi> Access<QuerySet<A>> for Device<A> {}
-impl<A: HalApi> Access<QuerySet<A>> for CommandBuffer<A> {}
-impl<A: HalApi> Access<QuerySet<A>> for RenderPipeline<A> {}
-impl<A: HalApi> Access<QuerySet<A>> for ComputePipeline<A> {}
-impl<A: HalApi> Access<QuerySet<A>> for Sampler<A> {}
 impl<A: HalApi> Access<ShaderModule<A>> for Device<A> {}
 impl<A: HalApi> Access<ShaderModule<A>> for BindGroupLayout<A> {}
 impl<A: HalApi> Access<Buffer<A>> for Root {}
@@ -537,22 +570,51 @@ impl<A: HalApi> Access<TextureView<A>> for Texture<A> {}
 impl<A: HalApi> Access<Sampler<A>> for Root {}
 impl<A: HalApi> Access<Sampler<A>> for Device<A> {}
 impl<A: HalApi> Access<Sampler<A>> for TextureView<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for Root {}
+impl<A: HalApi> Access<QuerySet<A>> for Device<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for CommandBuffer<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for RenderPipeline<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for ComputePipeline<A> {}
+impl<A: HalApi> Access<QuerySet<A>> for Sampler<A> {}
 
 #[cfg(debug_assertions)]
 thread_local! {
+    /// Per-thread state checking `Token<Root>` creation in debug builds.
+    ///
+    /// This is the number of `Token` values alive on the current
+    /// thread. Since `Token` creation respects the [`Access`] graph,
+    /// there can never be more tokens alive than there are fields of
+    /// [`Hub`], so a `u8` is plenty.
     static ACTIVE_TOKEN: Cell<u8> = Cell::new(0);
 }
 
-/// A permission token to lock resource `T` or anything after it,
-/// as defined by the `Access` implementations.
+/// A zero-size permission token to lock some fields of [`Hub`].
 ///
-/// Note: there can only be one non-borrowed `Token` alive on a thread
-/// at a time, which is enforced by `ACTIVE_TOKEN`.
+/// Access to a `Token<T>` grants permission to lock any field of
+/// [`Hub`] following the one of type [`Registry<T, ...>`], where
+/// "following" is as defined by the [`Access`] implementations.
+///
+/// Calling [`Token::root()`] returns a `Token<Root>`, which grants
+/// permission to lock any field. Dynamic checks ensure that each
+/// thread has at most one `Token<Root>` live at a time, in debug
+/// builds.
+///
+/// The locking methods on `Registry<T, ...>` take a `&'t mut
+/// Token<A>`, and return a fresh `Token<'t, T>` and a lock guard with
+/// lifetime `'t`, so the caller cannot access their `Token<A>` again
+/// until they have dropped both the `Token<T>` and the lock guard.
+///
+/// Tokens are `!Send`, so one thread can't send its permissions to
+/// another.
 pub(crate) struct Token<'a, T: 'a> {
-    level: PhantomData<&'a T>,
+    // The `*const` makes us `!Send` and `!Sync`.
+    level: PhantomData<&'a *const T>,
 }
 
 impl<'a, T> Token<'a, T> {
+    /// Return a new token for a locked field.
+    ///
+    /// This should only be used by `Registry` locking methods.
     fn new() -> Self {
         #[cfg(debug_assertions)]
         ACTIVE_TOKEN.with(|active| {
@@ -565,6 +627,10 @@ impl<'a, T> Token<'a, T> {
 }
 
 impl Token<'static, Root> {
+    /// Return a `Token<Root>`, granting permission to lock any [`Hub`] field.
+    ///
+    /// Debug builds check dynamically that each thread has at most
+    /// one root token at a time.
     pub fn root() -> Self {
         #[cfg(debug_assertions)]
         ACTIVE_TOKEN.with(|active| {
@@ -757,6 +823,22 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
         }
     }
 
+    /// Acquire read access to this `Registry`'s contents.
+    ///
+    /// The caller must present a mutable reference to a `Token<A>`,
+    /// for some type `A` that comes before this `Registry`'s resource
+    /// type `T` in the lock ordering. A `Token<Root>` grants
+    /// permission to lock any field; see [`Token::root`].
+    ///
+    /// Once the read lock is acquired, return a new `Token<T>`, along
+    /// with a read guard for this `Registry`'s [`Storage`], which can
+    /// be indexed by id to get at the actual resources.
+    ///
+    /// The borrow checker ensures that the caller cannot again access
+    /// its `Token<A>` until it has dropped both the guard and the
+    /// `Token<T>`.
+    ///
+    /// See the [`Hub`] type for more details on locking.
     pub(crate) fn read<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
@@ -764,6 +846,22 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
         (self.data.read(), Token::new())
     }
 
+    /// Acquire write access to this `Registry`'s contents.
+    ///
+    /// The caller must present a mutable reference to a `Token<A>`,
+    /// for some type `A` that comes before this `Registry`'s resource
+    /// type `T` in the lock ordering. A `Token<Root>` grants
+    /// permission to lock any field; see [`Token::root`].
+    ///
+    /// Once the lock is acquired, return a new `Token<T>`, along with
+    /// a write guard for this `Registry`'s [`Storage`], which can be
+    /// indexed by id to get at the actual resources.
+    ///
+    /// The borrow checker ensures that the caller cannot again access
+    /// its `Token<A>` until it has dropped both the guard and the
+    /// `Token<T>`.
+    ///
+    /// See the [`Hub`] type for more details on locking.
     pub(crate) fn write<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
@@ -771,6 +869,12 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
         (self.data.write(), Token::new())
     }
 
+    /// Unregister the resource at `id`.
+    ///
+    /// The caller must prove that it already holds a write lock for
+    /// this `Registry` by passing a mutable reference to this
+    /// `Registry`'s storage, obtained from the write guard returned
+    /// by a previous call to [`write`], as the `guard` parameter.
     pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> Option<T> {
         let value = guard.remove(id);
         //Note: careful about the order here!
@@ -779,6 +883,23 @@ impl<T: Resource, I: id::TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<
         value
     }
 
+    /// Unregister the resource at `id` and return its value, if any.
+    ///
+    /// The caller must present a mutable reference to a `Token<A>`,
+    /// for some type `A` that comes before this `Registry`'s resource
+    /// type `T` in the lock ordering.
+    ///
+    /// This returns a `Token<T>`, but it's almost useless, because it
+    /// doesn't return a lock guard to go with it: its only effect is
+    /// to make the token you passed to this function inaccessible.
+    /// However, the `Token<T>` can be used to satisfy some functions'
+    /// bureacratic expectations that you will have one available.
+    ///
+    /// The borrow checker ensures that the caller cannot again access
+    /// its `Token<A>` until it has dropped both the guard and the
+    /// `Token<T>`.
+    ///
+    /// See the [`Hub`] type for more details on locking.
     pub(crate) fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
@@ -838,6 +959,71 @@ impl HubReport {
     }
 }
 
+#[allow(rustdoc::private_intra_doc_links)]
+/// All the resources for a particular backend in a [`Global`].
+///
+/// To obtain `global`'s `Hub` for some [`HalApi`] backend type `A`,
+/// call [`A::hub(global)`].
+///
+/// ## Locking
+///
+/// Each field in `Hub` is a [`Registry`] holding all the values of a
+/// particular type of resource, all protected by a single [`RwLock`].
+/// So for example, to access any [`Buffer`], you must acquire a read
+/// lock on the `Hub`s entire [`buffers`] registry. The lock guard
+/// gives you access to the `Registry`'s [`Storage`], which you can
+/// then index with the buffer's id. (Yes, this design causes
+/// contention; see [#2272].)
+///
+/// But most `wgpu` operations require access to several different
+/// kinds of resource, so you often need to hold locks on several
+/// different fields of your [`Hub`] simultaneously. To avoid
+/// deadlock, there is an ordering imposed on the fields, and you may
+/// only acquire new locks on fields that come *after* all those you
+/// are already holding locks on, in this ordering. (The ordering is
+/// described in the documentation for the [`Access`] trait.)
+///
+/// We use Rust's type system to statically check that `wgpu_core` can
+/// only ever acquire locks in the correct order:
+///
+/// - A value of type [`Token<T>`] represents proof that the owner
+///   only holds locks on the `Hub` fields holding resources of type
+///   `T` or earlier in the lock ordering. A special value of type
+///   `Token<Root>`, obtained by calling [`Token::root`], represents
+///   proof that no `Hub` field locks are held.
+///
+/// - To lock the `Hub` field holding resources of type `T`, you must
+///   call its [`read`] or [`write`] methods. These require you to
+///   pass in a `&mut Token<A>`, for some `A` that implements
+///   [`Access<T>`]. This implementation exists only if `T` follows `A`
+///   in the field ordering, which statically ensures that you are
+///   indeed allowed to lock this new `Hub` field.
+///
+/// - The locking methods return both an [`RwLock`] guard that you can
+///   use to access the field's resources, and a new `Token<T>` value.
+///   These both borrow from the lifetime of your `Token<A>`, so since
+///   you passed that by mutable reference, you cannot access it again
+///   until you drop the new token and lock guard.
+///
+/// Because a thread only ever has access to the `Token<T>` for the
+/// last resource type `T` it holds a lock for, and the `Access` trait
+/// implementations only permit acquiring locks for types `U` that
+/// follow `T` in the lock ordering, it is statically impossible for a
+/// program to violate the locking order.
+///
+/// This does assume that threads cannot call `Token<Root>` when they
+/// already hold locks (dynamically enforced in debug builds) and that
+/// threads cannot send their `Token`s to other threads (enforced by
+/// making `Token` neither `Send` nor `Sync`).
+///
+/// [`A::hub(global)`]: HalApi::hub
+/// [`RwLock`]: parking_lot::RwLock
+/// [`buffers`]: Hub::buffers
+/// [`read`]: Registry::read
+/// [`write`]: Registry::write
+/// [`Token<T>`]: Token
+/// [`Access<T>`]: Access
+/// [#2272]: https://github.com/gfx-rs/wgpu/pull/2272
 pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<Adapter<A>, id::AdapterId, F>,
     pub devices: Registry<Device<A>, id::DeviceId, F>,
@@ -1032,6 +1218,20 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         if with_adapters {
             drop(devices);
             self.adapters.data.write().map.clear();
+        }
+    }
+
+    pub(crate) fn surface_unconfigure(
+        &self,
+        device_id: id::Valid<id::DeviceId>,
+        surface: &mut HalSurface<A>,
+    ) {
+        use hal::Surface as _;
+
+        let devices = self.devices.data.read();
+        let device = &devices[device_id];
+        unsafe {
+            surface.raw.unconfigure(&device.raw);
         }
     }
 

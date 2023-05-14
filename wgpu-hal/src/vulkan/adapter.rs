@@ -526,6 +526,16 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
+        let rg11b10ufloat_renderable = supports_format(
+            instance,
+            phd,
+            vk::Format::B10G11R11_UFLOAT_PACK32,
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::COLOR_ATTACHMENT
+                | vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND,
+        );
+        features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
+
         (features, dl_flags)
     }
 
@@ -951,8 +961,8 @@ impl super::Instance {
                     .unwrap_or("?")
                     .to_owned()
             },
-            vendor: phd_capabilities.properties.vendor_id as usize,
-            device: phd_capabilities.properties.device_id as usize,
+            vendor: phd_capabilities.properties.vendor_id,
+            device: phd_capabilities.properties.device_id,
             device_type: match phd_capabilities.properties.device_type {
                 ash::vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
                 ash::vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
@@ -1320,7 +1330,6 @@ impl super::Adapter {
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
-            downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),

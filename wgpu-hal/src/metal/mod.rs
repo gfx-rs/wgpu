@@ -151,7 +151,6 @@ struct PrivateCapabilities {
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
-    sampler_lod_average: bool,
     base_instance: bool,
     base_vertex_instance_drawing: bool,
     dual_source_blending: bool,
@@ -502,11 +501,18 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
 }
 
 impl<T> MultiStageData<T> {
-    fn map<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
+    fn map_ref<Y>(&self, fun: impl Fn(&T) -> Y) -> MultiStageData<Y> {
         MultiStageData {
             vs: fun(&self.vs),
             fs: fun(&self.fs),
             cs: fun(&self.cs),
+        }
+    }
+    fn map<Y>(self, fun: impl Fn(T) -> Y) -> MultiStageData<Y> {
+        MultiStageData {
+            vs: fun(self.vs),
+            fs: fun(self.fs),
+            cs: fun(self.cs),
         }
     }
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
@@ -522,6 +528,7 @@ impl<T> MultiStageData<T> {
 }
 
 type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
+type MultiStageResources = MultiStageData<naga::back::msl::EntryPointResources>;
 
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
@@ -536,11 +543,11 @@ struct PushConstantsInfo {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    naga_options: naga::back::msl::Options,
     bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
     push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
     total_counters: MultiStageResourceCounters,
     total_push_constants: u32,
+    per_stage_map: MultiStageResources,
 }
 
 trait AsNative {
@@ -622,6 +629,7 @@ unsafe impl Sync for BindGroup {}
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
+    runtime_checks: bool,
 }
 
 #[derive(Debug, Default)]
@@ -661,7 +669,7 @@ pub struct RenderPipeline {
     #[allow(dead_code)]
     fs_lib: Option<metal::Library>,
     vs_info: PipelineStageInfo,
-    fs_info: PipelineStageInfo,
+    fs_info: Option<PipelineStageInfo>,
     raw_primitive_type: metal::MTLPrimitiveType,
     raw_triangle_fill_mode: metal::MTLTriangleFillMode,
     raw_front_winding: metal::MTLWinding,

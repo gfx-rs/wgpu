@@ -465,6 +465,7 @@ impl fmt::Display for AttachmentErrorLocation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ColorAttachmentError {
     #[error("Attachment format {0:?} is not a color format")]
     InvalidFormat(wgt::TextureFormat),
@@ -1304,7 +1305,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::SetBindGroup(bind_group_id);
                         let max_bind_groups = device.limits.max_bind_groups;
-                        if (index as u32) >= max_bind_groups {
+                        if index >= max_bind_groups {
                             return Err(RenderCommandError::BindGroupIndexOutOfRange {
                                 index,
                                 max: max_bind_groups,
@@ -1371,7 +1372,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
-                                        index as u32 + i as u32,
+                                        index + i as u32,
                                         raw_bg,
                                         &e.dynamic_offsets,
                                     );
@@ -2224,7 +2225,7 @@ pub mod render_ffi {
         }
 
         pass.base.commands.push(RenderCommand::SetBindGroup {
-            index: index.try_into().unwrap(),
+            index,
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });

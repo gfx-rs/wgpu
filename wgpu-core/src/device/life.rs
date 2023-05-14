@@ -220,6 +220,7 @@ struct ActiveSubmission<A: hal::Api> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum WaitIdleError {
     #[error(transparent)]
     Device(#[from] DeviceError),

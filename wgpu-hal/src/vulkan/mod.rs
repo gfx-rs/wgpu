@@ -173,6 +173,7 @@ struct PrivateCapabilities {
 
 bitflags::bitflags!(
     /// Workaround flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Workarounds: u32 {
         /// Only generate SPIR-V for one entry point at a time.
         const SEPARATE_ENTRY_POINTS = 0x1;
@@ -249,7 +250,6 @@ struct DeviceShared {
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     timestamp_period: f32,
-    downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
