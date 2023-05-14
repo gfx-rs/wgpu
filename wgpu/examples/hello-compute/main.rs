@@ -46,7 +46,7 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty() | wgpu::Features::TIMESTAMP_QUERY,
+                features: wgpu::Features::empty(),
                 limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
