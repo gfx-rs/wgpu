@@ -772,13 +772,25 @@ static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 pub struct BufferBinding<'a> {
     /// The buffer to bind.
     pub buffer: &'a Buffer,
-    /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
-    /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
+
+    /// Base offset of the buffer, in bytes.
     ///
-    /// The offset has to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
-    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    /// If the [`has_dynamic_offset`] field of this buffer's layout entry is
+    /// `true`, the offset here will be added to the dynamic offset passed to
+    /// [`RenderPass::set_bind_group`] or [`ComputePass::set_bind_group`].
+    ///
+    /// If the buffer was created with [`BufferUsages::UNIFORM`], then this
+    /// offset must be a multiple of
+    /// [`Limits::min_uniform_buffer_offset_alignment`].
+    ///
+    /// If the buffer was created with [`BufferUsages::STORAGE`], then this
+    /// offset must be a multiple of
+    /// [`Limits::min_storage_buffer_offset_alignment`].
+    ///
+    /// [`has_dynamic_offset`]: BindingType::Buffer::has_dynamic_offset
     pub offset: BufferAddress,
-    /// Size of the binding, or `None` for using the rest of the buffer.
+
+    /// Size of the binding in bytes, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
 }
 static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
