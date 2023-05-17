@@ -59,6 +59,7 @@ Bottom level categories:
 
 - Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
 - Use `u32`s internally for bind group indices, rather than `u8`. By @ErichDonGubler in [#3743](https://github.com/gfx-rs/wgpu/pull/3743).
+- Fix Multiview to disable validation of TextureViewDimension and ArrayLayerCount. By @MalekiRe in [#3779](https://github.com/gfx-rs/wgpu/pull/3779#issue-1713269437).
 
 ### Examples
 
