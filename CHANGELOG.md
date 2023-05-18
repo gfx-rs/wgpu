@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.12.1 (2023-5-18)
+
+#### SPV-IN
+
+- Convert conditional backedges to `break if`. ([#2290](https://github.com/gfx-rs/naga/pull/2290)) **@eddyb**
+
 ## v0.12 (2023-04-19)
 
 #### GENERAL
