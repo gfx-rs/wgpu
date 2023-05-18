@@ -56,6 +56,8 @@ Bottom level categories:
 
 ### Bug Fixes
 
+- Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
+
 #### General
 
 - Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
