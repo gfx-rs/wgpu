@@ -193,9 +193,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.2.1"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a6904aef64d73cf10ab17ebace7befb918b82164785cb89907993be7f83813"
+checksum = "6776fc96284a0bb647b615056fc496d1fe1644a7ab01829818a6d91cae888b84"
 
 [[package]]
 name = "block"
@@ -3078,7 +3078,7 @@ version = "0.16.0"
 dependencies = [
  "arrayvec 0.7.2",
  "async-executor",
- "bitflags 2.2.1",
+ "bitflags 2.3.1",
  "bytemuck",
  "cfg-if",
  "console_error_panic_hook",
@@ -3118,7 +3118,7 @@ version = "0.16.0"
 dependencies = [
  "arrayvec 0.7.2",
  "bit-vec",
- "bitflags 2.2.1",
+ "bitflags 2.3.1",
  "codespan-reporting",
  "log",
  "naga",
@@ -3143,7 +3143,7 @@ dependencies = [
  "arrayvec 0.7.2",
  "ash",
  "bit-set",
- "bitflags 2.2.1",
+ "bitflags 2.3.1",
  "block",
  "core-graphics-types",
  "d3d12",
@@ -3191,7 +3191,7 @@ dependencies = [
 name = "wgpu-types"
 version = "0.16.0"
 dependencies = [
- "bitflags 2.2.1",
+ "bitflags 2.3.1",
  "js-sys",
  "serde",
  "serde_json",
