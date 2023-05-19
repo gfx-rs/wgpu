@@ -713,10 +713,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     | Tfc::MULTISAMPLE_X16
             } else if max_samples >= 8 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
-            } else if max_samples >= 4 {
-                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
             } else {
-                Tfc::MULTISAMPLE_X2
+                // The lowest supported level in GLE3.0/WebGL2 is 4X
+                // (see GL_MAX_SAMPLES in https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glGet.xhtml).
+                // On some platforms, like iOS Safari, `get_parameter_i32(MAX_SAMPLES)` returns 0,
+                // so we always fall back to supporting 4x here.
+                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
             }
         };
 
