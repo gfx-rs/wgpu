@@ -57,6 +57,7 @@ Bottom level categories:
 ### Bug Fixes
 
 - Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
+- Fix missing 4X MSAA support on some OpenGL backends. By @emilk in [#3780](https://github.com/gfx-rs/wgpu/pull/3780)
 
 #### General
 
