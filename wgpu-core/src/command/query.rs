@@ -68,10 +68,7 @@ impl<A: HalApi> QueryResetMap<A> {
                     // We've hit the end of a run, dispatch a reset
                     (Some(start), false) => {
                         run_start = None;
-                        unsafe {
-                            raw_encoder
-                                .reset_queries(query_set.raw.as_ref().unwrap(), start..idx as u32)
-                        };
+                        unsafe { raw_encoder.reset_queries(query_set.raw(), start..idx as u32) };
                     }
                     // We're starting a run
                     (None, true) => {
@@ -213,7 +210,7 @@ impl<A: HalApi> QuerySet<A> {
             });
         }
 
-        Ok(self.raw.as_ref().unwrap())
+        Ok(self.raw())
     }
 
     pub(super) fn validate_and_write_timestamp(
@@ -234,8 +231,7 @@ impl<A: HalApi> QuerySet<A> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                raw_encoder
-                    .reset_queries(self.raw.as_ref().unwrap(), query_index..(query_index + 1));
+                raw_encoder.reset_queries(self.raw(), query_index..(query_index + 1));
             }
             raw_encoder.write_timestamp(query_set, query_index);
         }
@@ -269,8 +265,7 @@ impl<A: HalApi> QuerySet<A> {
         unsafe {
             // If we don't have a reset state tracker which can defer resets, we must reset now.
             if needs_reset {
-                raw_encoder
-                    .reset_queries(self.raw.as_ref().unwrap(), query_index..(query_index + 1));
+                raw_encoder.reset_queries(self.raw(), query_index..(query_index + 1));
             }
             raw_encoder.begin_query(query_set, query_index);
         }
@@ -288,7 +283,7 @@ pub(super) fn end_pipeline_statistics_query<A: HalApi>(
         // We can unwrap here as the validity was validated when the active query was set
         let query_set = storage.get(query_set_id).unwrap();
 
-        unsafe { raw_encoder.end_query(query_set.raw.as_ref().unwrap(), query_index) };
+        unsafe { raw_encoder.end_query(query_set.raw(), query_index) };
 
         Ok(())
     } else {
@@ -424,9 +419,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             raw_encoder.transition_buffers(dst_barrier.into_iter());
             raw_encoder.copy_query_results(
-                query_set.raw.as_ref().unwrap(),
+                query_set.raw(),
                 start_query..end_query,
-                dst_buffer.raw.as_ref().unwrap(),
+                dst_buffer.raw(),
                 destination_offset,
                 wgt::BufferSize::new_unchecked(stride as u64),
             );

@@ -786,11 +786,9 @@ impl<A: HalApi> RenderBundle<A> {
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout_guard[pipeline_layout_id.unwrap()]
-                                .raw
-                                .as_ref()
-                                .unwrap(),
+                                .raw(),
                             index,
-                            bind_group.raw.as_ref().unwrap(),
+                            bind_group.raw(),
                             &offsets[..num_dynamic_offsets as usize],
                         )
                     };
@@ -798,7 +796,7 @@ impl<A: HalApi> RenderBundle<A> {
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = pipeline_guard.get(pipeline_id).unwrap();
-                    unsafe { raw.set_render_pipeline(pipeline.raw.as_ref().unwrap()) };
+                    unsafe { raw.set_render_pipeline(pipeline.raw()) };
 
                     pipeline_layout_id = Some(pipeline.layout_id);
                 }
@@ -857,7 +855,7 @@ impl<A: HalApi> RenderBundle<A> {
 
                         unsafe {
                             raw.set_push_constants(
-                                pipeline_layout.raw.as_ref().unwrap(),
+                                pipeline_layout.raw(),
                                 stages,
                                 offset,
                                 data_slice,
@@ -870,7 +868,7 @@ impl<A: HalApi> RenderBundle<A> {
                             |clear_offset, clear_data| {
                                 unsafe {
                                     raw.set_push_constants(
-                                        pipeline_layout.raw.as_ref().unwrap(),
+                                        pipeline_layout.raw(),
                                         stages,
                                         clear_offset,
                                         clear_data,

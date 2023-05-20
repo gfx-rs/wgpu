@@ -163,13 +163,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let ptr = if map_size == 0 {
                     std::ptr::NonNull::dangling()
                 } else {
-                    match map_buffer(
-                        device.raw.as_ref().unwrap(),
-                        &buffer,
-                        0,
-                        map_size,
-                        HostMap::Write,
-                    ) {
+                    match map_buffer(device.raw(), &buffer, 0, map_size, HostMap::Write) {
                         Ok(ptr) => ptr,
                         Err(e) => {
                             device.lock_life().schedule_resource_destruction(
@@ -206,13 +200,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         break e;
                     }
                 };
-                let mapping = match unsafe {
-                    device
-                        .raw
-                        .as_ref()
-                        .unwrap()
-                        .map_buffer(stage.raw.as_ref().unwrap(), 0..stage.size)
-                } {
+                let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
                     Ok(mapping) => mapping,
                     Err(e) => {
                         let mut life_lock = device.lock_life();
@@ -360,26 +348,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let raw_buf = buffer.raw.as_ref().unwrap();
+        let raw_buf = buffer.raw();
         unsafe {
             let mapping = device
-                .raw
-                .as_ref()
-                .unwrap()
+                .raw()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
             ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len());
             if !mapping.is_coherent {
                 device
-                    .raw
-                    .as_ref()
-                    .unwrap()
+                    .raw()
                     .flush_mapped_ranges(raw_buf, iter::once(offset..offset + data.len() as u64));
             }
             device
-                .raw
-                .as_ref()
-                .unwrap()
+                .raw()
                 .unmap_buffer(raw_buf)
                 .map_err(DeviceError::from)?;
         }
@@ -410,25 +392,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         check_buffer_usage(buffer.usage, wgt::BufferUsages::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        let raw_buf = buffer.raw.as_ref().unwrap();
+        let raw_buf = buffer.raw();
         unsafe {
             let mapping = device
-                .raw
-                .as_ref()
-                .unwrap()
+                .raw()
                 .map_buffer(raw_buf, offset..offset + data.len() as u64)
                 .map_err(DeviceError::from)?;
             if !mapping.is_coherent {
-                device.raw.as_ref().unwrap().invalidate_mapped_ranges(
+                device.raw().invalidate_mapped_ranges(
                     raw_buf,
                     iter::once(offset..offset + data.len() as u64),
                 );
             }
             ptr::copy_nonoverlapping(mapping.ptr.as_ptr(), data.as_mut_ptr(), data.len());
             device
-                .raw
-                .as_ref()
-                .unwrap()
+                .raw()
                 .unmap_buffer(raw_buf)
                 .map_err(DeviceError::from)?;
         }
@@ -1379,7 +1357,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .as_mut()
                 .unwrap()
-                .acquire_encoder(device.raw.as_ref().unwrap(), device.queue.as_ref().unwrap())
+                .acquire_encoder(device.raw(), device.queue.as_ref().unwrap())
             {
                 Ok(raw) => raw,
                 Err(_) => break DeviceError::OutOfMemory,
@@ -2048,7 +2026,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 A::get_surface(surface)
                     .unwrap()
                     .raw
-                    .configure(device.raw.as_ref().unwrap(), &hal_config)
+                    .configure(device.raw(), &hal_config)
             } {
                 Ok(()) => (),
                 Err(error) => {
@@ -2225,14 +2203,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_start_capture<A: HalApi>(&self, id: DeviceId) {
         let hub = A::hub(self);
         if let Ok(device) = hub.devices.get(id) {
-            unsafe { device.raw.as_ref().unwrap().start_capture() };
+            unsafe { device.raw().start_capture() };
         }
     }
 
     pub fn device_stop_capture<A: HalApi>(&self, id: DeviceId) {
         let hub = A::hub(self);
         if let Ok(device) = hub.devices.get(id) {
-            unsafe { device.raw.as_ref().unwrap().stop_capture() };
+            unsafe { device.raw().stop_capture() };
         }
     }
 
@@ -2483,10 +2461,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let _ = ptr;
                 if needs_flush {
                     unsafe {
-                        device.raw.as_ref().unwrap().flush_mapped_ranges(
-                            stage_buffer.raw.as_ref().unwrap(),
-                            iter::once(0..buffer.size),
-                        );
+                        device
+                            .raw()
+                            .flush_mapped_ranges(stage_buffer.raw(), iter::once(0..buffer.size));
                     }
                 }
 
@@ -2501,7 +2478,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     size,
                 });
                 let transition_src = hal::BufferBarrier {
-                    buffer: stage_buffer.raw.as_ref().unwrap(),
+                    buffer: stage_buffer.raw(),
                     usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                 };
                 let transition_dst = hal::BufferBarrier {
@@ -2517,7 +2494,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     if buffer.size > 0 {
                         encoder.copy_buffer_to_buffer(
-                            stage_buffer.raw.as_ref().unwrap(),
+                            stage_buffer.raw(),
                             raw_buf,
                             region.into_iter(),
                         );
@@ -2551,10 +2528,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 unsafe {
                     device
-                        .raw
-                        .as_ref()
-                        .unwrap()
-                        .unmap_buffer(buffer.raw.as_ref().unwrap())
+                        .raw()
+                        .unmap_buffer(buffer.raw())
                         .map_err(DeviceError::from)?
                 };
             }

@@ -455,15 +455,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &temp_offsets,
                     );
                     if !entries.is_empty() {
-                        let pipeline_layout = pipeline_layout_guard[pipeline_layout_id.unwrap()]
-                            .raw
-                            .as_ref()
-                            .unwrap();
+                        let pipeline_layout =
+                            pipeline_layout_guard[pipeline_layout_id.unwrap()].raw();
                         for (i, e) in entries.iter().enumerate() {
-                            let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()]
-                                .raw
-                                .as_ref()
-                                .unwrap();
+                            let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                             unsafe {
                                 raw.set_bind_group(
                                     pipeline_layout,
@@ -487,7 +482,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
 
                     unsafe {
-                        raw.set_compute_pipeline(pipeline.raw.as_ref().unwrap());
+                        raw.set_compute_pipeline(pipeline.raw());
                     }
 
                     // Rebind resources
@@ -501,13 +496,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
-                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()]
-                                    .raw
-                                    .as_ref()
-                                    .unwrap();
+                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                                 unsafe {
                                     raw.set_bind_group(
-                                        pipeline_layout.raw.as_ref().unwrap(),
+                                        pipeline_layout.raw(),
                                         start_index as u32 + i as u32,
                                         raw_bg,
                                         &e.dynamic_offsets,
@@ -528,7 +520,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 size_bytes,
                                 |clear_offset, clear_data| unsafe {
                                     raw.set_push_constants(
-                                        pipeline_layout.raw.as_ref().unwrap(),
+                                        pipeline_layout.raw(),
                                         wgt::ShaderStages::COMPUTE,
                                         clear_offset,
                                         clear_data,
@@ -571,7 +563,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     unsafe {
                         raw.set_push_constants(
-                            pipeline_layout.raw.as_ref().unwrap(),
+                            pipeline_layout.raw(),
                             wgt::ShaderStages::COMPUTE,
                             offset,
                             data_slice,

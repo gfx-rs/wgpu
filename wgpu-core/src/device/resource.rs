@@ -56,21 +56,17 @@ use super::{
 /// stored behind mutexes.
 ///
 /// TODO: establish clear order of locking for these:
-/// `mem_allocator`, `desc_allocator`, `life_tracker`, `trackers`,
-/// `render_passes`, `pending_writes`, `trace`.
+/// `life_tracker`, `trackers`, `render_passes`, `pending_writes`, `trace`.
 ///
 /// Currently, the rules are:
 /// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
 /// 1. `self.trackers` is locked last (unenforced)
 /// 1. `self.trace` is locked last (unenforced)
 pub struct Device<A: HalApi> {
-    pub(crate) raw: Option<A::Device>,
+    raw: Option<A::Device>,
     pub(crate) adapter_id: id::Valid<AdapterId>,
     pub(crate) queue: Option<A::Queue>,
     pub(crate) zero_buffer: Option<A::Buffer>,
-    //pub(crate) cmd_allocator: command::CommandAllocator<A>,
-    //mem_allocator: Mutex<alloc::MemoryAllocator<A>>,
-    //desc_allocator: Mutex<descriptor::DescriptorAllocator<A>>,
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) info: ResourceInfo<DeviceId>,
 
@@ -131,6 +127,9 @@ pub enum CreateDeviceError {
 }
 
 impl<A: HalApi> Device<A> {
+    pub(crate) fn raw(&self) -> &A::Device {
+        self.raw.as_ref().unwrap()
+    }
     pub(crate) fn require_features(&self, feature: wgt::Features) -> Result<(), MissingFeatures> {
         if self.features.contains(feature) {
             Ok(())
@@ -316,8 +315,7 @@ impl<A: HalApi> Device<A> {
             last_done_index,
             self.command_allocator.lock().as_mut().unwrap(),
         );
-        let mapping_closures =
-            life_tracker.handle_mapping(hub, self.raw.as_ref().unwrap(), &self.trackers);
+        let mapping_closures = life_tracker.handle_mapping(hub, self.raw(), &self.trackers);
         life_tracker.cleanup();
 
         let closures = UserClosures {
@@ -328,69 +326,56 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
-        self.temp_suspected.lock().clear();
+        let mut temp_suspected = self.temp_suspected.lock();
+        temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
         {
             for resource in trackers.buffers.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected.lock().buffers.push(resource.clone());
+                    temp_suspected.buffers.push(resource.clone());
                 }
             }
             for resource in trackers.textures.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected.lock().textures.push(resource.clone());
+                    temp_suspected.textures.push(resource.clone());
                 }
             }
             for resource in trackers.views.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected
-                        .lock()
-                        .texture_views
-                        .push(resource.clone());
+                    temp_suspected.texture_views.push(resource.clone());
                 }
             }
             for resource in trackers.bind_groups.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected
-                        .lock()
-                        .bind_groups
-                        .push(resource.clone());
+                    temp_suspected.bind_groups.push(resource.clone());
                 }
             }
             for resource in trackers.samplers.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected.lock().samplers.push(resource.clone());
+                    temp_suspected.samplers.push(resource.clone());
                 }
             }
             for resource in trackers.compute_pipelines.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected
-                        .lock()
-                        .compute_pipelines
-                        .push(resource.clone());
+                    temp_suspected.compute_pipelines.push(resource.clone());
                 }
             }
             for resource in trackers.render_pipelines.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected
-                        .lock()
-                        .render_pipelines
-                        .push(resource.clone());
+                    temp_suspected.render_pipelines.push(resource.clone());
                 }
             }
             for resource in trackers.query_sets.used_resources() {
                 if resource.is_unique() {
-                    self.temp_suspected.lock().query_sets.push(resource.clone());
+                    temp_suspected.query_sets.push(resource.clone());
                 }
             }
         }
 
-        self.lock_life()
-            .suspected_resources
-            .extend(&self.temp_suspected.lock());
+        self.lock_life().suspected_resources.extend(&temp_suspected);
 
-        self.temp_suspected.lock().clear();
+        temp_suspected.clear();
     }
 
     pub(crate) fn create_buffer(
@@ -478,8 +463,7 @@ impl<A: HalApi> Device<A> {
             usage,
             memory_flags,
         };
-        let buffer = unsafe { self.raw.as_ref().unwrap().create_buffer(&hal_desc) }
-            .map_err(DeviceError::from)?;
+        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
         Ok(Buffer {
             raw: Some(buffer),
@@ -1897,7 +1881,7 @@ impl<A: HalApi> Device<A> {
                             }
 
                             let res_index = hal_samplers.len();
-                            hal_samplers.push(&sampler.raw);
+                            hal_samplers.push(sampler.raw());
                             (res_index, 1)
                         }
                         _ => {
@@ -1919,7 +1903,7 @@ impl<A: HalApi> Device<A> {
                             .samplers
                             .add_single(&*sampler_guard, id)
                             .ok_or(Error::InvalidSampler(id))?;
-                        hal_samplers.push(&sampler.raw);
+                        hal_samplers.push(sampler.raw());
                     }
 
                     (res_index, num_bindings)
@@ -1945,7 +1929,7 @@ impl<A: HalApi> Device<A> {
                     )?;
                     let res_index = hal_textures.len();
                     hal_textures.push(hal::TextureBinding {
-                        view: view.raw.as_ref().unwrap(),
+                        view: view.raw(),
                         usage: internal_use,
                     });
                     (res_index, 1)
@@ -1972,7 +1956,7 @@ impl<A: HalApi> Device<A> {
                             &mut used_texture_ranges,
                         )?;
                         hal_textures.push(hal::TextureBinding {
-                            view: view.raw.as_ref().unwrap(),
+                            view: view.raw(),
                             usage: internal_use,
                         });
                     }
@@ -1996,16 +1980,12 @@ impl<A: HalApi> Device<A> {
                 return Err(Error::DuplicateBinding(a.binding));
             }
         }
-        let samplers = hal_samplers
-            .iter()
-            .map(|&s| s.as_ref().unwrap())
-            .collect::<Vec<_>>();
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.borrow_option(),
-            layout: layout.raw.as_ref().unwrap(),
+            layout: layout.raw(),
             entries: &hal_entries,
             buffers: &hal_buffers,
-            samplers: samplers.as_ref(),
+            samplers: &hal_samplers,
             textures: &hal_textures,
         };
         let raw = unsafe {
@@ -2267,7 +2247,7 @@ impl<A: HalApi> Device<A> {
         let bgl_vec = desc
             .bind_group_layouts
             .iter()
-            .map(|&id| bgl_guard.get(id).unwrap().raw.as_ref().unwrap())
+            .map(|&id| bgl_guard.get(id).unwrap().raw())
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
@@ -2425,10 +2405,10 @@ impl<A: HalApi> Device<A> {
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.borrow_option(),
-            layout: layout.raw.as_ref().unwrap(),
+            layout: layout.raw(),
             stage: hal::ProgrammableStage {
                 entry_point: desc.stage.entry_point.as_ref(),
-                module: shader_module.raw.as_ref().unwrap(),
+                module: shader_module.raw(),
             },
         };
 
@@ -2770,7 +2750,7 @@ impl<A: HalApi> Device<A> {
             }
 
             hal::ProgrammableStage {
-                module: shader_module.raw.as_ref().unwrap(),
+                module: shader_module.raw(),
                 entry_point: stage.entry_point.as_ref(),
             }
         };
@@ -2819,7 +2799,7 @@ impl<A: HalApi> Device<A> {
                 }
 
                 Some(hal::ProgrammableStage {
-                    module: shader_module.raw.as_ref().unwrap(),
+                    module: shader_module.raw(),
                     entry_point: fragment.stage.entry_point.as_ref(),
                 })
             }
@@ -2901,7 +2881,7 @@ impl<A: HalApi> Device<A> {
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),
-            layout: layout.raw.as_ref().unwrap(),
+            layout: layout.raw(),
             vertex_buffers: &vertex_buffers,
             vertex_stage,
             primitive: desc.primitive,
@@ -3064,9 +3044,7 @@ impl<A: HalApi> Device<A> {
         let hal_desc = desc.map_label(crate::LabelHelpers::borrow_option);
         Ok(QuerySet {
             raw: Some(unsafe {
-                self.raw
-                    .as_ref()
-                    .unwrap()
+                self.raw()
                     .create_query_set(&hal_desc)
                     .unwrap()
             }),

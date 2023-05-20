@@ -301,7 +301,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
                     let device = &devices[present.device_id];
                     let suf = A::get_surface(surface);
                     unsafe {
-                        suf.unwrap().raw.unconfigure(device.raw.as_ref().unwrap());
+                        suf.unwrap().raw.unconfigure(device.raw());
                         //TODO: we could destroy the surface here
                     }
                 }
@@ -324,7 +324,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         let device = self.devices.get(device_id.0).unwrap();
         unsafe {
             use hal::Surface;
-            surface.raw.unconfigure(device.raw.as_ref().unwrap());
+            surface.raw.unconfigure(device.raw());
         }
     }
 

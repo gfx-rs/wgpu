@@ -372,9 +372,15 @@ impl<A: HalApi> Drop for Buffer<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_buffer(raw);
+                self.device.raw().destroy_buffer(raw);
             }
         }
+    }
+}
+
+impl<A: HalApi> Buffer<A> {
+    pub(crate) fn raw(&self) -> &A::Buffer {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -439,7 +445,7 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
         if let Some(raw) = self.raw.lock().take() {
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_buffer(raw);
+                self.device.raw().destroy_buffer(raw);
             }
         }
     }
@@ -526,7 +532,7 @@ impl<A: HalApi> Drop for Texture<A> {
         let inner = self.inner.take().unwrap();
         if let TextureInner::Native { raw: Some(raw) } = inner {
             unsafe {
-                self.device.raw.as_ref().unwrap().destroy_texture(raw);
+                self.device.raw().destroy_texture(raw);
             }
         }
     }
@@ -556,7 +562,7 @@ impl<A: HalApi> Texture<A> {
                 } else {
                     mip_level * desc.size.depth_or_array_layers
                 } + depth_or_layer;
-                clear_views[index as usize].raw.as_ref().unwrap()
+                clear_views[index as usize].raw()
             }
         }
     }
@@ -611,7 +617,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let device = hub.devices.try_get(id).ok().flatten();
-        let hal_device = device.as_ref().map(|device| device.raw.as_ref().unwrap());
+        let hal_device = device.as_ref().map(|device| device.raw());
 
         hal_device_callback(hal_device)
     }
@@ -803,9 +809,15 @@ impl<A: HalApi> Drop for TextureView<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_texture_view(raw);
+                self.device.raw().destroy_texture_view(raw);
             }
         }
+    }
+}
+
+impl<A: HalApi> TextureView<A> {
+    pub(crate) fn raw(&self) -> &A::TextureView {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -915,9 +927,15 @@ impl<A: HalApi> Drop for Sampler<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_sampler(raw);
+                self.device.raw().destroy_sampler(raw);
             }
         }
+    }
+}
+
+impl<A: HalApi> Sampler<A> {
+    pub(crate) fn raw(&self) -> &A::Sampler {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -1002,7 +1020,7 @@ impl<A: HalApi> Drop for QuerySet<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_query_set(raw);
+                self.device.raw().destroy_query_set(raw);
             }
         }
     }
@@ -1013,6 +1031,12 @@ impl<A: HalApi> Resource<QuerySetId> for QuerySet<A> {
 
     fn info(&self) -> &ResourceInfo<QuerySetId> {
         &self.info
+    }
+}
+
+impl<A: HalApi> QuerySet<A> {
+    pub(crate) fn raw(&self) -> &A::QuerySet {
+        self.raw.as_ref().unwrap()
     }
 }
 

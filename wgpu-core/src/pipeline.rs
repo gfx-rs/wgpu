@@ -62,7 +62,7 @@ impl<A: HalApi> Drop for ShaderModule<A> {
             }
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_shader_module(raw);
+                self.device.raw().destroy_shader_module(raw);
             }
         }
     }
@@ -80,6 +80,12 @@ impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
         return self.label.clone();
         #[cfg(not(debug_assertions))]
         return String::new();
+    }
+}
+
+impl<A: HalApi> ShaderModule<A> {
+    pub(crate) fn raw(&self) -> &A::ShaderModule {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -246,11 +252,7 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device
-                    .raw
-                    .as_ref()
-                    .unwrap()
-                    .destroy_compute_pipeline(raw);
+                self.device.raw().destroy_compute_pipeline(raw);
             }
         }
     }
@@ -261,6 +263,12 @@ impl<A: HalApi> Resource<ComputePipelineId> for ComputePipeline<A> {
 
     fn info(&self) -> &ResourceInfo<ComputePipelineId> {
         &self.info
+    }
+}
+
+impl<A: HalApi> ComputePipeline<A> {
+    pub(crate) fn raw(&self) -> &A::ComputePipeline {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -471,11 +479,7 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device
-                    .raw
-                    .as_ref()
-                    .unwrap()
-                    .destroy_render_pipeline(raw);
+                self.device.raw().destroy_render_pipeline(raw);
             }
         }
     }
@@ -486,5 +490,11 @@ impl<A: HalApi> Resource<RenderPipelineId> for RenderPipeline<A> {
 
     fn info(&self) -> &ResourceInfo<RenderPipelineId> {
         &self.info
+    }
+}
+
+impl<A: HalApi> RenderPipeline<A> {
+    pub(crate) fn raw(&self) -> &A::RenderPipeline {
+        self.raw.as_ref().unwrap()
     }
 }

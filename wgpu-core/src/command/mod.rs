@@ -163,9 +163,7 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         unsafe {
             use hal::Device;
             self.device
-                .raw
-                .as_ref()
-                .unwrap()
+                .raw()
                 .destroy_command_encoder(baked.encoder);
         }
     }

@@ -271,8 +271,8 @@ fn prepare_staging_buffer<A: HalApi>(
         memory_flags: hal::MemoryFlags::TRANSIENT,
     };
 
-    let buffer = unsafe { device.raw.as_ref().unwrap().create_buffer(&stage_desc)? };
-    let mapping = unsafe { device.raw.as_ref().unwrap().map_buffer(&buffer, 0..size) }?;
+    let buffer = unsafe { device.raw().create_buffer(&stage_desc)? };
+    let mapping = unsafe { device.raw().map_buffer(&buffer, 0..size) }?;
 
     let staging_buffer = StagingBuffer {
         raw: Mutex::new(Some(buffer)),
@@ -381,7 +381,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
             ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
-            staging_buffer.flush(device.raw.as_ref().unwrap())
+            staging_buffer.flush(device.raw())
         } {
             device
                 .pending_writes
@@ -459,7 +459,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        if let Err(flush_error) = unsafe { staging_buffer.flush(device.raw.as_ref().unwrap()) } {
+        if let Err(flush_error) = unsafe { staging_buffer.flush(device.raw()) } {
             device
                 .pending_writes
                 .write()
@@ -820,7 +820,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        if let Err(e) = unsafe { staging_buffer.flush(device.raw.as_ref().unwrap()) } {
+        if let Err(e) = unsafe { staging_buffer.flush(device.raw()) } {
             pending_writes.consume(&device, Arc::new(staging_buffer));
             return Err(e.into());
         }
@@ -1163,10 +1163,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     if let BufferMapState::Active { .. } = *buffer.map_state.lock()
                                     {
                                         log::warn!("Dropped buffer has a pending mapping.");
-                                        unsafe {
-                                            device.raw.as_ref().unwrap().unmap_buffer(raw_buf)
-                                        }
-                                        .map_err(DeviceError::from)?;
+                                        unsafe { device.raw().unmap_buffer(raw_buf) }
+                                            .map_err(DeviceError::from)?;
                                     }
                                     device.temp_suspected.lock().buffers.push(buffer.clone());
                                 } else {
@@ -1442,7 +1440,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(pending_execution) =
                 device.pending_writes.write().as_mut().unwrap().post_submit(
                     device.command_allocator.lock().as_mut().unwrap(),
-                    device.raw.as_ref().unwrap(),
+                    device.raw(),
                     device.queue.as_ref().unwrap(),
                 )
             {

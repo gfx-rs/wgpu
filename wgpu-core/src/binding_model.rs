@@ -464,11 +464,7 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device
-                    .raw
-                    .as_ref()
-                    .unwrap()
-                    .destroy_bind_group_layout(raw);
+                self.device.raw().destroy_bind_group_layout(raw);
             }
         }
     }
@@ -486,6 +482,12 @@ impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
         return self.label.clone();
         #[cfg(not(debug_assertions))]
         return String::new();
+    }
+}
+
+impl<A: HalApi> BindGroupLayout<A> {
+    pub(crate) fn raw(&self) -> &A::BindGroupLayout {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -600,17 +602,16 @@ impl<A: HalApi> Drop for PipelineLayout<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device
-                    .raw
-                    .as_ref()
-                    .unwrap()
-                    .destroy_pipeline_layout(raw);
+                self.device.raw().destroy_pipeline_layout(raw);
             }
         }
     }
 }
 
 impl<A: HalApi> PipelineLayout<A> {
+    pub(crate) fn raw(&self) -> &A::PipelineLayout {
+        self.raw.as_ref().unwrap()
+    }
     /// Validate push constants match up with expected ranges.
     pub(crate) fn validate_push_constant_ranges(
         &self,
@@ -818,13 +819,16 @@ impl<A: HalApi> Drop for BindGroup<A> {
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
-                self.device.raw.as_ref().unwrap().destroy_bind_group(raw);
+                self.device.raw().destroy_bind_group(raw);
             }
         }
     }
 }
 
 impl<A: HalApi> BindGroup<A> {
+    pub(crate) fn raw(&self) -> &A::BindGroup {
+        self.raw.as_ref().unwrap()
+    }
     pub(crate) fn validate_dynamic_bindings(
         &self,
         bind_group_index: u32,

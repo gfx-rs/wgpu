@@ -198,16 +198,13 @@ fn map_buffer<A: HalApi>(
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
     let mapping = unsafe {
-        raw.map_buffer(buffer.raw.as_ref().unwrap(), offset..offset + size)
+        raw.map_buffer(buffer.raw(), offset..offset + size)
             .map_err(DeviceError::from)?
     };
 
     *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
-            raw.invalidate_mapped_ranges(
-                buffer.raw.as_ref().unwrap(),
-                iter::once(offset..offset + size),
-            );
+            raw.invalidate_mapped_ranges(buffer.raw(), iter::once(offset..offset + size));
             None
         },
         HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
@@ -247,9 +244,7 @@ fn map_buffer<A: HalApi>(
         mapped[fill_range].fill(0);
 
         if zero_init_needs_flush_now {
-            unsafe {
-                raw.flush_mapped_ranges(buffer.raw.as_ref().unwrap(), iter::once(uninitialized))
-            };
+            unsafe { raw.flush_mapped_ranges(buffer.raw(), iter::once(uninitialized)) };
         }
     }
 

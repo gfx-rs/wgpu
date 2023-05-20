@@ -929,7 +929,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             depth_stencil = Some(hal::DepthStencilAttachment {
                 target: hal::Attachment {
-                    view: view.raw.as_ref().unwrap(),
+                    view: view.raw(),
                     usage,
                 },
                 depth_ops: at.depth.hal_ops(),
@@ -1040,14 +1040,14 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
 
                 hal_resolve_target = Some(hal::Attachment {
-                    view: resolve_view.raw.as_ref().unwrap(),
+                    view: resolve_view.raw(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 });
             }
 
             colors.push(Some(hal::ColorAttachment {
                 target: hal::Attachment {
-                    view: color_view.raw.as_ref().unwrap(),
+                    view: color_view.raw(),
                     usage: hal::TextureUses::COLOR_TARGET,
                 },
                 resolve_target: hal_resolve_target,
@@ -1168,7 +1168,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(hal::DepthStencilAttachment {
                     target: hal::Attachment {
-                        view: view.raw.as_ref().unwrap(),
+                        view: view.raw(),
                         usage: hal::TextureUses::DEPTH_STENCIL_WRITE,
                     },
                     depth_ops,
@@ -1363,16 +1363,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &temp_offsets,
                         );
                         if !entries.is_empty() {
-                            let pipeline_layout = pipeline_layout_guard
-                                [pipeline_layout_id.unwrap()]
-                            .raw
-                            .as_ref()
-                            .unwrap();
+                            let pipeline_layout =
+                                pipeline_layout_guard[pipeline_layout_id.unwrap()].raw();
                             for (i, e) in entries.iter().enumerate() {
-                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()]
-                                    .raw
-                                    .as_ref()
-                                    .unwrap();
+                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
@@ -1418,7 +1412,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require(pipeline.flags.contains(PipelineFlags::BLEND_CONSTANT));
 
                         unsafe {
-                            raw.set_render_pipeline(pipeline.raw.as_ref().unwrap());
+                            raw.set_render_pipeline(pipeline.raw());
                         }
 
                         if pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE) {
@@ -1438,13 +1432,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
-                                    let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()]
-                                        .raw
-                                        .as_ref()
-                                        .unwrap();
+                                    let raw_bg =
+                                        bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                                     unsafe {
                                         raw.set_bind_group(
-                                            pipeline_layout.raw.as_ref().unwrap(),
+                                            pipeline_layout.raw(),
                                             start_index as u32 + i as u32,
                                             raw_bg,
                                             &e.dynamic_offsets,
@@ -1465,7 +1457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     size_bytes,
                                     |clear_offset, clear_data| unsafe {
                                         raw.set_push_constants(
-                                            pipeline_layout.raw.as_ref().unwrap(),
+                                            pipeline_layout.raw(),
                                             range.stages,
                                             clear_offset,
                                             clear_data,
@@ -1678,7 +1670,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         unsafe {
                             raw.set_push_constants(
-                                pipeline_layout.raw.as_ref().unwrap(),
+                                pipeline_layout.raw(),
                                 stages,
                                 offset,
                                 data_slice,
