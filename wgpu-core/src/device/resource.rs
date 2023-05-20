@@ -926,7 +926,10 @@ impl<A: HalApi> Device<A> {
                 break 'b Err(TextureViewNotRenderableReason::Usage(texture_desc.usage));
             }
 
-            if resolved_dimension != TextureViewDimension::D2 {
+            if !(resolved_dimension == TextureViewDimension::D2
+                || (self.features.contains(wgt::Features::MULTIVIEW)
+                    && resolved_dimension == TextureViewDimension::D2Array))
+            {
                 break 'b Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
                 ));
@@ -938,7 +941,9 @@ impl<A: HalApi> Device<A> {
                 ));
             }
 
-            if resolved_array_layer_count != 1 {
+            if resolved_array_layer_count != 1
+                && !(self.features.contains(wgt::Features::MULTIVIEW))
+            {
                 break 'b Err(TextureViewNotRenderableReason::ArrayLayerCount(
                     resolved_array_layer_count,
                 ));
