@@ -785,8 +785,7 @@ impl<A: HalApi> RenderBundle<A> {
                     let bind_group = bind_group_guard.get(bind_group_id).unwrap();
                     unsafe {
                         raw.set_bind_group(
-                            pipeline_layout_guard[pipeline_layout_id.unwrap()]
-                                .raw(),
+                            pipeline_layout_guard[pipeline_layout_id.unwrap()].raw(),
                             index,
                             bind_group.raw(),
                             &offsets[..num_dynamic_offsets as usize],

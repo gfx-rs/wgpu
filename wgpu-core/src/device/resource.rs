@@ -3043,11 +3043,7 @@ impl<A: HalApi> Device<A> {
 
         let hal_desc = desc.map_label(crate::LabelHelpers::borrow_option);
         Ok(QuerySet {
-            raw: Some(unsafe {
-                self.raw()
-                    .create_query_set(&hal_desc)
-                    .unwrap()
-            }),
+            raw: Some(unsafe { self.raw().create_query_set(&hal_desc).unwrap() }),
             device: self.clone(),
             info: ResourceInfo::new(""),
             desc: desc.map_label(|_| ()),
