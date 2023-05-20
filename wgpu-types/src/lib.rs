@@ -1303,13 +1303,29 @@ pub enum DeviceType {
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
-    /// Vendor PCI id of the adapter
+    /// [`Backend`]-specific vendor ID of the adapter
     ///
-    /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
-    /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
-    pub vendor: usize,
-    /// PCI id of the adapter
-    pub device: usize,
+    /// This generally is a 16-bit PCI vendor ID in the least significant bytes of this field.
+    /// However, more significant bytes may be non-zero if the backend uses a different
+    /// representation.
+    ///
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::vendorID`] is used, which is
+    ///     a superset of PCI IDs.
+    ///
+    /// [`VkPhysicalDeviceProperties::vendorID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    pub vendor: u32,
+    /// [`Backend`]-specific device ID of the adapter
+    ///
+    ///
+    /// This generally is a 16-bit PCI device ID in the least significant bytes of this field.
+    /// However, more significant bytes may be non-zero if the backend uses a different
+    /// representation.
+    ///
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::deviceID`] is used, which is
+    ///    a superset of PCI IDs.
+    ///
+    /// [`VkPhysicalDeviceProperties::deviceID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
     /// Driver name
@@ -4260,7 +4276,7 @@ impl_bitflags!(BufferUsages);
 pub struct BufferDescriptor<L> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// Size of a buffer.
+    /// Size of a buffer, in bytes.
     pub size: BufferAddress,
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
@@ -5515,18 +5531,41 @@ pub enum BindingType {
     Buffer {
         /// Sub-type of the buffer binding.
         ty: BufferBindingType,
+
         /// Indicates that the binding has a dynamic offset.
         ///
-        /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg] for each dynamic
-        /// binding in increasing order of binding number.
+        /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg]
+        /// for each dynamic binding in increasing order of binding number.
         ///
         /// [RPsbg]: ../wgpu/struct.RenderPass.html#method.set_bind_group
         #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         has_dynamic_offset: bool,
-        /// Minimum size of the corresponding `BufferBinding` required to match this entry.
-        /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
-        /// plus one element of the unbound array, which can only be last in the structure.
-        /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
+
+        /// The minimum size for a [`BufferBinding`] matching this entry, in bytes.
+        ///
+        /// If this is `Some(size)`:
+        ///
+        /// - When calling [`create_bind_group`], the resource at this bind point
+        ///   must be a [`BindingResource::Buffer`] whose effective size is at
+        ///   least `size`.
+        ///
+        /// - When calling [`create_render_pipeline`] or [`create_compute_pipeline`],
+        ///   `size` must be at least the [minimum buffer binding size] for the
+        ///   shader module global at this bind point: large enough to hold the
+        ///   global's value, along with one element of a trailing runtime-sized
+        ///   array, if present.
+        ///
+        /// If this is `None`:
+        ///
+        /// - Each draw or dispatch command checks that the buffer range at this
+        ///   bind point satisfies the [minimum buffer binding size].
+        ///
+        /// [`BufferBinding`]: ../wgpu/struct.BufferBinding.html
+        /// [`create_bind_group`]: ../wgpu/struct.Device.html#method.create_bind_group
+        /// [`BindingResource::Buffer`]: ../wgpu/enum.BindingResource.html#variant.Buffer
+        /// [minimum buffer binding size]: https://www.w3.org/TR/webgpu/#minimum-buffer-binding-size
+        /// [`create_render_pipeline`]: ../wgpu/struct.Device.html#method.create_render_pipeline
+        /// [`create_compute_pipeline`]: ../wgpu/struct.Device.html#method.create_compute_pipeline
         #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         min_binding_size: Option<BufferSize>,
     },

@@ -53,7 +53,7 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 
 pub struct FailureCase {
     backends: Option<wgpu::Backends>,
-    vendor: Option<usize>,
+    vendor: Option<u32>,
     adapter: Option<String>,
     skip: bool,
 }
@@ -170,7 +170,7 @@ impl TestParameters {
     pub fn specific_failure(
         mut self,
         backends: Option<Backends>,
-        vendor: Option<usize>,
+        vendor: Option<u32>,
         device: Option<&'static str>,
         skip: bool,
     ) -> Self {
