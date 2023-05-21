@@ -1496,7 +1496,8 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.25.0"
-source = "git+https://github.com/gfx-rs/metal-rs?branch=master#05df13a4f751910ef54d7805e8e4682488b23b8d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "550b24b0cd4cf923f36bae78eca457b3a10d8a6a14a9c84cb2687b527e6a84af"
 dependencies = [
  "bitflags 1.3.2",
  "block",

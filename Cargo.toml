@@ -151,4 +151,3 @@ wgpu-types = { path = "./wgpu-types" }
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
-metal = { git = "https://github.com/gfx-rs/metal-rs", branch = "master" }
