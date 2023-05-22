@@ -42,6 +42,7 @@ pub mod command;
 mod conv;
 pub mod device;
 pub mod error;
+pub mod global;
 pub mod hub;
 pub mod id;
 mod init_tracker;
@@ -355,7 +356,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// identifiers to select backends dynamically, even though many `wgpu_core`
 /// methods are compiled and optimized for a specific back end.
 ///
-/// This macro is typically used to call methods on [`wgpu_core::hub::Global`],
+/// This macro is typically used to call methods on [`wgpu_core::global::Global`],
 /// many of which take a single `hal::Api` type parameter. For example, to
 /// create a new buffer on the device indicated by `device_id`, one would say:
 ///
@@ -375,13 +376,13 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// That `gfx_select!` call uses `device_id`'s backend to select the right
 /// backend type `A` for a call to `Global::device_create_buffer<A>`.
 ///
-/// However, there's nothing about this macro that is specific to `hub::Global`.
+/// However, there's nothing about this macro that is specific to `global::Global`.
 /// For example, Firefox's embedding of `wgpu_core` defines its own types with
 /// methods that take `hal::Api` type parameters. Firefox uses `gfx_select!` to
 /// dynamically dispatch to the right specialization based on the resource's id.
 ///
 /// [`wgpu_types::Backend`]: wgt::Backend
-/// [`wgpu_core::hub::Global`]: crate::hub::Global
+/// [`wgpu_core::global::Global`]: crate::global::Global
 /// [`Id`]: id::Id
 #[macro_export]
 macro_rules! gfx_select {

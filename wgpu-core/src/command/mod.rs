@@ -21,7 +21,8 @@ use crate::error::{ErrorFormatter, PrettyError};
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::track::{Tracker, UsageScope};
 use crate::{
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hub::{GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id,
     resource::{Buffer, Texture},
     Label, Stored,

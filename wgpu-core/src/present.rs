@@ -16,7 +16,8 @@ use crate::device::trace::Action;
 use crate::{
     conv,
     device::{DeviceError, MissingDownlevelFlags},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hub::{GlobalIdentityHandlerFactory, HalApi, Input, Token},
     id::{DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::TextureInitTracker,
     resource, track, LifeGuard, Stored,

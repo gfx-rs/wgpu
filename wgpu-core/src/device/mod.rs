@@ -1,7 +1,8 @@
 use crate::{
     binding_model, command, conv,
     device::life::WaitIdleError,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
+    global::Global,
+    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Input, InvalidId, Storage, Token},
     id,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
