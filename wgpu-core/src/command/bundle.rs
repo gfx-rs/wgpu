@@ -71,8 +71,8 @@ called. It goes through the commands and issues them into the native command
 buffer. Thanks to isolation, it doesn't track any bind group invalidations or
 index format changes.
 
-[Gdcrbe]: crate::hub::Global::device_create_render_bundle_encoder
-[Grbef]: crate::hub::Global::render_bundle_encoder_finish
+[Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
+[Grbef]: crate::global::Global::render_bundle_encoder_finish
 [wrpeb]: crate::command::render_ffi::wgpu_render_pass_execute_bundles
 !*/
 

@@ -78,7 +78,7 @@ impl Test<'_> {
     fn run(
         self,
         dir: &Path,
-        global: &wgc::hub::Global<IdentityPassThroughFactory>,
+        global: &wgc::global::Global<IdentityPassThroughFactory>,
         adapter: wgc::id::AdapterId,
         test_num: u32,
     ) {
@@ -178,7 +178,7 @@ impl Corpus {
         let dir = path.parent().unwrap();
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
-        let global = wgc::hub::Global::new(
+        let global = wgc::global::Global::new(
             "test",
             IdentityPassThroughFactory,
             wgt::InstanceDescriptor {

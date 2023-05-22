@@ -1698,7 +1698,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.context
             .as_any()
             .downcast_ref::<crate::backend::Context>()

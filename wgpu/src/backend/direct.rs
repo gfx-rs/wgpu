@@ -26,7 +26,7 @@ use wgc::id::TypedId;
 
 const LABEL: &str = "label";
 
-pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+pub struct Context(wgc::global::Global<wgc::hub::IdentityManagerFactory>);
 
 impl Drop for Context {
     fn drop(&mut self) {
@@ -43,7 +43,7 @@ impl fmt::Debug for Context {
 impl Context {
     pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_hal_instance::<A>(
+            wgc::global::Global::from_hal_instance::<A>(
                 "wgpu",
                 wgc::hub::IdentityManagerFactory,
                 hal_instance,
@@ -60,11 +60,11 @@ impl Context {
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+            wgc::global::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
         })
     }
 
-    pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::hub::IdentityManagerFactory> {
         &self.0
     }
 
@@ -186,7 +186,7 @@ impl Context {
         }
     }
 
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.0.generate_report()
     }
 
@@ -536,7 +536,7 @@ impl crate::Context for Context {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
-        Self(wgc::hub::Global::new(
+        Self(wgc::global::Global::new(
             "wgpu",
             wgc::hub::IdentityManagerFactory,
             instance_desc,

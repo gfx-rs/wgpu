@@ -4,7 +4,8 @@ use hal::CommandEncoder as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hub::{GlobalIdentityHandlerFactory, HalApi, Storage, Token},
     id::{self, Id, TypedId},
     init_tracker::MemoryInitKind,
     resource::QuerySet,

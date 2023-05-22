@@ -43,7 +43,7 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::hub::Global::new(
+    let global = wgc::global::Global::new(
         "player",
         IdentityPassThroughFactory,
         wgt::InstanceDescriptor::default(),

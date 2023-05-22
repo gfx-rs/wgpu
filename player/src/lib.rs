@@ -51,7 +51,7 @@ pub trait GlobalPlay {
     );
 }
 
-impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
+impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
     fn encode_commands<A: wgc::hub::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
