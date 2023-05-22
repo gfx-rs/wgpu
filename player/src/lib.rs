@@ -37,12 +37,12 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
 impl wgc::hub::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
-    fn encode_commands<A: wgc::hub::HalApi>(
+    fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
     ) -> wgc::id::CommandBufferId;
-    fn process<A: wgc::hub::HalApi>(
+    fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
@@ -52,7 +52,7 @@ pub trait GlobalPlay {
 }
 
 impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
-    fn encode_commands<A: wgc::hub::HalApi>(
+    fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
@@ -146,7 +146,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         cmd_buf
     }
 
-    fn process<A: wgc::hub::HalApi>(
+    fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,

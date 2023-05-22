@@ -1,7 +1,8 @@
 use crate::{
     device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
     global::Global,
-    hub::{GlobalIdentityHandlerFactory, HalApi, Resource, Token},
+    hal_api::HalApi,
+    hub::{GlobalIdentityHandlerFactory, Resource, Token},
     id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,

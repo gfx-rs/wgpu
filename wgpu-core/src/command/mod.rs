@@ -22,7 +22,8 @@ use crate::init_tracker::BufferInitTrackerAction;
 use crate::track::{Tracker, UsageScope};
 use crate::{
     global::Global,
-    hub::{GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    hal_api::HalApi,
+    hub::{GlobalIdentityHandlerFactory, Storage, Token},
     id,
     resource::{Buffer, Texture},
     Label, Stored,

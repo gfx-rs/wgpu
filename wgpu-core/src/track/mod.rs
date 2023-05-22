@@ -100,7 +100,9 @@ mod stateless;
 mod texture;
 
 use crate::{
-    binding_model, command, conv, hub,
+    binding_model, command, conv,
+    hal_api::HalApi,
+    hub,
     id::{self, TypedId},
     pipeline, resource,
 };
@@ -312,14 +314,14 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 ///
 /// All bind group states are sorted by their ID so that when adding to a tracker,
 /// they are added in the most efficient order possible (assending order).
-pub(crate) struct BindGroupStates<A: hub::HalApi> {
+pub(crate) struct BindGroupStates<A: HalApi> {
     pub buffers: BufferBindGroupState<A>,
     pub textures: TextureBindGroupState<A>,
     pub views: StatelessBindGroupSate<resource::TextureView<A>, id::TextureViewId>,
     pub samplers: StatelessBindGroupSate<resource::Sampler<A>, id::SamplerId>,
 }
 
-impl<A: hub::HalApi> BindGroupStates<A> {
+impl<A: HalApi> BindGroupStates<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferBindGroupState::new(),
@@ -344,7 +346,7 @@ impl<A: hub::HalApi> BindGroupStates<A> {
 /// This is a render bundle specific usage scope. It includes stateless resources
 /// that are not normally included in a usage scope, but are used by render bundles
 /// and need to be owned by the render bundles.
-pub(crate) struct RenderBundleScope<A: hub::HalApi> {
+pub(crate) struct RenderBundleScope<A: HalApi> {
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
@@ -353,7 +355,7 @@ pub(crate) struct RenderBundleScope<A: hub::HalApi> {
     pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
 }
 
-impl<A: hub::HalApi> RenderBundleScope<A> {
+impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
@@ -406,12 +408,12 @@ impl<A: hub::HalApi> RenderBundleScope<A> {
 /// A usage scope tracker. Only needs to store stateful resources as stateless
 /// resources cannot possibly have a usage conflict.
 #[derive(Debug)]
-pub(crate) struct UsageScope<A: hub::HalApi> {
+pub(crate) struct UsageScope<A: HalApi> {
     pub buffers: BufferUsageScope<A>,
     pub textures: TextureUsageScope<A>,
 }
 
-impl<A: hub::HalApi> UsageScope<A> {
+impl<A: HalApi> UsageScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
         buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
@@ -474,7 +476,7 @@ impl<A: hub::HalApi> UsageScope<A> {
 }
 
 /// A full double sided tracker used by CommandBuffers and the Device.
-pub(crate) struct Tracker<A: hub::HalApi> {
+pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
     pub views: StatelessTracker<A, resource::TextureView<A>, id::TextureViewId>,
@@ -486,7 +488,7 @@ pub(crate) struct Tracker<A: hub::HalApi> {
     pub query_sets: StatelessTracker<A, resource::QuerySet<A>, id::QuerySetId>,
 }
 
-impl<A: hub::HalApi> Tracker<A> {
+impl<A: HalApi> Tracker<A> {
     pub fn new() -> Self {
         Self {
             buffers: BufferTracker::new(),

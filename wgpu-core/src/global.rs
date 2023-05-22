@@ -1,6 +1,6 @@
 use crate::{
+    hal_api::HalApi,
     hub::GlobalIdentityHandlerFactory,
-    hub::HalApi,
     hub::Registry,
     hub::{Element, StorageReport},
     hub::{HubReport, Hubs},
