@@ -4708,7 +4708,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let id = self.next()?;
         let sample_type_id = self.next()?;
         let dim = self.next()?;
-        let _is_depth = self.next()?;
+        let is_depth = self.next()?;
         let is_array = self.next()? != 0;
         let is_msaa = self.next()? != 0;
         let _is_sampled = self.next()?;
@@ -4740,7 +4740,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .ok_or(Error::InvalidImageBaseType(base_handle))?;
 
         let inner = crate::TypeInner::Image {
-            class: if format != 0 {
+            class: if is_depth == 1 {
+                crate::ImageClass::Depth { multi: is_msaa }
+            } else if format != 0 {
                 crate::ImageClass::Storage {
                     format: map_image_format(format)?,
                     access: crate::StorageAccess::default(),

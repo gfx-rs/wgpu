@@ -90,9 +90,6 @@
         (
             bits: 64,
         ),
-        (
-            bits: 64,
-        ),
     ],
     functions: [
         (
@@ -190,7 +187,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(1),
-                    ty: Handle(30),
+                    ty: Handle(7),
                 ),
                 (
                     uniformity: (
@@ -201,7 +198,7 @@
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
-                    ty: Handle(31),
+                    ty: Handle(30),
                 ),
                 (
                     uniformity: (
@@ -1256,7 +1253,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: Some(1),
-                    ty: Handle(30),
+                    ty: Handle(7),
                 ),
                 (
                     uniformity: (
@@ -1267,7 +1264,7 @@
                     ),
                     ref_count: 0,
                     assignable_global: Some(2),
-                    ty: Handle(31),
+                    ty: Handle(30),
                 ),
                 (
                     uniformity: (

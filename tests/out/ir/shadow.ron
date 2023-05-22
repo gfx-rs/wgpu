@@ -50,8 +50,7 @@
             inner: Image(
                 dim: D2,
                 arrayed: true,
-                class: Sampled(
-                    kind: Float,
+                class: Depth(
                     multi: false,
                 ),
             ),
@@ -267,16 +266,6 @@
             inner: Pointer(
                 base: 1,
                 space: Private,
-            ),
-        ),
-        (
-            name: None,
-            inner: Image(
-                dim: D2,
-                arrayed: true,
-                class: Depth(
-                    multi: false,
-                ),
             ),
         ),
         (
@@ -616,7 +605,7 @@
                 group: 0,
                 binding: 2,
             )),
-            ty: 30,
+            ty: 7,
             init: None,
         ),
         (
@@ -626,7 +615,7 @@
                 group: 0,
                 binding: 3,
             )),
-            ty: 31,
+            ty: 30,
             init: None,
         ),
         (
