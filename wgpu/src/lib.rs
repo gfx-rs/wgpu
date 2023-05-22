@@ -1360,7 +1360,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
                 crate::backend::Context::from_hal_instance::<A>(hal_instance)
@@ -1383,7 +1383,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe {
             self.context
                 .as_any()
@@ -1468,7 +1468,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
@@ -1773,7 +1773,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
@@ -1827,7 +1827,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
@@ -2176,7 +2176,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor,
@@ -2281,7 +2281,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
     ) -> R {
@@ -2623,7 +2623,7 @@ impl Texture {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
@@ -4240,7 +4240,11 @@ impl Surface {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::Surface>) -> R,
+        R,
+    >(
         &mut self,
         hal_surface_callback: F,
     ) -> R {

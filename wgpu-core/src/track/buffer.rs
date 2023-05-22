@@ -9,6 +9,7 @@ use std::{borrow::Cow, marker::PhantomData, vec::Drain};
 
 use super::PendingTransition;
 use crate::{
+    hal_api::HalApi,
     hub,
     id::{BufferId, TypedId, Valid},
     resource::Buffer,
@@ -41,12 +42,12 @@ impl ResourceUses for BufferUses {
 }
 
 /// Stores all the buffers that a bind group stores.
-pub(crate) struct BufferBindGroupState<A: hub::HalApi> {
+pub(crate) struct BufferBindGroupState<A: HalApi> {
     buffers: Vec<(Valid<BufferId>, RefCount, BufferUses)>,
 
     _phantom: PhantomData<A>,
 }
-impl<A: hub::HalApi> BufferBindGroupState<A> {
+impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
             buffers: Vec::new(),
@@ -87,13 +88,13 @@ impl<A: hub::HalApi> BufferBindGroupState<A> {
 
 /// Stores all buffer state within a single usage scope.
 #[derive(Debug)]
-pub(crate) struct BufferUsageScope<A: hub::HalApi> {
+pub(crate) struct BufferUsageScope<A: HalApi> {
     state: Vec<BufferUses>,
 
     metadata: ResourceMetadata<A>,
 }
 
-impl<A: hub::HalApi> BufferUsageScope<A> {
+impl<A: HalApi> BufferUsageScope<A> {
     pub fn new() -> Self {
         Self {
             state: Vec::new(),
@@ -248,7 +249,7 @@ impl<A: hub::HalApi> BufferUsageScope<A> {
 }
 
 /// Stores all buffer state within a command buffer or device.
-pub(crate) struct BufferTracker<A: hub::HalApi> {
+pub(crate) struct BufferTracker<A: HalApi> {
     start: Vec<BufferUses>,
     end: Vec<BufferUses>,
 
@@ -256,7 +257,7 @@ pub(crate) struct BufferTracker<A: hub::HalApi> {
 
     temp: Vec<PendingTransition<BufferUses>>,
 }
-impl<A: hub::HalApi> BufferTracker<A> {
+impl<A: HalApi> BufferTracker<A> {
     pub fn new() -> Self {
         Self {
             start: Vec::new(),
@@ -588,7 +589,7 @@ impl BufferStateProvider<'_> {
 /// Indexes must be valid indexes into all arrays passed in
 /// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
-unsafe fn insert_or_merge<A: hub::HalApi>(
+unsafe fn insert_or_merge<A: HalApi>(
     life_guard: Option<&LifeGuard>,
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
@@ -645,7 +646,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
 /// Indexes must be valid indexes into all arrays passed in
 /// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
-unsafe fn insert_or_barrier_update<A: hub::HalApi>(
+unsafe fn insert_or_barrier_update<A: HalApi>(
     life_guard: Option<&LifeGuard>,
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
@@ -690,7 +691,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
 }
 
 #[inline(always)]
-unsafe fn insert<A: hub::HalApi>(
+unsafe fn insert<A: HalApi>(
     life_guard: Option<&LifeGuard>,
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
@@ -723,7 +724,7 @@ unsafe fn insert<A: hub::HalApi>(
 }
 
 #[inline(always)]
-unsafe fn merge<A: hub::HalApi>(
+unsafe fn merge<A: HalApi>(
     current_states: &mut [BufferUses],
     index32: u32,
     index: usize,

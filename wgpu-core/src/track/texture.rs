@@ -21,6 +21,7 @@
 
 use super::{range::RangedStates, PendingTransition};
 use crate::{
+    hal_api::HalApi,
     hub,
     id::{TextureId, TypedId, Valid},
     resource::Texture,
@@ -148,7 +149,7 @@ impl ComplexTextureState {
 }
 
 /// Stores all the textures that a bind group stores.
-pub(crate) struct TextureBindGroupState<A: hub::HalApi> {
+pub(crate) struct TextureBindGroupState<A: HalApi> {
     textures: Vec<(
         Valid<TextureId>,
         Option<TextureSelector>,
@@ -158,7 +159,7 @@ pub(crate) struct TextureBindGroupState<A: hub::HalApi> {
 
     _phantom: PhantomData<A>,
 }
-impl<A: hub::HalApi> TextureBindGroupState<A> {
+impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
             textures: Vec::new(),
@@ -219,13 +220,13 @@ impl TextureStateSet {
 
 /// Stores all texture state within a single usage scope.
 #[derive(Debug)]
-pub(crate) struct TextureUsageScope<A: hub::HalApi> {
+pub(crate) struct TextureUsageScope<A: HalApi> {
     set: TextureStateSet,
 
     metadata: ResourceMetadata<A>,
 }
 
-impl<A: hub::HalApi> TextureUsageScope<A> {
+impl<A: HalApi> TextureUsageScope<A> {
     pub fn new() -> Self {
         Self {
             set: TextureStateSet::new(),
@@ -382,7 +383,7 @@ impl<A: hub::HalApi> TextureUsageScope<A> {
 }
 
 /// Stores all texture state within a command buffer or device.
-pub(crate) struct TextureTracker<A: hub::HalApi> {
+pub(crate) struct TextureTracker<A: HalApi> {
     start_set: TextureStateSet,
     end_set: TextureStateSet,
 
@@ -392,7 +393,7 @@ pub(crate) struct TextureTracker<A: hub::HalApi> {
 
     _phantom: PhantomData<A>,
 }
-impl<A: hub::HalApi> TextureTracker<A> {
+impl<A: HalApi> TextureTracker<A> {
     pub fn new() -> Self {
         Self {
             start_set: TextureStateSet::new(),
@@ -875,7 +876,7 @@ impl<'a> TextureStateProvider<'a> {
 /// Helper function that gets what is needed from the texture storage
 /// out of the texture storage.
 #[inline(always)]
-unsafe fn texture_data_from_texture<A: hub::HalApi>(
+unsafe fn texture_data_from_texture<A: HalApi>(
     storage: &hub::Storage<Texture<A>, TextureId>,
     index32: u32,
 ) -> (&LifeGuard, &TextureSelector) {
@@ -893,7 +894,7 @@ unsafe fn texture_data_from_texture<A: hub::HalApi>(
 /// Indexes must be valid indexes into all arrays passed in
 /// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
-unsafe fn insert_or_merge<A: hub::HalApi>(
+unsafe fn insert_or_merge<A: HalApi>(
     texture_data: (&LifeGuard, &TextureSelector),
     current_state_set: &mut TextureStateSet,
     resource_metadata: &mut ResourceMetadata<A>,
@@ -951,7 +952,7 @@ unsafe fn insert_or_merge<A: hub::HalApi>(
 /// Indexes must be valid indexes into all arrays passed in
 /// to this function, either directly or via metadata or provider structs.
 #[inline(always)]
-unsafe fn insert_or_barrier_update<A: hub::HalApi>(
+unsafe fn insert_or_barrier_update<A: HalApi>(
     texture_data: (&LifeGuard, &TextureSelector),
     start_state: Option<&mut TextureStateSet>,
     current_state_set: &mut TextureStateSet,
@@ -1008,7 +1009,7 @@ unsafe fn insert_or_barrier_update<A: hub::HalApi>(
 }
 
 #[inline(always)]
-unsafe fn insert<A: hub::HalApi>(
+unsafe fn insert<A: HalApi>(
     texture_data: Option<(&LifeGuard, &TextureSelector)>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &mut TextureStateSet,
@@ -1096,7 +1097,7 @@ unsafe fn insert<A: hub::HalApi>(
 }
 
 #[inline(always)]
-unsafe fn merge<A: hub::HalApi>(
+unsafe fn merge<A: HalApi>(
     texture_data: (&LifeGuard, &TextureSelector),
     current_state_set: &mut TextureStateSet,
     index32: u32,

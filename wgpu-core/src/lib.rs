@@ -43,6 +43,7 @@ mod conv;
 pub mod device;
 pub mod error;
 pub mod global;
+pub mod hal_api;
 pub mod hub;
 pub mod id;
 mod init_tracker;

@@ -7,6 +7,7 @@
 use std::marker::PhantomData;
 
 use crate::{
+    hal_api::HalApi,
     hub,
     id::{TypedId, Valid},
     track::ResourceMetadata,
@@ -55,13 +56,13 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
 }
 
 /// Stores all resource state within a command buffer or device.
-pub(crate) struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
+pub(crate) struct StatelessTracker<A: HalApi, T, Id: TypedId> {
     metadata: ResourceMetadata<A>,
 
     _phantom: PhantomData<(T, Id)>,
 }
 
-impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
+impl<A: HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
