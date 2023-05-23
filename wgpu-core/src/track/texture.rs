@@ -22,9 +22,9 @@
 use super::{range::RangedStates, PendingTransition};
 use crate::{
     hal_api::HalApi,
-    hub,
     id::{TextureId, TypedId, Valid},
     resource::Texture,
+    storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
@@ -185,7 +185,7 @@ impl<A: HalApi> TextureBindGroupState<A> {
     /// Adds the given resource with the given state.
     pub fn add_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Texture<A>, TextureId>,
+        storage: &'a storage::Storage<Texture<A>, TextureId>,
         id: TextureId,
         ref_count: RefCount,
         selector: Option<TextureSelector>,
@@ -279,7 +279,7 @@ impl<A: HalApi> TextureUsageScope<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_usage_scope(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &storage::Storage<Texture<A>, TextureId>,
         scope: &Self,
     ) -> Result<(), UsageConflict> {
         let incoming_size = scope.set.simple.len();
@@ -326,7 +326,7 @@ impl<A: HalApi> TextureUsageScope<A> {
     /// method is called.
     pub unsafe fn merge_bind_group(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &storage::Storage<Texture<A>, TextureId>,
         bind_group: &TextureBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
         for &(id, ref selector, ref ref_count, state) in &bind_group.textures {
@@ -351,7 +351,7 @@ impl<A: HalApi> TextureUsageScope<A> {
     /// method is called.
     pub unsafe fn merge_single(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &storage::Storage<Texture<A>, TextureId>,
         id: Valid<TextureId>,
         selector: Option<TextureSelector>,
         ref_count: &RefCount,
@@ -564,7 +564,7 @@ impl<A: HalApi> TextureTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_tracker(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &storage::Storage<Texture<A>, TextureId>,
         tracker: &Self,
     ) {
         let incoming_size = tracker.start_set.simple.len();
@@ -610,7 +610,7 @@ impl<A: HalApi> TextureTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_from_usage_scope(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &storage::Storage<Texture<A>, TextureId>,
         scope: &TextureUsageScope<A>,
     ) {
         let incoming_size = scope.set.simple.len();
@@ -662,7 +662,7 @@ impl<A: HalApi> TextureTracker<A> {
     /// method is called.
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
-        storage: &hub::Storage<Texture<A>, TextureId>,
+        storage: &storage::Storage<Texture<A>, TextureId>,
         scope: &mut TextureUsageScope<A>,
         bind_group_state: &TextureBindGroupState<A>,
     ) {
@@ -877,7 +877,7 @@ impl<'a> TextureStateProvider<'a> {
 /// out of the texture storage.
 #[inline(always)]
 unsafe fn texture_data_from_texture<A: HalApi>(
-    storage: &hub::Storage<Texture<A>, TextureId>,
+    storage: &storage::Storage<Texture<A>, TextureId>,
     index32: u32,
 ) -> (&LifeGuard, &TextureSelector) {
     let texture = unsafe { storage.get_unchecked(index32) };

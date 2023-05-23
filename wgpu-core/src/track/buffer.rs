@@ -10,9 +10,9 @@ use std::{borrow::Cow, marker::PhantomData, vec::Drain};
 use super::PendingTransition;
 use crate::{
     hal_api::HalApi,
-    hub,
     id::{BufferId, TypedId, Valid},
     resource::Buffer,
+    storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
@@ -73,7 +73,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
     /// Adds the given resource with the given state.
     pub fn add_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        storage: &'a storage::Storage<Buffer<A>, BufferId>,
         id: BufferId,
         state: BufferUses,
     ) -> Option<&'a Buffer<A>> {
@@ -216,7 +216,7 @@ impl<A: HalApi> BufferUsageScope<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn merge_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        storage: &'a storage::Storage<Buffer<A>, BufferId>,
         id: BufferId,
         new_state: BufferUses,
     ) -> Result<&'a Buffer<A>, UsageConflict> {
@@ -349,7 +349,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn set_single<'a>(
         &mut self,
-        storage: &'a hub::Storage<Buffer<A>, BufferId>,
+        storage: &'a storage::Storage<Buffer<A>, BufferId>,
         id: BufferId,
         state: BufferUses,
     ) -> Option<(&'a Buffer<A>, Option<PendingTransition<BufferUses>>)> {

@@ -10,6 +10,7 @@ use crate::{
     hal_api::HalApi,
     hub,
     id::{TypedId, Valid},
+    storage,
     track::ResourceMetadata,
     RefCount,
 };
@@ -45,7 +46,11 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a storage::Storage<T, Id>,
+        id: Id,
+    ) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
         self.resources
@@ -118,7 +123,11 @@ impl<A: HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a storage::Storage<T, Id>,
+        id: Id,
+    ) -> Option<&'a T> {
         let item = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();
