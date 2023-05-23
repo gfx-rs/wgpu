@@ -5196,11 +5196,16 @@ pub struct RenderBundleDepthStencil {
     ///
     /// This must match the [`RenderPassDepthStencilAttachment::depth_ops`] of the renderpass this render bundle is executed in.
     /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
+    ///
+    /// [`RenderPassDepthStencilAttachment::depth_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.depth_ops
     pub depth_read_only: bool,
+
     /// If the stencil aspect of the depth stencil attachment is going to be written to.
     ///
     /// This must match the [`RenderPassDepthStencilAttachment::stencil_ops`] of the renderpass this render bundle is executed in.
     /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
+    ///
+    /// [`RenderPassDepthStencilAttachment::stencil_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.stencil_ops
     pub stencil_read_only: bool,
 }
 
