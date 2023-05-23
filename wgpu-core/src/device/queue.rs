@@ -480,7 +480,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     fn queue_validate_write_buffer_impl<A: HalApi>(
         &self,
-        buffer: &super::resource::Buffer<A>,
+        buffer: &crate::resource::Buffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
         buffer_size: u64,
