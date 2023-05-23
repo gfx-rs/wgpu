@@ -6,8 +6,10 @@ use crate::{
         DeviceError,
     },
     hal_api::HalApi,
-    hub::{GlobalIdentityHandlerFactory, Hub, Token},
-    id, resource,
+    hub::{Hub, Token},
+    id,
+    identity::GlobalIdentityHandlerFactory,
+    resource,
     track::{BindGroupStates, RenderBundleScope, Tracker},
     RefCount, Stored, SubmissionIndex,
 };

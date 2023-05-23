@@ -23,8 +23,9 @@ use crate::track::{Tracker, UsageScope};
 use crate::{
     global::Global,
     hal_api::HalApi,
-    hub::{GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Storage, Token},
     id,
+    identity::GlobalIdentityHandlerFactory,
     resource::{Buffer, Texture},
     Label, Stored,
 };

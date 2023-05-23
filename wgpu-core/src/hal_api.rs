@@ -2,7 +2,8 @@ use wgt::Backend;
 
 use crate::{
     global::Global,
-    hub::{GlobalIdentityHandlerFactory, Hub},
+    hub::Hub,
+    identity::GlobalIdentityHandlerFactory,
     instance::{HalSurface, Instance, Surface},
 };
 

@@ -46,6 +46,7 @@ pub mod global;
 pub mod hal_api;
 pub mod hub;
 pub mod id;
+pub mod identity;
 mod init_tracker;
 pub mod instance;
 pub mod pipeline;

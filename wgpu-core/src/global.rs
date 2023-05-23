@@ -1,10 +1,10 @@
 use crate::{
     hal_api::HalApi,
-    hub::GlobalIdentityHandlerFactory,
     hub::Registry,
     hub::{Element, StorageReport},
     hub::{HubReport, Hubs},
     id,
+    identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
 };
 
@@ -156,7 +156,7 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
 }
 
 #[cfg(test)]
-fn _test_send_sync(global: &Global<crate::hub::IdentityManagerFactory>) {
+fn _test_send_sync(global: &Global<crate::identity::IdentityManagerFactory>) {
     fn test_internal<T: Send + Sync>(_: T) {}
     test_internal(global)
 }
