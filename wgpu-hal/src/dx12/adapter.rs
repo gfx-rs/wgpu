@@ -88,7 +88,7 @@ impl super::Adapter {
             device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_FEATURE_LEVELS,
                 &mut device_levels as *mut _ as *mut _,
-                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS> as _,
+                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS>() as _,
             )
         };
         // If this is an error, then the feature level is higher than what d3d12_rs currently has implemented for the enum.
