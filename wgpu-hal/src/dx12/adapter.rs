@@ -84,6 +84,7 @@ impl super::Adapter {
         let mut device_levels: d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS =
             unsafe { mem::zeroed() };
         device_levels.NumFeatureLevels = d3d_feature_level.len() as u32;
+        device_levels.pFeatureLevelsRequested = d3d_feature_level.as_ptr().cast();
         unsafe {
             device.CheckFeatureSupport(
                 d3d12_ty::D3D12_FEATURE_FEATURE_LEVELS,
@@ -91,11 +92,10 @@ impl super::Adapter {
                 mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS>() as _,
             )
         };
-        // If this is an error, then the feature level is higher than what d3d12_rs currently has implemented for the enum.
-        // Just use the highest supported level in this case.
+        // This cast should never fail because we only requested feature levels that are already in the enum.
         let max_feature_level =
             d3d12::FeatureLevel::try_from(device_levels.MaxSupportedFeatureLevel)
-                .unwrap_or(d3d12::FeatureLevel::L12_1);
+                .expect("Unexpected feature level");
 
         // We have found a possible adapter.
         // Acquire the device information.
