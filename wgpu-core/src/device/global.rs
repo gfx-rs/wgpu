@@ -282,6 +282,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fid.assign_error(label.borrow_or_default());
     }
 
+    pub fn create_render_bundle_error<A: HalApi>(
+        &self,
+        id_in: Input<G, id::RenderBundleId>,
+        label: Label,
+    ) {
+        let hub = A::hub(self);
+        let fid = hub.render_bundles.prepare(id_in);
+
+        fid.assign_error(label.borrow_or_default());
+    }
+
     /// Assign `id_in` an error with the given `label`.
     ///
     /// See `create_buffer_error` for more context and explaination.
