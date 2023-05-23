@@ -8,9 +8,8 @@ use std::marker::PhantomData;
 
 use crate::{
     hal_api::HalApi,
-    hub,
     id::{TypedId, Valid},
-    storage,
+    resource, storage,
     track::ResourceMetadata,
     RefCount,
 };
@@ -22,7 +21,7 @@ pub(crate) struct StatelessBindGroupSate<T, Id: TypedId> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
+impl<T: resource::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
     pub fn new() -> Self {
         Self {
             resources: Vec::new(),
@@ -67,7 +66,7 @@ pub(crate) struct StatelessTracker<A: HalApi, T, Id: TypedId> {
     _phantom: PhantomData<(T, Id)>,
 }
 
-impl<A: HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
+impl<A: HalApi, T: resource::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),

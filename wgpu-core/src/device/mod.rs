@@ -3383,7 +3383,7 @@ impl<A: HalApi> Device<A> {
     }
 }
 
-impl<A: HalApi> crate::hub::Resource for Device<A> {
+impl<A: HalApi> crate::resource::Resource for Device<A> {
     const TYPE: &'static str = "Device";
 
     fn life_guard(&self) -> &LifeGuard {
