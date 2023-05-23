@@ -51,6 +51,7 @@ mod init_tracker;
 pub mod instance;
 pub mod pipeline;
 pub mod present;
+pub mod registry;
 pub mod resource;
 mod track;
 mod validation;
