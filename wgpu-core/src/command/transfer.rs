@@ -7,7 +7,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    hub::{Storage, Token},
+    hub::Token,
     id::{BufferId, CommandEncoderId, TextureId, Valid},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{
@@ -15,6 +15,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{Texture, TextureErrorDimension},
+    storage::Storage,
     track::TextureSelector,
 };
 

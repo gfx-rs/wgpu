@@ -3,7 +3,7 @@ use crate::{
     device::life::WaitIdleError,
     global::Global,
     hal_api::HalApi,
-    hub::{Hub, InvalidId, Storage, Token},
+    hub::{Hub, Token},
     id,
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{
@@ -14,6 +14,7 @@ use crate::{
     pipeline, present,
     resource::{self, BufferAccessResult, BufferMapState, TextureViewNotRenderableReason},
     resource::{BufferAccessError, BufferMapOperation},
+    storage::{InvalidId, Storage},
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LabelHelpers as _, LifeGuard, MultiRefCount, RefCount, Stored,

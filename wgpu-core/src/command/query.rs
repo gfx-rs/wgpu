@@ -6,11 +6,12 @@ use crate::{
     command::{CommandBuffer, CommandEncoderError},
     global::Global,
     hal_api::HalApi,
-    hub::{Storage, Token},
+    hub::Token,
     id::{self, Id, TypedId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     resource::QuerySet,
+    storage::Storage,
     Epoch, FastHashMap, Index,
 };
 use std::{iter, marker::PhantomData};

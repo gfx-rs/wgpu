@@ -7,11 +7,12 @@ use crate::{
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
-    hub::{self, Token},
+    hub::Token,
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
+    storage,
     track::{TextureSelector, TextureTracker},
 };
 
@@ -235,7 +236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub(crate) fn clear_texture<A: HalApi>(
-    storage: &hub::Storage<Texture<A>, TextureId>,
+    storage: &storage::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,

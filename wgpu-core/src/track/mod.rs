@@ -102,9 +102,8 @@ mod texture;
 use crate::{
     binding_model, command, conv,
     hal_api::HalApi,
-    hub,
     id::{self, TypedId},
-    pipeline, resource,
+    pipeline, resource, storage,
 };
 
 use std::{fmt, ops};
@@ -358,11 +357,11 @@ pub(crate) struct RenderBundleScope<A: HalApi> {
 impl<A: HalApi> RenderBundleScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
-        bind_groups: &hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
-        render_pipelines: &hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
-        query_sets: &hub::Storage<resource::QuerySet<A>, id::QuerySetId>,
+        buffers: &storage::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &storage::Storage<resource::Texture<A>, id::TextureId>,
+        bind_groups: &storage::Storage<binding_model::BindGroup<A>, id::BindGroupId>,
+        render_pipelines: &storage::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        query_sets: &storage::Storage<resource::QuerySet<A>, id::QuerySetId>,
     ) -> Self {
         let mut value = Self {
             buffers: BufferUsageScope::new(),
@@ -392,7 +391,7 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &storage::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
         unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
@@ -416,8 +415,8 @@ pub(crate) struct UsageScope<A: HalApi> {
 impl<A: HalApi> UsageScope<A> {
     /// Create the render bundle scope and pull the maximum IDs from the hubs.
     pub fn new(
-        buffers: &hub::Storage<resource::Buffer<A>, id::BufferId>,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        buffers: &storage::Storage<resource::Buffer<A>, id::BufferId>,
+        textures: &storage::Storage<resource::Texture<A>, id::TextureId>,
     ) -> Self {
         let mut value = Self {
             buffers: BufferUsageScope::new(),
@@ -441,7 +440,7 @@ impl<A: HalApi> UsageScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &storage::Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
         unsafe {
@@ -464,7 +463,7 @@ impl<A: HalApi> UsageScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_render_bundle(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &storage::Storage<resource::Texture<A>, id::TextureId>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
         self.buffers.merge_usage_scope(&render_bundle.buffers)?;
@@ -506,17 +505,19 @@ impl<A: HalApi> Tracker<A> {
     /// Pull the maximum IDs from the hubs.
     pub fn set_size(
         &mut self,
-        buffers: Option<&hub::Storage<resource::Buffer<A>, id::BufferId>>,
-        textures: Option<&hub::Storage<resource::Texture<A>, id::TextureId>>,
-        views: Option<&hub::Storage<resource::TextureView<A>, id::TextureViewId>>,
-        samplers: Option<&hub::Storage<resource::Sampler<A>, id::SamplerId>>,
-        bind_groups: Option<&hub::Storage<binding_model::BindGroup<A>, id::BindGroupId>>,
+        buffers: Option<&storage::Storage<resource::Buffer<A>, id::BufferId>>,
+        textures: Option<&storage::Storage<resource::Texture<A>, id::TextureId>>,
+        views: Option<&storage::Storage<resource::TextureView<A>, id::TextureViewId>>,
+        samplers: Option<&storage::Storage<resource::Sampler<A>, id::SamplerId>>,
+        bind_groups: Option<&storage::Storage<binding_model::BindGroup<A>, id::BindGroupId>>,
         compute_pipelines: Option<
-            &hub::Storage<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
+            &storage::Storage<pipeline::ComputePipeline<A>, id::ComputePipelineId>,
         >,
-        render_pipelines: Option<&hub::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>>,
-        bundles: Option<&hub::Storage<command::RenderBundle<A>, id::RenderBundleId>>,
-        query_sets: Option<&hub::Storage<resource::QuerySet<A>, id::QuerySetId>>,
+        render_pipelines: Option<
+            &storage::Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
+        >,
+        bundles: Option<&storage::Storage<command::RenderBundle<A>, id::RenderBundleId>>,
+        query_sets: Option<&storage::Storage<resource::QuerySet<A>, id::QuerySetId>>,
     ) {
         if let Some(buffers) = buffers {
             self.buffers.set_size(buffers.len());
@@ -571,7 +572,7 @@ impl<A: HalApi> Tracker<A> {
     /// value given to `set_size`
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
-        textures: &hub::Storage<resource::Texture<A>, id::TextureId>,
+        textures: &storage::Storage<resource::Texture<A>, id::TextureId>,
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {

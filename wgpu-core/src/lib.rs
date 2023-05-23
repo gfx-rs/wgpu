@@ -53,6 +53,7 @@ pub mod pipeline;
 pub mod present;
 pub mod registry;
 pub mod resource;
+pub mod storage;
 mod track;
 mod validation;
 

@@ -1,11 +1,11 @@
 use crate::{
     hal_api::HalApi,
-    hub::{Element, StorageReport},
     hub::{HubReport, Hubs},
     id,
     identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
     registry::Registry,
+    storage::{Element, StorageReport},
 };
 
 #[derive(Debug)]
