@@ -4,9 +4,10 @@ use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use wgt::Backend;
 
 use crate::{
-    hub::{Access, Resource, Token},
+    hub::{Access, Token},
     id,
     identity::{IdentityHandler, IdentityHandlerFactory},
+    resource::Resource,
     storage::Storage,
 };
 

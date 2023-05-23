@@ -354,17 +354,6 @@ impl<'a, T> Drop for Token<'a, T> {
     }
 }
 
-pub trait Resource {
-    const TYPE: &'static str;
-    fn life_guard(&self) -> &crate::LifeGuard;
-    fn label(&self) -> &str {
-        #[cfg(debug_assertions)]
-        return &self.life_guard().label;
-        #[cfg(not(debug_assertions))]
-        return "";
-    }
-}
-
 #[derive(Debug)]
 pub struct HubReport {
     pub adapters: StorageReport,
