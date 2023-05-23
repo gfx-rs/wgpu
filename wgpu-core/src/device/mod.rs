@@ -3,8 +3,9 @@ use crate::{
     device::life::WaitIdleError,
     global::Global,
     hal_api::HalApi,
-    hub::{GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token},
+    hub::{Hub, InvalidId, Storage, Token},
     id,
+    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,

@@ -7,8 +7,9 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    hub::{GlobalIdentityHandlerFactory, Storage, Token},
+    hub::{Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,

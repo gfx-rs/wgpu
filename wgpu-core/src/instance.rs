@@ -2,8 +2,9 @@ use crate::{
     device::{Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
-    hub::{GlobalIdentityHandlerFactory, Input, Token},
+    hub::Token,
     id::{AdapterId, DeviceId, SurfaceId, Valid},
+    identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };

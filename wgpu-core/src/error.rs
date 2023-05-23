@@ -1,7 +1,7 @@
 use core::fmt;
 use std::error::Error;
 
-use crate::{gfx_select, global::Global, hub::IdentityManagerFactory};
+use crate::{gfx_select, global::Global, identity::IdentityManagerFactory};
 
 pub struct ErrorFormatter<'a> {
     writer: &'a mut dyn fmt::Write,

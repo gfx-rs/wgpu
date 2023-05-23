@@ -26,7 +26,7 @@ use wgc::id::TypedId;
 
 const LABEL: &str = "label";
 
-pub struct Context(wgc::global::Global<wgc::hub::IdentityManagerFactory>);
+pub struct Context(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
 
 impl Drop for Context {
     fn drop(&mut self) {
@@ -45,7 +45,7 @@ impl Context {
         Self(unsafe {
             wgc::global::Global::from_hal_instance::<A>(
                 "wgpu",
-                wgc::hub::IdentityManagerFactory,
+                wgc::identity::IdentityManagerFactory,
                 hal_instance,
             )
         })
@@ -60,11 +60,11 @@ impl Context {
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(unsafe {
-            wgc::global::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+            wgc::global::Global::from_instance(wgc::identity::IdentityManagerFactory, core_instance)
         })
     }
 
-    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::hub::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::identity::IdentityManagerFactory> {
         &self.0
     }
 
@@ -542,7 +542,7 @@ impl crate::Context for Context {
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
         Self(wgc::global::Global::new(
             "wgpu",
-            wgc::hub::IdentityManagerFactory,
+            wgc::identity::IdentityManagerFactory,
             instance_desc,
         ))
     }

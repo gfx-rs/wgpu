@@ -18,8 +18,9 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags},
     global::Global,
     hal_api::HalApi,
-    hub::{GlobalIdentityHandlerFactory, Input, Token},
+    hub::Token,
     id::{DeviceId, SurfaceId, TextureId, Valid},
+    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     resource, track, LifeGuard, Stored,
 };
