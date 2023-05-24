@@ -215,7 +215,17 @@ tree.
     clippy::rest_pat_in_fully_bound_structs,
     clippy::match_wildcard_for_single_variants
 )]
-#![cfg_attr(not(test), deny(clippy::panic))]
+#![deny(clippy::exit)]
+#![cfg_attr(
+    not(test),
+    warn(
+        clippy::dbg_macro,
+        clippy::panic,
+        clippy::print_stderr,
+        clippy::print_stdout,
+        clippy::todo
+    )
+)]
 
 mod arena;
 pub mod back;
