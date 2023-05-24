@@ -113,7 +113,7 @@ unsafe extern "system" fn egl_debug_proc(
 }
 
 fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> {
-    log::info!("Loading X11 library to get the current display");
+    log::debug!("Loading X11 library to get the current display");
     unsafe {
         let library = libloading::Library::new("libX11.so").ok()?;
         let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay").unwrap();
@@ -136,7 +136,7 @@ fn test_wayland_display() -> Option<libloading::Library> {
     /* We try to connect and disconnect here to simply ensure there
      * is an active wayland display available.
      */
-    log::info!("Loading Wayland library to get the current display");
+    log::debug!("Loading Wayland library to get the current display");
     let library = unsafe {
         let client_library = find_library(&["libwayland-client.so.0", "libwayland-client.so"])?;
         let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
@@ -191,7 +191,7 @@ fn choose_config(
     let mut attributes = Vec::with_capacity(9);
     for tier_max in (0..tiers.len()).rev() {
         let name = tiers[tier_max].0;
-        log::info!("\tTrying {}", name);
+        log::debug!("\tTrying {}", name);
 
         attributes.clear();
         for &(_, tier_attr) in tiers[..=tier_max].iter() {
@@ -448,17 +448,17 @@ impl Inner {
             .query_string(Some(display), khronos_egl::EXTENSIONS)
             .unwrap()
             .to_string_lossy();
-        log::info!("Display vendor {:?}, version {:?}", vendor, version,);
+        log::debug!("Display vendor {:?}, version {:?}", vendor, version,);
         log::debug!(
             "Display extensions: {:#?}",
             display_extensions.split_whitespace().collect::<Vec<_>>()
         );
 
         let srgb_kind = if version >= (1, 5) {
-            log::info!("\tEGL surface: +srgb");
+            log::debug!("\tEGL surface: +srgb");
             SrgbFrameBufferKind::Core
         } else if display_extensions.contains("EGL_KHR_gl_colorspace") {
-            log::info!("\tEGL surface: +srgb khr");
+            log::debug!("\tEGL surface: +srgb khr");
             SrgbFrameBufferKind::Khr
         } else {
             log::warn!("\tEGL surface: -srgb");
@@ -495,14 +495,14 @@ impl Inner {
         ];
         if flags.contains(crate::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
-                log::info!("\tEGL context: +debug");
+                log::debug!("\tEGL context: +debug");
                 context_attributes.push(khronos_egl::CONTEXT_OPENGL_DEBUG);
                 context_attributes.push(khronos_egl::TRUE as _);
             } else if supports_khr_context {
-                log::info!("\tEGL context: +debug KHR");
+                log::debug!("\tEGL context: +debug KHR");
                 khr_context_flags |= EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR;
             } else {
-                log::info!("\tEGL context: -debug");
+                log::debug!("\tEGL context: -debug");
             }
         }
         if needs_robustness {
@@ -510,11 +510,11 @@ impl Inner {
             // (regardless of whether the extension is supported!).
             // In fact, Angle does precisely that awful behavior, so we don't try it there.
             if version >= (1, 5) && !display_extensions.contains("EGL_ANGLE_") {
-                log::info!("\tEGL context: +robust access");
+                log::debug!("\tEGL context: +robust access");
                 context_attributes.push(khronos_egl::CONTEXT_OPENGL_ROBUST_ACCESS);
                 context_attributes.push(khronos_egl::TRUE as _);
             } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
-                log::info!("\tEGL context: +robust access EXT");
+                log::debug!("\tEGL context: +robust access EXT");
                 context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
                 context_attributes.push(khronos_egl::TRUE as _);
             } else {
@@ -544,7 +544,7 @@ impl Inner {
             || display_extensions.contains("EGL_KHR_surfaceless_context")
             || cfg!(target_os = "emscripten")
         {
-            log::info!("\tEGL context: +surfaceless");
+            log::debug!("\tEGL context: +surfaceless");
             None
         } else {
             let attributes = [
@@ -660,7 +660,7 @@ impl crate::Instance<super::Api> for Instance {
         let egl = match egl_result {
             Ok(egl) => Arc::new(egl),
             Err(e) => {
-                log::info!("Unable to open libEGL: {:?}", e);
+                log::warn!("Unable to open libEGL: {:?}", e);
                 return Err(crate::InstanceError);
             }
         };
@@ -736,7 +736,7 @@ impl crate::Instance<super::Api> for Instance {
                 .unwrap();
             (display, Some(Arc::new(library)), WindowKind::AngleX11)
         } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
-            log::info!("No windowing system present. Using surfaceless platform");
+            log::warn!("No windowing system present. Using surfaceless platform");
             let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
             let display = egl
                 .get_platform_display(
@@ -747,7 +747,7 @@ impl crate::Instance<super::Api> for Instance {
                 .unwrap();
             (display, None, WindowKind::Unknown)
         } else {
-            log::info!("EGL_MESA_platform_surfaceless not available. Using default platform");
+            log::warn!("EGL_MESA_platform_surfaceless not available. Using default platform");
             let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
             (display, None, WindowKind::Unknown)
         };
@@ -755,7 +755,7 @@ impl crate::Instance<super::Api> for Instance {
         if desc.flags.contains(crate::InstanceFlags::VALIDATION)
             && client_ext_str.contains("EGL_KHR_debug")
         {
-            log::info!("Enabling EGL debug output");
+            log::debug!("Enabling EGL debug output");
             let function: EglDebugMessageControlFun = {
                 let addr = egl.get_proc_address("eglDebugMessageControlKHR").unwrap();
                 unsafe { std::mem::transmute(addr) }
@@ -903,13 +903,13 @@ impl crate::Instance<super::Api> for Instance {
         };
 
         if self.flags.contains(crate::InstanceFlags::DEBUG) && gl.supports_debug() {
-            log::info!("Max label length: {}", unsafe {
+            log::debug!("Max label length: {}", unsafe {
                 gl.get_parameter_i32(glow::MAX_LABEL_LENGTH)
             });
         }
 
         if self.flags.contains(crate::InstanceFlags::VALIDATION) && gl.supports_debug() {
-            log::info!("Enabling GLES debug output");
+            log::debug!("Enabling GLES debug output");
             unsafe { gl.enable(glow::DEBUG_OUTPUT) };
             unsafe { gl.debug_message_callback(gl_debug_message_callback) };
         }

@@ -208,9 +208,9 @@ impl super::Adapter {
             (vendor, renderer)
         };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::info!("Vendor: {}", vendor);
-        log::info!("Renderer: {}", renderer);
-        log::info!("Version: {}", version);
+        log::debug!("Vendor: {}", vendor);
+        log::debug!("Renderer: {}", renderer);
+        log::debug!("Version: {}", version);
 
         log::debug!("Extensions: {:#?}", extensions);
 
@@ -229,7 +229,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::info!("SL version: {}", &sl_version);
+            log::debug!("SL version: {}", &sl_version);
             let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
             let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
             naga::back::glsl::Version::Embedded {

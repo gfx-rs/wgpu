@@ -121,7 +121,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
-        log::info!("Dropping Global");
+        log::info!("Destroying Global");
         let mut surface_guard = self.surfaces.data.write();
 
         // destroy hubs before the instance gets dropped

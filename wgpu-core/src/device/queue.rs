@@ -408,6 +408,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(staging_buffer, device_token);
+        log::info!("Created StagingBuffer {:?}", id);
 
         Ok((id.0, staging_buffer_ptr))
     }

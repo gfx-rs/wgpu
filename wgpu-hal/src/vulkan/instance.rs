@@ -165,7 +165,7 @@ impl super::Instance {
         let instance_extensions = entry
             .enumerate_instance_extension_properties(None)
             .map_err(|e| {
-                log::info!("enumerate_instance_extension_properties: {:?}", e);
+                log::debug!("enumerate_instance_extension_properties: {:?}", e);
                 crate::InstanceError
             })?;
 
@@ -222,7 +222,7 @@ impl super::Instance {
             }) {
                 true
             } else {
-                log::info!("Unable to find extension: {}", ext.to_string_lossy());
+                log::warn!("Unable to find extension: {}", ext.to_string_lossy());
                 false
             }
         });
@@ -247,10 +247,10 @@ impl super::Instance {
         has_nv_optimus: bool,
         drop_guard: Option<crate::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
-        log::info!("Instance version: 0x{:x}", driver_api_version);
+        log::debug!("Instance version: 0x{:x}", driver_api_version);
 
         let debug_utils = if extensions.contains(&ext::DebugUtils::name()) {
-            log::info!("Enabling debug utils");
+            log::debug!("Enabling debug utils");
             let extension = ext::DebugUtils::new(&entry, &raw_instance);
             // having ERROR unconditionally because Vk doesn't like empty flags
             let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
@@ -284,7 +284,7 @@ impl super::Instance {
 
         let get_physical_device_properties =
             if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
-                log::info!("Enabling device properties2");
+                log::debug!("Enabling device properties2");
                 Some(khr::GetPhysicalDeviceProperties2::new(
                     &entry,
                     &raw_instance,
@@ -499,7 +499,7 @@ impl crate::Instance<super::Api> for super::Instance {
         let entry = match unsafe { ash::Entry::load() } {
             Ok(entry) => entry,
             Err(err) => {
-                log::info!("Missing Vulkan entry points: {:?}", err);
+                log::warn!("Missing Vulkan entry points: {:?}", err);
                 return Err(crate::InstanceError);
             }
         };
@@ -539,7 +539,7 @@ impl crate::Instance<super::Api> for super::Instance {
         let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
-            log::info!("enumerate_instance_layer_properties: {:?}", e);
+            log::debug!("enumerate_instance_layer_properties: {:?}", e);
             crate::InstanceError
         })?;
 

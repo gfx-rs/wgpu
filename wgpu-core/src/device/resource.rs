@@ -2520,7 +2520,7 @@ impl<A: HalApi> Device<A> {
                 .iter()
                 .any(|ct| ct.write_mask != first.write_mask || ct.blend != first.blend)
         } {
-            log::info!("Color targets: {:?}", color_targets);
+            log::debug!("Color targets: {:?}", color_targets);
             self.require_downlevel_flags(wgt::DownlevelFlags::INDEPENDENT_BLEND)?;
         }
 

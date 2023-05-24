@@ -930,7 +930,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let fid = A::hub(self).adapters.prepare(input);
 
-        match A::VARIANT {
+        let id = match A::VARIANT {
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             Backend::Vulkan => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
@@ -942,7 +942,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(feature = "gles")]
             Backend::Gl => fid.assign(Adapter::new(hal_adapter), &mut token).0,
             _ => unreachable!(),
-        }
+        };
+        log::info!("Created Adapter {:?}", id);
+        id
     }
 
     pub fn adapter_get_info<A: HalApi>(
@@ -1066,6 +1068,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let id = fid.assign(device, &mut token);
+            log::info!("Created Device {:?}", id);
             return (id.0, None);
         };
 
@@ -1103,6 +1106,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => break e,
                 };
             let id = fid.assign(device, &mut token);
+            log::info!("Created Device {:?}", id);
             return (id.0, None);
         };
 

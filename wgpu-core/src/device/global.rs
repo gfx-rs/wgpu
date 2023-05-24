@@ -241,7 +241,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(buffer, &mut token);
-            log::info!("Created buffer {:?} with {:?}", id, desc);
+            log::info!("Created Buffer {:?} with {:?}", id, desc);
 
             device
                 .trackers
@@ -461,7 +461,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             //TODO: lock pending writes separately, keep the device read-only
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-            log::info!("Buffer {:?} is destroyed", buffer_id);
+            log::debug!("Buffer {:?} is destroyed", buffer_id);
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = buffer_guard
                 .get_mut(buffer_id)
@@ -512,7 +512,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
         profiling::scope!("Buffer::drop");
-        log::debug!("buffer {:?} is dropped", buffer_id);
+        log::debug!("buffer {:?} is asked to be dropped", buffer_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -700,7 +700,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: lock pending writes separately, keep the device read-only
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-        log::info!("Buffer {:?} is destroyed", texture_id);
+        log::debug!("Texture {:?} is destroyed", texture_id);
         let (mut texture_guard, _) = hub.textures.write(&mut token);
         let texture = texture_guard
             .get_mut(texture_id)
@@ -750,7 +750,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
         profiling::scope!("Texture::drop");
-        log::debug!("texture {:?} is dropped", texture_id);
+        log::debug!("texture {:?} is asked to be dropped", texture_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -832,6 +832,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let ref_count = view.life_guard.add_ref();
             let id = fid.assign(view, &mut token);
+            log::info!("Created TextureView {:?}", id);
 
             device.trackers.lock().views.insert_single(id, ref_count);
             return (id.0, None);
@@ -851,7 +852,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         profiling::scope!("TextureView::drop");
-        log::debug!("texture view {:?} is dropped", texture_view_id);
+        log::debug!("texture view {:?} is asked to be dropped", texture_view_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -925,6 +926,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let ref_count = sampler.life_guard.add_ref();
             let id = fid.assign(sampler, &mut token);
+            log::info!("Created Sampler {:?}", id);
 
             device.trackers.lock().samplers.insert_single(id, ref_count);
 
@@ -941,7 +943,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
         profiling::scope!("Sampler::drop");
-        log::debug!("sampler {:?} is dropped", sampler_id);
+        log::debug!("sampler {:?} is asked to be dropped", sampler_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1034,6 +1036,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(layout, &mut token);
+            log::info!("Created BindGroupLayout {:?}", id);
             return (id.0, None);
         };
 
@@ -1047,7 +1050,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
         profiling::scope!("BindGroupLayout::drop");
-        log::debug!("bind group layout {:?} is dropped", bind_group_layout_id);
+        log::debug!(
+            "bind group layout {:?} is asked to be dropped",
+            bind_group_layout_id
+        );
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1108,6 +1114,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(layout, &mut token);
+            log::info!("Created PipelineLayout {:?}", id);
             return (id.0, None);
         };
 
@@ -1121,7 +1128,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         profiling::scope!("PipelineLayout::drop");
-        log::debug!("pipeline layout {:?} is dropped", pipeline_layout_id);
+        log::debug!(
+            "pipeline layout {:?} is asked to be dropped",
+            pipeline_layout_id
+        );
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1191,7 +1201,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
-            log::debug!("Bind group {:?}", id,);
+            log::debug!("Created BindGroup {:?}", id,);
 
             device
                 .trackers
@@ -1211,7 +1221,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
         profiling::scope!("BindGroup::drop");
-        log::debug!("bind group {:?} is dropped", bind_group_id);
+        log::debug!("bind group {:?} is asked to be dropped", bind_group_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1291,6 +1301,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let id = fid.assign(shader, &mut token);
+            log::info!("Created ShaderModule {:?} with {:?}", id, desc);
             return (id.0, None);
         };
 
@@ -1345,6 +1356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => break e,
                 };
             let id = fid.assign(shader, &mut token);
+            log::info!("Created ShaderModule {:?} with {:?}", id, desc);
             return (id.0, None);
         };
 
@@ -1358,7 +1370,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
         profiling::scope!("ShaderModule::drop");
-        log::debug!("shader module {:?} is dropped", shader_module_id);
+        log::debug!(
+            "shader module {:?} is asked to be dropped",
+            shader_module_id
+        );
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1420,6 +1435,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             let id = fid.assign(command_buffer, &mut token);
+            log::info!("Created CommandBuffer {:?} with {:?}", id, desc);
             return (id.0, None);
         };
 
@@ -1433,7 +1449,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("CommandEncoder::drop");
-        log::debug!("command encoder {:?} is dropped", command_encoder_id);
+        log::debug!(
+            "command encoder {:?} is asked to be dropped",
+            command_encoder_id
+        );
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1451,7 +1470,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
-        log::debug!("command buffer {:?} is dropped", command_buffer_id);
+        log::debug!(
+            "command buffer {:?} is asked to be dropped",
+            command_buffer_id
+        );
         self.command_encoder_drop::<A>(command_buffer_id)
     }
 
@@ -1508,9 +1530,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
-            log::debug!("Render bundle");
             let ref_count = render_bundle.life_guard.add_ref();
             let id = fid.assign(render_bundle, &mut token);
+            log::info!("Created RenderBundle {:?}", id);
 
             device.trackers.lock().bundles.insert_single(id, ref_count);
             return (id.0, None);
@@ -1526,7 +1548,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
         profiling::scope!("RenderBundle::drop");
-        log::debug!("render bundle {:?} is dropped", render_bundle_id);
+        log::debug!(
+            "render bundle {:?} is asked to be dropped",
+            render_bundle_id
+        );
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -1586,6 +1611,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let ref_count = query_set.life_guard.add_ref();
             let id = fid.assign(query_set, &mut token);
+            log::info!("Created QuerySet {:?}", id);
 
             device
                 .trackers
@@ -1602,7 +1628,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
         profiling::scope!("QuerySet::drop");
-        log::debug!("query set {:?} is dropped", query_set_id);
+        log::debug!("query set {:?} is asked to be dropped", query_set_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1684,7 +1710,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
-            log::info!("Created render pipeline {:?} with {:?}", id, desc);
+            log::info!("Created RenderPipeline {:?} with {:?}", id, desc);
 
             device
                 .trackers
@@ -1748,7 +1774,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
         profiling::scope!("RenderPipeline::drop");
-        log::debug!("render pipeline {:?} is dropped", render_pipeline_id);
+        log::debug!(
+            "render pipeline {:?} is asked to be dropped",
+            render_pipeline_id
+        );
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1825,7 +1854,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
-            log::info!("Created compute pipeline {:?} with {:?}", id, desc);
+            log::info!("Created ComputePipeline {:?} with {:?}", id, desc);
 
             device
                 .trackers
@@ -1888,7 +1917,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
         profiling::scope!("ComputePipeline::drop");
-        log::debug!("compute pipeline {:?} is dropped", compute_pipeline_id);
+        log::debug!(
+            "compute pipeline {:?} is asked to be dropped",
+            compute_pipeline_id
+        );
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -2318,7 +2350,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
-        log::debug!("device {:?} is dropped", device_id);
+        log::debug!("device {:?} is asked to be dropped", device_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();

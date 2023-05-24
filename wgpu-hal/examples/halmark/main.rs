@@ -114,7 +114,7 @@ impl<A: hal::Api> Example<A> {
         };
         let surface_caps =
             unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
-        log::info!("Surface caps: {:#?}", surface_caps);
+        log::debug!("Surface caps: {:#?}", surface_caps);
 
         let hal::OpenDevice { device, mut queue } = unsafe {
             adapter
@@ -723,7 +723,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         if do_fence {
-            log::info!("Context switch from {}", self.context_index);
+            log::debug!("Context switch from {}", self.context_index);
             let old_fence_value = ctx.fence_value;
             if self.contexts.len() == 1 {
                 let hal_desc = hal::CommandEncoderDescriptor {
