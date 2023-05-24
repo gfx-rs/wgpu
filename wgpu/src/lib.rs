@@ -4260,6 +4260,15 @@ impl Surface {
 #[repr(transparent)]
 pub struct Id<T>(core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
 
+// SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
+// returned for different types , so `Id` can safely implement Send and Sync.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Send for Id<T> {}
+
+// SAFETY: See the implementation for `Send`.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Sync for Id<T> {}
+
 #[cfg(feature = "expose-ids")]
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
