@@ -386,7 +386,12 @@ enum BodyFragment {
         reject: BodyIndex,
     },
     Loop {
+        /// The body of the loop. Its [`Body::parent`] is the block containing
+        /// this `Loop` fragment.
         body: BodyIndex,
+
+        /// The loop's continuing block. This is a grandchild: its
+        /// [`Body::parent`] is the loop body block, whose index is above.
         continuing: BodyIndex,
 
         /// If the SPIR-V loop's back-edge branch is conditional, this is the
@@ -445,8 +450,16 @@ enum MergeBlockInformation {
 /// Fragments of Naga IR, to be assembled into `Statements` once data flow is
 /// resolved.
 ///
-/// We can't build a Naga `Statement` tree directly from SPIR-V blocks for two
+/// We can't build a Naga `Statement` tree directly from SPIR-V blocks for three
 /// main reasons:
+///
+/// - We parse a function's SPIR-V blocks in the order they appear in the file.
+///   Within a function, SPIR-V requires that a block must precede any blocks it
+///   structurally dominates, but doesn't say much else about the order in which
+///   they must appear. So while we know we'll see control flow header blocks
+///   before their child constructs and merge blocks, those children and the
+///   merge blocks may appear in any order - perhaps even intermingled with
+///   children of other constructs.
 ///
 /// - A SPIR-V expression can be used in any SPIR-V block dominated by its
 ///   definition, whereas Naga expressions are scoped to the rest of their
@@ -457,7 +470,7 @@ enum MergeBlockInformation {
 /// - We translate SPIR-V OpPhi expressions as Naga local variables in which we
 ///   store the appropriate value before jumping to the OpPhi's block.
 ///
-/// Both cases require us to go back and amend previously generated Naga IR
+/// All these cases require us to go back and amend previously generated Naga IR
 /// based on things we discover later. But modifying old blocks in arbitrary
 /// spots in a `Statement` tree is awkward.
 ///
@@ -482,18 +495,37 @@ struct BlockContext<'function> {
 
     /// Fragments of control-flow-free Naga IR.
     ///
-    /// These will be stitched together into a proper `Statement` tree according
+    /// These will be stitched together into a proper [`Statement`] tree according
     /// to `bodies`, once parsing is complete.
+    ///
+    /// [`Statement`]: crate::Statement
     blocks: FastHashMap<spirv::Word, crate::Block>,
 
-    /// Map from block label ids to the index of the corresponding `Body` in
-    /// `bodies`.
+    /// Map from each SPIR-V block's label id to the index of the [`Body`] in
+    /// [`bodies`] the block should append its contents to.
+    ///
+    /// Since each statement in a Naga [`Block`] dominates the next, we are sure
+    /// to encounter their SPIR-V blocks in order. Thus, by having this table
+    /// map a SPIR-V structured control flow construct's merge block to the same
+    /// body index as its header block, when we encounter the merge block, we
+    /// will simply pick up building the [`Body`] where the header left off.
+    ///
+    /// A function's first block is special: it is the only block we encounter
+    /// without having seen its label mentioned in advance. (It's simply the
+    /// first `OpLabel` after the `OpFunction`.) We thus assume that any block
+    /// missing an entry here must be the first block, which always has body
+    /// index zero.
+    ///
+    /// [`bodies`]: BlockContext::bodies
+    /// [`Block`]: crate::Block
     body_for_label: FastHashMap<spirv::Word, BodyIndex>,
 
     /// SPIR-V metadata about merge/continue blocks.
     mergers: FastHashMap<spirv::Word, MergeBlockInformation>,
 
     /// A table of `Body` values, each representing a block in the final IR.
+    ///
+    /// The first element is always the function's top-level block.
     bodies: Vec<Body>,
 
     /// Id of the function currently being processed
@@ -1264,10 +1296,26 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let mut emitter = super::Emitter::default();
         emitter.start(ctx.expressions);
 
-        // Find the `Body` that this block belongs to. Index zero is the
-        // function's root `Body`, corresponding to `Function::body`.
+        // Find the `Body` to which this block contributes.
+        //
+        // If this is some SPIR-V structured control flow construct's merge
+        // block, then `body_idx` will refer to the same `Body` as the header,
+        // so that we simply pick up accumulating the `Body` where the header
+        // left off. Each of the statements in a block dominates the next, so
+        // we're sure to encounter their SPIR-V blocks in order, ensuring that
+        // the `Body` will be assembled in the proper order.
+        //
+        // Note that, unlike every other kind of SPIR-V block, we don't know the
+        // function's first block's label in advance. Thus, we assume that if
+        // this block has no entry in `ctx.body_for_label`, it must be the
+        // function's first block. This always has body index zero.
         let mut body_idx = *ctx.body_for_label.entry(block_id).or_default();
+
+        // The Naga IR block this call builds. This will end up as
+        // `ctx.blocks[&block_id]`, and `ctx.bodies[body_idx]` will refer to it
+        // via a `BodyFragment::BlockId`.
         let mut block = crate::Block::new();
+
         // Stores the merge block as defined by a `OpSelectionMerge` otherwise is `None`
         //
         // This is used in `OpSwitch` to promote the `MergeBlockInformation` from
@@ -3086,8 +3134,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     inst.expect(2)?;
                     let target_id = self.next()?;
 
-                    // If this is a branch to a merge or continue block,
-                    // then that ends the current body.
+                    // If this is a branch to a merge or continue block, then
+                    // that ends the current body.
+                    //
+                    // Why can we count on finding an entry here when it's
+                    // needed? SPIR-V requires dominators to appear before
+                    // blocks they dominate, so we will have visited a
+                    // structured control construct's header block before
+                    // anything that could exit it.
                     if let Some(info) = ctx.mergers.get(&target_id) {
                         block.extend(emitter.finish(ctx.expressions));
                         ctx.blocks.insert(block_id, block);
@@ -3099,15 +3153,22 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         return Ok(());
                     }
 
-                    // Since the target of the branch has no merge information,
-                    // this must be the only branch to that block. This means
-                    // we can treat it as an extension of the current `Body`.
+                    // If `target_id` has no entry in `ctx.body_for_label`, then
+                    // this must be the only branch to it:
                     //
-                    // NOTE: it's possible that another branch was already made to this block
-                    // setting the body index in which case it SHOULD NOT be overridden.
-                    // For example a switch with falltrough, the OpSwitch will set the body to
-                    // the respective case and the case may branch to another case in which case
-                    // the body index shouldn't be changed
+                    // - We've already established that it's not anybody's merge
+                    //   block.
+                    //
+                    // - It can't be a switch case. Only switch header blocks
+                    //   and other switch cases can branch to a switch case.
+                    //   Switch header blocks must dominate all their cases, so
+                    //   they must appear in the file before them, and when we
+                    //   see `Op::Switch` we populate `ctx.body_for_label` for
+                    //   every switch case.
+                    //
+                    // Thus, `target_id` must be a simple extension of the
+                    // current block, which we dominate, so we know we'll
+                    // encounter it later in the file.
                     ctx.body_for_label.entry(target_id).or_insert(body_idx);
 
                     break None;
