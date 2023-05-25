@@ -1,45 +1,41 @@
 fn blockLexicalScope(a: bool) {
-    let a = 1.0;
     {
         let a = 2;
         {
-            let a = true;
+            let a = 2.0;
         }
-        let test = a == 3;
+        let test: i32 = a;
     }
-    let test = a == 2.0;
+    let test: bool = a;
 }
 
 fn ifLexicalScope(a: bool) {
-    let a = 1.0;
-    if (a == 1.0) {
-        let a = true;
+    if (a) {
+        let a = 2.0;
     }
-    let test = a == 2.0;
+    let test: bool = a;
 }
 
 
 fn loopLexicalScope(a: bool) {
-    let a = 1.0;
     loop {
-        let a = true;
+        let a = 2.0;
     }
-    let test = a == 2.0;
+    let test: bool = a;
 }
 
 fn forLexicalScope(a: f32) {
-    let a = false;
     for (var a = 0; a < 1; a++) {
-        let a = 3.0;
+        let a = true;
     }
-    let test = a == true;
+    let test: f32 = a;
 }
 
 fn whileLexicalScope(a: i32) {
     while (a > 2) {
         let a = false;
     }
-    let test = a == 1;
+    let test: i32 = a;
 }
 
 fn switchLexicalScope(a: i32) {
