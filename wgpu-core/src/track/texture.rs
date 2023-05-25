@@ -530,8 +530,8 @@ impl<A: HalApi> TextureTracker<A> {
                     state: new_state,
                 },
                 None,
-                ResourceMetadataProvider::Resource {
-                    resource: texture.clone(),
+                ResourceMetadataProvider::Direct {
+                    resource: Cow::Owned(texture.clone()),
                 },
                 &mut self.temp,
             )

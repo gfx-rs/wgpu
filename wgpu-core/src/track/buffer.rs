@@ -240,8 +240,8 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index32,
                 index,
                 BufferStateProvider::Direct { state: new_state },
-                ResourceMetadataProvider::Resource {
-                    resource: buffer.clone(),
+                ResourceMetadataProvider::Direct {
+                    resource: Cow::Owned(buffer.clone()),
                 },
             )?;
         }
@@ -379,8 +379,8 @@ impl<A: HalApi> BufferTracker<A> {
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Resource {
-                    resource: buffer.clone(),
+                ResourceMetadataProvider::Direct {
+                    resource: Cow::Owned(buffer.clone()),
                 },
                 &mut self.temp,
             )

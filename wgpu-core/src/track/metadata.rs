@@ -187,8 +187,6 @@ pub(super) enum ResourceMetadataProvider<'a, A: HalApi, I: TypedId, T: Resource<
     Indirect {
         metadata: &'a ResourceMetadata<A, I, T>,
     },
-    /// The epoch is given directly, but the life count comes from the resource itself.
-    Resource { resource: Arc<T> },
 }
 impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T> {
     /// Get the epoch and an owned refcount from this.
@@ -206,7 +204,6 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T
                 let resource = unsafe { metadata.resources.get_unchecked(index) };
                 unsafe { resource.clone().unwrap_unchecked() }
             }
-            ResourceMetadataProvider::Resource { resource } => resource,
         }
     }
     /// Get the epoch from this.
