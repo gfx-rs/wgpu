@@ -1626,14 +1626,16 @@ pub enum Statement {
     /// The `continuing` block and its substatements must not contain `Return`
     /// or `Kill` statements, or any `Break` or `Continue` statements targeting
     /// this loop. (It may have `Break` and `Continue` statements targeting
-    /// loops or switches nested within the `continuing` block.)
+    /// loops or switches nested within the `continuing` block.) Expressions
+    /// emitted in `body` are in scope in `continuing`.
     ///
     /// If present, `break_if` is an expression which is evaluated after the
-    /// continuing block. If its value is true, control continues after the
-    /// `Loop` statement, rather than branching back to the top of body as
-    /// usual. The `break_if` expression corresponds to a "break if" statement
-    /// in WGSL, or a loop whose back edge is an `OpBranchConditional`
-    /// instruction in SPIR-V.
+    /// continuing block. Expressions emitted in `body` or `continuing` are
+    /// considered to be in scope. If the expression's value is true, control
+    /// continues after the `Loop` statement, rather than branching back to the
+    /// top of body as usual. The `break_if` expression corresponds to a "break
+    /// if" statement in WGSL, or a loop whose back edge is an
+    /// `OpBranchConditional` instruction in SPIR-V.
     ///
     /// [`Break`]: Statement::Break
     /// [`Continue`]: Statement::Continue
