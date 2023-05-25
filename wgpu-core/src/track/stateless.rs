@@ -106,7 +106,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn insert_single(&mut self, id: Valid<Id>, resource: Arc<T>) {
-        let (index32, epoch, _) = id.0.unzip();
+        let (index32, _epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -114,7 +114,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            self.metadata.insert(index, epoch, resource);
+            self.metadata.insert(index, resource);
         }
     }
 
@@ -125,7 +125,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
-        let (index32, epoch, _) = id.unzip();
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -133,7 +133,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
         self.tracker_assert_in_bounds(index);
 
         unsafe {
-            self.metadata.insert(index, epoch, resource.clone());
+            self.metadata.insert(index, resource.clone());
         }
 
         Some(resource)
@@ -156,9 +156,8 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
                 let previously_owned = self.metadata.contains_unchecked(index);
 
                 if !previously_owned {
-                    let epoch = other.metadata.get_epoch_unchecked(index);
                     let other_resource = other.metadata.get_resource_unchecked(index);
-                    self.metadata.insert(index, epoch, other_resource.clone());
+                    self.metadata.insert(index, other_resource.clone());
                 }
             }
         }

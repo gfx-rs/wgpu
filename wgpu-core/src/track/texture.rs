@@ -359,7 +359,7 @@ impl<A: HalApi> TextureUsageScope<A> {
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let (index32, epoch, _) = id.0.unzip();
+        let (index32, _epoch, _) = id.0.unzip();
         let index = index32 as usize;
         let resource = storage.get(id.0).unwrap();
 
@@ -375,7 +375,6 @@ impl<A: HalApi> TextureUsageScope<A> {
                 index,
                 TextureStateProvider::from_option(selector, new_state),
                 ResourceMetadataProvider::Direct {
-                    epoch,
                     resource: Cow::Borrowed(resource),
                 },
             )?
@@ -467,7 +466,7 @@ impl<A: HalApi> TextureTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn insert_single(&mut self, id: TextureId, resource: Arc<Texture<A>>, usage: TextureUses) {
-        let (index32, epoch, _) = id.unzip();
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -491,7 +490,6 @@ impl<A: HalApi> TextureTracker<A> {
                 TextureStateProvider::KnownSingle { state: usage },
                 None,
                 ResourceMetadataProvider::Direct {
-                    epoch,
                     resource: Cow::Owned(resource),
                 },
             )
@@ -512,7 +510,7 @@ impl<A: HalApi> TextureTracker<A> {
         selector: TextureSelector,
         new_state: TextureUses,
     ) -> Option<Drain<'_, PendingTransition<TextureUses>>> {
-        let (index32, epoch, _) = id.unzip();
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -533,7 +531,6 @@ impl<A: HalApi> TextureTracker<A> {
                 },
                 None,
                 ResourceMetadataProvider::Resource {
-                    epoch,
                     resource: texture.clone(),
                 },
                 &mut self.temp,
@@ -1077,8 +1074,8 @@ unsafe fn insert<A: HalApi>(
     }
 
     unsafe {
-        let (epoch, resource) = metadata_provider.get_own(index);
-        resource_metadata.insert(index, epoch, resource);
+        let resource = metadata_provider.get_own(index);
+        resource_metadata.insert(index, resource);
     }
 }
 

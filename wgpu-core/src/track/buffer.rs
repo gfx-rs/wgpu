@@ -11,7 +11,7 @@ use super::PendingTransition;
 use crate::{
     hal_api::HalApi,
     id::{BufferId, TypedId, Valid},
-    resource::Buffer,
+    resource::{Buffer, Resource as _},
     storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -150,7 +150,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
         for &(id, ref resource, state) in &bind_group.buffers {
-            let (index32, epoch, _) = id.0.unzip();
+            let (index32, _epoch, _) = id.0.unzip();
             let index = index32 as usize;
 
             unsafe {
@@ -162,7 +162,6 @@ impl<A: HalApi> BufferUsageScope<A> {
                     index,
                     BufferStateProvider::Direct { state },
                     ResourceMetadataProvider::Direct {
-                        epoch,
                         resource: Cow::Borrowed(resource),
                     },
                 )?
@@ -226,7 +225,7 @@ impl<A: HalApi> BufferUsageScope<A> {
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
 
-        let (index32, epoch, _) = id.unzip();
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -242,7 +241,6 @@ impl<A: HalApi> BufferUsageScope<A> {
                 index,
                 BufferStateProvider::Direct { state: new_state },
                 ResourceMetadataProvider::Resource {
-                    epoch,
                     resource: buffer.clone(),
                 },
             )?;
@@ -322,7 +320,7 @@ impl<A: HalApi> BufferTracker<A> {
         resource: Arc<Buffer<A>>,
         state: BufferUses,
     ) {
-        let (index32, epoch, _) = id.0.unzip();
+        let (index32, _epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -344,7 +342,6 @@ impl<A: HalApi> BufferTracker<A> {
                 BufferStateProvider::Direct { state },
                 None,
                 ResourceMetadataProvider::Direct {
-                    epoch,
                     resource: Cow::Owned(resource),
                 },
             )
@@ -366,7 +363,7 @@ impl<A: HalApi> BufferTracker<A> {
     ) -> SetSingleResult<A> {
         let buffer = storage.get(id).ok()?;
 
-        let (index32, epoch, _) = id.unzip();
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -383,7 +380,6 @@ impl<A: HalApi> BufferTracker<A> {
                 BufferStateProvider::Direct { state },
                 None,
                 ResourceMetadataProvider::Resource {
-                    epoch,
                     resource: buffer.clone(),
                 },
                 &mut self.temp,
@@ -538,7 +534,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
     pub fn remove_abandoned(&mut self, id: Valid<BufferId>) -> bool {
-        let (index32, epoch, _) = id.0.unzip();
+        let (index32, _epoch, _) = id.0.unzip();
         let index = index32 as usize;
 
         if index > self.metadata.size() {
@@ -549,10 +545,9 @@ impl<A: HalApi> BufferTracker<A> {
 
         unsafe {
             if self.metadata.contains_unchecked(index) {
-                let existing_epoch = self.metadata.get_epoch_unchecked(index);
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
+                let resource = self.metadata.get_resource_unchecked(index);
                 //3 ref count: Registry, Device Tracker and suspected resource itself
-                if existing_epoch == epoch && existing_ref_count <= 3 {
+                if resource.info().id() == id && resource.ref_count() <= 3 {
                     self.metadata.remove(index);
                     return true;
                 }
@@ -723,8 +718,8 @@ unsafe fn insert<A: HalApi>(
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
 
-        let (epoch, resource) = metadata_provider.get_own(index);
-        resource_metadata.insert(index, epoch, resource);
+        let resource = metadata_provider.get_own(index);
+        resource_metadata.insert(index, resource);
     }
 }
 
