@@ -576,6 +576,10 @@ fn convert_wgsl() {
             "workgroup-var-init",
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
+        (
+            "workgroup-uniform-load",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
+        ),
         ("sprite", Targets::SPIRV),
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
         ("invariant", Targets::GLSL),

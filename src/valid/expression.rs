@@ -1,4 +1,3 @@
-#[cfg(feature = "validate")]
 use std::ops::Index;
 
 #[cfg(feature = "validate")]
@@ -119,6 +118,10 @@ pub enum ExpressionError {
     InvalidArgumentType(crate::MathFunction, u32, Handle<crate::Expression>),
     #[error("Atomic result type can't be {0:?}")]
     InvalidAtomicResultType(Handle<crate::Type>),
+    #[error(
+        "workgroupUniformLoad result type can't be {0:?}. It can only be a constructible type."
+    )]
+    InvalidWorkGroupUniformLoadResultType(Handle<crate::Type>),
     #[error("Shader requires capability {0:?}")]
     MissingCapabilities(super::Capabilities),
 }
@@ -1411,6 +1414,18 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidAtomicResultType(ty));
                 }
                 ShaderStages::all()
+            }
+            E::WorkGroupUniformLoadResult { ty } => {
+                if self.types[ty.index()]
+                    .flags
+                    // Sized | Constructible is exactly the types currently supported by
+                    // WorkGroupUniformLoad
+                    .contains(TypeFlags::SIZED | TypeFlags::CONSTRUCTIBLE)
+                {
+                    ShaderStages::COMPUTE
+                } else {
+                    return Err(ExpressionError::InvalidWorkGroupUniformLoadResultType(ty));
+                }
             }
             E::ArrayLength(expr) => match resolver[expr] {
                 Ti::Pointer { base, .. } => {

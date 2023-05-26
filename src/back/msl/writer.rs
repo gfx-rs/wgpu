@@ -1880,6 +1880,7 @@ impl<W: Write> Writer<W> {
             // has to be a named expression
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
+            | crate::Expression::WorkGroupUniformLoadResult { .. }
             | crate::Expression::RayQueryProceedResult => {
                 unreachable!()
             }
@@ -2841,6 +2842,18 @@ impl<W: Write> Writer<W> {
                     }
                     // done
                     writeln!(self.out, ";")?;
+                }
+                crate::Statement::WorkGroupUniformLoad { pointer, result } => {
+                    self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.put_load(pointer, &context.expression, true)?;
+                    self.named_expressions.insert(result, name);
+
+                    writeln!(self.out, ";")?;
+                    self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     match *fun {

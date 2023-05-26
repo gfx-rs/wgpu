@@ -1473,6 +1473,13 @@ pub enum Expression {
     CallResult(Handle<Function>),
     /// Result of an atomic operation.
     AtomicResult { ty: Handle<Type>, comparison: bool },
+    /// Result of a [`WorkGroupUniformLoad`] statement.
+    ///
+    /// [`WorkGroupUniformLoad`]: Statement::WorkGroupUniformLoad
+    WorkGroupUniformLoadResult {
+        /// The type of the result
+        ty: Handle<Type>,
+    },
     /// Get the length of an array.
     /// The expression must resolve to a pointer to an array with a dynamic size.
     ///
@@ -1730,6 +1737,21 @@ pub enum Statement {
         /// [`AtomicResult`] expression representing this function's result.
         ///
         /// [`AtomicResult`]: crate::Expression::AtomicResult
+        result: Handle<Expression>,
+    },
+    /// Load uniformly from a uniform pointer in the workgroup address space.
+    ///
+    /// Corresponds to the [`workgroupUniformLoad`](https://www.w3.org/TR/WGSL/#workgroupUniformLoad-builtin)
+    /// built-in function of wgsl, and has the same barrier semantics
+    WorkGroupUniformLoad {
+        /// This must be of type [`Pointer`] in the [`WorkGroup`] address space
+        ///
+        /// [`Pointer`]: TypeInner::Pointer
+        /// [`WorkGroup`]: AddressSpace::WorkGroup
+        pointer: Handle<Expression>,
+        /// The [`WorkGroupUniformLoadResult`] expression representing this load's result.
+        ///
+        /// [`WorkGroupUniformLoadResult`]: Expression::WorkGroupUniformLoadResult
         result: Handle<Expression>,
     },
     /// Calls a function.

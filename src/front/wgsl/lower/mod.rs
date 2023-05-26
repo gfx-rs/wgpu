@@ -1691,6 +1691,36 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::Barrier(crate::Barrier::WORK_GROUP), span);
                             return Ok(None);
                         }
+                        "workgroupUniformLoad" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let expr = args.next()?;
+                            args.finish()?;
+
+                            let pointer = self.expression(expr, ctx.reborrow())?;
+                            ctx.grow_types(pointer)?;
+                            let result_ty = match *ctx.resolved_inner(pointer) {
+                                crate::TypeInner::Pointer {
+                                    base,
+                                    space: crate::AddressSpace::WorkGroup,
+                                } => base,
+                                ref other => {
+                                    log::error!("Type {other:?} passed to workgroupUniformLoad");
+                                    let span = ctx.ast_expressions.get_span(expr);
+                                    return Err(Error::InvalidWorkGroupUniformLoad(span));
+                                }
+                            };
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::WorkGroupUniformLoadResult { ty: result_ty },
+                                span,
+                            );
+                            ctx.block.push(
+                                crate::Statement::WorkGroupUniformLoad { pointer, result },
+                                span,
+                            );
+
+                            ctx.grow_types(pointer)?;
+                            return Ok(Some(result));
+                        }
                         "textureStore" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 

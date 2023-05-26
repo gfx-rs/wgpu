@@ -239,6 +239,7 @@ pub enum Error<'a> {
         found: u32,
     },
     FunctionReturnsVoid(Span),
+    InvalidWorkGroupUniformLoad(Span),
     Other,
     ExpectedArraySize(Span),
     NonPositiveArrayLength(Span),
@@ -681,6 +682,11 @@ impl<'a> Error<'a> {
                 notes: vec![
                     "perhaps you meant to call the function in a separate statement?".into(),
                 ],
+            },
+            Error::InvalidWorkGroupUniformLoad(span) => ParseError {
+                message: "incorrect type passed to workgroupUniformLoad".into(),
+                labels: vec![(span, "".into())],
+                notes: vec!["passed type must be a workgroup pointer".into()],
             },
             Error::Other => ParseError {
                 message: "other error".to_string(),

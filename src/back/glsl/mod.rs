@@ -1824,7 +1824,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                     if let Some(name) = expr_name {
                         write!(self.out, "{level}")?;
-                        self.write_named_expr(handle, name, ctx)?;
+                        self.write_named_expr(handle, name, handle, ctx)?;
                     }
                 }
             }
@@ -2113,6 +2113,19 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, " = ")?;
                 self.write_expr(value, ctx)?;
                 writeln!(self.out, ";")?
+            }
+            Statement::WorkGroupUniformLoad { pointer, result } => {
+                // GLSL doesn't have pointers, which means that this backend needs to ensure that
+                // the actual "loading" is happening between the two barriers.
+                // This is done in `Emit` by never emitting a variable name for pointer variables
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+
+                let result_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                write!(self.out, "{level}")?;
+                // Expressions cannot have side effects, so just writing the expression here is fine.
+                self.write_named_expr(pointer, result_name, result, ctx)?;
+
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
             }
             // Stores a value into an image.
             Statement::ImageStore {
@@ -3289,7 +3302,8 @@ impl<'a, W: Write> Writer<'a, W> {
             // These expressions never show up in `Emit`.
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
-            | Expression::RayQueryProceedResult => unreachable!(),
+            | Expression::RayQueryProceedResult
+            | Expression::WorkGroupUniformLoadResult { .. } => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;
@@ -3725,9 +3739,12 @@ impl<'a, W: Write> Writer<'a, W> {
         &mut self,
         handle: Handle<crate::Expression>,
         name: String,
+        // The expression which is being named.
+        // Generally, this is the same as handle, except in WorkGroupUniformLoad
+        named: Handle<crate::Expression>,
         ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        match ctx.info[handle].ty {
+        match ctx.info[named].ty {
             proc::TypeResolution::Handle(ty_handle) => match self.module.types[ty_handle].inner {
                 TypeInner::Struct { .. } => {
                     let ty_name = &self.names[&NameKey::Type(ty_handle)];
@@ -3742,7 +3759,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let base_ty_res = &ctx.info[handle].ty;
+        let base_ty_res = &ctx.info[named].ty;
         let resolved = base_ty_res.inner_with(&self.module.types);
 
         write!(self.out, " {name}")?;
@@ -3752,7 +3769,7 @@ impl<'a, W: Write> Writer<'a, W> {
         write!(self.out, " = ")?;
         self.write_expr(handle, ctx)?;
         writeln!(self.out, ";")?;
-        self.named_expressions.insert(handle, name);
+        self.named_expressions.insert(named, name);
 
         Ok(())
     }

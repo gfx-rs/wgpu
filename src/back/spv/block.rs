@@ -1089,6 +1089,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::FunctionArgument(index) => self.function.parameter_id(index),
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
+            | crate::Expression::WorkGroupUniformLoadResult { .. }
             | crate::Expression::RayQueryProceedResult => self.cached[expr_handle],
             crate::Expression::As {
                 expr,
@@ -2208,6 +2209,46 @@ impl<'w> BlockContext<'w> {
                     };
 
                     block.body.push(instruction);
+                }
+                crate::Statement::WorkGroupUniformLoad { pointer, result } => {
+                    self.writer
+                        .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                    let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
+                    // Embed the body of
+                    match self.write_expression_pointer(pointer, &mut block, None)? {
+                        ExpressionPointer::Ready { pointer_id } => {
+                            let id = self.gen_id();
+                            block.body.push(Instruction::load(
+                                result_type_id,
+                                id,
+                                pointer_id,
+                                None,
+                            ));
+                            self.cached[result] = id;
+                        }
+                        ExpressionPointer::Conditional { condition, access } => {
+                            self.cached[result] = self.write_conditional_indexed_load(
+                                result_type_id,
+                                condition,
+                                &mut block,
+                                move |id_gen, block| {
+                                    // The in-bounds path. Perform the access and the load.
+                                    let pointer_id = access.result_id.unwrap();
+                                    let value_id = id_gen.next();
+                                    block.body.push(access);
+                                    block.body.push(Instruction::load(
+                                        result_type_id,
+                                        value_id,
+                                        pointer_id,
+                                        None,
+                                    ));
+                                    value_id
+                                },
+                            )
+                        }
+                    }
+                    self.writer
+                        .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);

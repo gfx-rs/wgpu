@@ -3845,6 +3845,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         }
                     }
                 }
+                S::WorkGroupUniformLoad { .. } => unreachable!(),
             }
             i += 1;
         }

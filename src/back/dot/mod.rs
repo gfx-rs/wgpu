@@ -252,6 +252,11 @@ impl StatementGraph {
                     }
                     "Atomic"
                 }
+                S::WorkGroupUniformLoad { pointer, result } => {
+                    self.emits.push((id, result));
+                    self.dependencies.push((id, pointer, "pointer"));
+                    "WorkGroupUniformLoad"
+                }
                 S::RayQuery { query, ref fun } => {
                     self.dependencies.push((id, query, "query"));
                     match *fun {
@@ -570,6 +575,7 @@ fn write_function_expressions(
             }
             E::CallResult(_function) => ("CallResult".into(), 4),
             E::AtomicResult { .. } => ("AtomicResult".into(), 4),
+            E::WorkGroupUniformLoadResult { .. } => ("WorkGroupUniformLoadResult".into(), 4),
             E::ArrayLength(expr) => {
                 edges.insert("", expr);
                 ("ArrayLength".into(), 7)

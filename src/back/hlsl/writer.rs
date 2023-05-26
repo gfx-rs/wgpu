@@ -1338,7 +1338,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                     if let Some(name) = expr_name {
                         write!(self.out, "{level}")?;
-                        self.write_named_expr(module, handle, name, func_ctx)?;
+                        self.write_named_expr(module, handle, name, handle, func_ctx)?;
                     }
                 }
             }
@@ -1898,6 +1898,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ", {res_name});")?;
                 self.named_expressions.insert(result, res_name);
+            }
+            Statement::WorkGroupUniformLoad { pointer, result } => {
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+                write!(self.out, "{level}")?;
+                let name = format!("_expr{}", result.index());
+                self.write_named_expr(module, pointer, name, result, func_ctx)?;
+
+                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
             }
             Statement::Switch {
                 selector,
@@ -2933,6 +2941,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
+            | Expression::WorkGroupUniformLoadResult { .. }
             | Expression::RayQueryProceedResult => {}
         }
 
@@ -3023,9 +3032,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
         handle: Handle<crate::Expression>,
         name: String,
+        // The expression which is being named.
+        // Generally, this is the same as handle, except in WorkGroupUniformLoad
+        named: Handle<crate::Expression>,
         ctx: &back::FunctionCtx,
     ) -> BackendResult {
-        match ctx.info[handle].ty {
+        match ctx.info[named].ty {
             proc::TypeResolution::Handle(ty_handle) => match module.types[ty_handle].inner {
                 TypeInner::Struct { .. } => {
                     let ty_name = &self.names[&NameKey::Type(ty_handle)];
@@ -3040,7 +3052,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
-        let base_ty_res = &ctx.info[handle].ty;
+        let base_ty_res = &ctx.info[named].ty;
         let resolved = base_ty_res.inner_with(&module.types);
 
         write!(self.out, " {name}")?;
@@ -3051,7 +3063,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, " = ")?;
         self.write_expr(module, handle, ctx)?;
         writeln!(self.out, ";")?;
-        self.named_expressions.insert(handle, name);
+        self.named_expressions.insert(named, name);
 
         Ok(())
     }

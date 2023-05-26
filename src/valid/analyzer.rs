@@ -690,6 +690,13 @@ impl FunctionInfo {
                 non_uniform_result: Some(handle),
                 requirements: UniformityRequirements::empty(),
             },
+            E::WorkGroupUniformLoadResult { .. } => Uniformity {
+                // The result of WorkGroupUniformLoad is always uniform by definition
+                non_uniform_result: None,
+                // The call is what cares about uniformity, not the expression
+                // This expression is never emitted, so this requirement should never be used anyway?
+                requirements: UniformityRequirements::empty(),
+            },
             E::ArrayLength(expr) => Uniformity {
                 non_uniform_result: self.add_ref_impl(expr, GlobalUse::QUERY),
                 requirements: UniformityRequirements::empty(),
@@ -776,6 +783,35 @@ impl FunctionInfo {
                     },
                     exit: ExitFlags::empty(),
                 },
+                S::WorkGroupUniformLoad { pointer, .. } => {
+                    let _condition_nur = self.add_ref(pointer);
+
+                    // Don't check that this call occurs in uniform control flow until Naga implements WGSL's standard
+                    // uniformity analysis (https://github.com/gfx-rs/naga/issues/1744).
+                    // The uniformity analysis Naga uses now is less accurate than the one in the WGSL standard,
+                    // causing Naga to reject correct uses of `workgroupUniformLoad` in some interesting programs.
+
+                    /* #[cfg(feature = "validate")]
+                    if self
+                        .flags
+                        .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
+                    {
+                        let condition_nur = self.add_ref(pointer);
+                        let this_disruptor =
+                            disruptor.or(condition_nur.map(UniformityDisruptor::Expression));
+                        if let Some(cause) = this_disruptor {
+                            return Err(FunctionError::NonUniformWorkgroupUniformLoad(cause)
+                                .with_span_static(*span, "WorkGroupUniformLoad"));
+                        }
+                    } */
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: None,
+                            requirements: UniformityRequirements::WORK_GROUP_BARRIER,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
+                }
                 S::Block(ref b) => {
                     self.process_block(b, other_functions, disruptor, expression_arena)?
                 }

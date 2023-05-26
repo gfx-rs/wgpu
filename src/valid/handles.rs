@@ -360,7 +360,9 @@ impl super::Validator {
                     handle.check_dep(function)?;
                 }
             }
-            crate::Expression::AtomicResult { .. } | crate::Expression::RayQueryProceedResult => (),
+            crate::Expression::AtomicResult { .. }
+            | crate::Expression::RayQueryProceedResult
+            | crate::Expression::WorkGroupUniformLoadResult { .. } => (),
             crate::Expression::ArrayLength(array) => {
                 handle.check_dep(array)?;
             }
@@ -468,6 +470,11 @@ impl super::Validator {
                     crate::AtomicFunction::Exchange { compare } => validate_expr_opt(compare)?,
                 };
                 validate_expr(value)?;
+                validate_expr(result)?;
+                Ok(())
+            }
+            crate::Statement::WorkGroupUniformLoad { pointer, result } => {
+                validate_expr(pointer)?;
                 validate_expr(result)?;
                 Ok(())
             }

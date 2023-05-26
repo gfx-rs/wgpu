@@ -780,6 +780,16 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, value, func_ctx)?;
                 writeln!(self.out, ");")?
             }
+            Statement::WorkGroupUniformLoad { pointer, result } => {
+                write!(self.out, "{level}")?;
+                // TODO: Obey named expressions here.
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                self.start_named_expr(module, result, func_ctx, &res_name)?;
+                self.named_expressions.insert(result, res_name);
+                write!(self.out, "workgroupUniformLoad(")?;
+                self.write_expr(module, pointer, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
             Statement::ImageStore {
                 image,
                 coordinate,
@@ -1633,7 +1643,8 @@ impl<W: Write> Writer<W> {
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
-            | Expression::RayQueryProceedResult => {}
+            | Expression::RayQueryProceedResult
+            | Expression::WorkGroupUniformLoadResult { .. } => {}
         }
 
         Ok(())
