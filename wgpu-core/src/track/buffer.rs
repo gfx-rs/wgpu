@@ -150,19 +150,17 @@ impl<A: HalApi> BufferUsageScope<A> {
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
         for &(id, ref resource, state) in &bind_group.buffers {
-            let (index32, epoch, _) = id.0.unzip();
-            let index = index32 as usize;
+            let index = id.0.unzip().0 as usize;
 
             unsafe {
                 insert_or_merge(
                     None,
                     &mut self.state,
                     &mut self.metadata,
-                    index32,
+                    index as _,
                     index,
                     BufferStateProvider::Direct { state },
                     ResourceMetadataProvider::Direct {
-                        epoch,
                         resource: Cow::Borrowed(resource),
                     },
                 )?
@@ -226,8 +224,7 @@ impl<A: HalApi> BufferUsageScope<A> {
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
 
-        let (index32, epoch, _) = id.unzip();
-        let index = index32 as usize;
+        let index = id.unzip().0 as usize;
 
         self.allow_index(index);
 
@@ -238,12 +235,11 @@ impl<A: HalApi> BufferUsageScope<A> {
                 None,
                 &mut self.state,
                 &mut self.metadata,
-                index32,
+                index as _,
                 index,
                 BufferStateProvider::Direct { state: new_state },
-                ResourceMetadataProvider::Resource {
-                    epoch,
-                    resource: buffer.clone(),
+                ResourceMetadataProvider::Direct {
+                    resource: Cow::Owned(buffer.clone()),
                 },
             )?;
         }
@@ -322,8 +318,7 @@ impl<A: HalApi> BufferTracker<A> {
         resource: Arc<Buffer<A>>,
         state: BufferUses,
     ) {
-        let (index32, epoch, _) = id.0.unzip();
-        let index = index32 as usize;
+        let index = id.0.unzip().0 as usize;
 
         self.allow_index(index);
 
@@ -344,7 +339,6 @@ impl<A: HalApi> BufferTracker<A> {
                 BufferStateProvider::Direct { state },
                 None,
                 ResourceMetadataProvider::Direct {
-                    epoch,
                     resource: Cow::Owned(resource),
                 },
             )
@@ -366,8 +360,7 @@ impl<A: HalApi> BufferTracker<A> {
     ) -> SetSingleResult<A> {
         let buffer = storage.get(id).ok()?;
 
-        let (index32, epoch, _) = id.unzip();
-        let index = index32 as usize;
+        let index = id.unzip().0 as usize;
 
         self.allow_index(index);
 
@@ -378,13 +371,11 @@ impl<A: HalApi> BufferTracker<A> {
                 Some(&mut self.start),
                 &mut self.end,
                 &mut self.metadata,
-                index32,
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Resource {
-                    epoch,
-                    resource: buffer.clone(),
+                ResourceMetadataProvider::Direct {
+                    resource: Cow::Owned(buffer.clone()),
                 },
                 &mut self.temp,
             )
@@ -417,7 +408,6 @@ impl<A: HalApi> BufferTracker<A> {
                     Some(&mut self.start),
                     &mut self.end,
                     &mut self.metadata,
-                    index as u32,
                     index,
                     BufferStateProvider::Indirect {
                         state: &tracker.start,
@@ -456,7 +446,6 @@ impl<A: HalApi> BufferTracker<A> {
                     Some(&mut self.start),
                     &mut self.end,
                     &mut self.metadata,
-                    index as u32,
                     index,
                     BufferStateProvider::Indirect {
                         state: &scope.state,
@@ -513,7 +502,6 @@ impl<A: HalApi> BufferTracker<A> {
                     Some(&mut self.start),
                     &mut self.end,
                     &mut self.metadata,
-                    index as u32,
                     index,
                     BufferStateProvider::Indirect {
                         state: &scope.state,
@@ -538,8 +526,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
     pub fn remove_abandoned(&mut self, id: Valid<BufferId>) -> bool {
-        let (index32, epoch, _) = id.0.unzip();
-        let index = index32 as usize;
+        let index = id.0.unzip().0 as usize;
 
         if index > self.metadata.size() {
             return false;
@@ -549,10 +536,9 @@ impl<A: HalApi> BufferTracker<A> {
 
         unsafe {
             if self.metadata.contains_unchecked(index) {
-                let existing_epoch = self.metadata.get_epoch_unchecked(index);
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
                 //3 ref count: Registry, Device Tracker and suspected resource itself
-                if existing_epoch == epoch && existing_ref_count <= 3 {
+                if existing_ref_count <= 3 {
                     self.metadata.remove(index);
                     return true;
                 }
@@ -658,7 +644,6 @@ unsafe fn insert_or_barrier_update<A: HalApi>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
     resource_metadata: &mut ResourceMetadata<A, BufferId, Buffer<A>>,
-    index32: u32,
     index: usize,
     start_state_provider: BufferStateProvider<'_>,
     end_state_provider: Option<BufferStateProvider<'_>>,
@@ -683,15 +668,7 @@ unsafe fn insert_or_barrier_update<A: HalApi>(
     }
 
     let update_state_provider = end_state_provider.unwrap_or_else(|| start_state_provider.clone());
-    unsafe {
-        barrier(
-            current_states,
-            index32,
-            index,
-            start_state_provider,
-            barriers,
-        )
-    };
+    unsafe { barrier(current_states, index, start_state_provider, barriers) };
 
     unsafe { update(current_states, index, update_state_provider) };
 }
@@ -723,8 +700,8 @@ unsafe fn insert<A: HalApi>(
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
 
-        let (epoch, resource) = metadata_provider.get_own(index);
-        resource_metadata.insert(index, epoch, resource);
+        let resource = metadata_provider.get_own(index);
+        resource_metadata.insert(index, resource);
     }
 }
 
@@ -763,7 +740,6 @@ unsafe fn merge<A: HalApi>(
 #[inline(always)]
 unsafe fn barrier(
     current_states: &mut [BufferUses],
-    index32: u32,
     index: usize,
     state_provider: BufferStateProvider<'_>,
     barriers: &mut Vec<PendingTransition<BufferUses>>,
@@ -776,12 +752,12 @@ unsafe fn barrier(
     }
 
     barriers.push(PendingTransition {
-        id: index32,
+        id: index as _,
         selector: (),
         usage: current_state..new_state,
     });
 
-    log::trace!("\tbuf {index32}: transition {current_state:?} -> {new_state:?}");
+    log::trace!("\tbuf {index}: transition {current_state:?} -> {new_state:?}");
 }
 
 #[inline(always)]

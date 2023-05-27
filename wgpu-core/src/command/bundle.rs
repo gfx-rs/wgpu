@@ -963,8 +963,12 @@ impl<A: HalApi> RenderBundle<A> {
 impl<A: HalApi> Resource<RenderBundleId> for RenderBundle<A> {
     const TYPE: &'static str = "RenderBundle";
 
-    fn info(&self) -> &ResourceInfo<RenderBundleId> {
+    fn as_info(&self) -> &ResourceInfo<RenderBundleId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<RenderBundleId> {
+        &mut self.info
     }
 }
 

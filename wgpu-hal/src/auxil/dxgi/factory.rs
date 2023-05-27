@@ -139,7 +139,7 @@ pub fn create_factory(
             log::error!("IDXGIFactory1 creation function not found: {:?}", err);
             return Err(crate::InstanceError);
         }
-        // If we don't print it to info as all win7 will hit this case.
+        // If we don't print it to warn as all win7 will hit this case.
         Err(err) => {
             log::warn!("IDXGIFactory1 creation function not found: {:?}", err);
             None
@@ -161,7 +161,7 @@ pub fn create_factory(
                 log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
                 return Err(crate::InstanceError);
             }
-            // If we don't print it to info.
+            // If we don't print it to warn.
             Err(err) => {
                 log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
                 return Ok((lib_dxgi, d3d12::DxgiFactory::Factory4(factory4)));
@@ -199,7 +199,7 @@ pub fn create_factory(
             log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
             return Err(crate::InstanceError);
         }
-        // If we don't print it to info.
+        // If we don't print it to warn.
         Err(err) => {
             log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
         }

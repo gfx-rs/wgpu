@@ -49,7 +49,7 @@ use std::{
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
 pub struct ResourceInfo<Id: TypedId> {
-    id: RwLock<Option<Valid<Id>>>,
+    id: Option<Valid<Id>>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -68,7 +68,7 @@ impl<Id: TypedId> ResourceInfo<Id> {
     #[allow(unused_variables)]
     pub(crate) fn new(label: &str) -> Self {
         Self {
-            id: RwLock::new(None),
+            id: None,
             submission_index: AtomicUsize::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
@@ -85,19 +85,18 @@ impl<Id: TypedId> ResourceInfo<Id> {
         {
             label = self.label.clone();
         }
-        if let Some(id) = self.id.read().as_ref() {
+        if let Some(id) = self.id.as_ref() {
             label = format!("{:?}", id);
         }
         label
     }
 
     pub(crate) fn id(&self) -> Valid<Id> {
-        self.id.read().unwrap()
+        self.id.unwrap()
     }
 
-    pub(crate) fn set_id(&self, id: Id) {
-        let mut value = self.id.write();
-        *value = Some(Valid(id));
+    pub(crate) fn set_id(&mut self, id: Id) {
+        self.id = Some(Valid(id));
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -114,10 +113,11 @@ impl<Id: TypedId> ResourceInfo<Id> {
 
 pub trait Resource<Id: TypedId> {
     const TYPE: &'static str;
-    fn info(&self) -> &ResourceInfo<Id>;
+    fn as_info(&self) -> &ResourceInfo<Id>;
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<Id>;
     fn label(&self) -> String {
         #[cfg(debug_assertions)]
-        return self.info().label.clone();
+        return self.as_info().label.clone();
         #[cfg(not(debug_assertions))]
         return String::new();
     }
@@ -406,8 +406,12 @@ pub enum CreateBufferError {
 impl<A: HalApi> Resource<BufferId> for Buffer<A> {
     const TYPE: &'static str = "Buffer";
 
-    fn info(&self) -> &ResourceInfo<BufferId> {
+    fn as_info(&self) -> &ResourceInfo<BufferId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<BufferId> {
+        &mut self.info
     }
 }
 
@@ -454,8 +458,12 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
 impl<A: HalApi> Resource<StagingBufferId> for StagingBuffer<A> {
     const TYPE: &'static str = "StagingBuffer";
 
-    fn info(&self) -> &ResourceInfo<StagingBufferId> {
+    fn as_info(&self) -> &ResourceInfo<StagingBufferId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<StagingBufferId> {
+        &mut self.info
     }
 
     fn label(&self) -> String {
@@ -720,8 +728,12 @@ pub enum CreateTextureError {
 impl<A: HalApi> Resource<TextureId> for Texture<A> {
     const TYPE: &'static str = "Texture";
 
-    fn info(&self) -> &ResourceInfo<TextureId> {
+    fn as_info(&self) -> &ResourceInfo<TextureId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<TextureId> {
+        &mut self.info
     }
 }
 
@@ -875,8 +887,12 @@ pub enum TextureViewDestroyError {}
 impl<A: HalApi> Resource<TextureViewId> for TextureView<A> {
     const TYPE: &'static str = "TextureView";
 
-    fn info(&self) -> &ResourceInfo<TextureViewId> {
+    fn as_info(&self) -> &ResourceInfo<TextureViewId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<TextureViewId> {
+        &mut self.info
     }
 }
 
@@ -986,8 +1002,12 @@ pub enum CreateSamplerError {
 impl<A: HalApi> Resource<SamplerId> for Sampler<A> {
     const TYPE: &'static str = "Sampler";
 
-    fn info(&self) -> &ResourceInfo<SamplerId> {
+    fn as_info(&self) -> &ResourceInfo<SamplerId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<SamplerId> {
+        &mut self.info
     }
 }
 
@@ -1029,8 +1049,12 @@ impl<A: HalApi> Drop for QuerySet<A> {
 impl<A: HalApi> Resource<QuerySetId> for QuerySet<A> {
     const TYPE: &'static str = "QuerySet";
 
-    fn info(&self) -> &ResourceInfo<QuerySetId> {
+    fn as_info(&self) -> &ResourceInfo<QuerySetId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<QuerySetId> {
+        &mut self.info
     }
 }
 

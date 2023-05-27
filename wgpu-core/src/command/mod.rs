@@ -315,8 +315,12 @@ impl<A: HalApi> CommandBuffer<A> {
 impl<A: HalApi> Resource<CommandBufferId> for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
-    fn info(&self) -> &ResourceInfo<CommandBufferId> {
+    fn as_info(&self) -> &ResourceInfo<CommandBufferId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<CommandBufferId> {
+        &mut self.info
     }
 
     fn label(&self) -> String {

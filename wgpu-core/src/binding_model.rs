@@ -473,8 +473,12 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
 impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
     const TYPE: &'static str = "BindGroupLayout";
 
-    fn info(&self) -> &ResourceInfo<BindGroupLayoutId> {
+    fn as_info(&self) -> &ResourceInfo<BindGroupLayoutId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<BindGroupLayoutId> {
+        &mut self.info
     }
 
     fn label(&self) -> String {
@@ -694,8 +698,12 @@ impl<A: HalApi> PipelineLayout<A> {
 impl<A: HalApi> Resource<PipelineLayoutId> for PipelineLayout<A> {
     const TYPE: &'static str = "PipelineLayout";
 
-    fn info(&self) -> &ResourceInfo<PipelineLayoutId> {
+    fn as_info(&self) -> &ResourceInfo<PipelineLayoutId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<PipelineLayoutId> {
+        &mut self.info
     }
 }
 
@@ -881,8 +889,12 @@ impl<A: HalApi> BindGroup<A> {
 impl<A: HalApi> Resource<BindGroupId> for BindGroup<A> {
     const TYPE: &'static str = "BindGroup";
 
-    fn info(&self) -> &ResourceInfo<BindGroupId> {
+    fn as_info(&self) -> &ResourceInfo<BindGroupId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<BindGroupId> {
+        &mut self.info
     }
 }
 

@@ -36,7 +36,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance: Instance::new(name, instance_desc),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
         }
     }
@@ -52,7 +52,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance: A::create_instance_from_hal(name, hal_instance),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
         }
     }
@@ -71,7 +71,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance,
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
         }
     }

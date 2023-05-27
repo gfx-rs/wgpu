@@ -5,7 +5,7 @@ use bit_vec::BitVec;
 use std::{borrow::Cow, marker::PhantomData, mem, sync::Arc};
 use wgt::strict_assert;
 
-/// A set of resources, holding a [`RefCount`] and epoch for each member.
+/// A set of resources, holding a `Arc<T>` and epoch for each member.
 ///
 /// Testing for membership is fast, and iterating over members is
 /// reasonably fast in practice. Storage consumption is proportional
@@ -17,11 +17,8 @@ pub(super) struct ResourceMetadata<A: HalApi, I: TypedId, T: Resource<I>> {
     /// If the resource with index `i` is a member, `owned[i]` is `true`.
     owned: BitVec<usize>,
 
-    /// A vector parallel to `owned`, holding clones of members' `RefCount`s.
+    /// A vector holding clones of members' `T`s.
     resources: Vec<Option<Arc<T>>>,
-
-    /// A vector parallel to `owned`, holding the epoch of each members' id.
-    epochs: Vec<Epoch>,
 
     /// This tells Rust that this type should be covariant with `A`.
     _phantom: PhantomData<(A, I)>,
@@ -32,8 +29,6 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
         Self {
             owned: BitVec::default(),
             resources: Vec::new(),
-            epochs: Vec::new(),
-
             _phantom: PhantomData,
         }
     }
@@ -45,8 +40,6 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
 
     pub(super) fn set_size(&mut self, size: usize) {
         self.resources.resize(size, None);
-        self.epochs.resize(size, u32::MAX);
-
         resize_bitvec(&mut self.owned, size);
     }
 
@@ -58,8 +51,6 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
     pub(super) fn tracker_assert_in_bounds(&self, index: usize) {
         strict_assert!(index < self.owned.len());
         strict_assert!(index < self.resources.len());
-        strict_assert!(index < self.epochs.len());
-
         strict_assert!(if self.contains(index) {
             self.resources[index].is_some()
         } else {
@@ -100,10 +91,9 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
     /// The given `index` must be in bounds for this `ResourceMetadata`'s
     /// existing tables. See `tracker_assert_in_bounds`.
     #[inline(always)]
-    pub(super) unsafe fn insert(&mut self, index: usize, epoch: Epoch, resource: Arc<T>) {
+    pub(super) unsafe fn insert(&mut self, index: usize, resource: Arc<T>) {
         self.owned.set(index, true);
         unsafe {
-            *self.epochs.get_unchecked_mut(index) = epoch;
             *self.resources.get_unchecked_mut(index) = Some(resource);
         }
     }
@@ -142,17 +132,6 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
         }
     }
 
-    /// Get the [`Epoch`] of the id of the resource with the given index.
-    ///
-    /// # Safety
-    ///
-    /// The given `index` must be in bounds for this `ResourceMetadata`'s
-    /// existing tables. See `tracker_assert_in_bounds`.
-    #[inline(always)]
-    pub(super) unsafe fn get_epoch_unchecked(&self, index: usize) -> Epoch {
-        unsafe { *self.epochs.get_unchecked(index) }
-    }
-
     /// Returns an iterator over the resources owned by `self`.
     pub(super) fn owned_resources(&self) -> impl Iterator<Item = &Arc<T>> + '_ {
         if !self.owned.is_empty() {
@@ -176,7 +155,6 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
     pub(super) unsafe fn remove(&mut self, index: usize) {
         unsafe {
             *self.resources.get_unchecked_mut(index) = None;
-            *self.epochs.get_unchecked_mut(index) = u32::MAX;
         }
         self.owned.set(index, false);
     }
@@ -188,16 +166,11 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
 /// trackers can get new resource metadata from.
 pub(super) enum ResourceMetadataProvider<'a, A: HalApi, I: TypedId, T: Resource<I>> {
     /// Comes directly from explicit values.
-    Direct {
-        epoch: Epoch,
-        resource: Cow<'a, Arc<T>>,
-    },
+    Direct { resource: Cow<'a, Arc<T>> },
     /// Comes from another metadata tracker.
     Indirect {
         metadata: &'a ResourceMetadata<A, I, T>,
     },
-    /// The epoch is given directly, but the life count comes from the resource itself.
-    Resource { epoch: Epoch, resource: Arc<T> },
 }
 impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T> {
     /// Get the epoch and an owned refcount from this.
@@ -207,17 +180,16 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T
     /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
     /// - info must be Some if this uses a Resource source.
     #[inline(always)]
-    pub(super) unsafe fn get_own(self, index: usize) -> (Epoch, Arc<T>) {
+    pub(super) unsafe fn get_own(self, index: usize) -> Arc<T> {
         match self {
-            ResourceMetadataProvider::Direct { epoch, resource } => (epoch, resource.into_owned()),
+            ResourceMetadataProvider::Direct { resource } => resource.into_owned(),
             ResourceMetadataProvider::Indirect { metadata } => {
                 metadata.tracker_assert_in_bounds(index);
-                (unsafe { *metadata.epochs.get_unchecked(index) }, {
+                {
                     let resource = unsafe { metadata.resources.get_unchecked(index) };
                     unsafe { resource.clone().unwrap_unchecked() }
-                })
+                }
             }
-            ResourceMetadataProvider::Resource { epoch, resource } => (epoch, resource),
         }
     }
     /// Get the epoch from this.
@@ -227,14 +199,7 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T
     /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
     #[inline(always)]
     pub(super) unsafe fn get_epoch(self, index: usize) -> Epoch {
-        match self {
-            ResourceMetadataProvider::Direct { epoch, .. }
-            | ResourceMetadataProvider::Resource { epoch, .. } => epoch,
-            ResourceMetadataProvider::Indirect { metadata } => {
-                metadata.tracker_assert_in_bounds(index);
-                unsafe { *metadata.epochs.get_unchecked(index) }
-            }
-        }
+        unsafe { self.get_own(index).as_info().id().0.unzip().1 }
     }
 }
 

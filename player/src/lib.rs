@@ -156,7 +156,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         comb_manager: &mut wgc::identity::IdentityManager,
     ) {
         use wgc::device::trace::Action;
-        log::info!("action {:?}", action);
+        log::debug!("action {:?}", action);
         //TODO: find a way to force ID perishing without excessive `maintain()` calls.
         match action {
             Action::Init { .. } => {
@@ -254,7 +254,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.bind_group_drop::<A>(id);
             }
             Action::CreateShaderModule { id, desc, data } => {
-                log::info!("Creating shader from {}", data);
+                log::debug!("Creating shader from {}", data);
                 let code = fs::read_to_string(dir.join(&data)).unwrap();
                 let source = if data.ends_with(".wgsl") {
                     wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))

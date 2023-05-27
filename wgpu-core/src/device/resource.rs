@@ -2823,7 +2823,7 @@ impl<A: HalApi> Device<A> {
                         )?;
                     }
                     _ => {
-                        log::info!(
+                        log::warn!(
                             "The fragment stage {:?} output @location({}) values are ignored",
                             fragment_stage
                                 .as_ref()
@@ -3095,7 +3095,11 @@ impl<A: HalApi> Device<A> {
 impl<A: HalApi> Resource<DeviceId> for Device<A> {
     const TYPE: &'static str = "Device";
 
-    fn info(&self) -> &ResourceInfo<DeviceId> {
+    fn as_info(&self) -> &ResourceInfo<DeviceId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<DeviceId> {
+        &mut self.info
     }
 }

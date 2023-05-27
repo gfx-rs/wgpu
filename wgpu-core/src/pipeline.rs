@@ -71,8 +71,12 @@ impl<A: HalApi> Drop for ShaderModule<A> {
 impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
     const TYPE: &'static str = "ShaderModule";
 
-    fn info(&self) -> &ResourceInfo<ShaderModuleId> {
+    fn as_info(&self) -> &ResourceInfo<ShaderModuleId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<ShaderModuleId> {
+        &mut self.info
     }
 
     fn label(&self) -> String {
@@ -261,8 +265,12 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
 impl<A: HalApi> Resource<ComputePipelineId> for ComputePipeline<A> {
     const TYPE: &'static str = "ComputePipeline";
 
-    fn info(&self) -> &ResourceInfo<ComputePipelineId> {
+    fn as_info(&self) -> &ResourceInfo<ComputePipelineId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<ComputePipelineId> {
+        &mut self.info
     }
 }
 
@@ -488,8 +496,12 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
 impl<A: HalApi> Resource<RenderPipelineId> for RenderPipeline<A> {
     const TYPE: &'static str = "RenderPipeline";
 
-    fn info(&self) -> &ResourceInfo<RenderPipelineId> {
+    fn as_info(&self) -> &ResourceInfo<RenderPipelineId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<RenderPipelineId> {
+        &mut self.info
     }
 }
 

@@ -44,27 +44,30 @@ pub(crate) struct InvalidId;
 /// values, so you should use an id allocator like `IdentityManager`
 /// that keeps the index values dense and close to zero.
 #[derive(Debug)]
-pub struct Storage<T, I: id::TypedId>
+pub struct Storage<T, I>
 where
     T: Resource<I>,
+    I: id::TypedId,
 {
     pub(crate) map: Vec<Element<T>>,
     kind: &'static str,
     _phantom: PhantomData<I>,
 }
 
-impl<T, I: id::TypedId> ops::Index<id::Valid<I>> for Storage<T, I>
+impl<T, I> ops::Index<id::Valid<I>> for Storage<T, I>
 where
     T: Resource<I>,
+    I: id::TypedId,
 {
     type Output = Arc<T>;
     fn index(&self, id: id::Valid<I>) -> &Arc<T> {
         self.get(id.0).unwrap()
     }
 }
-impl<T, I: id::TypedId> Storage<T, I>
+impl<T, I> Storage<T, I>
 where
     T: Resource<I>,
+    I: id::TypedId,
 {
     pub(crate) fn new() -> Self {
         Self {
@@ -75,17 +78,11 @@ where
     }
 }
 
-impl<T, I: id::TypedId> Storage<T, I>
+impl<T, I> Storage<T, I>
 where
     T: Resource<I>,
+    I: id::TypedId,
 {
-    pub(crate) fn from_kind(kind: &'static str) -> Self {
-        Self {
-            map: Vec::new(),
-            kind,
-            _phantom: PhantomData,
-        }
-    }
     pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
@@ -182,9 +179,9 @@ where
         }
     }
 
-    pub(crate) fn insert(&mut self, id: I, value: T) {
+    pub(crate) fn insert(&mut self, id: I, mut value: T) {
         let (index, epoch, _) = id.unzip();
-        value.info().set_id(id);
+        value.as_info_mut().set_id(id);
         self.insert_impl(index as usize, Element::Occupied(Arc::new(value), epoch))
     }
 
@@ -193,9 +190,9 @@ where
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
-    pub(crate) fn force_replace(&mut self, id: I, value: T) {
+    pub(crate) fn force_replace(&mut self, id: I, mut value: T) {
         let (index, epoch, _) = id.unzip();
-        value.info().set_id(id);
+        value.as_info_mut().set_id(id);
         self.map[index as usize] = Element::Occupied(Arc::new(value), epoch);
     }
 

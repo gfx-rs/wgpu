@@ -26,12 +26,8 @@ impl<I: id::TypedId, T: Resource<I>, F: IdentityHandlerFactory<I>> Registry<I, T
         }
     }
 
-    pub(crate) fn without_backend(factory: &F, kind: &'static str) -> Self {
-        Self {
-            identity: factory.spawn(),
-            storage: RwLock::new(Storage::from_kind(kind)),
-            backend: Backend::Empty,
-        }
+    pub(crate) fn without_backend(factory: &F) -> Self {
+        Self::new(Backend::Empty, factory)
     }
 }
 
@@ -75,10 +71,10 @@ impl<I: id::TypedId + Copy, T: Resource<I>, F: IdentityHandlerFactory<I>> Regist
         }
     }
     pub(crate) fn try_get(&self, id: I) -> Result<Option<Arc<T>>, InvalidId> {
-        self.storage.read().try_get(id).map(|o| o.cloned())
+        self.read().try_get(id).map(|o| o.cloned())
     }
     pub(crate) fn get(&self, id: I) -> Result<Arc<T>, InvalidId> {
-        self.storage.read().get(id).map(|v| v.clone())
+        self.read().get(id).map(|v| v.clone())
     }
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T, I>> {
         self.storage.read()

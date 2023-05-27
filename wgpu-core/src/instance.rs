@@ -154,8 +154,12 @@ pub struct Surface {
 impl Resource<SurfaceId> for Surface {
     const TYPE: &'static str = "Surface";
 
-    fn info(&self) -> &ResourceInfo<SurfaceId> {
+    fn as_info(&self) -> &ResourceInfo<SurfaceId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<SurfaceId> {
+        &mut self.info
     }
 
     fn label(&self) -> String {
@@ -330,7 +334,7 @@ impl<A: HalApi> Adapter<A> {
                 missing_flags,
                 DOWNLEVEL_WARNING_MESSAGE
             );
-            log::info!("{:#?}", caps.downlevel);
+            log::warn!("{:#?}", caps.downlevel);
         }
 
         // Verify feature preconditions
@@ -367,8 +371,12 @@ impl<A: HalApi> Adapter<A> {
 impl<A: hal::Api> Resource<AdapterId> for Adapter<A> {
     const TYPE: &'static str = "Adapter";
 
-    fn info(&self) -> &ResourceInfo<AdapterId> {
+    fn as_info(&self) -> &ResourceInfo<AdapterId> {
         &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<AdapterId> {
+        &mut self.info
     }
 }
 
