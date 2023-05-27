@@ -228,7 +228,7 @@ deno_core::extension!(
         // shader
         shader::op_webgpu_create_shader_module,
     ],
-    esm = ["01_webgpu.js", "02_idl_types.js"],
+    esm = ["01_webgpu.js"],
     options = { unstable: bool },
     state = |state, options| {
         state.put(Unstable(options.unstable));

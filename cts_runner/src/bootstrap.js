@@ -23,11 +23,22 @@ import * as event from "ext:deno_web/02_event.js";
 import * as timers from "ext:deno_web/02_timers.js";
 import * as base64 from "ext:deno_web/05_base64.js";
 import * as encoding from "ext:deno_web/08_text_encoding.js";
-import { Console } from "ext:deno_console/02_console.js";
+import { Console } from "ext:deno_console/01_console.js";
 import * as url from "ext:deno_url/00_url.js";
 import DOMException from "ext:deno_web/01_dom_exception.js";
 import * as performance from "ext:deno_web/15_performance.js";
 import * as webgpu from "ext:deno_webgpu/01_webgpu.js";
+
+// imports needed to pass module evaluation
+import "ext:deno_url/01_urlpattern.js";
+import "ext:deno_web/01_mimesniff.js";
+import "ext:deno_web/03_abort_signal.js";
+import "ext:deno_web/06_streams.js";
+import "ext:deno_web/09_file.js";
+import "ext:deno_web/10_filereader.js";
+import "ext:deno_web/12_location.js";
+import "ext:deno_web/13_message_port.js";
+import "ext:deno_web/14_compression.js";
 
 let globalThis_;
 

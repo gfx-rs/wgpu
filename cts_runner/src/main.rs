@@ -87,7 +87,8 @@ async fn run() -> Result<(), AnyError> {
 deno_core::extension!(
     cts_runner,
     deps = [deno_webidl, deno_web],
-    ops = [op_exit, op_read_file_sync, op_write_file_sync,],
+    ops = [op_exit, op_read_file_sync, op_write_file_sync],
+    esm_entry_point = "ext:cts_runner/bootstrap.js",
     esm = ["bootstrap.js"],
 );
 
