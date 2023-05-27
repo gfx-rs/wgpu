@@ -642,13 +642,13 @@ const GPUSupportedFeaturesPrototype = GPUSupportedFeatures.prototype;
 function createGPUDeviceLostInfo(reason, message) {
   /** @type {GPUDeviceLostInfo} */
   const deviceLostInfo = webidl.createBranded(GPUDeviceLostInfo);
-  deviceLostInfo[_reason] = reason;
+  deviceLostInfo[_reason] = reason ?? "unknown";
   deviceLostInfo[_message] = message;
   return deviceLostInfo;
 }
 
 class GPUDeviceLostInfo {
-  /** @type {string | undefined} */
+  /** @type {string} */
   [_reason];
   /** @type {string} */
   [_message];
@@ -1673,10 +1673,6 @@ class GPUQueue {
     device.pushError(err);
   }
 
-  copyImageBitmapToTexture(_source, _destination, _copySize) {
-    throw new Error("Not yet implemented");
-  }
-
   [SymbolFor("Deno.privateCustomInspect")](inspect) {
     return `${this.constructor.name} ${
       inspect({
@@ -2485,10 +2481,6 @@ class GPUShaderModule {
     webidl.illegalConstructor();
   }
 
-  compilationInfo() {
-    throw new Error("Not yet implemented");
-  }
-
   [SymbolFor("Deno.privateCustomInspect")](inspect) {
     return `${this.constructor.name} ${
       inspect({
@@ -2764,6 +2756,15 @@ class GPUCommandEncoder {
 
     let depthStencilAttachment;
     if (descriptor.depthStencilAttachment) {
+      if (descriptor.depthStencilAttachment.depthLoadOp === "clear" && !("depthClearValue" in descriptor.depthStencilAttachment)) {
+        throw webidl.makeException(
+          TypeError,
+          "`depthClearValue` must be specified when `depthLoadOp` is \"clear\"",
+          prefix,
+          "Argument 1",
+        );
+      }
+
       const view = assertResource(descriptor.depthStencilAttachment.view, {
         prefix,
         context: "texture view for depth stencil attachment",
@@ -3587,14 +3588,6 @@ class GPURenderPassEncoder {
       renderPassRid,
       reference,
     );
-  }
-
-  beginOcclusionQuery(_queryIndex) {
-    throw new Error("Not yet implemented");
-  }
-
-  endOcclusionQuery() {
-    throw new Error("Not yet implemented");
   }
 
   /**
@@ -5079,10 +5072,6 @@ class GPURenderBundleEncoder {
     );
   }
 
-  drawIndexedIndirect(_indirectBuffer, _indirectOffset) {
-    throw new Error("Not yet implemented");
-  }
-
   [SymbolFor("Deno.privateCustomInspect")](inspect) {
     return `${this.constructor.name} ${
       inspect({
@@ -6461,12 +6450,12 @@ const dictMembersGPUDepthStencilState = [
   {
     key: "depthWriteEnabled",
     converter: webidl.converters["boolean"],
-    defaultValue: false,
+    required: true,
   },
   {
     key: "depthCompare",
     converter: webidl.converters["GPUCompareFunction"],
-    defaultValue: "always",
+    required: true,
   },
   {
     key: "stencilFront",
@@ -6971,7 +6960,6 @@ const dictMembersGPURenderPassDepthStencilAttachment = [
   {
     key: "depthClearValue",
     converter: webidl.converters["float"],
-    defaultValue: 0,
   },
   {
     key: "depthLoadOp",
