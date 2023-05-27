@@ -62,6 +62,18 @@ use super::{
 /// 1. `life_tracker` is locked after `hub.devices`, enforced by the type system
 /// 1. `self.trackers` is locked last (unenforced)
 /// 1. `self.trace` is locked last (unenforced)
+///
+/// Right now avoid locking twice same resource or registry in a call execution
+/// and minimize the locking to the minimum scope possibile
+/// Unless otherwise specified, no lock may be acquired while holding another lock.
+/// This means that you must inspect function calls made while a lock is held
+/// to see what locks the callee may try to acquire.
+///
+/// As far as this point:
+/// device_maintain_ids locks Device::lifetime_tracker, and calls...
+/// triage_suspected locks Device::trackers, and calls...
+/// Registry::unregister locks Registry::storage
+///
 pub struct Device<A: HalApi> {
     raw: Option<A::Device>,
     pub(crate) adapter_id: id::Valid<AdapterId>,
@@ -255,7 +267,7 @@ impl<A: HalApi> Device<A> {
     ///   submissions still in flight. (We have to take the locks needed to
     ///   produce this information for other reasons, so we might as well just
     ///   return it to our callers.)
-    pub(crate) fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn maintain<'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
         hub: &Hub<A, G>,
         fence: &A::Fence,

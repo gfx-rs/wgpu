@@ -10,6 +10,17 @@ use crate::{
     storage::{InvalidId, Storage, StorageReport},
 };
 
+/// Registry is the primary holder of each resource type
+/// Every resource is now arcanized so the last arc released
+/// will in the end free the memory and release the inner raw resource
+///
+/// Registry act as the main entry point to keep resource alive
+/// when created and released from user land code
+///
+/// A resource may still be alive when released from user land code
+/// if it's used in active submission or anyway kept alive from
+/// any other dependent resource
+///
 #[derive(Debug)]
 pub struct Registry<I: id::TypedId, T: Resource<I>, F: IdentityHandlerFactory<I>> {
     identity: F::Filter,
