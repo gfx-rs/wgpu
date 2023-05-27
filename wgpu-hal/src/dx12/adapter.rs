@@ -316,8 +316,8 @@ impl super::Adapter {
                     // these both account towards `uav_count`, but we can't express the limit as as sum
                     // of the two, so we divide it by 4 to account for the worst case scenario
                     // (2 shader stages, with both using 16 storage textures and 16 storage buffers)
-                    max_storage_buffers_per_shader_stage: (uav_count / 4).min(8),
-                    max_storage_textures_per_shader_stage: (uav_count / 4).min(8),
+                    max_storage_buffers_per_shader_stage: uav_count / 4,
+                    max_storage_textures_per_shader_stage: uav_count / 4,
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         d3d12_ty::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
