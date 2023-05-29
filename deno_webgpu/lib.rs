@@ -94,7 +94,8 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-pub type Instance = std::sync::Arc<wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>>;
+pub type Instance =
+    std::sync::Arc<wgpu_core::global::Global<wgpu_core::identity::IdentityManagerFactory>>;
 
 struct WebGpuAdapter(Instance, wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
@@ -321,9 +322,9 @@ pub async fn op_webgpu_request_adapter(
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
     } else {
-        state.put(std::sync::Arc::new(wgpu_core::hub::Global::new(
+        state.put(std::sync::Arc::new(wgpu_core::global::Global::new(
             "webgpu",
-            wgpu_core::hub::IdentityManagerFactory,
+            wgpu_core::identity::IdentityManagerFactory,
             wgpu_types::InstanceDescriptor {
                 backends,
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,

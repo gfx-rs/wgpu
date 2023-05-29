@@ -78,7 +78,7 @@ impl Test<'_> {
     fn run(
         self,
         dir: &Path,
-        global: &wgc::hub::Global<IdentityPassThroughFactory>,
+        global: &wgc::global::Global<IdentityPassThroughFactory>,
         adapter: wgc::id::AdapterId,
         test_num: u32,
     ) {
@@ -98,7 +98,7 @@ impl Test<'_> {
             panic!("{:?}", e);
         }
 
-        let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
+        let mut command_buffer_id_manager = wgc::identity::IdentityManager::default();
         println!("\t\t\tRunning...");
         for action in self.actions {
             wgc::gfx_select!(device => global.process(device, action, dir, &mut command_buffer_id_manager));
@@ -178,7 +178,7 @@ impl Corpus {
         let dir = path.parent().unwrap();
         let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
-        let global = wgc::hub::Global::new(
+        let global = wgc::global::Global::new(
             "test",
             IdentityPassThroughFactory,
             wgt::InstanceDescriptor {

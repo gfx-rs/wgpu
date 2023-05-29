@@ -2,8 +2,8 @@ use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     command::ColorAttachmentError,
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
-    hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
+    resource::Resource,
     validation, Label, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;

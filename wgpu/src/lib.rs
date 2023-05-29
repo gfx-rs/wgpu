@@ -773,13 +773,25 @@ static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 pub struct BufferBinding<'a> {
     /// The buffer to bind.
     pub buffer: &'a Buffer,
-    /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
-    /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
+
+    /// Base offset of the buffer, in bytes.
     ///
-    /// The offset has to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
-    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    /// If the [`has_dynamic_offset`] field of this buffer's layout entry is
+    /// `true`, the offset here will be added to the dynamic offset passed to
+    /// [`RenderPass::set_bind_group`] or [`ComputePass::set_bind_group`].
+    ///
+    /// If the buffer was created with [`BufferUsages::UNIFORM`], then this
+    /// offset must be a multiple of
+    /// [`Limits::min_uniform_buffer_offset_alignment`].
+    ///
+    /// If the buffer was created with [`BufferUsages::STORAGE`], then this
+    /// offset must be a multiple of
+    /// [`Limits::min_storage_buffer_offset_alignment`].
+    ///
+    /// [`has_dynamic_offset`]: BindingType::Buffer::has_dynamic_offset
     pub offset: BufferAddress,
-    /// Size of the binding, or `None` for using the rest of the buffer.
+
+    /// Size of the binding in bytes, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
 }
 static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
@@ -1393,7 +1405,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
                 crate::backend::Context::from_hal_instance::<A>(hal_instance)
@@ -1416,7 +1428,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe {
             self.context
                 .as_any()
@@ -1501,7 +1513,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
@@ -1731,7 +1743,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.context
             .as_any()
             .downcast_ref::<crate::backend::Context>()
@@ -1806,7 +1818,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
@@ -1860,7 +1872,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
@@ -2209,7 +2221,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor,
@@ -2314,7 +2326,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
     ) -> R {
@@ -2656,7 +2668,7 @@ impl Texture {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
@@ -4277,7 +4289,11 @@ impl Surface {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::Surface>) -> R,
+        R,
+    >(
         &mut self,
         hal_surface_callback: F,
     ) -> R {
@@ -4299,6 +4315,15 @@ impl Surface {
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
 pub struct Id<T>(core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+
+// SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
+// returned for different types , so `Id` can safely implement Send and Sync.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Send for Id<T> {}
+
+// SAFETY: See the implementation for `Send`.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Sync for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
 impl<T> Clone for Id<T> {

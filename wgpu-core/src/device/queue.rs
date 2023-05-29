@@ -8,8 +8,11 @@ use crate::{
     conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, StagingBuffer, TextureInner},
     track, FastHashSet, SubmissionIndex,
@@ -477,7 +480,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     fn queue_validate_write_buffer_impl<A: HalApi>(
         &self,
-        buffer: &super::resource::Buffer<A>,
+        buffer: &crate::resource::Buffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
         buffer_size: u64,
