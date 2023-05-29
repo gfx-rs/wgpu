@@ -3155,7 +3155,6 @@ dependencies = [
  "core-graphics-types",
  "d3d12",
  "env_logger",
- "foreign-types 0.3.2",
  "glow",
  "glutin",
  "gpu-alloc",
