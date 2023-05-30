@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.12.2 (2023-5-30)
+
+#### WGSL-IN, SPV-OUT
+
+- Support array bindings of uniform and storage buffers.
+
 ## v0.12.1 (2023-5-18)
 
 #### SPV-IN
