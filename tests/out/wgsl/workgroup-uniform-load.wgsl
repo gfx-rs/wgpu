@@ -1,6 +1,6 @@
 const SIZE: u32 = 128u;
 
-var<workgroup> arr_i32_: array<i32,SIZE>;
+var<workgroup> arr_i32_: array<i32, 128>;
 
 @compute @workgroup_size(4, 1, 1) 
 fn test_workgroupUniformLoad(@builtin(workgroup_id) workgroup_id: vec3<u32>) {

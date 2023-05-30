@@ -6,7 +6,7 @@ using metal::uint;
 
 constexpr constant unsigned SIZE = 128u;
 struct type_2 {
-    int inner[SIZE];
+    int inner[128];
 };
 
 struct test_workgroupUniformLoadInput {
