@@ -4,9 +4,23 @@ HLSL Reserved Words
 - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-appendix-reserved-words>
 */
 
+// When compiling with FXC without strict mode, these keywords are actually case insensitive.
+// If you compile with strict mode and specify a different casing like "Pass" instead in an identifier, FXC will give this error:
+// "error X3086: alternate cases for 'pass' are deprecated in strict mode"
+// This behavior is not documented anywhere, but as far as I can tell this is the full list.
+pub const RESERVED_CASE_INSENSITIVE: &[&str] = &[
+    "asm",
+    "decl",
+    "pass",
+    "technique",
+    "Texture1D",
+    "Texture2D",
+    "Texture3D",
+    "TextureCube",
+];
+
 pub const RESERVED: &[&str] = &[
     "AppendStructuredBuffer",
-    "asm",
     "asm_fragment",
     "BlendState",
     "bool",
@@ -68,7 +82,6 @@ pub const RESERVED: &[&str] = &[
     "out",
     "OutputPatch",
     "packoffset",
-    "pass",
     "pixelfragment",
     "PixelShader",
     "point",
@@ -101,18 +114,13 @@ pub const RESERVED: &[&str] = &[
     "switch",
     "StructuredBuffer",
     "tbuffer",
-    "technique",
     "technique10",
     "technique11",
     "texture",
-    "Texture1D",
     "Texture1DArray",
-    "Texture2D",
     "Texture2DArray",
     "Texture2DMS",
     "Texture2DMSArray",
-    "Texture3D",
-    "TextureCube",
     "TextureCubeArray",
     "true",
     "typedef",

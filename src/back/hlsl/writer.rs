@@ -89,8 +89,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     fn reset(&mut self, module: &Module) {
         self.names.clear();
-        self.namer
-            .reset(module, super::keywords::RESERVED, &[], &mut self.names);
+        self.namer.reset(
+            module,
+            super::keywords::RESERVED,
+            super::keywords::RESERVED_CASE_INSENSITIVE,
+            &[],
+            &mut self.names,
+        );
         self.entry_point_io.clear();
         self.named_expressions.clear();
         self.wrapped.clear();

@@ -484,7 +484,13 @@ impl<'a, W: Write> Writer<'a, W> {
         // Generate a map with names required to write the module
         let mut names = crate::FastHashMap::default();
         let mut namer = proc::Namer::default();
-        namer.reset(module, keywords::RESERVED_KEYWORDS, &["gl_"], &mut names);
+        namer.reset(
+            module,
+            keywords::RESERVED_KEYWORDS,
+            &[],
+            &["gl_"],
+            &mut names,
+        );
 
         // Build the instance
         let mut this = Self {

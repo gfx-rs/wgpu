@@ -584,6 +584,7 @@ fn convert_wgsl() {
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
         ("invariant", Targets::GLSL),
         ("ray-query", Targets::SPIRV | Targets::METAL),
+        ("hlsl-keyword", Targets::HLSL),
     ];
 
     for &(name, targets) in inputs.iter() {

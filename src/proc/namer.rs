@@ -1,5 +1,6 @@
 use crate::{arena::Handle, FastHashMap, FastHashSet};
 use std::borrow::Cow;
+use std::hash::{Hash, Hasher};
 
 pub type EntryPointIndex = u16;
 const SEPARATOR: char = '_';
@@ -25,6 +26,7 @@ pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
     keywords: FastHashSet<String>,
+    keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
     reserved_prefixes: Vec<String>,
 }
 
@@ -102,7 +104,12 @@ impl Namer {
             }
             None => {
                 let mut suffixed = base.to_string();
-                if base.ends_with(char::is_numeric) || self.keywords.contains(base.as_ref()) {
+                if base.ends_with(char::is_numeric)
+                    || self.keywords.contains(base.as_ref())
+                    || self
+                        .keywords_case_insensitive
+                        .contains(&AsciiUniCase(base.as_ref()))
+                {
                     suffixed.push(SEPARATOR);
                 }
                 debug_assert!(!self.keywords.contains(&suffixed));
@@ -137,6 +144,7 @@ impl Namer {
         &mut self,
         module: &crate::Module,
         reserved_keywords: &[&str],
+        reserved_keywords_case_insensitive: &[&'static str],
         reserved_prefixes: &[&str],
         output: &mut FastHashMap<NameKey, String>,
     ) {
@@ -148,6 +156,17 @@ impl Namer {
         self.keywords.clear();
         self.keywords
             .extend(reserved_keywords.iter().map(|string| (string.to_string())));
+
+        debug_assert!(reserved_keywords_case_insensitive
+            .iter()
+            .all(|s| s.is_ascii()));
+        self.keywords_case_insensitive.clear();
+        self.keywords_case_insensitive.extend(
+            reserved_keywords_case_insensitive
+                .iter()
+                .map(|string| (AsciiUniCase(*string))),
+        );
+
         let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {
@@ -248,6 +267,33 @@ impl Namer {
             };
             let name = self.call(label);
             output.insert(NameKey::Constant(handle), name);
+        }
+    }
+}
+
+/// A string wrapper type with an ascii case insensitive Eq and Hash impl
+struct AsciiUniCase<S: AsRef<str> + ?Sized>(S);
+
+impl<S: AsRef<str>> PartialEq<Self> for AsciiUniCase<S> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ref().eq_ignore_ascii_case(other.0.as_ref())
+    }
+}
+
+impl<S: AsRef<str>> Eq for AsciiUniCase<S> {}
+
+impl<S: AsRef<str>> Hash for AsciiUniCase<S> {
+    #[inline]
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        for byte in self
+            .0
+            .as_ref()
+            .as_bytes()
+            .iter()
+            .map(|b| b.to_ascii_lowercase())
+        {
+            hasher.write_u8(byte);
         }
     }
 }
