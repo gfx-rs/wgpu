@@ -518,13 +518,27 @@ impl<A: HalApi> BufferTracker<A> {
         }
     }
 
-    /// Removes the given resource from the tracker iff we have the last reference to the
-    /// resource and the epoch matches.
+    /// Removes the buffer `id` from this tracker if it is otherwise unused.
     ///
-    /// Returns true if the resource was removed.
+    /// A buffer is 'otherwise unused' when the only references to it are:
     ///
-    /// If the ID is higher than the length of internal vectors,
-    /// false will be returned.
+    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_suspected`, has just
+    ///    drained from `LifetimeTracker::suspected_resources`,
+    ///
+    /// 2) its `Arc` in [`self.metadata`] (owned by [`Device::trackers`]), and
+    ///
+    /// 3) its `Arc` in the [`Hub::buffers`] registry.
+    ///
+    /// If the buffer is indeed unused, this function removes 2), and
+    /// `triage_suspected` will remove 3), leaving 1) as the sole
+    /// remaining reference.
+    ///
+    /// Return `true` if this tracker contained the buffer `id`. This
+    /// implies that we removed it.
+    ///
+    /// [`Device::trackers`]: crate::device::Device
+    /// [`self.metadata`]: BufferTracker::metadata
+    /// [`Hub::buffers`]: crate::hub::Hub::buffers
     pub fn remove_abandoned(&mut self, id: Valid<BufferId>) -> bool {
         let index = id.0.unzip().0 as usize;
 
@@ -537,7 +551,6 @@ impl<A: HalApi> BufferTracker<A> {
         unsafe {
             if self.metadata.contains_unchecked(index) {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //3 ref count: Registry, Device Tracker and suspected resource itself
                 if existing_ref_count <= 3 {
                     self.metadata.remove(index);
                     return true;

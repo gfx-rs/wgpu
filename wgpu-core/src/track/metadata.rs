@@ -114,7 +114,7 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
         }
     }
 
-    /// Get the [`RefCount`] of the resource with the given index.
+    /// Get the reference count of the resource with the given index.
     ///
     /// # Safety
     ///

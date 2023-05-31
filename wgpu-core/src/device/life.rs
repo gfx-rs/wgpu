@@ -242,12 +242,12 @@ pub enum WaitIdleError {
 /// A buffer cannot be mapped until all active queue submissions that use it
 /// have completed. To that end:
 ///
-/// -   Each buffer's `LifeGuard::submission_index` records the index of the
+/// -   Each buffer's `ResourceInfo::submission_index` records the index of the
 ///     most recent queue submission that uses that buffer.
 ///
-/// -   Calling `map_async` adds the buffer to `self.mapped`, and changes
-///     `Buffer::map_state` to prevent it from being used in any new
-///     submissions.
+/// -   Calling `Global::buffer_map_async` adds the buffer to
+///     `self.mapped`, and changes `Buffer::map_state` to prevent it
+///     from being used in any new submissions.
 ///
 /// -   When the device is polled, the following `LifetimeTracker` methods decide
 ///     what should happen next:
@@ -270,8 +270,8 @@ pub enum WaitIdleError {
 ///
 ///     4)  `cleanup` frees everything in `free_resources`.
 ///
-/// Only `self.mapped` holds a `RefCount` for the buffer; it is dropped by
-/// `triage_mapped`.
+/// Only calling `Global::buffer_map_async` clones a new `Arc` for the
+/// buffer. This new `Arc` is only dropped by `handle_mapping`.
 pub(crate) struct LifetimeTracker<A: HalApi> {
     /// Resources that the user has requested be mapped, but which are used by
     /// queue submissions still in flight.
