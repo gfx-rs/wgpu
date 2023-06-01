@@ -47,9 +47,7 @@
         (
             name: Some("v_indices"),
             space: Storage(
-                access: (
-                    bits: 3,
-                ),
+                access: ("LOAD | STORE"),
             ),
             binding: Some((
                 group: 0,

@@ -9,6 +9,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct TypeFlags: u8 {
         /// Can be used for data variables.
         ///

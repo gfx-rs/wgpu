@@ -1,148 +1,62 @@
 (
     type_flags: [
-        (
-            bits: 223,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 19,
-        ),
-        (
-            bits: 19,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 21,
-        ),
-        (
-            bits: 17,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 70,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 6,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 223,
-        ),
-        (
-            bits: 70,
-        ),
-        (
-            bits: 215,
-        ),
-        (
-            bits: 70,
-        ),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | HOST_SHAREABLE"),
+        ("DATA | SIZED | HOST_SHAREABLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | COPY | HOST_SHAREABLE"),
+        ("DATA | HOST_SHAREABLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | ARGUMENT"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | ARGUMENT"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | ARGUMENT"),
     ],
     functions: [
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: None,
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                (""),
+                ("READ"),
+                (""),
+                (""),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -154,9 +68,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 15,
                     assignable_global: None,
@@ -168,9 +80,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -179,9 +89,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -193,9 +101,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -204,9 +110,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -218,9 +122,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -232,9 +134,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -243,9 +143,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -257,9 +155,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -271,9 +167,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -285,9 +179,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -301,9 +193,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -316,9 +206,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -330,9 +218,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -344,9 +230,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -355,9 +239,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -371,9 +253,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -386,9 +266,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -400,9 +278,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -414,9 +290,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -428,9 +302,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -444,9 +316,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -458,9 +328,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -474,9 +342,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -488,9 +354,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -502,9 +366,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -516,9 +378,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -530,9 +390,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -546,9 +404,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -557,9 +413,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -573,9 +427,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -587,9 +439,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -601,9 +451,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -615,9 +463,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -626,9 +472,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -642,9 +486,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -656,9 +498,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -672,9 +512,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -686,9 +524,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -700,9 +536,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -714,9 +548,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -725,9 +557,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -741,9 +571,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -752,9 +580,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(3),
@@ -768,9 +594,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -782,9 +606,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -796,9 +618,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -811,9 +631,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -825,9 +643,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -840,9 +656,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -854,9 +668,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -869,9 +681,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -880,9 +690,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -891,9 +699,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 8,
                     assignable_global: None,
@@ -905,9 +711,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -916,9 +720,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -930,9 +732,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -941,9 +741,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -955,9 +753,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -969,9 +765,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -984,9 +778,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -998,9 +790,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1013,9 +803,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1027,9 +815,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1042,9 +828,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1053,9 +837,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1067,9 +849,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1081,9 +861,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1097,9 +875,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1111,9 +887,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1126,9 +900,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1140,9 +912,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1151,9 +921,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1167,9 +935,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1181,9 +947,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1196,9 +960,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1210,9 +972,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1224,9 +984,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1240,9 +998,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1254,9 +1010,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1270,9 +1024,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1284,9 +1036,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1298,9 +1048,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1312,9 +1060,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1328,9 +1074,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1339,9 +1083,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1355,9 +1097,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1369,9 +1109,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1383,9 +1121,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1394,9 +1130,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1410,9 +1144,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1424,9 +1156,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1440,9 +1170,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1454,9 +1182,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1468,9 +1194,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1479,9 +1203,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1495,9 +1217,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1506,9 +1226,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(55),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1522,9 +1240,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1537,47 +1253,27 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: None,
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                (""),
+                (""),
+                (""),
+                ("READ"),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1589,9 +1285,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 15,
                     assignable_global: None,
@@ -1603,9 +1297,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1614,9 +1306,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1628,9 +1318,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1639,9 +1327,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1653,9 +1339,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1667,9 +1351,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1678,9 +1360,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1692,9 +1372,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1706,9 +1384,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1720,9 +1396,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1734,9 +1408,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1745,9 +1417,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1759,9 +1429,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1773,9 +1441,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1787,9 +1453,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1801,9 +1465,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1815,9 +1477,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1831,9 +1491,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1846,9 +1504,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1860,9 +1516,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1874,9 +1528,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1888,9 +1540,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1902,9 +1552,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -1913,9 +1561,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1929,9 +1575,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1944,9 +1588,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1958,9 +1600,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -1972,9 +1612,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -1986,9 +1624,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2000,9 +1636,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2014,9 +1648,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2030,9 +1662,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2044,9 +1674,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2060,9 +1688,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2074,9 +1700,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2088,9 +1712,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2102,9 +1724,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2116,9 +1736,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2130,9 +1748,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2144,9 +1760,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2160,9 +1774,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2171,9 +1783,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2187,9 +1797,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2201,9 +1809,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2215,9 +1821,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2229,9 +1833,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2243,9 +1845,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2257,9 +1857,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2268,9 +1866,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2284,9 +1880,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2298,9 +1892,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2314,9 +1906,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2328,9 +1918,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2342,9 +1930,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2356,9 +1942,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2370,9 +1954,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2384,9 +1966,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2395,9 +1975,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2411,9 +1989,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2422,9 +1998,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(5),
@@ -2438,9 +2012,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2452,9 +2024,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2463,9 +2033,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2474,9 +2042,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 9,
                     assignable_global: None,
@@ -2488,9 +2054,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2499,9 +2063,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2513,9 +2075,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2524,9 +2084,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2538,9 +2096,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2549,9 +2105,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2563,9 +2117,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2577,9 +2129,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2591,9 +2141,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2605,9 +2153,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2620,9 +2166,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2634,9 +2178,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2649,9 +2191,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2663,9 +2203,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2678,9 +2216,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2692,9 +2228,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2707,9 +2241,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2718,9 +2250,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2732,9 +2262,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2746,9 +2274,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2760,9 +2286,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2774,9 +2298,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2790,9 +2312,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2804,9 +2324,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2819,9 +2337,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2833,9 +2349,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2847,9 +2361,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2861,9 +2373,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2872,9 +2382,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2888,9 +2396,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2902,9 +2408,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2917,9 +2421,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2931,9 +2433,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2945,9 +2445,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2959,9 +2457,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -2973,9 +2469,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -2989,9 +2483,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3003,9 +2495,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3019,9 +2509,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3033,9 +2521,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3047,9 +2533,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3061,9 +2545,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3075,9 +2557,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3089,9 +2569,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3105,9 +2583,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3116,9 +2592,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3132,9 +2606,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3146,9 +2618,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3160,9 +2630,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3174,9 +2642,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3188,9 +2654,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3199,9 +2663,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3215,9 +2677,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3229,9 +2689,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3245,9 +2703,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3259,9 +2715,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3273,9 +2727,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3287,9 +2739,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3301,9 +2751,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3312,9 +2760,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3328,9 +2774,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(2),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3339,9 +2783,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(66),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3355,9 +2797,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3370,47 +2810,27 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: Some(1),
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3419,9 +2839,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3431,47 +2849,27 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: Some(1),
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3480,9 +2878,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3494,9 +2890,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3505,9 +2899,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3519,9 +2911,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3531,47 +2921,27 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: None,
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3580,9 +2950,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3595,47 +2963,27 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: None,
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3644,9 +2992,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3658,9 +3004,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3673,9 +3017,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3687,9 +3029,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3702,9 +3042,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3716,47 +3054,27 @@
     ],
     entry_points: [
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: Some(1),
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 5,
-                ),
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 1,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                ("READ | QUERY"),
+                ("READ"),
+                ("READ"),
+                ("READ"),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 2,
                     assignable_global: None,
@@ -3765,9 +3083,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3779,9 +3095,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 4,
                     assignable_global: None,
@@ -3793,9 +3107,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(3),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3804,9 +3116,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3818,45 +3128,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -3865,45 +3165,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(9),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(9),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 12,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(9),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3912,9 +3202,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -3926,45 +3214,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(13),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(13),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(13),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
@@ -3973,18 +3251,14 @@
                         kind: Float,
                         width: 4,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(13),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
@@ -3993,18 +3267,14 @@
                         kind: Float,
                         width: 4,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(13),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4016,81 +3286,63 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(20),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(20),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(20),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4102,9 +3354,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4116,9 +3366,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(20),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4130,45 +3378,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 5,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 3,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4177,27 +3415,21 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(28),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 17,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(28),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -4206,45 +3438,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(30),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(30),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -4256,45 +3478,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(30),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 5,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(30),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 3,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -4303,9 +3515,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(13),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4317,9 +3527,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4331,9 +3539,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4345,9 +3551,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4359,9 +3563,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4370,9 +3572,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(41),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 3,
                     assignable_global: None,
@@ -4384,9 +3584,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4398,9 +3596,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4409,9 +3605,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(41),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4423,9 +3617,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4437,9 +3629,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(41),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4451,9 +3641,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(41),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4462,9 +3650,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4473,9 +3659,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -4484,9 +3668,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(41),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4499,9 +3681,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(41),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4514,9 +3694,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4529,9 +3707,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4543,9 +3719,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4555,83 +3729,55 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: None,
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 2,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 2,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
+                (""),
+                ("WRITE"),
+                (""),
+                ("WRITE"),
+                (""),
+                (""),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -4643,9 +3789,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
@@ -4654,18 +3798,14 @@
                         kind: Float,
                         width: 4,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(1),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
@@ -4674,18 +3814,14 @@
                         kind: Float,
                         width: 4,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4697,45 +3833,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(7),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(7),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 6,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4747,9 +3873,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4762,9 +3886,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4776,9 +3898,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4791,9 +3911,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4805,9 +3923,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4820,9 +3936,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4834,9 +3948,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4849,9 +3961,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4860,45 +3970,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(18),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 12,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4910,9 +4010,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4925,9 +4023,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4939,9 +4035,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4954,9 +4048,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -4965,45 +4057,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(25),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 14,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(25),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 13,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 0,
                     assignable_global: None,
@@ -5015,45 +4097,35 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(25),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 5,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: Some(25),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 3,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5065,27 +4137,21 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(31),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(4),
                     ty: Value(Pointer(
                         base: 17,
                         space: Storage(
-                            access: (
-                                bits: 3,
-                            ),
+                            access: ("LOAD | STORE"),
                         ),
                     )),
                 ),
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5094,9 +4160,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5108,9 +4172,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5124,47 +4186,27 @@
             sampling: [],
         ),
         (
-            flags: (
-                bits: 63,
-            ),
-            available_stages: (
-                bits: 7,
-            ),
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
             uniformity: (
                 non_uniform_result: None,
-                requirements: (
-                    bits: 0,
-                ),
+                requirements: (""),
             ),
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 0,
-                ),
-                (
-                    bits: 1,
-                ),
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+                ("READ"),
             ],
             expressions: [
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5176,9 +4218,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5191,9 +4231,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5205,9 +4243,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5220,9 +4256,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: None,
@@ -5231,9 +4265,7 @@
                 (
                     uniformity: (
                         non_uniform_result: Some(6),
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 2,
                     assignable_global: None,
@@ -5245,9 +4277,7 @@
                 (
                     uniformity: (
                         non_uniform_result: None,
-                        requirements: (
-                            bits: 0,
-                        ),
+                        requirements: (""),
                     ),
                     ref_count: 1,
                     assignable_global: Some(6),

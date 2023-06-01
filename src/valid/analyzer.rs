@@ -20,6 +20,7 @@ bitflags::bitflags! {
     /// Kinds of expressions that require uniform control flow.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct UniformityRequirements: u8 {
         const WORK_GROUP_BARRIER = 0x1;
         const DERIVATIVE = 0x2;
@@ -59,6 +60,7 @@ impl Uniformity {
 }
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq)]
     struct ExitFlags: u8 {
         /// Control flow may return from the function, which makes all the
         /// subsequent statements within the current function (only!)
@@ -117,6 +119,7 @@ bitflags::bitflags! {
     /// Indicates how a global variable is used.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct GlobalUse: u8 {
         /// Data will be read from the variable.
         const READ = 0x1;

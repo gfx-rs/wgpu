@@ -216,6 +216,7 @@ bitflags::bitflags! {
     /// Configuration flags for the [`Writer`].
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct WriterFlags: u32 {
         /// Flip output Y and extend Z from (0, 1) to (-1, 1).
         const ADJUST_COORDINATE_SPACE = 0x1;

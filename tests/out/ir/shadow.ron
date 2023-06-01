@@ -186,9 +186,7 @@
             inner: Pointer(
                 base: 20,
                 space: Storage(
-                    access: (
-                        bits: 0,
-                    ),
+                    access: (""),
                 ),
             ),
         ),
@@ -197,9 +195,7 @@
             inner: Pointer(
                 base: 19,
                 space: Storage(
-                    access: (
-                        bits: 3,
-                    ),
+                    access: ("LOAD | STORE"),
                 ),
             ),
         ),
@@ -208,9 +204,7 @@
             inner: Pointer(
                 base: 18,
                 space: Storage(
-                    access: (
-                        bits: 3,
-                    ),
+                    access: ("LOAD | STORE"),
                 ),
             ),
         ),
@@ -219,9 +213,7 @@
             inner: Pointer(
                 base: 17,
                 space: Storage(
-                    access: (
-                        bits: 3,
-                    ),
+                    access: ("LOAD | STORE"),
                 ),
             ),
         ),
@@ -244,9 +236,7 @@
             inner: Pointer(
                 base: 4,
                 space: Storage(
-                    access: (
-                        bits: 3,
-                    ),
+                    access: ("LOAD | STORE"),
                 ),
             ),
         ),
@@ -255,9 +245,7 @@
             inner: Pointer(
                 base: 1,
                 space: Storage(
-                    access: (
-                        bits: 3,
-                    ),
+                    access: ("LOAD | STORE"),
                 ),
             ),
         ),
@@ -631,9 +619,7 @@
         (
             name: Some("s_lights"),
             space: Storage(
-                access: (
-                    bits: 1,
-                ),
+                access: ("LOAD"),
             ),
             binding: Some((
                 group: 0,

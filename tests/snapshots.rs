@@ -11,6 +11,7 @@ const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy)]
     struct Targets: u32 {
         const IR = 0x1;
         const ANALYSIS = 0x2;

@@ -28,9 +28,9 @@ dot-out = []
 glsl-in = ["pp-rs"]
 glsl-out = []
 msl-out = []
-serialize = ["serde", "indexmap/serde-1"]
-deserialize = ["serde", "indexmap/serde-1"]
-arbitrary = ["dep:arbitrary", "indexmap/arbitrary"]
+serialize = ["serde", "bitflags/serde", "indexmap/serde-1"]
+deserialize = ["serde", "bitflags/serde", "indexmap/serde-1"]
+arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
 wgsl-in = ["codespan-reporting", "hexf-parse", "termcolor", "unicode-xid"]
@@ -45,7 +45,7 @@ harness = false
 
 [dependencies]
 arbitrary = { version = "1.0.2", features = ["derive"], optional = true }
-bitflags = "1.0.5"
+bitflags = "2"
 bit-set = "0.5"
 termcolor = { version = "1.0.4", optional = true }
 # remove termcolor dep when updating to the next version of codespan-reporting

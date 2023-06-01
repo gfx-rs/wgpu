@@ -280,9 +280,7 @@
             inner: Pointer(
                 base: 3,
                 space: Storage(
-                    access: (
-                        bits: 3,
-                    ),
+                    access: ("LOAD | STORE"),
                 ),
             ),
         ),
@@ -422,9 +420,7 @@
         (
             name: Some("bar"),
             space: Storage(
-                access: (
-                    bits: 3,
-                ),
+                access: ("LOAD | STORE"),
             ),
             binding: Some((
                 group: 0,
@@ -446,9 +442,7 @@
         (
             name: Some("qux"),
             space: Storage(
-                access: (
-                    bits: 3,
-                ),
+                access: ("LOAD | STORE"),
             ),
             binding: Some((
                 group: 0,

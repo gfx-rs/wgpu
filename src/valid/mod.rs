@@ -53,6 +53,7 @@ bitflags::bitflags! {
     /// by default.)
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct ValidationFlags: u8 {
         /// Expressions.
         #[cfg(feature = "validate")]
@@ -86,6 +87,7 @@ bitflags::bitflags! {
     #[must_use]
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Capabilities: u16 {
         /// Support for [`AddressSpace:PushConstant`].
         const PUSH_CONSTANT = 0x1;
@@ -126,6 +128,7 @@ bitflags::bitflags! {
     /// Validation flags.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct ShaderStages: u8 {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;

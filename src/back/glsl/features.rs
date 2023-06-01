@@ -7,6 +7,7 @@ use std::fmt::Write;
 
 bitflags::bitflags! {
     /// Structure used to encode additions to GLSL that aren't supported by all versions.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Features: u32 {
         /// Buffer address space support.
         const BUFFER_STORAGE = 1;

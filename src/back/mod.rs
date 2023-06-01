@@ -228,7 +228,7 @@ bitflags::bitflags! {
     /// we might as well make one back end's life easier.)
     ///
     /// [`RayDesc`]: crate::Module::generate_ray_desc_type
-    #[derive(Default)]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct RayFlag: u32 {
         const OPAQUE = 0x01;
         const NO_OPAQUE = 0x02;

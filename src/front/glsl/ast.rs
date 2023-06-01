@@ -67,6 +67,7 @@ bitflags::bitflags! {
     /// builtins overloads can't be generated unless explicitly used, since they might cause
     /// unneeded capabilities to be requested
     #[derive(Default)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct BuiltinVariations: u32 {
         /// Request the standard overloads
         const STANDARD = 1 << 0;

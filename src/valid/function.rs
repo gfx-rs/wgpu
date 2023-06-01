@@ -161,6 +161,7 @@ pub enum FunctionError {
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[derive(Clone, Copy)]
     struct ControlFlowAbility: u8 {
         /// The control can return out of this block.
         const RETURN = 0x1;

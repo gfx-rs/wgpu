@@ -8,7 +8,7 @@
 	),
 	glsl: (
 		version: Desktop(430),
-		writer_flags: (bits: 0),
+		writer_flags: (""),
 		binding_map: { },
 		zero_initialize_workgroup_memory: true,
 	),

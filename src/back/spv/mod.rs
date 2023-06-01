@@ -176,6 +176,7 @@ struct LocalImageType {
 
 bitflags::bitflags! {
     /// Flags corresponding to the boolean(-ish) parameters to OpTypeImage.
+    #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub struct ImageTypeFlags: u8 {
         const DEPTH = 0x1;
         const ARRAYED = 0x2;
@@ -624,6 +625,7 @@ pub struct Writer {
 }
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct WriterFlags: u32 {
         /// Include debug labels for everything.
         const DEBUG = 0x1;
