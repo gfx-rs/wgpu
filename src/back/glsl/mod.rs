@@ -489,6 +489,7 @@ impl<'a, W: Write> Writer<'a, W> {
             module,
             keywords::RESERVED_KEYWORDS,
             &[],
+            &[],
             &["gl_"],
             &mut names,
         );

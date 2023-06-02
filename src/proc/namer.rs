@@ -144,6 +144,7 @@ impl Namer {
         &mut self,
         module: &crate::Module,
         reserved_keywords: &[&'static str],
+        extra_reserved_keywords: &[&'static str],
         reserved_keywords_case_insensitive: &[&'static str],
         reserved_prefixes: &[&'static str],
         output: &mut FastHashMap<NameKey, String>,
@@ -154,6 +155,7 @@ impl Namer {
         self.unique.clear();
         self.keywords.clear();
         self.keywords.extend(reserved_keywords.iter());
+        self.keywords.extend(extra_reserved_keywords.iter());
 
         debug_assert!(reserved_keywords_case_insensitive
             .iter()

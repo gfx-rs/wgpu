@@ -88,6 +88,7 @@ impl<W: Write> Writer<W> {
             crate::keywords::wgsl::RESERVED,
             // an identifier must not start with two underscore
             &[],
+            &[],
             &["__"],
             &mut self.names,
         );

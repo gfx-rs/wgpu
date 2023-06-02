@@ -3032,8 +3032,14 @@ impl<W: Write> Writer<W> {
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
         self.names.clear();
-        self.namer
-            .reset(module, super::keywords::RESERVED, &[], &[], &mut self.names);
+        self.namer.reset(
+            module,
+            super::keywords::RESERVED,
+            &[],
+            &[],
+            &[],
+            &mut self.names,
+        );
         self.struct_member_pads.clear();
 
         writeln!(
