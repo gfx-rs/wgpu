@@ -25,9 +25,9 @@ pub enum NameKey {
 pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
-    keywords: FastHashSet<String>,
+    keywords: FastHashSet<&'static str>,
     keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
-    reserved_prefixes: Vec<String>,
+    reserved_prefixes: Vec<&'static str>,
 }
 
 impl Namer {
@@ -112,7 +112,7 @@ impl Namer {
                 {
                     suffixed.push(SEPARATOR);
                 }
-                debug_assert!(!self.keywords.contains(&suffixed));
+                debug_assert!(!self.keywords.contains::<str>(&suffixed));
                 // `self.unique` wants to own its keys. This allocates only if we haven't
                 // already done so earlier.
                 self.unique.insert(base.into_owned(), 0);
@@ -143,19 +143,17 @@ impl Namer {
     pub fn reset(
         &mut self,
         module: &crate::Module,
-        reserved_keywords: &[&str],
+        reserved_keywords: &[&'static str],
         reserved_keywords_case_insensitive: &[&'static str],
-        reserved_prefixes: &[&str],
+        reserved_prefixes: &[&'static str],
         output: &mut FastHashMap<NameKey, String>,
     ) {
         self.reserved_prefixes.clear();
-        self.reserved_prefixes
-            .extend(reserved_prefixes.iter().map(|string| string.to_string()));
+        self.reserved_prefixes.extend(reserved_prefixes.iter());
 
         self.unique.clear();
         self.keywords.clear();
-        self.keywords
-            .extend(reserved_keywords.iter().map(|string| (string.to_string())));
+        self.keywords.extend(reserved_keywords.iter());
 
         debug_assert!(reserved_keywords_case_insensitive
             .iter()
