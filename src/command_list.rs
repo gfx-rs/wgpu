@@ -20,6 +20,7 @@ pub enum CmdListType {
 }
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct ClearFlags: u32 {
         const DEPTH = d3d12::D3D12_CLEAR_FLAG_DEPTH;
         const STENCIL = d3d12::D3D12_CLEAR_FLAG_STENCIL;

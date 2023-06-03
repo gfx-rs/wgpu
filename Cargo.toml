@@ -16,7 +16,7 @@ edition = "2018"
 implicit-link = []
 
 [dependencies]
-bitflags = "1"
+bitflags = "2"
 libloading = { version = "0.7", optional = true }
 
 [dependencies.winapi]

@@ -30,6 +30,7 @@ pub enum MemoryPool {
 }
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct HeapFlags: u32 {
         const NONE = d3d12::D3D12_HEAP_FLAG_NONE;
         const SHARED = d3d12::D3D12_HEAP_FLAG_SHARED;

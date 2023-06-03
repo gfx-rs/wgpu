@@ -5,12 +5,14 @@ use std::{ffi, ops::Deref, ptr};
 use winapi::um::{d3d12, d3dcompiler};
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct PipelineStateFlags: u32 {
         const TOOL_DEBUG = d3d12::D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
     }
 }
 
 bitflags! {
+    #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct ShaderCompileFlags: u32 {
         const DEBUG = d3dcompiler::D3DCOMPILE_DEBUG;
         const SKIP_VALIDATION = d3dcompiler::D3DCOMPILE_SKIP_VALIDATION;
