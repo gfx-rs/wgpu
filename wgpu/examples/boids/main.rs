@@ -335,6 +335,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn boids() {
     framework::test::<Example>(framework::FrameworkRefTest {
+        // Generated on 1080ti on Vk/Windows
         image_path: "/examples/boids/screenshot.png",
         width: 1024,
         height: 768,
@@ -342,7 +343,6 @@ fn boids() {
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults()),
-        tolerance: 0,
-        max_outliers: 2500, // Currently bounded by WARP
+        comparisons: &[framework::ComparisonType::Mean(0.005)],
     });
 }

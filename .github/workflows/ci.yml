@@ -112,10 +112,23 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
+      - name: install aarch64-linux-gnu g++
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          set -e
+
+          sudo apt-get update -y -qq
+
+          sudo apt-get install g++-aarch64-linux-gnu
+
       - name: add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          # clang++ will be detected correctly by CC from path
+          echo "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+          # the android sdk doesn't use the conventional name for ar, so explicitly set it.
+          echo "AR_aarch64_linux_android=llvm-ar" >> "$GITHUB_ENV"
 
       - name: check web
         if: matrix.kind == 'web'

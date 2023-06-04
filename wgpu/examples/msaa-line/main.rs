@@ -324,10 +324,15 @@ fn msaa_line() {
         image_path: "/examples/msaa-line/screenshot.png",
         width: 1024,
         height: 768,
-        optional_features: wgpu::Features::default()
-            | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-        base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 64,
-        max_outliers: 1 << 16, // MSAA is comically different between vendors, 32k is a decent limit
+        optional_features: wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+        base_test_parameters: framework::test_common::TestParameters::default()
+            // AMD seems to render nothing on DX12
+            .specific_failure(Some(wgpu::Backends::DX12), Some(0x1002), None, false),
+        // There's a lot of natural variance so we check the weighted median too to differentiate
+        // real failures from variance.
+        comparisons: &[
+            framework::ComparisonType::Mean(0.065),
+            framework::ComparisonType::Percentile(0.5, 0.29),
+        ],
     });
 }

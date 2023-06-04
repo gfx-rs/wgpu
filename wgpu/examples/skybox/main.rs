@@ -482,8 +482,7 @@ fn skybox() {
             Some("ANGLE"),
             false,
         ),
-        tolerance: 3,
-        max_outliers: 207, // bounded by swiftshader
+        comparisons: &[framework::ComparisonType::Mean(0.015)],
     });
 }
 
@@ -496,8 +495,7 @@ fn skybox_bc1() {
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        tolerance: 5,
-        max_outliers: 191, // Bounded by swiftshader
+        comparisons: &[framework::ComparisonType::Mean(0.02)],
     });
 }
 
@@ -510,8 +508,7 @@ fn skybox_etc2() {
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        tolerance: 5,
-        max_outliers: 248, // Bounded by swiftshader
+        comparisons: &[framework::ComparisonType::Mean(0.015)],
     });
 }
 
@@ -524,7 +521,6 @@ fn skybox_astc() {
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
         base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        tolerance: 5,
-        max_outliers: 300, // Bounded by rp4 on vk
+        comparisons: &[framework::ComparisonType::Mean(0.016)],
     });
 }

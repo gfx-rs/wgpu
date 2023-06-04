@@ -369,7 +369,10 @@ fn bunnymark() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 10,
-        max_outliers: 53, // Bounded by WARP
+        // We're looking for very small differences, so look in the high percentiles.
+        comparisons: &[
+            framework::ComparisonType::Mean(0.05),
+            framework::ComparisonType::Percentile(0.99, 0.05),
+        ],
     });
 }

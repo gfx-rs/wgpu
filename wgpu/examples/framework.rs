@@ -495,14 +495,17 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
 }
 
 #[cfg(test)]
+pub use test_common::image::ComparisonType;
+
+#[cfg(test)]
 pub struct FrameworkRefTest {
     pub image_path: &'static str,
     pub width: u32,
     pub height: u32,
     pub optional_features: wgpu::Features,
     pub base_test_parameters: test_common::TestParameters,
-    pub tolerance: u8,
-    pub max_outliers: usize,
+    /// Comparisons against FLIP statistics that determine if the test passes or fails.
+    pub comparisons: &'static [ComparisonType],
 }
 
 #[cfg(test)]
@@ -619,8 +622,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
                 params.width,
                 params.height,
                 &bytes,
-                params.tolerance,
-                params.max_outliers,
+                params.comparisons,
             );
         },
     );
