@@ -17,7 +17,8 @@ implicit-link = []
 
 [dependencies]
 bitflags = "2"
-libloading = { version = "0.7", optional = true }
+# libloading 0.8 switches from `winapi` to `windows-sys`; permit either
+libloading = { version = ">=0.7,<0.9", optional = true }
 
 [dependencies.winapi]
 version = "0.3"
