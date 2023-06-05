@@ -732,8 +732,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
-        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
-            cmd_buf_data.raw_mut();
+        
+        let encoder = &mut cmd_buf_data.encoder;
+        let tracker = &mut cmd_buf_data.trackers;
+        let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
+        let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
+
         let texture_guard = hub.textures.read();
 
         let device = &cmd_buf.device;
@@ -885,8 +889,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
-        let (encoder, _, tracker, buffer_memory_init_actions, texture_memory_actions) =
-            cmd_buf_data.raw_mut();
+        let encoder = &mut cmd_buf_data.encoder;
+        let tracker = &mut cmd_buf_data.trackers;
+        let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
+        let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
+
 
         let texture_guard = hub.textures.read();
 
@@ -1056,7 +1063,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
-        let (encoder, _, tracker, _, texture_memory_actions) = cmd_buf_data.raw_mut();
+        let encoder = &mut cmd_buf_data.encoder;
+        let tracker = &mut cmd_buf_data.trackers;
+        let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
+
         let texture_guard = hub.textures.read();
 
         let device = &cmd_buf.device;

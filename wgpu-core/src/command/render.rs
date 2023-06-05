@@ -1230,8 +1230,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let (encoder, status, tracker, buffer_memory_init_actions, texture_memory_actions) =
-                cmd_buf_data.raw_mut();
+            let encoder = &mut cmd_buf_data.encoder;
+            let status = &mut cmd_buf_data.status;
+            let tracker = &mut cmd_buf_data.trackers;
+            let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
+            let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
+    
             // close everything while the new command encoder is filled
             encoder.close();
             // will be reset to true if recording is done without errors
@@ -2144,7 +2148,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
-        let (encoder, status, tracker, _, _) = cmd_buf_data.raw_mut();
+        
+        let encoder = &mut cmd_buf_data.encoder;
+        let status = &mut cmd_buf_data.status;
+        let tracker = &mut cmd_buf_data.trackers;
+
         {
             let transit = encoder.open();
 

@@ -118,28 +118,6 @@ impl<A: HalApi> CommandBufferMutable<A> {
         let tracker = &mut self.trackers;
         (encoder, tracker)
     }
-    pub(crate) fn raw_mut(
-        &mut self,
-    ) -> (
-        &mut CommandEncoder<A>,
-        &mut CommandEncoderStatus,
-        &mut Tracker<A>,
-        &mut Vec<BufferInitTrackerAction>,
-        &mut CommandBufferTextureMemoryActions,
-    ) {
-        let encoder = &mut self.encoder;
-        let status = &mut self.status;
-        let tracker = &mut self.trackers;
-        let buffer_memory_init_actions = &mut self.buffer_memory_init_actions;
-        let texture_memory_actions = &mut self.texture_memory_actions;
-        (
-            encoder,
-            status,
-            tracker,
-            buffer_memory_init_actions,
-            texture_memory_actions,
-        )
-    }
 }
 
 pub struct CommandBuffer<A: HalApi> {

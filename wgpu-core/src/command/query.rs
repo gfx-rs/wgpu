@@ -312,7 +312,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (encoder, _, tracker, _, _) = cmd_buf_data.raw_mut();
+        let encoder = &mut cmd_buf_data.encoder;
+        let tracker = &mut cmd_buf_data.trackers;
+
         let raw_encoder = encoder.open();
 
         let query_set_guard = hub.query_sets.read();
@@ -352,7 +354,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             });
         }
 
-        let (encoder, _, tracker, buffer_memory_init_actions, _) = cmd_buf_data.raw_mut();
+        let encoder = &mut cmd_buf_data.encoder;
+        let tracker = &mut cmd_buf_data.trackers;
+        let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
         let raw_encoder = encoder.open();
 
         if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
