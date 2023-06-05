@@ -230,7 +230,7 @@ pub fn compare_image_output(
 
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = (path, width, height, test_with_alpha, checks);
+        let _ = (path, backend, width, height, test_with_alpha, checks);
     }
 }
 
