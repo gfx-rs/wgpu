@@ -955,7 +955,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
         self.begin_pass();
-      
+
         debug_assert!(self.state.blit.is_none());
         debug_assert!(self.state.compute.is_none());
         debug_assert!(self.state.render.is_none());
