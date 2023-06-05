@@ -232,7 +232,7 @@ jobs:
           mkdir -p swiftshader
           curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
 
-          echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
+          echo "VK_ICD_FILENAMES=$PWD/swiftshader/vk_swiftshader_icd.json" >> $GITHUB_ENV
 
       - name: install llvmpipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
