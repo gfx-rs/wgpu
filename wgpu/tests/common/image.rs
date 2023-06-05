@@ -134,6 +134,7 @@ impl ComparisonType {
 
 pub fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
+    backend: wgpu::Backend,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],
@@ -187,17 +188,17 @@ pub fn compare_image_output(
             all_passed &= check.check(&mut pool);
         }
 
+        let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
         // Determine the paths to write out the various intermediate files
         let actual_path = Path::new(&path).with_file_name(
-            OsString::from_str(
-                &(reference_path.file_stem().unwrap().to_string_lossy() + "-actual.png"),
-            )
-            .unwrap(),
+            OsString::from_str(&format!("{}-{}-actual.png", file_stem, backend.to_str(),)).unwrap(),
         );
         let difference_path = Path::new(&path).with_file_name(
-            OsString::from_str(
-                &(reference_path.file_stem().unwrap().to_string_lossy() + "-difference.png"),
-            )
+            OsString::from_str(&format!(
+                "{}-{}-difference.png",
+                file_stem,
+                backend.to_str(),
+            ))
             .unwrap(),
         );
 

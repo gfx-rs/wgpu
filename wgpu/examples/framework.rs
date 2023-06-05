@@ -619,6 +619,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
             test_common::image::compare_image_output(
                 env!("CARGO_MANIFEST_DIR").to_string() + params.image_path,
+                ctx.adapter_info.backend,
                 params.width,
                 params.height,
                 &bytes,

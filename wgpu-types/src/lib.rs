@@ -111,6 +111,21 @@ pub enum Backend {
     BrowserWebGpu = 6,
 }
 
+impl Backend {
+    /// Returns the string name of the backend.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Backend::Empty => "empty",
+            Backend::Vulkan => "vulkan",
+            Backend::Metal => "metal",
+            Backend::Dx12 => "dx12",
+            Backend::Dx11 => "dx11",
+            Backend::Gl => "gl",
+            Backend::BrowserWebGpu => "webgpu",
+        }
+    }
+}
+
 /// Power Preference when choosing a physical adapter.
 ///
 /// Corresponds to [WebGPU `GPUPowerPreference`](
