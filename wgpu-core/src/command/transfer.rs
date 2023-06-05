@@ -732,7 +732,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: *copy_size,
             });
         }
-        
+
         let encoder = &mut cmd_buf_data.encoder;
         let tracker = &mut cmd_buf_data.trackers;
         let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
@@ -893,7 +893,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let tracker = &mut cmd_buf_data.trackers;
         let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
         let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
-
 
         let texture_guard = hub.textures.read();
 
