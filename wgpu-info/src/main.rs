@@ -1,13 +1,11 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod inner {
     use std::{
-        fmt::Debug,
-        mem::size_of,
         process::{exit, Command},
         time::Instant,
     };
 
-    use num_traits::FromPrimitive;
+    use bitflags::Flags;
 
     // Lets keep these on one line
     #[rustfmt::skip]
@@ -156,9 +154,9 @@ mod inner {
 
         println!("\tFeatures:");
         let max_feature_flag_width = wgpu::Features::max_debug_print_width();
-        wgpu::Features::for_valid_bits(|bit, _i| {
-            println!("\t\t{:>width$}: {}", format!("{bit:?}"), features.contains(bit), width = max_feature_flag_width);
-        });
+        for bit in wgpu::Features::all().iter() {
+            println!("\t\t{:>width$}: {}", bit.name(), features.contains(bit), width = max_feature_flag_width);
+        }
 
         ////////////
         // Limits //
@@ -238,9 +236,9 @@ mod inner {
         } = downlevel;
         println!("\t\t                       Shader Model: {shader_model:?}");
         let max_downlevel_flag_width = wgpu::DownlevelFlags::max_debug_print_width();
-        wgpu::DownlevelFlags::for_valid_bits(|bit, _i| {
-            println!("\t\t{:>width$}: {}", format!("{bit:?}"), flags.contains(bit), width = max_downlevel_flag_width);
-        });
+        for bit in wgpu::DownlevelFlags::all().iter() {
+            println!("\t\t{:>width$}: {}", bit.name(), flags.contains(bit), width = max_downlevel_flag_width);
+        };
 
         ////////////////////
         // Texture Usages //
@@ -257,16 +255,16 @@ mod inner {
             let features = adapter.get_texture_format_features(format);
             let format_name = texture_format_name(format);
             print!("\t\t{format_name:>0$}", max_format_name_size);
-            wgpu::TextureUsages::for_valid_bits(|bit, _i| {
+            for bit in wgpu::TextureUsages::all().iter() {
                 print!(" │ ");
                 if features.allowed_usages.contains(bit) {
-                    print!("{bit:?}");
+                    print!("{}", bit.name());
                 }
                 else {
-                    let length = format!("{bit:?}").len();
+                    let length = bit.name().len();
                     print!("{}", " ".repeat(length))
                 }
-            });
+            };
             println!(" │");
         }
         print!("\t\t {texture_format_whitespace}");
@@ -286,16 +284,16 @@ mod inner {
             let format_name = texture_format_name(format);
 
             print!("\t\t{format_name:>0$}", max_format_name_size);
-            wgpu::TextureFormatFeatureFlags::for_valid_bits(|bit, _i| {
+            for bit in wgpu::TextureFormatFeatureFlags::all().iter() {
                 print!(" │ ");
                 if features.flags.contains(bit) {
-                    print!("{bit:?}");
+                    print!("{}", bit.name());
                 }
                 else {
-                    let length = format!("{bit:?}").len();
+                    let length = bit.name().len();
                     print!("{}", " ".repeat(length))
                 }
-            });
+            };
             println!(" │");
         }
         print!("\t\t {texture_format_whitespace}");
@@ -367,83 +365,49 @@ mod inner {
         }
     }
 
-    trait Bitflags: Sized + Debug {
-        type Underlying: FromPrimitive;
+    trait FlagsExt: Flags {
+        fn name(&self) -> &'static str {
+            self.iter_names().next().unwrap().0
+        }
 
-        fn from_bits(bits: Self::Underlying) -> Option<Self>;
-
-        fn for_valid_bits(mut func: impl FnMut(Self, usize)) {
-            for i in 0..(size_of::<Self>() * 8) {
-                let bit = Self::from_bits(
-                    <Self::Underlying as FromPrimitive>::from_u64(1 << i as u64).unwrap(),
-                );
-                if let Some(bit) = bit {
-                    func(bit, i)
-                }
-            }
+        fn valid_bits() -> std::iter::Enumerate<bitflags::iter::Iter<Self>> {
+            Self::all().iter().enumerate()
         }
 
         fn max_debug_print_width() -> usize {
             let mut width = 0;
-            Self::for_valid_bits(|bit, _i| {
-                width = width.max(format!("{bit:?}").len());
-            });
+            for bit in Self::all().iter() {
+                width = width.max(bit.name().len());
+            }
             width
         }
 
         fn println_table_header() {
             print!("┌─");
-            Self::for_valid_bits(|bit, i| {
+            for (i, bit) in Self::valid_bits() {
                 if i != 0 {
                     print!("─┬─");
                 }
-                let length = format!("{bit:?}").len();
+                let length = bit.name().len();
                 print!("{}", "─".repeat(length));
-            });
+            }
             println!("─┐");
         }
 
         fn println_table_footer() {
             print!("└─");
-            Self::for_valid_bits(|bit, i| {
+            for (i, bit) in Self::valid_bits() {
                 if i != 0 {
                     print!("─┴─");
                 }
-                let length = format!("{bit:?}").len();
+                let length = bit.name().len();
                 print!("{}", "─".repeat(length));
-            });
+            }
             println!("─┘")
         }
     }
 
-    impl Bitflags for wgpu::DownlevelFlags {
-        type Underlying = u32;
-
-        fn from_bits(bits: u32) -> Option<Self> {
-            Self::from_bits(bits)
-        }
-    }
-    impl Bitflags for wgpu::Features {
-        type Underlying = u64;
-
-        fn from_bits(bits: u64) -> Option<Self> {
-            Self::from_bits(bits)
-        }
-    }
-    impl Bitflags for wgpu::TextureUsages {
-        type Underlying = u32;
-
-        fn from_bits(bits: u32) -> Option<Self> {
-            Self::from_bits(bits)
-        }
-    }
-    impl Bitflags for wgpu::TextureFormatFeatureFlags {
-        type Underlying = u32;
-
-        fn from_bits(bits: u32) -> Option<Self> {
-            Self::from_bits(bits)
-        }
-    }
+    impl<T> FlagsExt for T where T: Flags {}
 
     fn max_texture_format_name_size() -> usize {
         TEXTURE_FORMAT_LIST

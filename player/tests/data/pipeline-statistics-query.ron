@@ -1,5 +1,5 @@
 (
-    features: 0x0000_0000_0000_0100, // PIPELINE_STATISTICS_QUERY
+    features: 0x0000_0001_0000_0000, // PIPELINE_STATISTICS_QUERY
     expectations: [
         (
             name: "Queried number of compute invocations is correct",
