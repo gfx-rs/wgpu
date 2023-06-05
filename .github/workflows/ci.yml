@@ -206,10 +206,16 @@ jobs:
             os: windows-2022
             backends: dx12
 
+          # Mac
+          - name: Mac aarch64
+            os: [self-hosted, macOS]
+            backends: metal
+
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
             backends: vulkan gl
+
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -259,6 +265,7 @@ jobs:
 
       - name: caching
         uses: Swatinem/rust-cache@v2
+        if: matrix.os[0] != 'self-hosted'
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
 

@@ -3201,8 +3201,8 @@ dependencies = [
 name = "wgpu-info"
 version = "0.16.0"
 dependencies = [
+ "bitflags 2.3.1",
  "env_logger",
- "num-traits 0.2.15",
  "wgpu",
 ]
 
