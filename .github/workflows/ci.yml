@@ -279,6 +279,13 @@ jobs:
             WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: comparison-images
+          path: |
+            **/*-actual.png
+            **/*-difference.png
+
       - name: generate coverage report
         shell: bash
         run: |
