@@ -355,6 +355,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
         let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
 
+        // We automatically keep extending command buffers over time, and because
+        // we want to insert a command buffer _before_ what we're about to record,
+        // we need to make sure to close the previous one.
+        encoder.close();
         // will be reset to true if recording is done without errors
         *status = CommandEncoderStatus::Error;
         let raw = encoder.open();
@@ -394,6 +398,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             raw.begin_compute_pass(&hal_desc);
         }
+
+        let mut intermediate_trackers = Tracker::<A>::new();
 
         // Immediate texture inits required because of prior discards. Need to
         // be inserted before texture reads.
@@ -578,20 +584,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         indirect: false,
                         pipeline: state.pipeline,
                     };
-
-                    fixup_discarded_surfaces(
-                        pending_discard_init_fixups.drain(..),
-                        raw,
-                        &texture_guard,
-                        &mut tracker.textures,
-                        device,
-                    );
-
                     state.is_ready().map_pass_err(scope)?;
                     state
                         .flush_states(
                             raw,
-                            tracker,
+                            &mut intermediate_trackers,
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
@@ -667,7 +664,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state
                         .flush_states(
                             raw,
-                            tracker,
+                            &mut intermediate_trackers,
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
@@ -761,20 +758,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             raw.end_compute_pass();
         }
+      
+        // We've successfully recorded the compute pass, bring the
+        // command buffer out of the error state.
         *status = CommandEncoderStatus::Recording;
 
-        // There can be entries left in pending_discard_init_fixups if a bind
-        // group was set, but not used (i.e. no Dispatch occurred)
+        // Stop the current command buffer.
+        encoder.close();
+
+        // Create a new command buffer, which we will insert _before_ the body of the compute pass.
         //
-        // However, we already altered the discard/init_action state on this
-        // cmd_buf, so we need to apply the promised changes.
+        // Use that buffer to insert barriers and clear discarded images.
+        let transit = cmd_buf.encoder.open();
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
-            raw,
+            transit,
             &texture_guard,
             &mut tracker.textures,
             device,
         );
+        CommandBuffer::insert_barriers_from_tracker(
+            transit,
+            &mut cmd_buf.trackers,
+            &intermediate_trackers,
+            &*buffer_guard,
+            &*texture_guard,
+        );
+        // Close the command buffer, and swap it with the previous.
+        cmd_buf.encoder.close_and_swap();
 
         Ok(())
     }
