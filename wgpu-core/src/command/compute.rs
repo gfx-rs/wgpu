@@ -758,7 +758,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             raw.end_compute_pass();
         }
-      
+
         // We've successfully recorded the compute pass, bring the
         // command buffer out of the error state.
         *status = CommandEncoderStatus::Recording;
@@ -769,7 +769,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Create a new command buffer, which we will insert _before_ the body of the compute pass.
         //
         // Use that buffer to insert barriers and clear discarded images.
-        let transit = cmd_buf.encoder.open();
+        let transit = encoder.open();
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             transit,
@@ -779,13 +779,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         CommandBuffer::insert_barriers_from_tracker(
             transit,
-            &mut cmd_buf.trackers,
+            tracker,
             &intermediate_trackers,
             &*buffer_guard,
             &*texture_guard,
         );
         // Close the command buffer, and swap it with the previous.
-        cmd_buf.encoder.close_and_swap();
+        encoder.close_and_swap();
 
         Ok(())
     }
