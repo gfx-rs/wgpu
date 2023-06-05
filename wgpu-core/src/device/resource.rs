@@ -10,7 +10,7 @@ use crate::{
     },
     hal_api::HalApi,
     hub::Hub,
-    id::{self, AdapterId, DeviceId},
+    id::{self, DeviceId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -76,7 +76,7 @@ use super::{
 ///
 pub struct Device<A: HalApi> {
     raw: Option<A::Device>,
-    pub(crate) adapter_id: id::Valid<AdapterId>,
+    pub(crate) adapter: Arc<Adapter<A>>,
     pub(crate) queue: Option<A::Queue>,
     pub(crate) zero_buffer: Option<A::Buffer>,
     //Note: The submission index here corresponds to the last submission that is done.
@@ -107,7 +107,7 @@ pub struct Device<A: HalApi> {
 impl<A: HalApi> std::fmt::Debug for Device<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Device")
-            .field("adapter_id", &self.adapter_id)
+            .field("adapter", &self.adapter.info.label())
             .field("limits", &self.limits)
             .field("features", &self.features)
             .field("downlevel", &self.downlevel)
@@ -165,7 +165,7 @@ impl<A: HalApi> Device<A> {
 impl<A: HalApi> Device<A> {
     pub(crate) fn new(
         open: hal::OpenDevice<A>,
-        adapter_id: id::Valid<AdapterId>,
+        adapter: &Arc<Adapter<A>>,
         alignments: hal::Alignments,
         downlevel: wgt::DownlevelCapabilities,
         desc: &DeviceDescriptor,
@@ -218,7 +218,7 @@ impl<A: HalApi> Device<A> {
 
         Ok(Self {
             raw: Some(open.device),
-            adapter_id,
+            adapter: adapter.clone(),
             queue: Some(open.queue),
             zero_buffer: Some(zero_buffer),
             info: ResourceInfo::new("<device>"),

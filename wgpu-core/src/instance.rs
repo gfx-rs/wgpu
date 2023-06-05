@@ -4,7 +4,7 @@ use crate::{
     device::{resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, DeviceId, SurfaceId, Valid},
+    id::{AdapterId, DeviceId, SurfaceId},
     identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
     resource::{Resource, ResourceInfo},
@@ -188,7 +188,7 @@ impl Surface {
 
 pub struct Adapter<A: hal::Api> {
     pub(crate) raw: hal::ExposedAdapter<A>,
-    info: ResourceInfo<AdapterId>,
+    pub(crate) info: ResourceInfo<AdapterId>,
 }
 
 impl<A: HalApi> Adapter<A> {
@@ -293,8 +293,7 @@ impl<A: HalApi> Adapter<A> {
     }
 
     fn create_device_from_hal(
-        &self,
-        self_id: AdapterId,
+        self: &Arc<Self>,
         open: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -302,7 +301,7 @@ impl<A: HalApi> Adapter<A> {
         let caps = &self.raw.capabilities;
         Device::new(
             open,
-            Valid(self_id),
+            self,
             caps.alignments.clone(),
             caps.downlevel.clone(),
             desc,
@@ -312,8 +311,7 @@ impl<A: HalApi> Adapter<A> {
     }
 
     fn create_device(
-        &self,
-        self_id: AdapterId,
+        self: &Arc<Self>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
@@ -364,7 +362,7 @@ impl<A: HalApi> Adapter<A> {
             },
         )?;
 
-        self.create_device_from_hal(self_id, open, desc, trace_path)
+        self.create_device_from_hal(open, desc, trace_path)
     }
 }
 
@@ -1060,7 +1058,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device = match adapter.create_device(adapter_id, desc, trace_path) {
+            let device = match adapter.create_device(desc, trace_path) {
                 Ok(device) => device,
                 Err(e) => break e,
             };
@@ -1095,11 +1093,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device =
-                match adapter.create_device_from_hal(adapter_id, hal_device, desc, trace_path) {
-                    Ok(device) => device,
-                    Err(e) => break e,
-                };
+            let device = match adapter.create_device_from_hal(hal_device, desc, trace_path) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
             let (id, _) = fid.assign(device);
             log::info!("Created Device {:?}", id);
             return (id.0, None);

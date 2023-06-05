@@ -571,8 +571,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ));
             }
 
-            let adapter = hub.adapters.get(device.adapter_id.0).unwrap();
-            let texture = match device.create_texture(device_id, &adapter, desc) {
+            let texture = match device.create_texture(device_id, &device.adapter, desc) {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
@@ -673,10 +672,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateTexture(fid.id(), None, desc.clone()));
             }
 
-            let adapter = hub.adapters.get(device.adapter_id.0).unwrap();
-
             let format_features = match device
-                .describe_format_features(&adapter, desc.format)
+                .describe_format_features(&device.adapter, desc.format)
                 .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))
             {
                 Ok(features) => features,
@@ -1603,7 +1600,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
-            let adapter = hub.adapters.get(device.adapter_id.0).unwrap();
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateRenderPipeline {
@@ -1614,7 +1610,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let pipeline =
-                match device.create_render_pipeline(&adapter, desc, implicit_context, hub) {
+                match device.create_render_pipeline(&device.adapter, desc, implicit_context, hub) {
                     Ok(pair) => pair,
                     Err(e) => break e,
                 };
@@ -1951,7 +1947,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let surface_guard = self.surfaces.read();
-        let adapter_guard = hub.adapters.read();
         let device_guard = hub.devices.read();
 
         let error = 'outer: loop {
@@ -1971,7 +1966,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let caps = unsafe {
                 let suf = A::get_surface(surface);
-                let adapter = &adapter_guard[device.adapter_id];
+                let adapter = &device.adapter;
                 match adapter
                     .raw
                     .adapter
@@ -2238,11 +2233,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 debug_assert!(device.lock_life().queue_empty());
                 device.pending_writes.write().as_mut().unwrap().deactivate();
 
-                let adapter = hub.adapters.get(device.adapter_id.0).unwrap();
                 // Adapter is only referenced by the device and itself.
                 // This isn't a robust way to destroy them, we should find a better one.
-                if adapter.is_unique() {
-                    free_adapter_id = Some(device.adapter_id.0);
+                // Check the refcount here should 2 -> registry and device
+                if device.adapter.ref_count() == 2 {
+                    free_adapter_id = Some(device.adapter.info.id().0);
                 }
 
                 drop(device);
