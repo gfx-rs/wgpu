@@ -55,6 +55,15 @@ struct CommandEncoder<A: hal::Api> {
 
 //TODO: handle errors better
 impl<A: hal::Api> CommandEncoder<A> {
+    /// Closes the live encoder
+    fn close_and_swap(&mut self) {
+        if self.is_open {
+            self.is_open = false;
+            let new = unsafe { self.raw.end_encoding().unwrap() };
+            self.list.insert(self.list.len() - 1, new);
+        }
+    }
+
     fn close(&mut self) {
         if self.is_open {
             self.is_open = false;

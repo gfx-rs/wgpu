@@ -127,8 +127,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         self.leave_blit();
-        assert!(self.state.render.is_none());
-        assert!(self.state.compute.is_none());
+        debug_assert!(self.state.render.is_none());
+        debug_assert!(self.state.compute.is_none());
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
         })
@@ -376,6 +376,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
         self.begin_pass();
         self.state.index = None;
+
+        assert!(self.state.blit.is_none());
+        assert!(self.state.compute.is_none());
+        assert!(self.state.render.is_none());
 
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPassDescriptor::new();
@@ -951,6 +955,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
         self.begin_pass();
+      
+        debug_assert!(self.state.blit.is_none());
+        debug_assert!(self.state.compute.is_none());
+        debug_assert!(self.state.render.is_none());
 
         let raw = self.raw_cmd_buf.as_ref().unwrap();
 

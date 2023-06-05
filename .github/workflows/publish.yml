@@ -37,7 +37,7 @@ jobs:
           done
 
       - name: Deploy WebGPU examples
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4.4.2
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gpu
@@ -59,7 +59,7 @@ jobs:
           done
 
       - name: Deploy WebGL examples
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4.4.2
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gl

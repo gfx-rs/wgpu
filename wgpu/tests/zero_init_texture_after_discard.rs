@@ -43,13 +43,7 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
             .downlevel_flags(
                 DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
             )
-            .limits(Limits::downlevel_defaults())
-            .specific_failure(
-                Some(wgpu::Backends::DX12),
-                Some(5140),
-                Some("Microsoft Basic Render Driver"),
-                false,
-            ),
+            .limits(Limits::downlevel_defaults()),
         |mut ctx| {
             for format in [
                 TextureFormat::Stencil8,
