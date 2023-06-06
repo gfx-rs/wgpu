@@ -1152,15 +1152,17 @@ impl crate::Surface<super::Api> for Surface {
                         khronos_egl::SINGLE_BUFFER
                     },
                 ];
-                match self.srgb_kind {
-                    SrgbFrameBufferKind::None => {}
-                    SrgbFrameBufferKind::Core => {
-                        attributes.push(khronos_egl::GL_COLORSPACE);
-                        attributes.push(khronos_egl::GL_COLORSPACE_SRGB);
-                    }
-                    SrgbFrameBufferKind::Khr => {
-                        attributes.push(EGL_GL_COLORSPACE_KHR as i32);
-                        attributes.push(EGL_GL_COLORSPACE_SRGB_KHR as i32);
+                if config.format.is_srgb() {
+                    match self.srgb_kind {
+                        SrgbFrameBufferKind::None => {}
+                        SrgbFrameBufferKind::Core => {
+                            attributes.push(khronos_egl::GL_COLORSPACE);
+                            attributes.push(khronos_egl::GL_COLORSPACE_SRGB);
+                        }
+                        SrgbFrameBufferKind::Khr => {
+                            attributes.push(EGL_GL_COLORSPACE_KHR as i32);
+                            attributes.push(EGL_GL_COLORSPACE_SRGB_KHR as i32);
+                        }
                     }
                 }
                 attributes.push(khronos_egl::ATTRIB_NONE as i32);

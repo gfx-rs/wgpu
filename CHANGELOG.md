@@ -65,6 +65,7 @@ Bottom level categories:
 ### Bug Fixes
 
 - Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
+- Fix OpenGL/EGL backend not respecting non-sRGB texture formats in `SurfaceConfiguration`. by @liquidev in [#3817](https://github.com/gfx-rs/wgpu/pull/3817)
 
 #### Metal
 
