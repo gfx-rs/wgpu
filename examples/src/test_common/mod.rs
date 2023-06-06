@@ -343,7 +343,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
 
     #[cfg(not(all(
         target_arch = "wasm32",
-        any(target_os = "emscripten", feature = "webgl")
+        any(not(target_os = "emscripten"), feature = "webgl")
     )))]
     {
         surface_guard = SurfaceGuard {};
@@ -351,7 +351,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     }
     #[cfg(all(
         target_arch = "wasm32",
-        any(target_os = "emscripten", feature = "webgl")
+        any(not(target_os = "emscripten"), feature = "webgl")
     ))]
     {
         // On wasm, append a canvas to the document body for initializing the adapter
