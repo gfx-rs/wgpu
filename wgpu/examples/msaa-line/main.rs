@@ -326,7 +326,7 @@ fn msaa_line() {
         height: 768,
         optional_features: wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
         base_test_parameters: framework::test_common::TestParameters::default()
-            // AMD seems to render nothing on DX12
+            // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
             .specific_failure(Some(wgpu::Backends::DX12), Some(0x1002), None, false),
         // There's a lot of natural variance so we check the weighted median too to differentiate
         // real failures from variance.
