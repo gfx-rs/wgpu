@@ -7,6 +7,7 @@ const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
+  run-wasm
 
 Options:
   -h, --help  Print help
@@ -37,7 +38,9 @@ impl Args {
     }
 }
 
-pub(crate) enum Subcommand {}
+pub(crate) enum Subcommand {
+    RunWasm { args: Arguments },
+}
 
 impl Subcommand {
     fn parse(mut args: Arguments) -> anyhow::Result<Subcommand> {
@@ -46,6 +49,7 @@ impl Subcommand {
             .context("failed to parse subcommand")?
             .context("no subcommand specified; see `--help` for more details")?;
         match &*subcmd {
+            "run-wasm" => Ok(Self::RunWasm { args }),
             other => {
                 bail!("unrecognized subcommand {other:?}; see `--help` for more details")
             }

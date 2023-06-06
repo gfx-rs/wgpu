@@ -9,7 +9,6 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "run-wasm"
 ]
 exclude = []
 default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
@@ -50,7 +49,6 @@ async-executor = "1"
 bitflags = "2"
 bit-vec = "0.6"
 bytemuck = "1.13"
-cargo-run-wasm = "0.3.2"
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"

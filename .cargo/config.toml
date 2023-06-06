@@ -1,5 +1,4 @@
 [alias]
-run-wasm = "run --release --package run-wasm --"
 xtask = "run --manifest-path xtask/Cargo.toml --"
 
 [build]

@@ -1,10 +1,10 @@
 use std::process::ExitCode;
 
-use cli::Args;
+use anyhow::Context;
+use cli::{Args, Subcommand};
 
 mod cli;
 
-#[allow(unreachable_code, unused_variables)]
 fn main() -> ExitCode {
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
@@ -25,5 +25,15 @@ fn main() -> ExitCode {
 
 fn run(args: Args) -> anyhow::Result<()> {
     let Args { subcommand } = args;
-    match subcommand {}
+    match subcommand {
+        Subcommand::RunWasm { args } => {
+            cargo_run_wasm::run_wasm_with_css_and_args(
+                "body { margin: 0px; }",
+                cargo_run_wasm::Args::from_args(args)
+                    .map_err(anyhow::Error::msg)
+                    .context("failed to parse arguments for `cargo-run-wasm`")?,
+            );
+            Ok(())
+        }
+    }
 }
