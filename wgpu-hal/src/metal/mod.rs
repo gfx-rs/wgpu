@@ -28,7 +28,7 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-use foreign_types::ForeignTypeRef as _;
+use metal::foreign_types::ForeignTypeRef as _;
 use parking_lot::Mutex;
 
 #[derive(Clone)]
