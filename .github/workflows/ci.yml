@@ -138,11 +138,11 @@ jobs:
           set -e
 
           # build for WebGPU
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
+          cargo clippy --target ${{ matrix.target }} -p wgpu-examples -p wgpu --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
 
           # all features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-examples -p wgpu -p wgpu-hal --tests --all-features
           cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
 
       - name: check em
@@ -162,7 +162,7 @@ jobs:
 
           # all features
           cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
-          cargo clippy --target ${{ matrix.target }} -p wgpu --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-examples -p wgpu --all-features
 
       - name: check native
         if: matrix.kind == 'native'
@@ -174,10 +174,10 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
+          cargo clippy --target ${{ matrix.target }}-p wgpu-examples -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
 
           # build docs
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
+          cargo doc --target ${{ matrix.target }} -p wgpu-examples -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
 
   wasm-test:
     name: Test WebAssembly
@@ -283,7 +283,7 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu-examples -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
 
       - uses: actions/upload-artifact@v3
@@ -331,7 +331,7 @@ jobs:
         run: |
           set -e
 
-          cargo test --doc -p wgpu -p wgpu-core -p wgpu-hal -p wgpu-types
+          cargo test --doc -p wgpu-examples -p wgpu -p wgpu-core -p wgpu-hal -p wgpu-types
 
   fmt:
     name: Format
