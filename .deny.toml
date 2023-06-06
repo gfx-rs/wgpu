@@ -2,10 +2,12 @@
 multiple-versions = "deny"
 skip-tree = [
 	{ name = "cts_runner" },
-	{ name = "dummy" },
 	{ name = "player" },
 	{ name = "run-wasm" },
 	{ name = "wgpu-info" },
+]
+skip = [
+	{ name = "wgpu" }
 ]
 wildcards = "deny"
 
