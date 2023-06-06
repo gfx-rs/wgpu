@@ -15,6 +15,7 @@ import {
   _device,
   assertDevice,
   createGPUTexture,
+  GPUTextureUsage,
 } from "ext:deno_webgpu/01_webgpu.js";
 
 const _surfaceRid = Symbol("[[surfaceRid]]");
@@ -129,6 +130,81 @@ function createCanvasContext(options) {
   canvasContext[_canvas] = options.canvas;
   return canvasContext;
 }
+
+// Converters
+
+// ENUM: GPUCanvasAlphaMode
+webidl.converters["GPUCanvasAlphaMode"] = webidl.createEnumConverter(
+  "GPUCanvasAlphaMode",
+  [
+    "opaque",
+    "premultiplied",
+  ],
+);
+
+// NON-SPEC: ENUM: GPUPresentMode
+webidl.converters["GPUPresentMode"] = webidl.createEnumConverter(
+  "GPUPresentMode",
+  [
+    "autoVsync",
+    "autoNoVsync",
+    "fifo",
+    "fifoRelaxed",
+    "immediate",
+    "mailbox",
+  ],
+);
+
+// DICT: GPUCanvasConfiguration
+const dictMembersGPUCanvasConfiguration = [
+  { key: "device", converter: webidl.converters.GPUDevice, required: true },
+  {
+    key: "format",
+    converter: webidl.converters.GPUTextureFormat,
+    required: true,
+  },
+  {
+    key: "usage",
+    converter: webidl.converters["GPUTextureUsageFlags"],
+    defaultValue: GPUTextureUsage.RENDER_ATTACHMENT,
+  },
+  {
+    key: "alphaMode",
+    converter: webidl.converters["GPUCanvasAlphaMode"],
+    defaultValue: "opaque",
+  },
+
+  // Extended from spec
+  {
+    key: "presentMode",
+    converter: webidl.converters["GPUPresentMode"],
+  },
+  {
+    key: "width",
+    converter: webidl.converters["long"],
+    required: true,
+  },
+  {
+    key: "height",
+    converter: webidl.converters["long"],
+    required: true,
+  },
+  {
+    key: "viewFormats",
+    converter: webidl.createSequenceConverter(
+      webidl.converters["GPUTextureFormat"],
+    ),
+    get defaultValue() {
+      return [];
+    },
+  },
+];
+webidl.converters["GPUCanvasConfiguration"] = webidl
+  .createDictionaryConverter(
+    "GPUCanvasConfiguration",
+    dictMembersGPUCanvasConfiguration,
+  );
+
 
 window.__bootstrap.webgpu = {
   ...window.__bootstrap.webgpu,
