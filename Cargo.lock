@@ -3095,27 +3095,11 @@ name = "wgpu"
 version = "0.16.0"
 dependencies = [
  "arrayvec 0.7.2",
- "async-executor",
- "bitflags 2.3.1",
- "bytemuck",
  "cfg-if",
- "console_error_panic_hook",
- "console_log",
- "ddsfile",
- "env_logger",
- "futures-intrusive",
- "glam",
- "image",
  "js-sys",
  "log",
  "naga",
- "nanorand",
- "noise",
- "nv-flip",
- "obj",
  "parking_lot 0.12.1",
- "png",
- "pollster",
  "profiling",
  "raw-window-handle 0.5.2",
  "serde",
@@ -3123,12 +3107,10 @@ dependencies = [
  "static_assertions",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-bindgen-test",
  "web-sys",
  "wgpu-core",
  "wgpu-hal",
  "wgpu-types",
- "winit",
 ]
 
 [[package]]
@@ -3152,6 +3134,37 @@ dependencies = [
  "web-sys",
  "wgpu-hal",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-examples-tests"
+version = "0.16.0"
+dependencies = [
+ "async-executor",
+ "bitflags 2.3.1",
+ "bytemuck",
+ "cfg-if",
+ "console_error_panic_hook",
+ "console_log",
+ "ddsfile",
+ "env_logger",
+ "futures-intrusive",
+ "glam",
+ "image",
+ "log",
+ "naga",
+ "nanorand",
+ "noise",
+ "nv-flip",
+ "obj",
+ "png",
+ "pollster",
+ "wasm-bindgen-test",
+ "web-sys",
+ "wgpu",
+ "wgpu-hal",
+ "wgpu-types",
+ "winit",
 ]
 
 [[package]]
