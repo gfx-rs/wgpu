@@ -13,6 +13,11 @@ end of the VS buffer table.
 
 !*/
 
+// `MTLFeatureSet` is superseded by `MTLGpuFamily`.
+// However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
+// See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
+// TODO: Eventually all deprecated features should be abstracted and use new api when available.
+#[allow(deprecated)]
 mod adapter;
 mod command;
 mod conv;
