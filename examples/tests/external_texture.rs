@@ -1,9 +1,9 @@
 #![cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 
-use crate::common::{fail_if, initialize_test, TestParameters};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 use wgpu::ExternalImageSource;
+use wgpu_examples::test_common::{fail_if, initialize_test, TestParameters};
 
 #[wasm_bindgen_test]
 async fn image_bitmap_import() {

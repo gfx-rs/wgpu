@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-examples-tests"
+name = "wgpu-examples"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

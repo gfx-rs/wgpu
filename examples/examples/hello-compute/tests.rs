@@ -1,10 +1,7 @@
-#[path = "../../tests/common/mod.rs"]
-mod common;
-
 use std::sync::Arc;
 
 use super::*;
-use common::{initialize_test, TestParameters};
+use wgpu_examples::test_common::{initialize_test, TestParameters};
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 

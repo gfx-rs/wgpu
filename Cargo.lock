@@ -3137,7 +3137,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-examples-tests"
+name = "wgpu-examples"
 version = "0.16.0"
 dependencies = [
  "async-executor",

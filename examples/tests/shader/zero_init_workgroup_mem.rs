@@ -8,7 +8,7 @@ use wgpu::{
     ShaderStages,
 };
 
-use crate::common::{initialize_test, TestParameters, TestingContext};
+use wgpu_examples::test_common::{initialize_test, TestParameters, TestingContext};
 
 #[test]
 fn zero_init_workgroup_mem() {

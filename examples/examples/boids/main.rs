@@ -5,9 +5,6 @@ use nanorand::{Rng, WyRand};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
-#[path = "../framework.rs"]
-mod framework;
-
 // number of boid particles to simulate
 
 const NUM_PARTICLES: u32 = 1500;
@@ -27,7 +24,7 @@ struct Example {
     frame_num: usize,
 }
 
-impl framework::Example for Example {
+impl wgpu_examples::framework::Example for Example {
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::downlevel_defaults()
     }
@@ -269,7 +266,7 @@ impl framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        _spawner: &wgpu_examples::framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
         let color_attachments = [Some(wgpu::RenderPassColorAttachment {
@@ -326,7 +323,7 @@ impl framework::Example for Example {
 
 /// run example
 fn main() {
-    framework::run::<Example>("boids");
+    wgpu_examples::framework::run::<Example>("boids");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -334,17 +331,17 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn boids() {
-    framework::test::<Example>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/boids/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default()
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             // https://github.com/gfx-rs/wgpu/issues/3733
             .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false),
-        comparisons: &[framework::ComparisonType::Mean(0.005)],
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.005)],
     });
 }

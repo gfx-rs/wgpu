@@ -1,5 +1,7 @@
-use crate::common::{image::calc_difference, initialize_test, TestParameters, TestingContext};
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
+use wgpu_examples::test_common::{
+    image::calc_difference, initialize_test, TestParameters, TestingContext,
+};
 
 #[test]
 fn reinterpret_srgb_ness() {

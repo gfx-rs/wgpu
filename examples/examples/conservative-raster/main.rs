@@ -1,6 +1,3 @@
-#[path = "../framework.rs"]
-mod framework;
-
 use std::borrow::Cow;
 
 const RENDER_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -66,7 +63,7 @@ impl Example {
     }
 }
 
-impl framework::Example for Example {
+impl wgpu_examples::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::CONSERVATIVE_RASTERIZATION
     }
@@ -258,7 +255,7 @@ impl framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        _spawner: &wgpu_examples::framework::Spawner,
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
@@ -312,7 +309,7 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("conservative-raster");
+    wgpu_examples::framework::run::<Example>("conservative-raster");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -320,12 +317,12 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn conservative_raster() {
-    framework::test::<Example>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/conservative-raster/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default(),
-        comparisons: &[framework::ComparisonType::Mean(0.0)],
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.0)],
     });
 }

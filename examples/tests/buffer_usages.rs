@@ -1,7 +1,7 @@
 //! Tests for buffer usages validation.
 
-use crate::common::{fail_if, initialize_test, TestParameters};
 use wasm_bindgen_test::*;
+use wgpu_examples::test_common::{fail_if, initialize_test, TestParameters};
 use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;

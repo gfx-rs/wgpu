@@ -1,4 +1,4 @@
-use crate::common::{initialize_test, TestParameters};
+use wgpu_examples::test_common::{initialize_test, TestParameters};
 
 use wasm_bindgen_test::wasm_bindgen_test;
 use wgpu::*;

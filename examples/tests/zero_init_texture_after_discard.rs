@@ -1,6 +1,8 @@
-use crate::common::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
 use wgpu::*;
+use wgpu_examples::test_common::{
+    image::ReadbackBuffers, initialize_test, TestParameters, TestingContext,
+};
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
 #[test]

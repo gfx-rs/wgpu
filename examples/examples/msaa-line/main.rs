@@ -7,9 +7,6 @@
 //! *   Set the primitive_topology to PrimitiveTopology::LineList.
 //! *   Vertices and Indices describe the two points that make up a line.
 
-#[path = "../framework.rs"]
-mod framework;
-
 use std::{borrow::Cow, iter};
 
 use bytemuck::{Pod, Zeroable};
@@ -118,7 +115,7 @@ impl Example {
     }
 }
 
-impl framework::Example for Example {
+impl wgpu_examples::framework::Example for Example {
     fn optional_features() -> wgt::Features {
         wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
     }
@@ -256,7 +253,7 @@ impl framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        _spawner: &wgpu_examples::framework::Spawner,
     ) {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(
@@ -312,7 +309,7 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("msaa-line");
+    wgpu_examples::framework::run::<Example>("msaa-line");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -320,19 +317,19 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn msaa_line() {
-    framework::test::<Example>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/msaa-line/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-        base_test_parameters: framework::test_common::TestParameters::default()
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
             // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
             .specific_failure(Some(wgpu::Backends::DX12), Some(0x1002), None, false),
         // There's a lot of natural variance so we check the weighted median too to differentiate
         // real failures from variance.
         comparisons: &[
-            framework::ComparisonType::Mean(0.065),
-            framework::ComparisonType::Percentile(0.5, 0.29),
+            wgpu_examples::framework::ComparisonType::Mean(0.065),
+            wgpu_examples::framework::ComparisonType::Percentile(0.5, 0.29),
         ],
     });
 }

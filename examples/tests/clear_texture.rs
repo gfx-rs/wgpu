@@ -1,5 +1,7 @@
-use crate::common::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
+use wgpu_examples::test_common::{
+    image::ReadbackBuffers, initialize_test, TestParameters, TestingContext,
+};
 
 static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,

@@ -10,10 +10,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
-#[cfg(test)]
-#[path = "../tests/common/mod.rs"]
-pub mod test_common;
-
 #[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
     use std::{mem::size_of, slice::from_raw_parts};
@@ -494,21 +490,18 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
     None
 }
 
-#[cfg(test)]
-pub use test_common::image::ComparisonType;
+pub use crate::test_common::image::ComparisonType;
 
-#[cfg(test)]
 pub struct FrameworkRefTest {
     pub image_path: &'static str,
     pub width: u32,
     pub height: u32,
     pub optional_features: wgpu::Features,
-    pub base_test_parameters: test_common::TestParameters,
+    pub base_test_parameters: crate::test_common::TestParameters,
     /// Comparisons against FLIP statistics that determine if the test passes or fails.
     pub comparisons: &'static [ComparisonType],
 }
 
-#[cfg(test)]
 #[allow(dead_code)]
 pub fn test<E: Example>(mut params: FrameworkRefTest) {
     use std::mem;
@@ -517,7 +510,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
     let features = E::required_features() | params.optional_features;
 
-    test_common::initialize_test(
+    crate::test_common::initialize_test(
         mem::take(&mut params.base_test_parameters).features(features),
         |ctx| {
             let spawner = Spawner::new();
@@ -617,7 +610,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             ctx.device.poll(wgpu::Maintain::Wait);
             let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
-            test_common::image::compare_image_output(
+            crate::test_common::image::compare_image_output(
                 env!("CARGO_MANIFEST_DIR").to_string() + params.image_path,
                 ctx.adapter_info.backend,
                 params.width,

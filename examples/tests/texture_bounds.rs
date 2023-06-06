@@ -1,7 +1,7 @@
 //! Tests for texture copy bounds checks.
 
-use crate::common::{fail_if, initialize_test, TestParameters};
 use wasm_bindgen_test::*;
+use wgpu_examples::test_common::{fail_if, initialize_test, TestParameters};
 
 #[test]
 #[wasm_bindgen_test]

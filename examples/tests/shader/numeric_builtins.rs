@@ -1,10 +1,8 @@
 use wasm_bindgen_test::*;
 use wgpu::{DownlevelFlags, Limits};
 
-use crate::{
-    common::{initialize_test, TestParameters},
-    shader::{shader_input_output_test, InputStorageType, ShaderTest},
-};
+use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
+use wgpu_examples::test_common::{initialize_test, TestParameters};
 
 fn create_numeric_builtin_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();

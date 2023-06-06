@@ -3,7 +3,7 @@
 use wasm_bindgen_test::wasm_bindgen_test;
 use wgt::BufferAddress;
 
-use crate::common::{fail_if, initialize_test, TestParameters};
+use wgpu_examples::test_common::{fail_if, initialize_test, TestParameters};
 
 #[test]
 #[wasm_bindgen_test]

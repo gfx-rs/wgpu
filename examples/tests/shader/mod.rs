@@ -13,7 +13,7 @@ use wgpu::{
     ShaderModuleDescriptor, ShaderSource, ShaderStages,
 };
 
-use crate::common::TestingContext;
+use wgpu_examples::test_common::TestingContext;
 
 mod numeric_builtins;
 mod struct_layout;

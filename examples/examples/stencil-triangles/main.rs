@@ -3,9 +3,6 @@ use std::borrow::Cow;
 use std::mem;
 use wgpu::util::DeviceExt;
 
-#[path = "../framework.rs"]
-mod framework;
-
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
@@ -26,7 +23,7 @@ struct Triangles {
     stencil_buffer: wgpu::Texture,
 }
 
-impl framework::Example for Triangles {
+impl wgpu_examples::framework::Example for Triangles {
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -185,7 +182,7 @@ impl framework::Example for Triangles {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        _spawner: &wgpu_examples::framework::Spawner,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -232,7 +229,7 @@ impl framework::Example for Triangles {
 }
 
 fn main() {
-    framework::run::<Triangles>("stencil-triangles");
+    wgpu_examples::framework::run::<Triangles>("stencil-triangles");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -240,12 +237,12 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn stencil_triangles() {
-    framework::test::<Triangles>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Triangles>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/stencil-triangles/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default(),
-        comparisons: &[framework::ComparisonType::Mean(0.03)],
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.03)],
     });
 }

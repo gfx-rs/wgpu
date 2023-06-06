@@ -1,6 +1,3 @@
-#[path = "../framework.rs"]
-mod framework;
-
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, f32::consts};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
@@ -92,7 +89,7 @@ impl Skybox {
     }
 }
 
-impl framework::Example for Skybox {
+impl wgpu_examples::framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_COMPRESSION_ASTC
             | wgpu::Features::TEXTURE_COMPRESSION_ETC2
@@ -399,7 +396,7 @@ impl framework::Example for Skybox {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        _spawner: &wgpu_examples::framework::Spawner,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -463,7 +460,7 @@ impl framework::Example for Skybox {
 }
 
 fn main() {
-    framework::run::<Skybox>("skybox");
+    wgpu_examples::framework::run::<Skybox>("skybox");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -471,56 +468,52 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox() {
-    framework::test::<Skybox>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("ANGLE"),
-            false,
-        ),
-        comparisons: &[framework::ComparisonType::Mean(0.015)],
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false),
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.015)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_bc1() {
-    framework::test::<Skybox>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-bc1.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
-        base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        comparisons: &[framework::ComparisonType::Mean(0.02)],
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.02)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_etc2() {
-    framework::test::<Skybox>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-etc2.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
-        base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        comparisons: &[framework::ComparisonType::Mean(0.015)],
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.015)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_astc() {
-    framework::test::<Skybox>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-astc.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
-        base_test_parameters: framework::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        comparisons: &[framework::ComparisonType::Mean(0.016)],
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.016)],
     });
 }

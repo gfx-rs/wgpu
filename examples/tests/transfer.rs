@@ -1,4 +1,4 @@
-use crate::common::{fail, initialize_test, TestParameters};
+use wgpu_examples::test_common::{fail, initialize_test, TestParameters};
 
 #[test]
 fn copy_overflow_z() {

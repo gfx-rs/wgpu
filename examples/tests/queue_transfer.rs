@@ -1,7 +1,7 @@
 //! Tests for buffer copy validation.
 
-use crate::common::{fail, initialize_test, TestParameters};
 use wasm_bindgen_test::*;
+use wgpu_examples::test_common::{fail, initialize_test, TestParameters};
 
 #[test]
 #[wasm_bindgen_test]

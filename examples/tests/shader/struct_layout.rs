@@ -3,10 +3,8 @@ use std::fmt::Write;
 use wasm_bindgen_test::*;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
-use crate::{
-    common::{initialize_test, TestParameters},
-    shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE},
-};
+use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
+use wgpu_examples::test_common::{initialize_test, TestParameters};
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();

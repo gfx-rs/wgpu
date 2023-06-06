@@ -1,6 +1,3 @@
-#[path = "../framework.rs"]
-mod framework;
-
 mod point_gen;
 
 use bytemuck::{Pod, Zeroable};
@@ -268,7 +265,7 @@ impl Example {
     }
 }
 
-impl framework::Example for Example {
+impl wgpu_examples::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -699,7 +696,7 @@ impl framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &framework::Spawner,
+        _spawner: &wgpu_examples::framework::Spawner,
     ) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
@@ -817,7 +814,7 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("water");
+    wgpu_examples::framework::run::<Example>("water");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -825,13 +822,13 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn water() {
-    framework::test::<Example>(framework::FrameworkRefTest {
+    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
         image_path: "/examples/water/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters::default()
+        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
-        comparisons: &[framework::ComparisonType::Mean(0.01)],
+        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.01)],
     });
 }

@@ -1,4 +1,4 @@
-use crate::common::{initialize_test, TestParameters, TestingContext};
+use wgpu_examples::test_common::{initialize_test, TestParameters, TestingContext};
 
 fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) {
     let r = wgpu::BufferUsages::MAP_READ;

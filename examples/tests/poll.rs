@@ -6,8 +6,8 @@ use wgpu::{
     CommandEncoderDescriptor, ComputePassDescriptor, Maintain, ShaderStages,
 };
 
-use crate::common::{initialize_test, TestParameters, TestingContext};
 use wasm_bindgen_test::*;
+use wgpu_examples::test_common::{initialize_test, TestParameters, TestingContext};
 
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
