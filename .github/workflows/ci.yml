@@ -174,7 +174,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }}-p wgpu-examples -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
+          cargo clippy --target ${{ matrix.target }} -p wgpu-examples -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
 
           # build docs
           cargo doc --target ${{ matrix.target }} -p wgpu-examples -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
