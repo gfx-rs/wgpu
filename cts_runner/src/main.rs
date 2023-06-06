@@ -27,18 +27,18 @@ mod native {
         let url = args_iter
             .next()
             .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
-        let specifier = resolve_url_or_path(&url)?;
+        let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
         let options = RuntimeOptions {
             module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
             get_error_class_fn: Some(&get_error_class_name),
             extensions: vec![
-                deno_webidl::init_esm(),
-                deno_console::init_esm(),
-                deno_url::init_ops_and_esm(),
-                deno_web::init_ops_and_esm::<Permissions>(BlobStore::default(), None),
-                deno_webgpu::init_ops_and_esm(true),
-                extension(),
+                deno_webidl::deno_webidl::init_ops_and_esm(),
+                deno_console::deno_console::init_ops_and_esm(),
+                deno_url::deno_url::init_ops_and_esm(),
+                deno_web::deno_web::init_ops_and_esm::<Permissions>(BlobStore::default(), None),
+                deno_webgpu::deno_webgpu::init_ops_and_esm(true),
+                cts_runner::init_ops_and_esm(),
             ],
             ..Default::default()
         };
@@ -81,16 +81,13 @@ mod native {
         Ok(())
     }
 
-    fn extension() -> deno_core::Extension {
-        deno_core::Extension::builder(env!("CARGO_PKG_NAME"))
-            .ops(vec![
-                op_exit::decl(),
-                op_read_file_sync::decl(),
-                op_write_file_sync::decl(),
-            ])
-            .esm(deno_core::include_js_files!("bootstrap.js",))
-            .build()
-    }
+    deno_core::extension!(
+        cts_runner,
+        deps = [deno_webidl, deno_web],
+        ops = [op_exit, op_read_file_sync, op_write_file_sync],
+        esm_entry_point = "ext:cts_runner/bootstrap.js",
+        esm = ["bootstrap.js"],
+    );
 
     #[op]
     fn op_exit(code: i32) -> Result<(), AnyError> {
