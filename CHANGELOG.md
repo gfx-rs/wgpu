@@ -46,6 +46,14 @@ Bottom level categories:
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
 
+#### DX12
+
+- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
+
+#### Vulkan
+
+- Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
+
 ### Documentation
 
 #### General
@@ -57,19 +65,38 @@ Bottom level categories:
 ### Bug Fixes
 
 - Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
-- Fix missing 4X MSAA support on some OpenGL backends. By @emilk in [#3780](https://github.com/gfx-rs/wgpu/pull/3780)
+
+#### Metal
+
+- Fix renderpasses being used inside of renderpasses. By @cwfitzgerald in [#3828](https://github.com/gfx-rs/wgpu/pull/3828)
 
 #### General
 
-- Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
-- Use `u32`s internally for bind group indices, rather than `u8`. By @ErichDonGubler in [#3743](https://github.com/gfx-rs/wgpu/pull/3743).
 - Fix Multiview to disable validation of TextureViewDimension and ArrayLayerCount. By @MalekiRe in [#3779](https://github.com/gfx-rs/wgpu/pull/3779#issue-1713269437).
+
+#### Vulkan
+- Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
 
 ### Examples
 
 #### General
 
 - Publish examples to wgpu.rs on updates to trunk branch instead of gecko. By @paul-hansen in [#3750](https://github.com/gfx-rs/wgpu/pull/3750)
+
+## v0.16.1 (2023-05-24)
+
+### Bug Fixes
+
+- Fix missing 4X MSAA support on some OpenGL backends. By @emilk in [#3780](https://github.com/gfx-rs/wgpu/pull/3780)
+
+#### General
+
+- Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
+- Use `u32`s internally for bind group indices, rather than `u8`. By @ErichDonGubler in [#3743](https://github.com/gfx-rs/wgpu/pull/3743).
+
+#### WebGPU
+
+* Fix crash when calling `create_surface_from_canvas`. By @grovesNL in [#3718](https://github.com/gfx-rs/wgpu/pull/3718)
 
 ## v0.16.0 (2023-04-19)
 
