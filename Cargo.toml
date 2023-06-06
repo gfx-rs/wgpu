@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "cts_runner",
     "deno_webgpu",
-    "dummy",
     "player",
     "wgpu",
     "wgpu-core",
