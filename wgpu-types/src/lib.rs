@@ -3025,6 +3025,92 @@ impl TextureFormat {
         }
     }
 
+    /// Returns the number of components this format has.
+    pub fn components(&self) -> u8 {
+        self.components_with_aspect(TextureAspect::All)
+    }
+
+    /// Returns the number of components this format has taking into account the `aspect`.
+    ///
+    /// The `aspect` is only relevant for combined depth-stencil formats.
+    pub fn components_with_aspect(&self, aspect: TextureAspect) -> u8 {
+        match *self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float => 1,
+
+            Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float => 2,
+
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float => 4,
+
+            Self::Rgb9e5Ufloat | Self::Rg11b10Float => 3,
+            Self::Rgb10a2Unorm => 4,
+
+            Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
+
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
+                TextureAspect::All => 2,
+                TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
+            },
+
+            Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
+            Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,
+            Self::Bc6hRgbUfloat | Self::Bc6hRgbFloat => 3,
+            Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb => 4,
+
+            Self::EacR11Unorm | Self::EacR11Snorm => 1,
+            Self::EacRg11Unorm | Self::EacRg11Snorm => 2,
+            Self::Etc2Rgb8Unorm | Self::Etc2Rgb8UnormSrgb => 3,
+            Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb => 4,
+
+            Self::Astc { .. } => 4,
+        }
+    }
+
     /// Strips the `Srgb` suffix from the given texture format.
     pub fn remove_srgb_suffix(&self) -> TextureFormat {
         match *self {
