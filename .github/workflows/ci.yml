@@ -155,7 +155,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
-          cargo clippy --target ${{ matrix.target }} --example cube
+          cargo clippy --target ${{ matrix.target }} --bin cube
 
           # build raw-gles example
           cargo clippy --target ${{ matrix.target }} --example raw-gles
@@ -195,13 +195,13 @@ jobs:
         run: |
           cd wgpu
           wasm-pack test --headless --chrome --features webgl
-          cd ..
+          cd -
 
           # finds all example folders except the common folder
           for dir in $(find examples -maxdepth 1 -type d -not -name common); do
             cd $dir
             wasm-pack test --headless --chrome --features webgl
-            cd ../..
+            cd -
           done
 
   gpu-test:
