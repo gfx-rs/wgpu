@@ -8,6 +8,7 @@
  *    - last action is `Submit`
  *    - no swapchain use
 !*/
+#![cfg(not(target_arch = "wasm32"))]
 
 use player::{GlobalPlay, IdentityPassThroughFactory};
 use std::{
@@ -208,6 +209,9 @@ impl Corpus {
             println!("\tBackend {:?}", backend);
             let supported_features =
                 wgc::gfx_select!(adapter => global.adapter_features(adapter)).unwrap();
+            let downlevel_caps =
+                wgc::gfx_select!(adapter => global.adapter_downlevel_capabilities(adapter))
+                    .unwrap();
             let mut test_num = 0;
             for test_path in &corpus.tests {
                 println!("\t\tTest '{:?}'", test_path);
@@ -217,6 +221,13 @@ impl Corpus {
                         "\t\tSkipped due to missing features {:?}",
                         test.features - supported_features
                     );
+                    continue;
+                }
+                if !downlevel_caps
+                    .flags
+                    .contains(wgt::DownlevelFlags::COMPUTE_SHADERS)
+                {
+                    println!("\t\tSkipped due to missing compute shader capability");
                     continue;
                 }
                 test.run(dir, &global, adapter, test_num);

@@ -25,21 +25,9 @@ winit = { workspace = true, optional = true }
 workspace = true
 features = ["replay"]
 
-[dependencies.wgc]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 workspace = true
-features = ["replay", "raw-window-handle", "strict_asserts", "wgsl"]
-
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.wgc]
-workspace = true
-features = ["metal"]
-
-[target.'cfg(windows)'.dependencies.wgc]
-workspace = true
-features = ["dx11", "dx12"]
-
-[target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
-workspace = true
-features = ["vulkan"]
+features = ["replay", "raw-window-handle", "strict_asserts", "wgsl", "metal", "dx11", "dx12", "vulkan", "gles"]
 
 [dev-dependencies]
 serde.workspace = true

@@ -8,7 +8,12 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+autotests = false
 publish = false
+
+[[test]]
+name = "wgpu-tests"
+path = "tests/root.rs"
 
 [features]
 webgl = ["wgpu/webgl"]
@@ -20,7 +25,6 @@ env_logger.workspace = true
 log.workspace = true
 pollster.workspace = true
 png.workspace = true
-wasm-bindgen-test.workspace = true
 wgpu.workspace = true
 wgt.workspace = true
 
@@ -35,6 +39,7 @@ web-sys = { workspace = true }
 [dev-dependencies]
 bytemuck.workspace = true
 naga = { workspace = true, features = ["wgsl-in"] }
+wasm-bindgen-test.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 js-sys.workspace = true

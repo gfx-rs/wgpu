@@ -282,7 +282,10 @@ impl wgpu_example::framework::Example for Example {
             multiview: None,
         });
 
-        let pipeline_wire = if device.features().contains(wgpu::Features::POLYGON_MODE_LINE) {
+        let pipeline_wire = if device
+            .features()
+            .contains(wgpu::Features::POLYGON_MODE_LINE)
+        {
             let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),

@@ -5,7 +5,7 @@
  *   which is basically everything except for BGL and shader modules,
  *   so that we don't accidentally try to use the same ID.
 !*/
-
+#![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
 use wgc::device::trace;

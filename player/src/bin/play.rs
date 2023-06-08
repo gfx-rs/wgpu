@@ -1,5 +1,6 @@
 /*! This is a player for WebGPU traces.
 !*/
+#![cfg(not(target_arch = "wasm32"))]
 
 use player::{GlobalPlay as _, IdentityPassThroughFactory};
 use wgc::{device::trace, gfx_select};

@@ -9,15 +9,7 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 exclude = [
-    "etc/**/*",
-    "examples/**/*.png",  # Image comparison test
-    "examples/**/*.dds",  # Compressed textures
-    "examples/**/*.ktx2", # Compressed textures
-    "examples/**/*.mtl",  # Material files
-    "examples/**/*.obj",  # Model files
-    "tests/**/*",
     "Cargo.lock",
-    "target/**/*"
 ]
 
 [package.metadata.docs.rs]
