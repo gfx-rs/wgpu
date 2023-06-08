@@ -93,12 +93,24 @@ fn print_flip(pool: &mut nv_flip::FlipPool) {
     println!("\tMax Value: {:.6}", pool.max_value());
 }
 
+/// The FLIP library generates a per-pixel error map where 0.0 represents "no error"
+/// and 1.0 represents "maximum error" between the images. This is then put into
+/// a weighted-histogram, which we query to determine if the errors between
+/// the test and reference image is high enough to count as "different".
+///
+/// Error thresholds will be different for every test, but good initial values
+/// to look at are in the [0.01, 0.1] range. The larger the area that might have
+/// inherent variance, the larger this base value is. Using a high percentile comparison
+/// (e.g. 95% or 99%) is good for images that are likely to have a lot of error
+/// in a small area when they fail.
 #[derive(Debug, Clone, Copy)]
 pub enum ComparisonType {
-    // If the mean error is greater than the given value, the test will fail.
+    /// If the mean error is greater than the given value, the test will fail.
     Mean(f32),
-    // If the error at the given percentile [0, 1] is greater than the given value, the test will fail.
-    Percentile(f32, f32),
+    /// If the given percentile is greater than the given value, the test will fail.
+    ///
+    /// The percentile is given in the range [0, 1].
+    Percentile { percentile: f32, threshold: f32 },
 }
 
 impl ComparisonType {
@@ -116,7 +128,10 @@ impl ComparisonType {
                 );
                 within
             }
-            ComparisonType::Percentile(p, v) => {
+            ComparisonType::Percentile {
+                percentile: p,
+                threshold: v,
+            } => {
                 let percentile = pool.get_percentile(p, true);
                 let within = percentile <= v;
                 println!(

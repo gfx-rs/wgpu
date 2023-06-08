@@ -372,7 +372,10 @@ fn bunnymark() {
         // We're looking for very small differences, so look in the high percentiles.
         comparisons: &[
             framework::ComparisonType::Mean(0.05),
-            framework::ComparisonType::Percentile(0.99, 0.05),
+            framework::ComparisonType::Percentile {
+                percentile: 0.95,
+                threshold: 0.05,
+            },
         ],
     });
 }

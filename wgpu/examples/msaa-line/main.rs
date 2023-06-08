@@ -332,7 +332,10 @@ fn msaa_line() {
         // real failures from variance.
         comparisons: &[
             framework::ComparisonType::Mean(0.065),
-            framework::ComparisonType::Percentile(0.5, 0.29),
+            framework::ComparisonType::Percentile {
+                percentile: 0.5,
+                threshold: 0.29,
+            },
         ],
     });
 }

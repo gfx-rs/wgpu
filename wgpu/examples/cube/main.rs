@@ -438,7 +438,10 @@ fn cube_lines() {
         // We're looking for tiny changes here, so we focus on a spike in the 95th percentile.
         comparisons: &[
             framework::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
-            framework::ComparisonType::Percentile(0.95, 0.36), // Bounded by 1080ti on DX12
+            framework::ComparisonType::Percentile {
+                percentile: 0.95,
+                threshold: 0.36,
+            }, // Bounded by 1080ti on DX12
         ],
     });
 }
