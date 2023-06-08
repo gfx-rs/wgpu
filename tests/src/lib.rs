@@ -9,7 +9,7 @@ use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 pub mod image;
 mod isolation;
 
-pub use image::ComparisonType;
+pub use self::image::ComparisonType;
 
 const CANVAS_ID: &str = "test-canvas";
 
@@ -382,7 +382,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
 struct SurfaceGuard {
     #[cfg(all(
         target_arch = "wasm32",
-        any(target_os = "emscripten", feature = "webgl")
+        any(not(target_os = "emscripten"), feature = "webgl")
     ))]
     canvas: web_sys::HtmlCanvasElement,
 }
@@ -410,7 +410,7 @@ impl SurfaceGuard {
 
 #[cfg(all(
     target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
+    any(not(target_os = "emscripten"), feature = "webgl")
 ))]
 impl Drop for SurfaceGuard {
     fn drop(&mut self) {
@@ -420,7 +420,7 @@ impl Drop for SurfaceGuard {
 
 #[cfg(all(
     target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
+    any(not(target_os = "emscripten"), feature = "webgl")
 ))]
 fn create_html_canvas() -> web_sys::HtmlCanvasElement {
     use wasm_bindgen::JsCast;
@@ -439,7 +439,7 @@ fn create_html_canvas() -> web_sys::HtmlCanvasElement {
 
 #[cfg(all(
     target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
+    any(not(target_os = "emscripten"), feature = "webgl")
 ))]
 fn delete_html_canvas() {
     if let Some(document) = web_sys::window().and_then(|win| win.document()) {

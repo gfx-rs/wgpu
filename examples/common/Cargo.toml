@@ -21,7 +21,6 @@ wgpu-test.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-executor.workspace = true
-nv-flip.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true

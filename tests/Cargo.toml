@@ -10,18 +10,35 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+webgl = ["wgpu/webgl"]
+
 [dependencies]
 bitflags.workspace = true
 cfg-if.workspace = true
 env_logger.workspace = true
 log.workspace = true
-nv-flip.workspace = true
 pollster.workspace = true
 png.workspace = true
 wasm-bindgen-test.workspace = true
 wgpu.workspace = true
 wgt.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+nv-flip.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_log.workspace = true
+wasm-bindgen.workspace = true
+web-sys = { workspace = true }
+
 [dev-dependencies]
 bytemuck.workspace = true
-naga.workspace = true
+naga = { workspace = true, features = ["wgsl-in"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+js-sys.workspace = true
+image.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
