@@ -1,10 +1,4 @@
-use std::{
-    borrow::Cow,
-    ffi::{OsStr, OsString},
-    io,
-    path::Path,
-    str::FromStr,
-};
+use std::{borrow::Cow, ffi::OsStr, io, path::Path};
 use wgpu::util::DeviceExt;
 use wgpu::*;
 
@@ -71,80 +65,187 @@ pub fn calc_difference(lhs: u8, rhs: u8) -> u8 {
     (lhs as i16 - rhs as i16).unsigned_abs() as u8
 }
 
+fn add_alpha(input: &[u8]) -> Vec<u8> {
+    input
+        .chunks_exact(3)
+        .flat_map(|chunk| [chunk[0], chunk[1], chunk[2], 255])
+        .collect()
+}
+
+fn remove_alpha(input: &[u8]) -> Vec<u8> {
+    input
+        .chunks_exact(4)
+        .flat_map(|chunk| &chunk[0..3])
+        .copied()
+        .collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn print_flip(pool: &mut nv_flip::FlipPool) {
+    println!("\tMean: {:.6}", pool.mean());
+    println!("\tMin Value: {:.6}", pool.min_value());
+    for percentile in [25, 50, 75, 95, 99] {
+        println!(
+            "\t      {percentile}%: {:.6}",
+            pool.get_percentile(percentile as f32 / 100.0, true)
+        );
+    }
+    println!("\tMax Value: {:.6}", pool.max_value());
+}
+
+/// The FLIP library generates a per-pixel error map where 0.0 represents "no error"
+/// and 1.0 represents "maximum error" between the images. This is then put into
+/// a weighted-histogram, which we query to determine if the errors between
+/// the test and reference image is high enough to count as "different".
+///
+/// Error thresholds will be different for every test, but good initial values
+/// to look at are in the [0.01, 0.1] range. The larger the area that might have
+/// inherent variance, the larger this base value is. Using a high percentile comparison
+/// (e.g. 95% or 99%) is good for images that are likely to have a lot of error
+/// in a small area when they fail.
+#[derive(Debug, Clone, Copy)]
+pub enum ComparisonType {
+    /// If the mean error is greater than the given value, the test will fail.
+    Mean(f32),
+    /// If the given percentile is greater than the given value, the test will fail.
+    ///
+    /// The percentile is given in the range [0, 1].
+    Percentile { percentile: f32, threshold: f32 },
+}
+
+impl ComparisonType {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn check(&self, pool: &mut nv_flip::FlipPool) -> bool {
+        match *self {
+            ComparisonType::Mean(v) => {
+                let mean = pool.mean();
+                let within = mean <= v;
+                println!(
+                    "\tExpected Mean ({:.6}) to be under expected maximum ({}): {}",
+                    mean,
+                    v,
+                    if within { "PASS" } else { "FAIL" }
+                );
+                within
+            }
+            ComparisonType::Percentile {
+                percentile: p,
+                threshold: v,
+            } => {
+                let percentile = pool.get_percentile(p, true);
+                let within = percentile <= v;
+                println!(
+                    "\tExpected {}% ({:.6}) to be under expected maximum ({}): {}",
+                    p * 100.0,
+                    percentile,
+                    v,
+                    if within { "PASS" } else { "FAIL" }
+                );
+                within
+            }
+        }
+    }
+}
+
 pub fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
+    backend: wgpu::Backend,
     width: u32,
     height: u32,
-    data: &[u8],
-    tolerance: u8,
-    max_outliers: usize,
+    test_with_alpha: &[u8],
+    checks: &[ComparisonType],
 ) {
-    let comparison_data = read_png(&path, width, height);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::{ffi::OsString, str::FromStr};
 
-    if let Some(cmp) = comparison_data {
-        assert_eq!(cmp.len(), data.len());
+        let reference_with_alpha = read_png(&path, width, height);
 
-        let difference_data: Vec<_> = cmp
-            .chunks_exact(4)
-            .zip(data.chunks_exact(4))
-            .flat_map(|(cmp_chunk, data_chunk)| {
-                [
-                    calc_difference(cmp_chunk[0], data_chunk[0]),
-                    calc_difference(cmp_chunk[1], data_chunk[1]),
-                    calc_difference(cmp_chunk[2], data_chunk[2]),
-                    255,
-                ]
-            })
-            .collect();
+        let reference = match reference_with_alpha {
+            Some(v) => remove_alpha(&v),
+            None => {
+                write_png(
+                    &path,
+                    width,
+                    height,
+                    test_with_alpha,
+                    png::Compression::Best,
+                );
+                return;
+            }
+        };
+        let test = remove_alpha(test_with_alpha);
 
-        let outliers: usize = difference_data
-            .chunks_exact(4)
-            .map(|colors| {
-                (colors[0] > tolerance) as usize
-                    + (colors[1] > tolerance) as usize
-                    + (colors[2] > tolerance) as usize
-            })
-            .sum();
+        assert_eq!(reference.len(), test.len());
 
-        let max_difference = difference_data
-            .chunks_exact(4)
-            .map(|colors| colors[0].max(colors[1]).max(colors[2]))
-            .max()
-            .unwrap();
+        let reference_flip = nv_flip::FlipImageRgb8::with_data(width, height, &reference);
+        let test_flip = nv_flip::FlipImageRgb8::with_data(width, height, &test);
 
-        if outliers > max_outliers {
-            // Because the data is mismatched, lets output the difference to a file.
-            let old_path = Path::new(&path);
-            let actual_path = Path::new(&path).with_file_name(
-                OsString::from_str(
-                    &(old_path.file_stem().unwrap().to_string_lossy() + "-actual.png"),
-                )
-                .unwrap(),
-            );
-            let difference_path = Path::new(&path).with_file_name(
-                OsString::from_str(
-                    &(old_path.file_stem().unwrap().to_string_lossy() + "-difference.png"),
-                )
-                .unwrap(),
-            );
+        let error_map_flip = nv_flip::flip(
+            reference_flip,
+            test_flip,
+            nv_flip::DEFAULT_PIXELS_PER_DEGREE,
+        );
+        let mut pool = nv_flip::FlipPool::from_image(&error_map_flip);
 
-            write_png(actual_path, width, height, data, png::Compression::Fast);
-            write_png(
-                difference_path,
-                width,
-                height,
-                &difference_data,
-                png::Compression::Fast,
-            );
+        let reference_path = Path::new(&path);
+        println!(
+            "Starting image comparison test with reference image \"{}\"",
+            reference_path.display()
+        );
 
-            panic!(
-                "Image data mismatch! Outlier count {outliers} over limit {max_outliers}. Max difference {max_difference}"
-            )
-        } else {
-            println!("{outliers} outliers over max difference {max_difference}");
+        print_flip(&mut pool);
+
+        // If there are no checks, we want to fail the test.
+        let mut all_passed = !checks.is_empty();
+        // We always iterate all of these, as the call to check prints
+        for check in checks {
+            all_passed &= check.check(&mut pool);
         }
-    } else {
-        write_png(&path, width, height, data, png::Compression::Best);
+
+        let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
+        // Determine the paths to write out the various intermediate files
+        let actual_path = Path::new(&path).with_file_name(
+            OsString::from_str(&format!("{}-{}-actual.png", file_stem, backend.to_str(),)).unwrap(),
+        );
+        let difference_path = Path::new(&path).with_file_name(
+            OsString::from_str(&format!(
+                "{}-{}-difference.png",
+                file_stem,
+                backend.to_str(),
+            ))
+            .unwrap(),
+        );
+
+        // Convert the error values to a false color reprensentation
+        let magma_image = error_map_flip
+            .apply_color_lut(&nv_flip::magma_lut())
+            .to_vec();
+        let magma_image_with_alpha = add_alpha(&magma_image);
+
+        write_png(
+            actual_path,
+            width,
+            height,
+            test_with_alpha,
+            png::Compression::Fast,
+        );
+        write_png(
+            difference_path,
+            width,
+            height,
+            &magma_image_with_alpha,
+            png::Compression::Fast,
+        );
+
+        if !all_passed {
+            panic!("Image data mismatch!")
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (path, backend, width, height, test_with_alpha, checks);
     }
 }
 

@@ -413,13 +413,15 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn cube() {
     framework::test::<Example>(framework::FrameworkRefTest {
+        // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 1,
-        max_outliers: 1225, // Bounded by swiftshader
+        comparisons: &[
+            framework::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
+        ],
     });
 }
 
@@ -427,12 +429,19 @@ fn cube() {
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn cube_lines() {
     framework::test::<Example>(framework::FrameworkRefTest {
+        // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot-lines.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::POLYGON_MODE_LINE,
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 2,
-        max_outliers: 1250, // Bounded by swiftshader
+        // We're looking for tiny changes here, so we focus on a spike in the 95th percentile.
+        comparisons: &[
+            framework::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
+            framework::ComparisonType::Percentile {
+                percentile: 0.95,
+                threshold: 0.36,
+            }, // Bounded by 1080ti on DX12
+        ],
     });
 }

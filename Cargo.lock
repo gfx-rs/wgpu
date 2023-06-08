@@ -1765,6 +1765,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "nv-flip"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f87db52c5c87af428016af298dcdcb879ed7e235603de697d1d2f90ddd0d95be"
+dependencies = [
+ "nv-flip-sys",
+]
+
+[[package]]
+name = "nv-flip-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "932e1eed40002ba70fccac6dab3b64be3301607c3ee88bd14989c4d4e1c1c993"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "obj"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3147,6 +3165,7 @@ dependencies = [
  "naga",
  "nanorand",
  "noise",
+ "nv-flip",
  "obj",
  "parking_lot 0.12.1",
  "png",

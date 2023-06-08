@@ -16,14 +16,15 @@ fn zero_init_workgroup_mem() {
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults())
-            // remove once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
+            // remove both of these once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
             // https://github.com/gfx-rs/wgpu/issues/3160
             .specific_failure(
                 Some(Backends::DX12),
                 Some(5140),
                 Some("Microsoft Basic Render Driver"),
                 true,
-            ),
+            )
+            .specific_failure(Some(Backends::VULKAN), None, Some("swiftshader"), true),
         zero_init_workgroup_mem_impl,
     );
 }

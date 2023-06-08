@@ -246,7 +246,6 @@ fn stencil_triangles() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 1,
-        max_outliers: 0,
+        comparisons: &[framework::ComparisonType::Mean(0.03)],
     });
 }
