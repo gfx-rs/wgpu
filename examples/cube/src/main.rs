@@ -124,9 +124,9 @@ impl Example {
     }
 }
 
-impl wgpu_examples::framework::Example for Example {
-    fn optional_features() -> wgt::Features {
-        wgt::Features::POLYGON_MODE_LINE
+impl wgpu_example::framework::Example for Example {
+    fn optional_features() -> wgpu::Features {
+        wgpu::Features::POLYGON_MODE_LINE
     }
 
     fn init(
@@ -282,7 +282,7 @@ impl wgpu_examples::framework::Example for Example {
             multiview: None,
         });
 
-        let pipeline_wire = if device.features().contains(wgt::Features::POLYGON_MODE_LINE) {
+        let pipeline_wire = if device.features().contains(wgpu::Features::POLYGON_MODE_LINE) {
             let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
@@ -354,7 +354,7 @@ impl wgpu_examples::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &wgpu_examples::framework::Spawner,
+        spawner: &wgpu_example::framework::Spawner,
     ) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut encoder =
@@ -401,7 +401,7 @@ impl wgpu_examples::framework::Example for Example {
 }
 
 fn main() {
-    wgpu_examples::framework::run::<Example>("cube");
+    wgpu_example::framework::run::<Example>("cube");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -409,15 +409,15 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn cube() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[
-            wgpu_examples::framework::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
+            wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
         ],
     });
 }
@@ -425,17 +425,20 @@ fn cube() {
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn cube_lines() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot-lines.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::POLYGON_MODE_LINE,
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         // We're looking for tiny changes here, so we focus on a spike in the 95th percentile.
         comparisons: &[
-            wgpu_examples::framework::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
-            wgpu_examples::framework::ComparisonType::Percentile(0.95, 0.36), // Bounded by 1080ti on DX12
+            wgpu_test::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
+            wgpu_test::ComparisonType::Percentile {
+                percentile: 0.95,
+                threshold: 0.36,
+            }, // Bounded by 1080ti on DX12
         ],
     });
 }

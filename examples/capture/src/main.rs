@@ -235,11 +235,11 @@ mod tests {
     }
 
     fn assert_generated_data_matches_expected() {
-        let (device, output_buffer, dimensions) =
-            create_red_image_with_dimensions(100usize, 200usize).await;
+        let (device, output_buffer, dimensions, submission_index) =
+            pollster::block_on(create_red_image_with_dimensions(100usize, 200usize));
         let buffer_slice = output_buffer.slice(..);
         buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::Maintain::WaitForSubmissionIndex(submission_index));
         let padded_buffer = buffer_slice.get_mapped_range();
         let expected_buffer_size = dimensions.padded_bytes_per_row * dimensions.height;
         assert_eq!(padded_buffer.len(), expected_buffer_size);

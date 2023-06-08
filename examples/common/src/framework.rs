@@ -490,14 +490,15 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
     None
 }
 
-pub use crate::test_common::image::ComparisonType;
+pub use wgpu_test::image::ComparisonType;
 
 pub struct FrameworkRefTest {
+    // Path to the reference image, relative to the root of the repo.
     pub image_path: &'static str,
     pub width: u32,
     pub height: u32,
     pub optional_features: wgpu::Features,
-    pub base_test_parameters: crate::test_common::TestParameters,
+    pub base_test_parameters: wgpu_test::TestParameters,
     /// Comparisons against FLIP statistics that determine if the test passes or fails.
     pub comparisons: &'static [ComparisonType],
 }
@@ -510,7 +511,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
     let features = E::required_features() | params.optional_features;
 
-    crate::test_common::initialize_test(
+    wgpu_test::initialize_test(
         mem::take(&mut params.base_test_parameters).features(features),
         |ctx| {
             let spawner = Spawner::new();
@@ -610,8 +611,8 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             ctx.device.poll(wgpu::Maintain::Wait);
             let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
-            crate::test_common::image::compare_image_output(
-                env!("CARGO_MANIFEST_DIR").to_string() + params.image_path,
+            wgpu_test::image::compare_image_output(
+                env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
                 ctx.adapter_info.backend,
                 params.width,
                 params.height,

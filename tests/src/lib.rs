@@ -9,6 +9,8 @@ use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 pub mod image;
 mod isolation;
 
+pub use image::ComparisonType;
+
 const CANVAS_ID: &str = "test-canvas";
 
 async fn initialize_device(
@@ -296,7 +298,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
     cfg_if::cfg_if!(
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
-            let canary_set = hal::VALIDATION_CANARY.get_and_reset();
+            let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
         } else {
             let canary_set = _surface_guard.check_for_unreported_errors();
         }

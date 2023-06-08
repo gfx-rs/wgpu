@@ -36,7 +36,7 @@ struct Example {
     rng: WyRand,
 }
 
-impl wgpu_examples::framework::Example for Example {
+impl wgpu_example::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -291,7 +291,7 @@ impl wgpu_examples::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_examples::framework::Spawner,
+        _spawner: &wgpu_example::framework::Spawner,
     ) {
         let delta = 0.01;
         for bunny in self.bunnies.iter_mut() {
@@ -352,7 +352,7 @@ impl wgpu_examples::framework::Example for Example {
 }
 
 fn main() {
-    wgpu_examples::framework::run::<Example>("bunnymark");
+    wgpu_example::framework::run::<Example>("bunnymark");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -360,16 +360,19 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn bunnymark() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/bunnymark/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         // We're looking for very small differences, so look in the high percentiles.
         comparisons: &[
-            wgpu_examples::framework::ComparisonType::Mean(0.05),
-            wgpu_examples::framework::ComparisonType::Percentile(0.99, 0.05),
+            wgpu_test::ComparisonType::Mean(0.05),
+            wgpu_test::ComparisonType::Percentile {
+                percentile: 0.95,
+                threshold: 0.05,
+            },
         ],
     });
 }

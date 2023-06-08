@@ -1,20 +1,22 @@
 [package]
-name = "wgpu-boid-example"
+name = "wgpu-boids-example"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "wgpu boid example"
+description = "wgpu boids example"
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autotests = false
 publish = false
 
-
 [dependencies]
-wgpu-example = { path = "../common" }
-wgpu = { path = "../../wgpu" }
+bytemuck.workspace = true
+nanorand.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
 
 [dev-dependencies]
-wgpu-test = { path = "../../tests" }
+wgpu-test.workspace = true

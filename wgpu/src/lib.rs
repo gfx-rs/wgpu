@@ -47,6 +47,13 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
+#[cfg(not(feature = "webgl"))]
+#[doc(hidden)]
+pub use ::wgc as core;
+#[cfg(not(feature = "webgl"))]
+#[doc(hidden)]
+pub use ::hal as hal;
+
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]

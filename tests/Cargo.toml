@@ -8,9 +8,20 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autotests = false
 publish = false
 
-
 [dependencies]
-wgpu = { path = "../wgpu" }
+bitflags.workspace = true
+cfg-if.workspace = true
+env_logger.workspace = true
+log.workspace = true
+nv-flip.workspace = true
+pollster.workspace = true
+png.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu.workspace = true
+wgt.workspace = true
+
+[dev-dependencies]
+bytemuck.workspace = true
+naga.workspace = true

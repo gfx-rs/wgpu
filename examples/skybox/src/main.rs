@@ -89,7 +89,7 @@ impl Skybox {
     }
 }
 
-impl wgpu_examples::framework::Example for Skybox {
+impl wgpu_example::framework::Example for Skybox {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_COMPRESSION_ASTC
             | wgpu::Features::TEXTURE_COMPRESSION_ETC2
@@ -104,7 +104,7 @@ impl wgpu_examples::framework::Example for Skybox {
     ) -> Self {
         let mut entities = Vec::new();
         {
-            let source = include_bytes!("models/teslacyberv3.0.obj");
+            let source = include_bytes!("../models/teslacyberv3.0.obj");
             let data = obj::ObjData::load_buf(&source[..]).unwrap();
             let mut vertices = Vec::new();
             for object in data.objects {
@@ -306,10 +306,10 @@ impl wgpu_examples::framework::Example for Skybox {
             wgpu::TextureFormat::Astc {
                 block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
-            } => &include_bytes!("images/astc.dds")[..],
-            wgpu::TextureFormat::Etc2Rgb8UnormSrgb => &include_bytes!("images/etc2.dds")[..],
-            wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("images/bc1.dds")[..],
-            wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("images/bgra.dds")[..],
+            } => &include_bytes!("../images/astc.dds")[..],
+            wgpu::TextureFormat::Etc2Rgb8UnormSrgb => &include_bytes!("../images/etc2.dds")[..],
+            wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("../images/bc1.dds")[..],
+            wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("../images/bgra.dds")[..],
             _ => unreachable!(),
         };
 
@@ -396,7 +396,7 @@ impl wgpu_examples::framework::Example for Skybox {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_examples::framework::Spawner,
+        _spawner: &wgpu_example::framework::Spawner,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -460,7 +460,7 @@ impl wgpu_examples::framework::Example for Skybox {
 }
 
 fn main() {
-    wgpu_examples::framework::run::<Skybox>("skybox");
+    wgpu_example::framework::run::<Skybox>("skybox");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -468,52 +468,56 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox() {
-    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Skybox>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false),
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.015)],
+        base_test_parameters: wgpu_test::TestParameters::default().specific_failure(
+            Some(wgpu::Backends::GL),
+            None,
+            Some("ANGLE"),
+            false,
+        ),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_bc1() {
-    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Skybox>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-bc1.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.02)],
+        base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_etc2() {
-    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Skybox>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-etc2.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.015)],
+        base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn skybox_astc() {
-    wgpu_examples::framework::test::<Skybox>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Skybox>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/skybox/screenshot-astc.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.016)],
+        base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.016)],
     });
 }

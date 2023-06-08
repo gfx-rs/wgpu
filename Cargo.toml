@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "cts_runner",
     "deno_webgpu",
-    "dummy",
     "player",
     "examples/*",
     "wgpu",
@@ -11,15 +10,14 @@ members = [
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "run-wasm",
     "tests",
 ]
 exclude = []
-default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
+default-members = ["examples/*", "wgpu", "wgpu-hal", "wgpu-info", "wgpu-types", "tests"]
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.64"
+rust-version = "1.65"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -52,8 +50,7 @@ arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
 bit-vec = "0.6"
-bytemuck = "1.13"
-cargo-run-wasm = "0.3.2"
+bytemuck = { version = "1.13", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
@@ -67,7 +64,7 @@ image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = ">=0.7,<0.9"
 libc = "0.2"
 log = "0.4"
-nanorand = { version = "0.7", default-features = false }
+nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 nv-flip = "0.1"
 num-traits = { version = "0.2" }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
@@ -88,17 +85,18 @@ smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.16", path = "./wgpu" }
+wgpu-example = { path = "./examples/common" }
+wgpu-test = { path = "./tests"}
 winit = "0.27.1"
 
 # Metal dependencies
 block = "0.1"
-foreign-types = "0.3"
-metal = "0.24.0"
+metal = "0.25.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
 # Vulkan dependencies
-ash = "0.37.2"
+ash = "0.37.3"
 gpu-alloc = "0.5"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
@@ -113,7 +111,7 @@ hassle-rs = "0.10.0"
 
 # Gles dependencies
 khronos-egl = "4.1"
-glow = "0.12.1"
+glow = "0.12.2"
 glutin = "0.29.1"
 
 # wasm32 dependencies
@@ -126,13 +124,13 @@ wasm-bindgen-test = "0.3"
 web-sys = "0.3.61"
 
 # deno dependencies
-deno_console = "0.92.0"
-deno_core = "0.174.0"
-deno_url = "0.92.0"
-deno_web = "0.123.0"
-deno_webidl = "0.92.0"
+deno_console = "0.106.0"
+deno_core = "0.188.0"
+deno_url = "0.106.0"
+deno_web = "0.137.0"
+deno_webidl = "0.106.0"
 deno_webgpu = { path = "./deno_webgpu" }
-tokio = "1.25.0"
+tokio = "1.28.2"
 termcolor = "1.2.0"
 wgpu-core = { path = "./wgpu-core" }
 wgpu-types = { path = "./wgpu-types" }

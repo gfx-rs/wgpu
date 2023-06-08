@@ -9,7 +9,9 @@ description = "CTS runner for wgpu"
 license.workspace = true
 publish = false
 
-[dependencies]
+# We make all dependencies conditional on not being wasm,
+# so the whole workspace can built as wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 deno_console.workspace = true
 deno_core.workspace = true
 deno_url.workspace = true

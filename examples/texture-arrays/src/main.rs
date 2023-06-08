@@ -70,7 +70,7 @@ struct Example {
     uniform_workaround: bool,
 }
 
-impl wgpu_examples::framework::Example for Example {
+impl wgpu_example::framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
     }
@@ -366,7 +366,7 @@ impl wgpu_examples::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_examples::framework::Spawner,
+        _spawner: &wgpu_example::framework::Spawner,
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
@@ -405,7 +405,7 @@ impl wgpu_examples::framework::Example for Example {
 }
 
 fn main() {
-    wgpu_examples::framework::run::<Example>("texture-arrays");
+    wgpu_example::framework::run::<Example>("texture-arrays");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -413,26 +413,26 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn texture_arrays_uniform() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::empty(),
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.0)],
+        base_test_parameters: wgpu_test::TestParameters::default(),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
     });
 }
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn texture_arrays_non_uniform() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/texture-arrays/screenshot.png",
         width: 1024,
         height: 768,
         optional_features:
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default(),
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.0)],
+        base_test_parameters: wgpu_test::TestParameters::default(),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
     });
 }

@@ -265,7 +265,7 @@ impl Example {
     }
 }
 
-impl wgpu_examples::framework::Example for Example {
+impl wgpu_example::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -696,7 +696,7 @@ impl wgpu_examples::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_examples::framework::Spawner,
+        _spawner: &wgpu_example::framework::Spawner,
     ) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
@@ -814,7 +814,7 @@ impl wgpu_examples::framework::Example for Example {
 }
 
 fn main() {
-    wgpu_examples::framework::run::<Example>("water");
+    wgpu_example::framework::run::<Example>("water");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -822,13 +822,13 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn water() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/water/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
+        base_test_parameters: wgpu_test::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.01)],
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
     });
 }

@@ -19,7 +19,6 @@ exclude = [
     "Cargo.lock",
     "target/**/*"
 ]
-autotests = false
 
 [package.metadata.docs.rs]
 all-features = true

@@ -34,7 +34,7 @@ targets = [
 
 [features]
 default = []
-metal = ["naga/msl-out", "block", "foreign-types"]
+metal = ["naga/msl-out", "block"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "khronos-egl", "libloading"]
 dx11 = ["naga/hlsl-out", "d3d12", "libloading", "winapi/d3d11", "winapi/std", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
@@ -64,7 +64,7 @@ rustc-hash = "1.1"
 log = "0.4"
 
 # backend: Gles
-glow = { version = "0.12.1", optional = true }
+glow = { version = "0.12.2", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
@@ -73,7 +73,7 @@ version = "0.16"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
-ash = { version = "0.37.2", optional = true }
+ash = { version = "0.37.3", optional = true }
 gpu-alloc = { version = "0.5", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
@@ -100,9 +100,8 @@ d3d12 = { version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
 block = { version = "0.1", optional = true }
-foreign-types = { version = "0.3", optional = true }
 
-metal = "0.24.0"
+metal = "0.25.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 

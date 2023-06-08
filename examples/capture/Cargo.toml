@@ -8,13 +8,16 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autotests = false
 publish = false
 
-
 [dependencies]
-wgpu-example = { path = "../common" }
-wgpu = { path = "../../wgpu" }
+bytemuck.workspace = true
+env_logger.workspace = true
+futures-intrusive.workspace = true
+pollster.workspace = true
+png.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
 
-[dev-dependencies]
-wgpu-test = { path = "../../tests" }

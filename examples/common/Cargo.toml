@@ -8,39 +8,19 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autotests = false
 publish = false
 
-[lib]
-
-[features]
-webgl = ["hal", "wgpu/webgl"]
-
 [dependencies]
-bitflags.workspace = true
-bytemuck = { workspace = true, features = ["derive"] }
-cfg-if.workspace = true
-glam.workspace = true
-ddsfile.workspace = true
-futures-intrusive.workspace = true
 env_logger.workspace = true
-image.workspace = true
 log.workspace = true
-naga.workspace = true
-hal.workspace = true
-noise = { workspace = true }
-obj.workspace = true
 pollster.workspace = true
 png.workspace = true
-nanorand = { workspace = true, features = ["wyrand"] }
-wasm-bindgen-test.workspace = true
-winit.workspace = true # for "halmark" example
-wgt.workspace = true
+winit.workspace = true
 wgpu.workspace = true
+wgpu-test.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-executor.workspace = true
-hal = { workspace = true }
 nv-flip.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

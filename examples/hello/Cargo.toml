@@ -8,9 +8,15 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-autotests = false
 publish = false
 
-
 [dependencies]
-wgpu = { path = "../../wgpu" }
+env_logger.workspace = true
+glam.workspace = true
+log.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true
+

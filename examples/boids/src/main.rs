@@ -24,7 +24,7 @@ struct Example {
     frame_num: usize,
 }
 
-impl wgpu_examples::framework::Example for Example {
+impl wgpu_example::framework::Example for Example {
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::downlevel_defaults()
     }
@@ -266,7 +266,7 @@ impl wgpu_examples::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_examples::framework::Spawner,
+        _spawner: &wgpu_example::framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
         let color_attachments = [Some(wgpu::RenderPassColorAttachment {
@@ -323,7 +323,7 @@ impl wgpu_examples::framework::Example for Example {
 
 /// run example
 fn main() {
-    wgpu_examples::framework::run::<Example>("boids");
+    wgpu_example::framework::run::<Example>("boids");
 }
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -331,17 +331,15 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn boids() {
-    wgpu_examples::framework::test::<Example>(wgpu_examples::framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         // Generated on 1080ti on Vk/Windows
-        image_path: "/examples/boids/screenshot.png",
+        image_path: "examples/boids/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_examples::test_common::TestParameters::default()
+        base_test_parameters: wgpu_test::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/3733
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false),
-        comparisons: &[wgpu_examples::framework::ComparisonType::Mean(0.005)],
+            .limits(wgpu::Limits::downlevel_defaults()),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     });
 }
