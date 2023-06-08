@@ -35,10 +35,7 @@ impl Args {
             eprint!("{HELP}");
             exit(101);
         }
-        match (|| -> anyhow::Result<_> {
-            let subcommand = Subcommand::parse(args)?;
-            Ok(Self { subcommand })
-        })() {
+        match Subcommand::parse(args).map(|subcommand| Self { subcommand }) {
             Ok(this) => this,
             Err(e) => {
                 eprintln!("{:?}", anyhow!(e));
