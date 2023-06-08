@@ -10,6 +10,10 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[[bin]]
+name = "water"
+path = "src/main.rs"
+
 [dependencies]
 bytemuck.workspace = true
 nanorand.workspace = true

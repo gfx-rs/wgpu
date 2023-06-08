@@ -10,6 +10,10 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[[bin]]
+name = "skybox"
+path = "src/main.rs"
+
 [dependencies]
 bytemuck.workspace = true
 ddsfile.workspace = true

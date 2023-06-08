@@ -10,6 +10,10 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[[bin]]
+name = "conservative-raster"
+path = "src/main.rs"
+
 [dependencies]
 wasm-bindgen-test.workspace = true
 wgpu-example.workspace = true

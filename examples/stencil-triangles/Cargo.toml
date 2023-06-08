@@ -10,6 +10,10 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[[bin]]
+name = "stencil-triangles"
+path = "src/main.rs"
+
 [dependencies]
 bytemuck.workspace = true
 wasm-bindgen-test.workspace = true

@@ -13,7 +13,15 @@ members = [
     "tests",
 ]
 exclude = []
-default-members = ["examples/*", "wgpu", "wgpu-hal", "wgpu-info", "wgpu-types", "tests"]
+default-members = [
+    "examples/*",
+    "player",
+    "wgpu",
+    "wgpu-hal",
+    "wgpu-info",
+    "wgpu-types",
+    "tests"
+]
 
 [workspace.package]
 edition = "2021"
@@ -85,8 +93,8 @@ smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.16", path = "./wgpu" }
-wgpu-example = { path = "./examples/common" }
-wgpu-test = { path = "./tests"}
+wgpu-example = { version = "0.16", path = "./examples/common" }
+wgpu-test = { version = "0.16", path = "./tests"}
 winit = "0.27.1"
 
 # Metal dependencies

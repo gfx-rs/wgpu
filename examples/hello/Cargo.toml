@@ -10,6 +10,10 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[[bin]]
+name = "hello"
+path = "src/main.rs"
+
 [dependencies]
 env_logger.workspace = true
 glam.workspace = true
