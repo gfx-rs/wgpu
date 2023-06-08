@@ -17,6 +17,7 @@ default-members = [
     "examples/*",
     "player",
     "wgpu",
+    "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",

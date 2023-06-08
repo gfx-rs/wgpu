@@ -113,7 +113,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(self.hubs.gl.generate_report())
             } else {
                 None
-            },
+            }
         }
     }
 }
