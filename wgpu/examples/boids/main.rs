@@ -342,9 +342,7 @@ fn boids() {
         optional_features: wgpu::Features::default(),
         base_test_parameters: framework::test_common::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-            .limits(wgpu::Limits::downlevel_defaults())
-            // https://github.com/gfx-rs/wgpu/issues/3733
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false),
+            .limits(wgpu::Limits::downlevel_defaults()),
         comparisons: &[framework::ComparisonType::Mean(0.005)],
     });
 }
