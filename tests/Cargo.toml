@@ -1,0 +1,16 @@
+[package]
+name = "wgpu-test"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "common code for wgpu tests"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+autotests = false
+publish = false
+
+
+[dependencies]
+wgpu = { path = "../wgpu" }

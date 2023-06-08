@@ -5,16 +5,17 @@ members = [
     "deno_webgpu",
     "dummy",
     "player",
-    "examples",
+    "examples/*",
     "wgpu",
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "run-wasm"
+    "run-wasm",
+    "tests",
 ]
 exclude = []
-default-members = ["examples", "wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
+default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
 
 [workspace.package]
 edition = "2021"

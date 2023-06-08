@@ -1,0 +1,20 @@
+[package]
+name = "wgpu-hello-triangle-example"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "wgpu hello triangle example"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+autotests = false
+publish = false
+
+
+[dependencies]
+wgpu-example = { path = "../common" }
+wgpu = { path = "../../wgpu" }
+
+[dev-dependencies]
+wgpu-test = { path = "../../tests" }

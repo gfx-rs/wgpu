@@ -1,0 +1,16 @@
+[package]
+name = "wgpu-hello-example"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "wgpu hello example"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+autotests = false
+publish = false
+
+
+[dependencies]
+wgpu = { path = "../../wgpu" }

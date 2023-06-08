@@ -3114,6 +3114,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-boid-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-bunnymark-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-capture-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-conservative-raster-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
 name = "wgpu-core"
 version = "0.16.0"
 dependencies = [
@@ -3137,7 +3173,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-examples"
+name = "wgpu-cube-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-example"
 version = "0.16.0"
 dependencies = [
  "async-executor",
@@ -3214,12 +3259,107 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-hello-compute-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-hello-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+]
+
+[[package]]
+name = "wgpu-hello-triangle-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-hello-windows-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
 name = "wgpu-info"
 version = "0.16.0"
 dependencies = [
  "bitflags 2.3.1",
  "env_logger",
  "wgpu",
+]
+
+[[package]]
+name = "wgpu-mipmap-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-msaa-line-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-shadow-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-skybox-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-stencil-triangle-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
+name = "wgpu-test"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+]
+
+[[package]]
+name = "wgpu-texture-arrays-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
 ]
 
 [[package]]
@@ -3231,6 +3371,15 @@ dependencies = [
  "serde",
  "serde_json",
  "web-sys",
+]
+
+[[package]]
+name = "wgpu-water-example"
+version = "0.16.0"
+dependencies = [
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
 ]
 
 [[package]]
