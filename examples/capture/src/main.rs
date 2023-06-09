@@ -229,7 +229,8 @@ mod tests {
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     #[test]
-    #[wasm_bindgen_test::wasm_bindgen_test]
+    // This test never creates a canvas, so will always fail on webgl2.
+    // #[wasm_bindgen_test::wasm_bindgen_test]
     fn ensure_generated_data_matches_expected() {
         assert_generated_data_matches_expected();
     }
