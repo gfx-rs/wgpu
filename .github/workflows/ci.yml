@@ -194,15 +194,7 @@ jobs:
       - name: execute tests
         run: |
           cd wgpu
-          wasm-pack test --headless --chrome --features webgl
-          cd -
-
-          # finds all example folders except the common folder
-          for dir in $(find examples -maxdepth 1 -type d -not -name common -not -name examples); do
-            cd $dir
-            wasm-pack test --headless --chrome --features webgl
-            cd -
-          done
+          wasm-pack test --headless --chrome --features webgl --workspace
 
   gpu-test:
     strategy:
