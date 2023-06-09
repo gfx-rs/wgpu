@@ -47,10 +47,10 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
-#[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+#[cfg(any(not(target_arch = "wasm32"), feature = "webgl", target_os = "emscripten"))]
 #[doc(hidden)]
 pub use ::hal;
-#[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
+#[cfg(any(not(target_arch = "wasm32"), feature = "webgl", target_os = "emscripten"))]
 #[doc(hidden)]
 pub use ::wgc as core;
 

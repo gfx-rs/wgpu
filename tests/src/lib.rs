@@ -345,7 +345,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
 
     #[cfg(not(all(
         target_arch = "wasm32",
-        any(not(target_os = "emscripten"), feature = "webgl")
+        any(target_os = "emscripten", feature = "webgl")
     )))]
     {
         surface_guard = SurfaceGuard {};
@@ -353,15 +353,36 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     }
     #[cfg(all(
         target_arch = "wasm32",
-        any(not(target_os = "emscripten"), feature = "webgl")
+        any(target_os = "emscripten", feature = "webgl")
     ))]
     {
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
 
-        let surface = instance
-            .create_surface_from_canvas(canvas.clone())
-            .expect("could not create surface from canvas");
+        // We use raw_window_handle here, as create_surface_from_canvas is not yet implemented on emscripten.
+        struct WindowHandle;
+        unsafe impl raw_window_handle::HasRawWindowHandle for WindowHandle {
+            fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
+                raw_window_handle::RawWindowHandle::Web({
+                    let mut handle = raw_window_handle::WebWindowHandle::empty();
+                    handle.id = 1;
+                    handle
+                })
+            }
+        }
+        unsafe impl raw_window_handle::HasRawDisplayHandle for WindowHandle {
+            fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
+                raw_window_handle::RawDisplayHandle::Web(
+                    raw_window_handle::WebDisplayHandle::empty(),
+                )
+            }
+        }
+
+        let surface = unsafe {
+            instance
+                .create_surface(&WindowHandle)
+                .expect("could not create surface from canvas")
+        };
 
         surface_guard = SurfaceGuard { canvas };
 
@@ -382,7 +403,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
 struct SurfaceGuard {
     #[cfg(all(
         target_arch = "wasm32",
-        any(not(target_os = "emscripten"), feature = "webgl")
+        any(target_os = "emscripten", feature = "webgl")
     ))]
     canvas: web_sys::HtmlCanvasElement,
 }
@@ -410,7 +431,7 @@ impl SurfaceGuard {
 
 #[cfg(all(
     target_arch = "wasm32",
-    any(not(target_os = "emscripten"), feature = "webgl")
+    any(target_os = "emscripten", feature = "webgl")
 ))]
 impl Drop for SurfaceGuard {
     fn drop(&mut self) {
@@ -420,7 +441,7 @@ impl Drop for SurfaceGuard {
 
 #[cfg(all(
     target_arch = "wasm32",
-    any(not(target_os = "emscripten"), feature = "webgl")
+    any(target_os = "emscripten", feature = "webgl")
 ))]
 fn create_html_canvas() -> web_sys::HtmlCanvasElement {
     use wasm_bindgen::JsCast;
@@ -430,6 +451,7 @@ fn create_html_canvas() -> web_sys::HtmlCanvasElement {
         .and_then(|doc| {
             let body = doc.body().unwrap();
             let canvas = doc.create_element("Canvas").unwrap();
+            canvas.set_attribute("data-raw-handle", "1").unwrap();
             canvas.set_id(CANVAS_ID);
             body.append_child(&canvas).unwrap();
             canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok()
@@ -439,7 +461,7 @@ fn create_html_canvas() -> web_sys::HtmlCanvasElement {
 
 #[cfg(all(
     target_arch = "wasm32",
-    any(not(target_os = "emscripten"), feature = "webgl")
+    any(target_os = "emscripten", feature = "webgl")
 ))]
 fn delete_html_canvas() {
     if let Some(document) = web_sys::window().and_then(|win| win.document()) {

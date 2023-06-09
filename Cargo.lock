@@ -3274,6 +3274,7 @@ dependencies = [
  "nv-flip",
  "png",
  "pollster",
+ "raw-window-handle 0.5.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
