@@ -359,7 +359,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
 
-        // We use raw_window_handle here, as create_surface_from_canvas is not yet implemented on emscripten.
+        // We use raw_window_handle here, as create_surface_from_canvas is not implemented on emscripten.
         struct WindowHandle;
         unsafe impl raw_window_handle::HasRawWindowHandle for WindowHandle {
             fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
