@@ -119,7 +119,7 @@ winapi = "0.3"
 hassle-rs = "0.10.0"
 
 # Gles dependencies
-khronos-egl = "4.1"
+khronos-egl = "5.0"
 glow = "0.12.2"
 glutin = "0.29.1"
 

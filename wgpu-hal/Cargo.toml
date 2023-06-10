@@ -78,7 +78,7 @@ gpu-alloc = { version = "0.5", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
 
-khronos-egl = { version = "4.1", features = ["dynamic"], optional = true }
+khronos-egl = { version = "5.0", features = ["dynamic"], optional = true }
 libloading = { version = ">=0.7,<0.9", optional = true }
 renderdoc-sys = { version = "1.0.0", optional = true }
 
