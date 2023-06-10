@@ -96,7 +96,7 @@ thiserror = "1"
 wgpu = { version = "0.16", path = "./wgpu" }
 wgpu-example = { version = "0.16", path = "./examples/common" }
 wgpu-test = { version = "0.16", path = "./tests"}
-winit = "0.27.1"
+winit = "0.28.6"
 
 # Metal dependencies
 block = "0.1"
