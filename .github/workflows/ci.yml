@@ -10,6 +10,7 @@ on:
 env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
+  RUST_LOG: info
   RUST_BACKTRACE: full
   RUST_LOG: info #needed to understand what's going on when tests fail
   MSRV: 1.65
@@ -113,10 +114,23 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
+      - name: install aarch64-linux-gnu g++
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          set -e
+
+          sudo apt-get update -y -qq
+
+          sudo apt-get install g++-aarch64-linux-gnu
+
       - name: add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          # clang++ will be detected correctly by CC from path
+          echo "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+          # the android sdk doesn't use the conventional name for ar, so explicitly set it.
+          echo "AR_aarch64_linux_android=llvm-ar" >> "$GITHUB_ENV"
 
       - name: check web
         if: matrix.kind == 'web'
@@ -225,7 +239,7 @@ jobs:
           mkdir -p swiftshader
           curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
 
-          echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
+          echo "VK_ICD_FILENAMES=$PWD/swiftshader/vk_swiftshader_icd.json" >> $GITHUB_ENV
 
       - name: install llvmpipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
@@ -272,6 +286,13 @@ jobs:
             echo "======= NATIVE TESTS $backend ======";
             WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
           done
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: comparison-images
+          path: |
+            **/*-actual.png
+            **/*-difference.png
 
       - name: generate coverage report
         shell: bash

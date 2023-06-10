@@ -422,8 +422,7 @@ fn texture_arrays_uniform() {
         height: 768,
         optional_features: wgpu::Features::empty(),
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 0,
-        max_outliers: 0,
+        comparisons: &[framework::ComparisonType::Mean(0.0)],
     });
 }
 
@@ -437,7 +436,6 @@ fn texture_arrays_non_uniform() {
         optional_features:
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         base_test_parameters: framework::test_common::TestParameters::default(),
-        tolerance: 0,
-        max_outliers: 0,
+        comparisons: &[framework::ComparisonType::Mean(0.0)],
     });
 }

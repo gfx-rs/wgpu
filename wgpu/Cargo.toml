@@ -178,6 +178,7 @@ winit.workspace = true # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-executor.workspace = true
+nv-flip.workspace = true
 
 [dependencies.naga]
 workspace = true

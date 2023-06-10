@@ -183,6 +183,8 @@ fn uniform_input() {
     initialize_test(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
+            .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false)
             .limits(Limits::downlevel_defaults()),
         |ctx| {
             shader_input_output_test(
