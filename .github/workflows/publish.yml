@@ -24,7 +24,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
-        run: cargo +stable install wasm-bindgen-cli --version=0.2.84
+        run: cargo +stable install wasm-bindgen-cli --version=0.2.86
 
       - name: Build WebGPU examples
         run: cargo build --package wgpu --release --target wasm32-unknown-unknown --examples
