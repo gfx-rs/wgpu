@@ -10,7 +10,6 @@ on:
 env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
-  RUST_LOG: info
   RUST_BACKTRACE: full
   RUST_LOG: info #needed to understand what's going on when tests fail
   MSRV: 1.65
