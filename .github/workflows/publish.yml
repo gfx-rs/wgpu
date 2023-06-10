@@ -2,8 +2,9 @@ name: Publish
 
 on:
   push:
-    branches:
-      - trunk
+    branches: ["*"]
+  pull_request:
+  merge_group:
 
 env:
   CARGO_INCREMENTAL: false
@@ -38,6 +39,7 @@ jobs:
 
       - name: Deploy WebGPU examples
         uses: JamesIves/github-pages-deploy-action@v4.4.2
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gpu
@@ -60,6 +62,7 @@ jobs:
 
       - name: Deploy WebGL examples
         uses: JamesIves/github-pages-deploy-action@v4.4.2
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gl
