@@ -1,13 +1,8 @@
 [package]
 name = "wgpu-stencil-triangle-example"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "wgpu stencil triangles example"
-homepage.workspace = true
-repository.workspace = true
-keywords.workspace = true
-license.workspace = true
 publish = false
 
 [[bin]]

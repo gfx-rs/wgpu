@@ -1,13 +1,8 @@
 [package]
 name = "wgpu-boids-example"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "wgpu boids example"
-homepage.workspace = true
-repository.workspace = true
-keywords.workspace = true
-license.workspace = true
 publish = false
 
 [[bin]]

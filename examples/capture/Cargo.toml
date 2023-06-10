@@ -1,13 +1,8 @@
 [package]
 name = "wgpu-capture-example"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 description = "wgpu capture example"
-homepage.workspace = true
-repository.workspace = true
-keywords.workspace = true
-license.workspace = true
 publish = false
 
 [[bin]]
