@@ -4,14 +4,25 @@ members = [
     "cts_runner",
     "deno_webgpu",
     "player",
+    "examples/*",
     "wgpu",
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
+    "tests",
 ]
 exclude = []
-default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
+default-members = [
+    "examples/*",
+    "player",
+    "wgpu",
+    "wgpu-core",
+    "wgpu-hal",
+    "wgpu-info",
+    "wgpu-types",
+    "tests"
+]
 
 [workspace.package]
 edition = "2021"
@@ -48,7 +59,7 @@ arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
 bit-vec = "0.6"
-bytemuck = "1.13"
+bytemuck = { version = "1.13", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
@@ -62,7 +73,7 @@ image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = ">=0.7,<0.9"
 libc = "0.2"
 log = "0.4"
-nanorand = { version = "0.7", default-features = false }
+nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 nv-flip = "0.1"
 num-traits = { version = "0.2" }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
@@ -83,6 +94,8 @@ smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.16", path = "./wgpu" }
+wgpu-example = { version = "0.16", path = "./examples/common" }
+wgpu-test = { version = "0.16", path = "./tests"}
 winit = "0.27.1"
 
 # Metal dependencies

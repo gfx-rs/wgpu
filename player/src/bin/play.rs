@@ -1,15 +1,16 @@
 /*! This is a player for WebGPU traces.
 !*/
 
-use player::{GlobalPlay as _, IdentityPassThroughFactory};
-use wgc::{device::trace, gfx_select};
-
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
-
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    use player::{GlobalPlay as _, IdentityPassThroughFactory};
+    use wgc::{device::trace, gfx_select};
+
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
+
     #[cfg(feature = "winit")]
     use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
     #[cfg(feature = "winit")]
@@ -197,3 +198,6 @@ fn main() {
         });
     }
 }
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}

@@ -27,11 +27,11 @@ jobs:
         run: cargo +stable install wasm-bindgen-cli --version=0.2.84
 
       - name: Build WebGPU examples
-        run: cargo build --package wgpu --release --target wasm32-unknown-unknown --examples
+        run: cargo build --release --target wasm32-unknown-unknown
 
       - name: Generate JS bindings for WebGPU examples
         run: |
-          for i in target/wasm32-unknown-unknown/release/examples/*.wasm;
+          for i in target/wasm32-unknown-unknown/release/*.wasm;
           do
             wasm-bindgen --no-typescript --out-dir target/generated-gpu --web "$i";
           done
@@ -49,11 +49,11 @@ jobs:
         run: cargo clean
 
       - name: Build WebGL examples
-        run: cargo build --release --target wasm32-unknown-unknown --examples --features webgl
+        run: cargo build --release --target wasm32-unknown-unknown --features webgl
 
       - name: Generate JS bindings for WebGL examples
         run: |
-          for i in target/wasm32-unknown-unknown/release/examples/*.wasm;
+          for i in target/wasm32-unknown-unknown/release/*.wasm;
           do
             wasm-bindgen --no-typescript --out-dir target/generated-gl --web "$i";
           done

@@ -47,6 +47,21 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+#[doc(hidden)]
+pub use ::hal;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+#[doc(hidden)]
+pub use ::wgc as core;
+
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
@@ -4265,7 +4280,7 @@ impl Surface {
 #[cfg(feature = "expose-ids")]
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
-pub struct Id<T>(core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+pub struct Id<T>(::core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
 
 // SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
 // returned for different types , so `Id` can safely implement Send and Sync.

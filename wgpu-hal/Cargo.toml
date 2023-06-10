@@ -130,6 +130,7 @@ version = "0.12.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
+cfg-if = "1"
 env_logger = "0.10"
 winit = "0.27.1"   # for "halmark" example
 
