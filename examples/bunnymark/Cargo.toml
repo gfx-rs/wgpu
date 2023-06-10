@@ -1,6 +1,7 @@
 [package]
 name = "wgpu-bunnymark-example"
 version.workspace = true
+license.workspace = true
 edition.workspace = true
 description = "wgpu bunnymark example"
 publish = false

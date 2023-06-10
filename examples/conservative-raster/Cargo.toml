@@ -1,6 +1,7 @@
 [package]
 name = "wgpu-conservative-raster-example"
 version.workspace = true
+license.workspace = true
 edition.workspace = true
 description = "wgpu conservative raster example"
 publish = false
