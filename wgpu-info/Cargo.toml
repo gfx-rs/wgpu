@@ -13,4 +13,5 @@ publish = false
 [dependencies]
 bitflags.workspace = true
 env_logger.workspace = true
+pico-args.workspace = true
 wgpu.workspace = true
