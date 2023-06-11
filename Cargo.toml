@@ -55,6 +55,7 @@ rev = "b99d58ea435090e561377949f428bce2c18451bb"
 version = "0.12.0"
 
 [workspace.dependencies]
+anyhow = "1.0"
 arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"

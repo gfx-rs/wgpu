@@ -11,7 +11,11 @@ license.workspace = true
 publish = false
 
 [dependencies]
+anyhow.workspace = true
 bitflags.workspace = true
 env_logger.workspace = true
 pico-args.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 wgpu.workspace = true
+wgpu-types = { workspace = true, features = ["serde"] }

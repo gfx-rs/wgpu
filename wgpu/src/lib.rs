@@ -1440,7 +1440,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
+    pub fn enumerate_adapters(&self, backends: Backends) -> impl ExactSizeIterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
