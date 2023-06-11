@@ -74,7 +74,7 @@ pub fn main() -> anyhow::Result<()> {
         }
     };
     let mut output = io::BufWriter::new(output);
-    
+
     let output_name = output_path.as_deref().unwrap_or("stdout");
 
     if json {
