@@ -84,7 +84,7 @@ obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
-png = "0.17.8"
+png = "0.17.9"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
@@ -108,7 +108,7 @@ core-graphics-types = "0.1"
 
 # Vulkan dependencies
 ash = "0.37.3"
-gpu-alloc = "0.5"
+gpu-alloc = "0.6"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
 
@@ -129,7 +129,7 @@ glutin = "0.29.1"
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
 js-sys = "0.3.63"
-wasm-bindgen = "0.2.84"
+wasm-bindgen = "0.2.86"
 wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3.61"

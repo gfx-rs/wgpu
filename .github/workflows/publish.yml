@@ -2,8 +2,9 @@ name: Publish
 
 on:
   push:
-    branches:
-      - trunk
+    branches: ["*"]
+  pull_request:
+  merge_group:
 
 env:
   CARGO_INCREMENTAL: false
@@ -24,7 +25,10 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
-        run: cargo +stable install wasm-bindgen-cli --version=0.2.84
+        run: cargo +stable install wasm-bindgen-cli --version=0.2.86
+
+      - name: Pin wasm-bindgen version
+        run: cargo update -p wasm-bindgen --precise 0.2.86
 
       - name: Build WebGPU examples
         run: cargo build --release --target wasm32-unknown-unknown
@@ -38,6 +42,7 @@ jobs:
 
       - name: Deploy WebGPU examples
         uses: JamesIves/github-pages-deploy-action@v4.4.2
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gpu
@@ -60,6 +65,7 @@ jobs:
 
       - name: Deploy WebGL examples
         uses: JamesIves/github-pages-deploy-action@v4.4.2
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gl
