@@ -1,10 +1,12 @@
-use wgpu_test::{fail, initialize_test, TestParameters};
+use wgpu_test::{fail, infra::GpuTest};
 
-#[test]
-fn copy_overflow_z() {
+#[derive(Default)]
+pub struct CopyOverflowZTest;
+
+impl GpuTest for CopyOverflowZTest {
     // A simple crash test exercising validation that used to happen a bit too
     // late, letting an integer overflow slip through.
-    initialize_test(TestParameters::default(), |ctx| {
+    fn run(&self, ctx: wgpu_test::TestingContext) {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -65,5 +67,5 @@ fn copy_overflow_z() {
             );
             ctx.queue.submit(Some(encoder.finish()));
         });
-    })
+    }
 }

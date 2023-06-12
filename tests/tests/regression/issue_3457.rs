@@ -15,7 +15,7 @@ use wgpu::*;
 ///
 /// We use non-consecutive vertex attribute locations (0 and 5) in order to also test
 /// that we unset the correct locations (see PR #3706).
-#[wasm_bindgen_test]
+// #[wasm_bindgen_test]
 #[test]
 fn pass_reset_vertex_buffer() {
     initialize_test(TestParameters::default(), |ctx| {

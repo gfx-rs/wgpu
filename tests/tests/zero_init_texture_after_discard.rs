@@ -1,12 +1,16 @@
-use wasm_bindgen_test::*;
 use wgpu::*;
-use wgpu_test::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
+use wgpu_test::{image::ReadbackBuffers, infra::GpuTest, TestParameters, TestingContext};
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
-#[test]
-#[wasm_bindgen_test]
-fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
-    initialize_test(TestParameters::default().webgl2_failure(), |mut ctx| {
+#[derive(Default)]
+pub struct DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyAfterSubmitTest;
+
+impl GpuTest for DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyAfterSubmitTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params.webgl2_failure()
+    }
+
+    fn run(&self, mut ctx: TestingContext) {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
@@ -17,14 +21,18 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after
         case.submit_command_encoder();
 
         case.assert_buffers_are_zero();
-    });
+    }
 }
 
-// Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in the same encoder to a buffer.
-#[test]
-#[wasm_bindgen_test]
-fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(TestParameters::default().webgl2_failure(), |mut ctx| {
+#[derive(Default)]
+pub struct DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest;
+
+impl GpuTest for DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params.webgl2_failure()
+    }
+
+    fn run(&self, mut ctx: TestingContext) {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
@@ -32,64 +40,68 @@ fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_sa
         case.submit_command_encoder();
 
         case.assert_buffers_are_zero();
-    });
+    }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(
-        TestParameters::default()
+#[derive(Default)]
+pub struct DiscardingDepthTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest;
+
+impl GpuTest for DiscardingDepthTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params
             .downlevel_flags(
                 DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
             )
-            .limits(Limits::downlevel_defaults()),
-        |mut ctx| {
-            for format in [
-                TextureFormat::Stencil8,
-                TextureFormat::Depth16Unorm,
-                TextureFormat::Depth24Plus,
-                TextureFormat::Depth24PlusStencil8,
-                TextureFormat::Depth32Float,
-            ] {
-                let mut case = TestCase::new(&mut ctx, format);
-                case.create_command_encoder();
-                case.discard();
-                case.copy_texture_to_buffer();
-                case.submit_command_encoder();
+            .limits(Limits::downlevel_defaults())
+    }
 
-                case.assert_buffers_are_zero();
-            }
-        },
-    );
-}
-
-#[test]
-#[wasm_bindgen_test]
-fn discarding_either_depth_or_stencil_aspect() {
-    initialize_test(
-        TestParameters::default()
-            .downlevel_flags(
-                DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
-            )
-            .limits(Limits::downlevel_defaults()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Depth24PlusStencil8);
+    fn run(&self, mut ctx: TestingContext) {
+        for format in [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+        ] {
+            let mut case = TestCase::new(&mut ctx, format);
             case.create_command_encoder();
-            case.discard_depth();
-            case.submit_command_encoder();
-
-            case.create_command_encoder();
-            case.discard_stencil();
-            case.submit_command_encoder();
-
-            case.create_command_encoder();
+            case.discard();
             case.copy_texture_to_buffer();
             case.submit_command_encoder();
 
             case.assert_buffers_are_zero();
-        },
-    );
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct DiscardingEitherDepthOrStencilAspectTest;
+
+impl GpuTest for DiscardingEitherDepthOrStencilAspectTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params
+            .downlevel_flags(
+                DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
+            )
+            .limits(Limits::downlevel_defaults())
+    }
+
+    fn run(&self, mut ctx: TestingContext) {
+        let mut case = TestCase::new(&mut ctx, TextureFormat::Depth24PlusStencil8);
+        case.create_command_encoder();
+        case.discard_depth();
+        case.submit_command_encoder();
+
+        case.create_command_encoder();
+        case.discard_stencil();
+        case.submit_command_encoder();
+
+        case.create_command_encoder();
+        case.copy_texture_to_buffer();
+        case.submit_command_encoder();
+
+        case.assert_buffers_are_zero();
+    }
 }
 
 struct TestCase<'ctx> {

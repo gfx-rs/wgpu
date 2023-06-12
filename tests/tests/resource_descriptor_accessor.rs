@@ -1,11 +1,11 @@
-use wasm_bindgen_test::*;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::infra::GpuTest;
 
 /// Buffer's size and usage can be read back.
-#[test]
-#[wasm_bindgen_test]
-fn buffer_size_and_usage() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct BufferSizeAndUsageTest;
+
+impl GpuTest for BufferSizeAndUsageTest {
+    fn run(&self, ctx: wgpu_test::TestingContext) {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 1234,
@@ -18,5 +18,5 @@ fn buffer_size_and_usage() {
             buffer.usage(),
             wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST
         );
-    })
+    }
 }

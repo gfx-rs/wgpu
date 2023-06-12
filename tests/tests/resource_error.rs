@@ -1,12 +1,12 @@
-use wasm_bindgen_test::*;
-use wgpu_test::{fail, initialize_test, valid, TestParameters};
+use wgpu_test::{fail, infra::GpuTest, valid};
 
-#[test]
-#[wasm_bindgen_test]
-fn bad_buffer() {
-    // Create a buffer with bad parameters and call a few methods.
-    // Validation should fail but there should be not panic.
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct BadBufferTest;
+
+impl GpuTest for BadBufferTest {
+    fn run(&self, ctx: wgpu_test::TestingContext) {
+        // Create a buffer with bad parameters and call a few methods.
+        // Validation should fail but there should be not panic.
         let buffer = fail(&ctx.device, || {
             ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
@@ -22,15 +22,14 @@ fn bad_buffer() {
         fail(&ctx.device, || buffer.unmap());
         valid(&ctx.device, || buffer.destroy());
         valid(&ctx.device, || buffer.destroy());
-    });
+    }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn bad_texture() {
-    // Create a texture with bad parameters and call a few methods.
-    // Validation should fail but there should be not panic.
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct BadTextureTest;
+
+impl GpuTest for BadTextureTest {
+    fn run(&self, ctx: wgpu_test::TestingContext) {
         let texture = fail(&ctx.device, || {
             ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -53,5 +52,5 @@ fn bad_texture() {
         });
         valid(&ctx.device, || texture.destroy());
         valid(&ctx.device, || texture.destroy());
-    });
+    }
 }

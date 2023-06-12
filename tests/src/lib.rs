@@ -4,9 +4,10 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
-use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
+use wgt::{AdapterInfo, Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 pub mod image;
+pub mod infra;
 mod isolation;
 
 pub use self::image::ComparisonType;
@@ -63,7 +64,7 @@ pub struct FailureCase {
 // This information determines if a test should run.
 pub struct TestParameters {
     pub required_features: Features,
-    pub required_downlevel_properties: DownlevelCapabilities,
+    pub required_downlevel_caps: DownlevelCapabilities,
     pub required_limits: Limits,
     // Backends where test should fail.
     pub failures: Vec<FailureCase>,
@@ -73,10 +74,55 @@ impl Default for TestParameters {
     fn default() -> Self {
         Self {
             required_features: Features::empty(),
-            required_downlevel_properties: lowest_downlevel_properties(),
+            required_downlevel_caps: lowest_downlevel_properties(),
             required_limits: Limits::downlevel_webgl2_defaults(),
             failures: Vec::new(),
         }
+    }
+}
+
+impl TestParameters {
+    fn to_failure_reasons(&self, adapter_info: &AdapterInfo) -> Option<(FailureReasons, bool)> {
+        self.failures.iter().find_map(|failure| {
+            let adapter_lowercase_name = adapter_info.name.to_lowercase();
+            let always =
+                failure.backends.is_none() && failure.vendor.is_none() && failure.adapter.is_none();
+
+            let expect_failure_backend = failure
+                .backends
+                .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
+            let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor);
+            let expect_failure_adapter = failure
+                .adapter
+                .as_deref()
+                .map(|f| adapter_lowercase_name.contains(f));
+
+            if expect_failure_backend.unwrap_or(true)
+                && expect_failure_vendor.unwrap_or(true)
+                && expect_failure_adapter.unwrap_or(true)
+            {
+                if always {
+                    Some((FailureReasons::ALWAYS, failure.skip))
+                } else {
+                    let mut reason = FailureReasons::empty();
+                    reason.set(
+                        FailureReasons::BACKEND,
+                        expect_failure_backend.unwrap_or(false),
+                    );
+                    reason.set(
+                        FailureReasons::VENDOR,
+                        expect_failure_vendor.unwrap_or(false),
+                    );
+                    reason.set(
+                        FailureReasons::ADAPTER,
+                        expect_failure_adapter.unwrap_or(false),
+                    );
+                    Some((reason, failure.skip))
+                }
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -105,7 +151,7 @@ impl TestParameters {
     }
 
     pub fn downlevel_flags(mut self, downlevel_flags: DownlevelFlags) -> Self {
-        self.required_downlevel_properties.flags |= downlevel_flags;
+        self.required_downlevel_caps.flags |= downlevel_flags;
         self
     }
 
@@ -186,7 +232,11 @@ impl TestParameters {
     }
 }
 
-pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
+pub fn initialize_test(
+    parameters: TestParameters,
+    expected_failure_reason: Option<FailureReasons>,
+    test_function: impl FnOnce(TestingContext),
+) {
     // We don't actually care if it fails
     #[cfg(not(target_arch = "wasm32"))]
     let _ = env_logger::try_init();
@@ -198,41 +248,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let (adapter, _surface_guard) = initialize_adapter();
 
     let adapter_info = adapter.get_info();
-    let adapter_lowercase_name = adapter_info.name.to_lowercase();
-    let adapter_features = adapter.features();
-    let adapter_limits = adapter.limits();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
-
-    let missing_features = parameters.required_features - adapter_features;
-    if !missing_features.is_empty() {
-        log::info!("TEST SKIPPED: MISSING FEATURES {:?}", missing_features);
-        return;
-    }
-
-    if !parameters.required_limits.check_limits(&adapter_limits) {
-        log::info!("TEST SKIPPED: LIMIT TOO LOW");
-        return;
-    }
-
-    let missing_downlevel_flags =
-        parameters.required_downlevel_properties.flags - adapter_downlevel_capabilities.flags;
-    if !missing_downlevel_flags.is_empty() {
-        log::info!(
-            "TEST SKIPPED: MISSING DOWNLEVEL FLAGS {:?}",
-            missing_downlevel_flags
-        );
-        return;
-    }
-
-    if adapter_downlevel_capabilities.shader_model
-        < parameters.required_downlevel_properties.shader_model
-    {
-        log::info!(
-            "TEST SKIPPED: LOW SHADER MODEL {:?}",
-            adapter_downlevel_capabilities.shader_model
-        );
-        return;
-    }
 
     let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
@@ -249,51 +265,6 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         device_limits: parameters.required_limits,
         queue,
     };
-
-    let expected_failure_reason = parameters.failures.iter().find_map(|failure| {
-        let always =
-            failure.backends.is_none() && failure.vendor.is_none() && failure.adapter.is_none();
-
-        let expect_failure_backend = failure
-            .backends
-            .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
-        let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor);
-        let expect_failure_adapter = failure
-            .adapter
-            .as_deref()
-            .map(|f| adapter_lowercase_name.contains(f));
-
-        if expect_failure_backend.unwrap_or(true)
-            && expect_failure_vendor.unwrap_or(true)
-            && expect_failure_adapter.unwrap_or(true)
-        {
-            if always {
-                Some((FailureReasons::ALWAYS, failure.skip))
-            } else {
-                let mut reason = FailureReasons::empty();
-                reason.set(
-                    FailureReasons::BACKEND,
-                    expect_failure_backend.unwrap_or(false),
-                );
-                reason.set(
-                    FailureReasons::VENDOR,
-                    expect_failure_vendor.unwrap_or(false),
-                );
-                reason.set(
-                    FailureReasons::ADAPTER,
-                    expect_failure_adapter.unwrap_or(false),
-                );
-                Some((reason, failure.skip))
-            }
-        } else {
-            None
-        }
-    });
-
-    if let Some((reason, true)) = expected_failure_reason {
-        log::info!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
-        return;
-    }
 
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
     cfg_if::cfg_if!(
@@ -317,7 +288,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     if failed == expect_failure {
         // We got the conditions we expected
-        if let Some((expected_reason, _)) = expected_failure_reason {
+        if let Some(expected_reason) = expected_failure_reason {
             // Print out reason for the failure
             log::info!(
                 "GOT EXPECTED TEST FAILURE DUE TO {}: {:?}",
@@ -325,7 +296,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
                 expected_reason
             );
         }
-    } else if let Some((reason, _)) = expected_failure_reason {
+    } else if let Some(reason) = expected_failure_reason {
         // We expected to fail, but things passed
         panic!("UNEXPECTED TEST PASS: {reason:?}");
     } else {
