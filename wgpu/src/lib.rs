@@ -3133,8 +3133,7 @@ impl<'a> RenderPass<'a> {
     ///     );
     ///
     ///     let (bw, bh, objh) = (right * scale, top * scale, height * scale);
-    ///     // We must minus the height to flip the Y location to window coords.
-    ///     // You might not need to do this based on how you handle your Y coords.
+    /// 
     ///     Vec4::new(xy.x, xy.y - objh, bw, bh)
     ///}
     /// ```
@@ -4619,6 +4618,18 @@ impl Display for Error {
         match self {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),
+        }
+    }
+}
+. } => f.write_str(description),
+        }
+    }
+}
+. } => f.write_str(description),
+        }
+    }
+}
+. } => f.write_str(description),
         }
     }
 }
