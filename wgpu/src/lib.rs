@@ -3109,34 +3109,6 @@ impl<'a> RenderPass<'a> {
     /// Subsequent draw calls will discard any fragments that fall outside this region.
     /// Scissor uses Window Coords so you will need to Convert any World Coords/Projections
     /// into Windows coords.
-    ///
-    /// # Conversion Example
-    /// ```rust ignore
-    /// pub fn world_to_screen(
-    ///     screen_size: [f32; 2],
-    ///     scale: f32,
-    ///     projection: Mat4,
-    ///     left: f32,
-    ///     bottom: f32,
-    ///     right: f32,
-    ///     top: f32,
-    ///     height: f32
-    /// ) -> Vec4 {
-    ///     let model = Mat4::IDENTITY;
-    ///     let clip_coords =
-    ///         projection * model * Vec4::new(left, bottom, 1.0, 1.0);
-    ///     let coords = Vec3::from_slice(&clip_coords.to_array()) / clip_coords.w;
-    ///
-    ///     let xy = Vec2::new(
-    ///         (coords.x + 1.0) * 0.5 * screen_size[0],
-    ///         (1.0 - coords.y) * 0.5 * screen_size[1],
-    ///     );
-    ///
-    ///     let (bw, bh, objh) = (right * scale, top * scale, height * scale);
-    ///
-    ///     Vec4::new(xy.x, xy.y - objh, bw, bh)
-    ///}
-    /// ```
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
