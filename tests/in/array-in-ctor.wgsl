@@ -6,5 +6,5 @@ var<storage> ah: Ah;
 
 @compute @workgroup_size(1)
 fn cs_main() {
-    _ = ah;
+    let ah = ah;
 }

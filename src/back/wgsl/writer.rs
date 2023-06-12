@@ -634,11 +634,6 @@ impl<W: Write> Writer<W> {
                         // Otherwise, we could accidentally write variable name instead of full expression.
                         // Also, we use sanitized names! It defense backend from generating variable with name from reserved keywords.
                         Some(self.namer.call(name))
-                    } else if info.ref_count == 0 {
-                        write!(self.out, "{level}_ = ")?;
-                        self.write_expr(module, handle, func_ctx)?;
-                        writeln!(self.out, ";")?;
-                        continue;
                     } else {
                         let expr = &func_ctx.expressions[handle];
                         let min_ref_count = expr.bake_ref_count();

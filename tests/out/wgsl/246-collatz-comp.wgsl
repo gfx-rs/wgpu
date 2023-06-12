@@ -10,7 +10,6 @@ fn collatz_iterations(n: u32) -> u32 {
     var n_1: u32;
     var i: u32;
 
-    _ = (&global.indices);
     n_1 = n;
     i = u32(0);
     loop {
@@ -19,7 +18,6 @@ fn collatz_iterations(n: u32) -> u32 {
             break;
         }
         {
-            _ = n_1;
             let _e14 = n_1;
             let _e15 = f32(_e14);
             let _e17 = f32(2);
@@ -49,7 +47,6 @@ fn main_1() {
     index = _e3.x;
     let _e6 = index;
     let _e8 = index;
-    _ = global.indices[_e8];
     let _e11 = index;
     let _e13 = global.indices[_e11];
     let _e14 = collatz_iterations(_e13);

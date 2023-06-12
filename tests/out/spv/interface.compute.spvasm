@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 56
+; Bound: 55
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -44,14 +44,13 @@ OpDecorate %29 BuiltIn NumWorkgroups
 %27 = OpVariable  %20  Input
 %29 = OpVariable  %20  Input
 %32 = OpTypeFunction %2
-%33 = OpConstant  %4  0
-%35 = OpConstantNull  %11
-%36 = OpConstantNull  %13
-%37 = OpTypeVector %10 3
-%42 = OpConstant  %8  2
-%43 = OpConstant  %8  264
-%45 = OpTypePointer Workgroup %8
-%54 = OpConstant  %8  0
+%34 = OpConstantNull  %11
+%35 = OpConstantNull  %13
+%36 = OpTypeVector %10 3
+%41 = OpConstant  %8  2
+%42 = OpConstant  %8  264
+%44 = OpTypePointer Workgroup %8
+%53 = OpConstant  %8  0
 %31 = OpFunction  %2  None %32
 %18 = OpLabel
 %21 = OpLoad  %13  %19
@@ -59,28 +58,28 @@ OpDecorate %29 BuiltIn NumWorkgroups
 %26 = OpLoad  %8  %24
 %28 = OpLoad  %13  %27
 %30 = OpLoad  %13  %29
-OpBranch %34
-%34 = OpLabel
-%38 = OpIEqual  %37  %23 %36
-%39 = OpAll  %10  %38
-OpSelectionMerge %40 None
-OpBranchConditional %39 %41 %40
-%41 = OpLabel
-OpStore %16 %35
-OpBranch %40
+OpBranch %33
+%33 = OpLabel
+%37 = OpIEqual  %36  %23 %35
+%38 = OpAll  %10  %37
+OpSelectionMerge %39 None
+OpBranchConditional %38 %40 %39
 %40 = OpLabel
-OpControlBarrier %42 %42 %43
-OpBranch %44
-%44 = OpLabel
-%46 = OpCompositeExtract  %8  %21 0
-%47 = OpCompositeExtract  %8  %23 0
-%48 = OpIAdd  %8  %46 %47
-%49 = OpIAdd  %8  %48 %26
-%50 = OpCompositeExtract  %8  %28 0
-%51 = OpIAdd  %8  %49 %50
-%52 = OpCompositeExtract  %8  %30 0
-%53 = OpIAdd  %8  %51 %52
-%55 = OpAccessChain  %45  %16 %54
-OpStore %55 %53
+OpStore %16 %34
+OpBranch %39
+%39 = OpLabel
+OpControlBarrier %41 %41 %42
+OpBranch %43
+%43 = OpLabel
+%45 = OpCompositeExtract  %8  %21 0
+%46 = OpCompositeExtract  %8  %23 0
+%47 = OpIAdd  %8  %45 %46
+%48 = OpIAdd  %8  %47 %26
+%49 = OpCompositeExtract  %8  %28 0
+%50 = OpIAdd  %8  %48 %49
+%51 = OpCompositeExtract  %8  %30 0
+%52 = OpIAdd  %8  %50 %51
+%54 = OpAccessChain  %44  %16 %53
+OpStore %54 %52
 OpReturn
 OpFunctionEnd

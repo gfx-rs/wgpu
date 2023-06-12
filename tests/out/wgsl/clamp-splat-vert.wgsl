@@ -6,7 +6,6 @@ var<private> a_pos_1: vec2<f32>;
 var<private> gl_Position: vec4<f32>;
 
 fn main_1() {
-    _ = a_pos_1;
     let _e5 = a_pos_1;
     let _e10 = clamp(_e5, vec2<f32>(0.0), vec2<f32>(1.0));
     gl_Position = vec4<f32>(_e10.x, _e10.y, 0.0, 1.0);

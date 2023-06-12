@@ -220,6 +220,15 @@ impl<'w> BlockContext<'w> {
         expr_handle: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<(), Error> {
+        let is_named_expression = self
+            .ir_function
+            .named_expressions
+            .contains_key(&expr_handle);
+
+        if self.fun_info[expr_handle].ref_count == 0 && !is_named_expression {
+            return Ok(());
+        }
+
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::Access { base, index: _ } if self.is_intermediate(base) => {

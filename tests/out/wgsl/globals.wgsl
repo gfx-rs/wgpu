@@ -36,13 +36,13 @@ fn test_msl_packed_vec3_() {
     let _e17 = idx;
     alignment.v3_[_e17] = 3.0;
     let data = alignment;
-    _ = data.v3_;
-    _ = data.v3_.zx;
+    let l0_ = data.v3_;
+    let l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    _ = (data.v3_ * mat3x3<f32>());
-    _ = (mat3x3<f32>() * data.v3_);
-    _ = (data.v3_ * 2.0);
-    _ = (2.0 * data.v3_);
+    let mvm0_ = (data.v3_ * mat3x3<f32>());
+    let mvm1_ = (mat3x3<f32>() * data.v3_);
+    let svm0_ = (data.v3_ * 2.0);
+    let svm1_ = (2.0 * data.v3_);
 }
 
 @compute @workgroup_size(1, 1, 1) 

@@ -394,9 +394,7 @@ fn testConstantLength(a_24: array<f32, 4>) {
     var a_25: array<f32, 4>;
     var len_1: i32;
 
-    _ = (&global_1.a);
     a_25 = a_24;
-    _ = a_25;
     len_1 = i32(4u);
     return;
 }
@@ -406,7 +404,6 @@ fn indexConstantNonConstantIndex(i: i32) {
     var local_5: TestStruct = TestStruct(array<vec4<u32>, 2>(vec4<u32>(0u, 0u, 0u, 0u), vec4<u32>(1u, 1u, 1u, 1u)));
     var a_26: vec4<u32>;
 
-    _ = (&global_1.a);
     i_1 = i;
     let _e6 = i_1;
     let _e10 = local_5.array_[_e6];
@@ -417,16 +414,12 @@ fn indexConstantNonConstantIndex(i: i32) {
 fn testSwizzleWrites(a_27: vec3<f32>) {
     var a_28: vec3<f32>;
 
-    _ = (&global_1.a);
     a_28 = a_27;
     let _e6 = a_28;
-    _ = _e6.zxy;
-    _ = _e6.zx;
     let _e11 = vec2<f32>(3.0, 4.0);
     a_28.z = _e11.x;
     a_28.x = _e11.y;
     let _e16 = a_28;
-    _ = _e16.xy;
     let _e18 = a_28;
     let _e21 = (_e18.xy * 5.0);
     a_28.x = _e21.x;
@@ -441,15 +434,12 @@ fn testSwizzleWrites(a_27: vec3<f32>) {
 fn main_1() {
     var local_6: f32;
 
-    _ = (&global_1.a);
-    _ = global;
     let _e6 = global;
     local_6 = _e6;
     privatePointer((&local_6));
     let _e8 = local_6;
     global = _e8;
     let _e9 = o_color;
-    _ = _e9.xyzw;
     let _e12 = vec4<f32>(1.0);
     o_color.x = _e12.x;
     o_color.y = _e12.y;
@@ -460,8 +450,6 @@ fn main_1() {
 
 @fragment 
 fn main() -> FragmentOutput {
-    _ = (&global_1.a);
-    _ = TestStruct(array<vec4<u32>, 2>(vec4<u32>(u32(0)), vec4<u32>(u32(1))));
     main_1();
     let _e17 = o_color;
     return FragmentOutput(_e17);

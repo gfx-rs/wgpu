@@ -1803,8 +1803,6 @@ impl<'a, W: Write> Writer<'a, W> {
                         Some(self.namer.call(name))
                     } else if self.need_bake_expressions.contains(&handle) {
                         Some(format!("{}{}", back::BAKE_PREFIX, handle.index()))
-                    } else if info.ref_count == 0 {
-                        Some(self.namer.call(""))
                     } else {
                         None
                     };

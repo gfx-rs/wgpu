@@ -9,7 +9,6 @@ fn main_1() {
 
 @fragment 
 fn main() {
-    _ = array<f32, 2>(1.0, 2.0);
     main_1();
     return;
 }

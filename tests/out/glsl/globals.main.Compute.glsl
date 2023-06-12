@@ -41,13 +41,13 @@ void test_msl_packed_vec3_() {
     int _e17 = idx;
     _group_0_binding_1_cs.v3_[_e17] = 3.0;
     FooStruct data = _group_0_binding_1_cs;
-    vec3 unnamed = data.v3_;
-    vec2 unnamed_1 = data.v3_.zx;
+    vec3 l0_ = data.v3_;
+    vec2 l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    vec3 unnamed_2 = (data.v3_ * mat3x3(0.0));
-    vec3 unnamed_3 = (mat3x3(0.0) * data.v3_);
-    vec3 unnamed_4 = (data.v3_ * 2.0);
-    vec3 unnamed_5 = (2.0 * data.v3_);
+    vec3 mvm0_ = (data.v3_ * mat3x3(0.0));
+    vec3 mvm1_ = (mat3x3(0.0) * data.v3_);
+    vec3 svm0_ = (data.v3_ * 2.0);
+    vec3 svm1_ = (2.0 * data.v3_);
 }
 
 void main() {

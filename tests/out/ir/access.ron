@@ -779,7 +779,15 @@
                 ),
                 Literal(F32(40.0)),
             ],
-            named_expressions: {},
+            named_expressions: {
+                8: "l0",
+                13: "l1",
+                18: "l2",
+                25: "l3",
+                32: "l4",
+                39: "l5",
+                46: "l6",
+            },
             body: [
                 Store(
                     pointer: 2,
@@ -1350,7 +1358,16 @@
                 ),
                 Literal(F32(40.0)),
             ],
-            named_expressions: {},
+            named_expressions: {
+                8: "l0",
+                13: "l1",
+                20: "l2",
+                27: "l3",
+                36: "l4",
+                45: "l5",
+                54: "l6",
+                63: "l7",
+            },
             body: [
                 Store(
                     pointer: 2,

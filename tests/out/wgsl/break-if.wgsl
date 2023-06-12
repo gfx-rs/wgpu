@@ -17,7 +17,6 @@ fn breakIfEmptyBody(a: bool) {
             let _e2 = b;
             c = (a != _e2);
             let _e5 = c;
-            _ = (a == _e5);
             break if (a == _e5);
         }
     }
@@ -34,7 +33,6 @@ fn breakIf(a_1: bool) {
         e = (a_1 != _e2);
         continuing {
             let _e5 = e;
-            _ = (a_1 == _e5);
             break if (a_1 == _e5);
         }
     }

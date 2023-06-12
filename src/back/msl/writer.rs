@@ -2581,8 +2581,6 @@ impl<W: Write> Writer<W> {
                             // Don't assume the names in `named_expressions` are unique,
                             // or even valid. Use the `Namer`.
                             Some(self.namer.call(name))
-                        } else if info.ref_count == 0 {
-                            Some(self.namer.call(""))
                         } else {
                             // If this expression is an index that we're going to first compare
                             // against a limit, and then actually use as an index, then we may

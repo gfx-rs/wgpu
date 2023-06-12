@@ -3,7 +3,6 @@ fn fb1_(cond: ptr<function, bool>) {
         continue;
         continuing {
             let _e6 = (*cond);
-            _ = !(_e6);
             break if !(_e6);
         }
     }

@@ -89,13 +89,13 @@ void test_msl_packed_vec3_()
     int _expr17 = idx;
     alignment.Store(_expr17*4+0, asuint(3.0));
     FooStruct data = ConstructFooStruct(asfloat(alignment.Load3(0)), asfloat(alignment.Load(12)));
-    float3 unnamed = data.v3_;
-    float2 unnamed_1 = data.v3_.zx;
+    float3 l0_ = data.v3_;
+    float2 l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
-    float3 unnamed_2 = mul((float3x3)0, data.v3_);
-    float3 unnamed_3 = mul(data.v3_, (float3x3)0);
-    float3 unnamed_4 = (data.v3_ * 2.0);
-    float3 unnamed_5 = (2.0 * data.v3_);
+    float3 mvm0_ = mul((float3x3)0, data.v3_);
+    float3 mvm1_ = mul(data.v3_, (float3x3)0);
+    float3 svm0_ = (data.v3_ * 2.0);
+    float3 svm1_ = (2.0 * data.v3_);
 }
 
 uint NagaBufferLength(ByteAddressBuffer buffer)

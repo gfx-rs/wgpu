@@ -34,14 +34,14 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
 
     workgroupBarrier();
 
-    atomicLoad(&storage_atomic_scalar);
-    atomicLoad(&storage_atomic_arr[1]);
-    atomicLoad(&storage_struct.atomic_scalar);
-    atomicLoad(&storage_struct.atomic_arr[1]);
-    atomicLoad(&workgroup_atomic_scalar);
-    atomicLoad(&workgroup_atomic_arr[1]);
-    atomicLoad(&workgroup_struct.atomic_scalar);
-    atomicLoad(&workgroup_struct.atomic_arr[1]);
+    let l0 = atomicLoad(&storage_atomic_scalar);
+    let l1 = atomicLoad(&storage_atomic_arr[1]);
+    let l2 = atomicLoad(&storage_struct.atomic_scalar);
+    let l3 = atomicLoad(&storage_struct.atomic_arr[1]);
+    let l4 = atomicLoad(&workgroup_atomic_scalar);
+    let l5 = atomicLoad(&workgroup_atomic_arr[1]);
+    let l6 = atomicLoad(&workgroup_struct.atomic_scalar);
+    let l7 = atomicLoad(&workgroup_struct.atomic_arr[1]);
 
     workgroupBarrier();
 

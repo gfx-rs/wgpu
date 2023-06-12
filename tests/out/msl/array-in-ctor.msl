@@ -14,5 +14,5 @@ struct Ah {
 kernel void cs_main(
   device Ah const& ah [[user(fake0)]]
 ) {
-    Ah unnamed = ah;
+    Ah ah_1 = ah;
 }

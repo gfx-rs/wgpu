@@ -25,8 +25,7 @@ void breakIfEmptyBody(bool a)
             bool _expr2 = b;
             c = (a != _expr2);
             bool _expr5 = c;
-            bool unnamed = (a == _expr5);
-            if (unnamed) {
+            if ((a == _expr5)) {
                 break;
             }
         }
@@ -44,8 +43,7 @@ void breakIf(bool a_1)
     while(true) {
         if (!loop_init_2) {
             bool _expr5 = e;
-            bool unnamed_1 = (a_1 == _expr5);
-            if (unnamed_1) {
+            if ((a_1 == _expr5)) {
                 break;
             }
         }

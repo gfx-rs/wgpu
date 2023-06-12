@@ -40,13 +40,13 @@ fn test_matrix_within_struct_accesses() {
     idx--;
 
 	// loads
-    _ = baz.m;
-    _ = baz.m[0];
-    _ = baz.m[idx];
-    _ = baz.m[0][1];
-    _ = baz.m[0][idx];
-    _ = baz.m[idx][1];
-    _ = baz.m[idx][idx];
+    let l0 = baz.m;
+    let l1 = baz.m[0];
+    let l2 = baz.m[idx];
+    let l3 = baz.m[0][1];
+    let l4 = baz.m[0][idx];
+    let l5 = baz.m[idx][1];
+    let l6 = baz.m[idx][idx];
 
     var t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
 
@@ -75,14 +75,14 @@ fn test_matrix_within_array_within_struct_accesses() {
     idx--;
 
 	// loads
-    _ = nested_mat_cx2.am;
-    _ = nested_mat_cx2.am[0];
-    _ = nested_mat_cx2.am[0][0];
-    _ = nested_mat_cx2.am[0][idx];
-    _ = nested_mat_cx2.am[0][0][1];
-    _ = nested_mat_cx2.am[0][0][idx];
-    _ = nested_mat_cx2.am[0][idx][1];
-    _ = nested_mat_cx2.am[0][idx][idx];
+    let l0 = nested_mat_cx2.am;
+    let l1 = nested_mat_cx2.am[0];
+    let l2 = nested_mat_cx2.am[0][0];
+    let l3 = nested_mat_cx2.am[0][idx];
+    let l4 = nested_mat_cx2.am[0][0][1];
+    let l5 = nested_mat_cx2.am[0][0][idx];
+    let l6 = nested_mat_cx2.am[0][idx][1];
+    let l7 = nested_mat_cx2.am[0][idx][idx];
 
     var t = MatCx2InArray(array<mat4x2<f32>, 2>());
 
@@ -134,7 +134,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	c2[vi + 1u] = 42;
 	let value = c2[vi];
 
-	_ = test_arr_as_arg(array<array<f32, 10>, 5>());
+	test_arr_as_arg(array<array<f32, 10>, 5>());
 
 	return vec4<f32>(_matrix * vec4<f32>(vec4<i32>(value)), 2.0);
 }

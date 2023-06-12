@@ -58,7 +58,6 @@ fn main(@location(0) Vertex_Position: vec3<f32>, @location(1) Vertex_Normal: vec
     Vertex_Normal_1 = Vertex_Normal;
     Vertex_Uv_1 = Vertex_Uv;
     Vertex_Tangent_1 = Vertex_Tangent;
-    _ = (&global.ViewProj);
     main_1();
     let _e29 = v_WorldPosition;
     let _e31 = v_WorldNormal;

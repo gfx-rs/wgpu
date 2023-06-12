@@ -8,7 +8,6 @@ fn swizzleCaller(a_1: vec3<f32>) {
 
     a_2 = a_1;
     let _e2 = a_2;
-    _ = _e2.xz;
     let _e4 = a_2;
     local = _e4.xz;
     swizzleCallee((&local));
@@ -28,8 +27,6 @@ fn outImplicitCastCaller(a_4: f32) {
     var local_1: u32;
 
     a_5 = a_4;
-    _ = a_5;
-    _ = a_5;
     outImplicitCastCallee((&local_1));
     let _e5 = local_1;
     a_5 = f32(_e5);
@@ -46,9 +43,7 @@ fn swizzleImplicitCastCaller(a_7: vec3<f32>) {
 
     a_8 = a_7;
     let _e2 = a_8;
-    _ = _e2.xz;
     let _e4 = a_8;
-    _ = _e4.xz;
     swizzleImplicitCastCallee((&local_2));
     let _e11 = local_2.x;
     a_8.x = f32(_e11);

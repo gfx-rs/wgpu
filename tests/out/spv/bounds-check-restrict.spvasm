@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 167
+; Bound: 164
 OpCapability Shader
 OpCapability Linkage
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -49,13 +49,10 @@ OpDecorate %12 Block
 %71 = OpTypeFunction %5 %4 %4
 %80 = OpConstant  %5  100.0
 %92 = OpTypeFunction %5
-%93 = OpConstant  %4  9
-%94 = OpConstant  %4  3
-%95 = OpConstant  %4  2
-%109 = OpTypeFunction %2 %4 %5
-%133 = OpTypeFunction %2 %4 %9
-%142 = OpTypeFunction %2 %4 %4 %5
-%162 = OpTypeFunction %2 %5
+%106 = OpTypeFunction %2 %4 %5
+%130 = OpTypeFunction %2 %4 %9
+%139 = OpTypeFunction %2 %4 %4 %5
+%159 = OpTypeFunction %2 %5
 %17 = OpFunction  %5  None %18
 %16 = OpFunctionParameter  %4
 %15 = OpLabel
@@ -137,103 +134,103 @@ OpReturnValue %89
 OpFunctionEnd
 %91 = OpFunction  %5  None %92
 %90 = OpLabel
-OpBranch %96
-%96 = OpLabel
-%97 = OpAccessChain  %21  %13 %24 %22
-%98 = OpLoad  %5  %97
-%99 = OpAccessChain  %44  %13 %33 %36
+OpBranch %93
+%93 = OpLabel
+%94 = OpAccessChain  %21  %13 %24 %22
+%95 = OpLoad  %5  %94
+%96 = OpAccessChain  %44  %13 %33 %36
+%97 = OpLoad  %5  %96
+%98 = OpFAdd  %5  %95 %97
+%99 = OpAccessChain  %44  %13 %63 %63 %36
 %100 = OpLoad  %5  %99
 %101 = OpFAdd  %5  %98 %100
-%102 = OpAccessChain  %44  %13 %63 %63 %36
-%103 = OpLoad  %5  %102
-%104 = OpFAdd  %5  %101 %103
-OpReturnValue %104
+OpReturnValue %101
 OpFunctionEnd
-%108 = OpFunction  %2  None %109
-%106 = OpFunctionParameter  %4
-%107 = OpFunctionParameter  %5
-%105 = OpLabel
-OpBranch %110
+%105 = OpFunction  %2  None %106
+%103 = OpFunctionParameter  %4
+%104 = OpFunctionParameter  %5
+%102 = OpLabel
+OpBranch %107
+%107 = OpLabel
+%108 = OpExtInst  %8  %1 UMin %103 %22
+%109 = OpAccessChain  %21  %13 %24 %108
+OpStore %109 %104
+OpReturn
+OpFunctionEnd
+%113 = OpFunction  %2  None %106
+%111 = OpFunctionParameter  %4
+%112 = OpFunctionParameter  %5
 %110 = OpLabel
-%111 = OpExtInst  %8  %1 UMin %106 %22
-%112 = OpAccessChain  %21  %13 %24 %111
-OpStore %112 %107
+OpBranch %114
+%114 = OpLabel
+%115 = OpArrayLength  %8  %13 3
+%116 = OpISub  %8  %115 %33
+%117 = OpExtInst  %8  %1 UMin %111 %116
+%118 = OpAccessChain  %21  %13 %36 %117
+OpStore %118 %112
 OpReturn
 OpFunctionEnd
-%116 = OpFunction  %2  None %109
-%114 = OpFunctionParameter  %4
-%115 = OpFunctionParameter  %5
-%113 = OpLabel
-OpBranch %117
-%117 = OpLabel
-%118 = OpArrayLength  %8  %13 3
-%119 = OpISub  %8  %118 %33
-%120 = OpExtInst  %8  %1 UMin %114 %119
-%121 = OpAccessChain  %21  %13 %36 %120
-OpStore %121 %115
+%122 = OpFunction  %2  None %106
+%120 = OpFunctionParameter  %4
+%121 = OpFunctionParameter  %5
+%119 = OpLabel
+OpBranch %123
+%123 = OpLabel
+%124 = OpExtInst  %8  %1 UMin %120 %36
+%125 = OpAccessChain  %44  %13 %33 %124
+OpStore %125 %121
 OpReturn
 OpFunctionEnd
-%125 = OpFunction  %2  None %109
-%123 = OpFunctionParameter  %4
-%124 = OpFunctionParameter  %5
-%122 = OpLabel
-OpBranch %126
+%129 = OpFunction  %2  None %130
+%127 = OpFunctionParameter  %4
+%128 = OpFunctionParameter  %9
 %126 = OpLabel
-%127 = OpExtInst  %8  %1 UMin %123 %36
-%128 = OpAccessChain  %44  %13 %33 %127
-OpStore %128 %124
+OpBranch %131
+%131 = OpLabel
+%132 = OpExtInst  %8  %1 UMin %127 %63
+%133 = OpAccessChain  %62  %13 %63 %132
+OpStore %133 %128
 OpReturn
 OpFunctionEnd
-%132 = OpFunction  %2  None %133
-%130 = OpFunctionParameter  %4
-%131 = OpFunctionParameter  %9
-%129 = OpLabel
-OpBranch %134
+%138 = OpFunction  %2  None %139
+%135 = OpFunctionParameter  %4
+%136 = OpFunctionParameter  %4
+%137 = OpFunctionParameter  %5
 %134 = OpLabel
-%135 = OpExtInst  %8  %1 UMin %130 %63
-%136 = OpAccessChain  %62  %13 %63 %135
-OpStore %136 %131
+OpBranch %140
+%140 = OpLabel
+%141 = OpExtInst  %8  %1 UMin %136 %36
+%142 = OpExtInst  %8  %1 UMin %135 %63
+%143 = OpAccessChain  %44  %13 %63 %142 %141
+OpStore %143 %137
 OpReturn
 OpFunctionEnd
-%141 = OpFunction  %2  None %142
-%138 = OpFunctionParameter  %4
-%139 = OpFunctionParameter  %4
-%140 = OpFunctionParameter  %5
-%137 = OpLabel
-OpBranch %143
-%143 = OpLabel
-%144 = OpExtInst  %8  %1 UMin %139 %36
-%145 = OpExtInst  %8  %1 UMin %138 %63
-%146 = OpAccessChain  %44  %13 %63 %145 %144
-OpStore %146 %140
+%147 = OpFunction  %2  None %106
+%145 = OpFunctionParameter  %4
+%146 = OpFunctionParameter  %5
+%144 = OpLabel
+OpBranch %148
+%148 = OpLabel
+%149 = OpConvertSToF  %5  %145
+%150 = OpFDiv  %5  %149 %80
+%151 = OpExtInst  %5  %1 Sin %150
+%152 = OpFMul  %5  %151 %80
+%153 = OpConvertFToS  %4  %152
+%154 = OpExtInst  %8  %1 UMin %153 %22
+%155 = OpAccessChain  %21  %13 %24 %154
+OpStore %155 %146
 OpReturn
 OpFunctionEnd
-%150 = OpFunction  %2  None %109
-%148 = OpFunctionParameter  %4
-%149 = OpFunctionParameter  %5
-%147 = OpLabel
-OpBranch %151
-%151 = OpLabel
-%152 = OpConvertSToF  %5  %148
-%153 = OpFDiv  %5  %152 %80
-%154 = OpExtInst  %5  %1 Sin %153
-%155 = OpFMul  %5  %154 %80
-%156 = OpConvertFToS  %4  %155
-%157 = OpExtInst  %8  %1 UMin %156 %22
-%158 = OpAccessChain  %21  %13 %24 %157
-OpStore %158 %149
-OpReturn
-OpFunctionEnd
-%161 = OpFunction  %2  None %162
-%160 = OpFunctionParameter  %5
-%159 = OpLabel
-OpBranch %163
-%163 = OpLabel
-%164 = OpAccessChain  %21  %13 %24 %22
-OpStore %164 %160
-%165 = OpAccessChain  %44  %13 %33 %36
-OpStore %165 %160
-%166 = OpAccessChain  %44  %13 %63 %63 %36
-OpStore %166 %160
+%158 = OpFunction  %2  None %159
+%157 = OpFunctionParameter  %5
+%156 = OpLabel
+OpBranch %160
+%160 = OpLabel
+%161 = OpAccessChain  %21  %13 %24 %22
+OpStore %161 %157
+%162 = OpAccessChain  %44  %13 %33 %36
+OpStore %162 %157
+%163 = OpAccessChain  %44  %13 %63 %63 %36
+OpStore %163 %157
 OpReturn
 OpFunctionEnd

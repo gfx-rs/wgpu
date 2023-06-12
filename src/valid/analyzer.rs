@@ -675,12 +675,17 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             E::Math {
-                arg, arg1, arg2, ..
+                fun: _,
+                arg,
+                arg1,
+                arg2,
+                arg3,
             } => {
                 let arg1_nur = arg1.and_then(|h| self.add_ref(h));
                 let arg2_nur = arg2.and_then(|h| self.add_ref(h));
+                let arg3_nur = arg3.and_then(|h| self.add_ref(h));
                 Uniformity {
-                    non_uniform_result: self.add_ref(arg).or(arg1_nur).or(arg2_nur),
+                    non_uniform_result: self.add_ref(arg).or(arg1_nur).or(arg2_nur).or(arg3_nur),
                     requirements: UniformityRequirements::empty(),
                 }
             }
@@ -868,7 +873,7 @@ impl FunctionInfo {
                 S::Loop {
                     ref body,
                     ref continuing,
-                    break_if: _,
+                    break_if,
                 } => {
                     let body_uniformity =
                         self.process_block(body, other_functions, disruptor, expression_arena)?;
@@ -879,6 +884,9 @@ impl FunctionInfo {
                         continuing_disruptor,
                         expression_arena,
                     )?;
+                    if let Some(expr) = break_if {
+                        let _ = self.add_ref(expr);
+                    }
                     body_uniformity | continuing_uniformity
                 }
                 S::Return { value } => FunctionUniformity {

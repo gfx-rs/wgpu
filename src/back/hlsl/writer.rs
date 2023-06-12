@@ -1336,8 +1336,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         Some(self.namer.call(name))
                     } else if self.need_bake_expressions.contains(&handle) {
                         Some(format!("_expr{}", handle.index()))
-                    } else if info.ref_count == 0 {
-                        Some(self.namer.call(""))
                     } else {
                         None
                     };

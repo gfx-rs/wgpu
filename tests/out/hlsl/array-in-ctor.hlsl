@@ -20,5 +20,5 @@ Ah ConstructAh(float arg0[2]) {
 [numthreads(1, 1, 1)]
 void cs_main()
 {
-    Ah unnamed = ConstructAh(Constructarray2_float_(asfloat(ah.Load(0+0)), asfloat(ah.Load(0+4))));
+    Ah ah_1 = ConstructAh(Constructarray2_float_(asfloat(ah.Load(0+0)), asfloat(ah.Load(0+4))));
 }

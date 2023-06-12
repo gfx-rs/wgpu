@@ -50,11 +50,11 @@ fn constructors() -> f32 {
     var foo: Foo;
     foo = Foo(vec4<f32>(1.0), 1);
 
-    let mat2comp = mat2x2<f32>(
+    let m0 = mat2x2<f32>(
         1.0, 0.0,
         0.0, 1.0,
     );
-    let mat4comp = mat4x4<f32>(
+    let m1 = mat4x4<f32>(
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
@@ -62,219 +62,221 @@ fn constructors() -> f32 {
     );
 
     // zero value constructors
-    _ = bool();
-    _ = i32();
-    _ = u32();
-    _ = f32();
-    _ = vec2<u32>();
-    _ = mat2x2<f32>();
-    _ = array<Foo, 3>();
-    _ = Foo();
+    let zvc0 = bool();
+    let zvc1 = i32();
+    let zvc2 = u32();
+    let zvc3 = f32();
+    let zvc4 = vec2<u32>();
+    let zvc5 = mat2x2<f32>();
+    let zvc6 = array<Foo, 3>();
+    let zvc7 = Foo();
 
     // constructors that infer their type from their parameters
-    _ = vec2(0u);
-    _ = mat2x2(vec2(0.), vec2(0.));
-    _ = array(0, 1, 2, 3);
+    let cit0 = vec2(0u);
+    let cit1 = mat2x2(vec2(0.), vec2(0.));
+    let cit2 = array(0, 1, 2, 3);
 
     // identity constructors
-    _ = bool(bool());
-    _ = i32(i32());
-    _ = u32(u32());
-    _ = f32(f32());
-    _ = vec2<u32>(vec2<u32>());
-    _ = mat2x3<f32>(mat2x3<f32>());
-    _ = vec2(vec2<u32>());
-    _ = mat2x3(mat2x3<f32>());
+    let ic0 = bool(bool());
+    let ic1 = i32(i32());
+    let ic2 = u32(u32());
+    let ic3 = f32(f32());
+    let ic4 = vec2<u32>(vec2<u32>());
+    let ic5 = mat2x3<f32>(mat2x3<f32>());
+    let ic6 = vec2(vec2<u32>());
+    let ic7 = mat2x3(mat2x3<f32>());
 
     return foo.a.x;
 }
 
 fn logical() {
     // unary
-    _ = !true;
-    _ = !vec2(true);
+    let neg0 = !true;
+    let neg1 = !vec2(true);
 
     // binary
-    _ = true || false;
-    _ = true && false;
-    _ = true | false;
-    _ = vec3(true) | vec3(false);
-    _ = true & false;
-    _ = vec4(true) & vec4(false);
+    let or = true || false;
+    let and = true && false;
+    let bitwise_or0 = true | false;
+    let bitwise_or1 = vec3(true) | vec3(false);
+    let bitwise_and0 = true & false;
+    let bitwise_and1 = vec4(true) & vec4(false);
 }
 
 fn arithmetic() {
     // unary
-    _ = -1.0;
-    _ = -vec2(1);
-    _ = -vec2(1.0);
+    let neg0 = -1.0;
+    let neg1 = -vec2(1);
+    let neg2 = -vec2(1.0);
 
     // binary
     // Addition
-    _ = 2 + 1;
-    _ = 2u + 1u;
-    _ = 2.0 + 1.0;
-    _ = vec2(2) + vec2(1);
-    _ = vec3(2u) + vec3(1u);
-    _ = vec4(2.0) + vec4(1.0);
+    let add0 = 2 + 1;
+    let add1 = 2u + 1u;
+    let add2 = 2.0 + 1.0;
+    let add3 = vec2(2) + vec2(1);
+    let add4 = vec3(2u) + vec3(1u);
+    let add5 = vec4(2.0) + vec4(1.0);
 
     // Subtraction
-    _ = 2 - 1;
-    _ = 2u - 1u;
-    _ = 2.0 - 1.0;
-    _ = vec2(2) - vec2(1);
-    _ = vec3(2u) - vec3(1u);
-    _ = vec4(2.0) - vec4(1.0);
+    let sub0 = 2 - 1;
+    let sub1 = 2u - 1u;
+    let sub2 = 2.0 - 1.0;
+    let sub3 = vec2(2) - vec2(1);
+    let sub4 = vec3(2u) - vec3(1u);
+    let sub5 = vec4(2.0) - vec4(1.0);
 
     // Multiplication
-    _ = 2 * 1;
-    _ = 2u * 1u;
-    _ = 2.0 * 1.0;
-    _ = vec2(2) * vec2(1);
-    _ = vec3(2u) * vec3(1u);
-    _ = vec4(2.0) * vec4(1.0);
+    let mul0 = 2 * 1;
+    let mul1 = 2u * 1u;
+    let mul2 = 2.0 * 1.0;
+    let mul3 = vec2(2) * vec2(1);
+    let mul4 = vec3(2u) * vec3(1u);
+    let mul5 = vec4(2.0) * vec4(1.0);
 
     // Division
-    _ = 2 / 1;
-    _ = 2u / 1u;
-    _ = 2.0 / 1.0;
-    _ = vec2(2) / vec2(1);
-    _ = vec3(2u) / vec3(1u);
-    _ = vec4(2.0) / vec4(1.0);
+    let div0 = 2 / 1;
+    let div1 = 2u / 1u;
+    let div2 = 2.0 / 1.0;
+    let div3 = vec2(2) / vec2(1);
+    let div4 = vec3(2u) / vec3(1u);
+    let div5 = vec4(2.0) / vec4(1.0);
 
     // Remainder
-    _ = 2 % 1;
-    _ = 2u % 1u;
-    _ = 2.0 % 1.0;
-    _ = vec2(2) % vec2(1);
-    _ = vec3(2u) % vec3(1u);
-    _ = vec4(2.0) % vec4(1.0);
+    let rem0 = 2 % 1;
+    let rem1 = 2u % 1u;
+    let rem2 = 2.0 % 1.0;
+    let rem3 = vec2(2) % vec2(1);
+    let rem4 = vec3(2u) % vec3(1u);
+    let rem5 = vec4(2.0) % vec4(1.0);
 
     // Binary arithmetic expressions with mixed scalar and vector operands
-    _ = vec2(2) + 1;
-    _ = 2 + vec2(1);
-    _ = vec2(2u) + 1u;
-    _ = 2u + vec2(1u);
-    _ = vec2(2.0) + 1.0;
-    _ = 2.0 + vec2(1.0);
+    {
+        let add0 = vec2(2) + 1;
+        let add1 = 2 + vec2(1);
+        let add2 = vec2(2u) + 1u;
+        let add3 = 2u + vec2(1u);
+        let add4 = vec2(2.0) + 1.0;
+        let add5 = 2.0 + vec2(1.0);
 
-    _ = vec2(2) - 1;
-    _ = 2 - vec2(1);
-    _ = vec2(2u) - 1u;
-    _ = 2u - vec2(1u);
-    _ = vec2(2.0) - 1.0;
-    _ = 2.0 - vec2(1.0);
+        let sub0 = vec2(2) - 1;
+        let sub1 = 2 - vec2(1);
+        let sub2 = vec2(2u) - 1u;
+        let sub3 = 2u - vec2(1u);
+        let sub4 = vec2(2.0) - 1.0;
+        let sub5 = 2.0 - vec2(1.0);
 
-    _ = vec2(2) * 1;
-    _ = 2 * vec2(1);
-    _ = vec2(2u) * 1u;
-    _ = 2u * vec2(1u);
-    _ = vec2(2.0) * 1.0;
-    _ = 2.0 * vec2(1.0);
+        let mul0 = vec2(2) * 1;
+        let mul1 = 2 * vec2(1);
+        let mul2 = vec2(2u) * 1u;
+        let mul3 = 2u * vec2(1u);
+        let mul4 = vec2(2.0) * 1.0;
+        let mul5 = 2.0 * vec2(1.0);
 
-    _ = vec2(2) / 1;
-    _ = 2 / vec2(1);
-    _ = vec2(2u) / 1u;
-    _ = 2u / vec2(1u);
-    _ = vec2(2.0) / 1.0;
-    _ = 2.0 / vec2(1.0);
+        let div0 = vec2(2) / 1;
+        let div1 = 2 / vec2(1);
+        let div2 = vec2(2u) / 1u;
+        let div3 = 2u / vec2(1u);
+        let div4 = vec2(2.0) / 1.0;
+        let div5 = 2.0 / vec2(1.0);
 
-    _ = vec2(2) % 1;
-    _ = 2 % vec2(1);
-    _ = vec2(2u) % 1u;
-    _ = 2u % vec2(1u);
-    _ = vec2(2.0) % 1.0;
-    _ = 2.0 % vec2(1.0);
+        let rem0 = vec2(2) % 1;
+        let rem1 = 2 % vec2(1);
+        let rem2 = vec2(2u) % 1u;
+        let rem3 = 2u % vec2(1u);
+        let rem4 = vec2(2.0) % 1.0;
+        let rem5 = 2.0 % vec2(1.0);
+    }
 
     // Matrix arithmetic
-    _ = mat3x3<f32>() + mat3x3<f32>();
-    _ = mat3x3<f32>() - mat3x3<f32>();
+    let add = mat3x3<f32>() + mat3x3<f32>();
+    let sub = mat3x3<f32>() - mat3x3<f32>();
 
-    _ = mat3x3<f32>() * 1.0;
-    _ = 2.0 * mat3x3<f32>();
+    let mul_scalar0 = mat3x3<f32>() * 1.0;
+    let mul_scalar1 = 2.0 * mat3x3<f32>();
 
-    _ = mat4x3<f32>() * vec4(1.0);
-    _ = vec3f(2.0) * mat4x3f();
+    let mul_vector0 = mat4x3<f32>() * vec4(1.0);
+    let mul_vector1 = vec3f(2.0) * mat4x3f();
 
-    _ = mat4x3<f32>() * mat3x4<f32>();
+    let mul = mat4x3<f32>() * mat3x4<f32>();
 }
 
 fn bit() {
     // unary
-    _ = ~1;
-    _ = ~1u;
-    _ = ~vec2(1);
-    _ = ~vec3(1u);
+    let flip0 = ~1;
+    let flip1 = ~1u;
+    let flip2 = ~vec2(1);
+    let flip3 = ~vec3(1u);
 
     // binary
-    _ = 2 | 1;
-    _ = 2u | 1u;
-    _ = vec2(2) | vec2(1);
-    _ = vec3(2u) | vec3(1u);
+    let or0 = 2 | 1;
+    let or1 = 2u | 1u;
+    let or2 = vec2(2) | vec2(1);
+    let or3 = vec3(2u) | vec3(1u);
 
-    _ = 2 & 1;
-    _ = 2u & 1u;
-    _ = vec2(2) & vec2(1);
-    _ = vec3(2u) & vec3(1u);
+    let and0 = 2 & 1;
+    let and1 = 2u & 1u;
+    let and2 = vec2(2) & vec2(1);
+    let and3 = vec3(2u) & vec3(1u);
 
-    _ = 2 ^ 1;
-    _ = 2u ^ 1u;
-    _ = vec2(2) ^ vec2(1);
-    _ = vec3(2u) ^ vec3(1u);
+    let xor0 = 2 ^ 1;
+    let xor1 = 2u ^ 1u;
+    let xor2 = vec2(2) ^ vec2(1);
+    let xor3 = vec3(2u) ^ vec3(1u);
 
-    _ = 2 << 1u;
-    _ = 2u << 1u;
-    _ = vec2(2) << vec2(1u);
-    _ = vec3(2u) << vec3(1u);
+    let shl0 = 2 << 1u;
+    let shl1 = 2u << 1u;
+    let shl2 = vec2(2) << vec2(1u);
+    let shl3 = vec3(2u) << vec3(1u);
 
-    _ = 2 >> 1u;
-    _ = 2u >> 1u;
-    _ = vec2(2) >> vec2(1u);
-    _ = vec3(2u) >> vec3(1u);
+    let shr0 = 2 >> 1u;
+    let shr1 = 2u >> 1u;
+    let shr2 = vec2(2) >> vec2(1u);
+    let shr3 = vec3(2u) >> vec3(1u);
 }
 
 fn comparison() {
-    _ = 2 == 1;
-    _ = 2u == 1u;
-    _ = 2.0 == 1.0;
-    _ = vec2(2) == vec2(1);
-    _ = vec3(2u) == vec3(1u);
-    _ = vec4(2.0) == vec4(1.0);
+    let eq0 = 2 == 1;
+    let eq1 = 2u == 1u;
+    let eq2 = 2.0 == 1.0;
+    let eq3 = vec2(2) == vec2(1);
+    let eq4 = vec3(2u) == vec3(1u);
+    let eq5 = vec4(2.0) == vec4(1.0);
 
-    _ = 2 != 1;
-    _ = 2u != 1u;
-    _ = 2.0 != 1.0;
-    _ = vec2(2) != vec2(1);
-    _ = vec3(2u) != vec3(1u);
-    _ = vec4(2.0) != vec4(1.0);
+    let neq0 = 2 != 1;
+    let neq1 = 2u != 1u;
+    let neq2 = 2.0 != 1.0;
+    let neq3 = vec2(2) != vec2(1);
+    let neq4 = vec3(2u) != vec3(1u);
+    let neq5 = vec4(2.0) != vec4(1.0);
 
-    _ = 2 < 1;
-    _ = 2u < 1u;
-    _ = 2.0 < 1.0;
-    _ = vec2(2) < vec2(1);
-    _ = vec3(2u) < vec3(1u);
-    _ = vec4(2.0) < vec4(1.0);
+    let lt0 = 2 < 1;
+    let lt1 = 2u < 1u;
+    let lt2 = 2.0 < 1.0;
+    let lt3 = vec2(2) < vec2(1);
+    let lt4 = vec3(2u) < vec3(1u);
+    let lt5 = vec4(2.0) < vec4(1.0);
 
-    _ = 2 <= 1;
-    _ = 2u <= 1u;
-    _ = 2.0 <= 1.0;
-    _ = vec2(2) <= vec2(1);
-    _ = vec3(2u) <= vec3(1u);
-    _ = vec4(2.0) <= vec4(1.0);
+    let lte0 = 2 <= 1;
+    let lte1 = 2u <= 1u;
+    let lte2 = 2.0 <= 1.0;
+    let lte3 = vec2(2) <= vec2(1);
+    let lte4 = vec3(2u) <= vec3(1u);
+    let lte5 = vec4(2.0) <= vec4(1.0);
 
-    _ = 2 > 1;
-    _ = 2u > 1u;
-    _ = 2.0 > 1.0;
-    _ = vec2(2) > vec2(1);
-    _ = vec3(2u) > vec3(1u);
-    _ = vec4(2.0) > vec4(1.0);
+    let gt0 = 2 > 1;
+    let gt1 = 2u > 1u;
+    let gt2 = 2.0 > 1.0;
+    let gt3 = vec2(2) > vec2(1);
+    let gt4 = vec3(2u) > vec3(1u);
+    let gt5 = vec4(2.0) > vec4(1.0);
 
-    _ = 2 >= 1;
-    _ = 2u >= 1u;
-    _ = 2.0 >= 1.0;
-    _ = vec2(2) >= vec2(1);
-    _ = vec3(2u) >= vec3(1u);
-    _ = vec4(2.0) >= vec4(1.0);
+    let gte0 = 2 >= 1;
+    let gte1 = 2u >= 1u;
+    let gte2 = 2.0 >= 1.0;
+    let gte3 = vec2(2) >= vec2(1);
+    let gte4 = vec3(2u) >= vec3(1u);
+    let gte5 = vec4(2.0) >= vec4(1.0);
 }
 
 fn assignment() {
@@ -301,10 +303,10 @@ fn assignment() {
 
 @compute @workgroup_size(1)
 fn main() {
-    _ = builtins();
-    _ = splat();
-    _ = bool_cast(v_f32_one.xyz);
-    _ = constructors();
+    builtins();
+    splat();
+    bool_cast(v_f32_one.xyz);
+    constructors();
 
     logical();
     arithmetic();
@@ -314,12 +316,12 @@ fn main() {
 }
 
 fn negation_avoids_prefix_decrement() {
-    _ = -1;
-    _ = - -2;
-    _ = -(-3);
-    _ = -(- 4);
-    _ = - - -5;
-    _ = - - - - 6;
-    _ = - - -(- -7);
-    _ = (- - - - -8);
+    let p0 = -1;
+    let p1 = - -2;
+    let p2 = -(-3);
+    let p3 = -(- 4);
+    let p4 = - - -5;
+    let p5 = - - - - 6;
+    let p6 = - - -(- -7);
+    let p7 = (- - - - -8);
 }

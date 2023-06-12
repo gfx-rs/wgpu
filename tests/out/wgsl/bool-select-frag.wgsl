@@ -21,8 +21,6 @@ fn TevPerCompGT_1(a_2: vec3<f32>, b_2: vec3<f32>) -> vec3<f32> {
 
     a_3 = a_2;
     b_3 = b_2;
-    _ = a_3;
-    _ = b_3;
     let _e7 = a_3;
     let _e8 = b_3;
     return select(vec3<f32>(0.0), vec3<f32>(1.0), (_e7 > _e8));
@@ -30,9 +28,6 @@ fn TevPerCompGT_1(a_2: vec3<f32>, b_2: vec3<f32>) -> vec3<f32> {
 
 fn main_1() {
     let _e1 = o_color;
-    _ = _e1.xyz;
-    _ = vec3<f32>(3.0);
-    _ = vec3<f32>(5.0);
     let _e11 = TevPerCompGT_1(vec3<f32>(3.0), vec3<f32>(5.0));
     o_color.x = _e11.x;
     o_color.y = _e11.y;

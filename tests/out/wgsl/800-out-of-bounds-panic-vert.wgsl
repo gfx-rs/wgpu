@@ -36,8 +36,6 @@ fn main_1() {
 fn main(@location(0) position: vec2<f32>, @location(1) color: vec4<f32>) -> VertexOutput {
     position_1 = position;
     color_1 = color;
-    _ = (&global.view_matrix);
-    _ = (&global_1.world_matrix);
     main_1();
     let _e15 = frag_color;
     let _e17 = gl_Position;

@@ -12,6 +12,6 @@ layout(std430) readonly buffer Ah_block_0Compute { Ah _group_0_binding_0_cs; };
 
 
 void main() {
-    Ah unnamed = _group_0_binding_0_cs;
+    Ah ah_1 = _group_0_binding_0_cs;
 }
 
