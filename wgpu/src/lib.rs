@@ -3107,6 +3107,37 @@ impl<'a> RenderPass<'a> {
     /// Sets the scissor region.
     ///
     /// Subsequent draw calls will discard any fragments that fall outside this region.
+    /// Scissor uses Window Coords so you will need to Convert any World Coords/Projections
+    /// into Windows coords.
+    ///
+    /// # Conversion Example
+    /// ```rust ignore
+    /// pub fn world_to_screen(
+    ///     screen_size: [f32; 2],
+    ///     scale: f32,
+    ///     projection: Mat4,
+    ///     left: f32,
+    ///     bottom: f32,
+    ///     right: f32,
+    ///     top: f32,
+    ///     height: f32
+    /// ) -> Vec4 {
+    ///     let model = Mat4::IDENTITY;
+    ///     let clip_coords =
+    ///         projection * model * Vec4::new(left, bottom, 1.0, 1.0);
+    ///     let coords = Vec3::from_slice(&clip_coords.to_array()) / clip_coords.w;
+    ///
+    ///     let xy = Vec2::new(
+    ///         (coords.x + 1.0) * 0.5 * screen_size[0],
+    ///         (1.0 - coords.y) * 0.5 * screen_size[1],
+    ///     );
+    ///
+    ///     let (bw, bh, objh) = (right * scale, top * scale, height * scale);
+    ///     // We must minus the height to flip the Y location to window coords.
+    ///     // You might not need to do this based on how you handle your Y coords.
+    ///     Vec4::new(xy.x, xy.y - objh, bw, bh)
+    ///}
+    /// ```
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
@@ -3150,7 +3181,14 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s).
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
+    /// Does not use an Index Buffer. If you need this see [`RenderPass::draw_indexed`]
+    ///
+    /// Panics if vertices Range is not within 0..BufferLen / BufferStride.
+    ///
+    /// vertices: The range of vertex's being used from the Vertex Buffer.
+    /// instances: matching instance's from an instance buffer with a repeated vertex
+    ///     otherwise set to 0..1.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.parent.context,
@@ -3192,8 +3230,16 @@ impl<'a> RenderPass<'a> {
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
-    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderPass::set_index_buffer`]
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// Panics if indices Range is not within 0..BufferLen / BufferStride.
+    ///
+    /// indices: The index range within the index buffer.
+    /// base_vertex: Addition upon the next set of Index's. example: 0,1,2,0,2,3 on next instance
+    ///     becomes 4,5,6,4,6,7 if base_vertex is set to 4 on the next index offset.
+    /// instances: matching instance's from an instance buffer with a repeated vertex
+    ///     otherwise set to 0..1.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.parent.context,
