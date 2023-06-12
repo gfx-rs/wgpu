@@ -3159,7 +3159,7 @@ impl<'a> RenderPass<'a> {
     /// vertices: The range of vertex's being used from the Vertex Buffer.
     /// instances: Change the vertex data used for any instance-rate vertex attributes
     ///     from a set instance buffer. The instance index is passed to the vertex
-    ///     shader through the instance_index builtin. Default to 0..1 if instance
+    ///     shader through the instance_index builtin. Use 0..1 if instance
     ///     buffers are not used.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
@@ -3212,7 +3212,7 @@ impl<'a> RenderPass<'a> {
     ///     becomes 4,5,6,4,6,7 if base_vertex is set to 4 on the next index offset.
     /// instances: Change the vertex data used for any instance-rate vertex attributes
     ///     from a set instance buffer. The instance index is passed to the vertex
-    ///     shader through the instance_index builtin. Default to 0..1 if instance
+    ///     shader through the instance_index builtin. use 0..1 if instance
     ///     buffers are not used.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
