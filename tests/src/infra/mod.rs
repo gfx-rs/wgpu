@@ -31,7 +31,10 @@ pub fn main<const GPU_TEST_COUNT: usize, const CPU_TEST_COUNT: usize>(
             report
                 .devices
                 .iter()
-                .map(move |device| single::run_test(test.clone(), device))
+                .enumerate()
+                .map(move |(adapter_index, adapter)| {
+                    single::run_test(test.clone(), adapter, adapter_index)
+                })
         })
         .collect();
     // Cpu tests

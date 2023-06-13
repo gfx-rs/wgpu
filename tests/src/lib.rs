@@ -235,6 +235,7 @@ impl TestParameters {
 pub fn initialize_test(
     parameters: TestParameters,
     expected_failure_reason: Option<FailureReasons>,
+    adapter_index: usize,
     test_function: impl FnOnce(TestingContext),
 ) {
     // We don't actually care if it fails
@@ -245,7 +246,7 @@ pub fn initialize_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (adapter, _surface_guard) = initialize_adapter();
+    let (adapter, _surface_guard) = initialize_adapter(adapter_index);
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -304,7 +305,7 @@ pub fn initialize_test(
     }
 }
 
-fn initialize_adapter() -> (Adapter, SurfaceGuard) {
+fn initialize_adapter(adapter_index: usize) -> (Adapter, SurfaceGuard) {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let instance = Instance::new(wgpu::InstanceDescriptor {
@@ -312,7 +313,6 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         dx12_shader_compiler,
     });
     let surface_guard;
-    let compatible_surface;
 
     #[cfg(not(all(
         target_arch = "wasm32",
@@ -320,7 +320,6 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     )))]
     {
         surface_guard = SurfaceGuard {};
-        compatible_surface = None;
     }
     #[cfg(all(
         target_arch = "wasm32",
@@ -356,17 +355,15 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
         };
 
         surface_guard = SurfaceGuard { canvas };
-
-        compatible_surface = Some(surface);
     }
 
-    let compatible_surface: Option<&Surface> = compatible_surface.as_ref();
-    let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
-        &instance,
-        backends,
-        compatible_surface,
-    ))
-    .expect("could not find suitable adapter on the system");
+    let adapter_iter = instance.enumerate_adapters(wgpu::Backends::all());
+    let adapter_count = adapter_iter.len();
+    let adapter = adapter_iter.into_iter()
+        .nth(adapter_index)
+        .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?"));
+
+    log::info!("Testing using adapter: {:#?}", adapter.get_info());
 
     (adapter, surface_guard)
 }

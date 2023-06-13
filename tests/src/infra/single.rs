@@ -10,6 +10,7 @@ use crate::{
 pub fn run_test(
     test: Arc<dyn GpuTest + Send + Sync>,
     adapter: &AdapterReport,
+    adapter_index: usize,
 ) -> libtest_mimic::Trial {
     let params = TestParameters::default();
     let params = test.parameters(params);
@@ -59,7 +60,7 @@ pub fn run_test(
         String::from("Executed")
     };
 
-    let full_name = format!("[{backend:?}/{device_name}] [{running_msg}] {base_name}");
+    let full_name = format!("[{running_msg}] [{backend:?}/{device_name}] {base_name}");
 
     libtest_mimic::Trial::test(full_name, move || {
         if should_skip {
@@ -68,6 +69,7 @@ pub fn run_test(
         initialize_test(
             params,
             expected_failure.map(|(reasons, _)| reasons),
+            adapter_index,
             |ctx| test.run(ctx),
         );
         Ok(())
