@@ -825,50 +825,48 @@ pub const TYPES: &[&str] = &{
 
     /// For each scalar type, it will additionally generate vector and matrix shorthands
     macro_rules! generate {
-        ($a:ident, $i:ident, [$($roots:literal),*], $x:tt) => {
+        ([$($roots:literal),*], $x:tt) => {
             $(
-                generate!(@inner push $a, $i, $roots);
-                generate!(@inner $a, $i, $roots, $x);
+                generate!(@inner push $roots);
+                generate!(@inner $roots, $x);
             )*
         };
 
-        (@inner $a:ident, $i:ident, $root:literal, [$($x:literal),*]) => {
-            generate!(@inner vector $a, $i, $root, $($x)*);
-            generate!(@inner matrix $a, $i, $root, $($x)*);
+        (@inner $root:literal, [$($x:literal),*]) => {
+            generate!(@inner vector $root, $($x)*);
+            generate!(@inner matrix $root, $($x)*);
         };
 
-        (@inner vector $a:ident, $i:ident, $root:literal, $($x:literal)*) => {
+        (@inner vector $root:literal, $($x:literal)*) => {
             $(
-                generate!(@inner push $a, $i, concat!($root, $x));
+                generate!(@inner push concat!($root, $x));
             )*
         };
 
-        (@inner matrix $a:ident, $i:ident, $root:literal, $($x:literal)*) => {
+        (@inner matrix $root:literal, $($x:literal)*) => {
             // Duplicate the list
-            generate!(@inner matrix $a, $i, $root, $($x)*; $($x)*);
+            generate!(@inner matrix $root, $($x)*; $($x)*);
         };
 
         // The head/tail recursion: pick the first element of the first list and recursively do it for the tail.
-        (@inner matrix $a:ident, $i:ident, $root:literal, $head:literal $($tail:literal)*; $($x:literal)*) => {
+        (@inner matrix $root:literal, $head:literal $($tail:literal)*; $($x:literal)*) => {
             $(
-                generate!(@inner push $a, $i, concat!($root, $head, "x", $x));
+                generate!(@inner push concat!($root, $head, "x", $x));
             )*
-            generate!(@inner matrix $a, $i, $root, $($tail)*; $($x)*);
+            generate!(@inner matrix $root, $($tail)*; $($x)*);
 
         };
 
         // The end of iteration: we exhausted the list
-        (@inner matrix $a:ident, $i:ident, $root:literal, ; $($x:literal)*) => {};
+        (@inner matrix $root:literal, ; $($x:literal)*) => {};
 
-        (@inner push $a:ident, $i:ident, $v:expr) => {
-            $a[$i] = $v;
-            $i += 1;
+        (@inner push $v:expr) => {
+            res[c] = $v;
+            c += 1;
         };
     }
 
     generate!(
-        res,
-        c,
         [
             "bool",
             "int",
