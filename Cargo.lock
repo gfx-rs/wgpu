@@ -66,9 +66,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "arrayvec"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
+checksum = "8868f09ff8cea88b079da74ae569d9b8c62a23c68c746240b704ee6f7525c89c"
 dependencies = [
  "serde",
 ]
@@ -2945,7 +2945,7 @@ dependencies = [
 name = "wgpu"
 version = "0.16.0"
 dependencies = [
- "arrayvec 0.7.2",
+ "arrayvec 0.7.3",
  "cfg-if",
  "js-sys",
  "log",
@@ -3025,7 +3025,7 @@ dependencies = [
 name = "wgpu-core"
 version = "0.16.0"
 dependencies = [
- "arrayvec 0.7.2",
+ "arrayvec 0.7.3",
  "bit-vec",
  "bitflags 2.3.1",
  "codespan-reporting",
@@ -3083,7 +3083,7 @@ name = "wgpu-hal"
 version = "0.16.0"
 dependencies = [
  "android_system_properties",
- "arrayvec 0.7.2",
+ "arrayvec 0.7.3",
  "ash",
  "bit-set",
  "bitflags 2.3.1",
