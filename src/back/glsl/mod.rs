@@ -1390,6 +1390,9 @@ impl<'a, W: Write> Writer<'a, W> {
             write!(self.out, "void")?;
         } else if let Some(ref result) = func.result {
             self.write_type(result.ty)?;
+            if let TypeInner::Array { base, size, .. } = self.module.types[result.ty].inner {
+                self.write_array_size(base, size)?
+            }
         } else {
             write!(self.out, "void")?;
         }
@@ -2154,7 +2157,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     let name = format!("{}{}", back::BAKE_PREFIX, expr.index());
                     let result = self.module.functions[function].result.as_ref().unwrap();
                     self.write_type(result.ty)?;
-                    write!(self.out, " {name} = ")?;
+                    write!(self.out, " {name}")?;
+                    if let TypeInner::Array { base, size, .. } = self.module.types[result.ty].inner
+                    {
+                        self.write_array_size(base, size)?
+                    }
+                    write!(self.out, " = ")?;
                     self.named_expressions.insert(expr, name);
                 }
                 write!(self.out, "{}(", &self.names[&NameKey::Function(function)])?;
