@@ -14,14 +14,14 @@ pub trait GpuTest: Send + Sync + 'static {
 
     fn name(&self) -> String {
         let name = std::any::type_name::<Self>();
-        let type_name = name.rsplit_once("::").unwrap().1;
+        let (path, type_name) = name.rsplit_once("::").unwrap();
         let snake_case = type_name.to_snake_case();
         let snake_case_trimmed = snake_case.trim_end_matches("_test");
         assert_ne!(
             &snake_case, snake_case_trimmed,
             "Type name of the test must end with \"Test\""
         );
-        snake_case_trimmed.to_string()
+        format!("{path}::{snake_case_trimmed}")
     }
 
     fn parameters(&self, params: TestParameters) -> TestParameters {
@@ -29,4 +29,29 @@ pub trait GpuTest: Send + Sync + 'static {
     }
 
     fn run(&self, ctx: TestingContext);
+}
+
+pub struct CpuTest {
+    name: &'static str,
+    test: Box<dyn FnOnce() + Send + Sync + 'static>,
+}
+
+impl CpuTest {
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn call(self) {
+        (self.test)();
+    }
+}
+
+pub fn cpu_test<T>(test: T) -> CpuTest
+where
+    T: FnOnce() + Send + Sync + 'static,
+{
+    CpuTest {
+        name: std::any::type_name::<T>(),
+        test: Box::new(test),
+    }
 }

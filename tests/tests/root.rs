@@ -28,19 +28,28 @@ mod zero_init_texture_after_discard;
 // wasm_bindgen_test_configure!(run_in_browser);
 
 fn main() -> wgpu_test::infra::MainResult {
-    wgpu_test::infra::main([
-        instance::InitializeTest::new(),
-        queue_transfer::QueueWriteTextureOverflowTest::new(),
-        resource_descriptor_accessor::BufferSizeAndUsageTest::new(),
-        resource_error::BadBufferTest::new(),
-        resource_error::BadTextureTest::new(),
-        texture_bounds::BadCopyOriginTest::new(),
-        transfer::CopyOverflowZTest::new(),
-        write_texture::WriteTextureSubset2dTest::new(),
-        write_texture::WriteTextureSubset3dTest::new(),
-        zero_init_texture_after_discard::DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyAfterSubmitTest::new(),
-        zero_init_texture_after_discard::DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest::new(),
-        zero_init_texture_after_discard::DiscardingDepthTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest::new(),
-        zero_init_texture_after_discard::DiscardingEitherDepthOrStencilAspectTest::new(),
-    ])
+    wgpu_test::infra::main(
+        [
+            instance::InitializeTest::new(),
+            poll::WaitTest::new(),
+            poll::DoubleWaitTest::new(),
+            poll::WaitOnSubmissionTest::new(),
+            poll::DoubleWaitOnSubmissionTest::new(),
+            poll::WaitOutOfOrderTest::new(),
+            queue_transfer::QueueWriteTextureOverflowTest::new(),
+            resource_descriptor_accessor::BufferSizeAndUsageTest::new(),
+            resource_error::BadBufferTest::new(),
+            resource_error::BadTextureTest::new(),
+            texture_bounds::BadCopyOriginTest::new(),
+            transfer::CopyOverflowZTest::new(),
+            write_texture::WriteTextureSubset2dTest::new(),
+            write_texture::WriteTextureSubset3dTest::new(),
+            zero_init_texture_after_discard::DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyAfterSubmitTest::new(),
+            zero_init_texture_after_discard::DiscardingColorTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest::new(),
+            zero_init_texture_after_discard::DiscardingDepthTargetResetsTextureInitStateCheckVisibleOnCopyInSameEncoderTest::new(),
+            zero_init_texture_after_discard::DiscardingEitherDepthOrStencilAspectTest::new(),
+        ], [
+            wgpu_test::infra::cpu_test(example_wgsl::parse_example_wgsl)
+        ]
+    )
 }
