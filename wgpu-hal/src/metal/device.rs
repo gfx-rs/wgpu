@@ -175,7 +175,7 @@ impl super::Device {
             match var.space {
                 naga::AddressSpace::WorkGroup => {
                     if !ep_info[var_handle].is_empty() {
-                        let size = module.types[var.ty].inner.size(&module.constants);
+                        let size = module.types[var.ty].inner.size(module.to_ctx());
                         wg_memory_sizes.push(size);
                     }
                 }
