@@ -915,7 +915,7 @@ impl Interface {
                     size: wgt::BufferSize::new(stride as u64).unwrap(),
                 },
                 ref other => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(other.size(&module.constants) as u64).unwrap(),
+                    size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },
             };
             let handle = resources.append(
