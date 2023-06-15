@@ -66,9 +66,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "arrayvec"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
+checksum = "8868f09ff8cea88b079da74ae569d9b8c62a23c68c746240b704ee6f7525c89c"
 dependencies = [
  "serde",
 ]
@@ -182,9 +182,12 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.1"
+version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6776fc96284a0bb647b615056fc496d1fe1644a7ab01829818a6d91cae888b84"
+checksum = "6dbe3c979c178231552ecba20214a8272df4e09f232a87aef4320cf06539aded"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block"
@@ -1127,7 +1130,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbcd2dba93594b227a1f57ee09b8b9da8892c34d55aa332e034a228d0fe6a171"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
  "gpu-alloc-types",
 ]
 
@@ -1137,7 +1140,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98ff03b468aa837d70984d55f5d3f846f6ec31fe34bbb97c4f85219caeee1ca4"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
 ]
 
 [[package]]
@@ -1521,10 +1524,10 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.12.0"
-source = "git+https://github.com/gfx-rs/naga?rev=b99d58ea435090e561377949f428bce2c18451bb#b99d58ea435090e561377949f428bce2c18451bb"
+source = "git+https://github.com/gfx-rs/naga?rev=76003dc0035d53a474d366dcdf49d2e4d12e921f#76003dc0035d53a474d366dcdf49d2e4d12e921f"
 dependencies = [
  "bit-set",
- "bitflags 1.3.2",
+ "bitflags 2.3.2",
  "codespan-reporting",
  "hexf-parse",
  "indexmap",
@@ -2951,7 +2954,7 @@ dependencies = [
 name = "wgpu"
 version = "0.16.0"
 dependencies = [
- "arrayvec 0.7.2",
+ "arrayvec 0.7.3",
  "cfg-if",
  "js-sys",
  "log",
@@ -3031,9 +3034,9 @@ dependencies = [
 name = "wgpu-core"
 version = "0.16.0"
 dependencies = [
- "arrayvec 0.7.2",
+ "arrayvec 0.7.3",
  "bit-vec",
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
  "codespan-reporting",
  "log",
  "naga",
@@ -3089,10 +3092,10 @@ name = "wgpu-hal"
 version = "0.16.0"
 dependencies = [
  "android_system_properties",
- "arrayvec 0.7.2",
+ "arrayvec 0.7.3",
  "ash",
  "bit-set",
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
  "block",
  "cfg-if",
  "core-graphics-types",
@@ -3192,7 +3195,7 @@ name = "wgpu-info"
 version = "0.16.0"
 dependencies = [
  "anyhow",
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
  "env_logger",
  "pico-args",
  "serde",
@@ -3273,7 +3276,7 @@ dependencies = [
 name = "wgpu-test"
 version = "0.16.0"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
  "bytemuck",
  "cfg-if",
  "console_log",
@@ -3310,7 +3313,7 @@ dependencies = [
 name = "wgpu-types"
 version = "0.16.0"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.3.2",
  "js-sys",
  "serde",
  "serde_json",
