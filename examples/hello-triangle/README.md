@@ -5,7 +5,7 @@ This example renders a triangle to a window.
 ## To Run
 
 ```
-cargo run --example hello-triangle
+cargo run --bin hello-triangle
 ```
 
 ## Screenshots

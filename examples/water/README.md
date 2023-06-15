@@ -5,6 +5,7 @@ This example renders animated water.
 It demonstrates Read only Depth/Stencil (abbreviated RODS), where a depth/stencil buffer is used as an attachment which is read-only. In this case it's used in the shaders to calculate reflections and depth.
 
 ## Files:
+
 ```
 water
 ├── main.rs ------------------ Main program
@@ -16,9 +17,11 @@ water
 ```
 
 ## To run
+
 ```
-cargo run --example water
+cargo run --bin water
 ```
 
 ## Screenshot
+
 ![Water example](./screenshot.png)
