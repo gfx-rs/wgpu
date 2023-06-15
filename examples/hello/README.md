@@ -5,7 +5,7 @@ This example prints output describing the adapter in use.
 ## To Run
 
 ```
-cargo run --example hello
+cargo run --bin hello
 ```
 
 ## Example output

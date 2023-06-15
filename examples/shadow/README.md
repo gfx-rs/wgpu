@@ -5,7 +5,7 @@ This animated example demonstrates shadow mapping.
 ## To Run
 
 ```
-cargo run --example shadow
+cargo run --bin shadow
 ```
 
 ## Screenshots
