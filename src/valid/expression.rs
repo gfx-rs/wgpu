@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 #[cfg(feature = "validate")]
 use super::{
     compose::validate_compose, validate_atomic_compare_exchange_struct, FunctionInfo, ShaderStages,
@@ -134,7 +132,7 @@ struct ExpressionTypeResolver<'a> {
 }
 
 #[cfg(feature = "validate")]
-impl<'a> Index<Handle<crate::Expression>> for ExpressionTypeResolver<'a> {
+impl<'a> std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'a> {
     type Output = crate::TypeInner;
 
     #[allow(clippy::panic)]
