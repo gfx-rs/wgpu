@@ -157,7 +157,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         vk_barriers.clear();
 
         for bar in barriers {
-            let range = conv::map_subresource_range(&bar.range, bar.texture.format);
+            let range = conv::map_subresource_range_combined_aspect(
+                &bar.range,
+                bar.texture.format,
+                &self.device.private_caps,
+            );
             let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.start);
             let src_layout = conv::derive_image_layout(bar.usage.start, bar.texture.format);
             src_stages |= src_stage;

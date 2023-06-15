@@ -4,10 +4,14 @@ use hal::CommandEncoder as _;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::{CommandBuffer, CommandEncoderError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{self, Id, TypedId},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     resource::QuerySet,
+    storage::Storage,
     Epoch, FastHashMap, Index,
 };
 use std::{iter, marker::PhantomData};

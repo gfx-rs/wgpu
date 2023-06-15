@@ -5,8 +5,11 @@ use crate::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
-    id, resource,
+    hal_api::HalApi,
+    hub::{Hub, Token},
+    id,
+    identity::GlobalIdentityHandlerFactory,
+    resource,
     track::{BindGroupStates, RenderBundleScope, Tracker},
     RefCount, Stored, SubmissionIndex,
 };

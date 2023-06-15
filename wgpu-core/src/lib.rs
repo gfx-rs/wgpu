@@ -3,6 +3,17 @@
  *  into other language-specific user-friendly libraries.
  */
 
+// When we have no backends, we end up with a lot of dead or otherwise unreachable code.
+#![cfg_attr(
+    all(
+        not(all(feature = "vulkan", not(target_arch = "wasm32"))),
+        not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
+        not(all(feature = "dx12", windows)),
+        not(all(feature = "dx11", windows)),
+        not(feature = "gles"),
+    ),
+    allow(unused, clippy::let_and_return)
+)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // It is much clearer to assert negative conditions with eq! false
@@ -42,13 +53,18 @@ pub mod command;
 mod conv;
 pub mod device;
 pub mod error;
+pub mod global;
+pub mod hal_api;
 pub mod hub;
 pub mod id;
+pub mod identity;
 mod init_tracker;
 pub mod instance;
 pub mod pipeline;
 pub mod present;
+pub mod registry;
 pub mod resource;
+pub mod storage;
 mod track;
 mod validation;
 
@@ -355,7 +371,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// identifiers to select backends dynamically, even though many `wgpu_core`
 /// methods are compiled and optimized for a specific back end.
 ///
-/// This macro is typically used to call methods on [`wgpu_core::hub::Global`],
+/// This macro is typically used to call methods on [`wgpu_core::global::Global`],
 /// many of which take a single `hal::Api` type parameter. For example, to
 /// create a new buffer on the device indicated by `device_id`, one would say:
 ///
@@ -375,13 +391,13 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// That `gfx_select!` call uses `device_id`'s backend to select the right
 /// backend type `A` for a call to `Global::device_create_buffer<A>`.
 ///
-/// However, there's nothing about this macro that is specific to `hub::Global`.
+/// However, there's nothing about this macro that is specific to `global::Global`.
 /// For example, Firefox's embedding of `wgpu_core` defines its own types with
 /// methods that take `hal::Api` type parameters. Firefox uses `gfx_select!` to
 /// dynamically dispatch to the right specialization based on the resource's id.
 ///
 /// [`wgpu_types::Backend`]: wgt::Backend
-/// [`wgpu_core::hub::Global`]: crate::hub::Global
+/// [`wgpu_core::global::Global`]: crate::global::Global
 /// [`Id`]: id::Id
 #[macro_export]
 macro_rules! gfx_select {

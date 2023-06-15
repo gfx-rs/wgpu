@@ -1,7 +1,10 @@
 use crate::{
     device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,
     validation::MissingBufferUsageError,
@@ -12,6 +15,17 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use std::{borrow::Borrow, ops::Range, ptr::NonNull};
+
+pub trait Resource {
+    const TYPE: &'static str;
+    fn life_guard(&self) -> &LifeGuard;
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.life_guard().label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
+}
 
 /// The status code provided to the buffer mapping callback.
 ///

@@ -5,13 +5,17 @@ use crate::{
     conv,
     device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{BufferId, CommandEncoderId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
     resource::{Texture, TextureErrorDimension},
+    storage::Storage,
     track::TextureSelector,
 };
 

@@ -47,6 +47,21 @@ pub use wgt::{
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+#[doc(hidden)]
+pub use ::hal;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+#[doc(hidden)]
+pub use ::wgc as core;
+
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
@@ -1360,7 +1375,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
                 crate::backend::Context::from_hal_instance::<A>(hal_instance)
@@ -1383,7 +1398,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe {
             self.context
                 .as_any()
@@ -1425,7 +1440,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
+    pub fn enumerate_adapters(&self, backends: Backends) -> impl ExactSizeIterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
@@ -1468,7 +1483,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
@@ -1698,7 +1713,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.context
             .as_any()
             .downcast_ref::<crate::backend::Context>()
@@ -1773,7 +1788,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
@@ -1827,7 +1842,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
@@ -2176,7 +2191,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor,
@@ -2281,7 +2296,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
     ) -> R {
@@ -2623,7 +2638,7 @@ impl Texture {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
@@ -4240,7 +4255,11 @@ impl Surface {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::Surface>) -> R,
+        R,
+    >(
         &mut self,
         hal_surface_callback: F,
     ) -> R {
@@ -4261,7 +4280,16 @@ impl Surface {
 #[cfg(feature = "expose-ids")]
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
-pub struct Id<T>(core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+pub struct Id<T>(::core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+
+// SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
+// returned for different types , so `Id` can safely implement Send and Sync.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Send for Id<T> {}
+
+// SAFETY: See the implementation for `Send`.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Sync for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
 impl<T> Clone for Id<T> {
