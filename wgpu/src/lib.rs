@@ -3156,7 +3156,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Panics if vertices Range is not within 0..BufferLen / BufferStride.
     ///
-    /// vertices: The range of vertex's being used from the Vertex Buffer.
+    /// vertices: The range of vertices being used from the Vertex Buffer.
     /// instances: Change the vertex data used for any instance-rate vertex attributes
     ///     from a set instance buffer. The instance index is passed to the vertex
     ///     shader through the instance_index builtin. Use 0..1 if instance
@@ -3207,7 +3207,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Panics if indices Range is not within 0..BufferLen / BufferStride.
     ///
-    /// indices: The index range within the index buffer.
+    /// indices: The indices range within the index buffer.
     /// base_vertex: Addition upon the next set of Index's. example: 0,1,2,0,2,3 on next instance
     ///     becomes 4,5,6,4,6,7 if base_vertex is set to 4 on the next index offset.
     /// instances: Change the vertex data used for any instance-rate vertex attributes
