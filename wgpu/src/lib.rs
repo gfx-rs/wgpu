@@ -3104,10 +3104,10 @@ impl<'a> RenderPass<'a> {
         )
     }
 
-    /// Sets the scissor region.
+    /// Sets the scissor rectangle used during the rasterization stage.
+    /// After transformation into [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
-    /// Subsequent draw calls will discard any fragments that fall outside this region
-    /// as framebuffer space.
+    /// Subsequent draw calls will discard any fragments which fall outside the scissor rectangle.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
@@ -3120,7 +3120,8 @@ impl<'a> RenderPass<'a> {
         );
     }
 
-    /// Sets the viewport region of framebuffer space.
+    /// Sets the viewport used during the rasterization stage to linearly map
+    /// from [normalized device coordinates](https://www.w3.org/TR/webgpu/#ndc) to [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
     /// Subsequent draw calls will draw any fragments in this region.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
