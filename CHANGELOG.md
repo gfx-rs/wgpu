@@ -83,6 +83,10 @@ Bottom level categories:
 #### Vulkan
 - Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
 
+#### DX12
+
+- Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
+
 ### Examples
 
 #### General
