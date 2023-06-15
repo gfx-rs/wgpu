@@ -55,6 +55,7 @@ rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
 version = "0.12.0"
 
 [workspace.dependencies]
+anyhow = "1.0"
 arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
@@ -82,6 +83,7 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
+pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
 png = "0.17.9"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
