@@ -9,7 +9,7 @@ require a window to be created.
 ## To Run
 
 ```
-cargo run --example capture
+cargo run --bin capture
 open examples/capture/red.png
 ```
 

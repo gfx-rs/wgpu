@@ -74,7 +74,7 @@ version = "0.16"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
 ash = { version = "0.37.3", optional = true }
-gpu-alloc = { version = "0.5", optional = true }
+gpu-alloc = { version = "0.6", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
 
@@ -106,7 +106,7 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wasm-bindgen = "0.2.84"
+wasm-bindgen = "0.2.86"
 web-sys = { version = "0.3.61", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
 js-sys = "0.3.63"
 
@@ -118,14 +118,14 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
+rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
 version = "0.12.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
+rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
 version = "0.12.0"
 features = ["wgsl-in"]
 

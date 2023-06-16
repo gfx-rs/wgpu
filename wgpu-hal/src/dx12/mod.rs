@@ -176,6 +176,7 @@ struct PrivateCapabilities {
     #[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
     heap_create_not_zeroed: bool,
     casting_fully_typed_format_supported: bool,
+    suballocation_supported: bool,
 }
 
 #[derive(Default)]

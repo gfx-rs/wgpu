@@ -12,7 +12,7 @@ Pixels only drawn with conservative rasterization enabled are depicted red.
 ## To Run
 
 ```
-cargo run --example conservative-raster
+cargo run --bin conservative-raster
 ```
 
 ## Screenshots

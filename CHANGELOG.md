@@ -54,6 +54,10 @@ Bottom level categories:
 
 - Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
 
+### Added/New Features
+
+- Empty scissor rects are allowed now, matching the specification. by @PJB3005 in [#3863](https://github.com/gfx-rs/wgpu/pull/3863).
+
 ### Documentation
 
 #### General
@@ -78,6 +82,10 @@ Bottom level categories:
 
 #### Vulkan
 - Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
+
+#### DX12
+
+- Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
 
 ### Examples
 
