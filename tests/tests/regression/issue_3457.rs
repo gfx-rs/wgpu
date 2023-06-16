@@ -1,6 +1,5 @@
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::infra::GpuTest;
 
-use wasm_bindgen_test::wasm_bindgen_test;
 use wgpu::*;
 
 /// The core issue here was that we weren't properly disabling vertex attributes on GL
@@ -15,10 +14,11 @@ use wgpu::*;
 ///
 /// We use non-consecutive vertex attribute locations (0 and 5) in order to also test
 /// that we unset the correct locations (see PR #3706).
-// #[wasm_bindgen_test]
-#[test]
-fn pass_reset_vertex_buffer() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct PassResetVertexBufferTest;
+
+impl GpuTest for PassResetVertexBufferTest {
+    fn run(&self, ctx: wgpu_test::TestingContext) {
         let module = ctx
             .device
             .create_shader_module(include_wgsl!("issue_3457.wgsl"));
@@ -186,5 +186,5 @@ fn pass_reset_vertex_buffer() {
         drop(single_rpass);
 
         ctx.queue.submit(Some(encoder2.finish()));
-    })
+    }
 }

@@ -3,7 +3,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
+use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue};
 use wgt::{AdapterInfo, Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 pub mod image;
@@ -54,6 +54,7 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
     }
 }
 
+#[derive(Clone)]
 pub struct FailureCase {
     backends: Option<wgpu::Backends>,
     vendor: Option<u32>,
@@ -62,6 +63,7 @@ pub struct FailureCase {
 }
 
 // This information determines if a test should run.
+#[derive(Clone)]
 pub struct TestParameters {
     pub required_features: Features,
     pub required_downlevel_caps: DownlevelCapabilities,
@@ -259,7 +261,7 @@ pub fn initialize_test(
 
     let context = TestingContext {
         adapter,
-        adapter_info: adapter_info.clone(),
+        adapter_info,
         adapter_downlevel_capabilities,
         device,
         device_features: parameters.required_features,

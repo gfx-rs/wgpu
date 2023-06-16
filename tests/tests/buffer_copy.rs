@@ -1,34 +1,39 @@
 //! Tests for buffer copy validation.
 
-use wasm_bindgen_test::wasm_bindgen_test;
 use wgt::BufferAddress;
 
-use wgpu_test::{fail_if, initialize_test, TestParameters};
+use wgpu_test::{fail_if, infra::GpuTest};
 
-#[test]
-#[wasm_bindgen_test]
-fn copy_alignment() {
-    fn try_copy(offset: BufferAddress, size: BufferAddress, should_fail: bool) {
-        initialize_test(TestParameters::default(), |ctx| {
-            let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR);
-            let data = vec![255; size as usize];
-            fail_if(&ctx.device, should_fail, || {
-                ctx.queue.write_buffer(&buffer, offset, &data)
-            });
-        });
+fn try_copy(
+    ctx: &wgpu_test::TestingContext,
+    offset: BufferAddress,
+    size: BufferAddress,
+    should_fail: bool,
+) {
+    let buffer = ctx.device.create_buffer(&BUFFER_DESCRIPTOR);
+    let data = vec![255; size as usize];
+    fail_if(&ctx.device, should_fail, || {
+        ctx.queue.write_buffer(&buffer, offset, &data)
+    });
+}
+
+#[derive(Default)]
+pub struct CopyAlignmentTest;
+
+impl GpuTest for CopyAlignmentTest {
+    fn run(&self, ctx: wgpu_test::TestingContext) {
+        try_copy(&ctx, 0, 0, false);
+        try_copy(&ctx, 4, 16 + 1, true);
+        try_copy(&ctx, 64, 20 + 2, true);
+        try_copy(&ctx, 256, 44 + 3, true);
+        try_copy(&ctx, 1024, 8 + 4, false);
+
+        try_copy(&ctx, 0, 4, false);
+        try_copy(&ctx, 4 + 1, 8, true);
+        try_copy(&ctx, 64 + 2, 12, true);
+        try_copy(&ctx, 256 + 3, 16, true);
+        try_copy(&ctx, 1024 + 4, 4, false);
     }
-
-    try_copy(0, 0, false);
-    try_copy(4, 16 + 1, true);
-    try_copy(64, 20 + 2, true);
-    try_copy(256, 44 + 3, true);
-    try_copy(1024, 8 + 4, false);
-
-    try_copy(0, 4, false);
-    try_copy(4 + 1, 8, true);
-    try_copy(64 + 2, 12, true);
-    try_copy(256 + 3, 16, true);
-    try_copy(1024 + 4, 4, false);
 }
 
 const BUFFER_SIZE: BufferAddress = 1234;

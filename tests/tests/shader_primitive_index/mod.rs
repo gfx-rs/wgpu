@@ -1,6 +1,5 @@
-use wasm_bindgen_test::*;
 use wgpu::util::{align_to, DeviceExt};
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{infra::GpuTest, TestParameters, TestingContext};
 
 //
 // These tests render two triangles to a 2x2 render target. The first triangle
@@ -36,54 +35,57 @@ use wgpu_test::{initialize_test, TestParameters, TestingContext};
 // draw_indexed() draws the triangles in the opposite order, using index
 // buffer [3, 4, 5, 0, 1, 2]. This also swaps the resulting pixel colors.
 //
-#[test]
-#[wasm_bindgen_test]
-fn draw() {
-    //
-    //   +-----+-----+
-    //   |white|blue |
-    //   +-----+-----+
-    //   | red |white|
-    //   +-----+-----+
-    //
-    let expected = [
-        255, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 255, 255,
-    ];
-    initialize_test(
-        TestParameters::default()
+#[derive(Default)]
+pub struct DrawTest;
+
+impl GpuTest for DrawTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
-        |ctx| {
-            pulling_common(ctx, &expected, |rpass| {
-                rpass.draw(0..6, 0..1);
-            })
-        },
-    );
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX)
+    }
+    fn run(&self, ctx: TestingContext) {
+        //
+        //   +-----+-----+
+        //   |white|blue |
+        //   +-----+-----+
+        //   | red |white|
+        //   +-----+-----+
+        //
+        let expected = [
+            255, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 255, 255,
+        ];
+        pulling_common(ctx, &expected, |rpass| {
+            rpass.draw(0..6, 0..1);
+        })
+    }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_indexed() {
-    //
-    //   +-----+-----+
-    //   |white| red |
-    //   +-----+-----+
-    //   |blue |white|
-    //   +-----+-----+
-    //
-    let expected = [
-        255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
-    ];
-    initialize_test(
-        TestParameters::default()
+#[derive(Default)]
+pub struct DrawIndexedTest;
+
+impl GpuTest for DrawIndexedTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
-        |ctx| {
-            pulling_common(ctx, &expected, |rpass| {
-                rpass.draw_indexed(0..6, 0, 0..1);
-            })
-        },
-    );
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX)
+    }
+
+    fn run(&self, ctx: TestingContext) {
+        //
+        //   +-----+-----+
+        //   |white| red |
+        //   +-----+-----+
+        //   |blue |white|
+        //   +-----+-----+
+        //
+        let expected = [
+            255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+        ];
+        pulling_common(ctx, &expected, |rpass| {
+            rpass.draw_indexed(0..6, 0, 0..1);
+        })
+    }
 }
 
 fn pulling_common(

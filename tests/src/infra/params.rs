@@ -5,11 +5,19 @@ use heck::ToSnakeCase;
 use crate::{TestParameters, TestingContext};
 
 pub trait GpuTest: Send + Sync + 'static {
+    #[allow(clippy::new_ret_no_self)]
     fn new() -> Arc<dyn GpuTest + Send + Sync>
     where
         Self: Sized + Default,
     {
-        Arc::new(Self::default())
+        Self::from_value(Self::default())
+    }
+
+    fn from_value(value: Self) -> Arc<dyn GpuTest + Send + Sync>
+    where
+        Self: Sized,
+    {
+        Arc::new(value)
     }
 
     fn name(&self) -> String {
@@ -46,6 +54,7 @@ impl CpuTest {
     }
 }
 
+// This needs to be generic, otherwise we will get the generic type name of `fn() -> ()`.
 pub fn cpu_test<T>(test: T) -> CpuTest
 where
     T: FnOnce() + Send + Sync + 'static,

@@ -403,45 +403,52 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("cube");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Test example
+#[cfg(test)]
+fn main() -> wgpu_test::infra::MainResult {
+    use std::marker::PhantomData;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        // Generated on 1080ti on Vk/Windows
-        image_path: "/examples/cube/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
-        ],
-    });
-}
+    use wgpu_test::infra::GpuTest;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube_lines() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        // Generated on 1080ti on Vk/Windows
-        image_path: "/examples/cube/screenshot-lines.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::POLYGON_MODE_LINE,
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        // We're looking for tiny changes here, so we focus on a spike in the 95th percentile.
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
-            wgpu_test::ComparisonType::Percentile {
-                percentile: 0.95,
-                threshold: 0.36,
-            }, // Bounded by 1080ti on DX12
+    wgpu_test::infra::main(
+        [
+            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
+                name: "cube",
+                // Generated on 1080ti on Vk/Windows
+                image_path: "/examples/cube/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::default(),
+                base_test_parameters: wgpu_test::TestParameters::default(),
+                comparisons: &[
+                    wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
+                ],
+                _phantom: PhantomData::<Example>,
+            }),
+            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
+                name: "cube-lines",
+                // Generated on 1080ti on Vk/Windows
+                image_path: "/examples/cube/screenshot-lines.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::POLYGON_MODE_LINE,
+                base_test_parameters: wgpu_test::TestParameters::default(),
+                // We're looking for tiny changes here, so we focus on a spike in the 95th percentile.
+                comparisons: &[
+                    wgpu_test::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
+                    wgpu_test::ComparisonType::Percentile {
+                        percentile: 0.95,
+                        threshold: 0.36,
+                    }, // Bounded by 1080ti on DX12
+                ],
+                _phantom: PhantomData::<Example>,
+            }),
         ],
-    });
+        [],
+    )
 }

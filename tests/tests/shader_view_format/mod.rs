@@ -1,13 +1,17 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
-use wgpu_test::{image::calc_difference, initialize_test, TestParameters, TestingContext};
+use wgpu_test::{image::calc_difference, infra::GpuTest, TestParameters, TestingContext};
 
-#[test]
-fn reinterpret_srgb_ness() {
-    let parameters = TestParameters::default()
-        .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
-        .limits(Limits::downlevel_defaults())
-        .specific_failure(Some(wgpu::Backends::GL), None, None, true);
-    initialize_test(parameters, |ctx| {
+#[derive(Default)]
+pub struct ReinterpretSrgbTest;
+
+impl GpuTest for ReinterpretSrgbTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params
+            .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
+            .limits(Limits::downlevel_defaults())
+    }
+
+    fn run(&self, ctx: TestingContext) {
         let unorm_data: [[u8; 4]; 4] = [
             [180, 0, 0, 255],
             [0, 84, 0, 127],
@@ -52,7 +56,7 @@ fn reinterpret_srgb_ness() {
             &srgb_data,
             &unorm_data,
         );
-    });
+    }
 }
 
 fn reinterpret(

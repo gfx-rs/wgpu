@@ -351,28 +351,38 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("bunnymark");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Test example
+#[cfg(test)]
+fn main() -> wgpu_test::infra::MainResult {
+    use std::marker::PhantomData;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn bunnymark() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        image_path: "/examples/bunnymark/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        // We're looking for very small differences, so look in the high percentiles.
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.05),
-            wgpu_test::ComparisonType::Percentile {
-                percentile: 0.95,
-                threshold: 0.05,
+    use wgpu_test::infra::GpuTest;
+
+    wgpu_test::infra::main(
+        [GpuTest::from_value(
+            wgpu_example::framework::ExampleTestParams {
+                name: "bunnymark",
+                image_path: "/examples/bunnymark/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::default(),
+                base_test_parameters: wgpu_test::TestParameters::default(),
+                // We're looking for very small differences, so look in the high percentiles.
+                comparisons: &[
+                    wgpu_test::ComparisonType::Mean(0.05),
+                    wgpu_test::ComparisonType::Percentile {
+                        percentile: 0.95,
+                        threshold: 0.05,
+                    },
+                ],
+                _phantom: PhantomData::<Example>,
             },
-        ],
-    });
+        )],
+        [],
+    )
 }

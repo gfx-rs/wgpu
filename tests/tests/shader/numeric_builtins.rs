@@ -1,8 +1,7 @@
-use wasm_bindgen_test::*;
 use wgpu::{DownlevelFlags, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{infra::GpuTest, TestParameters};
 
 fn create_numeric_builtin_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
@@ -38,19 +37,21 @@ fn create_numeric_builtin_test() -> Vec<ShaderTest> {
     tests
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn numeric_builtins() {
-    initialize_test(
-        TestParameters::default()
+#[derive(Default)]
+pub struct NumericBuiltinsTest;
+
+impl GpuTest for NumericBuiltinsTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
-        |ctx| {
-            shader_input_output_test(
-                ctx,
-                InputStorageType::Storage,
-                create_numeric_builtin_test(),
-            );
-        },
-    );
+            .limits(Limits::downlevel_defaults())
+    }
+
+    fn run(&self, ctx: wgpu_test::TestingContext) {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_numeric_builtin_test(),
+        );
+    }
 }

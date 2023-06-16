@@ -9,6 +9,7 @@ publish = false
 [[bin]]
 name = "skybox"
 path = "src/main.rs"
+harness = false
 
 [dependencies]
 bytemuck.workspace = true

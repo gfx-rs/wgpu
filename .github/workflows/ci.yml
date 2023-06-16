@@ -204,17 +204,14 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2022
-            backends: dx12
 
           # Mac
           - name: Mac aarch64
             os: [self-hosted, macOS]
-            backends: metal
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
-            backends: vulkan gl
 
 
     name: Test ${{ matrix.name }}
@@ -281,10 +278,7 @@ jobs:
         run: |
           set -e
 
-          for backend in ${{ matrix.backends }}; do
-            echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
-          done
+          WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
 
       - uses: actions/upload-artifact@v3
         with:

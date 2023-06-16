@@ -481,22 +481,32 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("mipmap");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Test example
+#[cfg(test)]
+fn main() -> wgpu_test::infra::MainResult {
+    use std::marker::PhantomData;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn mipmap() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        image_path: "/examples/mipmap/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
-    });
+    use wgpu_test::infra::GpuTest;
+
+    wgpu_test::infra::main(
+        [GpuTest::from_value(
+            wgpu_example::framework::ExampleTestParams {
+                name: "mipmap",
+                image_path: "/examples/mipmap/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::default(),
+                base_test_parameters: wgpu_test::TestParameters::default()
+                    .backend_failure(wgpu::Backends::GL),
+                comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+                _phantom: PhantomData::<Example>,
+            },
+        )],
+        [],
+    )
 }

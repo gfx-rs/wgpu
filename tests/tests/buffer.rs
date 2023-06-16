@@ -1,4 +1,4 @@
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{infra::GpuTest, TestingContext};
 
 fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) {
     let r = wgpu::BufferUsages::MAP_READ;
@@ -80,20 +80,26 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
     ctx.device.poll(wgpu::MaintainBase::Wait);
 }
 
-#[test]
-#[ignore]
-fn empty_buffer() {
-    // TODO: Currently wgpu does not accept empty buffer slices, which
-    // is what test is about.
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct EmptyBufferTest;
+
+impl GpuTest for EmptyBufferTest {
+    fn parameters(&self, params: wgpu_test::TestParameters) -> wgpu_test::TestParameters {
+        // wgpu doesn't support zero sized buffers
+        params.failure()
+    }
+
+    fn run(&self, ctx: TestingContext) {
         test_empty_buffer_range(&ctx, 2048, "regular buffer");
         test_empty_buffer_range(&ctx, 0, "zero-sized buffer");
-    })
+    }
 }
 
-#[test]
-fn test_map_offset() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct MapOffsetTest;
+
+impl GpuTest for MapOffsetTest {
+    fn run(&self, ctx: TestingContext) {
         // This test writes 16 bytes at the beginning of buffer mapped mapped with
         // an offset of 32 bytes. Then the buffer is copied into another buffer that
         // is read back and we check that the written bytes are correctly placed at
@@ -157,5 +163,5 @@ fn test_map_offset() {
         for byte in &view[48..] {
             assert_eq!(*byte, 0);
         }
-    });
+    }
 }

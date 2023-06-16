@@ -1,9 +1,8 @@
 use std::num::NonZeroU64;
 
-use wasm_bindgen_test::*;
 use wgpu::util::DeviceExt;
 
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{infra::GpuTest, TestParameters, TestingContext};
 
 fn pulling_common(
     ctx: TestingContext,
@@ -132,54 +131,64 @@ fn pulling_common(
     assert_eq!(data, expected);
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn draw() {
-    initialize_test(TestParameters::default().test_features_limits(), |ctx| {
+#[derive(Default)]
+pub struct DrawTest;
+
+impl GpuTest for DrawTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params.test_features_limits()
+    }
+
+    fn run(&self, ctx: TestingContext) {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..6, 0..1);
         })
-    })
+    }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_vertex_offset() {
-    initialize_test(
-        TestParameters::default()
-            .test_features_limits()
-            .backend_failure(wgpu::Backends::DX11),
-        |ctx| {
-            pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
-                cmb.draw(0..3, 0..1);
-                cmb.draw(3..6, 0..1);
-            })
-        },
-    )
+#[derive(Default)]
+pub struct DrawVertexTest;
+
+impl GpuTest for DrawVertexTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params.test_features_limits()
+    }
+
+    fn run(&self, ctx: TestingContext) {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+            cmb.draw(0..3, 0..1);
+            cmb.draw(3..6, 0..1);
+        })
+    }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_instanced() {
-    initialize_test(TestParameters::default().test_features_limits(), |ctx| {
+#[derive(Default)]
+pub struct DrawInstancedTest;
+
+impl GpuTest for DrawInstancedTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params.test_features_limits()
+    }
+
+    fn run(&self, ctx: TestingContext) {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..2);
         })
-    })
+    }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_instanced_offset() {
-    initialize_test(
-        TestParameters::default()
-            .test_features_limits()
-            .backend_failure(wgpu::Backends::DX11),
-        |ctx| {
-            pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
-                cmb.draw(0..3, 0..1);
-                cmb.draw(0..3, 1..2);
-            })
-        },
-    )
+#[derive(Default)]
+pub struct DrawInstancedOffsetTest;
+
+impl GpuTest for DrawInstancedOffsetTest {
+    fn parameters(&self, params: TestParameters) -> TestParameters {
+        params.test_features_limits()
+    }
+
+    fn run(&self, ctx: TestingContext) {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+            cmb.draw(0..3, 0..1);
+            cmb.draw(0..3, 1..2);
+        })
+    }
 }

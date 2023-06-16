@@ -404,35 +404,52 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("texture-arrays");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Test example
+#[cfg(test)]
+fn main() -> wgpu_test::infra::MainResult {
+    use std::marker::PhantomData;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn texture_arrays_uniform() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        image_path: "/examples/texture-arrays/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::empty(),
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
-    });
-}
+    use wgpu_test::infra::GpuTest;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn texture_arrays_non_uniform() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        image_path: "/examples/texture-arrays/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features:
-            wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
-    });
+    wgpu_test::infra::main(
+        [
+            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
+                name: "texture-arrays",
+                image_path: "/examples/texture-arrays/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::empty(),
+                base_test_parameters: wgpu_test::TestParameters::default(),
+                comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
+                _phantom: PhantomData::<Example>,
+            }),
+            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
+                name: "texture-arrays-uniform",
+                image_path: "/examples/texture-arrays/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::empty(),
+                base_test_parameters: wgpu_test::TestParameters::default(),
+                comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
+                _phantom: PhantomData::<Example>,
+            }),
+            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
+                name: "texture-arrays-non-uniform",
+                image_path: "/examples/texture-arrays/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features:
+                    wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+                base_test_parameters: wgpu_test::TestParameters::default(),
+                comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
+                _phantom: PhantomData::<Example>,
+            }),
+        ],
+        [],
+    )
 }

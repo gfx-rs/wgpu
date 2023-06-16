@@ -308,31 +308,47 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("msaa-line");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Test example
+#[cfg(test)]
+fn main() -> wgpu_test::infra::MainResult {
+    use std::marker::PhantomData;
+
+    use wgpu_test::infra::GpuTest;
+
+    wgpu_test::infra::main(
+        [GpuTest::from_value(
+            wgpu_example::framework::ExampleTestParams {
+                name: "msaa-line",
+                image_path: "/examples/msaa-line/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                base_test_parameters: wgpu_test::TestParameters::default()
+                    // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
+                    .specific_failure(Some(wgpu::Backends::DX12), Some(0x1002), None, false),
+                // There's a lot of natural variance so we check the weighted median too to differentiate
+                // real failures from variance.
+                comparisons: &[
+                    wgpu_test::ComparisonType::Mean(0.065),
+                    wgpu_test::ComparisonType::Percentile {
+                        percentile: 0.5,
+                        threshold: 0.29,
+                    },
+                ],
+                _phantom: PhantomData::<Example>,
+            },
+        )],
+        [],
+    )
+}
 
 #[test]
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn msaa_line() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        image_path: "/examples/msaa-line/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-        base_test_parameters: wgpu_test::TestParameters::default()
-            // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
-            .specific_failure(Some(wgpu::Backends::DX12), Some(0x1002), None, false),
-        // There's a lot of natural variance so we check the weighted median too to differentiate
-        // real failures from variance.
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.065),
-            wgpu_test::ComparisonType::Percentile {
-                percentile: 0.5,
-                threshold: 0.29,
-            },
-        ],
-    });
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::ExampleTestParams {});
 }

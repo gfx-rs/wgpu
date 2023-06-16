@@ -1,13 +1,13 @@
-use wasm_bindgen_test::*;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{infra::GpuTest, TestingContext};
 
-#[test]
-#[wasm_bindgen_test]
-fn drop_encoder() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[derive(Default)]
+pub struct DropEncoderTest;
+
+impl GpuTest for DropEncoderTest {
+    fn run(&self, ctx: TestingContext) {
         let encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         drop(encoder);
-    })
+    }
 }

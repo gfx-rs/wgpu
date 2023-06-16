@@ -38,11 +38,12 @@ pub fn main<const GPU_TEST_COUNT: usize, const CPU_TEST_COUNT: usize>(
         })
         .collect();
     // Cpu tests
-    tests.extend(
-        cpu_test_list
-            .into_iter()
-            .map(|test| libtest_mimic::Trial::test(test.name(), move || Ok(test.call()))),
-    );
+    tests.extend(cpu_test_list.into_iter().map(|test| {
+        libtest_mimic::Trial::test(test.name(), move || {
+            test.call();
+            Ok(())
+        })
+    }));
 
     libtest_mimic::run(&args, tests).exit_if_failed();
 

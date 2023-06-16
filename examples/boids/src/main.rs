@@ -322,24 +322,34 @@ impl wgpu_example::framework::Example for Example {
 }
 
 /// run example
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("boids");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+// Test example
+#[cfg(test)]
+fn main() -> wgpu_test::infra::MainResult {
+    use std::marker::PhantomData;
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn boids() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
-        // Generated on 1080ti on Vk/Windows
-        image_path: "examples/boids/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default()
-            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-            .limits(wgpu::Limits::downlevel_defaults()),
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
-    });
+    use wgpu_test::infra::GpuTest;
+
+    wgpu_test::infra::main(
+        [GpuTest::from_value(
+            wgpu_example::framework::ExampleTestParams {
+                name: "boids",
+                // Generated on 1080ti on Vk/Windows
+                image_path: "examples/boids/screenshot.png",
+                width: 1024,
+                height: 768,
+                optional_features: wgpu::Features::default(),
+                base_test_parameters: wgpu_test::TestParameters::default()
+                    .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+                    .limits(wgpu::Limits::downlevel_defaults()),
+                comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
+                _phantom: PhantomData::<Example>,
+            },
+        )],
+        [],
+    )
 }

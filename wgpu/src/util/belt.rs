@@ -3,7 +3,7 @@ use crate::{
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use std::fmt;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 
 struct Chunk {
     buffer: Arc<Buffer>,
@@ -36,9 +36,9 @@ pub struct StagingBelt {
     /// into `active_chunks`.
     free_chunks: Vec<Chunk>,
     /// When closed chunks are mapped again, the map callback sends them here.
-    sender: mpsc::Sender<Chunk>,
+    sender: flume::Sender<Chunk>,
     /// Free chunks are received here to be put on `self.free_chunks`.
-    receiver: mpsc::Receiver<Chunk>,
+    receiver: flume::Receiver<Chunk>,
 }
 
 impl StagingBelt {
@@ -53,7 +53,7 @@ impl StagingBelt {
     ///   (per [`StagingBelt::finish()`]); and
     /// * bigger is better, within these bounds.
     pub fn new(chunk_size: BufferAddress) -> Self {
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = flume::unbounded();
         StagingBelt {
             chunk_size,
             active_chunks: Vec::new(),
