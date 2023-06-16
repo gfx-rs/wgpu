@@ -28,7 +28,7 @@ pub fn run_tests(args: Arguments) -> anyhow::Result<()> {
 
     log::info!("Running cargo tests");
 
-    xshell::cmd!(shell, "cargo nextest run")
+    xshell::cmd!(shell, "cargo nextest run --no-fail-fast")
         .args(args.finish())
         .quiet()
         .run()
