@@ -3155,13 +3155,19 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
     /// Does not use an Index Buffer. If you need this see [`RenderPass::draw_indexed`]
     ///
-    /// Panics if vertices Range is not within 0..BufferLen / BufferStride.
+    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
     ///
     /// vertices: The range of vertices to draw.
-    /// instances: Range of Instances to draw. This advances the stepping on an instance stepped
-    ///     vertex buffer if any are set and sets any instance-rate vertex attributes.
-    ///     The instance index is passed to the vertex shader through the instance_index builtin.
-    ///     Use 0..1 if instance buffers are not used.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for vertex_id in vertex_range {
+    ///         let vertex = vertex[vertex_id];
+    ///         vertex_shader(vertex, vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.parent.context,
@@ -3206,15 +3212,22 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`]
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// Panics if indices Range is not within 0..BufferLen / BufferStride.
+    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
     ///
     /// indices: The range of indices to draw.
     /// base_vertex: value added to each index value before indexing into the vertex buffers.
-    ///     Does not increment per instance.
-    /// instances: Range of Instances to draw. This advances the stepping on an instance stepped
-    ///     vertex buffer if any are set and sets any instance-rate vertex attributes.
-    ///     The instance index is passed to the vertex shader through the instance_index builtin.
-    ///     Use 0..1 if instance buffers are not used.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for index_index in index_range {
+    ///         let vertex_id = index_buffer[index_index];
+    ///         let adjusted_vertex_id = vertex_id + base_vertex;
+    ///         let vertex = vertex[adjusted_vertex_id];
+    ///         vertex_shader(vertex, adjusted_vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.parent.context,
@@ -3810,13 +3823,19 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     /// Does not use an Index Buffer. If you need this see [`RenderBundleEncoder::draw_indexed`]
     ///
-    /// Panics if vertices Range is not within 0..BufferLen / BufferStride.
+    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
     ///
     /// vertices: The range of vertices to draw.
-    /// instances: Range of Instances to draw. This advances the stepping on an instance stepped
-    ///     vertex buffer if any are set and sets any instance-rate vertex attributes.
-    ///     The instance index is passed to the vertex shader through the instance_index builtin.
-    ///     Use 0..1 if instance buffers are not used.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for vertex_id in vertex_range {
+    ///         let vertex = vertex[vertex_id];
+    ///         vertex_shader(vertex, vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw(
             &*self.parent.context,
@@ -3827,20 +3846,27 @@ impl<'a> RenderBundleEncoder<'a> {
         )
     }
 
-    /// Draws indexed primitives using the active index buffer and the active vertex buffers.
+    /// Draws indexed primitives using the active index buffer and the active vertex buffer(s).
     ///
     /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`].
-    /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active vertex buffer(s) can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// Panics if indices Range is not within 0..BufferLen / BufferStride.
+    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
     ///
     /// indices: The range of indices to draw.
     /// base_vertex: value added to each index value before indexing into the vertex buffers.
-    ///     Does not increment per instance.
-    /// instances: Range of Instances to draw. This advances the stepping on an instance stepped
-    ///     vertex buffer if any are set and sets any instance-rate vertex attributes.
-    ///     The instance index is passed to the vertex shader through the instance_index builtin.
-    ///     Use 0..1 if instance buffers are not used.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for index_index in index_range {
+    ///         let vertex_id = index_buffer[index_index];
+    ///         let adjusted_vertex_id = vertex_id + base_vertex;
+    ///         let vertex = vertex[adjusted_vertex_id];
+    ///         vertex_shader(vertex, adjusted_vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw_indexed(
             &*self.parent.context,
