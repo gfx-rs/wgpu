@@ -60,7 +60,7 @@ pub fn run_test(
         String::from("Executed")
     };
 
-    let full_name = format!("[{running_msg}] [{backend:?}/{device_name}] {base_name}");
+    let full_name = format!("[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}");
 
     libtest_mimic::Trial::test(full_name, move || {
         if should_skip {
