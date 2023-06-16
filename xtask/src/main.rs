@@ -4,6 +4,7 @@ use anyhow::Context;
 use cli::{Args, Subcommand};
 
 mod cli;
+mod test;
 
 fn main() -> ExitCode {
     env_logger::builder()
@@ -35,5 +36,6 @@ fn run(args: Args) -> anyhow::Result<()> {
             );
             Ok(())
         }
+        Subcommand::Test { args } => test::run_tests(args),
     }
 }

@@ -266,19 +266,13 @@ jobs:
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
 
-      - name: run wgpu-info
-        shell: bash
-        run: |
-          set -e
-
-          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report
-
       - name: run tests
         shell: bash
         run: |
           set -e
 
-          WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
+          cargo xtask test
+          # WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
 
       - uses: actions/upload-artifact@v3
         with:

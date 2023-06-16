@@ -20,7 +20,7 @@ pub fn main<const GPU_TEST_COUNT: usize, const CPU_TEST_COUNT: usize>(
 
     let config_text =
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
-            .context("failed to read .gpuconfig")?;
+            .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?;
     let report =
         report::GpuReport::from_json(config_text).context("Could not pare .gpuconfig JSON")?;
 

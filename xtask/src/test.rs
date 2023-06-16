@@ -1,0 +1,40 @@
+use anyhow::Context;
+use pico_args::Arguments;
+
+pub fn run_tests(args: Arguments) -> anyhow::Result<()> {
+    let shell = xshell::Shell::new().context("Couldn't create xshell shell")?;
+
+    shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
+
+    log::info!("Generating .gpuconfig file based on gpus on the system");
+
+    xshell::cmd!(shell, "cargo run --bin wgpu-info -- --json -o .gpuconfig")
+        .quiet()
+        .run()
+        .context("Failed to run wgpu-info to generate .gpuconfig")?;
+
+    let gpu_count = shell
+        .read_file(".gpuconfig")
+        .unwrap()
+        .lines()
+        .filter(|line| line.contains("name"))
+        .count();
+
+    log::info!(
+        "Found {} gpu{}",
+        gpu_count,
+        if gpu_count == 1 { "" } else { "s" }
+    );
+
+    log::info!("Running cargo tests");
+
+    xshell::cmd!(shell, "cargo nextest run")
+        .args(args.finish())
+        .quiet()
+        .run()
+        .context("Tests failed")?;
+
+    log::info!("Finished tests");
+
+    Ok(())
+}

@@ -8,6 +8,7 @@ Usage: xtask <COMMAND>
 
 Commands:
   run-wasm
+  test
 
 Options:
   -h, --help  Print help
@@ -40,6 +41,7 @@ impl Args {
 
 pub(crate) enum Subcommand {
     RunWasm { args: Arguments },
+    Test { args: Arguments },
 }
 
 impl Subcommand {
@@ -50,6 +52,7 @@ impl Subcommand {
             .context("no subcommand specified; see `--help` for more details")?;
         match &*subcmd {
             "run-wasm" => Ok(Self::RunWasm { args }),
+            "test" => Ok(Self::Test { args }),
             other => {
                 bail!("unrecognized subcommand {other:?}; see `--help` for more details")
             }
