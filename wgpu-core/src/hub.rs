@@ -360,7 +360,14 @@ pub struct Hubs<F: GlobalIdentityHandlerFactory> {
     pub(crate) dx11: Hub<hal::api::Dx11, F>,
     #[cfg(feature = "gles")]
     pub(crate) gl: Hub<hal::api::Gles, F>,
-    _phantom_data: PhantomData<F>,
+    #[cfg(all(
+        not(all(feature = "vulkan", not(target_arch = "wasm32"))),
+        not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
+        not(all(feature = "dx12", windows)),
+        not(all(feature = "dx11", windows)),
+        not(feature = "gles"),
+    ))]
+    pub(crate) empty: Hub<hal::api::Empty, F>,
 }
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
@@ -376,7 +383,14 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
             dx11: Hub::new(factory),
             #[cfg(feature = "gles")]
             gl: Hub::new(factory),
-            _phantom_data: PhantomData,
+            #[cfg(all(
+                not(all(feature = "vulkan", not(target_arch = "wasm32"))),
+                not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
+                not(all(feature = "dx12", windows)),
+                not(all(feature = "dx11", windows)),
+                not(feature = "gles"),
+            ))]
+            empty: Hub::new(factory),
         }
     }
 }

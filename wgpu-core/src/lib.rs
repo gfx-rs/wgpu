@@ -3,6 +3,17 @@
  *  into other language-specific user-friendly libraries.
  */
 
+// When we have no backends, we end up with a lot of dead or otherwise unreachable code.
+#![cfg_attr(
+    all(
+        not(all(feature = "vulkan", not(target_arch = "wasm32"))),
+        not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
+        not(all(feature = "dx12", windows)),
+        not(all(feature = "dx11", windows)),
+        not(feature = "gles"),
+    ),
+    allow(unused, clippy::let_and_return)
+)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // It is much clearer to assert negative conditions with eq! false

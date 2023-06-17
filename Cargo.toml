@@ -4,14 +4,25 @@ members = [
     "cts_runner",
     "deno_webgpu",
     "player",
+    "examples/*",
     "wgpu",
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
+    "tests",
 ]
 exclude = []
-default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
+default-members = [
+    "examples/*",
+    "player",
+    "wgpu",
+    "wgpu-core",
+    "wgpu-hal",
+    "wgpu-info",
+    "wgpu-types",
+    "tests"
+]
 
 [workspace.package]
 edition = "2021"
@@ -40,15 +51,16 @@ version = "0.16"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
+rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
 version = "0.12.0"
 
 [workspace.dependencies]
+anyhow = "1.0"
 arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
 bit-vec = "0.6"
-bytemuck = "1.13"
+bytemuck = { version = "1.13", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
@@ -62,7 +74,7 @@ image = { version = "0.24", default-features = false, features = ["png"] }
 libloading = ">=0.7,<0.9"
 libc = "0.2"
 log = "0.4"
-nanorand = { version = "0.7", default-features = false }
+nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 nv-flip = "0.1"
 num-traits = { version = "0.2" }
 # Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
@@ -71,7 +83,8 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
-png = "0.17.8"
+pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
+png = "0.17.9"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
@@ -83,6 +96,8 @@ smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.16", path = "./wgpu" }
+wgpu-example = { version = "0.16", path = "./examples/common" }
+wgpu-test = { version = "0.16", path = "./tests"}
 winit = "0.27.1"
 
 # Metal dependencies
@@ -93,7 +108,7 @@ core-graphics-types = "0.1"
 
 # Vulkan dependencies
 ash = "0.37.3"
-gpu-alloc = "0.5"
+gpu-alloc = "0.6"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
 
@@ -114,7 +129,7 @@ glutin = "0.29.1"
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
 js-sys = "0.3.63"
-wasm-bindgen = "0.2.84"
+wasm-bindgen = "0.2.86"
 wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3.61"

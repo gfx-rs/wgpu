@@ -1,0 +1,28 @@
+[package]
+name = "wgpu-capture-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu capture example"
+publish = false
+
+[[bin]]
+name = "capture"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck.workspace = true
+env_logger.workspace = true
+futures-intrusive.workspace = true
+pollster.workspace = true
+png.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+wasm-bindgen-futures.workspace = true
+

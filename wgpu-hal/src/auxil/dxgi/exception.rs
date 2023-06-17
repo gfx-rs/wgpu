@@ -87,6 +87,11 @@ unsafe extern "system" fn output_debug_string_handler(
         return excpt::EXCEPTION_CONTINUE_SEARCH;
     }
 
+    if level == log::Level::Warn && message.contains("DRAW_EMPTY_SCISSOR_RECTANGLE") {
+        // This is normal, WebGPU allows passing empty scissor rectangles.
+        return excpt::EXCEPTION_CONTINUE_SEARCH;
+    }
+
     let _ = std::panic::catch_unwind(|| {
         log::log!(level, "{}", message);
     });

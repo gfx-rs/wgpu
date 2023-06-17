@@ -201,6 +201,8 @@ impl super::Adapter {
             },
             heap_create_not_zeroed: false, //TODO: winapi support for Options7
             casting_fully_typed_format_supported,
+            // See https://github.com/gfx-rs/wgpu/issues/3552
+            suballocation_supported: !info.name.contains("Iris(R) Xe"),
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit

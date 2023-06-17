@@ -751,26 +751,28 @@ impl<A: hal::Api> Example<A> {
     }
 }
 
-#[cfg(all(feature = "metal"))]
-type Api = hal::api::Metal;
-#[cfg(all(feature = "vulkan", not(feature = "metal")))]
-type Api = hal::api::Vulkan;
-#[cfg(all(feature = "gles", not(feature = "metal"), not(feature = "vulkan")))]
-type Api = hal::api::Gles;
-#[cfg(all(
-    feature = "dx12",
-    not(feature = "metal"),
-    not(feature = "vulkan"),
-    not(feature = "gles")
-))]
-type Api = hal::api::Dx12;
-#[cfg(not(any(
-    feature = "metal",
-    feature = "vulkan",
-    feature = "gles",
-    feature = "dx12"
-)))]
-type Api = hal::api::Empty;
+cfg_if::cfg_if! {
+    // Apple + Metal
+    if #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))] {
+        type Api = hal::api::Metal;
+    }
+    // Wasm + Vulkan
+    else if #[cfg(all(not(target_arch = "wasm32"), feature = "vulkan"))] {
+        type Api = hal::api::Vulkan;
+    }
+    // Windows + DX12
+    else if #[cfg(all(windows, feature = "dx12"))] {
+        type Api = hal::api::Dx12;
+    }
+    // Anything + GLES
+    else if #[cfg(feature = "gles")] {
+        type Api = hal::api::Gles;
+    }
+    // Fallback
+    else {
+        type Api = hal::api::Empty;
+    }
+}
 
 fn main() {
     env_logger::init();

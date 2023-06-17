@@ -9,17 +9,8 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 exclude = [
-    "etc/**/*",
-    "examples/**/*.png",  # Image comparison test
-    "examples/**/*.dds",  # Compressed textures
-    "examples/**/*.ktx2", # Compressed textures
-    "examples/**/*.mtl",  # Material files
-    "examples/**/*.obj",  # Model files
-    "tests/**/*",
     "Cargo.lock",
-    "target/**/*"
 ]
-autotests = false
 
 [package.metadata.docs.rs]
 all-features = true
@@ -32,58 +23,6 @@ targets = [
 ]
 
 [lib]
-
-[[test]]
-name = "wgpu-tests"
-path = "tests/root.rs"
-
-[[example]]
-name = "boids"
-test = true
-
-[[example]]
-name = "bunnymark"
-test = true
-
-[[example]]
-name = "conservative-raster"
-test = true
-
-[[example]]
-name = "cube"
-test = true
-
-[[example]]
-name = "hello-compute"
-test = true
-
-[[example]]
-name = "mipmap"
-test = true
-
-[[example]]
-name = "msaa-line"
-test = true
-
-[[example]]
-name = "shadow"
-test = true
-
-[[example]]
-name = "skybox"
-test = true
-
-[[example]]
-name = "texture-arrays"
-test = true
-
-[[example]]
-name = "water"
-test = true
-
-[[example]]
-name = "stencil-triangles"
-test = true
 
 [features]
 default = ["wgsl"]
@@ -158,27 +97,6 @@ serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
 cfg-if.workspace = true
-
-[dev-dependencies]
-bitflags.workspace = true
-bytemuck = { workspace = true, features = ["derive"] }
-glam.workspace = true
-ddsfile.workspace = true
-futures-intrusive.workspace = true
-env_logger.workspace = true
-image.workspace = true
-log.workspace = true
-noise = { workspace = true }
-obj.workspace = true
-pollster.workspace = true
-png.workspace = true
-nanorand = { workspace = true, features = ["wyrand"] }
-wasm-bindgen-test.workspace = true
-winit.workspace = true # for "halmark" example
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-async-executor.workspace = true
-nv-flip.workspace = true
 
 [dependencies.naga]
 workspace = true
@@ -329,18 +247,3 @@ wasm-bindgen.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
 parking_lot.workspace = true
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-console_error_panic_hook.workspace = true
-console_log.workspace = true
-# We need these features in the framework examples and tests
-web-sys = { workspace = true, features = [
-    "Location",
-    "Blob",
-    "RequestInit",
-    "RequestMode",
-    "Request",
-    "Response",
-    "WebGl2RenderingContext",
-    "CanvasRenderingContext2d"
-] }

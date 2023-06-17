@@ -1685,9 +1685,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::SetScissor(ref rect) => {
                         let scope = PassErrorScope::SetScissorRect;
-                        if rect.w == 0
-                            || rect.h == 0
-                            || rect.x + rect.w > info.extent.width
+                        if rect.x + rect.w > info.extent.width
                             || rect.y + rect.h > info.extent.height
                         {
                             return Err(RenderCommandError::InvalidScissorRect(*rect, info.extent))

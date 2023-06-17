@@ -138,12 +138,12 @@ jobs:
           set -e
 
           # build for WebGPU
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
+          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
           # all features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
+          cargo clippy --target ${{ matrix.target }} --tests --all-features
+          cargo doc --target ${{ matrix.target }} --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -155,7 +155,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
-          cargo clippy --target ${{ matrix.target }} --example cube
+          cargo clippy --target ${{ matrix.target }} --bin cube
 
           # build raw-gles example
           cargo clippy --target ${{ matrix.target }} --example raw-gles
@@ -171,13 +171,13 @@ jobs:
           set -e
 
           # check with no features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
+          cargo clippy --target ${{ matrix.target }} --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
+          cargo clippy --target ${{ matrix.target }} --tests --all-features
 
           # build docs
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
+          cargo doc --target ${{ matrix.target }} --all-features --no-deps
 
   wasm-test:
     name: Test WebAssembly
@@ -194,7 +194,7 @@ jobs:
       - name: execute tests
         run: |
           cd wgpu
-          wasm-pack test --headless --chrome --features webgl
+          wasm-pack test --headless --chrome --features webgl --workspace
 
   gpu-test:
     strategy:
@@ -283,7 +283,7 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
           done
 
       - uses: actions/upload-artifact@v3
@@ -331,7 +331,7 @@ jobs:
         run: |
           set -e
 
-          cargo test --doc -p wgpu -p wgpu-core -p wgpu-hal -p wgpu-types
+          cargo test --doc
 
   fmt:
     name: Format
