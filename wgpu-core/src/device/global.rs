@@ -58,10 +58,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             hal_caps.formats.sort_by_key(|f| !f.is_srgb());
 
+            let mut usages = wgt::TextureUsages::empty();
+            usages.set(
+                wgt::TextureUsages::COPY_SRC,
+                hal_caps.usage.contains(hal::TextureUses::COPY_SRC),
+            );
+            usages.set(
+                wgt::TextureUsages::COPY_DST,
+                hal_caps.usage.contains(hal::TextureUses::COPY_DST),
+            );
+            usages.set(
+                wgt::TextureUsages::TEXTURE_BINDING,
+                hal_caps.usage.contains(hal::TextureUses::RESOURCE),
+            );
+            usages.set(
+                wgt::TextureUsages::STORAGE_BINDING,
+                hal_caps.usage.contains(
+                    hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE,
+                ),
+            );
+            usages.set(
+                wgt::TextureUsages::RENDER_ATTACHMENT,
+                hal_caps.usage.contains(hal::TextureUses::COLOR_TARGET)
+                    | hal_caps.usage.contains(
+                        hal::TextureUses::DEPTH_STENCIL_READ
+                            | hal::TextureUses::DEPTH_STENCIL_WRITE,
+                    ),
+            );
+
             Ok(wgt::SurfaceCapabilities {
                 formats: hal_caps.formats,
                 present_modes: hal_caps.present_modes,
                 alpha_modes: hal_caps.composite_alpha_modes,
+                usages,
             })
         })
     }
