@@ -74,6 +74,9 @@ use super::{
 /// triage_suspected locks Device::trackers, and calls...
 /// Registry::unregister locks Registry::storage
 ///
+/// Important:
+/// When locking pending_writes please check that trackers is not locked
+/// trackers should be locked only when needed for the shortest time possible
 pub struct Device<A: HalApi> {
     raw: Option<A::Device>,
     pub(crate) adapter: Arc<Adapter<A>>,

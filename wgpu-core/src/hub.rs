@@ -163,7 +163,7 @@ use crate::{
     storage::{Element, Storage, StorageReport},
 };
 
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct HubReport {

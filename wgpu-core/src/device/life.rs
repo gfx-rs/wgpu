@@ -508,11 +508,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         profiling::scope!("triage_suspected");
 
         if !self.suspected_resources.render_bundles.is_empty() {
-            let mut trackers = trackers.lock();
-
             while let Some(bundle) = self.suspected_resources.render_bundles.pop() {
                 let id = bundle.info.id();
-                if trackers.bundles.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.bundles.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("Bundle {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -527,11 +529,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.bind_groups.is_empty() {
-            let mut trackers = trackers.lock();
-
             while let Some(resource) = self.suspected_resources.bind_groups.pop() {
                 let id = resource.info.id();
-                if trackers.bind_groups.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.bind_groups.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("BindGroup {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -559,12 +563,14 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.texture_views.is_empty() {
-            let mut trackers = trackers.lock();
-
             let mut list = mem::take(&mut self.suspected_resources.texture_views);
             for texture_view in list.drain(..) {
                 let id = texture_view.info.id();
-                if trackers.views.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.views.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("TextureView {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -591,11 +597,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.textures.is_empty() {
-            let mut trackers = trackers.lock();
-
             for texture in self.suspected_resources.textures.drain(..) {
                 let id = texture.info.id();
-                if trackers.textures.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.textures.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("Texture {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -625,11 +633,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.samplers.is_empty() {
-            let mut trackers = trackers.lock();
-
             for sampler in self.suspected_resources.samplers.drain(..) {
                 let id = sampler.info.id();
-                if trackers.samplers.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.samplers.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("Sampler {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -650,11 +660,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.buffers.is_empty() {
-            let mut trackers = trackers.lock();
-
             for buffer in self.suspected_resources.buffers.drain(..) {
                 let id = buffer.info.id();
-                if trackers.buffers.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.buffers.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("Buffer {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -681,11 +693,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.compute_pipelines.is_empty() {
-            let mut trackers = trackers.lock();
-
             for compute_pipeline in self.suspected_resources.compute_pipelines.drain(..) {
                 let id = compute_pipeline.info.id();
-                if trackers.compute_pipelines.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.compute_pipelines.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("ComputePipeline {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -706,11 +720,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.render_pipelines.is_empty() {
-            let mut trackers = trackers.lock();
-
             for render_pipeline in self.suspected_resources.render_pipelines.drain(..) {
                 let id = render_pipeline.info.id();
-                if trackers.render_pipelines.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.render_pipelines.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("RenderPipeline {:?} is removed from registry", id);
                     #[cfg(feature = "trace")]
                     if let Some(ref mut t) = trace {
@@ -783,11 +799,13 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
 
         if !self.suspected_resources.query_sets.is_empty() {
-            let mut trackers = trackers.lock();
-
             for query_set in self.suspected_resources.query_sets.drain(..) {
                 let id = query_set.info.id();
-                if trackers.query_sets.remove_abandoned(id) {
+                let is_removed = {
+                    let mut trackers = trackers.lock();
+                    trackers.query_sets.remove_abandoned(id)
+                };
+                if is_removed {
                     log::info!("QuerySet {:?} is removed from registry", id);
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id.0)));
@@ -848,10 +866,14 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
         let mut pending_callbacks: Vec<super::BufferMapPendingClosure> =
             Vec::with_capacity(self.ready_to_map.len());
-        let mut trackers = trackers.lock();
+
         for buffer in self.ready_to_map.drain(..) {
             let buffer_id = buffer.info.id();
-            if trackers.buffers.remove_abandoned(buffer_id) {
+            let is_removed = {
+                let mut trackers = trackers.lock();
+                trackers.buffers.remove_abandoned(buffer_id)
+            };
+            if is_removed {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::info!("Buffer {:?} is removed from registry", buffer_id);
                 if let Some(buf) = hub.buffers.unregister(buffer_id.0) {

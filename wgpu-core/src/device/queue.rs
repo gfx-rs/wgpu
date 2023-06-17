@@ -146,6 +146,10 @@ impl<A: HalApi> EncoderInFlight<A> {
 /// time the user submits a wgpu command buffer, ahead of the user's
 /// commands.
 ///
+/// Important:
+/// When locking pending_writes be sure that tracker is not locked
+/// and try to lock trackers for the minimum timespan possible
+///
 /// All uses of [`StagingBuffer`]s end up here.
 #[derive(Debug)]
 pub(crate) struct PendingWrites<A: HalApi> {
@@ -545,9 +549,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), QueueWriteError> {
         let hub = A::hub(self);
 
-        let mut trackers = device.trackers.lock();
         let (dst, transition) = {
             let buffer_guard = hub.buffers.read();
+            let mut trackers = device.trackers.lock();
             trackers
                 .buffers
                 .set_single(&buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
@@ -706,7 +710,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
 
-        let mut trackers = device.trackers.lock();
         let mut pending_writes = device.pending_writes.write();
         let pending_writes = pending_writes.as_mut().unwrap();
         let encoder = pending_writes.activate();
@@ -732,6 +735,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .drain(init_layer_range)
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
+                    let mut trackers = device.trackers.lock();
                     let texture_guard = hub.textures.read();
                     crate::command::clear_texture(
                         &*texture_guard,
@@ -758,16 +762,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // call above. Since we've held `texture_guard` the whole time, we know
         // the texture hasn't gone away in the mean time, so we can unwrap.
         let dst = hub.textures.get(destination.texture).unwrap();
-        let transition = trackers
-            .textures
-            .set_single(
-                &dst,
-                destination.texture,
-                selector,
-                hal::TextureUses::COPY_DST,
-            )
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
-
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
@@ -848,6 +842,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
             };
 
+            let mut trackers = device.trackers.lock();
+            let transition = trackers
+                .textures
+                .set_single(
+                    &dst,
+                    destination.texture,
+                    selector,
+                    hal::TextureUses::COPY_DST,
+                )
+                .ok_or(TransferError::InvalidTexture(destination.texture))?;
             unsafe {
                 encoder.transition_textures(transition.map(|pending| pending.into_hal(&dst)));
                 encoder.transition_buffers(iter::once(barrier));
@@ -979,7 +983,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (selector, dst_base) =
             extract_texture_selector(&destination.to_untagged(), &size, &dst)?;
 
-        let mut trackers = device.trackers.lock();
         let mut pending_writes = device.pending_writes.write();
         let encoder = pending_writes.as_mut().unwrap().activate();
 
@@ -1004,6 +1007,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .drain(init_layer_range)
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
+                    let mut trackers = device.trackers.lock();
                     crate::command::clear_texture(
                         &*texture_guard,
                         id::Valid(destination.texture),
@@ -1023,17 +1027,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .drain(init_layer_range);
             }
         }
-
-        let transitions = trackers
-            .textures
-            .set_single(
-                &dst,
-                destination.texture,
-                selector,
-                hal::TextureUses::COPY_DST,
-            )
-            .ok_or(TransferError::InvalidTexture(destination.texture))?;
-
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
@@ -1056,6 +1049,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         unsafe {
+            let mut trackers = device.trackers.lock();
+            let transitions = trackers
+                .textures
+                .set_single(
+                    &dst,
+                    destination.texture,
+                    selector,
+                    hal::TextureUses::COPY_DST,
+                )
+                .ok_or(TransferError::InvalidTexture(destination.texture))?;
             encoder.transition_textures(transitions.map(|pending| pending.into_hal(&dst)));
             encoder.copy_external_image_to_texture(
                 source,
