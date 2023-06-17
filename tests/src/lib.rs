@@ -1,7 +1,10 @@
 //! This module contains common test-only code that needs to be shared between the examples and the tests.
 #![allow(dead_code)] // This module is used in a lot of contexts and only parts of it will be used
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::{
+    panic::{catch_unwind, AssertUnwindSafe},
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue, Surface};
 use wgt::{Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
@@ -295,7 +298,34 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         return;
     }
 
+    let is_running = Arc::new(AtomicBool::new(true));
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let is_running = is_running.clone();
+        // Create a background thread which checks for deadlocks every 3 seconds
+        std::thread::spawn(move || loop {
+            if is_running.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+            std::thread::sleep(core::time::Duration::from_secs(3));
+            let deadlocks = parking_lot::deadlock::check_deadlock();
+            if deadlocks.is_empty() {
+                continue;
+            }
+            is_running.store(false, std::sync::atomic::Ordering::Relaxed);
+            println!("{} deadlocks detected", deadlocks.len());
+            for (i, threads) in deadlocks.iter().enumerate() {
+                println!("Deadlock #{}", i);
+                for t in threads {
+                    println!("Thread Id {:#?}", t.thread_id());
+                    println!("{:#?}", t.backtrace());
+                }
+            }
+        });
+    }
+
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
+    is_running.store(false, std::sync::atomic::Ordering::Relaxed);
     cfg_if::cfg_if!(
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
             let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
