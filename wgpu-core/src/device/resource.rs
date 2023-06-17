@@ -92,6 +92,7 @@ pub struct Device<A: HalApi> {
     /// All live resources allocated with this [`Device`].
     ///
     /// Has to be locked temporarily only (locked last)
+    /// and never before pending_writes
     pub(crate) trackers: Mutex<Tracker<A>>,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<LifetimeTracker<A>>,
