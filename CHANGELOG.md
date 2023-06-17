@@ -60,6 +60,8 @@ Bottom level categories:
 
 ### Documentation
 
+- Better documentation for draw, draw_indexed, set_viewport and set_scissor_rect. By @genusistimelord in [#3860](https://github.com/gfx-rs/wgpu/pull/3860)
+
 #### General
 
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
