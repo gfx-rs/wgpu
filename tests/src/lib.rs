@@ -304,7 +304,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         let is_running = is_running.clone();
         // Create a background thread which checks for deadlocks every 3 seconds
         std::thread::spawn(move || loop {
-            if is_running.load(std::sync::atomic::Ordering::Relaxed) {
+            if !is_running.load(std::sync::atomic::Ordering::Relaxed) {
                 break;
             }
             std::thread::sleep(core::time::Duration::from_secs(3));
