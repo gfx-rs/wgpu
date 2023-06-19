@@ -1,5 +1,5 @@
 use wasm_bindgen_test::*;
-use wgpu::util::{align_to, DeviceExt};
+use wgpu::util::{DeviceExt};
 use wgpu_test::{initialize_test, TestParameters, TestingContext};
 
 //
@@ -193,58 +193,7 @@ fn pulling_common(
     drop(rpass);
 
     ctx.queue.submit(Some(encoder.finish()));
-
-    let data = capture_rgba_u8_texture(ctx, color_texture, texture_size);
+    let data = wgpu_test::image::capture_rgba_u8_texture(&ctx, &color_texture, texture_size);
 
     assert_eq!(data, expected);
-}
-
-fn capture_rgba_u8_texture(
-    ctx: TestingContext,
-    color_texture: wgpu::Texture,
-    texture_size: wgpu::Extent3d,
-) -> Vec<u8> {
-    let bytes_per_row = align_to(4 * texture_size.width, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-    let buffer_size = bytes_per_row * texture_size.height;
-    let output_buffer = ctx
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: &vec![0u8; buffer_size as usize],
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-        });
-
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-    encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
-            texture: &color_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::ImageCopyBuffer {
-            buffer: &output_buffer,
-            layout: wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: None,
-            },
-        },
-        texture_size,
-    );
-
-    ctx.queue.submit(Some(encoder.finish()));
-    let slice = output_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.device.poll(wgpu::Maintain::Wait);
-    let data: Vec<u8> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
-    // Chunk rows from output buffer, take actual pixel
-    // bytes from each row and flatten into a vector.
-    data.chunks_exact(bytes_per_row as usize)
-        .flat_map(|x| x.iter().take(4 * texture_size.width as usize))
-        .copied()
-        .collect()
 }
