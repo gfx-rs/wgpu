@@ -1,5 +1,5 @@
 use wasm_bindgen_test::*;
-use wgpu::util::{DeviceExt};
+use wgpu::util::DeviceExt;
 use wgpu_test::{initialize_test, TestParameters, TestingContext};
 
 //

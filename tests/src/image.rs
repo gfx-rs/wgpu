@@ -1,7 +1,7 @@
+use crate::TestingContext;
 use std::{borrow::Cow, ffi::OsStr, io, path::Path};
 use wgpu::util::DeviceExt;
 use wgpu::*;
-use crate::TestingContext;
 
 fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
     let data = match std::fs::read(&path) {
@@ -207,7 +207,7 @@ pub fn compare_image_output(
         let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
         // Determine the paths to write out the various intermediate files
         let actual_path = Path::new(&path).with_file_name(
-            OsString::from_str(&format!("{}-{}-actual.png", file_stem, backend.to_str(), )).unwrap(),
+            OsString::from_str(&format!("{}-{}-actual.png", file_stem, backend.to_str(),)).unwrap(),
         );
         let difference_path = Path::new(&path).with_file_name(
             OsString::from_str(&format!(
@@ -215,7 +215,7 @@ pub fn compare_image_output(
                 file_stem,
                 backend.to_str(),
             ))
-                .unwrap(),
+            .unwrap(),
         );
 
         // Convert the error values to a false color reprensentation
@@ -465,14 +465,14 @@ impl ReadbackBuffers {
         if texture.format().is_combined_depth_stencil_format() {
             let buffer_size = base_size
                 * texture
-                .format()
-                .block_size(Some(TextureAspect::DepthOnly))
-                .unwrap_or(4);
+                    .format()
+                    .block_size(Some(TextureAspect::DepthOnly))
+                    .unwrap_or(4);
             let buffer_stencil_size = base_size
                 * texture
-                .format()
-                .block_size(Some(TextureAspect::StencilOnly))
-                .unwrap();
+                    .format()
+                    .block_size(Some(TextureAspect::StencilOnly))
+                    .unwrap();
             let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
@@ -521,10 +521,10 @@ impl ReadbackBuffers {
 
         is_zero(device, &self.buffer)
             && self
-            .buffer_stencil
-            .as_ref()
-            .map(|buffer_stencil| is_zero(device, buffer_stencil))
-            .unwrap_or(true)
+                .buffer_stencil
+                .as_ref()
+                .map(|buffer_stencil| is_zero(device, buffer_stencil))
+                .unwrap_or(true)
     }
 }
 
@@ -535,13 +535,11 @@ pub fn capture_rgba_u8_texture(
 ) -> Vec<u8> {
     let bytes_per_row = wgt::math::align_to(4 * texture_size.width, COPY_BYTES_PER_ROW_ALIGNMENT);
     let buffer_size = bytes_per_row * texture_size.height;
-    let output_buffer = ctx
-        .device
-        .create_buffer_init(&util::BufferInitDescriptor {
-            label: None,
-            contents: &vec![0u8; buffer_size as usize],
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-        });
+    let output_buffer = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
+        label: None,
+        contents: &vec![0u8; buffer_size as usize],
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+    });
 
     let mut encoder = ctx
         .device
