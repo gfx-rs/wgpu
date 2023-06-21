@@ -47,7 +47,7 @@ impl Writer {
         }
         let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
 
-        let mut capabilities_used = crate::FastHashSet::default();
+        let mut capabilities_used = crate::FastIndexSet::default();
         capabilities_used.insert(spirv::Capability::Shader);
 
         let mut id_gen = IdGenerator::default();
@@ -60,7 +60,7 @@ impl Writer {
             id_gen,
             capabilities_available: options.capabilities.clone(),
             capabilities_used,
-            extensions_used: crate::FastHashSet::default(),
+            extensions_used: crate::FastIndexSet::default(),
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -1936,7 +1936,7 @@ impl Writer {
     }
 
     /// Return the set of capabilities the last module written used.
-    pub const fn get_capabilities_used(&self) -> &crate::FastHashSet<spirv::Capability> {
+    pub const fn get_capabilities_used(&self) -> &crate::FastIndexSet<spirv::Capability> {
         &self.capabilities_used
     }
 

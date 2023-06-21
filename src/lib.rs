@@ -254,6 +254,11 @@ pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
 /// Hash set that is faster but not resilient to DoS attacks.
 pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 
+/// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
+/// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
+pub type FastIndexSet<K> =
+    indexmap::IndexSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = indexmap::IndexMap<
     Handle<Expression>,

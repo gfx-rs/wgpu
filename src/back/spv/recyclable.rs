@@ -52,6 +52,13 @@ impl<K, S: Clone> Recyclable for std::collections::HashSet<K, S> {
     }
 }
 
+impl<K, S: Clone> Recyclable for indexmap::IndexSet<K, S> {
+    fn recycle(mut self) -> Self {
+        self.clear();
+        self
+    }
+}
+
 impl<K: Ord, V> Recyclable for std::collections::BTreeMap<K, V> {
     fn recycle(mut self) -> Self {
         self.clear();

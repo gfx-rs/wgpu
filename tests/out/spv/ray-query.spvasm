@@ -2,8 +2,8 @@
 ; Version: 1.4
 ; Generator: rspirv
 ; Bound: 95
-OpCapability RayQueryKHR
 OpCapability Shader
+OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
