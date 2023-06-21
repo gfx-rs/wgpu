@@ -6,7 +6,7 @@ Test SPIR-V backend capability checks.
 
 use spirv::Capability as Ca;
 
-fn capabilities_used(source: &str) -> naga::FastHashSet<Ca> {
+fn capabilities_used(source: &str) -> naga::FastIndexSet<Ca> {
     use naga::back::spv;
     use naga::valid;
 
@@ -36,7 +36,7 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
 
     let missing_caps: Vec<_> = required
         .iter()
-        .filter(|cap| !caps_used.contains(cap))
+        .filter(|&cap| !caps_used.contains(cap))
         .cloned()
         .collect();
     if !missing_caps.is_empty() {
@@ -48,7 +48,7 @@ fn require_and_forbid(required: &[Ca], forbidden: &[Ca], source: &str) {
 
     let forbidden_caps: Vec<_> = forbidden
         .iter()
-        .filter(|cap| caps_used.contains(cap))
+        .filter(|&cap| caps_used.contains(cap))
         .cloned()
         .collect();
     if !forbidden_caps.is_empty() {

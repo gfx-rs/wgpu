@@ -573,10 +573,10 @@ pub struct Writer {
     ///
     /// If `capabilities_available` is `Some`, then this is always a subset of
     /// that.
-    capabilities_used: crate::FastHashSet<Capability>,
+    capabilities_used: crate::FastIndexSet<Capability>,
 
     /// The set of spirv extensions used.
-    extensions_used: crate::FastHashSet<&'static str>,
+    extensions_used: crate::FastIndexSet<&'static str>,
 
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,

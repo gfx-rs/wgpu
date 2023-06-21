@@ -192,7 +192,12 @@ tree.
     clippy::unneeded_field_pattern,
     clippy::match_like_matches_macro,
     clippy::if_same_then_else,
-    clippy::derive_partial_eq_without_eq
+    clippy::derive_partial_eq_without_eq,
+    clippy::only_used_in_recursion,
+    clippy::needless_borrowed_reference,
+    clippy::useless_conversion,
+    clippy::needless_lifetimes,
+    clippy::bool_to_int_with_if
 )]
 #![warn(
     trivial_casts,
@@ -230,6 +235,11 @@ pub const BOOL_WIDTH: Bytes = 1;
 pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
 /// Hash set that is faster but not resilient to DoS attacks.
 pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
+
+/// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
+/// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
+pub type FastIndexSet<K> =
+    indexmap::IndexSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastHashMap<Handle<Expression>, String>;
@@ -1259,7 +1269,7 @@ pub enum Expression {
     /// Load a value indirectly.
     ///
     /// For [`TypeInner::Atomic`] the result is a corresponding scalar.
-    /// For other types behind the pointer<T>, the result is T.
+    /// For other types behind the `pointer<T>`, the result is T.
     Load { pointer: Handle<Expression> },
     /// Sample a point from a sampled or a depth image.
     ImageSample {
@@ -1547,7 +1557,7 @@ pub enum Statement {
     ///
     /// For [`TypeInner::Atomic`] type behind the pointer, the value
     /// has to be a corresponding scalar.
-    /// For other types behind the pointer<T>, the value is T.
+    /// For other types behind the `pointer<T>`, the value is T.
     ///
     /// This statement is a barrier for any operations on the
     /// `Expression::LocalVariable` or `Expression::GlobalVariable`
