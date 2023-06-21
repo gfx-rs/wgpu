@@ -38,6 +38,8 @@ angle = ["wgc/angle"]
 webgl = ["hal", "wgc"]
 vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
+# Implement `Send` and `Sync` on Wasm.
+fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "wgc/fragile-send-sync-non-atomic-wasm", "wgt/fragile-send-sync-non-atomic-wasm"]
 
 # wgpu-core is always available as an optional dependency, "wgc".
 # Whenever wgpu-core is selected, we want the GLES backend and raw

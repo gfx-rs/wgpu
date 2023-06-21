@@ -1039,7 +1039,13 @@ impl ObjectId {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ObjectId: Send, Sync);
 
 pub(crate) fn downcast_ref<T: Debug + WasmNotSend + WasmNotSync + 'static>(
@@ -1082,33 +1088,93 @@ pub(crate) struct DeviceRequest {
     pub queue_data: Box<crate::Data>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + 'static>;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 pub(crate) type AdapterRequestDeviceFuture =
     Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
 pub(crate) type AdapterRequestDeviceFuture =
     Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>>>;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 pub type InstanceRequestAdapterFuture =
     Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>> + Send>;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
 pub type InstanceRequestAdapterFuture =
     Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>>>;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>> + Send>;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
 pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>>>;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].

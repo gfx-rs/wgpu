@@ -79,9 +79,21 @@ pub(crate) enum BufferMapState<A: hal::Api> {
     Idle,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 #[repr(C)]
@@ -90,7 +102,13 @@ pub struct BufferMapCallbackC {
     pub user_data: *mut u8,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMapCallbackC {}
 
 pub struct BufferMapCallback {
@@ -99,9 +117,21 @@ pub struct BufferMapCallback {
     inner: Option<BufferMapCallbackInner>,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
 type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
 
 enum BufferMapCallbackInner {

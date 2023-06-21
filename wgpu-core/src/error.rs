@@ -162,9 +162,21 @@ pub fn format_pretty_any(
 #[derive(Debug)]
 pub struct ContextError {
     pub string: &'static str,
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
     pub cause: Box<dyn Error + Send + Sync + 'static>,
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
     pub cause: Box<dyn Error + 'static>,
     pub label_key: &'static str,
     pub label: String,

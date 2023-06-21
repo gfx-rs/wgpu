@@ -106,6 +106,17 @@ impl Instance {
     }
 }
 
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for Instance {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for Instance {}
+
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         Ok(Instance {
@@ -166,6 +177,17 @@ pub struct Surface {
     pub(super) presentable: bool,
     srgb_present_program: Option<glow::Program>,
 }
+
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for Surface {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for Surface {}
 
 #[derive(Clone, Debug)]
 enum Canvas {

@@ -936,6 +936,19 @@ impl super::AdapterShared {
     }
 }
 
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for super::Adapter {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for super::Adapter {}
+
 #[cfg(test)]
 mod tests {
     use super::super::Adapter;
