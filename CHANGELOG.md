@@ -339,7 +339,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 ### Documentation
 
 #### General
-- Build for WASM on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
+- Build for Wasm on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
 
 
 ## wgpu-0.15.0 (2023-01-25)
@@ -1725,7 +1725,7 @@ DeviceDescriptor {
   - better error messages
   - timestamp and pipeline statistics queries
   - ETC2 and ASTC compressed textures
-  - (beta) targeting WASM with WebGL backend
+  - (beta) targeting Wasm with WebGL backend
   - reduced dependencies
   - Native-only:
     - clamp-to-border addressing

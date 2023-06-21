@@ -246,7 +246,7 @@ pub struct Buffer {
     data: Option<Arc<std::sync::Mutex<Vec<u8>>>>,
 }
 
-// Safe: WASM doesn't have threads
+// Safe: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for Buffer {}
 #[cfg(target_arch = "wasm32")]
@@ -268,7 +268,7 @@ pub enum TextureInner {
     },
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Send for TextureInner {}
 #[cfg(target_arch = "wasm32")]
@@ -462,7 +462,7 @@ struct UniformDesc {
     utype: u32,
 }
 
-// Safe: WASM doesn't have threads
+// Safe: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for UniformDesc {}
 #[cfg(target_arch = "wasm32")]
@@ -530,7 +530,7 @@ pub struct RenderPipeline {
     alpha_to_coverage_enabled: bool,
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Send for RenderPipeline {}
 #[cfg(target_arch = "wasm32")]
@@ -540,7 +540,7 @@ pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Send for ComputePipeline {}
 #[cfg(target_arch = "wasm32")]
