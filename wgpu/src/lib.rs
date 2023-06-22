@@ -3104,9 +3104,10 @@ impl<'a> RenderPass<'a> {
         )
     }
 
-    /// Sets the scissor region.
+    /// Sets the scissor rectangle used during the rasterization stage.
+    /// After transformation into [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
-    /// Subsequent draw calls will discard any fragments that fall outside this region.
+    /// Subsequent draw calls will discard any fragments which fall outside the scissor rectangle.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
@@ -3119,7 +3120,8 @@ impl<'a> RenderPass<'a> {
         );
     }
 
-    /// Sets the viewport region.
+    /// Sets the viewport used during the rasterization stage to linearly map
+    /// from [normalized device coordinates](https://www.w3.org/TR/webgpu/#ndc) to [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
     /// Subsequent draw calls will draw any fragments in this region.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
@@ -3150,7 +3152,22 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s).
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
+    /// Does not use an Index Buffer. If you need this see [`RenderPass::draw_indexed`]
+    ///
+    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
+    ///
+    /// vertices: The range of vertices to draw.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for vertex_id in vertex_range {
+    ///         let vertex = vertex[vertex_id];
+    ///         vertex_shader(vertex, vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.parent.context,
@@ -3192,8 +3209,25 @@ impl<'a> RenderPass<'a> {
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
-    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderPass::set_index_buffer`]
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
+    ///
+    /// indices: The range of indices to draw.
+    /// base_vertex: value added to each index value before indexing into the vertex buffers.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for index_index in index_range {
+    ///         let vertex_id = index_buffer[index_index];
+    ///         let adjusted_vertex_id = vertex_id + base_vertex;
+    ///         let vertex = vertex[adjusted_vertex_id];
+    ///         vertex_shader(vertex, adjusted_vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.parent.context,
@@ -3787,6 +3821,21 @@ impl<'a> RenderBundleEncoder<'a> {
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// Does not use an Index Buffer. If you need this see [`RenderBundleEncoder::draw_indexed`]
+    ///
+    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
+    ///
+    /// vertices: The range of vertices to draw.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for vertex_id in vertex_range {
+    ///         let vertex = vertex[vertex_id];
+    ///         vertex_shader(vertex, vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw(
             &*self.parent.context,
@@ -3797,10 +3846,27 @@ impl<'a> RenderBundleEncoder<'a> {
         )
     }
 
-    /// Draws indexed primitives using the active index buffer and the active vertex buffers.
+    /// Draws indexed primitives using the active index buffer and the active vertex buffer(s).
     ///
-    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`].
+    /// The active vertex buffer(s) can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    ///
+    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
+    ///
+    /// indices: The range of indices to draw.
+    /// base_vertex: value added to each index value before indexing into the vertex buffers.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for index_index in index_range {
+    ///         let vertex_id = index_buffer[index_index];
+    ///         let adjusted_vertex_id = vertex_id + base_vertex;
+    ///         let vertex = vertex[adjusted_vertex_id];
+    ///         vertex_shader(vertex, adjusted_vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw_indexed(
             &*self.parent.context,

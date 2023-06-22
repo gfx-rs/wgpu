@@ -60,6 +60,8 @@ Bottom level categories:
 
 ### Documentation
 
+- Better documentation for draw, draw_indexed, set_viewport and set_scissor_rect. By @genusistimelord in [#3860](https://github.com/gfx-rs/wgpu/pull/3860)
+
 #### General
 
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
@@ -337,7 +339,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 ### Documentation
 
 #### General
-- Build for WASM on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
+- Build for Wasm on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
 
 
 ## wgpu-0.15.0 (2023-01-25)
@@ -1723,7 +1725,7 @@ DeviceDescriptor {
   - better error messages
   - timestamp and pipeline statistics queries
   - ETC2 and ASTC compressed textures
-  - (beta) targeting WASM with WebGL backend
+  - (beta) targeting Wasm with WebGL backend
   - reduced dependencies
   - Native-only:
     - clamp-to-border addressing
