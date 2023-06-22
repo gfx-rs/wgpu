@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.10.1 (2023-6-21)
+
+SPV-IN, SPV-OUT
+- Backport #2389 ([spv-out] Use IndexSet instead of HashSet for iterated sets (capabilities/extensions)). By @eddyb, @jimblandy in https://github.com/gfx-rs/naga/pull/2391
+- Backport #2290 ([spv-in] Convert conditional backedges to `break if`). By @eddyb in https://github.com/gfx-rs/naga/pull/2387
+
 ## v0.10 (2022-10-05)
 
 - Make termcolor dependency optional by @AldaronLau in https://github.com/gfx-rs/naga/pull/2014
