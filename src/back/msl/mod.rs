@@ -210,10 +210,13 @@ impl Default for Options {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
-    /// Allow `BuiltIn::PointSize` in the vertex shader.
+    /// Allow `BuiltIn::PointSize` and inject it if doesn't exist.
     ///
-    /// Metal doesn't like this for non-point primitive topologies.
-    pub allow_point_size: bool,
+    /// Metal doesn't like this for non-point primitive topologies and requires it for
+    /// point primitive topologies.
+    ///
+    /// Enable this for vertex shaders with point primitive topologies.
+    pub allow_and_force_point_size: bool,
 }
 
 impl Options {

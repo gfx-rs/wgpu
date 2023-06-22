@@ -26,6 +26,6 @@
 		zero_initialize_workgroup_memory: true,
 	),
 	msl_pipeline: (
-		allow_point_size: true,
+		allow_and_force_point_size: true,
 	),
 )
