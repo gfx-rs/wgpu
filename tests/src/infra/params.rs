@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use heck::ToSnakeCase;
 
@@ -37,6 +37,13 @@ pub trait GpuTest: Send + Sync + 'static {
     }
 
     fn run(&self, ctx: TestingContext);
+
+    fn run_async<'a>(
+        &'a self,
+        ctx: TestingContext,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'a>> {
+        Box::pin(async move { self.run(ctx) })
+    }
 }
 
 pub struct CpuTest {

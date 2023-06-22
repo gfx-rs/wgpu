@@ -6,7 +6,7 @@ pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
     let llvm_cov_flags: &[_] = if llvm_cov {
         &["llvm-cov", "--no-cfg-coverage", "--no-report"]
     } else {
-        &[""]
+        &[]
     };
     let llvm_cov_nextest_flags: &[_] = if llvm_cov {
         &["llvm-cov", "--no-cfg-coverage", "--no-report", "nextest"]

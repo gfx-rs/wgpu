@@ -25,6 +25,7 @@ arrayvec.workspace = true
 bitflags.workspace = true
 cfg-if.workspace = true
 env_logger.workspace = true
+futures-lite.workspace = true
 heck.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true

@@ -3440,6 +3440,7 @@ dependencies = [
  "cfg-if",
  "console_log",
  "env_logger",
+ "futures-lite",
  "heck",
  "image",
  "js-sys",

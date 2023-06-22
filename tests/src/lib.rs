@@ -1,14 +1,17 @@
 //! This module contains common test-only code that needs to be shared between the examples and the tests.
 #![allow(dead_code)] // This module is used in a lot of contexts and only parts of it will be used
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::AssertUnwindSafe;
 
+use futures_lite::FutureExt;
 use wgpu::{Adapter, Device, DownlevelFlags, Instance, Queue};
 use wgt::{AdapterInfo, Backends, DeviceDescriptor, DownlevelCapabilities, Features, Limits};
 
 pub mod image;
 pub mod infra;
 mod isolation;
+
+use crate::infra::GpuTest;
 
 pub use self::image::ComparisonType;
 
@@ -234,11 +237,11 @@ impl TestParameters {
     }
 }
 
-pub fn initialize_test(
+pub async fn initialize_test(
     parameters: TestParameters,
     expected_failure_reason: Option<FailureReasons>,
     adapter_index: usize,
-    test_function: impl FnOnce(TestingContext),
+    test: &dyn GpuTest,
 ) {
     // We don't actually care if it fails
     #[cfg(not(target_arch = "wasm32"))]
@@ -269,7 +272,10 @@ pub fn initialize_test(
         queue,
     };
 
-    let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
+    let panicked = AssertUnwindSafe(test.run_async(context))
+        .catch_unwind()
+        .await
+        .is_err();
     cfg_if::cfg_if!(
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
             let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
