@@ -9,6 +9,7 @@ Usage: xtask <COMMAND>
 Commands:
   run-wasm
   test
+    --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
 
 Options:
   -h, --help  Print help

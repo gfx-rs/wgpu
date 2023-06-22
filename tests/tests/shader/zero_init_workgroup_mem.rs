@@ -17,8 +17,15 @@ impl GpuTest for ZeroInitWorkgroupMemTest {
     fn parameters(&self, params: TestParameters) -> TestParameters {
         params
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false)
+            // remove both of these once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
+            // https://github.com/gfx-rs/wgpu/issues/3160
+            .specific_failure(
+                Some(wgpu::Backends::DX12),
+                Some(5140),
+                Some("Microsoft Basic Render Driver"),
+                true,
+            )
+            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("swiftshader"), true)
             .limits(Limits::downlevel_defaults())
     }
 
