@@ -89,6 +89,10 @@ Bottom level categories:
 
 - Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
 
+#### WebGPU
+
+- Use `get_preferred_canvas_format()` to fill `formats` of `SurfaceCapabilities`. By @jinleili in [#3744](https://github.com/gfx-rs/wgpu/pull/3744)
+
 ### Examples
 
 #### General
