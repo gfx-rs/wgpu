@@ -607,6 +607,11 @@ fn convert_spv_all() {
         Targets::HLSL | Targets::WGSL | Targets::METAL,
     );
     convert_spv("degrees", false, Targets::empty());
+    convert_spv(
+        "do-while",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
 }
 
 #[cfg(feature = "glsl-in")]
