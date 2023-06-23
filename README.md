@@ -32,7 +32,7 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.64**.
+Minimum Supported Rust Version is **1.66**.
 It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
 This version can only be upgraded in breaking releases.
 
@@ -43,10 +43,10 @@ determined by the value of `MINIMUM_RUST_VERSION` in
 vendor` to extract only those crates it actually uses, so the
 workspace's other crates can have more recent MSRVs.
 
-_Note for Rust 1.64_: The workspace itself can even use a newer MSRV
+_Note for Rust 1.66_: The workspace itself can even use a newer MSRV
 than Firefox, as long as the vendoring step's `Cargo.toml` rewriting
 removes any features Firefox's MSRV couldn't handle. For example,
-`wgpu` can use manifest key inheritance, added in Rust 1.64, even
+`wgpu` can use manifest key inheritance, added in Rust 1.66, even
 before Firefox reaches that MSRV, because `cargo vendor` copies
 inherited values directly into the individual crates' `Cargo.toml`
 files, producing 1.63-compatible files.
