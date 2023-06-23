@@ -60,7 +60,7 @@ Bottom level categories:
 
 #### General
 
-- Added example repeated-compute.
+- Added example repeated-compute. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 
 ### Documentation
 
