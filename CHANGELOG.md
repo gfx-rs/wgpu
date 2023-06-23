@@ -76,7 +76,7 @@ Bottom level categories:
 #### Metal
 
 - Fix renderpasses being used inside of renderpasses. By @cwfitzgerald in [#3828](https://github.com/gfx-rs/wgpu/pull/3828)
-- Add visionOS support. By @jinleili in [#3883](https://github.com/gfx-rs/wgpu/pull/3883)
+- Support (simulated) visionOS. By @jinleili in [#3883](https://github.com/gfx-rs/wgpu/pull/3883)
 
 #### General
 
