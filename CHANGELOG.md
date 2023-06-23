@@ -45,6 +45,7 @@ Bottom level categories:
 #### Misc Breaking Changes
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+- Move from Rust 1.65 to 1.66. by Snowii [#3886](https://github.com/gfx-rs/wgpu/pull/3886)
 
 #### DX12
 
