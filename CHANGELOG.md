@@ -58,6 +58,10 @@ Bottom level categories:
 
 - Empty scissor rects are allowed now, matching the specification. by @PJB3005 in [#3863](https://github.com/gfx-rs/wgpu/pull/3863).
 
+#### General
+
+- Added example repeated-compute.
+
 ### Documentation
 
 - Better documentation for draw, draw_indexed, set_viewport and set_scissor_rect. By @genusistimelord in [#3860](https://github.com/gfx-rs/wgpu/pull/3860)
