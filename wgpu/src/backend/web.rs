@@ -1118,17 +1118,11 @@ impl crate::context::Context for Context {
             wgt::TextureFormat::Bgra8Unorm,
             wgt::TextureFormat::Rgba16Float,
         ];
-        let mapped_formats: Vec<_> = formats
-            .iter()
-            .map(|format| map_texture_format(*format))
-            .collect();
+        let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
         // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
         // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
         let preferred_format = self.0.get_preferred_canvas_format();
-        if let Some(index) = mapped_formats
-            .iter()
-            .position(|format| *format == preferred_format)
-        {
+        if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
             formats.swap(0, index);
         }
 
