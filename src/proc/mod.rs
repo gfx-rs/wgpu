@@ -190,6 +190,17 @@ impl super::TypeInner {
         }
     }
 
+    pub const fn scalar_width(&self) -> Option<u8> {
+        // Multiply by 8 to get the bit width
+        match *self {
+            super::TypeInner::Scalar { width, .. } | super::TypeInner::Vector { width, .. } => {
+                Some(width * 8)
+            }
+            super::TypeInner::Matrix { width, .. } => Some(width * 8),
+            _ => None,
+        }
+    }
+
     pub const fn pointer_space(&self) -> Option<crate::AddressSpace> {
         match *self {
             Self::Pointer { space, .. } => Some(space),
