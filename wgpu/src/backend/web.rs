@@ -1113,7 +1113,6 @@ impl crate::context::Context for Context {
         _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
-        let preferred_format = self.0.get_preferred_canvas_format();
         let mut formats = vec![
             wgt::TextureFormat::Rgba8Unorm,
             wgt::TextureFormat::Bgra8Unorm,
@@ -1123,6 +1122,9 @@ impl crate::context::Context for Context {
             .iter()
             .map(|format| map_texture_format(*format))
             .collect();
+        // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
+        // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
+        let preferred_format = self.0.get_preferred_canvas_format();
         if let Some(index) = mapped_formats
             .iter()
             .position(|format| *format == preferred_format)
