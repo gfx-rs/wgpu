@@ -77,6 +77,7 @@ Bottom level categories:
 #### Metal
 
 - Fix renderpasses being used inside of renderpasses. By @cwfitzgerald in [#3828](https://github.com/gfx-rs/wgpu/pull/3828)
+- Support (simulated) visionOS. By @jinleili in [#3883](https://github.com/gfx-rs/wgpu/pull/3883)
 
 #### General
 
@@ -89,6 +90,10 @@ Bottom level categories:
 #### DX12
 
 - Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
+
+#### WebGPU
+
+- Use `get_preferred_canvas_format()` to fill `formats` of `SurfaceCapabilities`. By @jinleili in [#3744](https://github.com/gfx-rs/wgpu/pull/3744)
 
 ### Examples
 
