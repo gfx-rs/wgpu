@@ -478,7 +478,12 @@ impl super::PrivateCapabilities {
         };
 
         let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-        let family_check = version.at_least((10, 15), (13, 0), os_is_mac);
+        // Metal was first introduced in OS X 10.11 and iOS 8. The current version number of visionOS is 1.0.0. Additionally,
+        // on the Simulator, Apple only provides the Apple2 GPU capability, and the Apple2+ GPU capability covers the capabilities of Apple2.
+        // Therefore, the following conditions can be used to determine if it is visionOS.
+        // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
+        let os_is_xr = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
+        let family_check = os_is_xr || version.at_least((10, 15), (13, 0), os_is_mac);
 
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
@@ -505,7 +510,7 @@ impl super::PrivateCapabilities {
 
         Self {
             family_check,
-            msl_version: if version.at_least((12, 0), (15, 0), os_is_mac) {
+            msl_version: if os_is_xr || version.at_least((12, 0), (15, 0), os_is_mac) {
                 MTLLanguageVersion::V2_4
             } else if version.at_least((11, 0), (14, 0), os_is_mac) {
                 MTLLanguageVersion::V2_3
@@ -627,7 +632,7 @@ impl super::PrivateCapabilities {
                 31
             },
             max_samplers_per_stage: 16,
-            buffer_alignment: if os_is_mac { 256 } else { 64 },
+            buffer_alignment: if os_is_mac || os_is_xr { 256 } else { 64 },
             max_buffer_size: if version.at_least((10, 14), (12, 0), os_is_mac) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
                 let buffer_size: metal::NSInteger =

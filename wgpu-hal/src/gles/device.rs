@@ -1321,7 +1321,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for super::Device {}
 #[cfg(target_arch = "wasm32")]

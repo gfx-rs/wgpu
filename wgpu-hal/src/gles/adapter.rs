@@ -586,7 +586,7 @@ impl super::Adapter {
         let downlevel_defaults = wgt::DownlevelLimits {};
 
         // Drop the GL guard so we can move the context into AdapterShared
-        // ( on WASM the gl handle is just a ref so we tell clippy to allow
+        // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
         #[allow(clippy::drop_ref)]
         drop(gl);
@@ -937,7 +937,7 @@ impl super::AdapterShared {
     }
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for super::Adapter {}
 #[cfg(target_arch = "wasm32")]

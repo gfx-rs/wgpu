@@ -2,6 +2,7 @@ use std::process::ExitCode;
 
 use anyhow::Context;
 use cli::{Args, Subcommand};
+use pico_args::Arguments;
 
 mod cli;
 
@@ -26,7 +27,15 @@ fn main() -> ExitCode {
 fn run(args: Args) -> anyhow::Result<()> {
     let Args { subcommand } = args;
     match subcommand {
-        Subcommand::RunWasm { args } => {
+        Subcommand::RunWasm { mut args } => {
+            // Use top-level Cargo.toml instead of xtask/Cargo.toml by default
+            let manifest_path = args.value_from_str("--manifest-path")
+                .unwrap_or_else(|_| "../Cargo.toml".to_string());
+            let mut arg_vec = args.finish();
+            arg_vec.push("--manifest-path".into());
+            arg_vec.push(manifest_path.into());
+            let args = Arguments::from_vec(arg_vec);
+
             cargo_run_wasm::run_wasm_with_css_and_args(
                 "body { margin: 0px; }",
                 cargo_run_wasm::Args::from_args(args)
