@@ -45,6 +45,8 @@ Bottom level categories:
 #### Misc Breaking Changes
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+- Arcanization of wgpu core resources: Removed 'Token' and 'LifeTime' related management,
+removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal reference count, removing mut from resources and added instead internal members locks on demand or atomics operations, resources now implement Drop and destroy stuff when last 'Arc' resources is released, resources hold an 'Arc' in order to be able to implement Drop, resources have an utility to retrieve the id of the resource itself, removed all guards and just retrive the 'Arc' needed on-demand to unlock registry of resources asap removing locking from hot paths. By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy
 
 #### DX12
 
