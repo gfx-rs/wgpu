@@ -10,7 +10,7 @@
 //! second texture to act as a reference and attach that as well. Luckily, we don't need
 //! to read anything in our shader except the dimensions of our texture, which we can
 //! easily get via `textureDimensions`.
-//! 
+//!
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
@@ -123,9 +123,7 @@ async fn run(path: Option<String>) {
             layout: wgpu::ImageDataLayout {
                 offset: 0,
                 // This needs to be padded to 256.
-                bytes_per_row: Some(
-                    (TEXTURE_DIMS.0 * 4) as u32,
-                ),
+                bytes_per_row: Some((TEXTURE_DIMS.0 * 4) as u32),
                 rows_per_image: Some(TEXTURE_DIMS.1 as u32),
             },
         },
@@ -163,7 +161,7 @@ fn output_image_native(image_data: Vec<u8>, path: Option<String>) {
     let mut encoder = png::Encoder::new(
         std::io::Cursor::new(&mut png_data),
         TEXTURE_DIMS.0 as u32,
-        TEXTURE_DIMS.1 as u32
+        TEXTURE_DIMS.1 as u32,
     );
     encoder.set_color(png::ColorType::Rgba);
     let mut png_writer = encoder.write_header().unwrap();
@@ -181,10 +179,7 @@ fn output_image_native(image_data: Vec<u8>, path: Option<String>) {
 
 #[cfg(target_arch = "wasm32")]
 fn output_image_wasm(image_data: Vec<u8>, _path: Option<String>) {
-    let document = web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap();
+    let document = web_sys::window().unwrap().document().unwrap();
     let body = document.body().unwrap();
     let canvas = document
         .create_element("canvas")
@@ -194,8 +189,12 @@ fn output_image_wasm(image_data: Vec<u8>, _path: Option<String>) {
     // We don't want to show the canvas, we just want it to exist in the background.
     canvas.set_attribute("hidden", "true").unwrap();
     let image_dimension_strings = (TEXTURE_DIMS.0.to_string(), TEXTURE_DIMS.1.to_string());
-    canvas.set_attribute("width", image_dimension_strings.0.as_str()).unwrap();
-    canvas.set_attribute("height", image_dimension_strings.1.as_str()).unwrap();
+    canvas
+        .set_attribute("width", image_dimension_strings.0.as_str())
+        .unwrap();
+    canvas
+        .set_attribute("height", image_dimension_strings.1.as_str())
+        .unwrap();
     canvas.set_attribute("background-color", "red").unwrap();
     body.append_child(&canvas).unwrap();
     log::info!("Set up canvas.");
@@ -207,8 +206,9 @@ fn output_image_wasm(image_data: Vec<u8>, _path: Option<String>) {
         .unwrap();
     let image_data = web_sys::ImageData::new_with_u8_clamped_array(
         wasm_bindgen::Clamped(&image_data),
-        TEXTURE_DIMS.0 as u32
-    ).unwrap();
+        TEXTURE_DIMS.0 as u32,
+    )
+    .unwrap();
     context.put_image_data(&image_data, 0.0, 0.0).unwrap();
     log::info!("Put image data in canvas.");
     // The canvas is now the image we ultimately want. We can create a data url from it now.
@@ -222,8 +222,9 @@ fn output_image_wasm(image_data: Vec<u8>, _path: Option<String>) {
     body.append_child(&image_element).unwrap();
     log::info!("Created image element with data url.");
     body.set_inner_html(
-        &(body.inner_html() + r#"<p>The above image is for you!
-        You can drag it to your desktop to download.</p>"#)
+        &(body.inner_html()
+            + r#"<p>The above image is for you!
+        You can drag it to your desktop to download.</p>"#),
     );
 }
 
@@ -235,7 +236,10 @@ fn main() {
             .format_timestamp_nanos()
             .init();
 
-        let path = std::env::args().skip(1).next().unwrap_or("please_don't_git_push_me.png".to_string());
+        let path = std::env::args()
+            .skip(1)
+            .next()
+            .unwrap_or("please_don't_git_push_me.png".to_string());
         pollster::block_on(run(Some(path)));
     }
     #[cfg(target_arch = "wasm32")]
