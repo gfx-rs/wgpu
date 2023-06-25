@@ -9,6 +9,7 @@ var texture: texture_storage_2d<rgba8unorm, write>;
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var final_iteration = MAX_ITERATIONS;
     var c = vec2(
+        // Translated to put everything nicely in frame.
         (f32(id.x) / f32(textureDimensions(texture).x)) * 3.0 - 2.25,
         (f32(id.y) / f32(textureDimensions(texture).y)) * 3.0 - 1.5
     );

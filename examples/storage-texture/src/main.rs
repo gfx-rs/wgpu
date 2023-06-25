@@ -14,12 +14,19 @@
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 const TEXTURE_DIMS: (usize, usize) = (512, 512);
 
 async fn run(path: Option<String>) {
-    let mut texture_data = [0u8; TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4];
+    //let mut texture_data = [0u8; TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4];
+    let mut texture_data = Vec::with_capacity(TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4);
+    for _ in 0..TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4 {
+        texture_data.push(0);
+    }
 
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -53,7 +60,7 @@ async fn run(path: Option<String>) {
     let storage_texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(&texture_data) as u64,
+        size: std::mem::size_of_val(&texture_data[..]) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -143,7 +150,16 @@ async fn run(path: Option<String>) {
     log::info!("GPU data copied to local.");
     output_staging_buffer.unmap();
 
-    let mut png_data = Vec::<u8>::with_capacity(texture_data.len());
+    #[cfg(not(target_arch = "wasm32"))]
+    output_image_native(texture_data.to_vec(), path);
+    #[cfg(target_arch = "wasm32")]
+    output_image_wasm(texture_data.to_vec(), path);
+    log::info!("Done.")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn output_image_native(image_data: Vec<u8>, path: Option<String>) {
+    let mut png_data = Vec::<u8>::with_capacity(image_data.len());
     let mut encoder = png::Encoder::new(
         std::io::Cursor::new(&mut png_data),
         TEXTURE_DIMS.0 as u32,
@@ -151,19 +167,64 @@ async fn run(path: Option<String>) {
     );
     encoder.set_color(png::ColorType::Rgba);
     let mut png_writer = encoder.write_header().unwrap();
-    png_writer.write_image_data(&texture_data[..]).unwrap();
+    png_writer.write_image_data(&image_data[..]).unwrap();
     png_writer.finish().unwrap();
     log::info!("Png file encoded in memory.");
 
-    output_image(png_data, path);
-    log::info!("File outputted.\nDone.");
-}
-
-fn output_image(image_data: Vec<u8>, path: Option<String>) {
     if let Some(p) = path {
         let mut file = std::fs::File::create(p).unwrap();
-        file.write_all(&image_data[..]).unwrap();
+        file.write_all(&png_data[..]).unwrap();
+    } else {
+        log::warn!("No path specified. No file ultimately emitted.");
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn output_image_wasm(image_data: Vec<u8>, _path: Option<String>) {
+    let document = web_sys::window()
+        .unwrap()
+        .document()
+        .unwrap();
+    let body = document.body().unwrap();
+    let canvas = document
+        .create_element("canvas")
+        .unwrap()
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .unwrap();
+    // We don't want to show the canvas, we just want it to exist in the background.
+    canvas.set_attribute("hidden", "true").unwrap();
+    let image_dimension_strings = (TEXTURE_DIMS.0.to_string(), TEXTURE_DIMS.1.to_string());
+    canvas.set_attribute("width", image_dimension_strings.0.as_str()).unwrap();
+    canvas.set_attribute("height", image_dimension_strings.1.as_str()).unwrap();
+    canvas.set_attribute("background-color", "red").unwrap();
+    body.append_child(&canvas).unwrap();
+    log::info!("Set up canvas.");
+    let context = canvas
+        .get_context("2d")
+        .unwrap()
+        .unwrap()
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .unwrap();
+    let image_data = web_sys::ImageData::new_with_u8_clamped_array(
+        wasm_bindgen::Clamped(&image_data),
+        TEXTURE_DIMS.0 as u32
+    ).unwrap();
+    context.put_image_data(&image_data, 0.0, 0.0).unwrap();
+    log::info!("Put image data in canvas.");
+    // The canvas is now the image we ultimately want. We can create a data url from it now.
+    let data_url = canvas.to_data_url().unwrap();
+    let image_element = document
+        .create_element("img")
+        .unwrap()
+        .dyn_into::<web_sys::HtmlImageElement>()
+        .unwrap();
+    image_element.set_src(&data_url);
+    body.append_child(&image_element).unwrap();
+    log::info!("Created image element with data url.");
+    body.set_inner_html(
+        &(body.inner_html() + r#"<p>The above image is for you!
+        You can drag it to your desktop to download.</p>"#)
+    );
 }
 
 fn main() {
@@ -181,6 +242,6 @@ fn main() {
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init_with_level(log::Level::Info).expect("could not initialize logger");
-        wasm_bindgen_futures::spawn_local(run());
+        wasm_bindgen_futures::spawn_local(run(None));
     }
 }
