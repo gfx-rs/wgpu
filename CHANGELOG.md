@@ -61,6 +61,7 @@ Bottom level categories:
 #### General
 
 - Added example repeated-compute. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
+- Added example storage-texture. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 
 ### Documentation
 
