@@ -89,17 +89,17 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     the recieving of a message from the passed closure will force the outside code to wait.
     It also doesn't hurt if the closure finishes before the outside code catches up as
     the message is buffered and recieving will just pick that up. */
-    let (sender, reciever) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     /* In order for the mapping to be completed, one of three things must happen.
-    One of those can be calling `Device::poll`. This isn't nessecary on the web as devices
+    One of those can be calling `Device::poll`. This isn't necessary on the web as devices
     are polled automatically but natively, we need to make sure this happens manually. */
     // `Maintain::Wait` will cause the thread to wait on native but not the web.
     context.device.poll(wgpu::Maintain::Wait);
     log::info!("Device polled.");
-    // Now we await the recieving and panic if anything went wrong because we're lazy.
-    reciever.receive().await.unwrap().unwrap();
-    log::info!("Result recieved.");
+    // Now we await the receiving and panic if anything went wrong because we're lazy.
+    receiver.receive().await.unwrap().unwrap();
+    log::info!("Result received.");
     // NOW we can call get_mapped_range.
     {
         let view = buffer_slice.get_mapped_range();
