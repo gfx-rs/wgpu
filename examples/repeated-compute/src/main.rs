@@ -5,7 +5,6 @@
 //! hello-compute example does not such as mapping buffers
 //! and why use the async channels.
 
-use rand::Rng;
 use std::mem::size_of_val;
 
 const OVERFLOW: u32 = 0xffffffff;
@@ -13,12 +12,10 @@ const OVERFLOW: u32 = 0xffffffff;
 async fn run() {
     let mut numbers = [0u32; 256];
     let context = WgpuContext::new(size_of_val(&numbers)).await;
-    // Not sure how compatible this is with web but I don't know how to check.
-    let mut rng = rand::thread_rng();
 
     for _ in 0..10 {
         for p in numbers.iter_mut() {
-            *p = rng.gen::<u16>() as u32;
+            *p = generate_rand() as u32;
         }
 
         compute(&mut numbers, &context).await;
@@ -32,6 +29,12 @@ async fn run() {
             .collect::<Vec<String>>();
         log::info!("Results: {printed_numbers:?}");
     }
+}
+
+fn generate_rand() -> u16 {
+    let mut bytes = [0u8; 2];
+    getrandom::getrandom(&mut bytes[..]).unwrap();
+    u16::from_le_bytes(bytes)
 }
 
 async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
