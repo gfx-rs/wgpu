@@ -11,13 +11,15 @@ async fn run(path: Option<String>) {
     let mut texture_data = Vec::<u8>::with_capacity(TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4);
 
     let instance = wgpu::Instance::default();
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default())
+    let adapter = instance
+        .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .unwrap();
-    let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor::default(), None)
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor::default(), None)
         .await
         .unwrap();
-    
+
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
@@ -34,8 +36,7 @@ async fn run(path: Option<String>) {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-            | wgpu::TextureUsages::COPY_SRC,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
     });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -61,12 +62,12 @@ async fn run(path: Option<String>) {
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
-            targets: &[Some(wgpu::TextureFormat::Rgba8UnormSrgb.into())]
+            targets: &[Some(wgpu::TextureFormat::Rgba8UnormSrgb.into())],
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None
+        multiview: None,
     });
 
     log::info!("Wgpu context set up.");
@@ -85,8 +86,8 @@ async fn run(path: Option<String>) {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                    store: true
-                }
+                    store: true,
+                },
             })],
             depth_stencil_attachment: None,
         });
@@ -105,17 +106,17 @@ async fn run(path: Option<String>) {
             buffer: &output_staging_buffer,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                /* This needs to be a multiple of 256. Normally we would need to pad 
+                /* This needs to be a multiple of 256. Normally we would need to pad
                 it but we here know it will work out anyways. */
                 bytes_per_row: Some((TEXTURE_DIMS.0 * 4) as u32),
                 rows_per_image: Some(TEXTURE_DIMS.1 as u32),
-            }
+            },
         },
         wgpu::Extent3d {
             width: TEXTURE_DIMS.0 as u32,
             height: TEXTURE_DIMS.1 as u32,
             depth_or_array_layers: 1,
-        }
+        },
     );
     queue.submit(Some(command_encoder.finish()));
     log::info!("Commands submitted.");
