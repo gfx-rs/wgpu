@@ -3306,6 +3306,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-storage-texture-example"
+version = "0.16.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "png",
+ "pollster",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "wgpu",
+ "wgpu-test",
+]
+
+[[package]]
 name = "wgpu-test"
 version = "0.16.0"
 dependencies = [
