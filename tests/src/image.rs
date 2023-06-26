@@ -1,4 +1,3 @@
-use crate::TestingContext;
 use std::{borrow::Cow, ffi::OsStr, io, path::Path};
 use wgpu::util::DeviceExt;
 use wgpu::*;
@@ -526,52 +525,16 @@ impl ReadbackBuffers {
                 .map(|buffer_stencil| is_zero(device, buffer_stencil))
                 .unwrap_or(true)
     }
-}
 
-pub fn capture_rgba_u8_texture(
-    ctx: &TestingContext,
-    color_texture: &Texture,
-    texture_size: Extent3d,
-) -> Vec<u8> {
-    let bytes_per_row = wgt::math::align_to(4 * texture_size.width, COPY_BYTES_PER_ROW_ALIGNMENT);
-    let buffer_size = bytes_per_row * texture_size.height;
-    let output_buffer = ctx.device.create_buffer_init(&util::BufferInitDescriptor {
-        label: None,
-        contents: &vec![0u8; buffer_size as usize],
-        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-    });
-
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor::default());
-
-    encoder.copy_texture_to_buffer(
-        ImageCopyTexture {
-            texture: color_texture,
-            mip_level: 0,
-            origin: Origin3d::ZERO,
-            aspect: TextureAspect::All,
-        },
-        ImageCopyBuffer {
-            buffer: &output_buffer,
-            layout: ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: None,
-            },
-        },
-        texture_size,
-    );
-
-    ctx.queue.submit(Some(encoder.finish()));
-    let slice = output_buffer.slice(..);
-    slice.map_async(MapMode::Read, |_| ());
-    ctx.device.poll(Maintain::Wait);
-    let data: Vec<u8> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
-    // Chunk rows from output buffer, take actual pixel
-    // bytes from each row and flatten into a vector.
-    data.chunks_exact(bytes_per_row as usize)
-        .flat_map(|x| x.iter().take(4 * texture_size.width as usize))
-        .copied()
-        .collect()
+    pub fn check_color_contents(&self, device: &Device, expected_data: &[u8]) -> bool {
+        let result = {
+            let buffer_slice = self.buffer.slice(..);
+            buffer_slice.map_async(MapMode::Read, |_| ());
+            device.poll(Maintain::Wait);
+            let buffer_view = buffer_slice.get_mapped_range();
+            buffer_view.iter().eq(expected_data.iter())
+        };
+        self.buffer.unmap();
+        result
+    }
 }

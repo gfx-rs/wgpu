@@ -1,8 +1,5 @@
-use std::mem::size_of;
-
-use wgpu::util::DeviceExt;
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
-use wgt::BufferAddress;
+use wgpu_test::{image, initialize_test, TestParameters, TestingContext};
+use wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
 
 struct Rect {
     x: u32,
@@ -11,34 +8,17 @@ struct Rect {
     height: u32,
 }
 
-fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u8; 16]) {
-    let vertex_data: [f32; 12] = [
-        -1.0_f32, -1.0_f32, 0.0_f32, 1.0_f32, -1.0_f32, 0.0_f32, 1.0_f32, 1.0_f32, 0.0_f32,
-        -1.0_f32, 1.0_f32, 0.0_f32,
-    ];
-    let index_data: [i16; 6] = [0, 1, 3, 1, 3, 2];
+const TEXTURE_HEIGHT: u32 = 2;
+const TEXTURE_WIDTH: u32 = 64;
+const BUFFER_SIZE: usize = (COPY_BYTES_PER_ROW_ALIGNMENT * TEXTURE_HEIGHT) as usize;
 
-    let vertex_buf = ctx
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-    let index_buf = ctx
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
+fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u8; BUFFER_SIZE]) {
+    assert_eq!(TEXTURE_WIDTH * 4, COPY_BYTES_PER_ROW_ALIGNMENT);
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Offscreen texture"),
         size: wgpu::Extent3d {
-            width: 2,
-            height: 2,
+            width: TEXTURE_WIDTH,
+            height: TEXTURE_HEIGHT,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -54,31 +34,15 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
         .device
         .create_shader_module(wgpu::include_wgsl!("solid_white.wgsl"));
 
-    let pipeline_layout = ctx
-        .device
-        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Pipeline layout"),
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
-        });
-
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: None,
             vertex: wgpu::VertexState {
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: (size_of::<f32>() * 3) as BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x3,
-                        offset: 0,
-                        shader_location: 0,
-                    }],
-                }],
                 entry_point: "vs_main",
                 module: &shader,
+                buffers: &[],
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -95,6 +59,7 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
             multiview: None,
         });
 
+    let readback_buffer = image::ReadbackBuffers::new(&ctx.device, &texture);
     {
         let mut encoder = ctx
             .device
@@ -124,29 +89,12 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
                 scissor_rect.width,
                 scissor_rect.height,
             );
-            render_pass.set_index_buffer(index_buf.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.set_vertex_buffer(0, vertex_buf.slice(..));
-            render_pass.draw_indexed(
-                0..(index_buf.size() as usize / size_of::<i16>()) as u32,
-                0,
-                0..1,
-            );
+            render_pass.draw(0..3, 0..1);
         }
+        readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
         ctx.queue.submit(Some(encoder.finish()));
     }
-    let data = wgpu_test::image::capture_rgba_u8_texture(
-        ctx,
-        &texture,
-        wgpu::Extent3d {
-            width: 2,
-            height: 2,
-            depth_or_array_layers: 1,
-        },
-    );
-    assert_eq!(data.len(), 16);
-    for i in 0..16 {
-        assert_eq!(data[i], expected_data[i]);
-    }
+    assert!(readback_buffer.check_color_contents(&ctx.device, &expected_data));
 }
 
 #[test]
@@ -157,10 +105,10 @@ fn scissor_test_full_rect() {
             Rect {
                 x: 0,
                 y: 0,
-                width: 2,
-                height: 2,
+                width: TEXTURE_WIDTH,
+                height: TEXTURE_HEIGHT,
             },
-            [255; 16],
+            [255; BUFFER_SIZE],
         );
     })
 }
@@ -176,7 +124,7 @@ fn scissor_test_empty_rect() {
                 width: 0,
                 height: 0,
             },
-            [0; 16],
+            [0; BUFFER_SIZE],
         );
     })
 }
@@ -187,28 +135,29 @@ fn scissor_test_empty_rect_with_offset() {
         scissor_test_impl(
             &ctx,
             Rect {
-                x: 1,
-                y: 1,
+                x: TEXTURE_WIDTH / 2,
+                y: TEXTURE_HEIGHT / 2,
                 width: 0,
                 height: 0,
             },
-            [0; 16],
+            [0; BUFFER_SIZE],
         );
     })
 }
 
 #[test]
 fn scissor_test_custom_rect() {
-    let mut expected_result = [0; 16];
-    expected_result[4..][..4].copy_from_slice(&[255; 4]);
+    let mut expected_result = [0; BUFFER_SIZE];
+    expected_result[((3 * BUFFER_SIZE) / 4)..][..BUFFER_SIZE / 4]
+        .copy_from_slice(&[255; BUFFER_SIZE / 4]);
     initialize_test(TestParameters::default(), |ctx| {
         scissor_test_impl(
             &ctx,
             Rect {
-                x: 1,
-                y: 0,
-                width: 1,
-                height: 1,
+                x: TEXTURE_WIDTH / 2,
+                y: TEXTURE_HEIGHT / 2,
+                width: TEXTURE_WIDTH / 2,
+                height: TEXTURE_HEIGHT / 2,
             },
             expected_result,
         );
