@@ -66,7 +66,6 @@ fn draw() {
             .take(BUFFER_SIZE / 4)
             .collect::<Vec<u8>>()),
     );
-    println!("dasndkas");
     initialize_test(
         TestParameters::default()
             .test_features_limits()
