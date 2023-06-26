@@ -1525,7 +1525,7 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for super::Queue {}
 #[cfg(target_arch = "wasm32")]

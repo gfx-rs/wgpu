@@ -106,7 +106,7 @@ impl Instance {
     }
 }
 
-// SAFE: WASM doesn't have threads
+// SAFE: Wasm doesn't have threads
 unsafe impl Sync for Instance {}
 unsafe impl Send for Instance {}
 
