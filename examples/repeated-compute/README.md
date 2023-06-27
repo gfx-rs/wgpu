@@ -1,7 +1,6 @@
 # repeated-compute
 
-Repeatedly performs the Collatz calculation used in `hello-compute` on sets of
-random numbers.
+Repeatedly performs the Collatz calculation used in `hello-compute` on sets of random numbers.
 
 ## Sample
 
