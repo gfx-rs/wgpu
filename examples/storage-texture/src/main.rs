@@ -22,11 +22,7 @@ use wasm_bindgen::prelude::*;
 const TEXTURE_DIMS: (usize, usize) = (512, 512);
 
 async fn run(path: Option<String>) {
-    //let mut texture_data = [0u8; TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4];
-    let mut texture_data = Vec::with_capacity(TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4);
-    for _ in 0..TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4 {
-        texture_data.push(0);
-    }
+    let mut texture_data = vec![0u8; TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4];
 
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -237,9 +233,8 @@ fn main() {
             .init();
 
         let path = std::env::args()
-            .skip(1)
-            .next()
-            .unwrap_or("please_don't_git_push_me.png".to_string());
+            .nth(1)
+            .unwrap_or_else(|| "please_don't_git_push_me.png".to_string());
         pollster::block_on(run(Some(path)));
     }
     #[cfg(target_arch = "wasm32")]
