@@ -23,6 +23,7 @@ wgpu.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
 wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["Document"] }
 
 [dev-dependencies]
 wasm-bindgen-test.workspace = true

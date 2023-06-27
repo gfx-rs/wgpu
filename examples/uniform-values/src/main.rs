@@ -296,7 +296,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
 fn main() {
     let event_loop = EventLoop::new();
-    let window = winit::window::Window::new(&event_loop).unwrap();
+    let window = winit::window::WindowBuilder::new()
+        .with_title("Remember: Use U/D to change sample count!")
+        .build(&event_loop)
+        .unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
@@ -307,15 +310,25 @@ fn main() {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("could not initialize logger");
         use winit::platform::web::WindowExtWebSys;
-        // On wasm, append the canvas to the document body
-        web_sys::window()
+
+        let document = web_sys::window()
             .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
-                    .ok()
-            })
-            .expect("couldn't append canvas to document body");
+            .expect("Failed to get document.");
+        let body = document.body().unwrap();
+        body.append_child(&web_sys::Element::from(window.canvas()))
+            .unwrap();
+        let controls_text = document
+            .create_element("p")
+            .expect("Failed to create controls text as element.");
+        controls_text.set_inner_html(
+            "Controls: <br/>
+Up, Down, Left, Right: Move view, <br/>
+Scroll: Zoom, <br/>
+U, D: Increase / decrease sample count.",
+        );
+        body.append_child(&controls_text)
+            .expect("Failed to append controls text to body.");
+
         wasm_bindgen_futures::spawn_local(run(event_loop, window));
     }
 }
