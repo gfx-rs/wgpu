@@ -12,7 +12,7 @@
 //! as pressing the arrow keys or zooming in or out.
 //! - At [8], the contents of the `AppState` are loaded into the uniform buffer in preparation.
 //! - At [9], the bind group with the uniform buffer is attached to the render pass.
-//! 
+//!
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
