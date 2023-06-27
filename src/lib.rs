@@ -289,7 +289,7 @@ pub(crate) type NamedExpressions = indexmap::IndexMap<
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct EarlyDepthTest {
-    conservative: Option<ConservativeDepth>,
+    pub conservative: Option<ConservativeDepth>,
 }
 /// Enables adjusting depth without disabling early Z.
 ///
