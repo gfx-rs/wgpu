@@ -30,6 +30,8 @@ vulkan = ["hal/vulkan"]
 gles = ["hal/gles"]
 dx11 = ["hal/dx11"]
 dx12 = ["hal/dx12"]
+
+# Use static linking for libraries. Disale to manually link. Enabled by default.
 link = ["hal/link"]
 
 # Support the Renderdoc graphics debugger:
