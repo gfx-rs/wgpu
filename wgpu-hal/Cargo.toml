@@ -106,8 +106,8 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wasm-bindgen = "0.2.86"
-web-sys = { version = "0.3.61", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
+wasm-bindgen = "0.2.87"
+web-sys = { version = "0.3.64", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
 js-sys = "0.3.64"
 
 [target.'cfg(unix)'.dependencies]
