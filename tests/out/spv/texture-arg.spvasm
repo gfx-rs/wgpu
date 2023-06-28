@@ -7,7 +7,6 @@ OpCapability Shader
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %28 "main" %26
 OpExecutionMode %28 OriginUpperLeft
-OpSource GLSL 450
 OpName %8 "Texture"
 OpName %10 "Sampler"
 OpName %13 "Passed_Texture"

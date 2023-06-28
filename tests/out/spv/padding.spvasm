@@ -6,7 +6,6 @@ OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %28 "vertex" %26
-OpSource GLSL 450
 OpMemberName %7 0 "a"
 OpName %7 "S"
 OpMemberName %8 0 "a"

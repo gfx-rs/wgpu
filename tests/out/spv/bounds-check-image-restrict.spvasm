@@ -10,7 +10,6 @@ OpCapability ImageQuery
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %269 "fragment_shader" %267
 OpExecutionMode %269 OriginUpperLeft
-OpSource GLSL 450
 OpName %21 "image_1d"
 OpName %23 "image_2d"
 OpName %25 "image_2d_array"

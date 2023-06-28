@@ -10,7 +10,6 @@ OpEntryPoint Fragment %44 "frag_main" %41 %43
 OpEntryPoint Fragment %60 "fs_extra" %59
 OpExecutionMode %44 OriginUpperLeft
 OpExecutionMode %60 OriginUpperLeft
-OpSource GLSL 450
 OpName %3 "c_scale"
 OpMemberName %7 0 "uv"
 OpMemberName %7 1 "position"

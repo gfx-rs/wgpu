@@ -181,7 +181,7 @@ fn backends(c: &mut Criterion) {
             let options = naga::back::spv::Options::default();
             for &(ref module, ref info) in inputs.iter() {
                 let mut writer = naga::back::spv::Writer::new(&options).unwrap();
-                writer.write(module, info, None, &mut data).unwrap();
+                writer.write(module, info, None, &None, &mut data).unwrap();
                 data.clear();
             }
         });
@@ -199,7 +199,7 @@ fn backends(c: &mut Criterion) {
                         entry_point: ep.name.clone(),
                     };
                     writer
-                        .write(module, info, Some(&pipeline_options), &mut data)
+                        .write(module, info, Some(&pipeline_options), &None, &mut data)
                         .unwrap();
                     data.clear();
                 }

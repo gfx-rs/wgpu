@@ -1,9 +1,10 @@
 use super::{
+    block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
-    make_local, Block, BlockContext, CachedConstant, CachedExpressions, EntryPointContext, Error,
-    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
-    LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options, PhysicalLayout,
-    PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    make_local, Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo,
+    EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
+    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, LoopContext, Options,
+    PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, UniqueArena},
@@ -329,6 +330,7 @@ impl Writer {
         info: &FunctionInfo,
         ir_module: &crate::Module,
         mut interface: Option<FunctionInterface>,
+        debug_info: &Option<DebugInfoInner>,
     ) -> Result<Word, Error> {
         let mut function = Function::default();
 
@@ -693,6 +695,7 @@ impl Writer {
             &ir_function.body,
             super::block::BlockExit::Return,
             LoopContext::default(),
+            debug_info.as_ref(),
         )?;
 
         // Consume the `BlockContext`, ending its borrows and letting the
@@ -726,6 +729,7 @@ impl Writer {
         entry_point: &crate::EntryPoint,
         info: &FunctionInfo,
         ir_module: &crate::Module,
+        debug_info: &Option<DebugInfoInner>,
     ) -> Result<Instruction, Error> {
         let mut interface_ids = Vec::new();
         let function_id = self.write_function(
@@ -736,6 +740,7 @@ impl Writer {
                 varying_ids: &mut interface_ids,
                 stage: entry_point.stage,
             }),
+            debug_info,
         )?;
 
         let exec_model = match entry_point.stage {
@@ -1724,6 +1729,7 @@ impl Writer {
         ir_module: &crate::Module,
         mod_info: &ModuleInfo,
         ep_index: Option<usize>,
+        debug_info: &Option<DebugInfo>,
     ) -> Result<(), Error> {
         fn has_view_index_check(
             ir_module: &crate::Module,
@@ -1771,9 +1777,23 @@ impl Writer {
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
             .to_words(&mut self.logical_layout.ext_inst_imports);
 
+        let mut debug_info_inner = None;
         if self.flags.contains(WriterFlags::DEBUG) {
-            self.debugs
-                .push(Instruction::source(spirv::SourceLanguage::GLSL, 450));
+            if let Some(debug_info) = debug_info.as_ref() {
+                let source_file_id = self.id_gen.next();
+                self.debugs
+                    .push(Instruction::string(debug_info.file_name, source_file_id));
+
+                debug_info_inner = Some(DebugInfoInner {
+                    source_code: debug_info.source_code,
+                    source_file_id,
+                });
+                self.debugs.push(Instruction::source(
+                    spirv::SourceLanguage::Unknown,
+                    0,
+                    &debug_info_inner,
+                ));
+            }
         }
 
         self.constant_ids.resize(ir_module.constants.len(), 0);
@@ -1858,7 +1878,7 @@ impl Writer {
                     continue;
                 }
             }
-            let id = self.write_function(ir_function, info, ir_module, None)?;
+            let id = self.write_function(ir_function, info, ir_module, None, &debug_info_inner)?;
             self.lookup_function.insert(handle, id);
         }
 
@@ -1868,7 +1888,8 @@ impl Writer {
                 continue;
             }
             let info = mod_info.get_entry_point(index);
-            let ep_instruction = self.write_entry_point(ir_ep, info, ir_module)?;
+            let ep_instruction =
+                self.write_entry_point(ir_ep, info, ir_module, &debug_info_inner)?;
             ep_instruction.to_words(&mut self.logical_layout.entry_points);
         }
 
@@ -1910,6 +1931,7 @@ impl Writer {
         ir_module: &crate::Module,
         info: &ModuleInfo,
         pipeline_options: Option<&PipelineOptions>,
+        debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
         self.reset();
@@ -1927,7 +1949,7 @@ impl Writer {
             None => None,
         };
 
-        self.write_logical_layout(ir_module, info, ep_index)?;
+        self.write_logical_layout(ir_module, info, ep_index, debug_info)?;
         self.write_physical_layout();
 
         self.physical_layout.in_words(words);

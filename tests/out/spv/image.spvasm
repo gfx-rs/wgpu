@@ -23,7 +23,6 @@ OpExecutionMode %299 OriginUpperLeft
 OpExecutionMode %444 OriginUpperLeft
 OpExecutionMode %499 OriginUpperLeft
 OpExecutionMode %534 OriginUpperLeft
-OpSource GLSL 450
 OpName %35 "image_mipmapped_src"
 OpName %37 "image_multisampled_src"
 OpName %39 "image_depth_multisampled_src"

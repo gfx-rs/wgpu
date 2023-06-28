@@ -11,7 +11,6 @@ OpEntryPoint Fragment %286 "foo_frag" %285
 OpEntryPoint GLCompute %306 "assign_through_ptr" %309
 OpExecutionMode %286 OriginUpperLeft
 OpExecutionMode %306 LocalSize 1 1 1
-OpSource GLSL 450
 OpMemberName %12 0 "a"
 OpMemberName %12 1 "b"
 OpMemberName %12 2 "c"

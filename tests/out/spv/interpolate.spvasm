@@ -9,7 +9,6 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %29 "vert_main" %13 %15 %17 %19 %21 %23 %24 %25 %26
 OpEntryPoint Fragment %109 "frag_main" %88 %91 %94 %97 %100 %103 %105 %107
 OpExecutionMode %109 OriginUpperLeft
-OpSource GLSL 450
 OpMemberName %8 0 "position"
 OpMemberName %8 1 "_flat"
 OpMemberName %8 2 "_linear"

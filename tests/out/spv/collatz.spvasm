@@ -8,7 +8,6 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %52 "main" %49
 OpExecutionMode %52 LocalSize 1 1 1
-OpSource GLSL 450
 OpMemberName %5 0 "data"
 OpName %5 "PrimeIndices"
 OpName %7 "v_indices"

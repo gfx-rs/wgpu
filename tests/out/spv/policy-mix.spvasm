@@ -8,7 +8,6 @@ OpCapability Linkage
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpSource GLSL 450
 OpMemberName %14 0 "a"
 OpName %14 "InStorage"
 OpMemberName %17 0 "a"

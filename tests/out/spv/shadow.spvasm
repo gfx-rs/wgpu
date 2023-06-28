@@ -11,7 +11,6 @@ OpEntryPoint Fragment %149 "fs_main" %140 %143 %146 %148
 OpEntryPoint Fragment %218 "fs_main_without_storage" %211 %213 %215 %217
 OpExecutionMode %149 OriginUpperLeft
 OpExecutionMode %218 OriginUpperLeft
-OpSource GLSL 450
 OpName %7 "c_max_lights"
 OpMemberName %13 0 "view_proj"
 OpMemberName %13 1 "num_lights"
