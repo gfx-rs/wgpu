@@ -22,7 +22,7 @@ targets = [
 [lib]
 
 [features]
-default = []
+default = ["link"]
 
 # Backends, passed through to wgpu-hal
 metal = ["hal/metal"]
@@ -30,6 +30,9 @@ vulkan = ["hal/vulkan"]
 gles = ["hal/gles"]
 dx11 = ["hal/dx11"]
 dx12 = ["hal/dx12"]
+
+# Use static linking for libraries. Disale to manually link. Enabled by default.
+link = ["hal/link"]
 
 # Support the Renderdoc graphics debugger:
 # https://renderdoc.org/
@@ -80,6 +83,7 @@ version = "0.16"
 package = "wgpu-hal"
 path = "../wgpu-hal"
 version = "0.16"
+default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 web-sys = { version = "0.3.60", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
