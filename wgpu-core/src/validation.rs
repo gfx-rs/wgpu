@@ -409,7 +409,7 @@ impl Resource {
                                 )
                             }
                         };
-                        if self.class != class {
+                        if !address_space_matches(self.class, class) {
                             return Err(BindingError::WrongAddressSpace {
                                 binding: class,
                                 shader: self.class,
@@ -1235,5 +1235,74 @@ impl Interface {
             })
             .collect();
         Ok(outputs)
+    }
+}
+
+fn address_space_matches(shader: naga::AddressSpace, binding: naga::AddressSpace) -> bool {
+    match (shader, binding) {
+        (
+            naga::AddressSpace::Storage {
+                access: access_shader,
+            },
+            naga::AddressSpace::Storage {
+                access: access_pipeline,
+            },
+        ) => {
+            // Allow read- and write-only usages to match read-write layouts:
+            (access_shader & access_pipeline) == access_shader
+        }
+        (a, b) => a == b,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::address_space_matches;
+
+    #[test]
+    fn address_space_matches_correctly() {
+        assert!(address_space_matches(
+            naga::AddressSpace::Uniform,
+            naga::AddressSpace::Uniform
+        ));
+
+        assert!(!address_space_matches(
+            naga::AddressSpace::Uniform,
+            naga::AddressSpace::Storage {
+                access: naga::StorageAccess::LOAD
+            }
+        ));
+
+        let test_cases = [
+            (naga::StorageAccess::LOAD, naga::StorageAccess::LOAD, true),
+            (naga::StorageAccess::STORE, naga::StorageAccess::LOAD, false),
+            (naga::StorageAccess::LOAD, naga::StorageAccess::STORE, false),
+            (naga::StorageAccess::STORE, naga::StorageAccess::STORE, true),
+            (
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                true,
+            ),
+            (
+                naga::StorageAccess::STORE,
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                true,
+            ),
+            (
+                naga::StorageAccess::LOAD,
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                true,
+            ),
+        ];
+
+        for (shader, binding, expect_match) in test_cases {
+            assert_eq!(
+                expect_match,
+                address_space_matches(
+                    naga::AddressSpace::Storage { access: shader },
+                    naga::AddressSpace::Storage { access: binding }
+                )
+            );
+        }
     }
 }
