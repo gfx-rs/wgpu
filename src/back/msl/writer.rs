@@ -955,7 +955,7 @@ impl<W: Write> Writer<W> {
         mut address: TexelAddress,
         context: &ExpressionContext,
     ) -> BackendResult {
-        match context.policies.image {
+        match context.policies.image_load {
             proc::BoundsCheckPolicy::Restrict => {
                 // Use the cached restricted level of detail, if any. Omit the
                 // level altogether for 1D textures.
@@ -1024,7 +1024,7 @@ impl<W: Write> Writer<W> {
         value: Handle<crate::Expression>,
         context: &StatementContext,
     ) -> BackendResult {
-        match context.expression.policies.image {
+        match context.expression.policies.image_store {
             proc::BoundsCheckPolicy::Restrict => {
                 // We don't have a restricted level value, because we don't
                 // support writes to mipmapped textures.
@@ -2507,7 +2507,7 @@ impl<W: Write> Writer<W> {
             None => return Ok(()),
         };
 
-        if context.expression.policies.image != index::BoundsCheckPolicy::Restrict
+        if context.expression.policies.image_load != index::BoundsCheckPolicy::Restrict
             || !context.expression.image_needs_lod(image)
         {
             return Ok(());

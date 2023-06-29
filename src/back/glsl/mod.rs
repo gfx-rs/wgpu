@@ -1824,7 +1824,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             ..
                         } = *ctx.info[image].ty.inner_with(&self.module.types)
                         {
-                            if let proc::BoundsCheckPolicy::Restrict = self.policies.image {
+                            if let proc::BoundsCheckPolicy::Restrict = self.policies.image_load {
                                 write!(self.out, "{level}")?;
                                 self.write_clamped_lod(ctx, handle, image, level_expr)?
                             }
@@ -3532,11 +3532,22 @@ impl<'a, W: Write> Writer<'a, W> {
         // and the policy to be used with it.
         let (fun_name, policy) = match class {
             // Sampled images inherit the policy from the user passed policies
-            crate::ImageClass::Sampled { .. } => ("texelFetch", self.policies.image),
+            crate::ImageClass::Sampled { .. } => ("texelFetch", self.policies.image_load),
             crate::ImageClass::Storage { .. } => {
-                // OpenGL 4.2 Core §3.9.20 defines that out of bounds texels in `imageLoad`s
-                // always return zero values so we don't need to generate bounds checks
-                ("imageLoad", proc::BoundsCheckPolicy::Unchecked)
+                // OpenGL ES 3.1 mentiones in Chapter "8.22 Texture Image Loads and Stores" that:
+                // "Invalid image loads will return a vector where the value of R, G, and B components
+                // is 0 and the value of the A component is undefined."
+                //
+                // OpenGL 4.2 Core mentiones in Chapter "3.9.20 Texture Image Loads and Stores" that:
+                // "Invalid image loads will return zero."
+                //
+                // So, we only inject bounds checks for ES
+                let policy = if self.options.version.is_es() {
+                    self.policies.image_load
+                } else {
+                    proc::BoundsCheckPolicy::Unchecked
+                };
+                ("imageLoad", policy)
             }
             // TODO: Is there even a function for this?
             crate::ImageClass::Depth { multi: _ } => {

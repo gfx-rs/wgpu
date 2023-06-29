@@ -443,7 +443,7 @@ impl<'a, W> Writer<'a, W> {
                 Expression::ImageLoad {
                     sample, level, ..
                 } => {
-                    if policies.image != crate::proc::BoundsCheckPolicy::Unchecked {
+                    if policies.image_load != crate::proc::BoundsCheckPolicy::Unchecked {
                         if sample.is_some() {
                             features.request(Features::TEXTURE_SAMPLES)
                         }

@@ -2,7 +2,8 @@
 	bounds_check_policies: (
 		index: Restrict,
 		buffer: Unchecked,
-		image: ReadZeroSkipWrite,
+		image_load: ReadZeroSkipWrite,
+		image_store: ReadZeroSkipWrite,
 	),
 	spv: (
 		version: (1, 1),

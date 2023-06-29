@@ -48,6 +48,7 @@
 	bounds_check_policies: (
 		index: ReadZeroSkipWrite,
 		buffer: ReadZeroSkipWrite,
-		image: ReadZeroSkipWrite,
+		image_load: ReadZeroSkipWrite,
+		image_store: ReadZeroSkipWrite,
 	)
 )

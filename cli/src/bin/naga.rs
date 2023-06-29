@@ -30,12 +30,19 @@ struct Args {
     #[argh(option)]
     buffer_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
-    /// what policy to use for texture bounds checking.
+    /// what policy to use for texture loads bounds checking.
     ///
     /// Possible values are the same as for `index-bounds-check-policy`. If
     /// omitted, defaults to the index bounds check policy.
     #[argh(option)]
-    image_bounds_check_policy: Option<BoundsCheckPolicyArg>,
+    image_load_bounds_check_policy: Option<BoundsCheckPolicyArg>,
+
+    /// what policy to use for texture stores bounds checking.
+    ///
+    /// Possible values are the same as for `index-bounds-check-policy`. If
+    /// omitted, defaults to the index bounds check policy.
+    #[argh(option)]
+    image_store_bounds_check_policy: Option<BoundsCheckPolicyArg>,
 
     /// directory to dump the SPIR-V block context dump to
     #[argh(option)]
@@ -248,7 +255,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-    params.bounds_check_policies.image = match args.image_bounds_check_policy {
+    params.bounds_check_policies.image_load = match args.image_load_bounds_check_policy {
+        Some(arg) => arg.0,
+        None => params.bounds_check_policies.index,
+    };
+    params.bounds_check_policies.image_store = match args.image_store_bounds_check_policy {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };

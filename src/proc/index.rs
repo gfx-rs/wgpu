@@ -106,17 +106,27 @@ pub struct BoundsCheckPolicies {
     #[cfg_attr(feature = "deserialize", serde(default))]
     pub buffer: BoundsCheckPolicy,
 
-    /// How should the generated code handle image texel references that are out
+    /// How should the generated code handle image texel loads that are out
     /// of range?
     ///
-    /// This controls the behavior of [`ImageLoad`] expressions and
-    /// [`ImageStore`] statements when a coordinate, texture array index, level
-    /// of detail, or multisampled sample number is out of range.
+    /// This controls the behavior of [`ImageLoad`] expressions when a coordinate,
+    /// texture array index, level of detail, or multisampled sample number is out of range.
     ///
     /// [`ImageLoad`]: crate::Expression::ImageLoad
+    #[cfg_attr(feature = "deserialize", serde(default))]
+    pub image_load: BoundsCheckPolicy,
+
+    /// How should the generated code handle image texel stores that are out
+    /// of range?
+    ///
+    /// This controls the behavior of [`ImageStore`] statements when a coordinate,
+    /// texture array index, level of detail, or multisampled sample number is out of range.
+    ///
+    /// This policy should't be needed since all backends should ignore OOB writes.
+    ///
     /// [`ImageStore`]: crate::Statement::ImageStore
     #[cfg_attr(feature = "deserialize", serde(default))]
-    pub image: BoundsCheckPolicy,
+    pub image_store: BoundsCheckPolicy,
 
     /// How should the generated code handle binding array indexes that are out of bounds.
     #[cfg_attr(feature = "deserialize", serde(default))]
@@ -163,7 +173,10 @@ impl BoundsCheckPolicies {
 
     /// Return `true` if any of `self`'s policies are `policy`.
     pub fn contains(&self, policy: BoundsCheckPolicy) -> bool {
-        self.index == policy || self.buffer == policy || self.image == policy
+        self.index == policy
+            || self.buffer == policy
+            || self.image_load == policy
+            || self.image_store == policy
     }
 }
 
@@ -261,7 +274,7 @@ pub fn find_checked_indexes(
                     level,
                     ..
                 } => {
-                    if policies.image == BoundsCheckPolicy::ReadZeroSkipWrite {
+                    if policies.image_load == BoundsCheckPolicy::ReadZeroSkipWrite {
                         guarded_indices.insert(coordinate.index());
                         if let Some(array_index) = array_index {
                             guarded_indices.insert(array_index.index());
