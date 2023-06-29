@@ -33,7 +33,7 @@ targets = [
 [lib]
 
 [features]
-default = []
+default = ["link"]
 metal = ["naga/msl-out", "block"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "khronos-egl", "libloading"]
@@ -44,6 +44,7 @@ windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
 fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
+link = ["metal/link"]
 
 [[example]]
 name = "halmark"
@@ -102,7 +103,7 @@ d3d12 = { version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "
 # backend: Metal
 block = { version = "0.1", optional = true }
 
-metal = "0.25.0"
+metal = { git = "https://github.com/gfx-rs/metal-rs.git", rev = "a6a0446", default_features = false }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
