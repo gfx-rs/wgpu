@@ -43,8 +43,9 @@ pub use wgt::{
     StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
 
 #[cfg(any(
@@ -66,8 +67,6 @@ pub use ::wgc as core;
 // specific, but these need to depend on web-sys.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
-#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -80,7 +79,22 @@ pub enum ErrorFilter {
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
 type C = dyn DynContext;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 type Data = dyn Any + Send + Sync;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type Data = dyn Any;
 
 /// Context for all other wgpu objects. Instance of wgpu.
 ///
@@ -94,6 +108,13 @@ type Data = dyn Any + Send + Sync;
 pub struct Instance {
     context: Arc<C>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 /// Handle to a physical graphics and/or compute device.
@@ -110,6 +131,13 @@ pub struct Adapter {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
 impl Drop for Adapter {
@@ -134,6 +162,13 @@ pub struct Device {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Device: Send, Sync);
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
@@ -144,6 +179,13 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex(ObjectId, Arc<crate::Data>);
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
 /// The main purpose of this struct is to resolve mapped ranges (convert sizes
@@ -220,6 +262,13 @@ pub struct Buffer {
     usage: BufferUsages,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 /// Slice into a [`Buffer`].
@@ -236,6 +285,13 @@ pub struct BufferSlice<'a> {
     offset: BufferAddress,
     size: Option<BufferSize>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
 
 /// Handle to a texture on the GPU.
@@ -251,6 +307,13 @@ pub struct Texture {
     owned: bool,
     descriptor: TextureDescriptor<'static>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
 /// Handle to a texture view.
@@ -265,6 +328,13 @@ pub struct TextureView {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
 /// Handle to a sampler.
@@ -282,6 +352,13 @@ pub struct Sampler {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
 impl Drop for Sampler {
@@ -322,6 +399,13 @@ pub struct Surface {
     // been created is is additionally wrapped in an option.
     config: Mutex<Option<SurfaceConfiguration>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
 impl Drop for Surface {
@@ -349,6 +433,13 @@ pub struct BindGroupLayout {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
 impl Drop for BindGroupLayout {
@@ -374,6 +465,13 @@ pub struct BindGroup {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 impl Drop for BindGroup {
@@ -398,6 +496,13 @@ pub struct ShaderModule {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
 impl Drop for ShaderModule {
@@ -490,6 +595,13 @@ pub struct PipelineLayout {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
 impl Drop for PipelineLayout {
@@ -513,6 +625,13 @@ pub struct RenderPipeline {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl Drop for RenderPipeline {
@@ -547,6 +666,13 @@ pub struct ComputePipeline {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl Drop for ComputePipeline {
@@ -584,6 +710,13 @@ pub struct CommandBuffer {
     id: Option<ObjectId>,
     data: Option<Box<Data>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
 impl Drop for CommandBuffer {
@@ -612,6 +745,13 @@ pub struct CommandEncoder {
     id: Option<ObjectId>,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 
 impl Drop for CommandEncoder {
@@ -688,6 +828,13 @@ pub struct RenderBundle {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
 impl Drop for RenderBundle {
@@ -709,6 +856,13 @@ pub struct QuerySet {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 impl Drop for QuerySet {
@@ -732,6 +886,13 @@ pub struct Queue {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 /// Resource that can be bound to a pipeline.
@@ -777,6 +938,13 @@ pub enum BindingResource<'a> {
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 
 /// Describes the segment of a buffer to bind.
@@ -808,6 +976,13 @@ pub struct BufferBinding<'a> {
     /// Size of the binding in bytes, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
@@ -869,6 +1044,13 @@ pub struct RenderPassColorAttachment<'tex> {
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassColorAttachment: Send, Sync);
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
@@ -886,6 +1068,13 @@ pub struct RenderPassDepthStencilAttachment<'tex> {
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil_ops: Option<Operations<u32>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment: Send, Sync);
 
 // The underlying types are also exported so that documentation shows up for them
@@ -900,6 +1089,13 @@ pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
 pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
 /// Describes a [`Device`].
 ///
@@ -952,6 +1148,13 @@ static_assertions::assert_impl_all!(QuerySetDescriptor: Send, Sync);
 pub use wgt::Maintain as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Maintain: Send, Sync);
 
 /// Describes a [`TextureView`].
@@ -1007,6 +1210,13 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
     pub push_constant_ranges: &'a [PushConstantRange],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(PipelineLayoutDescriptor: Send, Sync);
 
 /// Describes a [`Sampler`].
@@ -1076,6 +1286,13 @@ pub struct BindGroupEntry<'a> {
     /// Resource to attach to the binding
     pub resource: BindingResource<'a>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroupEntry: Send, Sync);
 
 /// Describes a group of bindings and the resources to be bound.
@@ -1093,6 +1310,13 @@ pub struct BindGroupDescriptor<'a> {
     /// The resources to bind to this bind group.
     pub entries: &'a [BindGroupEntry<'a>],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroupDescriptor: Send, Sync);
 
 /// Describes the attachments of a render pass.
@@ -1113,6 +1337,13 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
@@ -1148,6 +1379,13 @@ pub struct VertexState<'a> {
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(VertexState: Send, Sync);
 
 /// Describes the fragment processing in a render pipeline.
@@ -1166,6 +1404,13 @@ pub struct FragmentState<'a> {
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(FragmentState: Send, Sync);
 
 /// Describes a render (graphics) pipeline.
@@ -1194,6 +1439,13 @@ pub struct RenderPipelineDescriptor<'a> {
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 
 /// Describes the attachments of a compute pass.
@@ -1227,6 +1479,13 @@ pub struct ComputePipelineDescriptor<'a> {
     /// and no return value in the shader.
     pub entry_point: &'a str,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
@@ -1235,6 +1494,13 @@ pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ImageCopyBuffer: Send, Sync);
 
 pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
@@ -1243,6 +1509,13 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
 pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
@@ -1252,6 +1525,13 @@ pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
 /// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
 pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
 /// Describes a [`BindGroupLayout`].
@@ -1308,8 +1588,15 @@ pub struct SurfaceTexture {
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
     presented: bool,
-    detail: Box<dyn Any + Send + Sync>,
+    detail: Box<dyn AnyWasmNotSendSync>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 
 /// Result of an unsuccessful call to [`Surface::get_current_texture`].
@@ -1463,7 +1750,7 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions,
-    ) -> impl Future<Output = Option<Adapter>> + Send {
+    ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
         async move {
@@ -1743,7 +2030,7 @@ impl Adapter {
         &self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
+    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let device = DynContext::adapter_request_device(
             &*self.context,
@@ -2257,7 +2544,7 @@ impl Device {
     }
 
     /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + Send {
+    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.context
             .device_pop_error_scope(&self.id, self.data.as_ref())
     }
@@ -2562,7 +2849,7 @@ impl<'a> BufferSlice<'a> {
     pub fn map_async(
         &self,
         mode: MapMode,
-        callback: impl FnOnce(Result<(), BufferAsyncError>) + Send + 'static,
+        callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(
@@ -3970,6 +4257,13 @@ pub struct QueueWriteBufferView<'a> {
     offset: BufferAddress,
     inner: Box<dyn context::QueueWriteBuffer>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
 impl Deref for QueueWriteBufferView<'_> {
@@ -4609,16 +4903,55 @@ pub enum Error {
     /// Out of memory error
     OutOfMemory {
         /// Lower level source of the error.
+        #[cfg(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        ))]
         source: Box<dyn error::Error + Send + 'static>,
+        /// Lower level source of the error.
+        #[cfg(not(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        )))]
+        source: Box<dyn error::Error + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
         /// Lower level source of the error.
+        #[cfg(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        ))]
         source: Box<dyn error::Error + Send + 'static>,
+        /// Lower level source of the error.
+        #[cfg(not(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        )))]
+        source: Box<dyn error::Error + 'static>,
         /// Description of the validation error.
         description: String,
     },
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Error: Send);
 
 impl error::Error for Error {
@@ -4635,6 +4968,38 @@ impl Display for Error {
         match self {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),
+        }
+    }
+}
+
+use send_sync::*;
+
+mod send_sync {
+    use std::any::Any;
+    use std::fmt;
+
+    use wgt::{WasmNotSend, WasmNotSync};
+
+    pub trait AnyWasmNotSendSync: Any + WasmNotSend + WasmNotSync {
+        fn upcast_any_ref(&self) -> &dyn Any;
+    }
+    impl<T: Any + WasmNotSend + WasmNotSync> AnyWasmNotSendSync for T {
+        #[inline]
+        fn upcast_any_ref(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    impl dyn AnyWasmNotSendSync + 'static {
+        #[inline]
+        pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+            self.upcast_any_ref().downcast_ref::<T>()
+        }
+    }
+
+    impl fmt::Debug for dyn AnyWasmNotSendSync {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("Any").finish_non_exhaustive()
         }
     }
 }

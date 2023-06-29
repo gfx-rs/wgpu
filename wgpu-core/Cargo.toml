@@ -51,6 +51,8 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
+# Implement `Send` and `Sync` on Wasm.
+fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "wgt/fragile-send-sync-non-atomic-wasm"]
 
 [dependencies]
 arrayvec = "0.7"

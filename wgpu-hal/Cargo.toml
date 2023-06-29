@@ -43,6 +43,7 @@ dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "range-alloc", "winapi/std", "winap
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
+fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
 link = ["metal/link"]
 
 [[example]]

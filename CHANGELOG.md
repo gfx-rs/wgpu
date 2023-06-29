@@ -68,6 +68,7 @@ Bottom level categories:
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
 - Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763).
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
+- On Web, types don't implement `Send` or `Sync` anymore. By @daxpedda in [#3691](https://github.com/gfx-rs/wgpu/pull/3691)
 
 ### Bug Fixes
 

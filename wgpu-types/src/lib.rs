@@ -5917,9 +5917,17 @@ impl std::ops::Deref for ExternalImageSource {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for ExternalImageSource {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for ExternalImageSource {}
 
 /// Color spaces supported on the web.
@@ -6316,4 +6324,75 @@ impl Default for InstanceDescriptor {
             dx12_shader_compiler: Dx12Compiler::default(),
         }
     }
+}
+
+pub use send_sync::*;
+
+#[doc(hidden)]
+mod send_sync {
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    pub trait WasmNotSend: Send {}
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    impl<T: Send> WasmNotSend for T {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    pub trait WasmNotSend {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    impl<T> WasmNotSend for T {}
+
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    pub trait WasmNotSync: Sync {}
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    impl<T: Sync> WasmNotSync for T {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    pub trait WasmNotSync {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    impl<T> WasmNotSync for T {}
 }

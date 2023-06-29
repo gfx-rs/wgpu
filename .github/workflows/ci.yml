@@ -138,6 +138,7 @@ jobs:
           set -e
 
           # build for WebGPU
+          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
