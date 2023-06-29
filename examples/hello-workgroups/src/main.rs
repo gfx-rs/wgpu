@@ -1,3 +1,12 @@
+//! This example assumes that you've seen hello-compute and or repeated-compute
+//! and thus have a general understanding of what's going on here.
+//!
+//! There's an explainer on what this example does exactly and what workgroups
+//! are and the meaning of `@workgroup(size_x, size_y, size_z)` in the
+//! README. Also see commenting in shader.wgsl as well.
+//!
+//! Only parts specific to this example will be commented.
+
 use wgpu::util::DeviceExt;
 
 async fn run() {
@@ -105,6 +114,8 @@ async fn run() {
             command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
+        /* Note that since each workgroup will cover both arrays, we only need to
+        cover the length of one array. */
         compute_pass.dispatch_workgroups(local_a.len() as u32, 1, 1);
     }
     queue.submit(Some(command_encoder.finish()));
@@ -142,11 +153,11 @@ async fn get_data<T: bytemuck::Pod>(
     let mut command_encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     command_encoder.copy_buffer_to_buffer(
-        &storage_buffer,
+        storage_buffer,
         0,
-        &staging_buffer,
+        staging_buffer,
         0,
-        std::mem::size_of_val(&output.len()) as u64,
+        std::mem::size_of_val(output) as u64,
     );
     queue.submit(Some(command_encoder.finish()));
     let buffer_slice = staging_buffer.slice(..);
@@ -170,7 +181,14 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        console_log::init().expect("could not initialize logger");
+        console_log::init_with_level(log::Level::Info).expect("could not initialize logger");
+
+        web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.body())
+            .expect("Could not get document / body.")
+            .set_inner_html("<p>Nothing to see here! Open the console!</p>");
+
         wasm_bindgen_futures::spawn_local(run());
     }
 }

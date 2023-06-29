@@ -3203,6 +3203,8 @@ dependencies = [
  "futures-intrusive",
  "log",
  "pollster",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wgpu",
 ]
 
