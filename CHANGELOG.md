@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### DX12
+
+- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
+
 ## v0.16.1 (2023-05-24)
 
 ### Bug Fixes
