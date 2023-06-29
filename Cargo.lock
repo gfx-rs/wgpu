@@ -3193,6 +3193,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-hello-workgroups-example"
+version = "0.16.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "pollster",
+ "wgpu",
+]
+
+[[package]]
 name = "wgpu-info"
 version = "0.16.0"
 dependencies = [
