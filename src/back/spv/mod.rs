@@ -739,8 +739,6 @@ pub fn write_vec(
     let mut words: Vec<u32> = Vec::new();
     let mut w = Writer::new(options)?;
 
-    if options.flags.contains(WriterFlags::DEBUG) {}
-
     w.write(
         module,
         info,

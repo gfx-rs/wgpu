@@ -421,14 +421,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 params.spv.bounds_check_policies = params.bounds_check_policies;
 
                 //Insert Debug infos
-                let debug_info = args.generate_debug_symbols.and_then(|debug| {
+                params.spv.debug_info = args.generate_debug_symbols.and_then(|debug| {
                     params.spv.flags.set(spv::WriterFlags::DEBUG, debug);
-                    Some(spv::DebugInfo {
-                        source_code: input_text.as_ref()?,
-                        file_name: input_path.file_name().and_then(std::ffi::OsStr::to_str)?,
-                    })
+
+                    if debug {
+                        Some(spv::DebugInfo {
+                            source_code: input_text.as_ref()?,
+                            file_name: input_path.file_name().and_then(std::ffi::OsStr::to_str)?,
+                        })
+                    } else {
+                        None
+                    }
                 });
-                params.spv.debug_info = debug_info;
 
                 params.spv.flags.set(
                     spv::WriterFlags::ADJUST_COORDINATE_SPACE,
