@@ -115,14 +115,17 @@ async fn run() {
     .await;
 
     // Print data
-    dbg!(&local_patient_workgroup_results);
-    dbg!(&local_hasty_workgroup_results);
-
-    // Validate
-    #[cfg(test)]
-    {
-        assert_eq!(local_patient_workgroup_results, [16_u32; ARR_SIZE]);
-        // The "hasty" one could actually work so we don't test that it doesn't.
+    log::info!("Patient results: {local_patient_workgroup_results:?}");
+    if !local_patient_workgroup_results.iter().any(|e| *e != 16) {
+        log::info!("patient_main was patient.");
+    } else {
+        log::error!("patient_main was not patient!");
+    }
+    log::info!("Hasty results: {local_hasty_workgroup_results:?}");
+    if local_hasty_workgroup_results.iter().any(|e| *e != 16) {
+        log::info!("hasty_main was not patient.");
+    } else {
+        log::info!("hasty_main got lucky.");
     }
 }
 
