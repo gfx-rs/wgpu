@@ -216,6 +216,7 @@ impl super::Validator {
             crate::Expression::Literal(_) => {}
             crate::Expression::Constant(constant) => {
                 validate_constant(constant)?;
+                handle.check_dep(constants[constant].init)?;
             }
             crate::Expression::ZeroValue(ty) => {
                 validate_type(ty)?;
@@ -659,5 +660,53 @@ impl<T> Handle<T> {
 impl<T> crate::arena::Range<T> {
     pub(self) fn check_valid_for(&self, arena: &Arena<T>) -> Result<(), BadRangeError> {
         arena.check_contains_range(self)
+    }
+}
+
+#[test]
+#[cfg(feature = "validate")]
+fn constant_deps() {
+    use crate::{Constant, Expression, Literal, Span, Type, TypeInner};
+
+    let nowhere = Span::default();
+
+    let mut types = UniqueArena::new();
+    let mut const_exprs = Arena::new();
+    let mut fun_exprs = Arena::new();
+    let mut constants = Arena::new();
+
+    let i32_handle = types.insert(
+        Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: crate::ScalarKind::Sint,
+                width: 4,
+            },
+        },
+        nowhere,
+    );
+
+    // Construct a self-referential constant by misusing a handle to
+    // fun_exprs as a constant initializer.
+    let fun_expr = fun_exprs.append(Expression::Literal(Literal::I32(42)), nowhere);
+    let self_referential_const = constants.append(
+        Constant {
+            name: None,
+            r#override: crate::Override::None,
+            ty: i32_handle,
+            init: fun_expr,
+        },
+        nowhere,
+    );
+    let _self_referential_expr =
+        const_exprs.append(Expression::Constant(self_referential_const), nowhere);
+
+    for handle_and_expr in const_exprs.iter() {
+        assert!(super::Validator::validate_const_expression_handles(
+            handle_and_expr,
+            &constants,
+            &types,
+        )
+        .is_err());
     }
 }
