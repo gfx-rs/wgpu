@@ -53,3 +53,7 @@ See [the WGSL spec on compute shader execution](https://www.w3.org/TR/2023/WD-WG
 ### Workgroups and their Invocations in a Global Scope
 
 As mentioned above, invocations exist both within the context of a workgroup grid as well as a compute shader grid which is a grid, divided into workgroup sections, of invocations that represents the whole of the dispatch. Similar to how `@builtin(local_invocation_id)` gets you the place of the invocation within the workgroup grid, `@builtin(global_invocation_id)` gets you the place of the invocation within the entire compute shader grid. Slight trivia: you might imagine that this is computed from `local_invocation_id` and `workgroup_id` but it's actually the opposite. Everything operates on the compute shader grid, the workgroups are imagined sectors within the compute shader grid, and `local_invocation_id` and `workgroup_id` are calculated based on global id and known workgroup size. Yes, we live in a matrix... of compute shader invocations. This isn't super useful information but it can help fit things into a larger picture.
+
+## Barriers and Workgroups
+
+Arguably, workgroups are at their most useful when being used alongside barriers. Since barriers are already explained more thoroughly in the hello-synchronization example, this section will be short. Despite affecting different memory address spaces, all synchronization functions affect invocations on a workgroup level, synchronizing the workgroup. See [hello-synchronization/README.md](../hello-synchronization/README.md) for more.
