@@ -3177,8 +3177,10 @@ dependencies = [
  "log",
  "pollster",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgpu-test",
 ]
 
 [[package]]

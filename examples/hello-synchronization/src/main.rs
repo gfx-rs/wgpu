@@ -14,6 +14,35 @@ async fn run() {
         .await
         .unwrap();
 
+    execute(
+        &device,
+        &queue,
+        &mut local_patient_workgroup_results[..],
+        &mut local_hasty_workgroup_results[..],
+    )
+    .await;
+
+    // Print data
+    log::info!("Patient results: {local_patient_workgroup_results:?}");
+    if !local_patient_workgroup_results.iter().any(|e| *e != 16) {
+        log::info!("patient_main was patient.");
+    } else {
+        log::error!("patient_main was not patient!");
+    }
+    log::info!("Hasty results: {local_hasty_workgroup_results:?}");
+    if local_hasty_workgroup_results.iter().any(|e| *e != 16) {
+        log::info!("hasty_main was not patient.");
+    } else {
+        log::info!("hasty_main got lucky.");
+    }
+}
+
+async fn execute(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    local_patient_workgroup_results: &mut [u32],
+    local_hasty_workgroup_results: &mut [u32],
+) {
     let shaders_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shaders.wgsl"))),
@@ -21,13 +50,13 @@ async fn run() {
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(&local_patient_workgroup_results) as u64,
+        size: std::mem::size_of_val(local_patient_workgroup_results) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(&local_patient_workgroup_results) as u64,
+        size: std::mem::size_of_val(local_patient_workgroup_results) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -86,11 +115,11 @@ async fn run() {
     queue.submit(Some(command_encoder.finish()));
 
     get_data(
-        &mut local_patient_workgroup_results[..],
+        local_patient_workgroup_results,
         &storage_buffer,
         &output_staging_buffer,
-        &device,
-        &queue,
+        device,
+        queue,
     )
     .await;
 
@@ -106,27 +135,13 @@ async fn run() {
     queue.submit(Some(command_encoder.finish()));
 
     get_data(
-        &mut local_hasty_workgroup_results[..],
+        local_hasty_workgroup_results,
         &storage_buffer,
         &output_staging_buffer,
-        &device,
-        &queue,
+        device,
+        queue,
     )
     .await;
-
-    // Print data
-    log::info!("Patient results: {local_patient_workgroup_results:?}");
-    if !local_patient_workgroup_results.iter().any(|e| *e != 16) {
-        log::info!("patient_main was patient.");
-    } else {
-        log::error!("patient_main was not patient!");
-    }
-    log::info!("Hasty results: {local_hasty_workgroup_results:?}");
-    if local_hasty_workgroup_results.iter().any(|e| *e != 16) {
-        log::info!("hasty_main was not patient.");
-    } else {
-        log::info!("hasty_main got lucky.");
-    }
 }
 
 async fn get_data<T: bytemuck::Pod>(
@@ -178,3 +193,6 @@ fn main() {
         wasm_bindgen_futures::spawn_local(run());
     }
 }
+
+#[cfg(test)]
+mod tests;
