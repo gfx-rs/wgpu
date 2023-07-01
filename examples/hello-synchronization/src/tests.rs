@@ -19,9 +19,9 @@ fn hello_synchronization_test_results() {
                 &ctx.device,
                 &ctx.queue,
                 &mut local_patient_results[..],
-                &mut local_hasty_results[..]
+                &mut local_hasty_results[..],
             ));
             assert_eq!(local_patient_results, [16_u32; ARR_SIZE]);
-        }
+        },
     );
 }
