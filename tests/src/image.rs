@@ -1,6 +1,8 @@
 use std::{borrow::Cow, ffi::OsStr, io, path::Path};
+
 use wgpu::util::DeviceExt;
 use wgpu::*;
+use wgt::math::align_to;
 
 fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
     let data = match std::fs::read(&path) {
@@ -367,6 +369,10 @@ fn copy_texture_to_buffer_with_aspect(
 ) {
     let (block_width, block_height) = texture.format().block_dimensions();
     let block_size = texture.format().block_size(Some(aspect)).unwrap();
+    let bytes_per_row = align_to(
+        (texture.width() / block_width) * block_size,
+        COPY_BYTES_PER_ROW_ALIGNMENT,
+    );
     let mip_level = 0;
     encoder.copy_texture_to_buffer(
         ImageCopyTexture {
@@ -382,7 +388,7 @@ fn copy_texture_to_buffer_with_aspect(
             },
             layout: ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some((texture.width() / block_width) * block_size),
+                bytes_per_row: Some(bytes_per_row),
                 rows_per_image: Some(texture.height() / block_height),
             },
         },
@@ -449,6 +455,14 @@ fn copy_texture_to_buffer(
 }
 
 pub struct ReadbackBuffers {
+    /// texture format
+    texture_format: TextureFormat,
+    /// texture width
+    texture_width: u32,
+    /// texture height
+    texture_height: u32,
+    /// texture depth or array layer count
+    texture_depth_or_array_layers: u32,
     /// buffer for color or depth aspects
     buffer: Buffer,
     /// buffer for stencil aspect
@@ -458,20 +472,37 @@ pub struct ReadbackBuffers {
 impl ReadbackBuffers {
     pub fn new(device: &Device, texture: &Texture) -> Self {
         let (block_width, block_height) = texture.format().block_dimensions();
-        let base_size = (texture.width() / block_width)
-            * (texture.height() / block_height)
-            * texture.depth_or_array_layers();
+        let should_align_buffer_size = !([
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+        ]
+        .contains(&texture.format()));
         if texture.format().is_combined_depth_stencil_format() {
-            let buffer_size = base_size
+            let mut buffer_depth_bytes_per_row = (texture.width() / block_width)
                 * texture
                     .format()
                     .block_size(Some(TextureAspect::DepthOnly))
                     .unwrap_or(4);
-            let buffer_stencil_size = base_size
-                * texture
-                    .format()
-                    .block_size(Some(TextureAspect::StencilOnly))
-                    .unwrap();
+            if should_align_buffer_size {
+                buffer_depth_bytes_per_row =
+                    align_to(buffer_depth_bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
+            }
+            let buffer_size = buffer_depth_bytes_per_row
+                * (texture.height() / block_height)
+                * texture.depth_or_array_layers();
+
+            let buffer_stencil_bytes_per_row = align_to(
+                (texture.width() / block_width)
+                    * texture
+                        .format()
+                        .block_size(Some(TextureAspect::StencilOnly))
+                        .unwrap_or(4),
+                COPY_BYTES_PER_ROW_ALIGNMENT,
+            );
+            let buffer_stencil_size = buffer_stencil_bytes_per_row
+                * (texture.height() / block_height)
+                * texture.depth_or_array_layers();
+
             let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
@@ -483,17 +514,31 @@ impl ReadbackBuffers {
                 contents: &vec![255; buffer_stencil_size as usize],
             });
             ReadbackBuffers {
+                texture_format: texture.format(),
+                texture_width: texture.width(),
+                texture_height: texture.height(),
+                texture_depth_or_array_layers: texture.depth_or_array_layers(),
                 buffer,
                 buffer_stencil: Some(buffer_stencil),
             }
         } else {
-            let buffer_size = base_size * texture.format().block_size(None).unwrap_or(4);
+            let mut bytes_per_row =
+                (texture.width() / block_width) * texture.format().block_size(None).unwrap_or(4);
+            if should_align_buffer_size {
+                bytes_per_row = align_to(bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
+            }
+            let buffer_size =
+                bytes_per_row * (texture.height() / block_height) * texture.depth_or_array_layers();
             let buffer = device.create_buffer_init(&util::BufferInitDescriptor {
                 label: Some("Texture Readback"),
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_size as usize],
             });
             ReadbackBuffers {
+                texture_format: texture.format(),
+                texture_width: texture.width(),
+                texture_height: texture.height(),
+                texture_depth_or_array_layers: texture.depth_or_array_layers(),
                 buffer,
                 buffer_stencil: None,
             }
@@ -505,35 +550,69 @@ impl ReadbackBuffers {
         copy_texture_to_buffer(device, encoder, texture, &self.buffer, &self.buffer_stencil);
     }
 
+    fn retrieve_buffer(
+        &self,
+        device: &Device,
+        buffer: &Buffer,
+        aspect: Option<TextureAspect>,
+    ) -> Vec<u8> {
+        let buffer_slice = buffer.slice(..);
+        buffer_slice.map_async(MapMode::Read, |_| ());
+        device.poll(Maintain::Wait);
+        let (block_width, block_height) = self.texture_format.block_dimensions();
+        let expected_bytes_per_row = (self.texture_width / block_width)
+            * self.texture_format.block_size(aspect).unwrap_or(4);
+        let expected_buffer_size = expected_bytes_per_row
+            * (self.texture_height / block_height)
+            * self.texture_depth_or_array_layers;
+        let data: BufferView = buffer_slice.get_mapped_range();
+        if expected_buffer_size as usize == data.len() {
+            data.to_vec()
+        } else {
+            bytemuck::cast_slice(&data)
+                .to_vec()
+                .chunks_exact(
+                    align_to(expected_bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT) as usize,
+                )
+                .flat_map(|x| x.iter().take(expected_bytes_per_row as usize))
+                .copied()
+                .collect()
+        }
+    }
+
+    fn buffer_aspect(&self) -> Option<TextureAspect> {
+        if self.texture_format.is_combined_depth_stencil_format() {
+            Some(TextureAspect::DepthOnly)
+        } else {
+            None
+        }
+    }
+
     pub fn are_zero(&self, device: &Device) -> bool {
-        fn is_zero(device: &Device, buffer: &Buffer) -> bool {
-            let is_zero = {
-                let buffer_slice = buffer.slice(..);
-                buffer_slice.map_async(MapMode::Read, |_| ());
-                device.poll(Maintain::Wait);
-                let buffer_view = buffer_slice.get_mapped_range();
-                buffer_view.iter().all(|b| *b == 0)
-            };
+        let is_zero = |device: &Device, buffer: &Buffer, aspect: Option<TextureAspect>| -> bool {
+            let is_zero = self
+                .retrieve_buffer(device, buffer, aspect)
+                .iter()
+                .all(|b| *b == 0);
             buffer.unmap();
             is_zero
-        }
+        };
 
-        is_zero(device, &self.buffer)
+        is_zero(device, &self.buffer, self.buffer_aspect())
             && self
                 .buffer_stencil
                 .as_ref()
-                .map(|buffer_stencil| is_zero(device, buffer_stencil))
+                .map(|buffer_stencil| {
+                    is_zero(device, buffer_stencil, Some(TextureAspect::StencilOnly))
+                })
                 .unwrap_or(true)
     }
 
-    pub fn check_color_contents(&self, device: &Device, expected_data: &[u8]) -> bool {
-        let result = {
-            let buffer_slice = self.buffer.slice(..);
-            buffer_slice.map_async(MapMode::Read, |_| ());
-            device.poll(Maintain::Wait);
-            let buffer_view = buffer_slice.get_mapped_range();
-            buffer_view.iter().eq(expected_data.iter())
-        };
+    pub fn check_buffer_contents(&self, device: &Device, expected_data: &[u8]) -> bool {
+        let result = self
+            .retrieve_buffer(device, &self.buffer, self.buffer_aspect())
+            .iter()
+            .eq(expected_data.iter());
         self.buffer.unmap();
         result
     }

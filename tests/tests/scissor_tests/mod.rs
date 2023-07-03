@@ -1,5 +1,4 @@
 use wgpu_test::{image, initialize_test, TestParameters, TestingContext};
-use wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
 
 struct Rect {
     x: u32,
@@ -9,11 +8,10 @@ struct Rect {
 }
 
 const TEXTURE_HEIGHT: u32 = 2;
-const TEXTURE_WIDTH: u32 = 64;
-const BUFFER_SIZE: usize = (COPY_BYTES_PER_ROW_ALIGNMENT * TEXTURE_HEIGHT) as usize;
+const TEXTURE_WIDTH: u32 = 2;
+const BUFFER_SIZE: usize = (TEXTURE_WIDTH * TEXTURE_HEIGHT * 4) as usize;
 
 fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u8; BUFFER_SIZE]) {
-    assert_eq!(TEXTURE_WIDTH * 4, COPY_BYTES_PER_ROW_ALIGNMENT);
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Offscreen texture"),
         size: wgpu::Extent3d {
@@ -94,7 +92,7 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
         ctx.queue.submit(Some(encoder.finish()));
     }
-    assert!(readback_buffer.check_color_contents(&ctx.device, &expected_data));
+    assert!(readback_buffer.check_buffer_contents(&ctx.device, &expected_data));
 }
 
 #[test]
