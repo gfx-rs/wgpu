@@ -412,7 +412,7 @@ pub async fn op_webgpu_request_adapter(
     };
 
     let descriptor = wgpu_core::instance::RequestAdapterOptions {
-        power_preference: power_preference.unwrap_or_default(),
+        power_preference,
         force_fallback_adapter,
         compatible_surface: None, // windowless
     };

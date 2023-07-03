@@ -894,8 +894,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // This means that backends which do provide accurate device types
             // will be preferred if their device type indicates an actual
             // hardware GPU (integrated or discrete).
-            PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
-            PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
+            Some(PowerPreference::LowPower) => integrated.or(discrete).or(other).or(virt).or(cpu),
+            Some(PowerPreference::HighPerformance) => {
+                discrete.or(integrated).or(other).or(virt).or(cpu)
+            }
+            None => None,
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);

@@ -193,7 +193,7 @@ impl Corpus {
             }
             let adapter = match global.request_adapter(
                 &wgc::instance::RequestAdapterOptions {
-                    power_preference: wgt::PowerPreference::LowPower,
+                    power_preference: None,
                     force_fallback_adapter: false,
                     compatible_surface: None,
                 },
