@@ -2589,8 +2589,25 @@ impl<'a, W: Write> Writer<'a, W> {
                                 write!(self.out, "textureSize(")?;
                                 self.write_expr(image, ctx)?;
                                 if let Some(expr) = level {
+                                    let cast_to_int = matches!(
+                                        *ctx.info[expr].ty.inner_with(&self.module.types),
+                                        crate::TypeInner::Scalar {
+                                            kind: crate::ScalarKind::Uint,
+                                            ..
+                                        }
+                                    );
+
                                     write!(self.out, ", ")?;
+
+                                    if cast_to_int {
+                                        write!(self.out, "int(")?;
+                                    }
+
                                     self.write_expr(expr, ctx)?;
+
+                                    if cast_to_int {
+                                        write!(self.out, ")")?;
+                                    }
                                 } else if !multi {
                                     // All textureSize calls requires an lod argument
                                     // except for multisampled samplers
