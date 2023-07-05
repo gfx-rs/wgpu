@@ -1,7 +1,10 @@
 use crate::{
     device::{Device, DeviceDescriptor},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{AdapterId, DeviceId, SurfaceId, Valid},
+    identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
@@ -140,7 +143,7 @@ pub struct Surface {
     pub gl: Option<HalSurface<hal::api::Gles>>,
 }
 
-impl crate::hub::Resource for Surface {
+impl crate::resource::Resource for Surface {
     const TYPE: &'static str = "Surface";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -356,7 +359,7 @@ impl<A: HalApi> Adapter<A> {
     }
 }
 
-impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
+impl<A: hal::Api> crate::resource::Resource for Adapter<A> {
     const TYPE: &'static str = "Adapter";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -517,7 +520,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(target_os = "emscripten"),
+        feature = "gles"
+    ))]
     pub fn create_surface_webgl_canvas(
         &self,
         canvas: web_sys::HtmlCanvasElement,
@@ -544,7 +551,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(target_os = "emscripten"),
+        feature = "gles"
+    ))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
         canvas: web_sys::OffscreenCanvas,

@@ -14,11 +14,15 @@ use crate::{
         RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{self, Buffer, Texture, TextureView, TextureViewNotRenderableReason},
+    storage::Storage,
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -1223,9 +1227,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let cmd_buf: &mut CommandBuffer<A> =
                 CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id)
                     .map_pass_err(init_scope)?;
-            // close everything while the new command encoder is filled
+
+            // We automatically keep extending command buffers over time, and because
+            // we want to insert a command buffer _before_ what we're about to record,
+            // we need to make sure to close the previous one.
             cmd_buf.encoder.close();
-            // will be reset to true if recording is done without errors
+            // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             cmd_buf.status = CommandEncoderStatus::Error;
 
             #[cfg(feature = "trace")]
@@ -1678,9 +1685,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::SetScissor(ref rect) => {
                         let scope = PassErrorScope::SetScissorRect;
-                        if rect.w == 0
-                            || rect.h == 0
-                            || rect.x + rect.w > info.extent.width
+                        if rect.x + rect.w > info.extent.width
                             || rect.y + rect.h > info.extent.height
                         {
                             return Err(RenderCommandError::InvalidScissorRect(*rect, info.extent))
@@ -2175,15 +2180,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        // Before we finish the auxiliary encoder, let's
-        // get our pass back and place it after.
-        //Note: we could just hold onto this raw pass while recording the
-        // auxiliary encoder, but then handling errors and cleaning up
-        // would be more complicated, so we re-use `open()`/`close()`.
-        let pass_raw = cmd_buf.encoder.list.pop().unwrap();
-        cmd_buf.encoder.close();
-        cmd_buf.encoder.list.push(pass_raw);
         cmd_buf.status = CommandEncoderStatus::Recording;
+        cmd_buf.encoder.close_and_swap();
 
         Ok(())
     }

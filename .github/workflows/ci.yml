@@ -10,8 +10,9 @@ on:
 env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
+  RUST_LOG: info
   RUST_BACKTRACE: full
-  MSRV: 1.64
+  MSRV: 1.65
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -112,10 +113,23 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
+      - name: install aarch64-linux-gnu g++
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          set -e
+
+          sudo apt-get update -y -qq
+
+          sudo apt-get install g++-aarch64-linux-gnu
+
       - name: add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          # clang++ will be detected correctly by CC from path
+          echo "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+          # the android sdk doesn't use the conventional name for ar, so explicitly set it.
+          echo "AR_aarch64_linux_android=llvm-ar" >> "$GITHUB_ENV"
 
       - name: check web
         if: matrix.kind == 'web'
@@ -124,12 +138,13 @@ jobs:
           set -e
 
           # build for WebGPU
-          cargo clippy --target ${{ matrix.target }} -p wgpu --tests --features glsl,spirv
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --features glsl,spirv
+          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
+          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
           # all features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --tests --all-features
-          cargo doc --target ${{ matrix.target }} -p wgpu --no-deps --all-features
+          cargo clippy --target ${{ matrix.target }} --tests --all-features
+          cargo doc --target ${{ matrix.target }} --no-deps --all-features
 
       - name: check em
         if: matrix.kind == 'em'
@@ -141,7 +156,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
           # build cube example
-          cargo clippy --target ${{ matrix.target }} --example cube
+          cargo clippy --target ${{ matrix.target }} --bin cube
 
           # build raw-gles example
           cargo clippy --target ${{ matrix.target }} --example raw-gles
@@ -157,13 +172,13 @@ jobs:
           set -e
 
           # check with no features
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-core -p wgpu-info -p player --no-default-features
+          cargo clippy --target ${{ matrix.target }} --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --tests --all-features
+          cargo clippy --target ${{ matrix.target }} --tests --all-features
 
           # build docs
-          cargo doc --target ${{ matrix.target }} -p wgpu -p wgpu-info -p player -p wgpu-core -p wgpu-hal --all-features --no-deps
+          cargo doc --target ${{ matrix.target }} --all-features --no-deps
 
   wasm-test:
     name: Test WebAssembly
@@ -180,7 +195,7 @@ jobs:
       - name: execute tests
         run: |
           cd wgpu
-          wasm-pack test --headless --chrome --features webgl
+          wasm-pack test --headless --chrome --features webgl --workspace
 
   gpu-test:
     strategy:
@@ -192,10 +207,16 @@ jobs:
             os: windows-2022
             backends: dx12
 
+          # Mac
+          - name: Mac aarch64
+            os: [self-hosted, macOS]
+            backends: metal
+
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
             backends: vulkan gl
+
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -218,7 +239,7 @@ jobs:
           mkdir -p swiftshader
           curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
 
-          echo "LD_LIBRARY_PATH=$PWD/swiftshader" >> $GITHUB_ENV
+          echo "VK_ICD_FILENAMES=$PWD/swiftshader/vk_swiftshader_icd.json" >> $GITHUB_ENV
 
       - name: install llvmpipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
@@ -245,6 +266,7 @@ jobs:
 
       - name: caching
         uses: Swatinem/rust-cache@v2
+        if: matrix.os[0] != 'self-hosted'
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
 
@@ -262,8 +284,15 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest -p wgpu -p wgpu-types -p wgpu-hal -p wgpu-core -p player --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
           done
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: comparison-images
+          path: |
+            **/*-actual.png
+            **/*-difference.png
 
       - name: generate coverage report
         shell: bash
@@ -303,7 +332,7 @@ jobs:
         run: |
           set -e
 
-          cargo test --doc -p wgpu -p wgpu-core -p wgpu-hal -p wgpu-types
+          cargo test --doc
 
   fmt:
     name: Format

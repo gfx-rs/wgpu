@@ -585,7 +585,7 @@ impl super::Adapter {
         let downlevel_defaults = wgt::DownlevelLimits {};
 
         // Drop the GL guard so we can move the context into AdapterShared
-        // ( on WASM the gl handle is just a ref so we tell clippy to allow
+        // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
         #[allow(clippy::drop_ref)]
         drop(gl);
@@ -713,10 +713,12 @@ impl crate::Adapter<super::Api> for super::Adapter {
                     | Tfc::MULTISAMPLE_X16
             } else if max_samples >= 8 {
                 Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4 | Tfc::MULTISAMPLE_X8
-            } else if max_samples >= 4 {
-                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
             } else {
-                Tfc::MULTISAMPLE_X2
+                // The lowest supported level in GLE3.0/WebGL2 is 4X
+                // (see GL_MAX_SAMPLES in https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glGet.xhtml).
+                // On some platforms, like iOS Safari, `get_parameter_i32(MAX_SAMPLES)` returns 0,
+                // so we always fall back to supporting 4x here.
+                Tfc::MULTISAMPLE_X2 | Tfc::MULTISAMPLE_X4
             }
         };
 
@@ -934,10 +936,17 @@ impl super::AdapterShared {
     }
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for super::Adapter {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for super::Adapter {}
 
 #[cfg(test)]

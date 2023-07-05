@@ -1,12 +1,9 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
-
+#![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
 use deno_core::error::AnyError;
-use deno_core::include_js_files;
 use deno_core::op;
-use deno_core::Extension;
-use deno_core::ExtensionBuilder;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -94,7 +91,8 @@ fn check_unstable(state: &OpState, api_name: &str) {
     }
 }
 
-pub type Instance = std::sync::Arc<wgpu_core::hub::Global<wgpu_core::hub::IdentityManagerFactory>>;
+pub type Instance =
+    std::sync::Arc<wgpu_core::global::Global<wgpu_core::identity::IdentityManagerFactory>>;
 
 struct WebGpuAdapter(Instance, wgpu_core::id::AdapterId);
 impl Resource for WebGpuAdapter {
@@ -132,29 +130,110 @@ impl Resource for WebGpuQuerySet {
     }
 }
 
-fn ext() -> ExtensionBuilder {
-    Extension::builder_with_deps(env!("CARGO_PKG_NAME"), &["deno_webidl", "deno_web"])
-}
+deno_core::extension!(
+    deno_webgpu,
+    deps = [deno_webidl, deno_web],
+    ops = [
+        // Request device/adapter
+        op_webgpu_request_adapter,
+        op_webgpu_request_device,
+        op_webgpu_request_adapter_info,
+        // Query Set
+        op_webgpu_create_query_set,
+        // buffer
+        buffer::op_webgpu_create_buffer,
+        buffer::op_webgpu_buffer_get_mapped_range,
+        buffer::op_webgpu_buffer_unmap,
+        // buffer async
+        buffer::op_webgpu_buffer_get_map_async,
+        // remaining sync ops
 
-fn ops(ext: &mut ExtensionBuilder, unstable: bool) -> &mut ExtensionBuilder {
-    ext.ops(declare_webgpu_ops()).state(move |state| {
-        // TODO: check & possibly streamline this
-        // Unstable might be able to be OpMiddleware
-        // let unstable_checker = state.borrow::<super::UnstableChecker>();
-        // let unstable = unstable_checker.unstable;
-        state.put(Unstable(unstable));
-    })
-}
-
-pub fn init_ops_and_esm(unstable: bool) -> Extension {
-    ops(&mut ext(), unstable)
-        .esm(include_js_files!("01_webgpu.js", "02_idl_types.js",))
-        .build()
-}
-
-pub fn init_ops(unstable: bool) -> Extension {
-    ops(&mut ext(), unstable).build()
-}
+        // texture
+        texture::op_webgpu_create_texture,
+        texture::op_webgpu_create_texture_view,
+        // sampler
+        sampler::op_webgpu_create_sampler,
+        // binding
+        binding::op_webgpu_create_bind_group_layout,
+        binding::op_webgpu_create_pipeline_layout,
+        binding::op_webgpu_create_bind_group,
+        // pipeline
+        pipeline::op_webgpu_create_compute_pipeline,
+        pipeline::op_webgpu_compute_pipeline_get_bind_group_layout,
+        pipeline::op_webgpu_create_render_pipeline,
+        pipeline::op_webgpu_render_pipeline_get_bind_group_layout,
+        // command_encoder
+        command_encoder::op_webgpu_create_command_encoder,
+        command_encoder::op_webgpu_command_encoder_begin_render_pass,
+        command_encoder::op_webgpu_command_encoder_begin_compute_pass,
+        command_encoder::op_webgpu_command_encoder_copy_buffer_to_buffer,
+        command_encoder::op_webgpu_command_encoder_copy_buffer_to_texture,
+        command_encoder::op_webgpu_command_encoder_copy_texture_to_buffer,
+        command_encoder::op_webgpu_command_encoder_copy_texture_to_texture,
+        command_encoder::op_webgpu_command_encoder_clear_buffer,
+        command_encoder::op_webgpu_command_encoder_push_debug_group,
+        command_encoder::op_webgpu_command_encoder_pop_debug_group,
+        command_encoder::op_webgpu_command_encoder_insert_debug_marker,
+        command_encoder::op_webgpu_command_encoder_write_timestamp,
+        command_encoder::op_webgpu_command_encoder_resolve_query_set,
+        command_encoder::op_webgpu_command_encoder_finish,
+        render_pass::op_webgpu_render_pass_set_viewport,
+        render_pass::op_webgpu_render_pass_set_scissor_rect,
+        render_pass::op_webgpu_render_pass_set_blend_constant,
+        render_pass::op_webgpu_render_pass_set_stencil_reference,
+        render_pass::op_webgpu_render_pass_begin_pipeline_statistics_query,
+        render_pass::op_webgpu_render_pass_end_pipeline_statistics_query,
+        render_pass::op_webgpu_render_pass_write_timestamp,
+        render_pass::op_webgpu_render_pass_execute_bundles,
+        render_pass::op_webgpu_render_pass_end,
+        render_pass::op_webgpu_render_pass_set_bind_group,
+        render_pass::op_webgpu_render_pass_push_debug_group,
+        render_pass::op_webgpu_render_pass_pop_debug_group,
+        render_pass::op_webgpu_render_pass_insert_debug_marker,
+        render_pass::op_webgpu_render_pass_set_pipeline,
+        render_pass::op_webgpu_render_pass_set_index_buffer,
+        render_pass::op_webgpu_render_pass_set_vertex_buffer,
+        render_pass::op_webgpu_render_pass_draw,
+        render_pass::op_webgpu_render_pass_draw_indexed,
+        render_pass::op_webgpu_render_pass_draw_indirect,
+        render_pass::op_webgpu_render_pass_draw_indexed_indirect,
+        compute_pass::op_webgpu_compute_pass_set_pipeline,
+        compute_pass::op_webgpu_compute_pass_dispatch_workgroups,
+        compute_pass::op_webgpu_compute_pass_dispatch_workgroups_indirect,
+        compute_pass::op_webgpu_compute_pass_begin_pipeline_statistics_query,
+        compute_pass::op_webgpu_compute_pass_end_pipeline_statistics_query,
+        compute_pass::op_webgpu_compute_pass_write_timestamp,
+        compute_pass::op_webgpu_compute_pass_end,
+        compute_pass::op_webgpu_compute_pass_set_bind_group,
+        compute_pass::op_webgpu_compute_pass_push_debug_group,
+        compute_pass::op_webgpu_compute_pass_pop_debug_group,
+        compute_pass::op_webgpu_compute_pass_insert_debug_marker,
+        // bundle
+        bundle::op_webgpu_create_render_bundle_encoder,
+        bundle::op_webgpu_render_bundle_encoder_finish,
+        bundle::op_webgpu_render_bundle_encoder_set_bind_group,
+        bundle::op_webgpu_render_bundle_encoder_push_debug_group,
+        bundle::op_webgpu_render_bundle_encoder_pop_debug_group,
+        bundle::op_webgpu_render_bundle_encoder_insert_debug_marker,
+        bundle::op_webgpu_render_bundle_encoder_set_pipeline,
+        bundle::op_webgpu_render_bundle_encoder_set_index_buffer,
+        bundle::op_webgpu_render_bundle_encoder_set_vertex_buffer,
+        bundle::op_webgpu_render_bundle_encoder_draw,
+        bundle::op_webgpu_render_bundle_encoder_draw_indexed,
+        bundle::op_webgpu_render_bundle_encoder_draw_indirect,
+        // queue
+        queue::op_webgpu_queue_submit,
+        queue::op_webgpu_write_buffer,
+        queue::op_webgpu_write_texture,
+        // shader
+        shader::op_webgpu_create_shader_module,
+    ],
+    esm = ["01_webgpu.js"],
+    options = { unstable: bool },
+    state = |state, options| {
+        state.put(Unstable(options.unstable));
+    },
+);
 
 fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     let mut return_features: Vec<&'static str> = vec![];
@@ -321,9 +400,9 @@ pub async fn op_webgpu_request_adapter(
     let instance = if let Some(instance) = state.try_borrow::<Instance>() {
         instance
     } else {
-        state.put(std::sync::Arc::new(wgpu_core::hub::Global::new(
+        state.put(std::sync::Arc::new(wgpu_core::global::Global::new(
             "webgpu",
-            wgpu_core::hub::IdentityManagerFactory,
+            wgpu_core::identity::IdentityManagerFactory,
             wgpu_types::InstanceDescriptor {
                 backends,
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
@@ -699,104 +778,4 @@ pub fn op_webgpu_create_query_set(
     &descriptor,
     ()
   ) => state, WebGpuQuerySet)
-}
-
-fn declare_webgpu_ops() -> Vec<deno_core::OpDecl> {
-    vec![
-        // Request device/adapter
-        op_webgpu_request_adapter::decl(),
-        op_webgpu_request_device::decl(),
-        op_webgpu_request_adapter_info::decl(),
-        // Query Set
-        op_webgpu_create_query_set::decl(),
-        // buffer
-        buffer::op_webgpu_create_buffer::decl(),
-        buffer::op_webgpu_buffer_get_mapped_range::decl(),
-        buffer::op_webgpu_buffer_unmap::decl(),
-        // buffer async
-        buffer::op_webgpu_buffer_get_map_async::decl(),
-        // remaining sync ops
-
-        // texture
-        texture::op_webgpu_create_texture::decl(),
-        texture::op_webgpu_create_texture_view::decl(),
-        // sampler
-        sampler::op_webgpu_create_sampler::decl(),
-        // binding
-        binding::op_webgpu_create_bind_group_layout::decl(),
-        binding::op_webgpu_create_pipeline_layout::decl(),
-        binding::op_webgpu_create_bind_group::decl(),
-        // pipeline
-        pipeline::op_webgpu_create_compute_pipeline::decl(),
-        pipeline::op_webgpu_compute_pipeline_get_bind_group_layout::decl(),
-        pipeline::op_webgpu_create_render_pipeline::decl(),
-        pipeline::op_webgpu_render_pipeline_get_bind_group_layout::decl(),
-        // command_encoder
-        command_encoder::op_webgpu_create_command_encoder::decl(),
-        command_encoder::op_webgpu_command_encoder_begin_render_pass::decl(),
-        command_encoder::op_webgpu_command_encoder_begin_compute_pass::decl(),
-        command_encoder::op_webgpu_command_encoder_copy_buffer_to_buffer::decl(),
-        command_encoder::op_webgpu_command_encoder_copy_buffer_to_texture::decl(),
-        command_encoder::op_webgpu_command_encoder_copy_texture_to_buffer::decl(),
-        command_encoder::op_webgpu_command_encoder_copy_texture_to_texture::decl(),
-        command_encoder::op_webgpu_command_encoder_clear_buffer::decl(),
-        command_encoder::op_webgpu_command_encoder_push_debug_group::decl(),
-        command_encoder::op_webgpu_command_encoder_pop_debug_group::decl(),
-        command_encoder::op_webgpu_command_encoder_insert_debug_marker::decl(),
-        command_encoder::op_webgpu_command_encoder_write_timestamp::decl(),
-        command_encoder::op_webgpu_command_encoder_resolve_query_set::decl(),
-        command_encoder::op_webgpu_command_encoder_finish::decl(),
-        // render_pass
-        render_pass::op_webgpu_render_pass_set_viewport::decl(),
-        render_pass::op_webgpu_render_pass_set_scissor_rect::decl(),
-        render_pass::op_webgpu_render_pass_set_blend_constant::decl(),
-        render_pass::op_webgpu_render_pass_set_stencil_reference::decl(),
-        render_pass::op_webgpu_render_pass_begin_pipeline_statistics_query::decl(),
-        render_pass::op_webgpu_render_pass_end_pipeline_statistics_query::decl(),
-        render_pass::op_webgpu_render_pass_write_timestamp::decl(),
-        render_pass::op_webgpu_render_pass_execute_bundles::decl(),
-        render_pass::op_webgpu_render_pass_end::decl(),
-        render_pass::op_webgpu_render_pass_set_bind_group::decl(),
-        render_pass::op_webgpu_render_pass_push_debug_group::decl(),
-        render_pass::op_webgpu_render_pass_pop_debug_group::decl(),
-        render_pass::op_webgpu_render_pass_insert_debug_marker::decl(),
-        render_pass::op_webgpu_render_pass_set_pipeline::decl(),
-        render_pass::op_webgpu_render_pass_set_index_buffer::decl(),
-        render_pass::op_webgpu_render_pass_set_vertex_buffer::decl(),
-        render_pass::op_webgpu_render_pass_draw::decl(),
-        render_pass::op_webgpu_render_pass_draw_indexed::decl(),
-        render_pass::op_webgpu_render_pass_draw_indirect::decl(),
-        render_pass::op_webgpu_render_pass_draw_indexed_indirect::decl(),
-        // compute_pass
-        compute_pass::op_webgpu_compute_pass_set_pipeline::decl(),
-        compute_pass::op_webgpu_compute_pass_dispatch_workgroups::decl(),
-        compute_pass::op_webgpu_compute_pass_dispatch_workgroups_indirect::decl(),
-        compute_pass::op_webgpu_compute_pass_begin_pipeline_statistics_query::decl(),
-        compute_pass::op_webgpu_compute_pass_end_pipeline_statistics_query::decl(),
-        compute_pass::op_webgpu_compute_pass_write_timestamp::decl(),
-        compute_pass::op_webgpu_compute_pass_end::decl(),
-        compute_pass::op_webgpu_compute_pass_set_bind_group::decl(),
-        compute_pass::op_webgpu_compute_pass_push_debug_group::decl(),
-        compute_pass::op_webgpu_compute_pass_pop_debug_group::decl(),
-        compute_pass::op_webgpu_compute_pass_insert_debug_marker::decl(),
-        // bundle
-        bundle::op_webgpu_create_render_bundle_encoder::decl(),
-        bundle::op_webgpu_render_bundle_encoder_finish::decl(),
-        bundle::op_webgpu_render_bundle_encoder_set_bind_group::decl(),
-        bundle::op_webgpu_render_bundle_encoder_push_debug_group::decl(),
-        bundle::op_webgpu_render_bundle_encoder_pop_debug_group::decl(),
-        bundle::op_webgpu_render_bundle_encoder_insert_debug_marker::decl(),
-        bundle::op_webgpu_render_bundle_encoder_set_pipeline::decl(),
-        bundle::op_webgpu_render_bundle_encoder_set_index_buffer::decl(),
-        bundle::op_webgpu_render_bundle_encoder_set_vertex_buffer::decl(),
-        bundle::op_webgpu_render_bundle_encoder_draw::decl(),
-        bundle::op_webgpu_render_bundle_encoder_draw_indexed::decl(),
-        bundle::op_webgpu_render_bundle_encoder_draw_indirect::decl(),
-        // queue
-        queue::op_webgpu_queue_submit::decl(),
-        queue::op_webgpu_write_buffer::decl(),
-        queue::op_webgpu_write_texture::decl(),
-        // shader
-        shader::op_webgpu_create_shader_module::decl(),
-    ]
 }

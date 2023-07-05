@@ -37,13 +37,13 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn initialize_adapter_from_env(instance: &Instance, backend_bits: Backends) -> Option<Adapter> {
+pub fn initialize_adapter_from_env(instance: &Instance) -> Option<Adapter> {
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
         .map(str::to_lowercase)
         .ok()?;
 
-    let adapters = instance.enumerate_adapters(backend_bits);
+    let adapters = instance.enumerate_adapters(Backends::all());
 
     let mut chosen_adapter = None;
     for adapter in adapters {
@@ -60,20 +60,16 @@ pub fn initialize_adapter_from_env(instance: &Instance, backend_bits: Backends) 
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
 #[cfg(target_arch = "wasm32")]
-pub fn initialize_adapter_from_env(
-    _instance: &Instance,
-    _backend_bits: Backends,
-) -> Option<Adapter> {
+pub fn initialize_adapter_from_env(_instance: &Instance) -> Option<Adapter> {
     None
 }
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
-    backend_bits: wgt::Backends,
     compatible_surface: Option<&Surface>,
 ) -> Option<Adapter> {
-    match initialize_adapter_from_env(instance, backend_bits) {
+    match initialize_adapter_from_env(instance) {
         Some(a) => Some(a),
         None => {
             instance

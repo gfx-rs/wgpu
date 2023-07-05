@@ -1,0 +1,20 @@
+[package]
+name = "wgpu-conservative-raster-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu conservative raster example"
+publish = false
+
+[[bin]]
+name = "conservative-raster"
+path = "src/main.rs"
+
+[dependencies]
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true

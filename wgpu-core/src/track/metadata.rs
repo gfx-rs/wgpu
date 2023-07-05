@@ -1,7 +1,7 @@
 //! The `ResourceMetadata` type.
 
 use crate::{
-    hub,
+    hal_api::HalApi,
     id::{self, TypedId},
     Epoch, LifeGuard, RefCount,
 };
@@ -17,7 +17,7 @@ use wgt::strict_assert;
 /// members, but a bit vector tracks occupancy, so iteration touches
 /// only occupied elements.
 #[derive(Debug)]
-pub(super) struct ResourceMetadata<A: hub::HalApi> {
+pub(super) struct ResourceMetadata<A: HalApi> {
     /// If the resource with index `i` is a member, `owned[i]` is `true`.
     owned: BitVec<usize>,
 
@@ -31,7 +31,7 @@ pub(super) struct ResourceMetadata<A: hub::HalApi> {
     _phantom: PhantomData<A>,
 }
 
-impl<A: hub::HalApi> ResourceMetadata<A> {
+impl<A: HalApi> ResourceMetadata<A> {
     pub(super) fn new() -> Self {
         Self {
             owned: BitVec::default(),
@@ -172,7 +172,7 @@ impl<A: hub::HalApi> ResourceMetadata<A> {
 ///
 /// This is used to abstract over the various places
 /// trackers can get new resource metadata from.
-pub(super) enum ResourceMetadataProvider<'a, A: hub::HalApi> {
+pub(super) enum ResourceMetadataProvider<'a, A: HalApi> {
     /// Comes directly from explicit values.
     Direct {
         epoch: Epoch,
@@ -183,7 +183,7 @@ pub(super) enum ResourceMetadataProvider<'a, A: hub::HalApi> {
     /// The epoch is given directly, but the life count comes from the resource itself.
     Resource { epoch: Epoch },
 }
-impl<A: hub::HalApi> ResourceMetadataProvider<'_, A> {
+impl<A: HalApi> ResourceMetadataProvider<'_, A> {
     /// Get the epoch and an owned refcount from this.
     ///
     /// # Safety

@@ -71,8 +71,8 @@ called. It goes through the commands and issues them into the native command
 buffer. Thanks to isolation, it doesn't track any bind group invalidations or
 index format changes.
 
-[Gdcrbe]: crate::hub::Global::device_create_render_bundle_encoder
-[Grbef]: crate::hub::Global::render_bundle_encoder_finish
+[Gdcrbe]: crate::global::Global::device_create_render_bundle_encoder
+[Grbef]: crate::global::Global::render_bundle_encoder_finish
 [wrpeb]: crate::command::render_ffi::wgpu_render_pass_execute_bundles
 !*/
 
@@ -90,11 +90,14 @@ use crate::{
         RenderPassCompatibilityCheckType, RenderPassContext, SHADER_STAGE_COUNT,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Resource, Storage, Token},
+    hal_api::HalApi,
+    hub::{Hub, Token},
     id,
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
-    resource,
+    resource::{self, Resource},
+    storage::Storage,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers, LifeGuard, Stored,
@@ -743,7 +746,21 @@ pub struct RenderBundle<A: HalApi> {
     pub(crate) life_guard: LifeGuard,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 
 impl<A: HalApi> RenderBundle<A> {
