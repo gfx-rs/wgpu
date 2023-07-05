@@ -1351,7 +1351,7 @@ static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 /// For use in [`VertexState`].
 ///
 /// Corresponds to [WebGPU `GPUVertexBufferLayout`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexbufferlayout).
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
