@@ -501,15 +501,15 @@ impl<A: HalApi> Device<A> {
         }
     }
 
-    fn create_buffer_from_hal(
+    pub fn create_buffer_from_hal(
         &self,
         hal_buffer: A::Buffer,
         self_id: id::DeviceId,
         desc: &resource::BufferDescriptor,
-    ) -> resource::Buffer<A> {
+    ) -> Buffer<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
-        resource::Buffer {
+        Buffer {
             raw: Some(hal_buffer),
             device_id: Stored {
                 value: id::Valid(self_id),

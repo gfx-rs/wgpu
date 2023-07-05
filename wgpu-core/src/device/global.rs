@@ -692,7 +692,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn create_buffer_from_hal<A: HalApi>(
         &self,
         hal_buffer: A::Buffer,
-        device_id: id::DeviceId,
+        device_id: DeviceId,
         desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, Option<resource::CreateBufferError>) {
@@ -721,7 +721,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut buffer = device.create_buffer_from_hal(hal_buffer, device_id, desc);
 
             // Assume external buffers are initialized
-            buffer.initialization_status = BufferInitTracker::new(0);
+            buffer.initialization_status = crate::init_tracker::BufferInitTracker::new(0);
 
             let ref_count = buffer.life_guard.add_ref();
 

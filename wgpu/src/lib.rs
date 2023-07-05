@@ -2519,7 +2519,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_buffer_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor,
