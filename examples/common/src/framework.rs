@@ -307,11 +307,20 @@ fn start<E: Example>(
                     },
                 ..
             } => {
-                log::info!("Resizing to {:?}", size);
-                config.width = size.width.max(1);
-                config.height = size.height.max(1);
-                example.resize(&config, &device, &queue);
-                surface.configure(&device, &config);
+                let max_dimension = adapter.limits().max_texture_dimension_2d;
+                if size.width > max_dimension || size.height > max_dimension {
+                    log::warn!(
+                        "The resizing size {:?} exceeds the limit of {}.",
+                        size,
+                        max_dimension
+                    );
+                } else {
+                    log::info!("Resizing to {:?}", size);
+                    config.width = size.width.max(1);
+                    config.height = size.height.max(1);
+                    example.resize(&config, &device, &queue);
+                    surface.configure(&device, &config);
+                }
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
