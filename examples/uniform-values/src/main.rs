@@ -3,9 +3,9 @@
 //! 1. the struct for the data stored in the uniform buffer is defined.
 //! 2. the uniform buffer itself is created.
 //! 3. the bind group that will bind the uniform buffer and it's layout are created.
-//! 4.  the bind group layout is attached to the pipeline layout.
-//! 5.  the uniform buffer and the bind group are stored alongside the pipeline.
-//! 6.  an instance of [`AppState`] is created. This variable will be modified
+//! 4. the bind group layout is attached to the pipeline layout.
+//! 5. the uniform buffer and the bind group are stored alongside the pipeline.
+//! 6. an instance of [`AppState`] is created. This variable will be modified
 //! to change parameters in the shader and modified by app events to preform and save
 //! those changes.
 //! 7. (7a and 7b) the `state` variable created at (6) is modified by commands such

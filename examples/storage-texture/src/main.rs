@@ -1,5 +1,5 @@
 //! This example demonstrates the basic usage of storage textures for the purpose of
-//! creating a digital image of the Mandelbrot
+//! creating a digital image of the Mandelbrot set
 //! (<https://en.wikipedia.org/wiki/Mandelbrot_set>).
 //!
 //! Storage textures work like normal textures but they operate similar to storage buffers
