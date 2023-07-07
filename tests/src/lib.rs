@@ -422,7 +422,6 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let compatible_surface: Option<&Surface> = compatible_surface.as_ref();
     let adapter = pollster::block_on(wgpu::util::initialize_adapter_from_env_or_default(
         &instance,
-        backends,
         compatible_surface,
     ))
     .expect("could not find suitable adapter on the system");

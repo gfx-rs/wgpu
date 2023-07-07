@@ -45,6 +45,7 @@ Bottom level categories:
 #### Misc Breaking Changes
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+- Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904)
 - Arcanization of wgpu core resources: Removed 'Token' and 'LifeTime' related management,
 removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal reference count, removing mut from resources and added instead internal members locks on demand or atomics operations, resources now implement Drop and destroy stuff when last 'Arc' resources is released, resources hold an 'Arc' in order to be able to implement Drop, resources have an utility to retrieve the id of the resource itself, removed all guards and just retrive the 'Arc' needed on-demand to unlock registry of resources asap removing locking from hot paths. By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy
 
@@ -55,6 +56,7 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
 #### Vulkan
 
 - Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
+- Implement depth-clip-control using depthClamp instead of VK_EXT_depth_clip_enable. By @AlbinBernhardssonARM [#3892](https://github.com/gfx-rs/wgpu/pull/3892).
 
 ### Added/New Features
 
@@ -63,17 +65,20 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
 ### Documentation
 
 - Better documentation for draw, draw_indexed, set_viewport and set_scissor_rect. By @genusistimelord in [#3860](https://github.com/gfx-rs/wgpu/pull/3860)
+- Fix link to `GPUVertexBufferLayout`. By @fornwall in [#3906](https://github.com/gfx-rs/wgpu/pull/3906)
 
 #### General
 
 - Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
 - Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763).
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
+- On Web, types don't implement `Send` or `Sync` anymore. By @daxpedda in [#3691](https://github.com/gfx-rs/wgpu/pull/3691)
 
 ### Bug Fixes
 
 - Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
 - Fix OpenGL/EGL backend not respecting non-sRGB texture formats in `SurfaceConfiguration`. by @liquidev in [#3817](https://github.com/gfx-rs/wgpu/pull/3817)
+- Make write- and read-only marked buffers match non-readonly layouts. by @fornwall in [#3893](https://github.com/gfx-rs/wgpu/pull/3893)
 
 #### Metal
 

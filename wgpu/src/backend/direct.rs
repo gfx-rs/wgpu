@@ -23,6 +23,7 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
+use wgt::{WasmNotSend, WasmNotSync};
 
 const LABEL: &str = "label";
 
@@ -263,7 +264,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -297,7 +298,7 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
@@ -306,7 +307,7 @@ impl Context {
     #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         operation: &'static str,
     ) -> ! {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));
@@ -1467,7 +1468,7 @@ impl crate::Context for Context {
         buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
@@ -2279,7 +2280,7 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
@@ -3051,7 +3052,21 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMappedRange {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::context::BufferMappedRange for BufferMappedRange {

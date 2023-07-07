@@ -182,8 +182,22 @@ pub(crate) enum BufferMapState<A: HalApi> {
     Idle,
 }
 
-unsafe impl<A: HalApi> Send for BufferMapState<A> {}
-unsafe impl<A: HalApi> Sync for BufferMapState<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 #[repr(C)]
 pub struct BufferMapCallbackC {
@@ -191,6 +205,13 @@ pub struct BufferMapCallbackC {
     pub user_data: *mut u8,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMapCallbackC {}
 
 #[derive(Debug)]
@@ -200,13 +221,26 @@ pub struct BufferMapCallback {
     inner: Option<BufferMapCallbackInner>,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
+
 enum BufferMapCallbackInner {
-    Rust {
-        callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>,
-    },
-    C {
-        inner: BufferMapCallbackC,
-    },
+    Rust { callback: BufferMapCallbackCallback },
+    C { inner: BufferMapCallbackC },
 }
 
 impl Debug for BufferMapCallbackInner {
@@ -219,7 +253,7 @@ impl Debug for BufferMapCallbackInner {
 }
 
 impl BufferMapCallback {
-    pub fn from_rust(callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>) -> Self {
+    pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
         Self {
             inner: Some(BufferMapCallbackInner::Rust { callback }),
         }
