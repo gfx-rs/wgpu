@@ -1,19 +1,19 @@
 struct FragmentOutputVec4Vec3_ {
     @location(0) vec4f: vec4<f32>,
-    @location(1) vec4i: vec4<i32>,
-    @location(2) vec4u: vec4<u32>,
+    @location(1) @interpolate(flat) vec4i: vec4<i32>,
+    @location(2) @interpolate(flat) vec4u: vec4<u32>,
     @location(3) vec3f: vec3<f32>,
-    @location(4) vec3i: vec3<i32>,
-    @location(5) vec3u: vec3<u32>,
+    @location(4) @interpolate(flat) vec3i: vec3<i32>,
+    @location(5) @interpolate(flat) vec3u: vec3<u32>,
 }
 
 struct FragmentOutputVec2Scalar {
     @location(0) vec2f: vec2<f32>,
-    @location(1) vec2i: vec2<i32>,
-    @location(2) vec2u: vec2<u32>,
+    @location(1) @interpolate(flat) vec2i: vec2<i32>,
+    @location(2) @interpolate(flat) vec2u: vec2<u32>,
     @location(3) scalarf: f32,
-    @location(4) scalari: i32,
-    @location(5) scalaru: u32,
+    @location(4) @interpolate(flat) scalari: i32,
+    @location(5) @interpolate(flat) scalaru: u32,
 }
 
 @fragment 

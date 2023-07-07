@@ -48,7 +48,7 @@ fn fetch_shadow(light_id: u32, homogeneous_coords: vec4<f32>) -> f32 {
 }
 
 @vertex 
-fn vs_main(@location(0) position: vec4<i32>, @location(1) normal: vec4<i32>) -> VertexOutput {
+fn vs_main(@location(0) @interpolate(flat) position: vec4<i32>, @location(1) @interpolate(flat) normal: vec4<i32>) -> VertexOutput {
     var out: VertexOutput;
 
     let w = u_entity.world;

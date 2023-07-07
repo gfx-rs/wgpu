@@ -7,7 +7,7 @@ struct Foo {
 }
 
 struct FragmentIn {
-    @location(0) index: u32,
+    @location(0) @interpolate(flat) index: u32,
 }
 
 @group(0) @binding(0) 
@@ -16,7 +16,7 @@ var<storage> storage_array: binding_array<Foo,1>;
 var<uniform> uni: UniformIndex;
 
 @fragment 
-fn main(fragment_in: FragmentIn) -> @location(0) u32 {
+fn main(fragment_in: FragmentIn) -> @location(0) @interpolate(flat) u32 {
     var u1_: u32;
 
     let uniform_index = uni.index;

@@ -3,7 +3,7 @@ struct UniformIndex {
 }
 
 struct FragmentIn {
-    @location(0) index: u32,
+    @location(0) @interpolate(flat) index: u32,
 }
 
 @group(0) @binding(0) 
