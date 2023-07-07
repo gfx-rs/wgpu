@@ -1,17 +1,17 @@
 //! Points of interest for seeing uniforms in action:
 //!
-//! - At [1], the struct for the data stored in the uniform buffer is defined.
-//! - At [2], the uniform buffer itself is created.
-//! - At [3], the bind group that will bind the uniform buffer and it's layout are created.
-//! - At [4], the bind group layout is attached to the pipeline layout.
-//! - At [5], the uniform buffer and the bind group are stored alongside the pipeline.
-//! - At [6], an instance of [`AppState`] is created. This variable will be modified
+//! 1. the struct for the data stored in the uniform buffer is defined.
+//! 2. the uniform buffer itself is created.
+//! 3. the bind group that will bind the uniform buffer and it's layout are created.
+//! 4.  the bind group layout is attached to the pipeline layout.
+//! 5.  the uniform buffer and the bind group are stored alongside the pipeline.
+//! 6.  an instance of [`AppState`] is created. This variable will be modified
 //! to change parameters in the shader and modified by app events to preform and save
 //! those changes.
-//! - At [7a] and [7b], the `state` variable created at [6] is modified by commands such
+//! 7. (7a and 7b) the `state` variable created at (6) is modified by commands such
 //! as pressing the arrow keys or zooming in or out.
-//! - At [8], the contents of the `AppState` are loaded into the uniform buffer in preparation.
-//! - At [9], the bind group with the uniform buffer is attached to the render pass.
+//! 8. the contents of the `AppState` are loaded into the uniform buffer in preparation.
+//! 9. the bind group with the uniform buffer is attached to the render pass.
 //!
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
@@ -25,7 +25,7 @@ use winit::{
 const ZOOM_INCREMENT_FACTOR: f32 = 1.1;
 const CAMERA_POS_INCREMENT_FACTOR: f32 = 0.1;
 
-// [1]
+// (1)
 #[derive(Debug)]
 struct AppState {
     pub cursor_pos: [f32; 2],
@@ -99,7 +99,7 @@ impl WgpuContext {
             ))),
         });
 
-        // [2]
+        // (2)
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: std::mem::size_of::<AppState>() as u64,
@@ -107,7 +107,7 @@ impl WgpuContext {
             mapped_at_creation: false,
         });
 
-        // [3]
+        // (3)
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -136,7 +136,7 @@ impl WgpuContext {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            // [4]
+            // (4)
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
@@ -174,7 +174,7 @@ impl WgpuContext {
         };
         surface.configure(&device, &surface_config);
 
-        // [5]
+        // (5)
         WgpuContext {
             window,
             surface,
@@ -197,7 +197,7 @@ impl WgpuContext {
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut wgpu_context = Some(WgpuContext::new(window).await);
-    // [6]
+    // (6)
     let mut state = Some(AppState::default());
     let main_window_id = wgpu_context.as_ref().unwrap().window.id();
     event_loop.run(move |event, _, control_flow| match event {
@@ -213,7 +213,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 let state_mut = state.as_mut().unwrap();
                 let wgpu_context_ref = wgpu_context.as_ref().unwrap();
                 if let Some(virtual_keycode) = input.virtual_keycode {
-                    // [7a]
+                    // (7a)
                     match virtual_keycode {
                         VirtualKeyCode::Escape => control_flow.set_exit(),
                         VirtualKeyCode::Up => state_mut.translate_view(1, 1),
@@ -234,7 +234,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 };
                 let state_mut = state.as_mut().unwrap();
                 let wgpu_context_ref = wgpu_context.as_ref().unwrap();
-                // [7b]
+                // (7b)
                 state_mut.zoom(change);
                 wgpu_context_ref.window.request_redraw();
             }
@@ -253,7 +253,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-            // [8]
+            // (8)
             wgpu_context_ref.queue.write_buffer(
                 &wgpu_context_ref.uniform_buffer,
                 0,
@@ -283,7 +283,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     depth_stencil_attachment: None,
                 });
                 render_pass.set_pipeline(&wgpu_context_ref.pipeline);
-                // [9]
+                // (9)
                 render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
                 render_pass.draw(0..3, 0..1);
             }
