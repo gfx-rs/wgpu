@@ -501,6 +501,29 @@ impl<A: HalApi> Device<A> {
         }
     }
 
+    pub fn create_buffer_from_hal(
+        &self,
+        hal_buffer: A::Buffer,
+        self_id: id::DeviceId,
+        desc: &resource::BufferDescriptor,
+    ) -> Buffer<A> {
+        debug_assert_eq!(self_id.backend(), A::VARIANT);
+
+        Buffer {
+            raw: Some(hal_buffer),
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            usage: desc.usage,
+            size: desc.size,
+            initialization_status: BufferInitTracker::new(0),
+            sync_mapped_writes: None,
+            map_state: resource::BufferMapState::Idle,
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        }
+    }
+
     pub(super) fn create_texture(
         &self,
         self_id: id::DeviceId,

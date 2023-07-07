@@ -41,6 +41,7 @@ Bottom level categories:
 ## Unreleased
 
 ### Changes
+- Added support for importing external buffers using `buffer_from_raw` (Dx12, Metal, Vulkan) and `create_buffer_from_hal`. By @AdrianEddy in [#3355](https://github.com/gfx-rs/wgpu/pull/3355)
 
 #### Misc Breaking Changes
 
