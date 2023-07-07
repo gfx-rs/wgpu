@@ -1364,57 +1364,56 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     log::trace!("Device after submission {}", submit_index);
                 }
-
-                {
-                    let texture_guard = hub.textures.read();
-                    let mut pending_writes = device.pending_writes.lock();
-                    let pending_writes = pending_writes.as_mut().unwrap();
-
-                    used_surface_textures.set_size(texture_guard.len());
-                    for (&id, texture) in pending_writes.dst_textures.iter() {
-                        match *texture.inner.as_ref().unwrap() {
-                            TextureInner::Native { raw: None } => {
-                                return Err(QueueSubmitError::DestroyedTexture(id));
-                            }
-                            TextureInner::Native { raw: Some(_) } => {}
-                            TextureInner::Surface { ref has_work, .. } => {
-                                has_work.store(true, Ordering::Relaxed);
-                                unsafe {
-                                    used_surface_textures
-                                        .merge_single(
-                                            &*texture_guard,
-                                            id::Valid(id),
-                                            None,
-                                            hal::TextureUses::PRESENT,
-                                        )
-                                        .unwrap()
-                                };
-                            }
-                        }
-                    }
-
-                    if !used_surface_textures.is_empty() {
-                        let mut trackers = device.trackers.lock();
-
-                        trackers
-                            .textures
-                            .set_from_usage_scope(&*texture_guard, &used_surface_textures);
-                        let texture_barriers = trackers.textures.drain().map(|pending| {
-                            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-                            pending.into_hal(tex)
-                        });
-
-                        unsafe {
-                            pending_writes
-                                .command_encoder
-                                .transition_textures(texture_barriers);
-                        };
-                    }
-                }
             }
 
             let mut pending_writes = device.pending_writes.lock();
             let pending_writes = pending_writes.as_mut().unwrap();
+
+            {
+                let texture_guard = hub.textures.read();
+
+                used_surface_textures.set_size(texture_guard.len());
+                for (&id, texture) in pending_writes.dst_textures.iter() {
+                    match *texture.inner.as_ref().unwrap() {
+                        TextureInner::Native { raw: None } => {
+                            return Err(QueueSubmitError::DestroyedTexture(id));
+                        }
+                        TextureInner::Native { raw: Some(_) } => {}
+                        TextureInner::Surface { ref has_work, .. } => {
+                            has_work.store(true, Ordering::Relaxed);
+                            unsafe {
+                                used_surface_textures
+                                    .merge_single(
+                                        &*texture_guard,
+                                        id::Valid(id),
+                                        None,
+                                        hal::TextureUses::PRESENT,
+                                    )
+                                    .unwrap()
+                            };
+                        }
+                    }
+                }
+
+                if !used_surface_textures.is_empty() {
+                    let mut trackers = device.trackers.lock();
+
+                    trackers
+                        .textures
+                        .set_from_usage_scope(&*texture_guard, &used_surface_textures);
+                    let texture_barriers = trackers.textures.drain().map(|pending| {
+                        let tex = unsafe { texture_guard.get_unchecked(pending.id) };
+                        pending.into_hal(tex)
+                    });
+
+                    unsafe {
+                        pending_writes
+                            .command_encoder
+                            .transition_textures(texture_barriers);
+                    };
+                }
+            }
+
             let refs = pending_writes
                 .pre_submit()
                 .into_iter()
