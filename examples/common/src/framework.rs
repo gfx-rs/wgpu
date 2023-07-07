@@ -307,6 +307,8 @@ fn start<E: Example>(
                     },
                 ..
             } => {
+                // Once winit is fixed, the detection conditions here can be removed.
+                // https://github.com/rust-windowing/winit/issues/2876
                 let max_dimension = adapter.limits().max_texture_dimension_2d;
                 if size.width > max_dimension || size.height > max_dimension {
                     log::warn!(
