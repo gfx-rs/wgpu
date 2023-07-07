@@ -6,6 +6,7 @@ on:
       - 'tests/out/hlsl/*.hlsl'
       - 'tests/out/hlsl/*.ron'
       - 'xtask/**'
+      - 'hlsl-snapshots/**'
 
 jobs:
   validate-windows-dxc:
