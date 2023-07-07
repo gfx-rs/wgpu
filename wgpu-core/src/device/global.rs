@@ -470,7 +470,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let temp = queue::TempResource::Buffer(buffer.clone());
-            let mut pending_writes = device.pending_writes.write();
+            let mut pending_writes = device.pending_writes.lock();
             let pending_writes = pending_writes.as_mut().unwrap();
             if pending_writes.dst_buffers.contains_key(&buffer_id) {
                 pending_writes.temp_resources.push(temp);
@@ -514,7 +514,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             if device
                 .pending_writes
-                .read()
+                .lock()
                 .as_ref()
                 .unwrap()
                 .dst_buffers
@@ -751,7 +751,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::TextureInner::Native { ref raw } => {
                 if !raw.is_none() {
                     let temp = queue::TempResource::Texture(texture.clone(), clear_views);
-                    let mut pending_writes = device.pending_writes.write();
+                    let mut pending_writes = device.pending_writes.lock();
                     let pending_writes = pending_writes.as_mut().unwrap();
                     if pending_writes.dst_textures.contains_key(&texture_id) {
                         pending_writes.temp_resources.push(temp);
@@ -798,7 +798,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut life_lock = device.lock_life();
             if device
                 .pending_writes
-                .read()
+                .lock()
                 .as_ref()
                 .unwrap()
                 .dst_textures
@@ -2231,7 +2231,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // need to wait for submissions or triage them. We know we were
                 // just polled, so `life_tracker.free_resources` is empty.
                 debug_assert!(device.lock_life().queue_empty());
-                device.pending_writes.write().as_mut().unwrap().deactivate();
+                {
+                    let mut pending_writes = device.pending_writes.lock();
+                    let pending_writes = pending_writes.as_mut().unwrap();
+                    pending_writes.deactivate();
+                }
 
                 // Adapter is only referenced by the device and itself.
                 // This isn't a robust way to destroy them, we should find a better one.
@@ -2485,7 +2489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     buffer: raw_buf,
                     usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
                 };
-                let mut pending_writes = device.pending_writes.write();
+                let mut pending_writes = device.pending_writes.lock();
                 let pending_writes = pending_writes.as_mut().unwrap();
                 let encoder = pending_writes.activate();
                 unsafe {

@@ -401,34 +401,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(&device, data_size)?;
+        let mut pending_writes = device.pending_writes.lock();
+        let pending_writes = pending_writes.as_mut().unwrap();
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
             ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
             staging_buffer.flush(device.raw())
         } {
-            device
-                .pending_writes
-                .write()
-                .as_mut()
-                .unwrap()
-                .consume(&device, Arc::new(staging_buffer));
+            pending_writes.consume(&device, Arc::new(staging_buffer));
             return Err(flush_error.into());
         }
 
         let result = self.queue_write_staging_buffer_impl(
             &device,
+            pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
         );
 
-        device
-            .pending_writes
-            .write()
-            .as_mut()
-            .unwrap()
-            .consume(&device, Arc::new(staging_buffer));
+        pending_writes.consume(&device, Arc::new(staging_buffer));
         result
     }
 
@@ -478,34 +471,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )));
         }
         let staging_buffer = staging_buffer.unwrap();
+        let mut pending_writes = device.pending_writes.lock();
+        let pending_writes = pending_writes.as_mut().unwrap();
 
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         if let Err(flush_error) = unsafe { staging_buffer.flush(device.raw()) } {
-            device
-                .pending_writes
-                .write()
-                .as_mut()
-                .unwrap()
-                .consume(&device, staging_buffer);
+            pending_writes.consume(&device, staging_buffer);
             return Err(flush_error.into());
         }
 
         let result = self.queue_write_staging_buffer_impl(
             &device,
+            pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
         );
 
-        device
-            .pending_writes
-            .write()
-            .as_mut()
-            .unwrap()
-            .consume(&device, staging_buffer);
+        pending_writes.consume(&device, staging_buffer);
         result
     }
 
@@ -563,6 +549,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     fn queue_write_staging_buffer_impl<A: HalApi>(
         &self,
         device: &Device<A>,
+        pending_writes: &mut PendingWrites<A>,
         staging_buffer: &StagingBuffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
@@ -599,8 +586,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
         })
         .chain(transition.map(|pending| pending.into_hal(&dst)));
-        let mut pending_writes = device.pending_writes.write();
-        let pending_writes = pending_writes.as_mut().unwrap();
         let encoder = pending_writes.activate();
         unsafe {
             encoder.transition_buffers(barriers);
@@ -730,7 +715,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (size.depth_or_array_layers - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
 
-        let mut pending_writes = device.pending_writes.write();
+        let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
         let encoder = pending_writes.activate();
 
@@ -1003,7 +988,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (selector, dst_base) =
             extract_texture_selector(&destination.to_untagged(), &size, &dst)?;
 
-        let mut pending_writes = device.pending_writes.write();
+        let mut pending_writes = device.pending_writes.lock();
         let encoder = pending_writes.as_mut().unwrap().activate();
 
         // If the copy does not fully cover the layers, we need to initialize to
@@ -1382,16 +1367,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 {
                     let texture_guard = hub.textures.read();
+                    let mut pending_writes = device.pending_writes.lock();
+                    let pending_writes = pending_writes.as_mut().unwrap();
 
                     used_surface_textures.set_size(texture_guard.len());
-                    for (&id, texture) in device
-                        .pending_writes
-                        .read()
-                        .as_ref()
-                        .unwrap()
-                        .dst_textures
-                        .iter()
-                    {
+                    for (&id, texture) in pending_writes.dst_textures.iter() {
                         match *texture.inner.as_ref().unwrap() {
                             TextureInner::Native { raw: None } => {
                                 return Err(QueueSubmitError::DestroyedTexture(id));
@@ -1425,53 +1405,43 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         });
 
                         unsafe {
-                            device
-                                .pending_writes
-                                .write()
-                                .as_mut()
-                                .unwrap()
+                            pending_writes
                                 .command_encoder
                                 .transition_textures(texture_barriers);
                         };
                     }
                 }
+            }
 
-                {
-                    let mut pending_writes = device.pending_writes.write();
-                    let pending_writes = pending_writes.as_mut().unwrap();
-                    let refs = pending_writes
-                        .pre_submit()
-                        .into_iter()
-                        .chain(
-                            active_executions
-                                .iter()
-                                .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
-                        )
-                        .collect::<Vec<_>>();
-                    unsafe {
-                        device
-                            .queue
-                            .as_ref()
-                            .unwrap()
-                            .submit(&refs, Some((fence, submit_index)))
-                            .map_err(DeviceError::from)?;
-                    }
-                }
+            let mut pending_writes = device.pending_writes.lock();
+            let pending_writes = pending_writes.as_mut().unwrap();
+            let refs = pending_writes
+                .pre_submit()
+                .into_iter()
+                .chain(
+                    active_executions
+                        .iter()
+                        .flat_map(|pool_execution| pool_execution.cmd_buffers.iter()),
+                )
+                .collect::<Vec<_>>();
+            unsafe {
+                device
+                    .queue
+                    .as_ref()
+                    .unwrap()
+                    .submit(&refs, Some((fence, submit_index)))
+                    .map_err(DeviceError::from)?;
             }
 
             profiling::scope!("cleanup");
-            if let Some(pending_execution) =
-                device.pending_writes.write().as_mut().unwrap().post_submit(
-                    device.command_allocator.lock().as_mut().unwrap(),
-                    device.raw(),
-                    device.queue.as_ref().unwrap(),
-                )
-            {
+            if let Some(pending_execution) = pending_writes.post_submit(
+                device.command_allocator.lock().as_mut().unwrap(),
+                device.raw(),
+                device.queue.as_ref().unwrap(),
+            ) {
                 active_executions.push(pending_execution);
             }
 
-            let mut pending_writes = device.pending_writes.write();
-            let pending_writes = pending_writes.as_mut().unwrap();
             // this will register the new submission to the life time tracker
             let mut pending_write_resources = mem::take(&mut pending_writes.temp_resources);
             device.lock_life().track_submission(

@@ -103,7 +103,7 @@ pub struct Device<A: HalApi> {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
-    pub(crate) pending_writes: RwLock<Option<PendingWrites<A>>>,
+    pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
@@ -123,7 +123,7 @@ impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
         log::info!("Destroying Device {:?}", self.info.label());
         let raw = self.raw.take().unwrap();
-        let pending_writes = self.pending_writes.write().take().unwrap();
+        let pending_writes = self.pending_writes.lock().take().unwrap();
         pending_writes.dispose(&raw);
         self.command_allocator.lock().take().unwrap().dispose(&raw);
         unsafe {
@@ -250,7 +250,7 @@ impl<A: HalApi> Device<A> {
             limits: desc.limits.clone(),
             features: desc.features,
             downlevel,
-            pending_writes: RwLock::new(Some(pending_writes)),
+            pending_writes: Mutex::new(Some(pending_writes)),
         })
     }
 
@@ -3083,7 +3083,7 @@ impl<A: HalApi> Device<A> {
 
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
-        self.pending_writes.write().as_mut().unwrap().deactivate();
+        self.pending_writes.lock().as_mut().unwrap().deactivate();
         let mut life_tracker = self.lock_life();
         let current_index = self.active_submission_index.load(Ordering::Relaxed);
         if let Err(error) = unsafe {

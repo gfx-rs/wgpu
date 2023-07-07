@@ -189,7 +189,7 @@ pub(crate) enum BufferMapState<A: HalApi> {
         not(target_feature = "atomics")
     )
 ))]
-unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
+unsafe impl<A: HalApi> Send for BufferMapState<A> {}
 #[cfg(any(
     not(target_arch = "wasm32"),
     all(
@@ -197,7 +197,7 @@ unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
         not(target_feature = "atomics")
     )
 ))]
-unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
+unsafe impl<A: HalApi> Sync for BufferMapState<A> {}
 
 #[repr(C)]
 pub struct BufferMapCallbackC {
