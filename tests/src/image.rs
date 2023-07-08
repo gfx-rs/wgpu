@@ -1,8 +1,7 @@
 use std::{borrow::Cow, ffi::OsStr, io, path::Path};
 
-use wgpu::util::DeviceExt;
+use wgpu::util::{align_to, DeviceExt};
 use wgpu::*;
-use wgt::math::align_to;
 
 fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
     let data = match std::fs::read(&path) {
@@ -570,7 +569,6 @@ impl ReadbackBuffers {
             data.to_vec()
         } else {
             bytemuck::cast_slice(&data)
-                .to_vec()
                 .chunks_exact(
                     align_to(expected_bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT) as usize,
                 )
@@ -598,14 +596,12 @@ impl ReadbackBuffers {
             is_zero
         };
 
-        is_zero(device, &self.buffer, self.buffer_aspect())
-            && self
-                .buffer_stencil
-                .as_ref()
-                .map(|buffer_stencil| {
-                    is_zero(device, buffer_stencil, Some(TextureAspect::StencilOnly))
-                })
-                .unwrap_or(true)
+        let buffer_zero = is_zero(device, &self.buffer, self.buffer_aspect());
+        let mut stencil_buffer_zero = true;
+        if let Some(buffer) = &self.buffer_stencil {
+            stencil_buffer_zero = is_zero(device, buffer, Some(TextureAspect::StencilOnly));
+        };
+        buffer_zero && stencil_buffer_zero
     }
 
     pub fn check_buffer_contents(&self, device: &Device, expected_data: &[u8]) -> bool {

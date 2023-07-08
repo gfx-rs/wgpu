@@ -90,7 +90,7 @@ fn draw_indexed() {
 fn pulling_common(
     ctx: TestingContext,
     expected: &[u8],
-    function: impl FnOnce(&mut wgpu::RenderPass<'_>),
+    draw_command: impl FnOnce(&mut wgpu::RenderPass<'_>),
 ) {
     let shader = ctx
         .device
@@ -191,7 +191,7 @@ fn pulling_common(
         rpass.set_pipeline(&pipeline);
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        function(&mut rpass);
+        draw_command(&mut rpass);
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
     ctx.queue.submit(Some(encoder.finish()));
