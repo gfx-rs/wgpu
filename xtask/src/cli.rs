@@ -17,6 +17,7 @@ Commands:
       fxc
     msl
     spv
+    wgsl
 
 Options:
   -h, --help  Print help
