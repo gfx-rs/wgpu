@@ -894,11 +894,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // This means that backends which do provide accurate device types
             // will be preferred if their device type indicates an actual
             // hardware GPU (integrated or discrete).
-            Some(PowerPreference::LowPower) => integrated.or(discrete).or(other).or(virt).or(cpu),
-            Some(PowerPreference::HighPerformance) => {
-                discrete.or(integrated).or(other).or(virt).or(cpu)
+            PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
+            PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
+            PowerPreference::None => {
+                let option_min = |a: Option<usize>, b: Option<usize>| {
+                    if let (Some(a), Some(b)) = (a, b) {
+                        Some(a.min(b))
+                    } else {
+                        a.or(b)
+                    }
+                };
+                // Pick the lowest id of these types (which will give us a `Backends::PRIMARY`
+                // adapter, if one exists).
+                option_min(option_min(discrete, integrated), other)
             }
-            None => None,
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);

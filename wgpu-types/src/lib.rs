@@ -130,15 +130,18 @@ impl Backend {
 /// Corresponds to [WebGPU `GPUPowerPreference`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
+    #[default]
+    /// Power usage is not considered when choosing an adapter.
+    None = 0,
     /// Adapter that uses the least possible power. This is often an integrated GPU.
-    LowPower = 0,
+    LowPower = 1,
     /// Adapter that has the highest performance. This is often a discrete GPU.
-    HighPerformance = 1,
+    HighPerformance = 2,
 }
 
 bitflags::bitflags! {
@@ -191,9 +194,8 @@ impl From<Backend> for Backends {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct RequestAdapterOptions<S> {
-    /// Power preference for the adapter. If `None`, then power usage
-    /// is not considered when choosing an adapter.
-    pub power_preference: Option<PowerPreference>,
+    /// Power preference for the adapter.
+    pub power_preference: PowerPreference,
     /// Indicates that only a fallback adapter can be returned. This is generally a "software"
     /// implementation on the system.
     pub force_fallback_adapter: bool,
@@ -205,7 +207,7 @@ pub struct RequestAdapterOptions<S> {
 impl<S> Default for RequestAdapterOptions<S> {
     fn default() -> Self {
         Self {
-            power_preference: None,
+            power_preference: PowerPreference::default(),
             force_fallback_adapter: false,
             compatible_surface: None,
         }
