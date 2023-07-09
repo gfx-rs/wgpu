@@ -471,11 +471,11 @@ pub struct ReadbackBuffers {
 impl ReadbackBuffers {
     pub fn new(device: &Device, texture: &Texture) -> Self {
         let (block_width, block_height) = texture.format().block_dimensions();
-        let should_align_buffer_size = !([
+        const SKIP_ALIGNMENT_FORMATS: [TextureFormat; 2] = [
             TextureFormat::Depth24Plus,
             TextureFormat::Depth24PlusStencil8,
-        ]
-        .contains(&texture.format()));
+        ];
+        let should_align_buffer_size = !SKIP_ALIGNMENT_FORMATS.contains(&texture.format());
         if texture.format().is_combined_depth_stencil_format() {
             let mut buffer_depth_bytes_per_row = (texture.width() / block_width)
                 * texture
