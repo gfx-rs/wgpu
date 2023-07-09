@@ -4584,9 +4584,9 @@ pub struct SurfaceCapabilities {
     ///
     /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
     pub alpha_modes: Vec<CompositeAlphaMode>,
-    /// List of supported texture usages for the surface to use with the given adapter.
+    /// Bitflag of supported texture usages for the surface to use with the given adapter.
     ///
-    /// What happens if the surface is incompatible with the adapter?
+    /// The usage TextureUsages::RENDER_ATTACHMENT is guaranteed.
     pub usages: TextureUsages,
 }
 
@@ -4596,7 +4596,7 @@ impl Default for SurfaceCapabilities {
             formats: Vec::new(),
             present_modes: Vec::new(),
             alpha_modes: vec![CompositeAlphaMode::Opaque],
-            usages: TextureUsages::empty(),
+            usages: TextureUsages::RENDER_ATTACHMENT,
         }
     }
 }

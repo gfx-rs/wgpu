@@ -1113,7 +1113,6 @@ impl crate::context::Context for Context {
         _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
-        
         wgt::SurfaceCapabilities {
             // https://gpuweb.github.io/gpuweb/#supported-context-formats
             formats: vec![
@@ -1124,8 +1123,8 @@ impl crate::context::Context for Context {
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
-            
-            // Something has to go here
+            // Statically set to RENDER_ATTACHMENT for now. See https://github.com/gfx-rs/wgpu/pull/3874
+            usages: TextureUsages::RENDER_ATTACHMENT,
         }
     }
 
