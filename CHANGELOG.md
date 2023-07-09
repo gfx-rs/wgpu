@@ -46,11 +46,7 @@ Bottom level categories:
 #### Misc Breaking Changes
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
-- Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904)
-
-#### DX12
-
-- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
+- Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) 
 
 #### Vulkan
 
@@ -105,6 +101,14 @@ Bottom level categories:
 #### General
 
 - Publish examples to wgpu.rs on updates to trunk branch instead of gecko. By @paul-hansen in [#3750](https://github.com/gfx-rs/wgpu/pull/3750)
+
+## v0.16.2 (2023-07-09)
+
+### Changes
+
+#### DX12
+
+- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
 
 ## v0.16.1 (2023-05-24)
 
