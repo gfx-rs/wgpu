@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.12.3 (2023-7-09)
+
+#### WGSL-OUT
+
+- Properly add `@interpolate` attribute to vertex parameters where appropriate.
+
 ## v0.12.2 (2023-5-30)
 
 #### WGSL-IN, SPV-OUT
