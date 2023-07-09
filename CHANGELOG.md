@@ -40,7 +40,7 @@ Bottom level categories:
 
 ## Unreleased
 
-## v0.16.1 (2023-06-09)
+## v0.16.2 (2023-07-09)
 
 ### Changes
 
