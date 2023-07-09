@@ -49,11 +49,6 @@ Bottom level categories:
 - Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904)
 - Add a `compatible_surface` parameter to `initialize_adapter_from_env` and use that to make `initialize_adapter_from_env_or_default` always respect its `compatible_surface` parameter. By @fornwall in [#3905](https://github.com/gfx-rs/wgpu/pull/3905)
 
-#### DX12
-
-- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
-
-
 #### Vulkan
 
 - Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
