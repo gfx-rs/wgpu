@@ -48,7 +48,6 @@ Bottom level categories:
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
 - Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904)
 - Add a `compatible_surface` parameter to `initialize_adapter_from_env` and use that to make `initialize_adapter_from_env_or_default` always respect its `compatible_surface` parameter. By @fornwall in [#3905](https://github.com/gfx-rs/wgpu/pull/3905)
-- Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) 
 
 #### DX12
 
