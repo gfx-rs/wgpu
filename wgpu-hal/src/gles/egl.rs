@@ -630,6 +630,13 @@ impl Instance {
             .expect("Could not lock instance. This is most-likely a deadlock.")
             .version
     }
+
+    pub fn egl_config(&self) -> khronos_egl::Config {
+        self.inner
+            .try_lock()
+            .expect("Could not lock instance. This is most-likely a deadlock.")
+            .config
+    }
 }
 
 unsafe impl Send for Instance {}

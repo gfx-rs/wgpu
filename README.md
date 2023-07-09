@@ -57,7 +57,7 @@ files, producing 1.63-compatible files.
 
 ### Rust
 
-Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --bin name`. See the [list of examples](wgpu/examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
+Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --bin name`. See the [list of examples](examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
 
 If you are looking for a wgpu tutorial, look at the following:
 

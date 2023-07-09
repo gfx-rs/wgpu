@@ -746,7 +746,21 @@ pub struct RenderBundle<A: HalApi> {
     pub(crate) life_guard: LifeGuard,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 
 impl<A: HalApi> RenderBundle<A> {
