@@ -1351,7 +1351,7 @@ static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 /// For use in [`VertexState`].
 ///
 /// Corresponds to [WebGPU `GPUVertexBufferLayout`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexbufferlayout).
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
@@ -2504,6 +2504,50 @@ impl Device {
                 view_formats: &[],
                 ..desc.clone()
             },
+        }
+    }
+
+    /// Creates a [`Buffer`] from a wgpu-hal Buffer.
+    ///
+    /// # Safety
+    ///
+    /// - `hal_buffer` must be created from this device internal handle
+    /// - `hal_buffer` must be created respecting `desc`
+    /// - `hal_buffer` must be initialized
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_buffer: A::Buffer,
+        desc: &BufferDescriptor,
+    ) -> Buffer {
+        let mut map_context = MapContext::new(desc.size);
+        if desc.mapped_at_creation {
+            map_context.initial_range = 0..desc.size;
+        }
+
+        let (id, buffer) = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_buffer_from_hal::<A>(
+                    hal_buffer,
+                    self.data.as_ref().downcast_ref().unwrap(),
+                    desc,
+                )
+        };
+
+        Buffer {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(id),
+            data: Box::new(buffer),
+            map_context: Mutex::new(map_context),
+            size: desc.size,
+            usage: desc.usage,
         }
     }
 

@@ -280,16 +280,16 @@ impl super::DeviceShared {
         &self,
         buffer: &'a super::Buffer,
         ranges: I,
-    ) -> impl 'a + Iterator<Item = vk::MappedMemoryRange> {
-        let block = buffer.block.lock();
+    ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange>> {
+        let block = buffer.block.as_ref()?.lock();
         let mask = self.private_caps.non_coherent_map_mask;
-        ranges.map(move |range| {
+        Some(ranges.map(move |range| {
             vk::MappedMemoryRange::builder()
                 .memory(*block.memory())
                 .offset((block.offset() + range.start) & !mask)
                 .size((range.end - range.start + mask) & !mask)
                 .build()
-        })
+        }))
     }
 
     unsafe fn free_resources(&self) {
@@ -680,6 +680,17 @@ impl super::Device {
         }
     }
 
+    /// # Safety
+    ///
+    /// - `vk_buffer`'s memory must be managed by the caller
+    /// - Externally imported buffers can't be mapped by `wgpu`
+    pub unsafe fn buffer_from_raw(vk_buffer: vk::Buffer) -> super::Buffer {
+        super::Buffer {
+            raw: vk_buffer,
+            block: None,
+        }
+    }
+
     fn create_shader_module_impl(
         &self,
         spv: &[u32],
@@ -868,16 +879,18 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Buffer {
             raw,
-            block: Mutex::new(block),
+            block: Some(Mutex::new(block)),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
-        unsafe {
-            self.mem_allocator
-                .lock()
-                .dealloc(&*self.shared, buffer.block.into_inner())
-        };
+        if let Some(block) = buffer.block {
+            unsafe {
+                self.mem_allocator
+                    .lock()
+                    .dealloc(&*self.shared, block.into_inner())
+            };
+        }
     }
 
     unsafe fn map_buffer(
@@ -885,48 +898,56 @@ impl crate::Device<super::Api> for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
-        let size = range.end - range.start;
-        let mut block = buffer.block.lock();
-        let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
-        let is_coherent = block
-            .props()
-            .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
-        Ok(crate::BufferMapping { ptr, is_coherent })
+        if let Some(ref block) = buffer.block {
+            let size = range.end - range.start;
+            let mut block = block.lock();
+            let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
+            let is_coherent = block
+                .props()
+                .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
+            Ok(crate::BufferMapping { ptr, is_coherent })
+        } else {
+            Err(crate::DeviceError::OutOfMemory)
+        }
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        unsafe { buffer.block.lock().unmap(&*self.shared) };
-        Ok(())
+        if let Some(ref block) = buffer.block {
+            unsafe { block.lock().unmap(&*self.shared) };
+            Ok(())
+        } else {
+            Err(crate::DeviceError::OutOfMemory)
+        }
     }
 
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
-
-        unsafe {
-            self.shared
-                .raw
-                .flush_mapped_memory_ranges(
-                    &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
-                )
+        if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
+            unsafe {
+                self.shared
+                    .raw
+                    .flush_mapped_memory_ranges(
+                        &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
+                    )
+            }
+            .unwrap();
         }
-        .unwrap();
     }
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
-
-        unsafe {
-            self.shared
-                .raw
-                .invalidate_mapped_memory_ranges(
-                    &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
-                )
+        if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
+            unsafe {
+                self.shared
+                    .raw
+                    .invalidate_mapped_memory_ranges(&smallvec::SmallVec::<
+                        [vk::MappedMemoryRange; 32],
+                    >::from_iter(vk_ranges))
+            }
+            .unwrap();
         }
-        .unwrap();
     }
 
     unsafe fn create_texture(
