@@ -1161,7 +1161,7 @@ impl crate::context::Context for Context {
             present_modes: vec![wgt::PresentMode::Fifo],
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
             // Statically set to RENDER_ATTACHMENT for now. See https://github.com/gfx-rs/wgpu/pull/3874
-            usages: TextureUsages::RENDER_ATTACHMENT,
+            usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
     }
 
