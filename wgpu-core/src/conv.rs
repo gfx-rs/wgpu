@@ -131,9 +131,7 @@ pub fn map_texture_usage(
     u
 }
 
-pub fn map_texture_usage_from_hal(
-    uses: hal::TextureUses,
-) -> wgt::TextureUsages{
+pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages {
     let mut u = wgt::TextureUsages::empty();
     u.set(
         wgt::TextureUsages::COPY_SRC,
@@ -149,21 +147,17 @@ pub fn map_texture_usage_from_hal(
     );
     u.set(
         wgt::TextureUsages::STORAGE_BINDING,
-        uses.contains(
-            hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE,
-        ),
+        uses.contains(hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE),
     );
     u.set(
         wgt::TextureUsages::RENDER_ATTACHMENT,
         uses.contains(hal::TextureUses::COLOR_TARGET)
             | uses.contains(
-                hal::TextureUses::DEPTH_STENCIL_READ
-                    | hal::TextureUses::DEPTH_STENCIL_WRITE,
+                hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::DEPTH_STENCIL_WRITE,
             ),
     );
     u
 }
-
 
 pub fn check_texture_dimension_size(
     dimension: wgt::TextureDimension,
