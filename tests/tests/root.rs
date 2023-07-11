@@ -5,6 +5,7 @@ mod regression {
     mod issue_4024;
 }
 
+mod bind_group_layout_dedup;
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;
