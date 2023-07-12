@@ -1,5 +1,7 @@
 use crate::{
-    binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
+    binding_model::{
+        BindGroup, BindGroupLayouts, LateMinBufferBindingSizeMismatch, PipelineLayout,
+    },
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
     id::{BindGroupId, PipelineLayoutId, Valid},
@@ -13,7 +15,10 @@ use arrayvec::ArrayVec;
 type BindGroupMask = u8;
 
 mod compat {
-    use crate::id::{BindGroupLayoutId, Valid};
+    use crate::{
+        binding_model::BindGroupLayouts,
+        id::{BindGroupLayoutId, Valid},
+    };
     use std::ops::Range;
 
     #[derive(Debug, Default)]
@@ -27,8 +32,16 @@ mod compat {
             self.assigned.is_some() && self.expected.is_some()
         }
 
-        fn is_valid(&self) -> bool {
-            self.expected.is_none() || self.expected == self.assigned
+        fn is_valid<A: hal::Api>(&self, bind_group_layouts: &BindGroupLayouts<A>) -> bool {
+            if self.expected.is_none() || self.expected == self.assigned {
+                return true;
+            }
+
+            if let Some(id) = self.assigned {
+                return bind_group_layouts[id].compatible_layout == self.expected;
+            }
+
+            false
         }
     }
 
@@ -88,9 +101,12 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_active() { Some(i) } else { None })
         }
 
-        pub fn invalid_mask(&self) -> super::BindGroupMask {
+        pub fn invalid_mask<A: hal::Api>(
+            &self,
+            bind_group_layouts: &BindGroupLayouts<A>,
+        ) -> super::BindGroupMask {
             self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
-                if entry.is_valid() {
+                if entry.is_valid(bind_group_layouts) {
                     mask
                 } else {
                     mask | 1u8 << i
@@ -276,8 +292,11 @@ impl Binder {
             .map(move |index| payloads[index].group_id.as_ref().unwrap().value)
     }
 
-    pub(super) fn invalid_mask(&self) -> BindGroupMask {
-        self.manager.invalid_mask()
+    pub(super) fn invalid_mask<A: hal::Api>(
+        &self,
+        bind_group_layouts: &BindGroupLayouts<A>,
+    ) -> BindGroupMask {
+        self.manager.invalid_mask(bind_group_layouts)
     }
 
     /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.
