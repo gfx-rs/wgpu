@@ -1581,7 +1581,7 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    /// Helper method that writes a list of comma separated `T` with a writer function `F`
+    /// Write a list of comma separated `T` values using a writer function `F`.
     ///
     /// The writer function `F` receives a mutable reference to `self` that if needed won't cause
     /// borrow checker issues (using for example a closure with `self` will cause issues), the
@@ -1596,7 +1596,7 @@ impl<'a, W: Write> Writer<'a, W> {
         data: &[T],
         mut f: F,
     ) -> BackendResult {
-        // Loop trough `data` invoking `f` for each element
+        // Loop through `data` invoking `f` for each element
         for (index, item) in data.iter().enumerate() {
             if index != 0 {
                 write!(self.out, ", ")?;
@@ -2164,20 +2164,40 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    /// Helper method used to write constant expressions
+    /// Write a const expression.
+    ///
+    /// Write `expr`, a handle to an [`Expression`] in the current [`Module`]'s
+    /// constant expression arena, as GLSL expression.
     ///
     /// # Notes
     /// Adds no newlines or leading/trailing whitespace
+    ///
+    /// [`Expression`]: crate::Expression
+    /// [`Module`]: crate::Module
     fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
         self.write_possibly_const_expr(expr, &self.module.const_expressions, |writer, expr| {
             writer.write_const_expr(expr)
         })
     }
 
-    /// Helper method used to write possibly constant expressions
+    /// Write [`Expression`] variants that can occur in both runtime and const expressions.
+    ///
+    /// Write `expr`, a handle to an [`Expression`] in the arena `expressions`,
+    /// as as GLSL expression. This must be one of the [`Expression`] variants
+    /// that is allowed to occur in constant expressions.
+    ///
+    /// Use `write_expression` to write subexpressions.
+    ///
+    /// This is the common code for `write_expr`, which handles arbitrary
+    /// runtime expressions, and `write_const_expr`, which only handles
+    /// const-expressions. Each of those callers passes itself (essentially) as
+    /// the `write_expression` callback, so that subexpressions are restricted
+    /// to the appropriate variants.
     ///
     /// # Notes
     /// Adds no newlines or leading/trailing whitespace
+    ///
+    /// [`Expression`]: crate::Expression
     fn write_possibly_const_expr<E>(
         &mut self,
         expr: Handle<crate::Expression>,
