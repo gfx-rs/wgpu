@@ -145,6 +145,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+
+            if desc.usage.is_empty() {
+                // Per spec, `usage` must not be zero.
+                break resource::CreateBufferError::InvalidUsage(desc.usage);
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut desc = desc.clone();
