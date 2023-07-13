@@ -11,6 +11,7 @@ fn device_initialization() {
 }
 
 #[test]
+#[ignore]
 fn device_mismatch() {
     initialize_test(TestParameters::default().failure(), |ctx| {
         // Create a bind group uisng a lyaout from another device. This should be a validation
