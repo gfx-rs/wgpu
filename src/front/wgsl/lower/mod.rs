@@ -196,12 +196,13 @@ pub enum ExpressionContextType<'temp, 'out> {
     /// We are lowering to an arbitrary runtime expression, to be
     /// included in a function's body.
     ///
-    /// The given [`RuntimeExpressionContext`] holds information about
-    /// local variables, arguments, and other definitions available to
-    /// runtime expressions, but not constant or override expressions.
+    /// The given [`RuntimeExpressionContext`] holds information about local
+    /// variables, arguments, and other definitions available only to runtime
+    /// expressions, not constant or override expressions.
     Runtime(RuntimeExpressionContext<'temp, 'out>),
 
-    /// We are lowering to a constant expression.
+    /// We are lowering to a constant expression, to be included in the module's
+    /// constant expression arena.
     ///
     /// Everything constant expressions are allowed to refer to is
     /// available in the [`ExpressionContext`], so this variant
@@ -211,32 +212,44 @@ pub enum ExpressionContextType<'temp, 'out> {
 
 /// State for lowering an [`ast::Expression`] to Naga IR.
 ///
-/// [`ExpressionContext`]s come in two kinds:
+/// [`ExpressionContext`]s come in two kinds, distinguished by
+/// the value of the [`expr_type`] field:
 ///
-/// depending on the `expr_type` is a value of this type, determining what sort
-/// of IR expression the context builds.
+/// - A [`Runtime`] context contributes [`naga::Expression`]s to a [`naga::Function`]'s
+///   runtime expression arena.
 ///
-/// These are constructed in restricted ways:
+/// - A [`Constant`] context contributes [`naga::Expression`]s to a [`naga::Module`]'s
+///   constant expression arena.
 ///
-/// - To originate a [`Runtime`] [`ExpressionContext`], call
+/// [`ExpressionContext`]s are constructed in restricted ways:
+///
+/// - To get a [`Runtime`] [`ExpressionContext`], call
 ///   [`StatementContext::as_expression`].
 ///
-/// - To originate a [`Constant`] [`ExpressionContext`], call
+/// - To get a [`Constant`] [`ExpressionContext`], call
 ///   [`GlobalContext::as_const`].
 ///
-/// - You can demote a [`Runtime`] [`ExpressionContext`] to a [`Constant`]
-///   context by calling [`as_const`], but there's no way to go in the other
-///   direction and get a runtime context from a constant one.
+/// - You can demote a [`Runtime`] context to a [`Constant`] context
+///   by calling [`as_const`], but there's no way to go in the other
+///   direction, producing a runtime context from a constant one. This
+///   is because runtime expressions can refer to constant
+///   expressions, via [`Expression::Constant`], but constant
+///   expressions can't refer to a function's expressions.
 ///
 /// - You can always call [`ExpressionContext::reborrow`] to get a fresh context
-///   for a recursive call. The reborrowed context is identical to the original.
+///   for a recursive call. The reborrowed context is equivalent to the original.
 ///
 /// Not to be confused with `wgsl::parse::ExpressionContext`, which is
 /// for parsing the `ast::Expression` in the first place.
 ///
+/// [`expr_type`]: ExpressionContext::expr_type
 /// [`Runtime`]: ExpressionContextType::Runtime
+/// [`naga::Expression`]: crate::Expression
+/// [`naga::Function`]: crate::Function
 /// [`Constant`]: ExpressionContextType::Constant
+/// [`naga::Module`]: crate::Module
 /// [`as_const`]: ExpressionContext::as_const
+/// [`Expression::Constant`]: crate::Expression::Constant
 pub struct ExpressionContext<'source, 'temp, 'out> {
     // WGSL AST values.
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
