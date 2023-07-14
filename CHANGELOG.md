@@ -69,6 +69,7 @@ Bottom level categories:
 - Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763).
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
 - On Web, types don't implement `Send` or `Sync` anymore. By @daxpedda in [#3691](https://github.com/gfx-rs/wgpu/pull/3691)
+- Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [https://github.com/gfx-rs/wgpu/pull/#3928](3928)
 
 ### Bug Fixes
 
