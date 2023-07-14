@@ -54,7 +54,7 @@ impl GeneralHeap {
         };
 
         Ok(Self {
-            raw,
+            raw: raw.clone(),
             ty,
             handle_size: device.get_descriptor_increment_size(ty) as u64,
             total_handles,
@@ -106,7 +106,7 @@ impl GeneralHeap {
 
 /// Fixed-size free-list allocator for CPU descriptors.
 struct FixedSizeHeap {
-    raw: d3d12::DescriptorHeap,
+    _raw: d3d12::DescriptorHeap,
     /// Bit flag representation of available handles in the heap.
     ///
     ///  0 - Occupied
@@ -117,7 +117,7 @@ struct FixedSizeHeap {
 }
 
 impl FixedSizeHeap {
-    fn new(device: d3d12::Device, ty: d3d12::DescriptorHeapType) -> Self {
+    fn new(device: &d3d12::Device, ty: d3d12::DescriptorHeapType) -> Self {
         let (heap, _hr) = device.create_descriptor_heap(
             HEAP_SIZE_FIXED as _,
             ty,
@@ -129,7 +129,7 @@ impl FixedSizeHeap {
             handle_size: device.get_descriptor_increment_size(ty) as _,
             availability: !0, // all free!
             start: heap.start_cpu_descriptor(),
-            raw: heap,
+            _raw: heap,
         }
     }
 
@@ -154,10 +154,6 @@ impl FixedSizeHeap {
 
     fn is_full(&self) -> bool {
         self.availability == 0
-    }
-
-    unsafe fn destroy(&self) {
-        unsafe { self.raw.destroy() };
     }
 }
 
@@ -201,7 +197,7 @@ impl CpuPool {
             .unwrap_or_else(|| {
                 // Allocate a new heap
                 let id = self.heaps.len();
-                self.heaps.push(FixedSizeHeap::new(self.device, self.ty));
+                self.heaps.push(FixedSizeHeap::new(&self.device, self.ty));
                 self.avaliable_heap_indices.insert(id);
                 id
             });
@@ -222,16 +218,10 @@ impl CpuPool {
         self.heaps[handle.heap_index].free_handle(handle.raw);
         self.avaliable_heap_indices.insert(handle.heap_index);
     }
-
-    pub(super) unsafe fn destroy(&self) {
-        for heap in &self.heaps {
-            unsafe { heap.destroy() };
-        }
-    }
 }
 
 pub(super) struct CpuHeapInner {
-    pub raw: d3d12::DescriptorHeap,
+    pub _raw: d3d12::DescriptorHeap,
     pub stage: Vec<d3d12::CpuDescriptor>,
 }
 
@@ -258,7 +248,7 @@ impl CpuHeap {
 
         Ok(Self {
             inner: Mutex::new(CpuHeapInner {
-                raw,
+                _raw: raw.clone(),
                 stage: Vec::new(),
             }),
             start: raw.start_cpu_descriptor(),
@@ -271,10 +261,6 @@ impl CpuHeap {
         d3d12::CpuDescriptor {
             ptr: self.start.ptr + (self.handle_size * index) as usize,
         }
-    }
-
-    pub(super) unsafe fn destroy(self) {
-        unsafe { self.inner.into_inner().raw.destroy() };
     }
 }
 
