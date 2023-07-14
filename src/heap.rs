@@ -1,7 +1,7 @@
-use crate::com::WeakPtr;
+use crate::com::ComPtr;
 use winapi::um::d3d12;
 
-pub type Heap = WeakPtr<d3d12::ID3D12Heap>;
+pub type Heap = ComPtr<d3d12::ID3D12Heap>;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]

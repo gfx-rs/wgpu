@@ -1,4 +1,4 @@
-use crate::{com::WeakPtr, Blob, D3DResult, Error, TextureAddressMode};
+use crate::{com::ComPtr, Blob, D3DResult, Error, TextureAddressMode};
 use std::{fmt, mem, ops::Range};
 use winapi::{shared::dxgiformat, um::d3d12};
 
@@ -27,7 +27,7 @@ bitflags! {
     }
 }
 
-pub type DescriptorHeap = WeakPtr<d3d12::ID3D12DescriptorHeap>;
+pub type DescriptorHeap = ComPtr<d3d12::ID3D12DescriptorHeap>;
 
 impl DescriptorHeap {
     pub fn start_cpu_descriptor(&self) -> CpuDescriptor {
@@ -265,7 +265,7 @@ bitflags! {
     }
 }
 
-pub type RootSignature = WeakPtr<d3d12::ID3D12RootSignature>;
+pub type RootSignature = ComPtr<d3d12::ID3D12RootSignature>;
 pub type BlobResult = D3DResult<(Blob, Error)>;
 
 #[cfg(feature = "libloading")]

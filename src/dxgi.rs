@@ -1,4 +1,4 @@
-use crate::{com::WeakPtr, D3DResult, Resource, SampleDesc, HRESULT};
+use crate::{com::ComPtr, D3DResult, Resource, SampleDesc, HRESULT};
 use std::ptr;
 use winapi::{
     shared::{
@@ -43,14 +43,14 @@ pub enum AlphaMode {
     ForceDword = dxgi1_2::DXGI_ALPHA_MODE_FORCE_DWORD,
 }
 
-pub type InfoQueue = WeakPtr<dxgidebug::IDXGIInfoQueue>;
+pub type InfoQueue = ComPtr<dxgidebug::IDXGIInfoQueue>;
 
-pub type Adapter1 = WeakPtr<dxgi::IDXGIAdapter1>;
-pub type Adapter2 = WeakPtr<dxgi1_2::IDXGIAdapter2>;
-pub type Adapter3 = WeakPtr<dxgi1_4::IDXGIAdapter3>;
-pub type Adapter4 = WeakPtr<dxgi1_6::IDXGIAdapter4>;
+pub type Adapter1 = ComPtr<dxgi::IDXGIAdapter1>;
+pub type Adapter2 = ComPtr<dxgi1_2::IDXGIAdapter2>;
+pub type Adapter3 = ComPtr<dxgi1_4::IDXGIAdapter3>;
+pub type Adapter4 = ComPtr<dxgi1_6::IDXGIAdapter4>;
 crate::weak_com_inheritance_chain! {
-    #[derive(Debug, Copy, Clone, PartialEq, Hash)]
+    #[derive(Debug, Clone, PartialEq, Hash)]
     pub enum DxgiAdapter {
         Adapter1(dxgi::IDXGIAdapter1), from_adapter1, as_adapter1, adapter1;
         Adapter2(dxgi1_2::IDXGIAdapter2), from_adapter2, as_adapter2, unwrap_adapter2;
@@ -59,14 +59,14 @@ crate::weak_com_inheritance_chain! {
     }
 }
 
-pub type Factory1 = WeakPtr<dxgi::IDXGIFactory1>;
-pub type Factory2 = WeakPtr<dxgi1_2::IDXGIFactory2>;
-pub type Factory3 = WeakPtr<dxgi1_3::IDXGIFactory3>;
-pub type Factory4 = WeakPtr<dxgi1_4::IDXGIFactory4>;
-pub type Factory5 = WeakPtr<dxgi1_5::IDXGIFactory5>;
-pub type Factory6 = WeakPtr<dxgi1_6::IDXGIFactory6>;
+pub type Factory1 = ComPtr<dxgi::IDXGIFactory1>;
+pub type Factory2 = ComPtr<dxgi1_2::IDXGIFactory2>;
+pub type Factory3 = ComPtr<dxgi1_3::IDXGIFactory3>;
+pub type Factory4 = ComPtr<dxgi1_4::IDXGIFactory4>;
+pub type Factory5 = ComPtr<dxgi1_5::IDXGIFactory5>;
+pub type Factory6 = ComPtr<dxgi1_6::IDXGIFactory6>;
 crate::weak_com_inheritance_chain! {
-    #[derive(Debug, Copy, Clone, PartialEq, Hash)]
+    #[derive(Debug, Clone, PartialEq, Hash)]
     pub enum DxgiFactory {
         Factory1(dxgi::IDXGIFactory1), from_factory1, as_factory1, factory1;
         Factory2(dxgi1_2::IDXGIFactory2), from_factory2, as_factory2, unwrap_factory2;
@@ -77,14 +77,14 @@ crate::weak_com_inheritance_chain! {
     }
 }
 
-pub type FactoryMedia = WeakPtr<dxgi1_3::IDXGIFactoryMedia>;
+pub type FactoryMedia = ComPtr<dxgi1_3::IDXGIFactoryMedia>;
 
-pub type SwapChain = WeakPtr<dxgi::IDXGISwapChain>;
-pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
-pub type SwapChain2 = WeakPtr<dxgi1_3::IDXGISwapChain2>;
-pub type SwapChain3 = WeakPtr<dxgi1_4::IDXGISwapChain3>;
+pub type SwapChain = ComPtr<dxgi::IDXGISwapChain>;
+pub type SwapChain1 = ComPtr<dxgi1_2::IDXGISwapChain1>;
+pub type SwapChain2 = ComPtr<dxgi1_3::IDXGISwapChain2>;
+pub type SwapChain3 = ComPtr<dxgi1_4::IDXGISwapChain3>;
 crate::weak_com_inheritance_chain! {
-    #[derive(Debug, Copy, Clone, PartialEq, Hash)]
+    #[derive(Debug, Clone, PartialEq, Hash)]
     pub enum DxgiSwapchain {
         SwapChain(dxgi::IDXGISwapChain), from_swap_chain, as_swap_chain, swap_chain;
         SwapChain1(dxgi1_2::IDXGISwapChain1), from_swap_chain1, as_swap_chain1, unwrap_swap_chain1;
