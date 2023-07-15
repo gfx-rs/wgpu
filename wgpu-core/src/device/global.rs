@@ -732,11 +732,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Device::create_buffer");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
         let fid = hub.buffers.prepare(id_in);
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
+            let device_guard = hub.devices.read();
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -745,32 +744,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // NB: Any change done through the raw buffer handle will not be
             // recorded in the replay
             #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
+            if let Some(trace) = device.trace.lock().as_mut() {
+                trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
             }
 
-            let mut buffer = device.create_buffer_from_hal(hal_buffer, device_id, desc);
+            let buffer = device.create_buffer_from_hal(hal_buffer, device_id, desc);
 
-            // Assume external buffers are initialized
-            buffer.initialization_status = crate::init_tracker::BufferInitTracker::new(0);
-
-            let ref_count = buffer.life_guard.add_ref();
-
-            let id = fid.assign(buffer, &mut token);
+            let (id, buffer) = fid.assign(buffer);
             log::info!("Created buffer {:?} with {:?}", id, desc);
 
             device
                 .trackers
                 .lock()
                 .buffers
-                .insert_single(id, ref_count, hal::BufferUses::empty());
+                .insert_single(id, buffer, hal::BufferUses::empty());
 
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 
