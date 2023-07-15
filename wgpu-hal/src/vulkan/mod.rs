@@ -39,6 +39,7 @@ use ash::{
     vk,
 };
 use parking_lot::Mutex;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -48,7 +49,7 @@ pub struct Api;
 
 impl crate::Api for Api {
     type Instance = Instance;
-    type Surface = Surface;
+    type Surface<W: wgt::WasmNotSend + wgt::WasmNotSync> = Surface<W>;
     type Adapter = Adapter;
     type Device = Device;
 
@@ -126,11 +127,12 @@ struct Swapchain {
     view_formats: Vec<wgt::TextureFormat>,
 }
 
-pub struct Surface {
+pub struct Surface<W> {
     raw: vk::SurfaceKHR,
     functor: khr::Surface,
     instance: Arc<InstanceShared>,
     swapchain: Option<Swapchain>,
+    _window: W,
 }
 
 #[derive(Debug)]
@@ -588,9 +590,9 @@ impl crate::Queue<Api> for Queue {
         Ok(())
     }
 
-    unsafe fn present(
+    unsafe fn present<W: HasDisplayHandle + HasWindowHandle>(
         &mut self,
-        surface: &mut Surface,
+        surface: &mut Surface<W>,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         let ssc = surface.swapchain.as_ref().unwrap();

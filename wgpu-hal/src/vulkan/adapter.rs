@@ -1529,9 +1529,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         flags
     }
 
-    unsafe fn surface_capabilities(
+    unsafe fn surface_capabilities<
+        W: raw_window_handle::HasDisplayHandle + raw_window_handle::HasWindowHandle,
+    >(
         &self,
-        surface: &super::Surface,
+        surface: &super::Surface<W>,
     ) -> Option<crate::SurfaceCapabilities> {
         if !self.private_caps.can_present {
             return None;

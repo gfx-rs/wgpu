@@ -94,6 +94,7 @@ use std::{
 };
 
 use bitflags::bitflags;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use thiserror::Error;
 use wgt::{WasmNotSend, WasmNotSync};
 
@@ -156,7 +157,7 @@ pub struct InstanceError;
 
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
-    type Surface: Surface<Self>;
+    type Surface<W: WasmNotSend + WasmNotSync>: Surface<Self>;
     type Adapter: Adapter<Self>;
     type Device: Device<Self>;
 
@@ -182,12 +183,14 @@ pub trait Api: Clone + Sized {
 
 pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
-    unsafe fn create_surface(
+    unsafe fn create_surface<W: HasDisplayHandle + HasWindowHandle + WasmNotSend + WasmNotSync>(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<A::Surface, InstanceError>;
-    unsafe fn destroy_surface(&self, surface: A::Surface);
+        window: W,
+    ) -> Result<A::Surface<W>, InstanceError>;
+    unsafe fn destroy_surface<W: HasDisplayHandle + HasWindowHandle + WasmNotSend + WasmNotSync>(
+        &self,
+        surface: A::Surface<W>,
+    );
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
@@ -233,7 +236,12 @@ pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
     /// Returns the capabilities of working with a specified surface.
     ///
     /// `None` means presentation is not supported for it.
-    unsafe fn surface_capabilities(&self, surface: &A::Surface) -> Option<SurfaceCapabilities>;
+    unsafe fn surface_capabilities<
+        W: HasDisplayHandle + HasWindowHandle + WasmNotSend + WasmNotSync,
+    >(
+        &self,
+        surface: &A::Surface<W>,
+    ) -> Option<SurfaceCapabilities>;
 
     /// Creates a [`PresentationTimestamp`] using the adapter's WSI.
     ///
@@ -349,9 +357,9 @@ pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
         command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
-    unsafe fn present(
+    unsafe fn present<W: HasDisplayHandle + HasWindowHandle + WasmNotSend + WasmNotSync>(
         &mut self,
-        surface: &mut A::Surface,
+        surface: &mut A::Surface<W>,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;

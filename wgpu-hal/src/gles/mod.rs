@@ -104,7 +104,7 @@ const MAX_PUSH_CONSTANTS: usize = 64;
 
 impl crate::Api for Api {
     type Instance = Instance;
-    type Surface = Surface;
+    type Surface<W: wgt::WasmNotSend + wgt::WasmNotSync> = Surface<W>;
     type Adapter = Adapter;
     type Device = Device;
 

@@ -57,7 +57,7 @@ required-features = ["gles"]
 bitflags = "2"
 parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
-raw-window-handle = "0.5"
+raw-window-handle = { version = "0.6", features = ["std"] }
 thiserror = "1"
 
 # backends common

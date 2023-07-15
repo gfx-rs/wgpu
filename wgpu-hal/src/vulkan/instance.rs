@@ -9,6 +9,9 @@ use ash::{
     extensions::{ext, khr},
     vk,
 };
+use raw_window_handle::{
+    HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle,
+};
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -346,11 +349,12 @@ impl super::Instance {
     }
 
     #[allow(dead_code)]
-    fn create_surface_from_xlib(
+    fn create_surface_from_xlib<W>(
         &self,
         dpy: *mut vk::Display,
         window: vk::Window,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        handle: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XlibSurface::name()) {
             log::warn!("Vulkan driver does not support VK_KHR_xlib_surface");
             return Err(crate::InstanceError);
@@ -367,15 +371,16 @@ impl super::Instance {
                 .expect("XlibSurface::create_xlib_surface() failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, handle))
     }
 
     #[allow(dead_code)]
-    fn create_surface_from_xcb(
+    fn create_surface_from_xcb<W>(
         &self,
         connection: *mut vk::xcb_connection_t,
         window: vk::xcb_window_t,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        handle: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XcbSurface::name()) {
             log::warn!("Vulkan driver does not support VK_KHR_xcb_surface");
             return Err(crate::InstanceError);
@@ -392,15 +397,16 @@ impl super::Instance {
                 .expect("XcbSurface::create_xcb_surface() failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, handle))
     }
 
     #[allow(dead_code)]
-    fn create_surface_from_wayland(
+    fn create_surface_from_wayland<W>(
         &self,
         display: *mut c_void,
         surface: *mut c_void,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        handle: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         if !self
             .shared
             .extensions
@@ -420,14 +426,15 @@ impl super::Instance {
             unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, handle))
     }
 
     #[allow(dead_code)]
-    fn create_surface_android(
+    fn create_surface_android<W>(
         &self,
         window: *const c_void,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        handle: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         if !self
             .shared
             .extensions
@@ -446,15 +453,16 @@ impl super::Instance {
             unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, handle))
     }
 
     #[allow(dead_code)]
-    fn create_surface_from_hwnd(
+    fn create_surface_from_hwnd<W>(
         &self,
         hinstance: *mut c_void,
         hwnd: *mut c_void,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        handle: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::Win32Surface::name()) {
             log::debug!("Vulkan driver does not support VK_KHR_win32_surface");
             return Err(crate::InstanceError);
@@ -473,13 +481,14 @@ impl super::Instance {
             }
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, handle))
     }
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    fn create_surface_from_view(
+    fn create_surface_from_view<W>(
         &self,
         view: *mut c_void,
+        handle: W,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::MetalSurface::name()) {
             log::warn!("Vulkan driver does not support VK_EXT_metal_surface");
@@ -500,16 +509,21 @@ impl super::Instance {
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        Ok(self.create_surface_from_vk_surface_khr(surface, handle))
     }
 
-    fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> super::Surface {
+    fn create_surface_from_vk_surface_khr<W>(
+        &self,
+        surface: vk::SurfaceKHR,
+        handle: W,
+    ) -> super::Surface<W> {
         let functor = khr::Surface::new(&self.shared.entry, &self.shared.raw);
         super::Surface {
             raw: surface,
             functor,
             instance: Arc::clone(&self.shared),
             swapchain: None,
+            _window: handle,
         }
     }
 }
@@ -675,48 +689,67 @@ impl crate::Instance<super::Api> for super::Instance {
         }
     }
 
-    unsafe fn create_surface(
+    unsafe fn create_surface<W: HasDisplayHandle + HasWindowHandle>(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        window: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         use raw_window_handle::{RawDisplayHandle as Rdh, RawWindowHandle as Rwh};
+
+        let display_handle = window
+            .display_handle()
+            .and_then(|w| w.raw_display_handle())
+            .map_err(|e| {
+                log::error!("Window doesn't have a display handle: {}", e);
+                crate::InstanceError
+            })?;
+        let window_handle = window
+            .window_handle()
+            .and_then(|w| w.raw_window_handle())
+            .map_err(|e| {
+                log::error!("Window doesn't have a window handle: {}", e);
+                crate::InstanceError
+            })?;
 
         match (window_handle, display_handle) {
             (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
-                self.create_surface_from_wayland(display.display, handle.surface)
+                self.create_surface_from_wayland(display.display, handle.surface, window)
             }
             (Rwh::Xlib(handle), Rdh::Xlib(display)) => {
-                self.create_surface_from_xlib(display.display as *mut _, handle.window)
+                self.create_surface_from_xlib(display.display as *mut _, handle.window, window)
             }
             (Rwh::Xcb(handle), Rdh::Xcb(display)) => {
-                self.create_surface_from_xcb(display.connection, handle.window)
+                self.create_surface_from_xcb(display.connection, handle.window, window)
             }
-            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window),
+            (Rwh::AndroidNdk(handle), _) => {
+                self.create_surface_android(handle.a_native_window, window)
+            }
             #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = unsafe { GetModuleHandleW(std::ptr::null()) };
-                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
+                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd, window)
             }
             #[cfg(target_os = "macos")]
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                self.create_surface_from_view(handle.ns_view)
+                self.create_surface_from_view(handle.ns_view, window)
             }
             #[cfg(target_os = "ios")]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                self.create_surface_from_view(handle.ui_view)
+                self.create_surface_from_view(handle.ui_view, window)
             }
             (_, _) => Err(crate::InstanceError),
         }
     }
 
-    unsafe fn destroy_surface(&self, surface: super::Surface) {
+    unsafe fn destroy_surface<W: HasDisplayHandle + HasWindowHandle>(
+        &self,
+        surface: super::Surface<W>,
+    ) {
         unsafe { surface.functor.destroy_surface(surface.raw, None) };
     }
 
@@ -761,7 +794,7 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 }
 
-impl crate::Surface<super::Api> for super::Surface {
+impl<W: wgt::WasmNotSend + wgt::WasmNotSync> crate::Surface<super::Api> for super::Surface<W> {
     unsafe fn configure(
         &mut self,
         device: &super::Device,

@@ -1,4 +1,5 @@
 use glow::HasContext;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::sync::Arc;
 use wgt::AstcChannel;
 
@@ -858,9 +859,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         }
     }
 
-    unsafe fn surface_capabilities(
+    unsafe fn surface_capabilities<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &self,
-        surface: &super::Surface,
+        surface: &super::Surface<W>,
     ) -> Option<crate::SurfaceCapabilities> {
         if surface.presentable {
             let mut formats = vec![

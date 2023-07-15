@@ -1,5 +1,6 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
+use raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle, HasRawWindowHandle};
 
 use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
 
@@ -849,11 +850,12 @@ impl crate::Instance<super::Api> for Instance {
     }
 
     #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
-    unsafe fn create_surface(
+    unsafe fn create_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<Surface, crate::InstanceError> {
+        window: W,
+    ) -> Result<Surface<W>, crate::InstanceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
         #[cfg_attr(
@@ -861,6 +863,21 @@ impl crate::Instance<super::Api> for Instance {
             allow(unused_mut)
         )]
         let mut inner = self.inner.lock();
+
+        let display_handle = window
+            .display_handle()
+            .and_then(|w| w.raw_display_handle())
+            .map_err(|e| {
+                log::error!("Error getting display handle: {:?}", e);
+                crate::InstanceError
+            })?;
+        let window_handle = window
+            .window_handle()
+            .and_then(|w| w.raw_window_handle())
+            .map_err(|e| {
+                log::error!("Error getting window handle: {:?}", e);
+                crate::InstanceError
+            })?;
 
         match (window_handle, display_handle) {
             (Rwh::Xlib(_), _) => {}
@@ -942,13 +959,20 @@ impl crate::Instance<super::Api> for Instance {
             egl: inner.egl.clone(),
             wsi: self.wsi.clone(),
             config: inner.config,
-            presentable: inner.supports_native_window,
             raw_window_handle: window_handle,
+            presentable: inner.supports_native_window,
             swapchain: None,
             srgb_kind: inner.srgb_kind,
+            _window: window,
         })
     }
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
+    unsafe fn destroy_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
+        &self,
+        _surface: Surface<W>,
+    ) {
+    }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();
@@ -1036,7 +1060,7 @@ pub struct Swapchain {
 }
 
 #[derive(Debug)]
-pub struct Surface {
+pub struct Surface<W> {
     egl: EglContext,
     wsi: WindowSystemInterface,
     config: khronos_egl::Config,
@@ -1044,12 +1068,13 @@ pub struct Surface {
     raw_window_handle: raw_window_handle::RawWindowHandle,
     swapchain: Option<Swapchain>,
     srgb_kind: SrgbFrameBufferKind,
+    _window: W,
 }
 
-unsafe impl Send for Surface {}
-unsafe impl Sync for Surface {}
+unsafe impl<W: Send> Send for Surface<W> {}
+unsafe impl<W: Sync> Sync for Surface<W> {}
 
-impl Surface {
+impl<W> Surface<W> {
     pub(super) unsafe fn present(
         &mut self,
         _suf_texture: super::Texture,
@@ -1135,7 +1160,7 @@ impl Surface {
     }
 }
 
-impl crate::Surface<super::Api> for Surface {
+impl<W: wgt::WasmNotSend + wgt::WasmNotSync> crate::Surface<super::Api> for Surface<W> {
     unsafe fn configure(
         &mut self,
         device: &super::Device,

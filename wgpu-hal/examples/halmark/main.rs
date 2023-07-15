@@ -9,6 +9,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{
     borrow::{Borrow, Cow},
+    sync::Arc,
     iter, mem, ptr,
     time::Instant,
 };
@@ -61,7 +62,7 @@ impl<A: hal::Api> ExecutionContext<A> {
 struct Example<A: hal::Api> {
     instance: A::Instance,
     adapter: A::Adapter,
-    surface: A::Surface,
+    surface: A::Surface<Arc<winit::window::Window>>,
     surface_format: wgt::TextureFormat,
     device: A::Device,
     queue: A::Queue,
@@ -86,7 +87,7 @@ struct Example<A: hal::Api> {
 }
 
 impl<A: hal::Api> Example<A> {
-    fn init(window: &winit::window::Window) -> Result<Self, hal::InstanceError> {
+    fn init(window: &Arc<winit::window::Window>) -> Result<Self, hal::InstanceError> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: if cfg!(debug_assertions) {
@@ -100,7 +101,7 @@ impl<A: hal::Api> Example<A> {
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {
             instance
-                .create_surface(window.raw_display_handle(), window.raw_window_handle())
+                .create_surface(window.clone())
                 .unwrap()
         };
 

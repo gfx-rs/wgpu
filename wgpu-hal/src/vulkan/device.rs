@@ -537,9 +537,9 @@ struct CompiledStage {
 }
 
 impl super::Device {
-    pub(super) unsafe fn create_swapchain(
+    pub(super) unsafe fn create_swapchain<W>(
         &self,
-        surface: &mut super::Surface,
+        surface: &mut super::Surface<W>,
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<super::Swapchain>,
     ) -> Result<super::Swapchain, crate::SurfaceError> {

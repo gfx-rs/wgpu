@@ -1,6 +1,7 @@
 use super::Command as C;
 use arrayvec::ArrayVec;
 use glow::HasContext;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{mem, slice, sync::Arc};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1506,9 +1507,11 @@ impl crate::Queue<super::Api> for super::Queue {
         Ok(())
     }
 
-    unsafe fn present(
+    unsafe fn present<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &mut self,
-        surface: &mut super::Surface,
+        surface: &mut super::Surface<W>,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
         #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]

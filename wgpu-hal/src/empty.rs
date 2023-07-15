@@ -2,6 +2,9 @@
 
 use std::ops::Range;
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use wgt::{WasmNotSend, WasmNotSync};
+
 #[derive(Clone)]
 pub struct Api;
 pub struct Context;
@@ -14,7 +17,7 @@ type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 impl crate::Api for Api {
     type Instance = Context;
-    type Surface = Context;
+    type Surface<W: WasmNotSend + WasmNotSync> = Context;
     type Adapter = Context;
     type Device = Context;
 
@@ -42,14 +45,13 @@ impl crate::Instance<Api> for Context {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         Ok(Context)
     }
-    unsafe fn create_surface(
+    unsafe fn create_surface<W: HasDisplayHandle + HasWindowHandle>(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
-        _window_handle: raw_window_handle::RawWindowHandle,
+        _window: W,
     ) -> Result<Context, crate::InstanceError> {
         Ok(Context)
     }
-    unsafe fn destroy_surface(&self, surface: Context) {}
+    unsafe fn destroy_surface<W: HasDisplayHandle + HasWindowHandle>(&self, surface: Context) {}
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<Api>> {
         Vec::new()
     }
@@ -90,7 +92,10 @@ impl crate::Adapter<Api> for Context {
         crate::TextureFormatCapabilities::empty()
     }
 
-    unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
+    unsafe fn surface_capabilities<W: HasDisplayHandle + HasWindowHandle>(
+        &self,
+        surface: &Context,
+    ) -> Option<crate::SurfaceCapabilities> {
         None
     }
 
@@ -107,7 +112,7 @@ impl crate::Queue<Api> for Context {
     ) -> DeviceResult<()> {
         Ok(())
     }
-    unsafe fn present(
+    unsafe fn present<W: HasDisplayHandle + HasWindowHandle>(
         &mut self,
         surface: &mut Context,
         texture: Resource,
