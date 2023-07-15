@@ -1,7 +1,7 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
@@ -152,6 +152,38 @@ impl Context {
             id,
             error_sink: Arc::clone(&device.error_sink),
         }
+    }
+
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_buffer: A::Buffer,
+        device: &Device,
+        desc: &BufferDescriptor,
+    ) -> (wgc::id::BufferId, Buffer) {
+        let global = &self.0;
+        let (id, error) = unsafe {
+            global.create_buffer_from_hal::<A>(
+                hal_buffer,
+                device.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                (),
+            )
+        };
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_buffer_from_hal",
+            );
+        }
+        (
+            id,
+            Buffer {
+                error_sink: Arc::clone(&device.error_sink),
+            },
+        )
     }
 
     pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
