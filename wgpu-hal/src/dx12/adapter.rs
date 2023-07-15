@@ -2,6 +2,7 @@ use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::SurfaceTarget,
 };
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
     shared::{dxgi, dxgi1_2, minwindef::DWORD, windef, winerror},
@@ -556,9 +557,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         caps
     }
 
-    unsafe fn surface_capabilities(
+    unsafe fn surface_capabilities<
+        W: wgt::WasmNotSend + wgt::WasmNotSync + HasDisplayHandle + HasWindowHandle,
+    >(
         &self,
-        surface: &super::Surface,
+        surface: &super::Surface<W>,
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
             match surface.target {

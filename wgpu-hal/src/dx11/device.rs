@@ -1,5 +1,6 @@
 use std::{ffi::c_void, mem};
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winapi::um::d3d11;
 
 use crate::auxil::dxgi::result::HResult;
@@ -211,9 +212,11 @@ impl crate::Queue<super::Api> for super::Queue {
         todo!()
     }
 
-    unsafe fn present(
+    unsafe fn present<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &mut self,
-        surface: &mut super::Surface,
+        surface: &mut super::Surface<W>,
         texture: super::SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         todo!()

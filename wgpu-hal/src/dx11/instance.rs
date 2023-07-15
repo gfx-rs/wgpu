@@ -1,3 +1,5 @@
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+
 use crate::auxil;
 
 impl crate::Instance<super::Api> for super::Instance {
@@ -25,15 +27,21 @@ impl crate::Instance<super::Api> for super::Instance {
         })
     }
 
-    unsafe fn create_surface(
+    unsafe fn create_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<super::Surface, crate::InstanceError> {
+        window: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
         todo!()
     }
 
-    unsafe fn destroy_surface(&self, surface: super::Surface) {
+    unsafe fn destroy_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
+        &self,
+        surface: super::Surface<W>,
+    ) {
         todo!()
     }
 

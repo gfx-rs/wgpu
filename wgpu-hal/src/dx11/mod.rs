@@ -14,7 +14,7 @@ pub struct Api;
 
 impl crate::Api for Api {
     type Instance = Instance;
-    type Surface = Surface;
+    type Surface<W: wgt::WasmNotSend + wgt::WasmNotSync> = Surface<W>;
     type Adapter = Adapter;
     type Device = Device;
 
@@ -47,7 +47,9 @@ pub struct Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
-pub struct Surface {}
+pub struct Surface<W> {
+    _handle: W,
+}
 
 pub struct Adapter {
     device: D3D11Device,
@@ -111,7 +113,7 @@ pub struct ShaderModule {}
 pub struct RenderPipeline {}
 pub struct ComputePipeline {}
 
-impl crate::Surface<Api> for Surface {
+impl<W: wgt::WasmNotSend + wgt::WasmNotSync> crate::Surface<Api> for Surface<W> {
     unsafe fn configure(
         &mut self,
         device: &Device,

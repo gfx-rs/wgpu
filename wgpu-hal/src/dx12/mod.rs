@@ -48,6 +48,7 @@ use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
@@ -60,7 +61,7 @@ pub struct Api;
 
 impl crate::Api for Api {
     type Instance = Instance;
-    type Surface = Surface;
+    type Surface<W: wgt::WasmNotSend + wgt::WasmNotSync> = Surface<W>;
     type Adapter = Adapter;
     type Device = Device;
 
@@ -99,29 +100,33 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub unsafe fn create_surface_from_visual(
+    pub unsafe fn create_surface_from_visual<W>(
         &self,
         visual: *mut dcomp::IDCompositionVisual,
-    ) -> Surface {
+        handle: W,
+    ) -> Surface<W> {
         Surface {
             factory: self.factory,
             factory_media: self.factory_media,
             target: SurfaceTarget::Visual(unsafe { d3d12::WeakPtr::from_raw(visual) }),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
+            _handle: handle,
         }
     }
 
-    pub unsafe fn create_surface_from_surface_handle(
+    pub unsafe fn create_surface_from_surface_handle<W>(
         &self,
         surface_handle: winnt::HANDLE,
-    ) -> Surface {
+        handle: W,
+    ) -> Surface<W> {
         Surface {
             factory: self.factory,
             factory_media: self.factory_media,
             target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
+            _handle: handle,
         }
     }
 }
@@ -147,16 +152,17 @@ enum SurfaceTarget {
     SurfaceHandle(winnt::HANDLE),
 }
 
-pub struct Surface {
+pub struct Surface<W> {
     factory: d3d12::DxgiFactory,
     factory_media: Option<d3d12::FactoryMedia>,
     target: SurfaceTarget,
     supports_allow_tearing: bool,
     swap_chain: Option<SwapChain>,
+    _handle: W,
 }
 
-unsafe impl Send for Surface {}
-unsafe impl Sync for Surface {}
+unsafe impl<W: Send> Send for Surface<W> {}
+unsafe impl<W: Sync> Sync for Surface<W> {}
 
 #[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
@@ -637,7 +643,7 @@ impl SwapChain {
     }
 }
 
-impl crate::Surface<Api> for Surface {
+impl<W: wgt::WasmNotSend + wgt::WasmNotSync> crate::Surface<Api> for Surface<W> {
     unsafe fn configure(
         &mut self,
         device: &Device,
@@ -873,9 +879,11 @@ impl crate::Queue<Api> for Queue {
         }
         Ok(())
     }
-    unsafe fn present(
+    unsafe fn present<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &mut self,
-        surface: &mut Surface,
+        surface: &mut Surface<W>,
         _texture: Texture,
     ) -> Result<(), crate::SurfaceError> {
         let sc = surface.swap_chain.as_mut().unwrap();

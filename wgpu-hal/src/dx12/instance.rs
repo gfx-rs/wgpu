@@ -1,3 +1,4 @@
+use raw_window_handle::{HasDisplayHandle, HasRawWindowHandle, HasWindowHandle};
 use winapi::shared::{dxgi1_5, minwindef};
 
 use super::SurfaceTarget;
@@ -84,23 +85,36 @@ impl crate::Instance<super::Api> for super::Instance {
         })
     }
 
-    unsafe fn create_surface(
+    unsafe fn create_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<super::Surface, crate::InstanceError> {
-        match window_handle {
+        window: W,
+    ) -> Result<super::Surface<W>, crate::InstanceError> {
+        match window
+            .window_handle()
+            .and_then(|w| w.raw_window_handle())
+            .map_err(|e| {
+                log::error!("Failed to get raw window handle: {:?}", e);
+                crate::InstanceError
+            })? {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory,
                 factory_media: self.factory_media,
                 target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: None,
+                _handle: window,
             }),
             _ => Err(crate::InstanceError),
         }
     }
-    unsafe fn destroy_surface(&self, _surface: super::Surface) {
+    unsafe fn destroy_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync,
+    >(
+        &self,
+        _surface: super::Surface<W>,
+    ) {
         // just drop
     }
 

@@ -1,5 +1,6 @@
 use std::num::NonZeroU64;
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use winapi::um::{d3d11, d3dcommon};
 
 impl crate::Adapter<super::Api> for super::Adapter {
@@ -18,9 +19,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
         todo!()
     }
 
-    unsafe fn surface_capabilities(
+    unsafe fn surface_capabilities<
+        W: wgt::WasmNotSend + wgt::WasmNotSync + HasDisplayHandle + HasWindowHandle,
+    >(
         &self,
-        surface: &super::Surface,
+        surface: &super::Surface<W>,
     ) -> Option<crate::SurfaceCapabilities> {
         todo!()
     }

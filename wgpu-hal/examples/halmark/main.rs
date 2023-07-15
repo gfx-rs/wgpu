@@ -9,8 +9,8 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{
     borrow::{Borrow, Cow},
-    sync::Arc,
     iter, mem, ptr,
+    sync::Arc,
     time::Instant,
 };
 
@@ -99,11 +99,7 @@ impl<A: hal::Api> Example<A> {
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe {
-            instance
-                .create_surface(window.clone())
-                .unwrap()
-        };
+        let mut surface = unsafe { instance.create_surface(window.clone()).unwrap() };
 
         let (adapter, capabilities) = unsafe {
             let mut adapters = instance.enumerate_adapters();

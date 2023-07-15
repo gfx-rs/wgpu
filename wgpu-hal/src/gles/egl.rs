@@ -1,6 +1,8 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
-use raw_window_handle::{HasDisplayHandle, HasRawDisplayHandle, HasWindowHandle, HasRawWindowHandle};
+use raw_window_handle::{
+    HasDisplayHandle, HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle,
+};
 
 use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
 
