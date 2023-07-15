@@ -756,7 +756,7 @@ impl crate::Instance<super::Api> for Instance {
 
         #[cfg(target_os = "emscripten")]
         let egl1_5: Option<&Arc<EglInstance>> = Some(&egl);
-      
+
         let (display, display_owner, wsi_kind) =
             if let (Some(library), Some(egl)) = (wayland_library, egl1_5) {
                 log::info!("Using Wayland platform");
