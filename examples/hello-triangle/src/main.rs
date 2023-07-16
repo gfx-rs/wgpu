@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -6,11 +6,12 @@ use winit::{
 };
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
+    let window = Arc::new(window);
     let size = window.inner_size();
 
     let instance = wgpu::Instance::default();
 
-    let surface = unsafe { instance.create_surface(&window) }.unwrap();
+    let surface = instance.create_surface(window.clone()).unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -157,7 +158,7 @@ fn main() {
             .and_then(|win| win.document())
             .and_then(|doc| doc.body())
             .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
+                body.append_child(&web_sys::Element::from(window.canvas().unwrap()))
                     .ok()
             })
             .expect("couldn't append canvas to document body");

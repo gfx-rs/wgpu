@@ -649,7 +649,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     pub(crate) fn surface_unconfigure(
         &self,
         device_id: id::Valid<id::DeviceId>,
-        surface: &mut HalSurface<A>,
+        surface: &mut HalSurface<A, super::instance::BoxedHandle>,
     ) {
         use hal::Surface as _;
 

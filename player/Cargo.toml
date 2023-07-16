@@ -27,7 +27,7 @@ features = ["replay"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 workspace = true
-features = ["replay", "raw-window-handle", "strict_asserts", "wgsl", "metal", "dx11", "dx12", "vulkan", "gles"]
+features = ["replay", "strict_asserts", "wgsl", "metal", "dx11", "dx12", "vulkan", "gles"]
 
 [dev-dependencies]
 serde.workspace = true

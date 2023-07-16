@@ -1795,12 +1795,6 @@ impl Instance {
     /// If the specified display and window handle are not supported by any of the backends, then the surface
     /// will not be supported by any adapters.
     ///
-    /// # Safety
-    ///
-    /// - `raw_window_handle` must be a valid object to create a surface upon.
-    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
-    ///   dropped.
-    ///
     /// # Errors
     ///
     /// - On WebGL2: Will return an error if the browser does not support WebGL2,
@@ -1811,17 +1805,17 @@ impl Instance {
     /// - On macOS/Metal: will panic if not called on the main thread.
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
-    pub unsafe fn create_surface<
-        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+    pub fn create_surface<
+        W: raw_window_handle::HasWindowHandle
+            + raw_window_handle::HasDisplayHandle
+            + wgt::WasmNotSend
+            + wgt::WasmNotSync
+            + 'static,
     >(
         &self,
-        window: &W,
+        window: W,
     ) -> Result<Surface, CreateSurfaceError> {
-        let (id, data) = DynContext::instance_create_surface(
-            &*self.context,
-            raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
-            raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
-        )?;
+        let (id, data) = DynContext::instance_create_surface(&*self.context, Arc::new(window))?;
         Ok(Surface {
             context: Arc::clone(&self.context),
             id,
@@ -4661,7 +4655,7 @@ impl Surface {
     ))]
     pub unsafe fn as_hal_mut<
         A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::Surface>) -> R,
+        F: FnOnce(Option<&mut A::Surface<std::sync::Arc<dyn wgt::HasWindowingHandles>>>) -> R,
         R,
     >(
         &mut self,

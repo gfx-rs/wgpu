@@ -14,7 +14,7 @@ description = "WebGPU implementation for Deno"
 path = "lib.rs"
 
 [features]
-surface = ["wgpu-core/raw-window-handle", "dep:raw-window-handle"]
+surface = ["dep:raw-window-handle"]
 
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.

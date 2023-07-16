@@ -1,6 +1,7 @@
 use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::str::FromStr;
+use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
@@ -64,7 +65,7 @@ pub trait Example: 'static + Sized {
 }
 
 struct Setup {
-    window: winit::window::Window,
+    window: Arc<winit::window::Window>,
     event_loop: EventLoop<()>,
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
@@ -96,7 +97,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         use winit::platform::windows::WindowBuilderExtWindows;
         builder = builder.with_no_redirection_bitmap(true);
     }
-    let window = builder.build(&event_loop).unwrap();
+    let window = Arc::new(builder.build(&event_loop).unwrap());
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -112,7 +113,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
             .and_then(|win| win.document())
             .and_then(|doc| doc.body())
             .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
+                body.append_child(&web_sys::Element::from(window.canvas().unwrap()))
                     .ok()
             })
             .expect("couldn't append canvas to document body");
@@ -137,6 +138,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
                 let bitmap_renderer = window
                     .canvas()
+                    .unwrap()
                     .get_context("bitmaprenderer")
                     .expect("couldn't create ImageBitmapRenderingContext (Result)")
                     .expect("couldn't create ImageBitmapRenderingContext (Option)")
@@ -160,11 +162,11 @@ async fn setup<E: Example>(title: &str) -> Setup {
         backends,
         dx12_shader_compiler,
     });
-    let (size, surface) = unsafe {
+    let (size, surface) = {
         let size = window.inner_size();
 
         #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
-        let surface = instance.create_surface(&window).unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
         #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         let surface = {
             if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
@@ -173,7 +175,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
                     offscreen_canvas_setup.offscreen_canvas.clone(),
                 )
             } else {
-                instance.create_surface(&window)
+                instance.create_surface(window.clone())
             }
         }
         .unwrap();
@@ -315,9 +317,9 @@ fn start<E: Example>(
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
-                    input:
-                        event::KeyboardInput {
-                            virtual_keycode: Some(event::VirtualKeyCode::Escape),
+                    event:
+                        event::KeyEvent {
+                            physical_key: winit::keyboard::KeyCode::Escape,
                             state: event::ElementState::Pressed,
                             ..
                         },
@@ -328,10 +330,10 @@ fn start<E: Example>(
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::KeyboardInput {
-                    input:
-                        event::KeyboardInput {
-                            virtual_keycode: Some(event::VirtualKeyCode::R),
+                    event:
+                        event::KeyEvent {
                             state: event::ElementState::Pressed,
+                            physical_key: winit::keyboard::KeyCode::KeyR,
                             ..
                         },
                     ..
@@ -561,14 +563,9 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
             if params.image_path == "/examples/bunnymark/screenshot.png" {
                 // Press spacebar to spawn bunnies
                 example.update(winit::event::WindowEvent::KeyboardInput {
-                    input: winit::event::KeyboardInput {
-                        scancode: 0,
-                        state: winit::event::ElementState::Pressed,
-                        virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                        modifiers: winit::event::ModifiersState::empty(),
-                    },
                     device_id: unsafe { winit::event::DeviceId::dummy() },
                     is_synthetic: false,
+                    event: todo!(),
                 });
 
                 // Step 3 extra frames

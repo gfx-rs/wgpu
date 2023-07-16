@@ -47,14 +47,14 @@ fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "w
 [dependencies.wgc]
 optional = true
 workspace = true
-features = ["raw-window-handle", "gles"]
+features = ["gles"]
 
 # wgpu-core is required whenever not targeting web APIs directly.
 # Whenever wgpu-core is selected, we want the GLES backend and raw
 # window handle support.
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies.wgc]
 workspace = true
-features = ["raw-window-handle", "gles"]
+features = ["gles"]
 
 # We want the wgpu-core Metal backend on macOS and iOS.
 # (We should consider also enabling "vulkan" for Vulkan Portability.)

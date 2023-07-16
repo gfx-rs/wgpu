@@ -249,10 +249,10 @@ impl wgpu_example::framework::Example for Example {
 
     fn update(&mut self, event: winit::event::WindowEvent) {
         if let winit::event::WindowEvent::KeyboardInput {
-            input:
-                winit::event::KeyboardInput {
-                    virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+            event:
+                winit::event::KeyEvent {
                     state: winit::event::ElementState::Pressed,
+                    physical_key: winit::keyboard::KeyCode::Space,
                     ..
                 },
             ..

@@ -9,7 +9,8 @@ use crate::{
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
 
-use wgt::{Backend, Backends, PowerPreference};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use wgt::{Backend, Backends, HasWindowingHandles, PowerPreference};
 
 use hal::{Adapter as _, Instance as _};
 use thiserror::Error;
@@ -17,8 +18,8 @@ use thiserror::Error;
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 type HalInstance<A> = <A as hal::Api>::Instance;
 //TODO: remove this
-pub struct HalSurface<A: hal::Api> {
-    pub raw: A::Surface,
+pub struct HalSurface<A: hal::Api, W: wgt::WasmNotSend + wgt::WasmNotSync> {
+    pub raw: A::Surface<W>,
     //pub acquired_texture: Option<A::SurfaceTexture>,
 }
 
@@ -108,7 +109,7 @@ impl Instance {
         fn destroy<A: HalApi>(
             _: A,
             instance: &Option<A::Instance>,
-            surface: Option<HalSurface<A>>,
+            surface: Option<HalSurface<A, BoxedHandle>>,
         ) {
             unsafe {
                 if let Some(suf) = surface {
@@ -132,16 +133,18 @@ impl Instance {
 pub struct Surface {
     pub(crate) presentation: Option<Presentation>,
     #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-    pub vulkan: Option<HalSurface<hal::api::Vulkan>>,
+    pub vulkan: Option<HalSurface<hal::api::Vulkan, BoxedHandle>>,
     #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-    pub metal: Option<HalSurface<hal::api::Metal>>,
+    pub metal: Option<HalSurface<hal::api::Metal, BoxedHandle>>,
     #[cfg(all(feature = "dx12", windows))]
-    pub dx12: Option<HalSurface<hal::api::Dx12>>,
+    pub dx12: Option<HalSurface<hal::api::Dx12, BoxedHandle>>,
     #[cfg(all(feature = "dx11", windows))]
-    pub dx11: Option<HalSurface<hal::api::Dx11>>,
+    pub dx11: Option<HalSurface<hal::api::Dx11, BoxedHandle>>,
     #[cfg(feature = "gles")]
-    pub gl: Option<HalSurface<hal::api::Gles>>,
+    pub gl: Option<HalSurface<hal::api::Gles, BoxedHandle>>,
 }
+
+pub(crate) type BoxedHandle = std::sync::Arc<dyn HasWindowingHandles>;
 
 impl crate::resource::Resource for Surface {
     const TYPE: &'static str = "Surface";
@@ -441,22 +444,23 @@ pub enum RequestAdapterError {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    #[cfg(feature = "raw-window-handle")]
-    pub fn instance_create_surface(
+    pub fn instance_create_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync + 'static,
+    >(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        window: W,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
         profiling::scope!("Instance::create_surface");
 
+        let handle: BoxedHandle = std::sync::Arc::new(window);
+
         fn init<A: hal::Api>(
             inst: &Option<A::Instance>,
-            display_handle: raw_window_handle::RawDisplayHandle,
-            window_handle: raw_window_handle::RawWindowHandle,
-        ) -> Option<HalSurface<A>> {
+            handle: BoxedHandle,
+        ) -> Option<HalSurface<A, BoxedHandle>> {
             inst.as_ref().and_then(|inst| unsafe {
-                match inst.create_surface(display_handle, window_handle) {
+                match inst.create_surface(handle) {
                     Ok(raw) => Some(HalSurface {
                         raw,
                         //acquired_texture: None,
@@ -472,15 +476,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = Surface {
             presentation: None,
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-            vulkan: init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle),
+            vulkan: init::<hal::api::Vulkan>(&self.instance.vulkan, handle.clone()),
             #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-            metal: init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle),
+            metal: init::<hal::api::Metal>(&self.instance.metal, handle.clone()),
             #[cfg(all(feature = "dx12", windows))]
-            dx12: init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle),
+            dx12: init::<hal::api::Dx12>(&self.instance.dx12, handle.clone()),
             #[cfg(all(feature = "dx11", windows))]
-            dx11: init::<hal::api::Dx11>(&self.instance.dx11, display_handle, window_handle),
+            dx11: init::<hal::api::Dx11>(&self.instance.dx11, handle.clone()),
             #[cfg(feature = "gles")]
-            gl: init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle),
+            gl: init::<hal::api::Gles>(&self.instance.gl, handle.clone()),
         };
 
         let mut token = Token::root();
@@ -598,7 +602,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: unsafe { inst.create_surface_from_visual(visual as _) },
+                raw: unsafe {
+                    let handle: BoxedHandle = std::sync::Arc::new(NoWindow);
+                    inst.create_surface_from_visual(visual as _, handle)
+                },
             }),
             dx11: None,
             #[cfg(feature = "gles")]
@@ -626,7 +633,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: unsafe { inst.create_surface_from_surface_handle(surface_handle) },
+                raw: unsafe {
+                    let handle: BoxedHandle = std::sync::Arc::new(NoWindow);
+                    inst.create_surface_from_surface_handle(surface_handle, handle)
+                },
             }),
             dx11: None,
             #[cfg(feature = "gles")]
@@ -646,7 +656,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
             global: &Global<G>,
-            surface: &mut HalSurface<A>,
+            surface: &mut HalSurface<A, BoxedHandle>,
             present: &Presentation,
         ) {
             let hub = HalApi::hub(global);
@@ -1154,4 +1164,22 @@ pub fn parse_backends_from_comma_list(string: &str) -> Backends {
     }
 
     backends
+}
+
+struct NoWindow;
+
+impl HasDisplayHandle for NoWindow {
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        Err(raw_window_handle::HandleError::NotSupported)
+    }
+}
+
+impl HasWindowHandle for NoWindow {
+    fn window_handle(
+        &self,
+    ) -> Result<raw_window_handle::WindowHandle<'_>, raw_window_handle::HandleError> {
+        Err(raw_window_handle::HandleError::NotSupported)
+    }
 }

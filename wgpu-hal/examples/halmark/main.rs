@@ -5,7 +5,6 @@ extern crate wgpu_hal as hal;
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{
     borrow::{Borrow, Cow},
@@ -562,10 +561,10 @@ impl<A: hal::Api> Example<A> {
 
     fn update(&mut self, event: winit::event::WindowEvent) {
         if let winit::event::WindowEvent::KeyboardInput {
-            input:
-                winit::event::KeyboardInput {
-                    virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+            event:
+                winit::event::KeyEvent {
                     state: winit::event::ElementState::Pressed,
+                    physical_key: winit::keyboard::KeyCode::Space,
                     ..
                 },
             ..
@@ -775,10 +774,12 @@ fn main() {
     env_logger::init();
 
     let event_loop = winit::event_loop::EventLoop::new();
-    let window = winit::window::WindowBuilder::new()
-        .with_title("hal-bunnymark")
-        .build(&event_loop)
-        .unwrap();
+    let window = Arc::new(
+        winit::window::WindowBuilder::new()
+            .with_title("hal-bunnymark")
+            .build(&event_loop)
+            .unwrap(),
+    );
 
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));
@@ -795,10 +796,10 @@ fn main() {
             }
             winit::event::Event::WindowEvent { event, .. } => match event {
                 winit::event::WindowEvent::KeyboardInput {
-                    input:
-                        winit::event::KeyboardInput {
-                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
+                    event:
+                        winit::event::KeyEvent {
                             state: winit::event::ElementState::Pressed,
+                            physical_key: winit::keyboard::KeyCode::Escape,
                             ..
                         },
                     ..

@@ -1,6 +1,7 @@
 #![allow(clippy::type_complexity)]
 
 use js_sys::Promise;
+use raw_window_handle::{HasDisplayHandle, HasRawWindowHandle, HasWindowHandle};
 use std::{
     any::Any,
     cell::RefCell,
@@ -954,13 +955,18 @@ impl crate::context::Context for Context {
         Context(gpu)
     }
 
-    fn instance_create_surface(
+    fn instance_create_surface<
+        W: HasWindowHandle + HasDisplayHandle + wgt::WasmNotSend + wgt::WasmNotSync + 'static,
+    >(
         &self,
-        _display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        window_handle: W,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let canvas_attribute = match window_handle {
-            raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
+        // TODO: keep window_handle around
+        let canvas_attribute = match window_handle
+            .window_handle()
+            .and_then(|w| w.raw_window_handle())
+        {
+            Ok(raw_window_handle::RawWindowHandle::Web(web_handle)) => web_handle.id,
             _ => panic!("expected valid handle for canvas"),
         };
         let canvas_node: wasm_bindgen::JsValue = web_sys::window()

@@ -1,6 +1,6 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -8,7 +8,7 @@ use winit::{
 };
 
 struct ViewportDesc {
-    window: Window,
+    window: Arc<Window>,
     background: wgpu::Color,
     surface: wgpu::Surface,
 }
@@ -20,7 +20,8 @@ struct Viewport {
 
 impl ViewportDesc {
     fn new(window: Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let window = Arc::new(window);
+        let surface = instance.create_surface(window.clone()).unwrap();
         Self {
             window,
             background,

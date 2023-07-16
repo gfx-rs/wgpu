@@ -9,6 +9,7 @@
 )]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
@@ -6324,6 +6325,16 @@ impl Default for InstanceDescriptor {
             dx12_shader_compiler: Dx12Compiler::default(),
         }
     }
+}
+
+/// An object-safe trait for types that have both kinds of window handles.
+pub trait HasWindowingHandles:
+    HasDisplayHandle + HasWindowHandle + WasmNotSend + WasmNotSync + 'static
+{
+}
+impl<T> HasWindowingHandles for T where
+    T: HasDisplayHandle + HasWindowHandle + WasmNotSend + WasmNotSync + 'static + ?Sized
+{
 }
 
 pub use send_sync::*;

@@ -1,5 +1,6 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
@@ -96,10 +97,11 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
     type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
-    fn instance_create_surface(
+    fn instance_create_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync + 'static,
+    >(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        window: W,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError>;
     fn instance_request_adapter(
         &self,
@@ -1183,8 +1185,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
 
     fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        window: Arc<dyn wgt::HasWindowingHandles>,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError>;
     #[allow(clippy::type_complexity)]
     fn instance_request_adapter(
@@ -2018,11 +2019,9 @@ where
 
     fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        window: Arc<dyn wgt::HasWindowingHandles>,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError> {
-        let (surface, data) =
-            Context::instance_create_surface(self, display_handle, window_handle)?;
+        let (surface, data) = Context::instance_create_surface(self, window)?;
         Ok((surface.into(), Box::new(data) as _))
     }
 

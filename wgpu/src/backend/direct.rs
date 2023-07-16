@@ -10,6 +10,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use smallvec::SmallVec;
 use std::{
     any::Any,
@@ -199,7 +200,7 @@ impl Context {
 
     pub unsafe fn surface_as_hal_mut<
         A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::Surface>) -> R,
+        F: FnOnce(Option<&mut A::Surface<std::sync::Arc<dyn wgt::HasWindowingHandles>>>) -> R,
         R,
     >(
         &self,
@@ -580,14 +581,13 @@ impl crate::Context for Context {
         ))
     }
 
-    fn instance_create_surface(
+    fn instance_create_surface<
+        W: HasDisplayHandle + HasWindowHandle + wgt::WasmNotSend + wgt::WasmNotSync + 'static,
+    >(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
-        window_handle: raw_window_handle::RawWindowHandle,
+        window: W,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .instance_create_surface(display_handle, window_handle, ());
+        let id = self.0.instance_create_surface(window, ());
 
         Ok((
             id,

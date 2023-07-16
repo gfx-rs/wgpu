@@ -483,7 +483,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     /// # Safety
     /// - The raw surface handle must not be manually destroyed
-    pub unsafe fn surface_as_hal_mut<A: HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+    pub unsafe fn surface_as_hal_mut<
+        A: HalApi,
+        F: FnOnce(Option<&mut A::Surface<super::instance::BoxedHandle>>) -> R,
+        R,
+    >(
         &self,
         id: SurfaceId,
         hal_surface_callback: F,
