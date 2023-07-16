@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+## v0.16.3 (2023-07-17)
+
+### Changes
+
+#### General
+
+- Make the `Id` type that is exposed when using the `expose-ids` feature implement `Send` and `Sync` again. This was unintentionally changed by the v0.16.0 release and is now fixed.
+
 ## v0.16.2 (2023-07-09)
 
 ### Changes
