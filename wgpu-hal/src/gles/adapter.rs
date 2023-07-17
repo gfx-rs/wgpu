@@ -397,7 +397,7 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
             {
                 if context
                     .glow_context
@@ -413,7 +413,7 @@ impl super::Adapter {
                 }
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
