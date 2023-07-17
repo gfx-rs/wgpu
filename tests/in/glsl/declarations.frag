@@ -21,6 +21,11 @@ struct TestStruct {
 float array_2d[2][2];
 float array_toomanyd[2][2][2][2][2][2][2];
 
+struct LightScatteringParams {
+    float BetaRay, BetaMie[3], HGg, DistanceMul[4], BlendCoeff;
+    vec3 SunDirection, SunColor;
+};
+
 void main() {
     const vec3 positions[2] = vec3[2](
         vec3(-1.0, 1.0, 0.0),

@@ -13,6 +13,16 @@ struct TestStruct {
     b: f32,
 }
 
+struct LightScatteringParams {
+    BetaRay: f32,
+    BetaMie: array<f32, 3>,
+    HGg: f32,
+    DistanceMul: array<f32, 4>,
+    BlendCoeff: f32,
+    SunDirection: vec3<f32>,
+    SunColor: vec3<f32>,
+}
+
 struct FragmentOutput {
     @location(0) position: vec2<f32>,
     @location(1) a: vec2<f32>,

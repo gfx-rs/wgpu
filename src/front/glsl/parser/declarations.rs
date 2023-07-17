@@ -628,35 +628,42 @@ impl<'source> ParsingContext<'source> {
         loop {
             // TODO: type_qualifier
 
-            let (mut ty, mut meta) = self.parse_type_non_void(frontend)?;
-            let (name, end_meta) = self.expect_ident(frontend)?;
+            let (base_ty, mut meta) = self.parse_type_non_void(frontend)?;
 
-            meta.subsume(end_meta);
+            loop {
+                let (name, name_meta) = self.expect_ident(frontend)?;
+                let mut ty = base_ty;
+                self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
 
-            self.parse_array_specifier(frontend, &mut meta, &mut ty)?;
+                meta.subsume(name_meta);
+
+                let info = offset::calculate_offset(
+                    ty,
+                    meta,
+                    layout,
+                    &mut frontend.module.types,
+                    &mut frontend.errors,
+                );
+
+                let member_alignment = info.align;
+                span = member_alignment.round_up(span);
+                align = member_alignment.max(align);
+
+                members.push(StructMember {
+                    name: Some(name),
+                    ty: info.ty,
+                    binding: None,
+                    offset: span,
+                });
+
+                span += info.span;
+
+                if self.bump_if(frontend, TokenValue::Comma).is_none() {
+                    break;
+                }
+            }
 
             self.expect(frontend, TokenValue::Semicolon)?;
-
-            let info = offset::calculate_offset(
-                ty,
-                meta,
-                layout,
-                &mut frontend.module.types,
-                &mut frontend.errors,
-            );
-
-            let member_alignment = info.align;
-            span = member_alignment.round_up(span);
-            align = member_alignment.max(align);
-
-            members.push(StructMember {
-                name: Some(name),
-                ty: info.ty,
-                binding: None,
-                offset: span,
-            });
-
-            span += info.span;
 
             if let TokenValue::RightBrace = self.expect_peek(frontend)?.value {
                 break;
