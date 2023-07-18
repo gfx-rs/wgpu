@@ -1,7 +1,7 @@
 //! Pipeline state
 
-use crate::{com::WeakPtr, Blob, D3DResult, Error};
-use std::{ffi, ops::Deref, ptr};
+use crate::{com::ComPtr, Blob, D3DResult, Error};
+use std::{ffi::{self, c_void}, ops::Deref, ptr, marker::PhantomData};
 use winapi::um::{d3d12, d3dcompiler};
 
 bitflags! {
@@ -25,28 +25,28 @@ bitflags! {
 }
 
 #[derive(Copy, Clone)]
-pub struct Shader(d3d12::D3D12_SHADER_BYTECODE);
-impl Shader {
+pub struct Shader<'a>(d3d12::D3D12_SHADER_BYTECODE, PhantomData<&'a c_void>);
+impl<'a> Shader<'a> {
     pub fn null() -> Self {
         Shader(d3d12::D3D12_SHADER_BYTECODE {
             BytecodeLength: 0,
             pShaderBytecode: ptr::null(),
-        })
+        }, PhantomData)
     }
 
-    pub fn from_raw(data: &[u8]) -> Self {
+    pub fn from_raw(data: &'a [u8]) -> Self {
         Shader(d3d12::D3D12_SHADER_BYTECODE {
             BytecodeLength: data.len() as _,
             pShaderBytecode: data.as_ptr() as _,
-        })
+        }, PhantomData)
     }
 
     // `blob` may not be null.
-    pub fn from_blob(blob: Blob) -> Self {
+    pub fn from_blob(blob: &'a Blob) -> Self {
         Shader(d3d12::D3D12_SHADER_BYTECODE {
             BytecodeLength: unsafe { blob.GetBufferSize() },
             pShaderBytecode: unsafe { blob.GetBufferPointer() },
-        })
+        }, PhantomData)
     }
 
     /// Compile a shader from raw HLSL.
@@ -81,49 +81,40 @@ impl Shader {
     }
 }
 
-impl Deref for Shader {
+impl<'a> Deref for Shader<'a> {
     type Target = d3d12::D3D12_SHADER_BYTECODE;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<Option<Blob>> for Shader {
-    fn from(blob: Option<Blob>) -> Self {
-        match blob {
-            Some(b) => Shader::from_blob(b),
-            None => Shader::null(),
-        }
-    }
-}
-
 #[derive(Copy, Clone)]
-pub struct CachedPSO(d3d12::D3D12_CACHED_PIPELINE_STATE);
-impl CachedPSO {
+pub struct CachedPSO<'a>(d3d12::D3D12_CACHED_PIPELINE_STATE, PhantomData<&'a c_void>);
+impl<'a> CachedPSO<'a> {
     pub fn null() -> Self {
         CachedPSO(d3d12::D3D12_CACHED_PIPELINE_STATE {
             CachedBlobSizeInBytes: 0,
             pCachedBlob: ptr::null(),
-        })
+        }, PhantomData)
     }
 
     // `blob` may not be null.
-    pub fn from_blob(blob: Blob) -> Self {
+    pub fn from_blob(blob: &'a Blob) -> Self {
         CachedPSO(d3d12::D3D12_CACHED_PIPELINE_STATE {
             CachedBlobSizeInBytes: unsafe { blob.GetBufferSize() },
             pCachedBlob: unsafe { blob.GetBufferPointer() },
-        })
+        }, PhantomData)
     }
 }
 
-impl Deref for CachedPSO {
+impl<'a> Deref for CachedPSO<'a> {
     type Target = d3d12::D3D12_CACHED_PIPELINE_STATE;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-pub type PipelineState = WeakPtr<d3d12::ID3D12PipelineState>;
+pub type PipelineState = ComPtr<d3d12::ID3D12PipelineState>;
 
 #[repr(u32)]
 pub enum Subobject {

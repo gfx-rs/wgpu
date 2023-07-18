@@ -1,7 +1,7 @@
 //! Device
 
 use crate::{
-    com::WeakPtr,
+    com::ComPtr,
     command_list::{CmdListType, CommandSignature, IndirectArgument},
     descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc},
     heap::{Heap, HeapFlags, HeapProperties},
@@ -12,13 +12,13 @@ use crate::{
 use std::ops::Range;
 use winapi::{um::d3d12, Interface};
 
-pub type Device = WeakPtr<d3d12::ID3D12Device>;
+pub type Device = ComPtr<d3d12::ID3D12Device>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
-    pub fn create_device<I: Interface>(
+pub fn create_device<I: Interface>(
         &self,
-        adapter: WeakPtr<I>,
+        adapter: &ComPtr<I>,
         feature_level: crate::FeatureLevel,
     ) -> Result<D3DResult<Device>, libloading::Error> {
         type Fun = extern "system" fn(
@@ -46,7 +46,7 @@ impl crate::D3D12Lib {
 impl Device {
     #[cfg(feature = "implicit-link")]
     pub fn create<I: Interface>(
-        adapter: WeakPtr<I>,
+        adapter: ComPtr<I>,
         feature_level: crate::FeatureLevel,
     ) -> D3DResult<Self> {
         let mut device = Device::null();
@@ -155,7 +155,7 @@ impl Device {
     pub fn create_graphics_command_list(
         &self,
         list_type: CmdListType,
-        allocator: CommandAllocator,
+        allocator: &CommandAllocator,
         initial: PipelineState,
         node_mask: NodeMask,
     ) -> D3DResult<GraphicsCommandList> {
@@ -215,7 +215,7 @@ impl Device {
 
     pub fn create_compute_pipeline_state(
         &self,
-        root_signature: RootSignature,
+        root_signature: &RootSignature,
         cs: Shader,
         node_mask: NodeMask,
         cached_pso: CachedPSO,

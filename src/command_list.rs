@@ -1,7 +1,7 @@
 //! Graphics command list
 
 use crate::{
-    com::WeakPtr, resource::DiscardRegion, CommandAllocator, CpuDescriptor, DescriptorHeap, Format,
+    com::ComPtr, resource::DiscardRegion, CommandAllocator, CpuDescriptor, DescriptorHeap, Format,
     GpuAddress, GpuDescriptor, IndexCount, InstanceCount, PipelineState, Rect, Resource, RootIndex,
     RootSignature, Subresource, VertexCount, VertexOffset, WorkGroupCount, HRESULT,
 };
@@ -140,9 +140,9 @@ impl ResourceBarrier {
     }
 }
 
-pub type CommandSignature = WeakPtr<d3d12::ID3D12CommandSignature>;
-pub type CommandList = WeakPtr<d3d12::ID3D12CommandList>;
-pub type GraphicsCommandList = WeakPtr<d3d12::ID3D12GraphicsCommandList>;
+pub type CommandSignature = ComPtr<d3d12::ID3D12CommandSignature>;
+pub type CommandList = ComPtr<d3d12::ID3D12CommandList>;
+pub type GraphicsCommandList = ComPtr<d3d12::ID3D12GraphicsCommandList>;
 
 impl GraphicsCommandList {
     pub fn as_list(&self) -> CommandList {
@@ -153,7 +153,7 @@ impl GraphicsCommandList {
         unsafe { self.Close() }
     }
 
-    pub fn reset(&self, allocator: CommandAllocator, initial_pso: PipelineState) -> HRESULT {
+    pub fn reset(&self, allocator: &CommandAllocator, initial_pso: PipelineState) -> HRESULT {
         unsafe { self.Reset(allocator.as_mut_ptr(), initial_pso.as_mut_ptr()) }
     }
 
@@ -263,7 +263,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_pipeline_state(&self, pso: PipelineState) {
+    pub fn set_pipeline_state(&self, pso:&PipelineState) {
         unsafe {
             self.SetPipelineState(pso.as_mut_ptr());
         }
@@ -284,13 +284,13 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_signature(&self, signature: RootSignature) {
+    pub fn set_compute_root_signature(&self, signature: &RootSignature) {
         unsafe {
             self.SetComputeRootSignature(signature.as_mut_ptr());
         }
     }
 
-    pub fn set_graphics_root_signature(&self, signature: RootSignature) {
+    pub fn set_graphics_root_signature(&self, signature: &RootSignature) {
         unsafe {
             self.SetGraphicsRootSignature(signature.as_mut_ptr());
         }

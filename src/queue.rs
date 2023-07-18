@@ -1,4 +1,4 @@
-use crate::{com::WeakPtr, sync::Fence, CommandList, HRESULT};
+use crate::{com::ComPtr, sync::Fence, CommandList, HRESULT};
 use winapi::um::d3d12;
 
 #[repr(u32)]
@@ -15,7 +15,7 @@ bitflags! {
     }
 }
 
-pub type CommandQueue = WeakPtr<d3d12::ID3D12CommandQueue>;
+pub type CommandQueue = ComPtr<d3d12::ID3D12CommandQueue>;
 
 impl CommandQueue {
     pub fn execute_command_lists(&self, command_lists: &[CommandList]) {
@@ -26,7 +26,7 @@ impl CommandQueue {
         unsafe { self.ExecuteCommandLists(command_lists.len() as _, command_lists.as_ptr()) }
     }
 
-    pub fn signal(&self, fence: Fence, value: u64) -> HRESULT {
+    pub fn signal(&self, fence: &Fence, value: u64) -> HRESULT {
         unsafe { self.Signal(fence.as_mut_ptr(), value) }
     }
 }

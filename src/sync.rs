@@ -1,4 +1,4 @@
-use crate::{com::WeakPtr, HRESULT};
+use crate::{com::ComPtr, HRESULT};
 use std::ptr;
 use winapi::um::{d3d12, synchapi, winnt};
 
@@ -23,7 +23,7 @@ impl Event {
     }
 }
 
-pub type Fence = WeakPtr<d3d12::ID3D12Fence>;
+pub type Fence = ComPtr<d3d12::ID3D12Fence>;
 impl Fence {
     pub fn set_event_on_completion(&self, event: Event, value: u64) -> HRESULT {
         unsafe { self.SetEventOnCompletion(value, event.0) }

@@ -1,9 +1,9 @@
-use crate::com::WeakPtr;
+use crate::com::ComPtr;
 use winapi::um::d3d12sdklayers;
 #[cfg(any(feature = "libloading", feature = "implicit-link"))]
 use winapi::Interface as _;
 
-pub type Debug = WeakPtr<d3d12sdklayers::ID3D12Debug>;
+pub type Debug = ComPtr<d3d12sdklayers::ID3D12Debug>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
