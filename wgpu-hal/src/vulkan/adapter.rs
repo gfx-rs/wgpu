@@ -1201,6 +1201,12 @@ impl super::Adapter {
             None
         };
 
+        let image_checks = if self.private_caps.robust_image_access {
+            naga::proc::BoundsCheckPolicy::Unchecked
+        } else {
+            naga::proc::BoundsCheckPolicy::Restrict
+        };
+
         let naga_options = {
             use naga::back::spv;
 
@@ -1262,11 +1268,8 @@ impl super::Adapter {
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
                     },
-                    image: if self.private_caps.robust_image_access {
-                        naga::proc::BoundsCheckPolicy::Unchecked
-                    } else {
-                        naga::proc::BoundsCheckPolicy::Restrict
-                    },
+                    image_load: image_checks,
+                    image_store: image_checks,
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
@@ -1280,6 +1283,7 @@ impl super::Adapter {
                 },
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
+                debug_info: None,
             }
         };
 
