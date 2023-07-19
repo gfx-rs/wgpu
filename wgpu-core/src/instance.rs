@@ -904,8 +904,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         a.or(b)
                     }
                 };
-                // Pick the lowest id of these types (which will give us a `Backends::PRIMARY`
-                // adapter, if one exists).
+                // Pick the lowest id of these types
                 option_min(option_min(discrete, integrated), other)
             }
         };
