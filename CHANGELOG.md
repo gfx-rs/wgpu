@@ -48,6 +48,7 @@ Bottom level categories:
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
 - Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) 
 - Make `RequestAdapterOptions.power_preference` optional. By @Aaron1011 in [#3903](https://github.com/gfx-rs/wgpu/pull/3903)
+- Add a `compatible_surface` parameter to `initialize_adapter_from_env` and use that to make `initialize_adapter_from_env_or_default` always respect its `compatible_surface` parameter. By @fornwall in [#3905](https://github.com/gfx-rs/wgpu/pull/3905)
 
 #### Vulkan
 
@@ -69,12 +70,15 @@ Bottom level categories:
 - Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763).
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
 - On Web, types don't implement `Send` or `Sync` anymore. By @daxpedda in [#3691](https://github.com/gfx-rs/wgpu/pull/3691)
+- Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [https://github.com/gfx-rs/wgpu/pull/#3928](3928)
 
 ### Bug Fixes
 
 - Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
 - Fix OpenGL/EGL backend not respecting non-sRGB texture formats in `SurfaceConfiguration`. by @liquidev in [#3817](https://github.com/gfx-rs/wgpu/pull/3817)
 - Make write- and read-only marked buffers match non-readonly layouts. by @fornwall in [#3893](https://github.com/gfx-rs/wgpu/pull/3893)
+- Fix leaking X11 connections. by @wez in [#3924](https://github.com/gfx-rs/wgpu/pull/3924)
+- Fix ASTC feature selection in the webgl backend. by @expenses in [#3934](https://github.com/gfx-rs/wgpu/pull/3934)
 
 #### Metal
 

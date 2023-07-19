@@ -38,7 +38,7 @@ metal = ["naga/msl-out", "block"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "khronos-egl", "libloading"]
 dx11 = ["naga/hlsl-out", "d3d12", "libloading", "winapi/d3d11", "winapi/std", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
-dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
+dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "libloading", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 # TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
@@ -66,7 +66,7 @@ rustc-hash = "1.1"
 log = "0.4"
 
 # backend: Gles
-glow = { version = "0.12.2", optional = true }
+glow = { version = "0.12.3", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
@@ -97,7 +97,7 @@ gpu-allocator = { version = "0.22", default_features = false, features = ["d3d12
 hassle-rs = { version = "0.10", optional = true }
 
 winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
-d3d12 = { version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "b940b1d71", features = ["libloading"], optional = true }
+d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
@@ -108,9 +108,9 @@ objc = "0.2.5"
 core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wasm-bindgen = "0.2.86"
-web-sys = { version = "0.3.61", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
-js-sys = "0.3.63"
+wasm-bindgen = "0.2.87"
+web-sys = { version = "0.3.64", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
+js-sys = "0.3.64"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -120,14 +120,14 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
+rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
 version = "0.12.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
+rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
 version = "0.12.0"
 features = ["wgsl-in"]
 

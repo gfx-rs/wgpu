@@ -37,7 +37,10 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn initialize_adapter_from_env(instance: &Instance) -> Option<Adapter> {
+pub fn initialize_adapter_from_env(
+    instance: &Instance,
+    compatible_surface: Option<&Surface>,
+) -> Option<Adapter> {
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
         .map(str::to_lowercase)
@@ -48,6 +51,12 @@ pub fn initialize_adapter_from_env(instance: &Instance) -> Option<Adapter> {
     let mut chosen_adapter = None;
     for adapter in adapters {
         let info = adapter.get_info();
+
+        if let Some(surface) = compatible_surface {
+            if !adapter.is_surface_supported(surface) {
+                continue;
+            }
+        }
 
         if info.name.to_lowercase().contains(&desired_adapter_name) {
             chosen_adapter = Some(adapter);
@@ -60,7 +69,10 @@ pub fn initialize_adapter_from_env(instance: &Instance) -> Option<Adapter> {
 
 /// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
 #[cfg(target_arch = "wasm32")]
-pub fn initialize_adapter_from_env(_instance: &Instance) -> Option<Adapter> {
+pub fn initialize_adapter_from_env(
+    _instance: &Instance,
+    _compatible_surface: Option<&Surface>,
+) -> Option<Adapter> {
     None
 }
 
@@ -69,7 +81,7 @@ pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
     compatible_surface: Option<&Surface>,
 ) -> Option<Adapter> {
-    match initialize_adapter_from_env(instance) {
+    match initialize_adapter_from_env(instance, compatible_surface) {
         Some(a) => Some(a),
         None => {
             instance

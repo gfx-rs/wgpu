@@ -51,7 +51,7 @@ version = "0.16"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
+rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
 version = "0.12.0"
 
 [workspace.dependencies]
@@ -122,17 +122,17 @@ hassle-rs = "0.10.0"
 
 # Gles dependencies
 khronos-egl = "4.1"
-glow = "0.12.2"
+glow = "0.12.3"
 glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "0.2"
-js-sys = "0.3.63"
-wasm-bindgen = "0.2.86"
+js-sys = "0.3.64"
+wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.61"
+web-sys = "0.3.64"
 
 # deno dependencies
 deno_console = "0.106.0"

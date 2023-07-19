@@ -283,7 +283,7 @@ pub struct Device {
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
-    naga_options: naga::back::spv::Options,
+    naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
