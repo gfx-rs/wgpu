@@ -151,10 +151,7 @@ pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages 
     );
     u.set(
         wgt::TextureUsages::RENDER_ATTACHMENT,
-        uses.contains(hal::TextureUses::COLOR_TARGET)
-            | uses.contains(
-                hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::DEPTH_STENCIL_WRITE,
-            ),
+        uses.contains(hal::TextureUses::COLOR_TARGET),
     );
     u
 }
