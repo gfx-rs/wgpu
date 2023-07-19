@@ -5,7 +5,7 @@ This example renders a textured cube.
 ## To Run
 
 ```
-cargo run --example cube
+cargo run --bin cube
 ```
 
 ## Screenshots

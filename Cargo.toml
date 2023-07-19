@@ -51,10 +51,11 @@ version = "0.16"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
+rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
 version = "0.12.0"
 
 [workspace.dependencies]
+anyhow = "1.0"
 arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
@@ -82,6 +83,7 @@ noise = { version = "0.7", default-features = false }
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
+pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
 png = "0.17.9"
 pollster = "0.2"
 profiling = { version = "1", default-features = false }
@@ -120,7 +122,7 @@ hassle-rs = "0.10.0"
 
 # Gles dependencies
 khronos-egl = "4.1"
-glow = "0.12.2"
+glow = "0.12.3"
 glutin = "0.29.1"
 
 # wasm32 dependencies

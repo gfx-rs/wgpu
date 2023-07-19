@@ -7,11 +7,10 @@ First it draws a small "mask" triangle, which sets the stencil buffer at every p
 
 Then, it draws a larger "outer" triangle which only touches pixels where the stencil buffer is less than 1.
 
-
 ## To Run
 
 ```
-cargo run --example stencil-triangles
+cargo run --bin stencil-triangles
 ```
 
 ## Screenshots

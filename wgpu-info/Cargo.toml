@@ -3,14 +3,18 @@ name = "wgpu-info"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Adapter information and per-adapter test program"
+description = "A tool to print and process information about available wgpu adapters."
 homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-publish = false
 
 [dependencies]
+anyhow.workspace = true
 bitflags.workspace = true
 env_logger.workspace = true
+pico-args.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 wgpu.workspace = true
+wgpu-types = { workspace = true, features = ["trace", "replay"] }

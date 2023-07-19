@@ -24,7 +24,6 @@ pub struct PhysicalDeviceFeatures {
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
-    depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
     multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
     shader_float16: Option<(
@@ -59,9 +58,6 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.robustness2 {
-            info = info.push_next(feature);
-        }
-        if let Some(ref mut feature) = self.depth_clip_enable {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.astc_hdr {
@@ -179,6 +175,7 @@ impl PhysicalDeviceFeatures {
                 .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
+                .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
                 .build(),
             descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
@@ -242,17 +239,6 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceRobustness2FeaturesEXT::builder()
                         .robust_buffer_access2(private_caps.robust_buffer_access)
                         .robust_image_access2(private_caps.robust_image_access)
-                        .build(),
-                )
-            } else {
-                None
-            },
-            depth_clip_enable: if enabled_extensions.contains(&vk::ExtDepthClipEnableFn::name()) {
-                Some(
-                    vk::PhysicalDeviceDepthClipEnableFeaturesEXT::builder()
-                        .depth_clip_enable(
-                            requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL),
-                        )
                         .build(),
                 )
             } else {
@@ -472,9 +458,7 @@ impl PhysicalDeviceFeatures {
             }
         }
 
-        if let Some(ref feature) = self.depth_clip_enable {
-            features.set(F::DEPTH_CLIP_CONTROL, feature.depth_clip_enable != 0);
-        }
+        features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
@@ -699,11 +683,6 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
         }
 
-        // Require `VK_EXT_depth_clip_enable` if the associated feature was requested
-        if requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
-            extensions.push(vk::ExtDepthClipEnableFn::name());
-        }
-
         // Require `VK_KHR_portability_subset` on macOS/iOS
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         extensions.push(vk::KhrPortabilitySubsetFn::name());
@@ -896,12 +875,6 @@ impl super::InstanceShared {
                 let next = features
                     .robustness2
                     .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
-                builder = builder.push_next(next);
-            }
-            if capabilities.supports_extension(vk::ExtDepthClipEnableFn::name()) {
-                let next = features
-                    .depth_clip_enable
-                    .insert(vk::PhysicalDeviceDepthClipEnableFeaturesEXT::default());
                 builder = builder.push_next(next);
             }
             if capabilities.supports_extension(vk::ExtTextureCompressionAstcHdrFn::name()) {
@@ -1228,6 +1201,12 @@ impl super::Adapter {
             None
         };
 
+        let image_checks = if self.private_caps.robust_image_access {
+            naga::proc::BoundsCheckPolicy::Unchecked
+        } else {
+            naga::proc::BoundsCheckPolicy::Restrict
+        };
+
         let naga_options = {
             use naga::back::spv;
 
@@ -1289,11 +1268,8 @@ impl super::Adapter {
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
                     },
-                    image: if self.private_caps.robust_image_access {
-                        naga::proc::BoundsCheckPolicy::Unchecked
-                    } else {
-                        naga::proc::BoundsCheckPolicy::Restrict
-                    },
+                    image_load: image_checks,
+                    image_store: image_checks,
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
@@ -1307,6 +1283,7 @@ impl super::Adapter {
                 },
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
+                debug_info: None,
             }
         };
 

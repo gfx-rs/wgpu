@@ -25,6 +25,7 @@ targets = [
 trace = ["serde"]
 replay = ["serde"]
 strict_asserts = []
+fragile-send-sync-non-atomic-wasm = []
 
 [dependencies]
 bitflags = "2"

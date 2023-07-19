@@ -185,6 +185,9 @@ name = "bitflags"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbe3c979c178231552ecba20214a8272df4e09f232a87aef4320cf06539aded"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "block"
@@ -478,10 +481,11 @@ checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 
 [[package]]
 name = "d3d12"
-version = "0.6.0"
-source = "git+https://github.com/gfx-rs/d3d12-rs?rev=b940b1d71#b940b1d71ab7083ae80eec697872672dc1f2bd32"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e16e44ab292b1dddfdaf7be62cfd8877df52f2f3fde5858d95bab606be259f20"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.3.2",
  "libloading 0.7.4",
  "winapi",
 ]
@@ -1046,9 +1050,9 @@ checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
 
 [[package]]
 name = "glow"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "807edf58b70c0b5b2181dd39fe1839dbdb3ba02645630dc5f753e23da307f762"
+checksum = "ca0fe580e4b60a8ab24a868bc08e2f03cbcb20d3d676601fa909386713333728"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -1460,10 +1464,9 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "550b24b0cd4cf923f36bae78eca457b3a10d8a6a14a9c84cb2687b527e6a84af"
+source = "git+https://github.com/gfx-rs/metal-rs.git?rev=a6a0446#a6a04463db388e8fd3e99095ab4fbb87cbe9d69c"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.3.2",
  "block",
  "core-graphics-types",
  "foreign-types 0.5.0",
@@ -1521,10 +1524,10 @@ dependencies = [
 [[package]]
 name = "naga"
 version = "0.12.0"
-source = "git+https://github.com/gfx-rs/naga?rev=b99d58ea435090e561377949f428bce2c18451bb#b99d58ea435090e561377949f428bce2c18451bb"
+source = "git+https://github.com/gfx-rs/naga?rev=409239c0e2313bfd0dc4fd64f8c3021185ccef1b#409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
 dependencies = [
  "bit-set",
- "bitflags 1.3.2",
+ "bitflags 2.3.2",
  "codespan-reporting",
  "hexf-parse",
  "indexmap",
@@ -1879,6 +1882,12 @@ dependencies = [
  "fixedbitset",
  "indexmap",
 ]
+
+[[package]]
+name = "pico-args"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 
 [[package]]
 name = "pin-project"
@@ -3185,9 +3194,14 @@ dependencies = [
 name = "wgpu-info"
 version = "0.16.0"
 dependencies = [
+ "anyhow",
  "bitflags 2.3.2",
  "env_logger",
+ "pico-args",
+ "serde",
+ "serde_json",
  "wgpu",
+ "wgpu-types",
 ]
 
 [[package]]

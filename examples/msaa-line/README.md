@@ -5,7 +5,7 @@ This example shows how to render lines using MSAA.
 ## To Run
 
 ```
-cargo run --example msaa-line
+cargo run --bin msaa-line
 ```
 
 ## Screenshots

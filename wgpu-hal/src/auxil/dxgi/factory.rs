@@ -20,7 +20,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         if let Some(factory6) = factory.as_factory6() {
             profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
             // We're already at dxgi1.6, we can grab IDXGIAdapater4 directly
-            let mut adapter4 = d3d12::WeakPtr::<dxgi1_6::IDXGIAdapter4>::null();
+            let mut adapter4 = d3d12::ComPtr::<dxgi1_6::IDXGIAdapter4>::null();
             let hr = unsafe {
                 factory6.EnumAdapterByGpuPreference(
                     cur_index,
@@ -43,7 +43,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         }
 
         profiling::scope!("IDXGIFactory1::EnumAdapters1");
-        let mut adapter1 = d3d12::WeakPtr::<dxgi::IDXGIAdapter1>::null();
+        let mut adapter1 = d3d12::ComPtr::<dxgi::IDXGIAdapter1>::null();
         let hr = unsafe { factory.EnumAdapters1(cur_index, adapter1.mut_self()) };
 
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
@@ -60,7 +60,6 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         unsafe {
             match adapter1.cast::<dxgi1_4::IDXGIAdapter3>().into_result() {
                 Ok(adapter3) => {
-                    adapter1.destroy();
                     adapters.push(d3d12::DxgiAdapter::Adapter3(adapter3));
                     continue;
                 }
@@ -74,7 +73,6 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         unsafe {
             match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().into_result() {
                 Ok(adapter2) => {
-                    adapter1.destroy();
                     adapters.push(d3d12::DxgiAdapter::Adapter2(adapter2));
                     continue;
                 }
@@ -107,8 +105,7 @@ pub fn create_factory(
         // we check for whether it exists first.
         match lib_dxgi.get_debug_interface1() {
             Ok(pair) => match pair.into_result() {
-                Ok(debug_controller) => {
-                    unsafe { debug_controller.destroy() };
+                Ok(_debug_controller) => {
                     factory_flags |= d3d12::FactoryCreationFlags::DEBUG;
                 }
                 Err(err) => {
@@ -151,9 +148,6 @@ pub fn create_factory(
         let factory6 = unsafe { factory4.cast::<dxgi1_6::IDXGIFactory6>().into_result() };
         match factory6 {
             Ok(factory6) => {
-                unsafe {
-                    factory4.destroy();
-                }
                 return Ok((lib_dxgi, d3d12::DxgiFactory::Factory6(factory6)));
             }
             // If we require factory6, hard error.
@@ -189,9 +183,6 @@ pub fn create_factory(
     let factory2 = unsafe { factory1.cast::<dxgi1_2::IDXGIFactory2>().into_result() };
     match factory2 {
         Ok(factory2) => {
-            unsafe {
-                factory1.destroy();
-            }
             return Ok((lib_dxgi, d3d12::DxgiFactory::Factory2(factory2)));
         }
         // If we require factory2, hard error.

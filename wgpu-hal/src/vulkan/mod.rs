@@ -283,7 +283,7 @@ pub struct Device {
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
-    naga_options: naga::back::spv::Options,
+    naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
@@ -305,7 +305,7 @@ pub struct Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
 #[derive(Debug)]
