@@ -1,3 +1,5 @@
+use crate::auxil::{max_bindings_per_bind_group, MaxBindingsPerBindGroupInput};
+
 use super::conv;
 
 use ash::{extensions::khr, vk};
@@ -713,6 +715,21 @@ impl PhysicalDeviceCapabilities {
                 u64::MAX
             };
 
+        let max_sampled_textures_per_shader_stage = limits.max_per_stage_descriptor_sampled_images;
+        let max_samplers_per_shader_stage = limits.max_per_stage_descriptor_samplers;
+        let max_storage_buffers_per_shader_stage = limits.max_per_stage_descriptor_storage_buffers;
+        let max_storage_textures_per_shader_stage = limits.max_per_stage_descriptor_storage_images;
+        let max_uniform_buffers_per_shader_stage = limits.max_per_stage_descriptor_uniform_buffers;
+
+        let max_bindings_per_bind_group =
+            max_bindings_per_bind_group(MaxBindingsPerBindGroupInput {
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
+            });
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -721,16 +738,16 @@ impl PhysicalDeviceCapabilities {
             max_bind_groups: limits
                 .max_bound_descriptor_sets
                 .min(crate::MAX_BIND_GROUPS as u32),
-            max_bindings_per_bind_group: wgt::Limits::default().max_bindings_per_bind_group,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
             max_dynamic_storage_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_storage_buffers_dynamic,
-            max_sampled_textures_per_shader_stage: limits.max_per_stage_descriptor_sampled_images,
-            max_samplers_per_shader_stage: limits.max_per_stage_descriptor_samplers,
-            max_storage_buffers_per_shader_stage: limits.max_per_stage_descriptor_storage_buffers,
-            max_storage_textures_per_shader_stage: limits.max_per_stage_descriptor_storage_images,
-            max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
+            max_sampled_textures_per_shader_stage,
+            max_samplers_per_shader_stage,
+            max_storage_buffers_per_shader_stage,
+            max_storage_textures_per_shader_stage,
+            max_uniform_buffers_per_shader_stage,
             max_uniform_buffer_binding_size: limits
                 .max_uniform_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE),

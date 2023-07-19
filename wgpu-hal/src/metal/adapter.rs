@@ -1,3 +1,4 @@
+use crate::auxil::{max_bindings_per_bind_group, MaxBindingsPerBindGroupInput};
 use metal::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
 use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
@@ -829,6 +830,21 @@ impl super::PrivateCapabilities {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
+        let max_sampled_textures_per_shader_stage = self.max_textures_per_stage;
+        let max_samplers_per_shader_stage = self.max_samplers_per_stage;
+        let max_storage_buffers_per_shader_stage = self.max_buffers_per_stage;
+        let max_storage_textures_per_shader_stage = self.max_textures_per_stage;
+        let max_uniform_buffers_per_shader_stage = self.max_buffers_per_stage;
+
+        let max_bindings_per_bind_group =
+            max_bindings_per_bind_group(MaxBindingsPerBindGroupInput {
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
+            });
+
         let base = wgt::Limits::default();
         crate::Capabilities {
             limits: wgt::Limits {
@@ -837,16 +853,16 @@ impl super::PrivateCapabilities {
                 max_texture_dimension_3d: self.max_texture_3d_size as u32,
                 max_texture_array_layers: self.max_texture_layers as u32,
                 max_bind_groups: 8,
-                max_bindings_per_bind_group: 65535,
+                max_bindings_per_bind_group,
                 max_dynamic_uniform_buffers_per_pipeline_layout: base
                     .max_dynamic_uniform_buffers_per_pipeline_layout,
                 max_dynamic_storage_buffers_per_pipeline_layout: base
                     .max_dynamic_storage_buffers_per_pipeline_layout,
-                max_sampled_textures_per_shader_stage: self.max_textures_per_stage,
-                max_samplers_per_shader_stage: self.max_samplers_per_stage,
-                max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
-                max_storage_textures_per_shader_stage: self.max_textures_per_stage,
-                max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
                 max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
                 max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
                 max_vertex_buffers: self.max_vertex_buffers,

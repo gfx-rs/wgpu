@@ -182,6 +182,8 @@ impl super::Adapter {
     pub(super) unsafe fn expose(
         context: super::AdapterContext,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        use crate::auxil::{max_bindings_per_bind_group, MaxBindingsPerBindGroupInput};
+
         let gl = context.lock();
         let extensions = gl.supported_extensions();
 
@@ -499,6 +501,18 @@ impl super::Adapter {
             0
         };
 
+        let max_sampled_textures_per_shader_stage = super::MAX_TEXTURE_SLOTS as u32;
+        let max_samplers_per_shader_stage = super::MAX_SAMPLERS as u32;
+
+        let max_bindings_per_bind_group =
+            max_bindings_per_bind_group(MaxBindingsPerBindGroupInput {
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
+            });
+
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
@@ -507,11 +521,11 @@ impl super::Adapter {
                 gl.get_parameter_i32(glow::MAX_ARRAY_TEXTURE_LAYERS)
             } as u32,
             max_bind_groups: crate::MAX_BIND_GROUPS as u32,
-            max_bindings_per_bind_group: 65535,
+            max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_uniform_buffers_per_shader_stage,
             max_dynamic_storage_buffers_per_pipeline_layout: max_storage_buffers_per_shader_stage,
-            max_sampled_textures_per_shader_stage: super::MAX_TEXTURE_SLOTS as u32,
-            max_samplers_per_shader_stage: super::MAX_SAMPLERS as u32,
+            max_sampled_textures_per_shader_stage,
+            max_samplers_per_shader_stage,
             max_storage_buffers_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,

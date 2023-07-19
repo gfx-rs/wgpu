@@ -1,5 +1,7 @@
 use crate::{
-    auxil::{self, dxgi::result::HResult as _},
+    auxil::{
+        self, dxgi::result::HResult as _, max_bindings_per_bind_group, MaxBindingsPerBindGroupInput,
+    },
     dx12::SurfaceTarget,
 };
 use std::{mem, ptr, sync::Arc, thread};
@@ -277,6 +279,30 @@ impl super::Adapter {
 
         let base = wgt::Limits::default();
 
+        let max_sampled_textures_per_shader_stage = match options.ResourceBindingTier {
+            d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+            _ => full_heap_count,
+        };
+        let max_samplers_per_shader_stage = match options.ResourceBindingTier {
+            d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => 16,
+            _ => d3d12_ty::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+        };
+        // these both account towards `uav_count`, but we can't express the limit as as sum
+        // of the two, so we divide it by 4 to account for the worst case scenario
+        // (2 shader stages, with both using 16 storage textures and 16 storage buffers)
+        let max_storage_buffers_per_shader_stage = uav_count / 4;
+        let max_storage_textures_per_shader_stage = uav_count / 4;
+        let max_uniform_buffers_per_shader_stage = full_heap_count;
+
+        let max_bindings_per_bind_group =
+            max_bindings_per_bind_group(MaxBindingsPerBindGroupInput {
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
+            });
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -297,26 +323,17 @@ impl super::Adapter {
                     max_texture_dimension_3d: d3d12_ty::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
                     max_texture_array_layers: d3d12_ty::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
                     max_bind_groups: crate::MAX_BIND_GROUPS as u32,
-                    max_bindings_per_bind_group: 65535,
+                    max_bindings_per_bind_group,
                     // dynamic offsets take a root constant, so we expose the minimum here
                     max_dynamic_uniform_buffers_per_pipeline_layout: base
                         .max_dynamic_uniform_buffers_per_pipeline_layout,
                     max_dynamic_storage_buffers_per_pipeline_layout: base
                         .max_dynamic_storage_buffers_per_pipeline_layout,
-                    max_sampled_textures_per_shader_stage: match options.ResourceBindingTier {
-                        d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        _ => full_heap_count,
-                    },
-                    max_samplers_per_shader_stage: match options.ResourceBindingTier {
-                        d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => 16,
-                        _ => d3d12_ty::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
-                    },
-                    // these both account towards `uav_count`, but we can't express the limit as as sum
-                    // of the two, so we divide it by 4 to account for the worst case scenario
-                    // (2 shader stages, with both using 16 storage textures and 16 storage buffers)
-                    max_storage_buffers_per_shader_stage: uav_count / 4,
-                    max_storage_textures_per_shader_stage: uav_count / 4,
-                    max_uniform_buffers_per_shader_stage: full_heap_count,
+                    max_sampled_textures_per_shader_stage,
+                    max_samplers_per_shader_stage,
+                    max_storage_buffers_per_shader_stage,
+                    max_storage_textures_per_shader_stage,
+                    max_uniform_buffers_per_shader_stage,
                     max_uniform_buffer_binding_size:
                         d3d12_ty::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: crate::auxil::MAX_I32_BINDING_SIZE,

@@ -1,3 +1,5 @@
+use wgt::Limits;
+
 #[cfg(all(any(feature = "dx11", feature = "dx12"), windows))]
 pub(super) mod dxgi;
 
@@ -45,6 +47,81 @@ pub mod db {
 /// element size is 4 bytes, but the compiler toolchain still computes the
 /// offset at some intermediate point, internally, as i32.
 pub const MAX_I32_BINDING_SIZE: u32 = 1 << 31;
+
+/// Per the [WebGPU spec.]:
+///
+/// > **_max shader stages per pipeline_** is `2`, because a `GPURenderPipeline` supports both
+/// > a vertex and fragment shader.
+///
+/// [WebGPU spec.]: https://gpuweb.github.io/gpuweb/#max-shader-stages-per-pipeline
+//#[cfg(not(target_arch = "wasm32"))]
+const MAX_SHADER_STAGES_PER_PIPELINE: u32 = 2;
+
+/// Input for [`max_bindings_per_bind_group`].
+pub(crate) struct MaxBindingsPerBindGroupInput {
+    pub max_sampled_textures_per_shader_stage: u32,
+    pub max_samplers_per_shader_stage: u32,
+    pub max_storage_buffers_per_shader_stage: u32,
+    pub max_storage_textures_per_shader_stage: u32,
+    pub max_uniform_buffers_per_shader_stage: u32,
+}
+
+/// Calculates the maximum bindings per bind group, according to [this formula from the adapter
+/// capabilities guarantees list in the WebGPU spec.]:
+///
+/// > `maxBindingsPerBindGroup` must be must be ≥ (max bindings per shader stage × max shader
+/// > stages per pipeline), where:
+/// >
+/// > - max bindings per shader stage is (`maxSampledTexturesPerShaderStage` +
+/// >   `maxSamplersPerShaderStage` + `maxStorageBuffersPerShaderStage` +
+/// >   `maxStorageTexturesPerShaderStage` + `maxUniformBuffersPerShaderStage`).
+/// > - max shader stages per pipeline is `2`, because
+/// >   a `[GPURenderPipeline](https://gpuweb.github.io/gpuweb/#gpurenderpipeline)` supports both
+/// >   a vertex and fragment shader.
+///
+/// We choose to interpret the above additions as saturating operations. If, for some reason, the
+/// output of this formula is <= default, it is clamped to the default.
+///
+/// See also from the spec.:
+///
+/// * Documentation for
+///   [`maxBindingsPerBindGroup`](https://gpuweb.github.io/gpuweb/#dom-supported-limits-maxbindingsperbindgroup)
+/// * [4.2.1 Adapter Capability Guarantees](adapter-cap-guarantees)
+///
+/// [adapter-cap-guarantees]: https://gpuweb.github.io/gpuweb/#adapter-capability-guarantees
+pub(crate) fn max_bindings_per_bind_group(input: MaxBindingsPerBindGroupInput) -> u32 {
+    let minimum = Limits::default().max_bindings_per_bind_group;
+
+    let MaxBindingsPerBindGroupInput {
+        max_sampled_textures_per_shader_stage,
+        max_samplers_per_shader_stage,
+        max_storage_buffers_per_shader_stage,
+        max_storage_textures_per_shader_stage,
+        max_uniform_buffers_per_shader_stage,
+    } = input;
+
+    let mut max_bindings_per_bind_group = (max_sampled_textures_per_shader_stage
+        .saturating_add(max_samplers_per_shader_stage)
+        .saturating_add(max_storage_buffers_per_shader_stage)
+        .saturating_add(max_storage_textures_per_shader_stage)
+        .saturating_add(max_uniform_buffers_per_shader_stage))
+    .saturating_mul(MAX_SHADER_STAGES_PER_PIPELINE);
+
+    if max_bindings_per_bind_group < minimum {
+        log::warn!(
+            "`max_bindings_per_bind_group` was < 1000, clamping to 1000 to adhere to WebGPU spec."
+        );
+        max_bindings_per_bind_group = minimum;
+    }
+
+    if max_bindings_per_bind_group > minimum {
+        // Yes, we're throwing away the calculated value! We're clamping to this value right now
+        // because we want to limit exposure to driver bugs, like Vulkan is known to have.
+        max_bindings_per_bind_group = minimum;
+    }
+
+    max_bindings_per_bind_group
+}
 
 pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
     match stage {

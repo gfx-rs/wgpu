@@ -2,6 +2,8 @@ use std::num::NonZeroU64;
 
 use winapi::um::{d3d11, d3dcommon};
 
+use crate::auxil::{max_bindings_per_bind_group, MaxBindingsPerBindGroupInput};
+
 impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
@@ -203,6 +205,21 @@ impl super::Adapter {
         let max_compute_workgroups_per_dimension =
             d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
 
+        let max_sampled_textures_per_shader_stage = max_sampled_textures;
+        let max_samplers_per_shader_stage = max_samplers;
+        let max_storage_buffers_per_shader_stage = max_uavs;
+        let max_storage_textures_per_shader_stage = max_uavs;
+        let max_uniform_buffers_per_shader_stage = max_constant_buffers;
+
+        let max_bindings_per_bind_group =
+            max_bindings_per_bind_group(MaxBindingsPerBindGroupInput {
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
+            });
+
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_dimension_2d,
             max_texture_dimension_2d,
@@ -212,11 +229,11 @@ impl super::Adapter {
             max_bindings_per_bind_group: 65535,
             max_dynamic_uniform_buffers_per_pipeline_layout: max_constant_buffers,
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
-            max_sampled_textures_per_shader_stage: max_sampled_textures,
-            max_samplers_per_shader_stage: max_samplers,
-            max_storage_buffers_per_shader_stage: max_uavs,
-            max_storage_textures_per_shader_stage: max_uavs,
-            max_uniform_buffers_per_shader_stage: max_constant_buffers,
+            max_sampled_textures_per_shader_stage,
+            max_samplers_per_shader_stage,
+            max_storage_buffers_per_shader_stage,
+            max_storage_textures_per_shader_stage,
+            max_uniform_buffers_per_shader_stage,
             max_uniform_buffer_binding_size: 1 << 16,
             max_storage_buffer_binding_size: u32::MAX,
             max_vertex_buffers,
