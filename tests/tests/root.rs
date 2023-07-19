@@ -3,6 +3,7 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 mod regression {
     mod issue_3457;
 }
+
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;
@@ -16,6 +17,7 @@ mod poll;
 mod queue_transfer;
 mod resource_descriptor_accessor;
 mod resource_error;
+mod scissor_tests;
 mod shader;
 mod shader_primitive_index;
 mod shader_view_format;
