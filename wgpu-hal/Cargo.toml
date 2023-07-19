@@ -38,7 +38,7 @@ metal = ["naga/msl-out", "block"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "khronos-egl", "libloading"]
 dx11 = ["naga/hlsl-out", "d3d12", "libloading", "winapi/d3d11", "winapi/std", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
-dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
+dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "libloading", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 # TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
