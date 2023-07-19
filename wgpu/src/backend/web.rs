@@ -1165,6 +1165,8 @@ impl crate::context::Context for Context {
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
+            usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
     }
 
