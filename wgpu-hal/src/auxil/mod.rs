@@ -116,23 +116,15 @@ impl crate::TextureCopy {
     }
 }
 
-/// Construct a `CStr` from a byte slice, up to the first zero byte.
-///
-/// Return a `CStr` extending from the start of `bytes` up to and
-/// including the first zero byte. If there is no zero byte in
-/// `bytes`, return `None`.
-///
-/// This can be removed when `CStr::from_bytes_until_nul` is stabilized.
-/// ([#95027](https://github.com/rust-lang/rust/issues/95027))
+/// A convenience wrapper around [`std::ffi::CStr::from_bytes_until_nul`].
 #[allow(dead_code)]
 pub(crate) fn cstr_from_bytes_until_nul(bytes: &[std::os::raw::c_char]) -> Option<&std::ffi::CStr> {
-    if bytes.contains(&0) {
-        // Safety for `CStr::from_ptr`:
-        // - We've ensured that the slice does contain a null terminator.
-        // - The range is valid to read, because the slice covers it.
-        // - The memory won't be changed, because the slice borrows it.
-        unsafe { Some(std::ffi::CStr::from_ptr(bytes.as_ptr())) }
-    } else {
-        None
-    }
+    // SAFETY: per docs for `c_char`, `bytes` is either a `&[i8]` or `&[u8]`. _So_, we're either…
+    //
+    // * …round-tripping a `*[u8]` to a `&[u8]`, which is definitely safe, or…
+    // * …casting from `&[i8]` to `&[u8]` with the same lifetime. Because we have elements of the
+    //   same size, we're preserving the element count, and the alignment is the same for both
+    //   types, this is safe.
+    let bytes = unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast(), bytes.len()) };
+    std::ffi::CStr::from_bytes_until_nul(bytes).ok()
 }
