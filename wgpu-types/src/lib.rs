@@ -845,7 +845,7 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
-    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 640.
+    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000.
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
     pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
@@ -929,7 +929,7 @@ impl Default for Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
-            max_bindings_per_bind_group: 640,
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
