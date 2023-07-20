@@ -6,6 +6,12 @@ const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const MIP_LEVEL_COUNT: u32 = 10;
 const MIP_PASS_COUNT: u32 = MIP_LEVEL_COUNT - 1;
 
+const QUERY_FEATURES: wgpu::Features = {
+    wgpu::Features::TIMESTAMP_QUERY
+        .union(wgpu::Features::PIPELINE_STATISTICS_QUERY)
+        .union(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
+};
+
 fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
     use std::iter;
 
@@ -34,6 +40,7 @@ struct QuerySets {
     timestamp_period: f32,
     pipeline_statistics: wgpu::QuerySet,
     data_buffer: wgpu::Buffer,
+    mapping_buffer: wgpu::Buffer,
 }
 
 #[repr(C)]
@@ -197,9 +204,7 @@ impl Example {
 
 impl wgpu_example::framework::Example for Example {
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::TIMESTAMP_QUERY
-            | wgpu::Features::PIPELINE_STATISTICS_QUERY
-            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES
+        QUERY_FEATURES
     }
 
     fn init(
@@ -323,11 +328,7 @@ impl wgpu_example::framework::Example for Example {
         });
 
         // If both kinds of query are supported, use queries
-        let query_sets = if device.features().contains(
-            wgpu::Features::TIMESTAMP_QUERY
-                | wgpu::Features::PIPELINE_STATISTICS_QUERY
-                | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-        ) {
+        let query_sets = if device.features().contains(QUERY_FEATURES) {
             // For N total mips, it takes N - 1 passes to generate them, and we're measuring those.
             let mip_passes = MIP_LEVEL_COUNT - 1;
 
@@ -353,11 +354,20 @@ impl wgpu_example::framework::Example for Example {
 
             // This databuffer has to store all of the query results, 2 * passes timestamp queries
             // and 1 * passes statistics queries. Each query returns a u64 value.
+            let buffer_size = pipeline_statistics_offset()
+                + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
             let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query buffer"),
-                size: pipeline_statistics_offset()
-                    + mem::size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::MAP_READ,
+                size: buffer_size,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+
+            // Mapping buffer
+            let mapping_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("query buffer"),
+                size: buffer_size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
 
@@ -366,6 +376,7 @@ impl wgpu_example::framework::Example for Example {
                 timestamp_period,
                 pipeline_statistics,
                 data_buffer,
+                mapping_buffer,
             })
         } else {
             None
@@ -379,22 +390,32 @@ impl wgpu_example::framework::Example for Example {
             MIP_LEVEL_COUNT,
         );
 
+        if let Some(ref query_sets) = query_sets {
+            init_encoder.copy_buffer_to_buffer(
+                &query_sets.data_buffer,
+                0,
+                &query_sets.mapping_buffer,
+                0,
+                query_sets.data_buffer.size(),
+            );
+        }
+
         queue.submit(Some(init_encoder.finish()));
         if let Some(ref query_sets) = query_sets {
             // We can ignore the callback as we're about to wait for the device.
             query_sets
-                .data_buffer
+                .mapping_buffer
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
             device.poll(wgpu::Maintain::Wait);
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
-                .data_buffer
+                .mapping_buffer
                 .slice(..mem::size_of::<TimestampQueries>() as wgpu::BufferAddress)
                 .get_mapped_range();
             let pipeline_stats_view = query_sets
-                .data_buffer
+                .mapping_buffer
                 .slice(pipeline_statistics_offset()..)
                 .get_mapped_range();
             // Convert the raw data into a useful structure
@@ -495,6 +516,20 @@ fn mipmap() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
+        base_test_parameters: wgpu_test::TestParameters::default()
+            .backend_failure(wgpu::Backends::GL),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+    });
+}
+
+#[test]
+#[wasm_bindgen_test::wasm_bindgen_test]
+fn mipmap_query() {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+        image_path: "/examples/mipmap/screenshot-query.png",
+        width: 1024,
+        height: 768,
+        optional_features: QUERY_FEATURES,
         base_test_parameters: wgpu_test::TestParameters::default()
             .backend_failure(wgpu::Backends::GL),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
