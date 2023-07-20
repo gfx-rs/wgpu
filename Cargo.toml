@@ -66,9 +66,9 @@ cfg-if = "1"
 codespan-reporting = "0.11"
 ddsfile = "0.5"
 env_logger = "0.10"
-futures-intrusive = "0.4"
+futures-intrusive = "0.5"
 rustc-hash = "1.1.0"
-glam = "0.21.3"
+glam = "0.24.1"
 image = { version = "0.24", default-features = false, features = ["png"] }
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
 libloading = ">=0.7,<0.9"
@@ -77,15 +77,13 @@ log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 nv-flip = "0.1"
 num-traits = { version = "0.2" }
-# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
-# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
-noise = { version = "0.7", default-features = false }
+noise = "0.8"
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
 png = "0.17.9"
-pollster = "0.2"
+pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
 renderdoc-sys = "1.0.0"
@@ -115,7 +113,7 @@ android_system_properties = "0.1.1"
 # DX dependencies
 bit-set = "0.5"
 gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"] }
-d3d12 = "0.5.0"
+d3d12 = "0.7.0"
 range-alloc = "0.1"
 winapi = "0.3"
 hassle-rs = "0.10.0"
@@ -127,7 +125,7 @@ glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
-console_log = "0.2"
+console_log = "1"
 js-sys = "0.3.64"
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.34"
