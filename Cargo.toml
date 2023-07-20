@@ -66,14 +66,14 @@ unicode-xid = { version = "0.2.3", optional = true }
 
 [dev-dependencies]
 bincode = "1"
-criterion = { version = "0.3", features = [] }
+criterion = { version = "0.5", features = [] }
 diff = "0.1"
-env_logger = "0.9"
+env_logger = "0.10"
 hlsl-snapshots = { path = "./hlsl-snapshots"}
 # Require at least version 0.7.1 of ron, this version changed how floating points are
 # serialized by forcing them to always have the decimal part, this makes it backwards
 # incompatible with our tests because we do a syntatic diff and not a semantic one.
-ron = "~0.7.1"
+ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { version = "1.0", features = ["derive"] }
 spirv = { version = "0.2", features = ["deserialize"] }
