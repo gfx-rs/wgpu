@@ -1,6 +1,6 @@
 [package]
 name = "naga-cli"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["Naga Developers"]
 edition = "2021"
 description = "Shader translation command line tool"
@@ -10,7 +10,7 @@ keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-naga = { version = "0.12", path = "../", features = ["validate", "span", "wgsl-in", "wgsl-out", "glsl-in", "glsl-out", "spv-in", "spv-out", "msl-out", "hlsl-out", "dot-out", "serialize", "deserialize"] }
+naga = { version = "0.13", path = "../", features = ["validate", "span", "wgsl-in", "wgsl-out", "glsl-in", "glsl-out", "spv-in", "spv-out", "msl-out", "hlsl-out", "dot-out", "serialize", "deserialize"] }
 bincode = "1"
 log = "0.4"
 codespan-reporting = "0.11"
