@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -72,19 +72,19 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.16"
+version = "0.17"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.16"
+version = "0.17"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
