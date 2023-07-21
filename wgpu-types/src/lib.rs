@@ -6309,9 +6309,9 @@ pub enum Dx12Compiler {
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
     Dxc {
-        /// Path to the `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
-        /// Path to the `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxc_path: Option<PathBuf>,
     },
 }
