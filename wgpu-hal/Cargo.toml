@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -71,7 +71,7 @@ glow = { version = "0.12.3", optional = true }
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.16"
+version = "0.17"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
@@ -103,7 +103,7 @@ d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 # backend: Metal
 block = { version = "0.1", optional = true }
 
-metal = { git = "https://github.com/gfx-rs/metal-rs.git", rev = "a6a0446", default_features = false }
+metal = { version = "0.26.0", default_features = false }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
@@ -120,15 +120,15 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]

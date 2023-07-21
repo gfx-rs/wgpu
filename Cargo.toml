@@ -31,28 +31,28 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.16"
+version = "0.17"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.16"
+version = "0.17"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.16"
+version = "0.17"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "409239c0e2313bfd0dc4fd64f8c3021185ccef1b"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 
 [workspace.dependencies]
 anyhow = "1.0"
@@ -93,14 +93,16 @@ serde_json = "1.0.96"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.16", path = "./wgpu" }
-wgpu-example = { version = "0.16", path = "./examples/common" }
-wgpu-test = { version = "0.16", path = "./tests"}
+wgpu = { version = "0.17.0", path = "./wgpu" }
+wgpu-core = { version = "0.17.0", path = "./wgpu-core" }
+wgpu-example = { version = "0.17.0", path = "./examples/common" }
+wgpu-test = { version = "0.17", path = "./tests"}
+wgpu-types = { version = "0.17.0", path = "./wgpu-types" }
 winit = "0.27.1"
 
 # Metal dependencies
 block = "0.1"
-metal = "0.25.0"
+metal = "0.26.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
@@ -141,8 +143,6 @@ deno_webidl = "0.106.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.28.2"
 termcolor = "1.2.0"
-wgpu-core = { path = "./wgpu-core" }
-wgpu-types = { path = "./wgpu-types" }
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
