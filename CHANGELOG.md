@@ -42,6 +42,8 @@ Bottom level categories:
 
 ## v0.17.0 (2023-07-20)
 
+This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
+
 ### Major Changes
 
 This release was fairly minor as breaking changes go.
