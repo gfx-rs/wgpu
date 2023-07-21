@@ -215,7 +215,8 @@ impl super::Instance {
         if cfg!(target_os = "macos") {
             // VK_EXT_metal_surface
             extensions.push(ext::MetalSurface::name());
-            extensions.push(CStr::from_bytes_with_nul(b"VK_KHR_portability_enumeration\0").unwrap());
+            extensions
+                .push(CStr::from_bytes_with_nul(b"VK_KHR_portability_enumeration\0").unwrap());
         }
 
         if flags.contains(crate::InstanceFlags::DEBUG) {
