@@ -2,8 +2,9 @@ name: Publish
 
 on:
   push:
-    branches:
-      - gecko
+    branches: ["*"]
+  pull_request:
+  merge_group:
 
 env:
   CARGO_INCREMENTAL: false
@@ -24,20 +25,24 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli --version=0.2.83
+        run: cargo +stable install wasm-bindgen-cli --version=0.2.86
+
+      - name: Pin wasm-bindgen version
+        run: cargo update -p wasm-bindgen --precise 0.2.86
 
       - name: Build WebGPU examples
-        run: cargo build --package wgpu --release --target wasm32-unknown-unknown --examples
+        run: cargo build --release --target wasm32-unknown-unknown
 
       - name: Generate JS bindings for WebGPU examples
         run: |
-          for i in target/wasm32-unknown-unknown/release/examples/*.wasm;
+          for i in target/wasm32-unknown-unknown/release/*.wasm;
           do
             wasm-bindgen --no-typescript --out-dir target/generated-gpu --web "$i";
           done
 
       - name: Deploy WebGPU examples
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4.4.2
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gpu
@@ -49,17 +54,18 @@ jobs:
         run: cargo clean
 
       - name: Build WebGL examples
-        run: cargo build --release --target wasm32-unknown-unknown --examples --features webgl
+        run: cargo build --release --target wasm32-unknown-unknown --features webgl
 
       - name: Generate JS bindings for WebGL examples
         run: |
-          for i in target/wasm32-unknown-unknown/release/examples/*.wasm;
+          for i in target/wasm32-unknown-unknown/release/*.wasm;
           do
             wasm-bindgen --no-typescript --out-dir target/generated-gl --web "$i";
           done
 
       - name: Deploy WebGL examples
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4.4.2
+        if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/generated-gl

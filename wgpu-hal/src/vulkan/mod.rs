@@ -77,6 +77,27 @@ impl crate::Api for Api {
 struct DebugUtils {
     extension: ext::DebugUtils,
     messenger: vk::DebugUtilsMessengerEXT,
+
+    /// Owning pointer to the debug messenger callback user data.
+    ///
+    /// `InstanceShared::drop` destroys the debug messenger before
+    /// dropping this, so the callback should never receive a dangling
+    /// user data pointer.
+    #[allow(dead_code)]
+    callback_data: Box<DebugUtilsMessengerUserData>,
+}
+
+/// User data needed by `instance::debug_utils_messenger_callback`.
+///
+/// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
+/// pointer refers to one of these values.
+#[derive(Debug)]
+pub struct DebugUtilsMessengerUserData {
+    /// Validation layer description, from `vk::LayerProperties`.
+    validation_layer_description: std::ffi::CString,
+
+    /// Validation layer specification version, from `vk::LayerProperties`.
+    validation_layer_spec_version: u32,
 }
 
 pub struct InstanceShared {
@@ -175,6 +196,7 @@ struct PrivateCapabilities {
 
 bitflags::bitflags!(
     /// Workaround flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Workarounds: u32 {
         /// Only generate SPIR-V for one entry point at a time.
         const SEPARATE_ENTRY_POINTS = 0x1;
@@ -251,7 +273,6 @@ struct DeviceShared {
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     timestamp_period: f32,
-    downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
@@ -286,7 +307,7 @@ pub struct Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
 #[derive(Debug)]

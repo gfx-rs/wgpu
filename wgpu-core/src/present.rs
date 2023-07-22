@@ -16,8 +16,11 @@ use crate::device::trace::Action;
 use crate::{
     conv,
     device::{DeviceError, MissingDownlevelFlags},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{DeviceId, SurfaceId, TextureId, Valid},
+    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     resource, track, LifeGuard, Stored,
 };
@@ -45,6 +48,7 @@ impl Presentation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum SurfaceError {
     #[error("Surface is invalid")]
     Invalid,
@@ -59,6 +63,7 @@ pub enum SurfaceError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ConfigureSurfaceError {
     #[error(transparent)]
     Device(#[from] DeviceError),

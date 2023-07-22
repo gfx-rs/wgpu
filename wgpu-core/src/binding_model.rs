@@ -1,9 +1,10 @@
 use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
-    hub::{HalApi, Resource},
+    hal_api::HalApi,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
+    resource::Resource,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
@@ -21,6 +22,7 @@ use std::{borrow::Cow, ops::Range};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindGroupLayoutEntryError {
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
@@ -28,6 +30,8 @@ pub enum BindGroupLayoutEntryError {
     StorageTextureReadWrite,
     #[error("Arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
+    #[error("Multisampled binding with sample type `TextureSampleType::Float` must have filterable set to false.")]
+    SampleTypeFloatFilterableBindingMultisampled,
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
@@ -35,6 +39,7 @@ pub enum BindGroupLayoutEntryError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBindGroupLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -57,6 +62,7 @@ pub enum CreateBindGroupLayoutError {
 //TODO: refactor this to move out `enum BindingError`.
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBindGroupError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -467,6 +473,7 @@ impl<A: hal::Api> Resource for BindGroupLayout<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -507,6 +514,7 @@ impl PrettyError for CreatePipelineLayoutError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum PushConstantUploadError {
     #[error("Provided push constant with indices {offset}..{end_offset} overruns matching push constant range at index {idx}, with stage(s) {:?} and indices {:?}", range.stages, range.range)]
     TooLarge {
@@ -682,6 +690,7 @@ pub enum BindingResource<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindError {
     #[error(
         "Bind group {group} expects {expected} dynamic offset{s0}. However {actual} dynamic offset{s1} were provided.",
@@ -689,7 +698,7 @@ pub enum BindError {
         s1 = if *.actual >= 2 { "s" } else { "" },
     )]
     MismatchedDynamicOffsetCount {
-        group: u8,
+        group: u32,
         actual: usize,
         expected: usize,
     },
@@ -698,7 +707,7 @@ pub enum BindError {
     )]
     UnalignedDynamicBinding {
         idx: usize,
-        group: u8,
+        group: u32,
         binding: u32,
         offset: u32,
         alignment: u32,
@@ -710,7 +719,7 @@ pub enum BindError {
     )]
     DynamicBindingOutOfBounds {
         idx: usize,
-        group: u8,
+        group: u32,
         binding: u32,
         offset: u32,
         buffer_size: wgt::BufferAddress,
@@ -772,7 +781,7 @@ pub struct BindGroup<A: HalApi> {
 impl<A: HalApi> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
-        bind_group_index: u8,
+        bind_group_index: u32,
         offsets: &[wgt::DynamicOffset],
         limits: &wgt::Limits,
     ) -> Result<(), BindError> {
@@ -828,6 +837,7 @@ impl<A: HalApi> Resource for BindGroup<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum GetBindGroupLayoutError {
     #[error("Pipeline is invalid")]
     InvalidPipeline,

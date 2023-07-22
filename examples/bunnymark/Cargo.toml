@@ -1,0 +1,24 @@
+[package]
+name = "wgpu-bunnymark-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu bunnymark example"
+publish = false
+
+[[bin]]
+name = "bunnymark"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck.workspace = true
+nanorand.workspace = true
+glam.workspace = true
+png.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true

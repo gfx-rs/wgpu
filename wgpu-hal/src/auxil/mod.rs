@@ -54,17 +54,6 @@ pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
     }
 }
 
-pub fn align_to(value: u32, alignment: u32) -> u32 {
-    if alignment.is_power_of_two() {
-        (value + alignment - 1) & !(alignment - 1)
-    } else {
-        match value % alignment {
-            0 => value,
-            other => value - other + alignment,
-        }
-    }
-}
-
 impl crate::CopyExtent {
     pub fn map_extent_to_copy_size(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> Self {
         Self {

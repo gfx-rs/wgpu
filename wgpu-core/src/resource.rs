@@ -1,7 +1,10 @@
 use crate::{
     device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
-    id::{AdapterId, CommandEncoderId, DeviceId, SurfaceId, TextureId, TextureViewId, Valid},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
+    id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,
     validation::MissingBufferUsageError,
@@ -11,7 +14,18 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, num::NonZeroU8, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, ops::Range, ptr::NonNull};
+
+pub trait Resource {
+    const TYPE: &'static str;
+    fn life_guard(&self) -> &LifeGuard;
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.life_guard().label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
+}
 
 /// The status code provided to the buffer mapping callback.
 ///
@@ -65,7 +79,21 @@ pub(crate) enum BufferMapState<A: hal::Api> {
     Idle,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 #[repr(C)]
@@ -74,6 +102,13 @@ pub struct BufferMapCallbackC {
     pub user_data: *mut u8,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMapCallbackC {}
 
 pub struct BufferMapCallback {
@@ -82,17 +117,30 @@ pub struct BufferMapCallback {
     inner: Option<BufferMapCallbackInner>,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
+
 enum BufferMapCallbackInner {
-    Rust {
-        callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>,
-    },
-    C {
-        inner: BufferMapCallbackC,
-    },
+    Rust { callback: BufferMapCallbackCallback },
+    C { inner: BufferMapCallbackC },
 }
 
 impl BufferMapCallback {
-    pub fn from_rust(callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>) -> Self {
+    pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
         Self {
             inner: Some(BufferMapCallbackInner::Rust { callback }),
         }
@@ -167,6 +215,7 @@ pub struct BufferMapOperation {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BufferAccessError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -235,6 +284,7 @@ pub struct Buffer<A: hal::Api> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateBufferError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -520,6 +570,7 @@ pub enum TextureErrorDimension {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureDimensionError {
     #[error("Dimension {0:?} is zero")]
     Zero(TextureErrorDimension),
@@ -548,6 +599,7 @@ pub enum TextureDimensionError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -580,7 +632,7 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
-    #[error("Texture format {0:?} can't be used due to missing features.")]
+    #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
@@ -671,6 +723,7 @@ pub struct TextureView<A: hal::Api> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureViewError {
     #[error("Parent texture is invalid or destroyed")]
     InvalidTexture,
@@ -717,6 +770,7 @@ pub enum CreateTextureViewError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TextureViewDestroyError {}
 
 impl<A: hal::Api> Resource for TextureView<A> {
@@ -750,28 +804,11 @@ pub struct SamplerDescriptor<'a> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<wgt::CompareFunction>,
-    /// Valid values: 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Must be at least 1. If this is not 1, all filter modes must be linear.
+    pub anisotropy_clamp: u16,
     /// Border color to use when address_mode is
     /// [`AddressMode::ClampToBorder`](wgt::AddressMode::ClampToBorder)
     pub border_color: Option<wgt::SamplerBorderColor>,
-}
-
-impl Default for SamplerDescriptor<'_> {
-    fn default() -> Self {
-        Self {
-            label: None,
-            address_modes: Default::default(),
-            mag_filter: Default::default(),
-            min_filter: Default::default(),
-            mipmap_filter: Default::default(),
-            lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
-            compare: None,
-            anisotropy_clamp: None,
-            border_color: None,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -785,14 +822,43 @@ pub struct Sampler<A: hal::Api> {
     pub(crate) filtering: bool,
 }
 
+#[derive(Copy, Clone)]
+pub enum SamplerFilterErrorType {
+    MagFilter,
+    MinFilter,
+    MipmapFilter,
+}
+
+impl std::fmt::Debug for SamplerFilterErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            SamplerFilterErrorType::MagFilter => write!(f, "magFilter"),
+            SamplerFilterErrorType::MinFilter => write!(f, "minFilter"),
+            SamplerFilterErrorType::MipmapFilter => write!(f, "mipmapFilter"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateSamplerError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Invalid lod clamp lod_min_clamp:{} lod_max_clamp:{}, must satisfy lod_min_clamp >= 0 and lod_max_clamp >= lod_min_clamp ", .0.start, .0.end)]
-    InvalidLodClamp(Range<f32>),
-    #[error("Invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
-    InvalidClamp(u8),
+    #[error("Invalid lodMinClamp: {0}. Must be greater or equal to 0.0")]
+    InvalidLodMinClamp(f32),
+    #[error("Invalid lodMaxClamp: {lod_max_clamp}. Must be greater or equal to lodMinClamp (which is {lod_min_clamp}).")]
+    InvalidLodMaxClamp {
+        lod_min_clamp: f32,
+        lod_max_clamp: f32,
+    },
+    #[error("Invalid anisotropic clamp: {0}. Must be at least 1.")]
+    InvalidAnisotropy(u16),
+    #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1 (it is {anisotropic_clamp}), all filter modes must be linear.")]
+    InvalidFilterModeWithAnisotropy {
+        filter_type: SamplerFilterErrorType,
+        filter_mode: wgt::FilterMode,
+        anisotropic_clamp: u16,
+    },
     #[error("Cannot create any more samplers")]
     TooManyObjects,
     /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER.
@@ -809,6 +875,7 @@ impl<A: hal::Api> Resource for Sampler<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateQuerySetError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -839,6 +906,7 @@ impl<A: hal::Api> Resource for QuerySet<A> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DestroyError {
     #[error("Resource is invalid")]
     Invalid,

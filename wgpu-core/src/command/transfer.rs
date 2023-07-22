@@ -5,13 +5,17 @@ use crate::{
     conv,
     device::{Device, MissingDownlevelFlags},
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{BufferId, CommandEncoderId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
     resource::{Texture, TextureErrorDimension},
+    storage::Storage,
     track::TextureSelector,
 };
 
@@ -34,6 +38,7 @@ pub enum CopySide {
 
 /// Error encountered while attempting a data transfer.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum TransferError {
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
@@ -170,6 +175,7 @@ impl PrettyError for TransferError {
 }
 /// Error encountered while attempting to do a copy on a command encoder.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CopyError {
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
@@ -264,7 +270,7 @@ pub(crate) fn validate_linear_texture_data(
     let bytes_in_last_row = width_in_blocks * block_size;
 
     let bytes_per_row = if let Some(bytes_per_row) = layout.bytes_per_row {
-        let bytes_per_row = bytes_per_row.get() as BufferAddress;
+        let bytes_per_row = bytes_per_row as BufferAddress;
         if bytes_per_row < bytes_in_last_row {
             return Err(TransferError::InvalidBytesPerRow);
         }
@@ -276,7 +282,7 @@ pub(crate) fn validate_linear_texture_data(
         0
     };
     let block_rows_per_image = if let Some(rows_per_image) = layout.rows_per_image {
-        let rows_per_image = rows_per_image.get() as BufferAddress;
+        let rows_per_image = rows_per_image as BufferAddress;
         if rows_per_image < height_in_blocks {
             return Err(TransferError::InvalidRowsPerImage);
         }
@@ -1097,7 +1103,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
             .map(|pending| pending.into_hal(src_texture))
-            .into_iter()
             .collect();
 
         let dst_pending = cmd_buf

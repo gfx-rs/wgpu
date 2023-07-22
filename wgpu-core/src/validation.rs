@@ -168,6 +168,7 @@ pub fn check_texture_usage(
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum BindingError {
     #[error("Binding is missing from the pipeline layout")]
     Missing,
@@ -211,6 +212,7 @@ pub enum BindingError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum FilteringError {
     #[error("Integer textures can't be sampled with a filtering sampler")]
     Integer,
@@ -219,6 +221,7 @@ pub enum FilteringError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum InputError {
     #[error("Input is not provided by the earlier stage in the pipeline")]
     Missing,
@@ -232,6 +235,7 @@ pub enum InputError {
 
 /// Errors produced when validating a programmable stage of a pipeline.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum StageError {
     #[error("Shader module is invalid")]
     InvalidModule,
@@ -405,7 +409,7 @@ impl Resource {
                                 )
                             }
                         };
-                        if self.class != class {
+                        if !address_space_matches(self.class, class) {
                             return Err(BindingError::WrongAddressSpace {
                                 binding: class,
                                 shader: self.class,
@@ -746,7 +750,7 @@ impl NumericType {
             Tf::Bc5RgUnorm | Tf::Bc5RgSnorm | Tf::EacRg11Unorm | Tf::EacRg11Snorm => {
                 (NumericDimension::Vector(Vs::Bi), Sk::Float)
             }
-            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
+            Tf::Bc6hRgbUfloat | Tf::Bc6hRgbFloat | Tf::Etc2Rgb8Unorm | Tf::Etc2Rgb8UnormSrgb => {
                 (NumericDimension::Vector(Vs::Tri), Sk::Float)
             }
             Tf::Astc {
@@ -911,7 +915,7 @@ impl Interface {
                     size: wgt::BufferSize::new(stride as u64).unwrap(),
                 },
                 ref other => ResourceType::Buffer {
-                    size: wgt::BufferSize::new(other.size(&module.constants) as u64).unwrap(),
+                    size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },
             };
             let handle = resources.append(
@@ -1231,5 +1235,74 @@ impl Interface {
             })
             .collect();
         Ok(outputs)
+    }
+}
+
+fn address_space_matches(shader: naga::AddressSpace, binding: naga::AddressSpace) -> bool {
+    match (shader, binding) {
+        (
+            naga::AddressSpace::Storage {
+                access: access_shader,
+            },
+            naga::AddressSpace::Storage {
+                access: access_pipeline,
+            },
+        ) => {
+            // Allow read- and write-only usages to match read-write layouts:
+            (access_shader & access_pipeline) == access_shader
+        }
+        (a, b) => a == b,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::address_space_matches;
+
+    #[test]
+    fn address_space_matches_correctly() {
+        assert!(address_space_matches(
+            naga::AddressSpace::Uniform,
+            naga::AddressSpace::Uniform
+        ));
+
+        assert!(!address_space_matches(
+            naga::AddressSpace::Uniform,
+            naga::AddressSpace::Storage {
+                access: naga::StorageAccess::LOAD
+            }
+        ));
+
+        let test_cases = [
+            (naga::StorageAccess::LOAD, naga::StorageAccess::LOAD, true),
+            (naga::StorageAccess::STORE, naga::StorageAccess::LOAD, false),
+            (naga::StorageAccess::LOAD, naga::StorageAccess::STORE, false),
+            (naga::StorageAccess::STORE, naga::StorageAccess::STORE, true),
+            (
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                true,
+            ),
+            (
+                naga::StorageAccess::STORE,
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                true,
+            ),
+            (
+                naga::StorageAccess::LOAD,
+                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
+                true,
+            ),
+        ];
+
+        for (shader, binding, expect_match) in test_cases {
+            assert_eq!(
+                expect_match,
+                address_space_matches(
+                    naga::AddressSpace::Storage { access: shader },
+                    naga::AddressSpace::Storage { access: binding }
+                )
+            );
+        }
     }
 }

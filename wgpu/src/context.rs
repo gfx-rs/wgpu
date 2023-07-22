@@ -4,13 +4,13 @@ use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
-    TextureFormatFeatures,
+    TextureFormatFeatures, WasmNotSend, WasmNotSync,
 };
 
 use crate::{
-    BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError, BufferDescriptor,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, DeviceDescriptor,
-    Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
+    AnyWasmNotSendSync, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferAsyncError,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
     RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
@@ -27,59 +27,59 @@ impl<T: Into<ObjectId> + From<ObjectId> + Debug + 'static> ContextId for T {}
 /// Meta trait for an data associated with an id tracked by a context.
 ///
 /// There is no need to manually implement this trait since there is a blanket implementation for this trait.
-pub trait ContextData: Debug + Send + Sync + 'static {}
-impl<T: Debug + Send + Sync + 'static> ContextData for T {}
+pub trait ContextData: Debug + WasmNotSend + WasmNotSync + 'static {}
+impl<T: Debug + WasmNotSend + WasmNotSync + 'static> ContextData for T {}
 
-pub trait Context: Debug + Send + Sized + Sync {
-    type AdapterId: ContextId + Send + Sync;
+pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
+    type AdapterId: ContextId + WasmNotSend + WasmNotSync;
     type AdapterData: ContextData;
-    type DeviceId: ContextId + Send + Sync;
+    type DeviceId: ContextId + WasmNotSend + WasmNotSync;
     type DeviceData: ContextData;
-    type QueueId: ContextId + Send + Sync;
+    type QueueId: ContextId + WasmNotSend + WasmNotSync;
     type QueueData: ContextData;
-    type ShaderModuleId: ContextId + Send + Sync;
+    type ShaderModuleId: ContextId + WasmNotSend + WasmNotSync;
     type ShaderModuleData: ContextData;
-    type BindGroupLayoutId: ContextId + Send + Sync;
+    type BindGroupLayoutId: ContextId + WasmNotSend + WasmNotSync;
     type BindGroupLayoutData: ContextData;
-    type BindGroupId: ContextId + Send + Sync;
+    type BindGroupId: ContextId + WasmNotSend + WasmNotSync;
     type BindGroupData: ContextData;
-    type TextureViewId: ContextId + Send + Sync;
+    type TextureViewId: ContextId + WasmNotSend + WasmNotSync;
     type TextureViewData: ContextData;
-    type SamplerId: ContextId + Send + Sync;
+    type SamplerId: ContextId + WasmNotSend + WasmNotSync;
     type SamplerData: ContextData;
-    type BufferId: ContextId + Send + Sync;
+    type BufferId: ContextId + WasmNotSend + WasmNotSync;
     type BufferData: ContextData;
-    type TextureId: ContextId + Send + Sync;
+    type TextureId: ContextId + WasmNotSend + WasmNotSync;
     type TextureData: ContextData;
-    type QuerySetId: ContextId + Send + Sync;
+    type QuerySetId: ContextId + WasmNotSend + WasmNotSync;
     type QuerySetData: ContextData;
-    type PipelineLayoutId: ContextId + Send + Sync;
+    type PipelineLayoutId: ContextId + WasmNotSend + WasmNotSync;
     type PipelineLayoutData: ContextData;
-    type RenderPipelineId: ContextId + Send + Sync;
+    type RenderPipelineId: ContextId + WasmNotSend + WasmNotSync;
     type RenderPipelineData: ContextData;
-    type ComputePipelineId: ContextId + Send + Sync;
+    type ComputePipelineId: ContextId + WasmNotSend + WasmNotSync;
     type ComputePipelineData: ContextData;
-    type CommandEncoderId: ContextId + Send + Sync;
+    type CommandEncoderId: ContextId + WasmNotSend + WasmNotSync;
     type CommandEncoderData: ContextData;
     type ComputePassId: ContextId;
     type ComputePassData: ContextData;
     type RenderPassId: ContextId;
     type RenderPassData: ContextData;
-    type CommandBufferId: ContextId + Send + Sync;
+    type CommandBufferId: ContextId + WasmNotSend + WasmNotSync;
     type CommandBufferData: ContextData;
     type RenderBundleEncoderId: ContextId;
     type RenderBundleEncoderData: ContextData;
-    type RenderBundleId: ContextId + Send + Sync;
+    type RenderBundleId: ContextId + WasmNotSend + WasmNotSync;
     type RenderBundleData: ContextData;
-    type SurfaceId: ContextId + Send + Sync;
+    type SurfaceId: ContextId + WasmNotSend + WasmNotSync;
     type SurfaceData: ContextData;
 
-    type SurfaceOutputDetail: Send + Sync + 'static;
-    type SubmissionIndex: ContextId + Clone + Copy + Send + Sync;
+    type SurfaceOutputDetail: WasmNotSend + WasmNotSync + 'static;
+    type SubmissionIndex: ContextId + Clone + Copy + WasmNotSend + WasmNotSync;
     type SubmissionIndexData: ContextData + Copy;
 
     type RequestAdapterFuture: Future<Output = Option<(Self::AdapterId, Self::AdapterData)>>
-        + Send
+        + WasmNotSend
         + 'static;
     type RequestDeviceFuture: Future<
             Output = Result<
@@ -91,9 +91,9 @@ pub trait Context: Debug + Send + Sized + Sync {
                 ),
                 RequestDeviceError,
             >,
-        > + Send
+        > + WasmNotSend
         + 'static;
-    type PopErrorScopeFuture: Future<Output = Option<Error>> + Send + 'static;
+    type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
     fn instance_create_surface(
@@ -299,7 +299,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>,
+        callback: BufferMapCallback,
     );
     fn buffer_get_mapped_range(
         &self,
@@ -570,7 +570,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         dest: crate::ImageCopyTextureTagged,
         size: wgt::Extent3d,
     );
-    fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
+    fn queue_submit<I: Iterator<Item = (Self::CommandBufferId, Self::CommandBufferData)>>(
         &self,
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
@@ -585,7 +585,7 @@ pub trait Context: Debug + Send + Sized + Sync {
         &self,
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: SubmittedWorkDoneCallback,
     );
 
     fn device_start_capture(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
@@ -987,7 +987,9 @@ pub trait Context: Debug + Send + Sized + Sync {
         &self,
         pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
+        render_bundles: Box<
+            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
+        >,
     );
 }
 
@@ -998,17 +1000,17 @@ pub struct ObjectId {
     id: Option<NonZeroU64>,
     #[cfg(feature = "expose-ids")]
     /// ID that is unique at all times
-    global_id: Option<crate::Id>,
+    global_id: Option<NonZeroU64>,
 }
 
 impl ObjectId {
-    const UNUSED: Self = ObjectId {
+    pub(crate) const UNUSED: Self = ObjectId {
         id: None,
         #[cfg(feature = "expose-ids")]
         global_id: None,
     };
 
-    pub fn new(id: NonZeroU64, #[cfg(feature = "expose-ids")] global_id: crate::Id) -> Self {
+    pub fn new(id: NonZeroU64, #[cfg(feature = "expose-ids")] global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
             #[cfg(feature = "expose-ids")]
@@ -1021,30 +1023,40 @@ impl ObjectId {
         Self {
             id: Some(global_id),
             #[cfg(feature = "expose-ids")]
-            global_id: Some(crate::Id(global_id)),
+            global_id: Some(global_id),
         }
     }
 
+    #[allow(dead_code)]
     pub fn id(&self) -> NonZeroU64 {
         self.id.unwrap()
     }
 
     #[cfg(feature = "expose-ids")]
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> crate::Id {
+    pub fn global_id(&self) -> NonZeroU64 {
         self.global_id.unwrap()
     }
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ObjectId: Send, Sync);
 
-fn downcast_ref<T: Debug + Send + Sync + 'static>(data: &crate::Data) -> &T {
+pub(crate) fn downcast_ref<T: Debug + WasmNotSend + WasmNotSync + 'static>(
+    data: &crate::Data,
+) -> &T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &*(data as *const dyn Any as *const T) }
 }
 
-fn downcast_mut<T: Debug + Send + Sync + 'static>(data: &mut crate::Data) -> &mut T {
+fn downcast_mut<T: Debug + WasmNotSend + WasmNotSync + 'static>(data: &mut crate::Data) -> &mut T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &mut *(data as *mut dyn Any as *mut T) }
@@ -1076,8 +1088,97 @@ pub(crate) struct DeviceRequest {
     pub queue_data: Box<crate::Data>,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + 'static>;
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub(crate) type AdapterRequestDeviceFuture =
+    Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub(crate) type AdapterRequestDeviceFuture =
+    Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>>>;
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type InstanceRequestAdapterFuture =
+    Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>> + Send>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type InstanceRequestAdapterFuture =
+    Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>>>;
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>> + Send>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>>>;
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
+
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
-pub(crate) trait DynContext: Debug + Send + Sync {
+pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     fn as_any(&self) -> &dyn Any;
 
     fn instance_create_surface(
@@ -1089,14 +1190,14 @@ pub(crate) trait DynContext: Debug + Send + Sync {
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-    ) -> Pin<Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>> + Send>>;
+    ) -> Pin<InstanceRequestAdapterFuture>;
     fn adapter_request_device(
         &self,
         adapter: &ObjectId,
         adapter_data: &crate::Data,
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
-    ) -> Pin<Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>>;
+    ) -> Pin<AdapterRequestDeviceFuture>;
 
     fn instance_poll_all_devices(&self, force_wait: bool) -> bool;
     fn adapter_is_surface_supported(
@@ -1149,10 +1250,10 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         Option<ObjectId>,
         Option<Box<crate::Data>>,
         SurfaceStatus,
-        Box<dyn Any + Send + Sync>,
+        Box<dyn AnyWasmNotSendSync>,
     );
-    fn surface_present(&self, texture: &ObjectId, detail: &(dyn Any + Send + Sync));
-    fn surface_texture_discard(&self, texture: &ObjectId, detail: &(dyn Any + Send + Sync));
+    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync);
+    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync);
 
     fn device_features(&self, device: &ObjectId, device_data: &crate::Data) -> Features;
     fn device_limits(&self, device: &ObjectId, device_data: &crate::Data) -> Limits;
@@ -1259,14 +1360,14 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-    ) -> Pin<Box<dyn Future<Output = Option<Error>> + Send + 'static>>;
+    ) -> Pin<DevicePopErrorFuture>;
     fn buffer_map_async(
         &self,
         buffer: &ObjectId,
         buffer_data: &crate::Data,
         mode: MapMode,
         range: Range<BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>,
+        callback: BufferMapCallback,
     );
     fn buffer_get_mapped_range(
         &self,
@@ -1501,14 +1602,14 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = ObjectId> + 'a>,
+        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
     ) -> (ObjectId, Arc<crate::Data>);
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: SubmittedWorkDoneCallback,
     );
 
     fn device_start_capture(&self, device: &ObjectId, data: &crate::Data);
@@ -1902,7 +2003,7 @@ pub(crate) trait DynContext: Debug + Send + Sync {
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = &'a ObjectId> + 'a>,
+        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
     );
 }
 
@@ -1928,7 +2029,7 @@ where
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-    ) -> Pin<Box<dyn Future<Output = Option<(ObjectId, Box<crate::Data>)>> + Send>> {
+    ) -> Pin<InstanceRequestAdapterFuture> {
         let future: T::RequestAdapterFuture = Context::instance_request_adapter(self, options);
         Box::pin(async move {
             let result: Option<(T::AdapterId, T::AdapterData)> = future.await;
@@ -1942,7 +2043,7 @@ where
         adapter_data: &crate::Data,
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
-    ) -> Pin<Box<dyn Future<Output = Result<DeviceRequest, RequestDeviceError>> + Send>> {
+    ) -> Pin<AdapterRequestDeviceFuture> {
         let adapter = <T::AdapterId>::from(*adapter);
         let adapter_data = downcast_ref(adapter_data);
         let future = Context::adapter_request_device(self, &adapter, adapter_data, desc, trace_dir);
@@ -2061,13 +2162,13 @@ where
         Option<ObjectId>,
         Option<Box<crate::Data>>,
         SurfaceStatus,
-        Box<dyn Any + Send + Sync>,
+        Box<dyn AnyWasmNotSendSync>,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
         let surface_data = downcast_ref(surface_data);
         let (texture, texture_data, status, detail) =
             Context::surface_get_current_texture(self, &surface, surface_data);
-        let detail = Box::new(detail) as Box<dyn Any + Send + Sync>;
+        let detail = Box::new(detail) as Box<dyn AnyWasmNotSendSync>;
         (
             texture.map(Into::into),
             texture_data.map(|b| Box::new(b) as _),
@@ -2076,12 +2177,12 @@ where
         )
     }
 
-    fn surface_present(&self, texture: &ObjectId, detail: &(dyn Any + Send + Sync)) {
+    fn surface_present(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync) {
         let texture = <T::TextureId>::from(*texture);
         Context::surface_present(self, &texture, detail.downcast_ref().unwrap())
     }
 
-    fn surface_texture_discard(&self, texture: &ObjectId, detail: &(dyn Any + Send + Sync)) {
+    fn surface_texture_discard(&self, texture: &ObjectId, detail: &dyn AnyWasmNotSendSync) {
         let texture = <T::TextureId>::from(*texture);
         Context::surface_texture_discard(self, &texture, detail.downcast_ref().unwrap())
     }
@@ -2322,7 +2423,7 @@ where
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-    ) -> Pin<Box<dyn Future<Output = Option<Error>> + Send + 'static>> {
+    ) -> Pin<DevicePopErrorFuture> {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Box::pin(Context::device_pop_error_scope(self, &device, device_data))
@@ -2334,7 +2435,7 @@ where
         buffer_data: &crate::Data,
         mode: MapMode,
         range: Range<BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>,
+        callback: BufferMapCallback,
     ) {
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
@@ -2902,11 +3003,14 @@ where
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        command_buffers: Box<dyn Iterator<Item = ObjectId> + 'a>,
+        command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
     ) -> (ObjectId, Arc<crate::Data>) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
-        let command_buffers = command_buffers.into_iter().map(<T::CommandBufferId>::from);
+        let command_buffers = command_buffers.into_iter().map(|(id, data)| {
+            let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
+            (<T::CommandBufferId>::from(id), command_buffer_data)
+        });
         let (submission_index, data) =
             Context::queue_submit(self, &queue, queue_data, command_buffers);
         (submission_index.into(), Arc::new(data) as _)
@@ -2922,7 +3026,7 @@ where
         &self,
         queue: &ObjectId,
         queue_data: &crate::Data,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: SubmittedWorkDoneCallback,
     ) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
@@ -3843,20 +3947,19 @@ where
         &self,
         pass: &mut ObjectId,
         pass_data: &mut crate::Data,
-        render_bundles: Box<dyn Iterator<Item = &'a ObjectId> + 'a>,
+        render_bundles: Box<dyn Iterator<Item = (&'a ObjectId, &'a crate::Data)> + 'a>,
     ) {
         let mut pass = <T::RenderPassId>::from(*pass);
         let pass_data = downcast_mut::<T::RenderPassData>(pass_data);
-        let render_bundles = Box::new(
-            render_bundles
-                .into_iter()
-                .map(|id| <T::RenderBundleId>::from(*id)),
-        );
+        let render_bundles = Box::new(render_bundles.into_iter().map(|(id, data)| {
+            let render_bundle_data: &<T as Context>::RenderBundleData = downcast_ref(data);
+            (<T::RenderBundleId>::from(*id), render_bundle_data)
+        }));
         Context::render_pass_execute_bundles(self, &mut pass, pass_data, render_bundles)
     }
 }
 
-pub trait QueueWriteBuffer: Send + Sync {
+pub trait QueueWriteBuffer: WasmNotSend + WasmNotSync {
     fn slice(&self) -> &[u8];
 
     fn slice_mut(&mut self) -> &mut [u8];

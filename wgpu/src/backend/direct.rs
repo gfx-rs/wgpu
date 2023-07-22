@@ -1,7 +1,7 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
@@ -23,10 +23,11 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
+use wgt::{WasmNotSend, WasmNotSync};
 
 const LABEL: &str = "label";
 
-pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+pub struct Context(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
 
 impl Drop for Context {
     fn drop(&mut self) {
@@ -41,11 +42,11 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_hal_instance::<A>(
+            wgc::global::Global::from_hal_instance::<A>(
                 "wgpu",
-                wgc::hub::IdentityManagerFactory,
+                wgc::identity::IdentityManagerFactory,
                 hal_instance,
             )
         })
@@ -54,17 +55,17 @@ impl Context {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn instance_as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe { self.0.instance_as_hal::<A>() }
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+            wgc::global::Global::from_instance(wgc::identity::IdentityManagerFactory, core_instance)
         })
     }
 
-    pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::identity::IdentityManagerFactory> {
         &self.0
     }
 
@@ -73,14 +74,18 @@ impl Context {
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
     }
 
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
     }
 
-    pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn adapter_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Adapter>) -> R,
+        R,
+    >(
         &self,
         adapter: wgc::id::AdapterId,
         hal_adapter_callback: F,
@@ -91,7 +96,6 @@ impl Context {
         }
     }
 
-    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub fn texture_format_as_hal<A: wgc::hub::HalApi>(
         &self,
         adapter: wgc::id::AdapterId,
@@ -102,9 +106,7 @@ impl Context {
 
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
-        adapter: &wgc::id::AdapterId,
         hal_device: hal::OpenDevice<A>,
-        desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
@@ -133,7 +135,7 @@ impl Context {
         Ok((device, queue))
     }
 
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         device: &Device,
@@ -158,7 +160,39 @@ impl Context {
         }
     }
 
-    pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_buffer: A::Buffer,
+        device: &Device,
+        desc: &BufferDescriptor,
+    ) -> (wgc::id::BufferId, Buffer) {
+        let global = &self.0;
+        let (id, error) = unsafe {
+            global.create_buffer_from_hal::<A>(
+                hal_buffer,
+                device.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                (),
+            )
+        };
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_buffer_from_hal",
+            );
+        }
+        (
+            id,
+            Buffer {
+                error_sink: Arc::clone(&device.error_sink),
+            },
+        )
+    }
+
+    pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
         hal_device_callback: F,
@@ -170,7 +204,7 @@ impl Context {
     }
 
     pub unsafe fn surface_as_hal_mut<
-        A: wgc::hub::HalApi,
+        A: wgc::hal_api::HalApi,
         F: FnOnce(Option<&mut A::Surface>) -> R,
         R,
     >(
@@ -232,7 +266,7 @@ impl Context {
         }
     }
 
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.0.generate_report()
     }
 
@@ -251,7 +285,7 @@ impl Context {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_canvas(
         &self,
-        canvas: &web_sys::HtmlCanvasElement,
+        canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
             .0
@@ -266,7 +300,7 @@ impl Context {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn instance_create_surface_from_offscreen_canvas(
         &self,
-        canvas: &web_sys::OffscreenCanvas,
+        canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
         let id = self
             .0
@@ -305,7 +339,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -339,18 +373,19 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
     }
 
+    #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + Send + Sync + 'static,
-        string: &'static str,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
+        operation: &'static str,
     ) -> ! {
-        panic!("Error in {string}: {cause}");
+        panic!("Error in {operation}: {f}", f = self.format_error(&cause));
     }
 
     fn format_error(&self, err: &(impl Error + 'static)) -> String {
@@ -581,9 +616,9 @@ impl crate::Context for Context {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
-        Self(wgc::hub::Global::new(
+        Self(wgc::global::Global::new(
             "wgpu",
-            wgc::hub::IdentityManagerFactory,
+            wgc::identity::IdentityManagerFactory,
             instance_desc,
         ))
     }
@@ -1508,7 +1543,7 @@ impl crate::Context for Context {
         buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
@@ -1594,9 +1629,8 @@ impl crate::Context for Context {
         (id, ())
     }
 
-    fn surface_drop(&self, _surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
-        //TODO: swapchain needs to hold the surface alive
-        //self.0.surface_drop(*surface)
+    fn surface_drop(&self, surface: &Self::SurfaceId, _surface_data: &Self::SurfaceData) {
+        self.0.surface_drop(*surface)
     }
 
     fn adapter_drop(&self, adapter: &Self::AdapterId, _adapter_data: &Self::AdapterData) {
@@ -2281,13 +2315,15 @@ impl crate::Context for Context {
         }
     }
 
-    fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
+    fn queue_submit<I: Iterator<Item = (Self::CommandBufferId, Self::CommandBufferData)>>(
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         command_buffers: I,
     ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
-        let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
+        let temp_command_buffers = command_buffers
+            .map(|(i, _)| i)
+            .collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
         let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers))
@@ -2319,7 +2355,7 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
@@ -2970,9 +3006,11 @@ impl crate::Context for Context {
         &self,
         _pass: &mut Self::RenderPassId,
         pass_data: &mut Self::RenderPassData,
-        render_bundles: Box<dyn Iterator<Item = Self::RenderBundleId> + 'a>,
+        render_bundles: Box<
+            dyn Iterator<Item = (Self::RenderBundleId, &'a Self::RenderBundleData)> + 'a,
+        >,
     ) {
-        let temp_render_bundles = render_bundles.collect::<SmallVec<[_; 4]>>();
+        let temp_render_bundles = render_bundles.map(|(i, _)| i).collect::<SmallVec<[_; 4]>>();
         unsafe {
             wgpu_render_pass_execute_bundles(
                 pass_data,
@@ -3089,7 +3127,21 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMappedRange {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::context::BufferMappedRange for BufferMappedRange {

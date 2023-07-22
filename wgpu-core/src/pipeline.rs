@@ -2,8 +2,8 @@ use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     command::ColorAttachmentError,
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
-    hub::Resource,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
+    resource::Resource,
     validation, Label, LifeGuard, Stored,
 };
 use arrayvec::ArrayVec;
@@ -88,7 +88,7 @@ impl fmt::Display for ShaderError<naga::WithSpan<naga::valid::ValidationError>> 
         let label = self.label.as_deref().unwrap_or_default();
         let files = SimpleFile::new(label, &self.source);
         let config = term::Config::default();
-        let mut writer = term::termcolor::Ansi::new(Vec::new());
+        let mut writer = term::termcolor::NoColor::new(Vec::new());
 
         let diagnostic = Diagnostic::error().with_labels(
             self.inner
@@ -120,6 +120,7 @@ where
 
 //Note: `Clone` would require `WithSpan: Clone`.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CreateShaderModuleError {
     #[cfg(feature = "wgsl")]
     #[error(transparent)]
@@ -169,6 +170,7 @@ pub struct ProgrammableStageDescriptor<'a> {
 pub type ImplicitBindGroupCount = u8;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ImplicitLayoutError {
     #[error("Missing IDs for deriving {0} bind groups")]
     MissingIds(ImplicitBindGroupCount),
@@ -193,6 +195,7 @@ pub struct ComputePipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -288,6 +291,7 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ColorStateError {
     #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
@@ -309,6 +313,7 @@ pub enum ColorStateError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DepthStencilStateError {
     #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
@@ -321,6 +326,7 @@ pub enum DepthStencilStateError {
 }
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateRenderPipelineError {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
@@ -352,6 +358,8 @@ pub enum CreateRenderPipelineError {
         location: wgt::ShaderLocation,
         offset: wgt::BufferAddress,
     },
+    #[error("Two or more vertex attributes were assigned to the same location in the shader: {0}")]
+    ShaderLocationClash(u32),
     #[error("Strip index format was not set to None but to {strip_index_format:?} while using the non-strip topology {topology:?}")]
     StripIndexFormatForNonStripTopology {
         strip_index_format: Option<wgt::IndexFormat>,
@@ -380,6 +388,7 @@ pub enum CreateRenderPipelineError {
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineFlags: u32 {
         const BLEND_CONSTANT = 1 << 0;
         const STENCIL_REFERENCE = 1 << 1;

@@ -9,9 +9,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, mem,
-    num::NonZeroU32,
-    ptr,
+    iter, mem, ptr,
     time::Instant,
 };
 
@@ -328,7 +326,7 @@ impl<A: hal::Api> Example<A> {
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgt::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: NonZeroU32::new(4),
+                    bytes_per_row: Some(4),
                     rows_per_image: None,
                 },
                 texture_base: hal::TextureCopyBase {
@@ -357,9 +355,9 @@ impl<A: hal::Api> Example<A> {
             mag_filter: wgt::FilterMode::Linear,
             min_filter: wgt::FilterMode::Nearest,
             mipmap_filter: wgt::FilterMode::Nearest,
-            lod_clamp: None,
+            lod_clamp: 0.0..32.0,
             compare: None,
-            anisotropy_clamp: None,
+            anisotropy_clamp: 1,
             border_color: None,
         };
         let sampler = unsafe { device.create_sampler(&sampler_desc).unwrap() };
@@ -397,7 +395,7 @@ impl<A: hal::Api> Example<A> {
             buffer
         };
 
-        let local_alignment = hal::auxil::align_to(
+        let local_alignment = wgt::math::align_to(
             mem::size_of::<Locals>() as u32,
             capabilities.limits.min_uniform_buffer_offset_alignment,
         );
@@ -753,26 +751,28 @@ impl<A: hal::Api> Example<A> {
     }
 }
 
-#[cfg(all(feature = "metal"))]
-type Api = hal::api::Metal;
-#[cfg(all(feature = "vulkan", not(feature = "metal")))]
-type Api = hal::api::Vulkan;
-#[cfg(all(feature = "gles", not(feature = "metal"), not(feature = "vulkan")))]
-type Api = hal::api::Gles;
-#[cfg(all(
-    feature = "dx12",
-    not(feature = "metal"),
-    not(feature = "vulkan"),
-    not(feature = "gles")
-))]
-type Api = hal::api::Dx12;
-#[cfg(not(any(
-    feature = "metal",
-    feature = "vulkan",
-    feature = "gles",
-    feature = "dx12"
-)))]
-type Api = hal::api::Empty;
+cfg_if::cfg_if! {
+    // Apple + Metal
+    if #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))] {
+        type Api = hal::api::Metal;
+    }
+    // Wasm + Vulkan
+    else if #[cfg(all(not(target_arch = "wasm32"), feature = "vulkan"))] {
+        type Api = hal::api::Vulkan;
+    }
+    // Windows + DX12
+    else if #[cfg(all(windows, feature = "dx12"))] {
+        type Api = hal::api::Dx12;
+    }
+    // Anything + GLES
+    else if #[cfg(feature = "gles")] {
+        type Api = hal::api::Gles;
+    }
+    // Fallback
+    else {
+        type Api = hal::api::Empty;
+    }
+}
 
 fn main() {
     env_logger::init();

@@ -1,23 +1,30 @@
-use std::{num::NonZeroU32, ops::Range};
+use std::ops::Range;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     command::CommandBuffer,
     get_lowest_common_denom,
-    hub::{self, Global, GlobalIdentityHandlerFactory, HalApi, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
+    storage,
     track::{TextureSelector, TextureTracker},
 };
 
-use hal::{auxil::align_to, CommandEncoder as _};
+use hal::CommandEncoder as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect};
+use wgt::{
+    math::align_to, BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect,
+};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum ClearError {
     #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
     MissingClearTextureFeature,
@@ -229,7 +236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub(crate) fn clear_texture<A: HalApi>(
-    storage: &hub::Storage<Texture<A>, TextureId>,
+    storage: &storage::Storage<Texture<A>, TextureId>,
     dst_texture_id: Valid<TextureId>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
@@ -363,7 +370,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
                     zero_buffer_copy_regions.push(hal::BufferTextureCopy {
                         buffer_layout: wgt::ImageDataLayout {
                             offset: 0,
-                            bytes_per_row: NonZeroU32::new(bytes_per_row),
+                            bytes_per_row: Some(bytes_per_row),
                             rows_per_image: None,
                         },
                         texture_base: hal::TextureCopyBase {

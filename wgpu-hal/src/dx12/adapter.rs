@@ -74,6 +74,29 @@ impl super::Adapter {
 
         profiling::scope!("feature queries");
 
+        // Detect the highest supported feature level.
+        let d3d_feature_level = [
+            d3d12::FeatureLevel::L12_1,
+            d3d12::FeatureLevel::L12_0,
+            d3d12::FeatureLevel::L11_1,
+            d3d12::FeatureLevel::L11_0,
+        ];
+        let mut device_levels: d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS =
+            unsafe { mem::zeroed() };
+        device_levels.NumFeatureLevels = d3d_feature_level.len() as u32;
+        device_levels.pFeatureLevelsRequested = d3d_feature_level.as_ptr().cast();
+        unsafe {
+            device.CheckFeatureSupport(
+                d3d12_ty::D3D12_FEATURE_FEATURE_LEVELS,
+                &mut device_levels as *mut _ as *mut _,
+                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS>() as _,
+            )
+        };
+        // This cast should never fail because we only requested feature levels that are already in the enum.
+        let max_feature_level =
+            d3d12::FeatureLevel::try_from(device_levels.MaxSupportedFeatureLevel)
+                .expect("Unexpected feature level");
+
         // We have found a possible adapter.
         // Acquire the device information.
         let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
@@ -115,8 +138,8 @@ impl super::Adapter {
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
             name: device_name,
-            vendor: desc.VendorId as usize,
-            device: desc.DeviceId as usize,
+            vendor: desc.VendorId,
+            device: desc.DeviceId,
             device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
                 workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu
@@ -177,16 +200,25 @@ impl super::Adapter {
             },
             heap_create_not_zeroed: false, //TODO: winapi support for Options7
             casting_fully_typed_format_supported,
+            // See https://github.com/gfx-rs/wgpu/issues/3552
+            suballocation_supported: !info.name.contains("Iris(R) Xe"),
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
         let tier3_practical_descriptor_limit = 1 << 20;
 
-        let (full_heap_count, _uav_count) = match options.ResourceBindingTier {
-            d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => (
-                d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
-                8, // conservative, is 64 on feature level 11.1
-            ),
+        let (full_heap_count, uav_count) = match options.ResourceBindingTier {
+            d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => {
+                let uav_count = match max_feature_level {
+                    d3d12::FeatureLevel::L11_0 => 8,
+                    _ => 64,
+                };
+
+                (
+                    d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
+                    uav_count,
+                )
+            }
             d3d12_ty::D3D12_RESOURCE_BINDING_TIER_2 => (
                 d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
                 64,
@@ -223,7 +255,8 @@ impl super::Adapter {
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::PUSH_CONSTANTS
-            | wgt::Features::SHADER_PRIMITIVE_INDEX;
+            | wgt::Features::SHADER_PRIMITIVE_INDEX
+            | wgt::Features::RG11B10UFLOAT_RENDERABLE;
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
@@ -283,9 +316,10 @@ impl super::Adapter {
                         _ => d3d12_ty::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
                     },
                     // these both account towards `uav_count`, but we can't express the limit as as sum
-                    max_storage_buffers_per_shader_stage: base.max_storage_buffers_per_shader_stage,
-                    max_storage_textures_per_shader_stage: base
-                        .max_storage_textures_per_shader_stage,
+                    // of the two, so we divide it by 4 to account for the worst case scenario
+                    // (2 shader stages, with both using 16 storage textures and 16 storage buffers)
+                    max_storage_buffers_per_shader_stage: uav_count / 4,
+                    max_storage_textures_per_shader_stage: uav_count / 4,
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         d3d12_ty::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,

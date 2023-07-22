@@ -87,7 +87,7 @@ pub mod api {
 use std::{
     borrow::{Borrow, Cow},
     fmt,
-    num::{NonZeroU32, NonZeroU8},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
     sync::atomic::AtomicBool,
@@ -95,6 +95,7 @@ use std::{
 
 use bitflags::bitflags;
 use thiserror::Error;
+use wgt::{WasmNotSend, WasmNotSync};
 
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
@@ -161,27 +162,27 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync + fmt::Debug;
+    type CommandBuffer: WasmNotSend + WasmNotSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + Send + Sync + 'static;
-    type Texture: fmt::Debug + Send + Sync + 'static;
-    type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + Send + Sync;
-    type Sampler: fmt::Debug + Send + Sync;
-    type QuerySet: fmt::Debug + Send + Sync;
-    type Fence: fmt::Debug + Send + Sync;
+    type Buffer: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
+    type Texture: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
+    type SurfaceTexture: fmt::Debug + WasmNotSend + WasmNotSync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Sampler: fmt::Debug + WasmNotSend + WasmNotSync;
+    type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
 
-    type BindGroupLayout: Send + Sync;
-    type BindGroup: fmt::Debug + Send + Sync;
-    type PipelineLayout: Send + Sync;
-    type ShaderModule: fmt::Debug + Send + Sync;
-    type RenderPipeline: Send + Sync;
-    type ComputePipeline: Send + Sync;
+    type BindGroupLayout: WasmNotSend + WasmNotSync;
+    type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
+    type PipelineLayout: WasmNotSend + WasmNotSync;
+    type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
+    type RenderPipeline: WasmNotSend + WasmNotSync;
+    type ComputePipeline: WasmNotSend + WasmNotSync;
 
     type TextureFormat;
 }
 
-pub trait Instance<A: Api>: Sized + Send + Sync {
+pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -192,7 +193,7 @@ pub trait Instance<A: Api>: Sized + Send + Sync {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api>: Send + Sync {
+pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn configure(
         &mut self,
         device: &A::Device,
@@ -218,7 +219,7 @@ pub trait Surface<A: Api>: Send + Sync {
     unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api>: Send + Sync {
+pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -245,7 +246,7 @@ pub trait Adapter<A: Api>: Send + Sync {
     fn texture_format_as_hal(&self, texture_format: wgt::TextureFormat) -> A::TextureFormat;
 }
 
-pub trait Device<A: Api>: Send + Sync {
+pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
     /// Exit connection to this logical device.
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
@@ -341,7 +342,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn stop_capture(&self);
 }
 
-pub trait Queue<A: Api>: Send + Sync {
+pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
     /// Submits the command buffers for execution on GPU.
     ///
     /// Valid usage:
@@ -365,7 +366,7 @@ pub trait Queue<A: Api>: Send + Sync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
+pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.
@@ -557,6 +558,7 @@ pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
 
 bitflags!(
     /// Instance initialization flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct InstanceFlags: u32 {
         /// Generate debug information in shaders and objects.
         const DEBUG = 1 << 0;
@@ -567,6 +569,7 @@ bitflags!(
 
 bitflags!(
     /// Pipeline layout creation flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
         /// Include support for base vertex/instance drawing.
         const BASE_VERTEX_INSTANCE = 1 << 0;
@@ -577,6 +580,7 @@ bitflags!(
 
 bitflags!(
     /// Pipeline layout creation flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BindGroupLayoutFlags: u32 {
         /// Allows for bind group binding arrays to be shorter than the array in the BGL.
         const PARTIALLY_BOUND = 1 << 0;
@@ -585,6 +589,7 @@ bitflags!(
 
 bitflags!(
     /// Texture format capability flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureFormatCapabilities: u32 {
         /// Format can be sampled.
         const SAMPLED = 1 << 0;
@@ -628,6 +633,7 @@ bitflags!(
 
 bitflags!(
     /// Texture format capability flags.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FormatAspects: u8 {
         const COLOR = 1 << 0;
         const DEPTH = 1 << 1;
@@ -676,6 +682,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
 }
 
 bitflags!(
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct MemoryFlags: u32 {
         const TRANSIENT = 1 << 0;
         const PREFER_COHERENT = 1 << 1;
@@ -685,6 +692,7 @@ bitflags!(
 //TODO: it's not intuitive for the backends to consider `LOAD` being optional.
 
 bitflags!(
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct AttachmentOps: u8 {
         const LOAD = 1 << 0;
         const STORE = 1 << 1;
@@ -693,6 +701,7 @@ bitflags!(
 
 bitflags::bitflags! {
     /// Similar to `wgt::BufferUsages` but for internal use.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUses: u16 {
         /// The argument to a read-only mapping.
         const MAP_READ = 1 << 0;
@@ -715,20 +724,21 @@ bitflags::bitflags! {
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
         /// The combination of states that a buffer may be in _at the same time_.
-        const INCLUSIVE = Self::MAP_READ.bits | Self::COPY_SRC.bits |
-            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
-            Self::STORAGE_READ.bits | Self::INDIRECT.bits;
+        const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
+            Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
+            Self::STORAGE_READ.bits() | Self::INDIRECT.bits();
         /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_READ_WRITE.bits;
+        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits | Self::MAP_WRITE.bits;
+        const ORDERED = Self::INCLUSIVE.bits() | Self::MAP_WRITE.bits();
     }
 }
 
 bitflags::bitflags! {
     /// Similar to `wgt::TextureUsages` but for internal use.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUses: u16 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
@@ -751,13 +761,13 @@ bitflags::bitflags! {
         /// Read-write or write-only storage buffer usage.
         const STORAGE_READ_WRITE = 1 << 9;
         /// The combination of states that a texture may be in _at the same time_.
-        const INCLUSIVE = Self::COPY_SRC.bits | Self::RESOURCE.bits | Self::DEPTH_STENCIL_READ.bits;
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
-        const EXCLUSIVE = Self::COPY_DST.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits | Self::STORAGE_READ_WRITE.bits | Self::PRESENT.bits;
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits() | Self::STORAGE_READ_WRITE.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
-        const ORDERED = Self::INCLUSIVE.bits | Self::COLOR_TARGET.bits | Self::DEPTH_STENCIL_WRITE.bits | Self::STORAGE_READ.bits;
+        const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
         const COMPLEX = 1 << 10;
@@ -924,9 +934,12 @@ pub struct SamplerDescriptor<'a> {
     pub mag_filter: wgt::FilterMode,
     pub min_filter: wgt::FilterMode,
     pub mipmap_filter: wgt::FilterMode,
-    pub lod_clamp: Option<Range<f32>>,
+    pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
-    pub anisotropy_clamp: Option<NonZeroU8>,
+    // Must in the range [1, 16].
+    //
+    // Anisotropic filtering must be supported if this is not 1.
+    pub anisotropy_clamp: u16,
     pub border_color: Option<wgt::SamplerBorderColor>,
 }
 

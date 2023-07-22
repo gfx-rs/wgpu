@@ -64,7 +64,7 @@ pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgifor
         Tf::Bc5RgUnorm => DXGI_FORMAT_BC5_UNORM,
         Tf::Bc5RgSnorm => DXGI_FORMAT_BC5_SNORM,
         Tf::Bc6hRgbUfloat => DXGI_FORMAT_BC6H_UF16,
-        Tf::Bc6hRgbSfloat => DXGI_FORMAT_BC6H_SF16,
+        Tf::Bc6hRgbFloat => DXGI_FORMAT_BC6H_SF16,
         Tf::Bc7RgbaUnorm => DXGI_FORMAT_BC7_UNORM,
         Tf::Bc7RgbaUnormSrgb => DXGI_FORMAT_BC7_UNORM_SRGB,
         Tf::Etc2Rgb8Unorm

@@ -127,8 +127,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
         self.leave_blit();
-        assert!(self.state.render.is_none());
-        assert!(self.state.compute.is_none());
+        debug_assert!(self.state.render.is_none());
+        debug_assert!(self.state.compute.is_none());
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
         })
@@ -231,14 +231,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .texture_base
                 .max_copy_size(&dst.copy_size)
                 .min(&copy.size);
-            let bytes_per_row = copy
-                .buffer_layout
-                .bytes_per_row
-                .map_or(0, |v| v.get() as u64);
+            let bytes_per_row = copy.buffer_layout.bytes_per_row.unwrap_or(0) as u64;
             let image_byte_stride = if extent.depth > 1 {
                 copy.buffer_layout
                     .rows_per_image
-                    .map_or(0, |v| v.get() as u64 * bytes_per_row)
+                    .map_or(0, |v| v as u64 * bytes_per_row)
             } else {
                 // Don't pass a stride when updating a single layer, otherwise metal validation
                 // fails when updating a subset of the image due to the stride being larger than
@@ -277,14 +274,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 .texture_base
                 .max_copy_size(&src.copy_size)
                 .min(&copy.size);
-            let bytes_per_row = copy
-                .buffer_layout
-                .bytes_per_row
-                .map_or(0, |v| v.get() as u64);
+            let bytes_per_row = copy.buffer_layout.bytes_per_row.unwrap_or(0) as u64;
             let bytes_per_image = copy
                 .buffer_layout
                 .rows_per_image
-                .map_or(0, |v| v.get() as u64 * bytes_per_row);
+                .map_or(0, |v| v as u64 * bytes_per_row);
             encoder.copy_from_texture_to_buffer(
                 &src.raw,
                 copy.texture_base.array_layer as u64,
@@ -360,6 +354,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
         self.begin_pass();
         self.state.index = None;
+
+        assert!(self.state.blit.is_none());
+        assert!(self.state.compute.is_none());
+        assert!(self.state.render.is_none());
 
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPassDescriptor::new();
@@ -674,7 +672,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
         self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
-        self.state.stage_infos.fs.assign_from(&pipeline.fs_info);
+        match pipeline.fs_info {
+            Some(ref info) => self.state.stage_infos.fs.assign_from(info),
+            None => self.state.stage_infos.fs.clear(),
+        }
 
         let encoder = self.state.render.as_ref().unwrap();
         encoder.set_render_pipeline_state(&pipeline.raw);
@@ -913,6 +914,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         self.begin_pass();
 
         let raw = self.raw_cmd_buf.as_ref().unwrap();
+        debug_assert!(self.state.blit.is_none());
+        debug_assert!(self.state.compute.is_none());
+        debug_assert!(self.state.render.is_none());
         objc::rc::autoreleasepool(|| {
             let encoder = raw.new_compute_command_encoder();
             if let Some(label) = desc.label {

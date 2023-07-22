@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::{num::NonZeroU32, ops::Range};
 
 pub mod assertions;
+pub mod math;
 
 // Use this macro instead of the one provided by the bitflags_serde_shim crate
 // because the latter produces an error when deserializing bits that are not
@@ -25,7 +26,7 @@ pub mod assertions;
 // behavior to this macro (unspecified bit do not produce an error).
 macro_rules! impl_bitflags {
     ($name:ident) => {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "serde")]
         impl serde::Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -35,16 +36,14 @@ macro_rules! impl_bitflags {
             }
         }
 
-        #[cfg(feature = "replay")]
+        #[cfg(feature = "serde")]
         impl<'de> serde::Deserialize<'de> for $name {
             fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
             where
                 D: serde::Deserializer<'de>,
             {
                 let value = <_ as serde::Deserialize<'de>>::deserialize(deserializer)?;
-                // Note: newer version of bitflags replaced from_bits_unchecked with
-                // from_bits_retain which is not marked as unsafe (same implementation).
-                Ok(unsafe { $name::from_bits_unchecked(value) })
+                Ok($name::from_bits_retain(value))
             }
         }
 
@@ -93,8 +92,7 @@ pub const QUERY_SIZE: u32 = 8;
 /// Backends supported by wgpu.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backend {
     /// Dummy backend, used for testing.
     Empty = 0,
@@ -110,6 +108,21 @@ pub enum Backend {
     Gl = 5,
     /// WebGPU in the browser
     BrowserWebGpu = 6,
+}
+
+impl Backend {
+    /// Returns the string name of the backend.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Backend::Empty => "empty",
+            Backend::Vulkan => "vulkan",
+            Backend::Metal => "metal",
+            Backend::Dx12 => "dx12",
+            Backend::Dx11 => "dx11",
+            Backend::Gl => "gl",
+            Backend::BrowserWebGpu => "webgpu",
+        }
+    }
 }
 
 /// Power Preference when choosing a physical adapter.
@@ -132,10 +145,12 @@ pub enum PowerPreference {
 bitflags::bitflags! {
     /// Represents the backends that wgpu will use.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Backends: u32 {
         /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
-        /// Currently unsupported
+        /// Supported on Linux/Android, the web through webassembly via WebGL, and Windows and
+        /// macOS/iOS via ANGLE
         const GL = 1 << Backend::Gl as u32;
         /// Supported on macOS/iOS
         const METAL = 1 << Backend::Metal as u32;
@@ -148,15 +163,15 @@ bitflags::bitflags! {
         /// All the apis that wgpu offers first tier of support for.
         ///
         /// Vulkan + Metal + DX12 + Browser WebGPU
-        const PRIMARY = Self::VULKAN.bits
-            | Self::METAL.bits
-            | Self::DX12.bits
-            | Self::BROWSER_WEBGPU.bits;
+        const PRIMARY = Self::VULKAN.bits()
+            | Self::METAL.bits()
+            | Self::DX12.bits()
+            | Self::BROWSER_WEBGPU.bits();
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
         /// OpenGL + DX11
-        const SECONDARY = Self::GL.bits | Self::DX11.bits;
+        const SECONDARY = Self::GL.bits() | Self::DX11.bits();
     }
 }
 
@@ -213,6 +228,7 @@ bitflags::bitflags! {
     /// https://gpuweb.github.io/gpuweb/#enumdef-gpufeaturename).
     #[repr(transparent)]
     #[derive(Default)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct Features: u64 {
         //
         // ---- Start numbering at 1 << 0 ----
@@ -268,7 +284,7 @@ bitflags::bitflags! {
 
         /// Allows shaders to acquire the FP16 ability
         ///
-        /// Note: this is not supported in naga yet，only through spir-v passthrough right now.
+        /// Note: this is not supported in `naga` yet，only through `spirv-passthrough` right now.
         ///
         /// Supported Platforms:
         /// - Vulkan
@@ -294,7 +310,16 @@ bitflags::bitflags! {
         // ? const FLOAT32_BLENDABLE = 1 << 20; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << 21; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << 22; (https://github.com/gpuweb/gpuweb/issues/3844)
-        // TODO const RG11B10UFLOAT_RENDERABLE = 1 << 23;
+
+        /// Allows for usage of textures of format [`TextureFormat::Rg11b10Float`] as a render target
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const RG11B10UFLOAT_RENDERABLE = 1 << 23;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
@@ -717,7 +742,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_F64 = 1 << 59;
-        /// Allows shaders to use i16. Not currently supported in naga, only available through `spirv-passthrough`.
+        /// Allows shaders to use i16. Not currently supported in `naga`, only available through `spirv-passthrough`.
         ///
         /// Supported platforms:
         /// - Vulkan
@@ -799,8 +824,7 @@ impl Features {
 /// [`downlevel_defaults()`]: Limits::downlevel_defaults
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase", default))]
 pub struct Limits {
     /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
@@ -833,7 +857,7 @@ pub struct Limits {
     pub max_samplers_per_shader_stage: u32,
     /// Amount of storage buffers visible in a single shader stage. Defaults to 8. Higher is "better".
     pub max_storage_buffers_per_shader_stage: u32,
-    /// Amount of storage textures visible in a single shader stage. Defaults to 8. Higher is "better".
+    /// Amount of storage textures visible in a single shader stage. Defaults to 4. Higher is "better".
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
@@ -1090,6 +1114,7 @@ impl Limits {
 /// Represents the sets of additional limits on an adapter,
 /// which take place when running on downlevel backends.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelLimits {}
 
 #[allow(unknown_lints)] // derivable_impls is nightly only currently
@@ -1102,6 +1127,7 @@ impl Default for DownlevelLimits {
 
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelCapabilities {
     /// Combined boolean flags.
     pub flags: DownlevelFlags,
@@ -1144,6 +1170,7 @@ bitflags::bitflags! {
     ///
     /// You can check whether a set of flags is compliant through the
     /// [`DownlevelCapabilities::is_webgpu_compliant()`] function.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         ///
@@ -1248,13 +1275,14 @@ impl DownlevelFlags {
         // We use manual bit twiddling to make this a const fn as `Sub` and `.remove` aren't const
 
         // WebGPU doesn't actually require aniso
-        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits)
+        Self::from_bits_truncate(Self::all().bits() & !Self::ANISOTROPIC_FILTERING.bits())
     }
 }
 
 /// Collections of shader features a device supports if they support less than WebGPU normally allows.
 // TODO: Fill out the differences between shader models more completely
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ShaderModel {
     /// Extremely limited shaders, including a total instruction limit.
     Sm2,
@@ -1267,8 +1295,7 @@ pub enum ShaderModel {
 /// Supported physical device types.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceType {
     /// Other or Unknown.
     Other,
@@ -1286,18 +1313,33 @@ pub enum DeviceType {
 
 /// Information about an adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
-    /// Vendor PCI id of the adapter
+    /// [`Backend`]-specific vendor ID of the adapter
     ///
-    /// If the vendor has no PCI id, then this value will be the backend's vendor id equivalent. On Vulkan,
-    /// Mesa would have a vendor id equivalent to it's `VkVendorId` value.
-    pub vendor: usize,
-    /// PCI id of the adapter
-    pub device: usize,
+    /// This generally is a 16-bit PCI vendor ID in the least significant bytes of this field.
+    /// However, more significant bytes may be non-zero if the backend uses a different
+    /// representation.
+    ///
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::vendorID`] is used, which is
+    ///     a superset of PCI IDs.
+    ///
+    /// [`VkPhysicalDeviceProperties::vendorID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    pub vendor: u32,
+    /// [`Backend`]-specific device ID of the adapter
+    ///
+    ///
+    /// This generally is a 16-bit PCI device ID in the least significant bytes of this field.
+    /// However, more significant bytes may be non-zero if the backend uses a different
+    /// representation.
+    ///
+    /// * For [`Backend::Vulkan`], the [`VkPhysicalDeviceProperties::deviceID`] is used, which is
+    ///    a superset of PCI IDs.
+    ///
+    /// [`VkPhysicalDeviceProperties::deviceID`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
+    pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
     /// Driver name
@@ -1348,6 +1390,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUShaderStageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpushaderstageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ShaderStages: u32 {
         /// Binding is not visible from any shader stage.
         const NONE = 0;
@@ -1358,7 +1401,7 @@ bitflags::bitflags! {
         /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
-        const VERTEX_FRAGMENT = Self::VERTEX.bits | Self::FRAGMENT.bits;
+        const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
     }
 }
 
@@ -1626,7 +1669,7 @@ pub enum PrimitiveTopology {
     TriangleList = 3,
     /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
     ///
-    /// Vertices `0 1 2 3 4 5` creates four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
+    /// Vertices `0 1 2 3 4 5` create four triangles `0 1 2`, `2 1 3`, `2 3 4`, and `4 3 5`
     TriangleStrip = 4,
 }
 
@@ -1773,6 +1816,7 @@ impl Default for MultisampleState {
 bitflags::bitflags! {
     /// Feature flags for a texture format.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureFormatFeatureFlags: u32 {
         /// If not present, the texture can't be sampled with a filtering sampler.
         /// This may overwrite TextureSampleType::Float.filterable
@@ -1820,6 +1864,7 @@ impl_bitflags!(TextureFormatFeatureFlags);
 ///
 /// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextureFormatFeatures {
     /// Valid bits for `TextureDescriptor::Usage` provided for format creation.
     pub allowed_usages: TextureUsages,
@@ -2011,6 +2056,8 @@ pub enum TextureFormat {
     /// Special depth format with 32 bit floating point depth.
     Depth32Float,
     /// Special depth/stencil format with 32 bit floating point depth and 8 bits integer stencil.
+    ///
+    /// [`Features::DEPTH32FLOAT_STENCIL8`] must be enabled to use this texture format.
     Depth32FloatStencil8,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
@@ -2095,7 +2142,7 @@ pub enum TextureFormat {
     /// Also known as BPTC (float).
     ///
     /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
-    Bc6hRgbSfloat,
+    Bc6hRgbFloat,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Variable sized pallet. 8 bit integer RGBA.
     /// [0, 255] converted to/from float [0, 1] in shader.
     ///
@@ -2253,7 +2300,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "bc5-rg-unorm" => TextureFormat::Bc5RgUnorm,
                     "bc5-rg-snorm" => TextureFormat::Bc5RgSnorm,
                     "bc6h-rgb-ufloat" => TextureFormat::Bc6hRgbUfloat,
-                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbSfloat,
+                    "bc6h-rgb-float" => TextureFormat::Bc6hRgbFloat,
                     "bc7-rgba-unorm" => TextureFormat::Bc7RgbaUnorm,
                     "bc7-rgba-unorm-srgb" => TextureFormat::Bc7RgbaUnormSrgb,
                     "etc2-rgb8unorm" => TextureFormat::Etc2Rgb8Unorm,
@@ -2379,7 +2426,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Bc5RgUnorm => "bc5-rg-unorm",
             TextureFormat::Bc5RgSnorm => "bc5-rg-snorm",
             TextureFormat::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
-            TextureFormat::Bc6hRgbSfloat => "bc6h-rgb-float",
+            TextureFormat::Bc6hRgbFloat => "bc6h-rgb-float",
             TextureFormat::Bc7RgbaUnorm => "bc7-rgba-unorm",
             TextureFormat::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
             TextureFormat::Etc2Rgb8Unorm => "etc2-rgb8unorm",
@@ -2569,7 +2616,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => (4, 4),
 
@@ -2673,7 +2720,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Features::TEXTURE_COMPRESSION_BC,
 
@@ -2698,7 +2745,7 @@ impl TextureFormat {
     /// Returns the format features guaranteed by the WebGPU spec.
     ///
     /// Additional features are available if `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
-    pub fn guaranteed_format_features(&self) -> TextureFormatFeatures {
+    pub fn guaranteed_format_features(&self, device_features: Features) -> TextureFormatFeatures {
         // Multisampling
         let noaa = TextureFormatFeatureFlags::empty();
         let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
@@ -2710,6 +2757,11 @@ impl TextureFormat {
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
         let all_flags = TextureUsages::all();
+        let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
+            attachment
+        } else {
+            basic
+        };
 
         #[rustfmt::skip] // lets make a nice table
         let (
@@ -2741,7 +2793,7 @@ impl TextureFormat {
             Self::Bgra8Unorm =>           (msaa_resolve, attachment),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
-            Self::Rg11b10Float =>         (        msaa,      basic),
+            Self::Rg11b10Float =>         (        msaa,   rg11b10f),
             Self::Rg32Uint =>             (        noaa,  all_flags),
             Self::Rg32Sint =>             (        noaa,  all_flags),
             Self::Rg32Float =>            (        noaa,  all_flags),
@@ -2779,7 +2831,7 @@ impl TextureFormat {
             Self::Bc5RgUnorm =>           (        noaa,      basic),
             Self::Bc5RgSnorm =>           (        noaa,      basic),
             Self::Bc6hRgbUfloat =>        (        noaa,      basic),
-            Self::Bc6hRgbSfloat =>        (        noaa,      basic),
+            Self::Bc6hRgbFloat =>         (        noaa,      basic),
             Self::Bc7RgbaUnorm =>         (        noaa,      basic),
             Self::Bc7RgbaUnormSrgb =>     (        noaa,      basic),
 
@@ -2885,7 +2937,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Some(float),
 
@@ -2969,7 +3021,7 @@ impl TextureFormat {
             | Self::Bc5RgUnorm
             | Self::Bc5RgSnorm
             | Self::Bc6hRgbUfloat
-            | Self::Bc6hRgbSfloat
+            | Self::Bc6hRgbFloat
             | Self::Bc7RgbaUnorm
             | Self::Bc7RgbaUnormSrgb => Some(16),
 
@@ -2985,6 +3037,92 @@ impl TextureFormat {
             | Self::EacRg11Snorm => Some(16),
 
             Self::Astc { .. } => Some(16),
+        }
+    }
+
+    /// Returns the number of components this format has.
+    pub fn components(&self) -> u8 {
+        self.components_with_aspect(TextureAspect::All)
+    }
+
+    /// Returns the number of components this format has taking into account the `aspect`.
+    ///
+    /// The `aspect` is only relevant for combined depth-stencil formats.
+    pub fn components_with_aspect(&self, aspect: TextureAspect) -> u8 {
+        match *self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float => 1,
+
+            Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float => 2,
+
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float => 4,
+
+            Self::Rgb9e5Ufloat | Self::Rg11b10Float => 3,
+            Self::Rgb10a2Unorm => 4,
+
+            Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
+
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
+                TextureAspect::All => 2,
+                TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
+            },
+
+            Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
+            Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,
+            Self::Bc6hRgbUfloat | Self::Bc6hRgbFloat => 3,
+            Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb => 4,
+
+            Self::EacR11Unorm | Self::EacR11Snorm => 1,
+            Self::EacRg11Unorm | Self::EacRg11Snorm => 2,
+            Self::Etc2Rgb8Unorm | Self::Etc2Rgb8UnormSrgb => 3,
+            Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb => 4,
+
+            Self::Astc { .. } => 4,
         }
     }
 
@@ -3279,7 +3417,7 @@ fn texture_format_serialize() {
         "\"bc6h-rgb-ufloat\"".to_string()
     );
     assert_eq!(
-        serde_json::to_string(&TextureFormat::Bc6hRgbSfloat).unwrap(),
+        serde_json::to_string(&TextureFormat::Bc6hRgbFloat).unwrap(),
         "\"bc6h-rgb-float\"".to_string()
     );
     assert_eq!(
@@ -3572,7 +3710,7 @@ fn texture_format_deserialize() {
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bc6h-rgb-float\"").unwrap(),
-        TextureFormat::Bc6hRgbSfloat
+        TextureFormat::Bc6hRgbFloat
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bc7-rgba-unorm\"").unwrap(),
@@ -3630,6 +3768,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUColorWriteFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpucolorwriteflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct ColorWrites: u32 {
         /// Enable red channel writes
         const RED = 1 << 0;
@@ -3640,9 +3779,9 @@ bitflags::bitflags! {
         /// Enable alpha channel writes
         const ALPHA = 1 << 3;
         /// Enable red, green, and blue channel writes
-        const COLOR = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits;
+        const COLOR = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits();
         /// Enable writes to all channels.
-        const ALL = Self::RED.bits | Self::GREEN.bits | Self::BLUE.bits | Self::ALPHA.bits;
+        const ALL = Self::RED.bits() | Self::GREEN.bits() | Self::BLUE.bits() | Self::ALPHA.bits();
     }
 }
 
@@ -4190,6 +4329,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUsages: u32 {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
@@ -4219,6 +4359,8 @@ bitflags::bitflags! {
         const STORAGE = 1 << 7;
         /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 1 << 8;
+        /// Allow a buffer to be the destination buffer for a [`CommandEncoder::resolve_query_set`] operation.
+        const QUERY_RESOLVE = 1 << 9;
     }
 }
 
@@ -4235,7 +4377,7 @@ impl_bitflags!(BufferUsages);
 pub struct BufferDescriptor<L> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// Size of a buffer.
+    /// Size of a buffer, in bytes.
     pub size: BufferAddress,
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
@@ -4408,6 +4550,7 @@ bitflags::bitflags! {
     /// Corresponds to [WebGPU `GPUTextureUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gputextureusageflags).
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct TextureUsages: u32 {
         /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
         /// [`CommandEncoder::copy_texture_to_texture`] operation.
@@ -5150,9 +5293,20 @@ impl<L> CommandBufferDescriptor<L> {
 pub struct RenderBundleDepthStencil {
     /// Format of the attachment.
     pub format: TextureFormat,
-    /// True if the depth aspect is used but not modified.
+    /// If the depth aspect of the depth stencil attachment is going to be written to.
+    ///
+    /// This must match the [`RenderPassDepthStencilAttachment::depth_ops`] of the renderpass this render bundle is executed in.
+    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
+    ///
+    /// [`RenderPassDepthStencilAttachment::depth_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.depth_ops
     pub depth_read_only: bool,
-    /// True if the stencil aspect is used but not modified.
+
+    /// If the stencil aspect of the depth stencil attachment is going to be written to.
+    ///
+    /// This must match the [`RenderPassDepthStencilAttachment::stencil_ops`] of the renderpass this render bundle is executed in.
+    /// If depth_ops is `Some(..)` this must be false. If it is `None` this must be true.
+    ///
+    /// [`RenderPassDepthStencilAttachment::stencil_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.stencil_ops
     pub stencil_read_only: bool,
 }
 
@@ -5222,7 +5376,7 @@ pub struct ImageDataLayout {
     /// [CEcbtt]: ../wgpu/struct.CommandEncoder.html#method.copy_buffer_to_texture
     /// [CEcttb]: ../wgpu/struct.CommandEncoder.html#method.copy_texture_to_buffer
     /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
-    pub bytes_per_row: Option<NonZeroU32>,
+    pub bytes_per_row: Option<u32>,
     /// "Rows" that make up a single "image".
     ///
     /// A row is one row of pixels or of compressed blocks in the x direction.
@@ -5232,7 +5386,7 @@ pub struct ImageDataLayout {
     /// The amount of rows per image may be larger than the actual amount of rows of data.
     ///
     /// Required if there are multiple images (i.e. the depth is more than one).
-    pub rows_per_image: Option<NonZeroU32>,
+    pub rows_per_image: Option<u32>,
 }
 
 /// Specific type of a buffer binding.
@@ -5314,7 +5468,7 @@ pub enum TextureSampleType {
     /// Example WGSL syntax:
     /// ```rust,ignore
     /// @group(0) @binding(0)
-    /// var t: texure_2d<f32>;
+    /// var t: texture_2d<f32>;
     /// ```
     ///
     /// Example GLSL syntax:
@@ -5483,18 +5637,41 @@ pub enum BindingType {
     Buffer {
         /// Sub-type of the buffer binding.
         ty: BufferBindingType,
+
         /// Indicates that the binding has a dynamic offset.
         ///
-        /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg] for each dynamic
-        /// binding in increasing order of binding number.
+        /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg]
+        /// for each dynamic binding in increasing order of binding number.
         ///
         /// [RPsbg]: ../wgpu/struct.RenderPass.html#method.set_bind_group
         #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         has_dynamic_offset: bool,
-        /// Minimum size of the corresponding `BufferBinding` required to match this entry.
-        /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
-        /// plus one element of the unbound array, which can only be last in the structure.
-        /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
+
+        /// The minimum size for a [`BufferBinding`] matching this entry, in bytes.
+        ///
+        /// If this is `Some(size)`:
+        ///
+        /// - When calling [`create_bind_group`], the resource at this bind point
+        ///   must be a [`BindingResource::Buffer`] whose effective size is at
+        ///   least `size`.
+        ///
+        /// - When calling [`create_render_pipeline`] or [`create_compute_pipeline`],
+        ///   `size` must be at least the [minimum buffer binding size] for the
+        ///   shader module global at this bind point: large enough to hold the
+        ///   global's value, along with one element of a trailing runtime-sized
+        ///   array, if present.
+        ///
+        /// If this is `None`:
+        ///
+        /// - Each draw or dispatch command checks that the buffer range at this
+        ///   bind point satisfies the [minimum buffer binding size].
+        ///
+        /// [`BufferBinding`]: ../wgpu/struct.BufferBinding.html
+        /// [`create_bind_group`]: ../wgpu/struct.Device.html#method.create_bind_group
+        /// [`BindingResource::Buffer`]: ../wgpu/enum.BindingResource.html#variant.Buffer
+        /// [minimum buffer binding size]: https://www.w3.org/TR/webgpu/#minimum-buffer-binding-size
+        /// [`create_render_pipeline`]: ../wgpu/struct.Device.html#method.create_render_pipeline
+        /// [`create_compute_pipeline`]: ../wgpu/struct.Device.html#method.create_compute_pipeline
         #[cfg_attr(any(feature = "trace", feature = "replay"), serde(default))]
         min_binding_size: Option<BufferSize>,
     },
@@ -5699,7 +5876,7 @@ pub enum ExternalImageSource {
     HTMLCanvasElement(web_sys::HtmlCanvasElement),
     /// Copy from a off-screen canvas.
     ///
-    /// Requies [`DownlevelFlags::EXTERNAL_TEXTURE_OFFSCREEN_CANVAS`]
+    /// Requies [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
@@ -5740,9 +5917,17 @@ impl std::ops::Deref for ExternalImageSource {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for ExternalImageSource {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for ExternalImageSource {}
 
 /// Color spaces supported on the web.
@@ -5989,6 +6174,7 @@ bitflags::bitflags! {
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
     #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineStatisticsTypes : u8 {
         /// Amount of times the vertex shader is ran. Accounts for
         /// the vertex cache when doing indexed rendering.
@@ -6138,4 +6324,75 @@ impl Default for InstanceDescriptor {
             dx12_shader_compiler: Dx12Compiler::default(),
         }
     }
+}
+
+pub use send_sync::*;
+
+#[doc(hidden)]
+mod send_sync {
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    pub trait WasmNotSend: Send {}
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    impl<T: Send> WasmNotSend for T {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    pub trait WasmNotSend {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    impl<T> WasmNotSend for T {}
+
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    pub trait WasmNotSync: Sync {}
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    impl<T: Sync> WasmNotSync for T {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    pub trait WasmNotSync {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    impl<T> WasmNotSync for T {}
 }

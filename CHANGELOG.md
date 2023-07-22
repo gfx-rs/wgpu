@@ -40,11 +40,111 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+- Added support for importing external buffers using `buffer_from_raw` (Dx12, Metal, Vulkan) and `create_buffer_from_hal`. By @AdrianEddy in [#3355](https://github.com/gfx-rs/wgpu/pull/3355)
+
+#### Misc Breaking Changes
+
+- Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+- Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904)
+- Add a `compatible_surface` parameter to `initialize_adapter_from_env` and use that to make `initialize_adapter_from_env_or_default` always respect its `compatible_surface` parameter. By @fornwall in [#3905](https://github.com/gfx-rs/wgpu/pull/3905)
+
+#### Vulkan
+
+- Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
+- Implement depth-clip-control using depthClamp instead of VK_EXT_depth_clip_enable. By @AlbinBernhardssonARM [#3892](https://github.com/gfx-rs/wgpu/pull/3892).
+
+### Added/New Features
+
+- Empty scissor rects are allowed now, matching the specification. by @PJB3005 in [#3863](https://github.com/gfx-rs/wgpu/pull/3863).
+
+### Documentation
+
+- Better documentation for draw, draw_indexed, set_viewport and set_scissor_rect. By @genusistimelord in [#3860](https://github.com/gfx-rs/wgpu/pull/3860)
+- Fix link to `GPUVertexBufferLayout`. By @fornwall in [#3906](https://github.com/gfx-rs/wgpu/pull/3906)
+
+#### General
+
+- Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
+- Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763).
+- Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
+- On Web, types don't implement `Send` or `Sync` anymore. By @daxpedda in [#3691](https://github.com/gfx-rs/wgpu/pull/3691)
+- Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [https://github.com/gfx-rs/wgpu/pull/#3928](3928)
+
+### Bug Fixes
+
+- Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
+- Fix OpenGL/EGL backend not respecting non-sRGB texture formats in `SurfaceConfiguration`. by @liquidev in [#3817](https://github.com/gfx-rs/wgpu/pull/3817)
+- Make write- and read-only marked buffers match non-readonly layouts. by @fornwall in [#3893](https://github.com/gfx-rs/wgpu/pull/3893)
+- Fix leaking X11 connections. by @wez in [#3924](https://github.com/gfx-rs/wgpu/pull/3924)
+
+#### Metal
+
+- Fix renderpasses being used inside of renderpasses. By @cwfitzgerald in [#3828](https://github.com/gfx-rs/wgpu/pull/3828)
+- Support (simulated) visionOS. By @jinleili in [#3883](https://github.com/gfx-rs/wgpu/pull/3883)
+
+#### General
+
+- Fix Multiview to disable validation of TextureViewDimension and ArrayLayerCount. By @MalekiRe in [#3779](https://github.com/gfx-rs/wgpu/pull/3779#issue-1713269437).
+- Add back components info to `TextureFormat`s. By @teoxoy in [#3843](https://github.com/gfx-rs/wgpu/pull/3843).
+
+#### Vulkan
+- Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
+
+#### DX12
+
+- Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
+
+#### WebGPU
+
+- Use `get_preferred_canvas_format()` to fill `formats` of `SurfaceCapabilities`. By @jinleili in [#3744](https://github.com/gfx-rs/wgpu/pull/3744)
+
+### Examples
+
+#### General
+
+- Publish examples to wgpu.rs on updates to trunk branch instead of gecko. By @paul-hansen in [#3750](https://github.com/gfx-rs/wgpu/pull/3750)
+
+## v0.16.2 (2023-07-09)
+
+### Changes
+
+#### DX12
+
+- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
+
+## v0.16.1 (2023-05-24)
+
+### Bug Fixes
+
+- Fix missing 4X MSAA support on some OpenGL backends. By @emilk in [#3780](https://github.com/gfx-rs/wgpu/pull/3780)
+
+#### General
+
+- Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
+- Use `u32`s internally for bind group indices, rather than `u8`. By @ErichDonGubler in [#3743](https://github.com/gfx-rs/wgpu/pull/3743).
+
+#### WebGPU
+
+* Fix crash when calling `create_surface_from_canvas`. By @grovesNL in [#3718](https://github.com/gfx-rs/wgpu/pull/3718)
+
+## v0.16.0 (2023-04-19)
+
 ### Major changes
+
+#### Shader Changes
+
+`type` has been replaced with `alias` to match with upstream WebGPU.
+
+```diff
+- type MyType = vec4<u32>;
++ alias MyType = vec4<u32>;
+```
 
 #### TextureFormat info API
 
-The `describe` fn was removed in favor of separate functions: `block_dimensions`, `is_compressed`, `is_srgb`, `required_features`, `guaranteed_format_features`, `sample_type` and `block_size`.
+The `TextureFormat::describe` function was removed in favor of separate functions: `block_dimensions`, `is_compressed`, `is_srgb`, `required_features`, `guaranteed_format_features`, `sample_type` and `block_size`.
+
 
 ```diff
 - let block_dimensions = format.describe().block_dimensions;
@@ -55,8 +155,13 @@ The `describe` fn was removed in favor of separate functions: `block_dimensions`
 + let is_srgb = format.is_srgb();
 - let required_features = format.describe().required_features;
 + let required_features = format.required_features();
+```
+
+Additionally `guaranteed_format_features` now takes a set of features to assume are enabled.
+
+```diff
 - let guaranteed_format_features = format.describe().guaranteed_format_features;
-+ let guaranteed_format_features = format.guaranteed_format_features();
++ let guaranteed_format_features = format.guaranteed_format_features(device.features());
 ```
 
 Additionally `sample_type` and `block_size` now take an optional `TextureAspect` and return `Option`s.
@@ -70,6 +175,22 @@ Additionally `sample_type` and `block_size` now take an optional `TextureAspect`
 
 By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 
+#### BufferUsages::QUERY_RESOLVE
+
+Buffers used as the `destination` argument of `CommandEncoder::resolve_query_set` now have to contain the `QUERY_RESOLVE` usage instead of the `COPY_DST` usage.
+
+```diff
+  let destination = device.create_buffer(&wgpu::BufferDescriptor {
+      // ...
+-     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
++     usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::MAP_READ,
+      mapped_at_creation: false,
+  });
+  command_encoder.resolve_query_set(&query_set, query_range, &destination, destination_offset);
+```
+
+By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+
 #### Renamed features
 
 The following `Features` have been renamed.
@@ -82,56 +203,162 @@ The following `Features` have been renamed.
 
 By @teoxoy in [#3534](https://github.com/gfx-rs/wgpu/pull/3534)
 
-#### General
+#### Anisotropic Filtering
+
+Anisotropic filtering has been brought in line with the spec. The anisotropic clamp is now a `u16` (was a `Option<u8>`) which must be at least 1.
+
+If the anisotropy clamp is not 1, all the filters in a sampler must be `Linear`.
+
+```diff
+SamplerDescriptor {
+-    anisotropic_clamp: None,
++    anisotropic_clamp: 1,
+}
+```
+
+By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
+#### TextureFormat Names
+
+Some texture format names have changed to get back in line with the spec.
+
+```diff
+- TextureFormat::Bc6hRgbSfloat
++ TextureFormat::Bc6hRgbFloat
+```
+
+By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
+
+#### Misc Breaking Changes
 
 - Change type of `mip_level_count` and `array_layer_count` (members of `TextureViewDescriptor` and `ImageSubresourceRange`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3445](https://github.com/gfx-rs/wgpu/pull/3445)
-- All `fxhash` dependencies have been replaced with `rustc-hash`. By @james7132 in [#3502](https://github.com/gfx-rs/wgpu/pull/3502)
+- Change type of `bytes_per_row` and `rows_per_image` (members of `ImageDataLayout`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3529](https://github.com/gfx-rs/wgpu/pull/3529)
+- On Web, `Instance::create_surface_from_canvas()` and `create_surface_from_offscreen_canvas()` now take the canvas by value. By @daxpedda in [#3690](https://github.com/gfx-rs/wgpu/pull/3690)
 
 ### Changes
 
 #### General
 
 - Added `TextureFormatFeatureFlags::MULTISAMPLE_X16`. By @Dinnerbone in [#3454](https://github.com/gfx-rs/wgpu/pull/3454)
+- Added `BufferUsages::QUERY_RESOLVE`. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
 - Support stencil-only views and copying to/from combined depth-stencil textures. By @teoxoy in [#3436](https://github.com/gfx-rs/wgpu/pull/3436)
 - Added `Features::SHADER_EARLY_DEPTH_TEST`. By @teoxoy in [#3494](https://github.com/gfx-rs/wgpu/pull/3494)
+- All `fxhash` dependencies have been replaced with `rustc-hash`. By @james7132 in [#3502](https://github.com/gfx-rs/wgpu/pull/3502)
 - Allow copying of textures with copy-compatible formats. By @teoxoy in [#3528](https://github.com/gfx-rs/wgpu/pull/3528)
 - Improve attachment related errors. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
 - Make error descriptions all upper case. By @cwfitzgerald in [#3549](https://github.com/gfx-rs/wgpu/pull/3549)
+- Don't include ANSI terminal color escape sequences in shader module validation error messages. By @jimblandy in [#3591](https://github.com/gfx-rs/wgpu/pull/3591)
+- Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
+- Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
+- On Web, the size of the canvas is adjusted when using `Surface::configure()`. If the canvas was given an explicit size (via CSS), this will not affect the visual size of the canvas. By @daxpedda in [#3690](https://github.com/gfx-rs/wgpu/pull/3690)
+- Added `Global::create_render_bundle_error`. By @jimblandy in [#3746](https://github.com/gfx-rs/wgpu/pull/3746)
 
 #### WebGPU
 
-- Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
 - Implement the new checks for readonly stencils. By @JCapucho in [#3443](https://github.com/gfx-rs/wgpu/pull/3443)
 - Reimplement `adapter|device_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
+- Implement `command_encoder_resolve_query_set`. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+- Add support for `Features::RG11B10UFLOAT_RENDERABLE`. By @mockersf in [#3689](https://github.com/gfx-rs/wgpu/pull/3689)
 
 #### Vulkan
-
-- Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
-- Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
+- Set `max_memory_allocation_size` via `PhysicalDeviceMaintenance3Properties`. By @jinleili in [#3567](https://github.com/gfx-rs/wgpu/pull/3567)
+- Silence false-positive validation error about surface resizing. By @seabassjh in [#3627](https://github.com/gfx-rs/wgpu/pull/3627)
 
 ### Bug Fixes
 
-#### DX12
+#### General
+- `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
+- Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
+- Fix fatal errors (those which panic even if an error handler is set) not including all of the details. By @kpreid in [#3563](https://github.com/gfx-rs/wgpu/pull/3563)
+- Validate shader location clashes. By @emilk in [#3613](https://github.com/gfx-rs/wgpu/pull/3613)
+- Fix surfaces not being dropped until exit. By @benjaminschaaf in [#3647](https://github.com/gfx-rs/wgpu/pull/3647)
 
-- Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
+#### WebGPU
+- Fix handling of `None` values for `depth_ops` and `stencil_ops` in `RenderPassDescriptor::depth_stencil_attachment`. By @niklaskorz in [#3660](https://github.com/gfx-rs/wgpu/pull/3660)
+- Avoid using `WasmAbi` functions for WebGPU backend. By @grovesNL in [#3657](https://github.com/gfx-rs/wgpu/pull/3657)
+
+#### DX12
 - Use typeless formats for textures that might be viewed as srgb or non-srgb. By @teoxoy in [#3555](https://github.com/gfx-rs/wgpu/pull/3555)
 
 #### GLES
-
-- [gles] fix: Set FORCE_POINT_SIZE if it is vertex shader with mesh consist of point list. By @REASY in [3440](https://github.com/gfx-rs/wgpu/pull/3440)
-- [gles] fix: enable `WEBGL_debug_renderer_info` before querying unmasked vendor/renderer to avoid crashing on emscripten in [#3519](https://github.com/gfx-rs/wgpu/pull/3519)
-
-#### General
-
-- `copyTextureToTexture` src/dst aspects must both refer to all aspects of src/dst format. By @teoxoy in [#3431](https://github.com/gfx-rs/wgpu/pull/3431)
-- Validate before extracting texture selectors. By @teoxoy in [#3487](https://github.com/gfx-rs/wgpu/pull/3487)
-
-#### Vulkan
-
-- Treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android. By @James2022-rgb in [#3525](https://github.com/gfx-rs/wgpu/pull/3525)
+- Set FORCE_POINT_SIZE if it is vertex shader with mesh consist of point list. By @REASY in [3440](https://github.com/gfx-rs/wgpu/pull/3440)
+- Remove unwraps inside `surface.configure`. By @cwfitzgerald in [#3585](https://github.com/gfx-rs/wgpu/pull/3585)
+- Fix `copy_external_image_to_texture`, `copy_texture_to_texture` and `copy_buffer_to_texture` not taking the specified index into account if the target texture is a cube map, 2D texture array or cube map array. By @daxpedda [#3641](https://github.com/gfx-rs/wgpu/pull/3641)
+- Fix disabling of vertex attributes with non-consecutive locations. By @Azorlogh in [#3706](https://github.com/gfx-rs/wgpu/pull/3706)
 
 #### Metal
+- Fix metal erroring on an `array_stride` of 0. By @teoxoy in [#3538](https://github.com/gfx-rs/wgpu/pull/3538)
 - `create_texture` returns an error if `new_texture` returns NULL. By @jinleili in [#3554](https://github.com/gfx-rs/wgpu/pull/3554)
+- Fix shader bounds checking being ignored. By @FL33TW00D in [#3603](https://github.com/gfx-rs/wgpu/pull/3603)
+
+#### Vulkan
+- Treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android due to rotation issues. By @James2022-rgb in [#3525](https://github.com/gfx-rs/wgpu/pull/3525)
+
+### Examples
+- Use `BufferUsages::QUERY_RESOLVE` instead of `BufferUsages::COPY_DST` for buffers used in `CommandEncoder::resolve_query_set` calls in `mipmap` example. By @JolifantoBambla in [#3489](https://github.com/gfx-rs/wgpu/pull/3489)
+
+## v0.15.3 (2023-03-22)
+
+### Bug Fixes
+
+#### Metal
+- Fix incorrect mipmap being sampled when using `MinLod <= 0.0` and `MaxLod >= 32.0` or when the fragment shader samples different Lods in the same quad. By @cwfitzgerald in [#3610](https://github.com/gfx-rs/wgpu/pull/3610).
+
+#### GLES
+- Fix `Vertex buffer is not big enough for the draw call.` for ANGLE/Web when rendering with instance attributes on a single instance. By @wumpf in [#3596](https://github.com/gfx-rs/wgpu/pull/3596)
+- Reset all queue state between command buffers in a submit. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+- Reset the state of `SAMPLE_ALPHA_TO_COVERAGE` on queue reset. By @jleibs [#3589](https://github.com/gfx-rs/wgpu/pull/3589)
+
+
+## wgpu-0.15.2 (2023-03-08)
+
+### Bug Fixes
+
+#### Metal
+- Fix definition of `NSOperatingSystemVersion` to avoid potential crashes. By @grovesNL in [#3557](https://github.com/gfx-rs/wgpu/pull/3557)
+
+#### GLES
+- Enable `WEBGL_debug_renderer_info` before querying unmasked vendor/renderer to avoid crashing on emscripten in [#3519](https://github.com/gfx-rs/wgpu/pull/3519)
+
+## wgpu-0.15.1 (2023-02-09)
+
+### Changes
+
+#### General
+- Fix for some minor issues in comments on some features. By @Wumpf in [#3455](https://github.com/gfx-rs/wgpu/pull/3455)
+
+#### Vulkan
+- Improve format MSAA capabilities detection. By @jinleili in [#3429](https://github.com/gfx-rs/wgpu/pull/3429)
+
+#### DX12
+- Update gpu allocator to 0.22. By @Elabajaba in [#3447](https://github.com/gfx-rs/wgpu/pull/3447)
+
+#### WebGPU
+- Implement `CommandEncoder::clear_buffer`. By @raphlinus in [#3426](https://github.com/gfx-rs/wgpu/pull/3426)
+
+### Bug Fixes
+
+#### General
+- Re-sort supported surface formats based on srgb-ness. By @cwfitzgerald in [#3444](https://github.com/gfx-rs/wgpu/pull/3444)
+
+#### Vulkan
+- Fix surface view formats validation error. By @jinleili in [#3432](https://github.com/gfx-rs/wgpu/pull/3432)
+
+#### DX12
+- Fix DXC validation issues when using a custom `dxil_path`. By @Elabajaba in [#3434](https://github.com/gfx-rs/wgpu/pull/3434)
+
+#### GLES
+- Unbind vertex buffers at end of renderpass. By @cwfitzgerald in [#3459](https://github.com/gfx-rs/wgpu/pull/3459)
+
+#### WebGPU
+
+- Reimplement `{adapter|device}_features`. By @jinleili in [#3428](https://github.com/gfx-rs/wgpu/pull/3428)
+
+### Documentation
+
+#### General
+- Build for Wasm on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
+
 
 ## wgpu-0.15.0 (2023-01-25)
 
@@ -1516,7 +1743,7 @@ DeviceDescriptor {
   - better error messages
   - timestamp and pipeline statistics queries
   - ETC2 and ASTC compressed textures
-  - (beta) targeting WASM with WebGL backend
+  - (beta) targeting Wasm with WebGL backend
   - reduced dependencies
   - Native-only:
     - clamp-to-border addressing

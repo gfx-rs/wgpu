@@ -15,6 +15,7 @@ use thiserror::Error;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum DrawError {
     #[error("Blend constant needs to be set")]
     MissingBlendConstant,
@@ -58,13 +59,14 @@ pub enum DrawError {
 /// Error encountered when encoding a render command.
 /// This is the shared error set between render bundles and passes.
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum RenderCommandError {
     #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
     #[error("Render bundle {0:?} is invalid")]
     InvalidRenderBundle(id::RenderBundleId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
-    BindGroupIndexOutOfRange { index: u8, max: u32 },
+    BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Dynamic buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(u64, &'static str, u32),
     #[error("Number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
@@ -146,7 +148,7 @@ pub struct Rect<T> {
 )]
 pub enum RenderCommand {
     SetBindGroup {
-        index: u8,
+        index: u32,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
     },

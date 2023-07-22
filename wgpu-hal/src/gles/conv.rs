@@ -94,7 +94,7 @@ impl super::AdapterShared {
             Tf::Bc5RgUnorm => (glow::COMPRESSED_RG_RGTC2, glow::RG, 0),
             Tf::Bc5RgSnorm => (glow::COMPRESSED_SIGNED_RG_RGTC2, glow::RG, 0),
             Tf::Bc6hRgbUfloat => (glow::COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT, glow::RGB, 0),
-            Tf::Bc6hRgbSfloat => (glow::COMPRESSED_RGB_BPTC_SIGNED_FLOAT, glow::RGB, 0),
+            Tf::Bc6hRgbFloat => (glow::COMPRESSED_RGB_BPTC_SIGNED_FLOAT, glow::RGB, 0),
             Tf::Bc7RgbaUnorm => (glow::COMPRESSED_RGBA_BPTC_UNORM, glow::RGBA, 0),
             Tf::Bc7RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_BPTC_UNORM, glow::RGBA, 0),
             Tf::Etc2Rgb8Unorm => (glow::COMPRESSED_RGB8_ETC2, glow::RGB, 0),

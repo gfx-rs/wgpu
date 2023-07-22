@@ -85,7 +85,7 @@ impl super::PrivateCapabilities {
             Tf::Bc5RgUnorm => F::BC5_UNORM_BLOCK,
             Tf::Bc5RgSnorm => F::BC5_SNORM_BLOCK,
             Tf::Bc6hRgbUfloat => F::BC6H_UFLOAT_BLOCK,
-            Tf::Bc6hRgbSfloat => F::BC6H_SFLOAT_BLOCK,
+            Tf::Bc6hRgbFloat => F::BC6H_SFLOAT_BLOCK,
             Tf::Bc7RgbaUnorm => F::BC7_UNORM_BLOCK,
             Tf::Bc7RgbaUnormSrgb => F::BC7_SRGB_BLOCK,
             Tf::Etc2Rgb8Unorm => F::ETC2_R8G8B8_UNORM_BLOCK,
@@ -596,6 +596,20 @@ pub fn map_subresource_range(
             .array_layer_count
             .unwrap_or(vk::REMAINING_ARRAY_LAYERS),
     }
+}
+
+// Special subresource range mapping for dealing with barriers
+// so that we account for the "hidden" depth aspect in emulated Stencil8.
+pub(super) fn map_subresource_range_combined_aspect(
+    range: &wgt::ImageSubresourceRange,
+    format: wgt::TextureFormat,
+    private_caps: &super::PrivateCapabilities,
+) -> vk::ImageSubresourceRange {
+    let mut range = map_subresource_range(range, format);
+    if !private_caps.texture_s8 && format == wgt::TextureFormat::Stencil8 {
+        range.aspect_mask |= vk::ImageAspectFlags::DEPTH;
+    }
+    range
 }
 
 pub fn map_subresource_layers(

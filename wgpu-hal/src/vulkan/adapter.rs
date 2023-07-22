@@ -24,7 +24,6 @@ pub struct PhysicalDeviceFeatures {
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
-    depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
     multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
     shader_float16: Option<(
@@ -59,9 +58,6 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.robustness2 {
-            info = info.push_next(feature);
-        }
-        if let Some(ref mut feature) = self.depth_clip_enable {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.astc_hdr {
@@ -179,6 +175,7 @@ impl PhysicalDeviceFeatures {
                 .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
+                .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
                 .build(),
             descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
@@ -242,17 +239,6 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceRobustness2FeaturesEXT::builder()
                         .robust_buffer_access2(private_caps.robust_buffer_access)
                         .robust_image_access2(private_caps.robust_image_access)
-                        .build(),
-                )
-            } else {
-                None
-            },
-            depth_clip_enable: if enabled_extensions.contains(&vk::ExtDepthClipEnableFn::name()) {
-                Some(
-                    vk::PhysicalDeviceDepthClipEnableFeaturesEXT::builder()
-                        .depth_clip_enable(
-                            requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL),
-                        )
                         .build(),
                 )
             } else {
@@ -472,9 +458,7 @@ impl PhysicalDeviceFeatures {
             }
         }
 
-        if let Some(ref feature) = self.depth_clip_enable {
-            features.set(F::DEPTH_CLIP_CONTROL, feature.depth_clip_enable != 0);
-        }
+        features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
@@ -526,6 +510,16 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
+        let rg11b10ufloat_renderable = supports_format(
+            instance,
+            phd,
+            vk::Format::B10G11R11_UFLOAT_PACK32,
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::COLOR_ATTACHMENT
+                | vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND,
+        );
+        features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
+
         (features, dl_flags)
     }
 
@@ -544,6 +538,7 @@ impl PhysicalDeviceFeatures {
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
+    maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The effective driver api version supported by the physical device.
@@ -602,6 +597,11 @@ impl PhysicalDeviceCapabilities {
                 extensions.push(vk::KhrMaintenance2Fn::name());
             }
 
+            // Optional `VK_KHR_maintenance3`
+            if self.supports_extension(vk::KhrMaintenance3Fn::name()) {
+                extensions.push(vk::KhrMaintenance3Fn::name());
+            }
+
             // Require `VK_KHR_storage_buffer_storage_class`
             extensions.push(vk::KhrStorageBufferStorageClassFn::name());
 
@@ -639,11 +639,6 @@ impl PhysicalDeviceCapabilities {
             // Require `VK_EXT_descriptor_indexing` if one of the associated features was requested
             if requested_features.intersects(indexing_features()) {
                 extensions.push(vk::ExtDescriptorIndexingFn::name());
-
-                // Require `VK_KHR_maintenance3` due to it being a dependency
-                if self.effective_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(vk::KhrMaintenance3Fn::name());
-                }
             }
 
             // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
@@ -686,11 +681,6 @@ impl PhysicalDeviceCapabilities {
         // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
-        }
-
-        // Require `VK_EXT_depth_clip_enable` if the associated feature was requested
-        if requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
-            extensions.push(vk::ExtDepthClipEnableFn::name());
         }
 
         // Require `VK_KHR_portability_subset` on macOS/iOS
@@ -798,6 +788,13 @@ impl super::InstanceShared {
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
+                if self.driver_api_version >= vk::API_VERSION_1_1
+                    || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
+                {
+                    capabilities.maintenance_3 =
+                        Some(vk::PhysicalDeviceMaintenance3Properties::default());
+                    builder = builder.push_next(capabilities.maintenance_3.as_mut().unwrap());
+                }
 
                 if supports_descriptor_indexing {
                     let next = capabilities
@@ -880,12 +877,6 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
                 builder = builder.push_next(next);
             }
-            if capabilities.supports_extension(vk::ExtDepthClipEnableFn::name()) {
-                let next = features
-                    .depth_clip_enable
-                    .insert(vk::PhysicalDeviceDepthClipEnableFeaturesEXT::default());
-                builder = builder.push_next(next);
-            }
             if capabilities.supports_extension(vk::ExtTextureCompressionAstcHdrFn::name()) {
                 let next = features
                     .astc_hdr
@@ -943,8 +934,8 @@ impl super::Instance {
                     .unwrap_or("?")
                     .to_owned()
             },
-            vendor: phd_capabilities.properties.vendor_id as usize,
-            device: phd_capabilities.properties.device_id as usize,
+            vendor: phd_capabilities.properties.vendor_id,
+            device: phd_capabilities.properties.device_id,
             device_type: match phd_capabilities.properties.device_type {
                 ash::vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
                 ash::vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
@@ -1312,7 +1303,6 @@ impl super::Adapter {
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
-            downlevel_flags: self.downlevel_flags,
             private_caps: self.private_caps.clone(),
             workarounds: self.workarounds,
             render_passes: Mutex::new(Default::default()),
@@ -1338,9 +1328,15 @@ impl super::Adapter {
         let mem_allocator = {
             let limits = self.phd_capabilities.properties.limits;
             let config = gpu_alloc::Config::i_am_prototyping(); //TODO
+            let max_memory_allocation_size =
+                if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
+                    maintenance_3.max_memory_allocation_size
+                } else {
+                    u64::max_value()
+                };
             let properties = gpu_alloc::DeviceProperties {
                 max_memory_allocation_count: limits.max_memory_allocation_count,
-                max_memory_allocation_size: u64::max_value(), // TODO
+                max_memory_allocation_size,
                 non_coherent_atom_size: limits.non_coherent_atom_size,
                 memory_types: memory_types
                     .iter()

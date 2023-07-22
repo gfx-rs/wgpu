@@ -20,7 +20,11 @@ impl super::Device {
         library: &Arc<d3d12::D3D12Lib>,
         dx12_shader_compiler: wgt::Dx12Compiler,
     ) -> Result<Self, crate::DeviceError> {
-        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw)?;
+        let mem_allocator = if private_caps.suballocation_supported {
+            super::suballocation::create_allocator_wrapper(&raw)?
+        } else {
+            None
+        };
 
         let dxc_container = match dx12_shader_compiler {
             wgt::Dx12Compiler::Dxc {
@@ -292,6 +296,17 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
+            allocation: None,
+        }
+    }
+
+    pub unsafe fn buffer_from_raw(
+        resource: d3d12::Resource,
+        size: wgt::BufferAddress,
+    ) -> super::Buffer {
+        super::Buffer {
+            resource,
+            size,
             allocation: None,
         }
     }
@@ -583,13 +598,14 @@ impl crate::Device<super::Api> for super::Device {
             Some(_) => d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
             None => d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
-        let filter = conv::map_filter_mode(desc.min_filter) << d3d12_ty::D3D12_MIN_FILTER_SHIFT
+        let mut filter = conv::map_filter_mode(desc.min_filter) << d3d12_ty::D3D12_MIN_FILTER_SHIFT
             | conv::map_filter_mode(desc.mag_filter) << d3d12_ty::D3D12_MAG_FILTER_SHIFT
             | conv::map_filter_mode(desc.mipmap_filter) << d3d12_ty::D3D12_MIP_FILTER_SHIFT
-            | reduction << d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_SHIFT
-            | desc
-                .anisotropy_clamp
-                .map_or(0, |_| d3d12_ty::D3D12_FILTER_ANISOTROPIC);
+            | reduction << d3d12_ty::D3D12_FILTER_REDUCTION_TYPE_SHIFT;
+
+        if desc.anisotropy_clamp != 1 {
+            filter |= d3d12_ty::D3D12_FILTER_ANISOTROPIC;
+        };
 
         let border_color = conv::map_border_color(desc.border_color);
 
@@ -602,10 +618,10 @@ impl crate::Device<super::Api> for super::Device {
                 conv::map_address_mode(desc.address_modes[2]),
             ],
             0.0,
-            desc.anisotropy_clamp.map_or(0, |aniso| aniso.get() as u32),
+            desc.anisotropy_clamp as u32,
             conv::map_comparison(desc.compare.unwrap_or(wgt::CompareFunction::Always)),
             border_color,
-            desc.lod_clamp.clone().unwrap_or(0.0..16.0),
+            desc.lod_clamp.clone(),
         );
 
         Ok(super::Sampler { handle })

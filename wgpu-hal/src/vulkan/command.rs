@@ -25,12 +25,12 @@ impl super::Texture {
                     let block_size = format
                         .block_size(Some(r.texture_base.aspect.map()))
                         .unwrap();
-                    block_width * (bpr.get() / block_size)
+                    block_width * (bpr / block_size)
                 }),
                 buffer_image_height: r
                     .buffer_layout
                     .rows_per_image
-                    .map_or(0, |rpi| rpi.get() * block_height),
+                    .map_or(0, |rpi| rpi * block_height),
                 image_subresource,
                 image_offset,
                 image_extent: conv::map_copy_extent(&extent),
@@ -157,7 +157,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         vk_barriers.clear();
 
         for bar in barriers {
-            let range = conv::map_subresource_range(&bar.range, bar.texture.format);
+            let range = conv::map_subresource_range_combined_aspect(
+                &bar.range,
+                bar.texture.format,
+                &self.device.private_caps,
+            );
             let (src_stage, src_access) = conv::map_texture_usage_to_barrier(bar.usage.start);
             let src_layout = conv::derive_image_layout(bar.usage.start, bar.texture.format);
             src_stages |= src_stage;

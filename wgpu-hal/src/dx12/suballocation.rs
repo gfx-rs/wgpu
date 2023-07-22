@@ -3,6 +3,11 @@ pub(crate) use allocation::{
     free_buffer_allocation, free_texture_allocation, AllocationWrapper, GpuAllocatorWrapper,
 };
 
+#[cfg(not(feature = "windows_rs"))]
+use committed as allocation;
+#[cfg(feature = "windows_rs")]
+use placed as allocation;
+
 // This exists to work around https://github.com/gfx-rs/wgpu/issues/3207
 // Currently this will work the older, slower way if the windows_rs feature is disabled,
 // and will use the fast path of suballocating buffers and textures using gpu_allocator if
@@ -10,7 +15,7 @@ pub(crate) use allocation::{
 
 // This is the fast path using gpu_allocator to suballocate buffers and textures.
 #[cfg(feature = "windows_rs")]
-mod allocation {
+mod placed {
     use d3d12::WeakPtr;
     use parking_lot::Mutex;
     use std::ptr;
@@ -63,6 +68,13 @@ mod allocation {
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+
+        // It's a workaround for Intel Xe drivers.
+        if !device.private_caps.suballocation_supported {
+            return super::committed::create_buffer_resource(device, desc, raw_desc, resource)
+                .map(|(hr, _)| (hr, None));
+        }
+
         let location = match (is_cpu_read, is_cpu_write) {
             (true, true) => MemoryLocation::CpuToGpu,
             (true, false) => MemoryLocation::GpuToCpu,
@@ -111,6 +123,12 @@ mod allocation {
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
         resource: &mut WeakPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+        // It's a workaround for Intel Xe drivers.
+        if !device.private_caps.suballocation_supported {
+            return super::committed::create_texture_resource(device, desc, raw_desc, resource)
+                .map(|(hr, _)| (hr, None));
+        }
+
         let location = MemoryLocation::GpuOnly;
 
         let name = desc.label.unwrap_or("Unlabeled texture");
@@ -168,7 +186,6 @@ mod allocation {
         };
     }
 
-    #[cfg(feature = "windows_rs")]
     impl From<gpu_allocator::AllocationError> for crate::DeviceError {
         fn from(result: gpu_allocator::AllocationError) -> Self {
             match result {
@@ -203,20 +220,20 @@ mod allocation {
 
 // This is the older, slower path where it doesn't suballocate buffers.
 // Tracking issue for when it can be removed: https://github.com/gfx-rs/wgpu/issues/3207
-#[cfg(not(feature = "windows_rs"))]
-mod allocation {
+mod committed {
     use d3d12::WeakPtr;
     use parking_lot::Mutex;
     use std::ptr;
     use winapi::{
         um::{
-            d3d12_ty::{self, ID3D12Resource},
+            d3d12::{self as d3d12_ty, ID3D12Resource},
             winnt::HRESULT,
         },
         Interface,
     };
 
-    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: u32 = d3d12_ty::D3D12_HEAP_FLAG_NONE; // TODO: find the exact value
+    // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_heap_flags
+    const D3D12_HEAP_FLAG_CREATE_NOT_ZEROED: d3d12_ty::D3D12_HEAP_FLAGS = 0x1000;
 
     // Allocator isn't needed when not suballocating with gpu_allocator
     #[derive(Debug)]
@@ -226,6 +243,7 @@ mod allocation {
     #[derive(Debug)]
     pub(crate) struct AllocationWrapper {}
 
+    #[allow(unused)]
     pub(crate) fn create_allocator_wrapper(
         _raw: &d3d12::Device,
     ) -> Result<Option<Mutex<GpuAllocatorWrapper>>, crate::DeviceError> {
@@ -315,6 +333,7 @@ mod allocation {
         Ok((hr, None))
     }
 
+    #[allow(unused)]
     pub(crate) fn free_buffer_allocation(
         _allocation: AllocationWrapper,
         _allocator: &Mutex<GpuAllocatorWrapper>,
@@ -322,6 +341,7 @@ mod allocation {
         // No-op when not using gpu-allocator
     }
 
+    #[allow(unused)]
     pub(crate) fn free_texture_allocation(
         _allocation: AllocationWrapper,
         _allocator: &Mutex<GpuAllocatorWrapper>,

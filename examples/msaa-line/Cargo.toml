@@ -1,0 +1,24 @@
+[package]
+name = "wgpu-msaa-line-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu msaa line example"
+publish = false
+
+[[bin]]
+name = "msaa-line"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck.workspace = true
+glam.workspace = true
+log.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true
+
