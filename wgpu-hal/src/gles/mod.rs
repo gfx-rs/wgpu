@@ -246,10 +246,17 @@ pub struct Buffer {
     data: Option<Arc<std::sync::Mutex<Vec<u8>>>>,
 }
 
-// Safe: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for Buffer {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for Buffer {}
 
 #[derive(Clone, Debug)]
@@ -268,11 +275,18 @@ pub enum TextureInner {
     },
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for TextureInner {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for TextureInner {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for TextureInner {}
 
 impl TextureInner {
     fn as_native(&self) -> (glow::Texture, BindTarget) {
@@ -462,10 +476,17 @@ struct UniformDesc {
     utype: u32,
 }
 
-// Safe: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for UniformDesc {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for UniformDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
@@ -530,21 +551,35 @@ pub struct RenderPipeline {
     alpha_to_coverage_enabled: bool,
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for RenderPipeline {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for RenderPipeline {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for RenderPipeline {}
 
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
-unsafe impl Send for ComputePipeline {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for ComputePipeline {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct QuerySet {
@@ -558,7 +593,21 @@ pub struct Fence {
     pending: Vec<(crate::FenceValue, glow::Fence)>,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for Fence {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Sync for Fence {}
 
 impl Fence {

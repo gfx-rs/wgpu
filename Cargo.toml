@@ -3,78 +3,87 @@ resolver = "2"
 members = [
     "cts_runner",
     "deno_webgpu",
-    "dummy",
+    "player",
+    "examples/*",
+    "wgpu",
+    "wgpu-core",
+    "wgpu-hal",
+    "wgpu-info",
+    "wgpu-types",
+    "tests",
+]
+exclude = []
+default-members = [
+    "examples/*",
     "player",
     "wgpu",
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-types",
-    "run-wasm"
+    "tests"
 ]
-exclude = []
-default-members = ["wgpu", "wgpu-hal", "wgpu-info", "wgpu-types"]
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.64"
+rust-version = "1.65"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"
 path = "./wgpu-core"
-version = "0.16"
+version = "0.17"
 
 [workspace.dependencies.wgt]
 package = "wgpu-types"
 path = "./wgpu-types"
-version = "0.16"
+version = "0.17"
 
 [workspace.dependencies.hal]
 package = "wgpu-hal"
 path = "./wgpu-hal"
-version = "0.16"
+version = "0.17"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 
 [workspace.dependencies]
+anyhow = "1.0"
 arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
 bit-vec = "0.6"
-bytemuck = "1.13"
-cargo-run-wasm = "0.3.2"
+bytemuck = { version = "1.13", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ddsfile = "0.5"
 env_logger = "0.10"
-futures-intrusive = "0.4"
+futures-intrusive = "0.5"
 rustc-hash = "1.1.0"
-glam = "0.21.3"
+glam = "0.24.1"
 image = { version = "0.24", default-features = false, features = ["png"] }
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
 libloading = ">=0.7,<0.9"
 libc = "0.2"
 log = "0.4"
-nanorand = { version = "0.7", default-features = false }
+nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
+nv-flip = "0.1"
 num-traits = { version = "0.2" }
-# Opt out of noise's "default-features" to avoid "image" feature as a dependency count optimization.
-# This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
-noise = { version = "0.7", default-features = false }
+noise = "0.8"
 obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
-png = "0.17.8"
-pollster = "0.2"
+pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
+png = "0.17.9"
+pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
 renderdoc-sys = "1.0.0"
@@ -84,55 +93,56 @@ serde_json = "1.0.96"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
-wgpu = { version = "0.16", path = "./wgpu" }
+wgpu = { version = "0.17.0", path = "./wgpu" }
+wgpu-core = { version = "0.17.0", path = "./wgpu-core" }
+wgpu-example = { version = "0.17.0", path = "./examples/common" }
+wgpu-test = { version = "0.17", path = "./tests"}
+wgpu-types = { version = "0.17.0", path = "./wgpu-types" }
 winit = "0.27.1"
 
 # Metal dependencies
 block = "0.1"
-foreign-types = "0.3"
-metal = "0.24.0"
+metal = "0.26.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
 # Vulkan dependencies
-ash = "0.37.2"
-gpu-alloc = "0.5"
+ash = "0.37.3"
+gpu-alloc = "0.6"
 gpu-descriptor = "0.2"
 android_system_properties = "0.1.1"
 
 # DX dependencies
 bit-set = "0.5"
 gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"] }
-d3d12 = "0.5.0"
+d3d12 = "0.7.0"
 range-alloc = "0.1"
 winapi = "0.3"
 hassle-rs = "0.10.0"
 
 # Gles dependencies
 khronos-egl = "4.1"
-glow = "0.12.1"
+glow = "0.12.3"
 glutin = "0.29.1"
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
-console_log = "0.2"
-js-sys = "0.3.61"
-wasm-bindgen = "0.2.84"
+console_log = "1"
+js-sys = "0.3.64"
+wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"
-web-sys = "0.3.61"
+web-sys = "0.3.64"
 
 # deno dependencies
-deno_console = "0.92.0"
-deno_core = "0.174.0"
-deno_url = "0.92.0"
-deno_web = "0.123.0"
-deno_webidl = "0.92.0"
+deno_console = "0.106.0"
+deno_core = "0.188.0"
+deno_url = "0.106.0"
+deno_web = "0.137.0"
+deno_webidl = "0.106.0"
 deno_webgpu = { path = "./deno_webgpu" }
-tokio = "1.25.0"
+tokio = "1.28.2"
 termcolor = "1.2.0"
-wgpu-core = { path = "./wgpu-core" }
-wgpu-types = { path = "./wgpu-types" }
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
@@ -151,3 +161,7 @@ wgpu-types = { path = "./wgpu-types" }
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
+
+# Speed up image comparison even in debug builds
+[profile.dev.package."nv-flip-sys"]
+opt-level = 3

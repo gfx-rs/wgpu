@@ -598,6 +598,20 @@ pub fn map_subresource_range(
     }
 }
 
+// Special subresource range mapping for dealing with barriers
+// so that we account for the "hidden" depth aspect in emulated Stencil8.
+pub(super) fn map_subresource_range_combined_aspect(
+    range: &wgt::ImageSubresourceRange,
+    format: wgt::TextureFormat,
+    private_caps: &super::PrivateCapabilities,
+) -> vk::ImageSubresourceRange {
+    let mut range = map_subresource_range(range, format);
+    if !private_caps.texture_s8 && format == wgt::TextureFormat::Stencil8 {
+        range.aspect_mask |= vk::ImageAspectFlags::DEPTH;
+    }
+    range
+}
+
 pub fn map_subresource_layers(
     base: &crate::TextureCopyBase,
 ) -> (vk::ImageSubresourceLayers, vk::Offset3D) {

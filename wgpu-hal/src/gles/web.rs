@@ -106,8 +106,15 @@ impl Instance {
     }
 }
 
-// SAFE: WASM doesn't have threads
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for Instance {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
@@ -171,15 +178,22 @@ pub struct Surface {
     srgb_present_program: Option<glow::Program>,
 }
 
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for Surface {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for Surface {}
+
 #[derive(Clone, Debug)]
 enum Canvas {
     Canvas(web_sys::HtmlCanvasElement),
     Offscreen(web_sys::OffscreenCanvas),
 }
-
-// SAFE: Because web doesn't have threads ( yet )
-unsafe impl Sync for Surface {}
-unsafe impl Send for Surface {}
 
 #[derive(Clone, Debug)]
 pub struct Swapchain {

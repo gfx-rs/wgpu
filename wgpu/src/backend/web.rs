@@ -63,22 +63,17 @@ impl<T> From<Identified<T>> for ObjectId {
     }
 }
 
-#[allow(unused_variables)]
-impl<T> From<(Identified<T>, Sendable<T>)> for ObjectId {
-    fn from((id, _data): (Identified<T>, Sendable<T>)) -> Self {
-        Self::new(
-            // TODO: the ID isn't used, so we hardcode it to 1 for now until we rework this
-            // API.
-            core::num::NonZeroU64::new(1).unwrap(),
-            #[cfg(feature = "expose-ids")]
-            id.0,
-        )
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Send for Sendable<T> {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
@@ -86,11 +81,27 @@ pub(crate) struct Identified<T>(
     #[cfg(feature = "expose-ids")] std::num::NonZeroU64,
     PhantomData<T>,
 );
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Send for Identified<T> {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Sync for Identified<T> {}
 
 pub(crate) struct Context(web_sys::Gpu);
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for Context {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for Context {}
 
 impl fmt::Debug for Context {
@@ -147,6 +158,10 @@ impl<F, M> MakeSendFuture<F, M> {
     }
 }
 
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
 fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTextureFormat {
@@ -971,10 +986,15 @@ impl crate::context::Context for Context {
         //assert!(backends.contains(wgt::Backends::BROWSER_WEBGPU));
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
-            wgt::PowerPreference::LowPower => web_sys::GpuPowerPreference::LowPower,
-            wgt::PowerPreference::HighPerformance => web_sys::GpuPowerPreference::HighPerformance,
+            wgt::PowerPreference::None => None,
+            wgt::PowerPreference::LowPower => Some(web_sys::GpuPowerPreference::LowPower),
+            wgt::PowerPreference::HighPerformance => {
+                Some(web_sys::GpuPowerPreference::HighPerformance)
+            }
         };
-        mapped_options.power_preference(mapped_power_preference);
+        if let Some(mapped_pref) = mapped_power_preference {
+            mapped_options.power_preference(mapped_pref);
+        }
         let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
 
         MakeSendFuture::new(
@@ -1126,16 +1146,27 @@ impl crate::context::Context for Context {
         _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
+        let mut formats = vec![
+            wgt::TextureFormat::Rgba8Unorm,
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Rgba16Float,
+        ];
+        let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
+        // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
+        // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
+        let preferred_format = self.0.get_preferred_canvas_format();
+        if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
+            formats.swap(0, index);
+        }
+
         wgt::SurfaceCapabilities {
             // https://gpuweb.github.io/gpuweb/#supported-context-formats
-            formats: vec![
-                wgt::TextureFormat::Bgra8Unorm,
-                wgt::TextureFormat::Rgba8Unorm,
-                wgt::TextureFormat::Rgba16Float,
-            ],
+            formats,
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
+            usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
     }
 
@@ -1842,7 +1873,7 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let map_promise = buffer_data.0.map_async_with_f64_and_f64(
             map_map_mode(mode),
@@ -2535,7 +2566,7 @@ impl crate::context::Context for Context {
         &self,
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        _callback: Box<dyn FnOnce() + Send + 'static>,
+        _callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         unimplemented!()
     }

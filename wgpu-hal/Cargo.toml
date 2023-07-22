@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
@@ -33,16 +33,18 @@ targets = [
 [lib]
 
 [features]
-default = []
-metal = ["naga/msl-out", "block", "foreign-types"]
+default = ["link"]
+metal = ["naga/msl-out", "block"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
 gles = ["naga/glsl-out", "glow", "khronos-egl", "libloading"]
 dx11 = ["naga/hlsl-out", "d3d12", "libloading", "winapi/d3d11", "winapi/std", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
-dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
+dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "libloading", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 # TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
 windows_rs = ["gpu-allocator"]
 dxc_shader_compiler = ["hassle-rs"]
 renderdoc = ["libloading", "renderdoc-sys"]
+fragile-send-sync-non-atomic-wasm = ["wgt/fragile-send-sync-non-atomic-wasm"]
+link = ["metal/link"]
 
 [[example]]
 name = "halmark"
@@ -64,17 +66,17 @@ rustc-hash = "1.1"
 log = "0.4"
 
 # backend: Gles
-glow = { version = "0.12.1", optional = true }
+glow = { version = "0.12.3", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.16"
+version = "0.17"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # backend: Vulkan
-ash = { version = "0.37.2", optional = true }
-gpu-alloc = { version = "0.5", optional = true }
+ash = { version = "0.37.3", optional = true }
+gpu-alloc = { version = "0.6", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
 
@@ -95,21 +97,20 @@ gpu-allocator = { version = "0.22", default_features = false, features = ["d3d12
 hassle-rs = { version = "0.10", optional = true }
 
 winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
-d3d12 = { version = "0.6.0", git = "https://github.com/gfx-rs/d3d12-rs", rev = "b940b1d71", features = ["libloading"], optional = true }
+d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal
 block = { version = "0.1", optional = true }
-foreign-types = { version = "0.3", optional = true }
 
-metal = "0.24.0"
+metal = { version = "0.26.0", default_features = false }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wasm-bindgen = "0.2.84"
-web-sys = { version = "0.3.61", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
-js-sys = "0.3.61"
+wasm-bindgen = "0.2.87"
+web-sys = { version = "0.3.64", features = ["Window", "HtmlCanvasElement", "WebGl2RenderingContext", "OffscreenCanvas"] }
+js-sys = "0.3.64"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -119,18 +120,19 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "b99d58ea435090e561377949f428bce2c18451bb"
-version = "0.12.0"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+version = "0.13.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
+cfg-if = "1"
 env_logger = "0.10"
 winit = "0.27.1"   # for "halmark" example
 

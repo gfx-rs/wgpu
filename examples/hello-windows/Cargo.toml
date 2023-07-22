@@ -1,0 +1,21 @@
+[package]
+name = "wgpu-hello-windows-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu hello windows example"
+publish = false
+
+[[bin]]
+name = "hello-windows"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck.workspace = true
+env_logger.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook.workspace = true

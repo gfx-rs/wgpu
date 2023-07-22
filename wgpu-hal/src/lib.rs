@@ -95,6 +95,7 @@ use std::{
 
 use bitflags::bitflags;
 use thiserror::Error;
+use wgt::{WasmNotSend, WasmNotSync};
 
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
@@ -161,25 +162,25 @@ pub trait Api: Clone + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: Send + Sync + fmt::Debug;
+    type CommandBuffer: WasmNotSend + WasmNotSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + Send + Sync + 'static;
-    type Texture: fmt::Debug + Send + Sync + 'static;
-    type SurfaceTexture: fmt::Debug + Send + Sync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + Send + Sync;
-    type Sampler: fmt::Debug + Send + Sync;
-    type QuerySet: fmt::Debug + Send + Sync;
-    type Fence: fmt::Debug + Send + Sync;
+    type Buffer: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
+    type Texture: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
+    type SurfaceTexture: fmt::Debug + WasmNotSend + WasmNotSync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Sampler: fmt::Debug + WasmNotSend + WasmNotSync;
+    type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
 
-    type BindGroupLayout: Send + Sync;
-    type BindGroup: fmt::Debug + Send + Sync;
-    type PipelineLayout: Send + Sync;
-    type ShaderModule: fmt::Debug + Send + Sync;
-    type RenderPipeline: Send + Sync;
-    type ComputePipeline: Send + Sync;
+    type BindGroupLayout: WasmNotSend + WasmNotSync;
+    type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
+    type PipelineLayout: WasmNotSend + WasmNotSync;
+    type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
+    type RenderPipeline: WasmNotSend + WasmNotSync;
+    type ComputePipeline: WasmNotSend + WasmNotSync;
 }
 
-pub trait Instance<A: Api>: Sized + Send + Sync {
+pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -190,7 +191,7 @@ pub trait Instance<A: Api>: Sized + Send + Sync {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api>: Send + Sync {
+pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn configure(
         &mut self,
         device: &A::Device,
@@ -216,7 +217,7 @@ pub trait Surface<A: Api>: Send + Sync {
     unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api>: Send + Sync {
+pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -240,7 +241,7 @@ pub trait Adapter<A: Api>: Send + Sync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
-pub trait Device<A: Api>: Send + Sync {
+pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
     /// Exit connection to this logical device.
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
@@ -336,7 +337,7 @@ pub trait Device<A: Api>: Send + Sync {
     unsafe fn stop_capture(&self);
 }
 
-pub trait Queue<A: Api>: Send + Sync {
+pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
     /// Submits the command buffers for execution on GPU.
     ///
     /// Valid usage:
@@ -360,7 +361,7 @@ pub trait Queue<A: Api>: Send + Sync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: Send + Sync + fmt::Debug {
+pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.
