@@ -215,6 +215,8 @@ impl super::Instance {
         if cfg!(target_os = "macos") {
             // VK_EXT_metal_surface
             extensions.push(ext::MetalSurface::name());
+            extensions
+                .push(CStr::from_bytes_with_nul(b"VK_KHR_portability_enumeration\0").unwrap());
         }
 
         if flags.contains(crate::InstanceFlags::DEBUG) {
@@ -648,8 +650,11 @@ impl crate::Instance<super::Api> for super::Instance {
                 })
                 .collect::<Vec<_>>();
 
+            const VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR: u32 = 0x00000001;
             let create_info = vk::InstanceCreateInfo::builder()
-                .flags(vk::InstanceCreateFlags::empty())
+                .flags(vk::InstanceCreateFlags::from_raw(
+                    VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR,
+                ))
                 .application_info(&app_info)
                 .enabled_layer_names(&str_pointers[..layers.len()])
                 .enabled_extension_names(&str_pointers[layers.len()..]);
