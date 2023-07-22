@@ -40,6 +40,21 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### Occlusion Query Support
+
+The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
+
+```diff
+let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+  // ...
++ occlusion_query_set: None,
+});
+```
+
+By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
+
 ## v0.17.0 (2023-07-20)
 
 This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
@@ -268,19 +283,6 @@ Some texture format names have changed to get back in line with the spec.
 ```
 
 By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
-
-#### Occlusion Query Support
-
-The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
-
-```diff
-let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-  // ...
-+ occlusion_query_set: None,
-});
-```
-
-By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 #### Misc Breaking Changes
 
