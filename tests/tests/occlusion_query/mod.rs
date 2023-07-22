@@ -1,12 +1,12 @@
-use crate::common::{initialize_test, TestParameters};
 use std::borrow::Cow;
+use wgpu_test::{initialize_test, TestParameters};
 
 #[test]
 fn occlusion_query() {
     initialize_test(TestParameters::default(), |ctx| {
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
+            label: Some("Depth texture"),
             size: wgpu::Extent3d {
                 width: 64,
                 height: 64,
@@ -25,13 +25,13 @@ fn occlusion_query() {
         let shader = ctx
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
+                label: Some("Shader module"),
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
             });
         let pipeline = ctx
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
+                label: Some("Pipeline"),
                 layout: None,
                 vertex: wgpu::VertexState {
                     module: &shader,
@@ -53,7 +53,7 @@ fn occlusion_query() {
 
         // Create occlusion query set
         let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
-            label: None,
+            label: Some("Query set"),
             ty: wgpu::QueryType::Occlusion,
             count: 3,
         });
@@ -63,7 +63,7 @@ fn occlusion_query() {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("Render pass"),
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &depth_texture_view,
@@ -95,28 +95,28 @@ fn occlusion_query() {
 
         // Resolve query set to buffer
         let query_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
+            label: Some("Query buffer"),
             size: std::mem::size_of::<u64>() as u64 * 3,
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         encoder.resolve_query_set(&query_set, 0..3, &query_buffer, 0);
 
-        let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
+        let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Mapping buffer"),
             size: query_buffer.size(),
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        encoder.copy_buffer_to_buffer(&query_buffer, 0, &staging_buffer, 0, query_buffer.size());
+        encoder.copy_buffer_to_buffer(&query_buffer, 0, &mapping_buffer, 0, query_buffer.size());
 
         ctx.queue.submit(Some(encoder.finish()));
 
-        staging_buffer
+        mapping_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
         ctx.device.poll(wgpu::Maintain::Wait);
-        let query_buffer_view = staging_buffer.slice(..).get_mapped_range();
+        let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 
         // WebGPU only defines query results as zero/non-zero

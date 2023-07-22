@@ -199,13 +199,6 @@ impl Example {
                 &query_sets.data_buffer,
                 pipeline_statistics_offset(),
             );
-            encoder.copy_buffer_to_buffer(
-                &query_sets.data_buffer,
-                0,
-                &query_sets.staging_buffer,
-                0,
-                query_sets.data_buffer.size(),
-            );
         }
     }
 }

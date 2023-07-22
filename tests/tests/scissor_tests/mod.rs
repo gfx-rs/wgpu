@@ -79,6 +79,7 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
             });
             render_pass.set_pipeline(&pipeline);
             render_pass.set_scissor_rect(
