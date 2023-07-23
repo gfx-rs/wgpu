@@ -130,16 +130,18 @@ impl Backend {
 /// Corresponds to [WebGPU `GPUPowerPreference`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
-    /// Adapter that uses the least possible power. This is often an integrated GPU.
     #[default]
-    LowPower = 0,
+    /// Power usage is not considered when choosing an adapter.
+    None = 0,
+    /// Adapter that uses the least possible power. This is often an integrated GPU.
+    LowPower = 1,
     /// Adapter that has the highest performance. This is often a discrete GPU.
-    HighPerformance = 1,
+    HighPerformance = 2,
 }
 
 bitflags::bitflags! {
@@ -576,7 +578,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 39;
-        /// Allows the user to create bind groups continaing arrays with less bindings than the BindGroupLayout.
+        /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
         ///
         /// This is a native only feature.
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 40;
@@ -845,7 +847,7 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
-    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 640.
+    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000.
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
     pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
@@ -929,7 +931,7 @@ impl Default for Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
-            max_bindings_per_bind_group: 640,
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
@@ -966,7 +968,7 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
-            max_bindings_per_bind_group: 640,
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
@@ -1619,7 +1621,7 @@ impl BlendState {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ColorTargetState {
-    /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
+    /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`][CEbrp]
     ///
     /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
@@ -3931,7 +3933,7 @@ impl Eq for DepthBiasState {}
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthStencilState {
-    /// Format of the depth/stencil buffer, must be special depth format. Must match the the format
+    /// Format of the depth/stencil buffer, must be special depth format. Must match the format
     /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`][CEbrp].
     ///
     /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
@@ -4584,6 +4586,10 @@ pub struct SurfaceCapabilities {
     ///
     /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
     pub alpha_modes: Vec<CompositeAlphaMode>,
+    /// Bitflag of supported texture usages for the surface to use with the given adapter.
+    ///
+    /// The usage TextureUsages::RENDER_ATTACHMENT is guaranteed.
+    pub usages: TextureUsages,
 }
 
 impl Default for SurfaceCapabilities {
@@ -4592,6 +4598,7 @@ impl Default for SurfaceCapabilities {
             formats: Vec::new(),
             present_modes: Vec::new(),
             alpha_modes: vec![CompositeAlphaMode::Opaque],
+            usages: TextureUsages::RENDER_ATTACHMENT,
         }
     }
 }
@@ -4643,7 +4650,7 @@ impl<V: Clone> SurfaceConfiguration<V> {
     }
 }
 
-/// Status of the recieved surface image.
+/// Status of the received surface image.
 #[repr(C)]
 #[derive(Debug)]
 pub enum SurfaceStatus {
@@ -6302,9 +6309,9 @@ pub enum Dx12Compiler {
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
     Dxc {
-        /// Path to the `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
-        /// Path to the `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxc_path: Option<PathBuf>,
     },
 }

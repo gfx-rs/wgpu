@@ -38,7 +38,7 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory);
+        let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 
         adapters
             .into_iter()

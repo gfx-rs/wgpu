@@ -397,8 +397,27 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
-            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            {
+                if context
+                    .glow_context
+                    .compressed_texture_astc_supports_ldr_profile()
+                {
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                }
+                if context
+                    .glow_context
+                    .compressed_texture_astc_supports_hdr_profile()
+                {
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+                }
+            }
+
+            #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+            {
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+            }
         } else {
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC,

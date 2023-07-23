@@ -191,6 +191,8 @@ struct PrivateCapabilities {
     non_coherent_map_mask: wgt::BufferAddress,
     robust_buffer_access: bool,
     robust_image_access: bool,
+    robust_buffer_access2: bool,
+    robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
 }
 
@@ -285,7 +287,7 @@ pub struct Device {
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
-    naga_options: naga::back::spv::Options,
+    naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }

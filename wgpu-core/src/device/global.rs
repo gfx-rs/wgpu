@@ -58,10 +58,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             hal_caps.formats.sort_by_key(|f| !f.is_srgb());
 
+            let usages = conv::map_texture_usage_from_hal(hal_caps.usage);
+
             Ok(wgt::SurfaceCapabilities {
                 formats: hal_caps.formats,
                 present_modes: hal_caps.present_modes,
                 alpha_modes: hal_caps.composite_alpha_modes,
+                usages,
             })
         })
     }

@@ -99,7 +99,8 @@ impl super::Device {
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
                 index: bounds_check_policy,
                 buffer: bounds_check_policy,
-                image: bounds_check_policy,
+                image_load: bounds_check_policy,
+                image_store: bounds_check_policy,
                 // TODO: support bounds checks on binding arrays
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
@@ -107,7 +108,7 @@ impl super::Device {
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
-            allow_point_size: match primitive_class {
+            allow_and_force_point_size: match primitive_class {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
