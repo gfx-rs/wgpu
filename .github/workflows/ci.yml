@@ -210,7 +210,7 @@ jobs:
           # Mac
           - name: Mac aarch64
             os: [self-hosted, macOS]
-            backends: metal
+            backends: vulkan metal
 
           # Linux
           - name: Linux x86_64
@@ -275,7 +275,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report
+          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report --features vulkan-portability
 
       - name: run tests
         shell: bash
@@ -284,7 +284,7 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report --features vulkan-portability
           done
 
       - uses: actions/upload-artifact@v3

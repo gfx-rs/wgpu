@@ -13,6 +13,7 @@ fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
         | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY
 }
 
 /// Aggregate of the `vk::PhysicalDevice*Features` structs used by `gfx`.
