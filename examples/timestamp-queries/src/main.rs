@@ -234,7 +234,7 @@ fn submit_render_and_compute_pass_with_queries(
 
 fn compute_pass(
     device: &wgpu::Device,
-    shader: &wgpu::ShaderModule,
+    module: &wgpu::ShaderModule,
     encoder: &mut wgpu::CommandEncoder,
     query_set: &wgpu::QuerySet,
     query_offset: u32,
@@ -247,7 +247,7 @@ fn compute_pass(
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
-        module: &shader,
+        module,
         entry_point: "main_cs",
     });
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
@@ -264,7 +264,7 @@ fn compute_pass(
         label: None,
         timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
             query_set,
-            beginning_of_pass_write_index: Some(query_offset + 0),
+            beginning_of_pass_write_index: Some(query_offset),
             end_of_pass_write_index: Some(query_offset + 2),
         }),
     });
@@ -282,7 +282,7 @@ fn compute_pass(
 
 fn render_pass(
     device: &wgpu::Device,
-    shader: &wgpu::ShaderModule,
+    module: &wgpu::ShaderModule,
     encoder: &mut wgpu::CommandEncoder,
     query_set: &wgpu::QuerySet,
     query_offset: u32,
@@ -299,12 +299,12 @@ fn render_pass(
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
-            module: &shader,
+            module,
             entry_point: "vs_main",
             buffers: &[],
         },
         fragment: Some(wgpu::FragmentState {
-            module: &shader,
+            module,
             entry_point: "fs_main",
             targets: &[Some(format.into())],
         }),
@@ -343,7 +343,7 @@ fn render_pass(
         depth_stencil_attachment: None,
         timestamp_writes: Some(wgpu::RenderPassTimestampWrites {
             query_set,
-            beginning_of_pass_write_index: Some(query_offset + 0),
+            beginning_of_pass_write_index: Some(query_offset),
             end_of_pass_write_index: Some(query_offset + 2),
         }),
     });
