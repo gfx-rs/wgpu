@@ -155,11 +155,7 @@ jobs:
           # build for Emscripten
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
-          # build cube example
-          cargo clippy --target ${{ matrix.target }} --bin cube
-
-          # build raw-gles example
-          cargo clippy --target ${{ matrix.target }} --example raw-gles
+          # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
 
           # all features
           cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
