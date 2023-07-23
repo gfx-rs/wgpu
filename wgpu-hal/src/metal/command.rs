@@ -329,6 +329,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         // TODO: Otherwise, we need to create a new blit command encoder with a descriptor that inserts the timestamps.
         // Note that as of writing creating a new encoder is not exposed by the metal crate.
         // https://developer.apple.com/documentation/metal/mtlcommandbuffer/3564431-makeblitcommandencoder
+
+        // TODO: Enable respective test in `examples/timestamp-queries/src/tests.rs`.
     }
 
     unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {

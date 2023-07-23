@@ -3303,7 +3303,9 @@ dependencies = [
  "log",
  "pollster",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
  "wgpu",
+ "wgpu-test",
  "winit",
 ]
 
