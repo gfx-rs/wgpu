@@ -104,9 +104,11 @@ impl Context {
         self.0.texture_format_as_hal::<A>(adapter, texture_format)
     }
 
-    pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
+        adapter: &wgc::id::AdapterId,
         hal_device: hal::OpenDevice<A>,
+        desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
