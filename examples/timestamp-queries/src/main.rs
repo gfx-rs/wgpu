@@ -385,7 +385,9 @@ mod tests {
         wgpu_test::initialize_test(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
-                .features(wgpu::Features::TIMESTAMP_QUERY),
+                .features(wgpu::Features::TIMESTAMP_QUERY)
+                // Reports zero timestamp periods on MoltenVK.
+                .molten_vk_failure(),
             |ctx| {
                 test_timestamps(ctx, false);
             },
@@ -400,7 +402,9 @@ mod tests {
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-                ),
+                )
+                // Reports zero timestamp periods on MoltenVK.
+                .molten_vk_failure(),
             |ctx| {
                 test_timestamps(ctx, true);
             },
