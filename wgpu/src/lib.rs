@@ -864,6 +864,13 @@ pub struct QuerySet {
         not(target_feature = "atomics")
     )
 ))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 impl Drop for QuerySet {
@@ -1046,6 +1053,13 @@ pub struct RenderPassTimestampWrites<'a> {
     /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
 
 /// Describes a color attachment to a [`RenderPass`].
@@ -1487,6 +1501,13 @@ pub struct ComputePassTimestampWrites<'a> {
     /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
 
 /// Describes the attachments of a compute pass.
@@ -1504,6 +1525,13 @@ pub struct ComputePassDescriptor<'a> {
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
     pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
 
 /// Describes a compute pipeline.
