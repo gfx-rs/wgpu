@@ -66,7 +66,7 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 
-    type TextureFormat = mtl::MTLPixelFormat;
+    type TextureFormat = metal::MTLPixelFormat;
 }
 
 pub struct Instance {
