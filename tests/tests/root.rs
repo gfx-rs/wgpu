@@ -13,6 +13,7 @@ mod encoder;
 mod example_wgsl;
 mod external_texture;
 mod instance;
+mod partially_bounded_arrays;
 mod poll;
 mod queue_transfer;
 mod resource_descriptor_accessor;
