@@ -230,10 +230,16 @@ impl super::CommandEncoder {
     }
 
     fn write_pass_end_timestamp_if_requested(&mut self) {
-        if let Some((query_set, index)) = self.end_of_pass_timer_query.take() {
+        if let Some((query_set_raw, index)) = self.end_of_pass_timer_query.take() {
             use crate::CommandEncoder as _;
             unsafe {
-                self.write_timestamp(&query_set, index);
+                self.write_timestamp(
+                    &crate::dx12::QuerySet {
+                        raw: query_set_raw,
+                        raw_ty: d3d12_ty::D3D12_QUERY_TYPE_TIMESTAMP,
+                    },
+                    index,
+                );
             }
         }
     }
@@ -675,7 +681,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
             self.end_of_pass_timer_query = timestamp_writes
                 .end_of_pass_write_index
-                .map(|index| (timestamp_writes.query_set.clone(), index));
+                .map(|index| (timestamp_writes.query_set.raw.clone(), index));
         }
 
         let mut color_views = [d3d12::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_ATTACHMENTS];
@@ -1147,7 +1153,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             }
             self.end_of_pass_timer_query = timestamp_writes
                 .end_of_pass_write_index
-                .map(|index| (timestamp_writes.query_set.clone(), index));
+                .map(|index| (timestamp_writes.query_set.raw.clone(), index));
         }
     }
     unsafe fn end_compute_pass(&mut self) {
