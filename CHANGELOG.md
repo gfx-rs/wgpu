@@ -40,6 +40,11 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### Vulkan
+- Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
+
 ## v0.17.0 (2023-07-20)
 
 This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
