@@ -69,7 +69,7 @@ By @Aaron1011 in [#3903](https://github.com/gfx-rs/wgpu/pull/3903)
 
 #### `initialize_adapter_from_env` argument changes
 
-Removed the backend_bits parameter from `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default`. If you want to limit the backends used by this function, only enable the watned backends in the instance.
+Removed the backend_bits parameter from `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default`. If you want to limit the backends used by this function, only enable the wanted backends in the instance.
 
 Added a compatible surface parameter, to ensure the given device is able to be presented onto the given surface.
 

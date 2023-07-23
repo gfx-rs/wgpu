@@ -578,7 +578,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 39;
-        /// Allows the user to create bind groups continaing arrays with less bindings than the BindGroupLayout.
+        /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
         ///
         /// This is a native only feature.
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 40;
@@ -1621,7 +1621,7 @@ impl BlendState {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ColorTargetState {
-    /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
+    /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`][CEbrp]
     ///
     /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
@@ -3933,7 +3933,7 @@ impl Eq for DepthBiasState {}
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthStencilState {
-    /// Format of the depth/stencil buffer, must be special depth format. Must match the the format
+    /// Format of the depth/stencil buffer, must be special depth format. Must match the format
     /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`][CEbrp].
     ///
     /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
@@ -4650,7 +4650,7 @@ impl<V: Clone> SurfaceConfiguration<V> {
     }
 }
 
-/// Status of the recieved surface image.
+/// Status of the received surface image.
 #[repr(C)]
 #[derive(Debug)]
 pub enum SurfaceStatus {
