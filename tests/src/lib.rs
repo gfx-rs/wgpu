@@ -184,6 +184,18 @@ impl TestParameters {
         });
         self
     }
+
+    /// Mark the test as failing on vulkan on mac only
+    pub fn molten_vk_failure(self) -> Self {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            self.specific_failure(Some(wgpu::Backends::VULKAN), None, None, false)
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            self
+        }
+    }
 }
 
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
