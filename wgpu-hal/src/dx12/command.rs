@@ -231,13 +231,7 @@ impl super::CommandEncoder {
 
     fn write_pass_end_timestamp_if_requested(&mut self) {
         if let Some((query_set_raw, index)) = self.end_of_pass_timer_query.take() {
-            unsafe {
-                self.list.unwrap().EndQuery(
-                    query_set_raw.as_mut_ptr(),
-                    d3d12_ty::D3D12_QUERY_TYPE_TIMESTAMP,
-                    index,
-                );
-            }
+            self.write_timestamp(query_set_raw.query_set, index);
         }
     }
 }
