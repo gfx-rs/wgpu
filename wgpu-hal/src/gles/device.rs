@@ -221,7 +221,8 @@ impl super::Device {
         let policies = naga::proc::BoundsCheckPolicies {
             index: BoundsCheckPolicy::Unchecked,
             buffer: BoundsCheckPolicy::Unchecked,
-            image: image_check,
+            image_load: image_check,
+            image_store: image_check,
             binding_array: BoundsCheckPolicy::Unchecked,
         };
 
@@ -1321,8 +1322,15 @@ impl crate::Device<super::Api> for super::Device {
     }
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for super::Device {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for super::Device {}

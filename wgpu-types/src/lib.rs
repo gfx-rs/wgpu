@@ -26,7 +26,7 @@ pub mod math;
 // behavior to this macro (unspecified bit do not produce an error).
 macro_rules! impl_bitflags {
     ($name:ident) => {
-        #[cfg(feature = "trace")]
+        #[cfg(feature = "serde")]
         impl serde::Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -36,7 +36,7 @@ macro_rules! impl_bitflags {
             }
         }
 
-        #[cfg(feature = "replay")]
+        #[cfg(feature = "serde")]
         impl<'de> serde::Deserialize<'de> for $name {
             fn deserialize<D>(deserializer: D) -> Result<$name, D::Error>
             where
@@ -92,8 +92,7 @@ pub const QUERY_SIZE: u32 = 8;
 /// Backends supported by wgpu.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backend {
     /// Dummy backend, used for testing.
     Empty = 0,
@@ -111,21 +110,38 @@ pub enum Backend {
     BrowserWebGpu = 6,
 }
 
+impl Backend {
+    /// Returns the string name of the backend.
+    pub fn to_str(self) -> &'static str {
+        match self {
+            Backend::Empty => "empty",
+            Backend::Vulkan => "vulkan",
+            Backend::Metal => "metal",
+            Backend::Dx12 => "dx12",
+            Backend::Dx11 => "dx11",
+            Backend::Gl => "gl",
+            Backend::BrowserWebGpu => "webgpu",
+        }
+    }
+}
+
 /// Power Preference when choosing a physical adapter.
 ///
 /// Corresponds to [WebGPU `GPUPowerPreference`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpupowerpreference).
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum PowerPreference {
-    /// Adapter that uses the least possible power. This is often an integrated GPU.
     #[default]
-    LowPower = 0,
+    /// Power usage is not considered when choosing an adapter.
+    None = 0,
+    /// Adapter that uses the least possible power. This is often an integrated GPU.
+    LowPower = 1,
     /// Adapter that has the highest performance. This is often a discrete GPU.
-    HighPerformance = 1,
+    HighPerformance = 2,
 }
 
 bitflags::bitflags! {
@@ -819,8 +835,7 @@ impl Features {
 /// [`downlevel_defaults()`]: Limits::downlevel_defaults
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase", default))]
 pub struct Limits {
     /// Maximum allowed value for the `size.width` of a texture created with `TextureDimension::D1`.
@@ -841,7 +856,7 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
-    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 640.
+    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000.
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
     pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
@@ -925,7 +940,7 @@ impl Default for Limits {
             max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
-            max_bindings_per_bind_group: 640,
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
@@ -962,7 +977,7 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_texture_array_layers: 256,
             max_bind_groups: 4,
-            max_bindings_per_bind_group: 640,
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
@@ -1110,6 +1125,7 @@ impl Limits {
 /// Represents the sets of additional limits on an adapter,
 /// which take place when running on downlevel backends.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelLimits {}
 
 #[allow(unknown_lints)] // derivable_impls is nightly only currently
@@ -1122,6 +1138,7 @@ impl Default for DownlevelLimits {
 
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelCapabilities {
     /// Combined boolean flags.
     pub flags: DownlevelFlags,
@@ -1276,6 +1293,7 @@ impl DownlevelFlags {
 /// Collections of shader features a device supports if they support less than WebGPU normally allows.
 // TODO: Fill out the differences between shader models more completely
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ShaderModel {
     /// Extremely limited shaders, including a total instruction limit.
     Sm2,
@@ -1288,8 +1306,7 @@ pub enum ShaderModel {
 /// Supported physical device types.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceType {
     /// Other or Unknown.
     Other,
@@ -1307,8 +1324,7 @@ pub enum DeviceType {
 
 /// Information about an adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -1859,6 +1875,7 @@ impl_bitflags!(TextureFormatFeatureFlags);
 ///
 /// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextureFormatFeatures {
     /// Valid bits for `TextureDescriptor::Usage` provided for format creation.
     pub allowed_usages: TextureUsages,
@@ -3031,6 +3048,92 @@ impl TextureFormat {
             | Self::EacRg11Snorm => Some(16),
 
             Self::Astc { .. } => Some(16),
+        }
+    }
+
+    /// Returns the number of components this format has.
+    pub fn components(&self) -> u8 {
+        self.components_with_aspect(TextureAspect::All)
+    }
+
+    /// Returns the number of components this format has taking into account the `aspect`.
+    ///
+    /// The `aspect` is only relevant for combined depth-stencil formats.
+    pub fn components_with_aspect(&self, aspect: TextureAspect) -> u8 {
+        match *self {
+            Self::R8Unorm
+            | Self::R8Snorm
+            | Self::R8Uint
+            | Self::R8Sint
+            | Self::R16Unorm
+            | Self::R16Snorm
+            | Self::R16Uint
+            | Self::R16Sint
+            | Self::R16Float
+            | Self::R32Uint
+            | Self::R32Sint
+            | Self::R32Float => 1,
+
+            Self::Rg8Unorm
+            | Self::Rg8Snorm
+            | Self::Rg8Uint
+            | Self::Rg8Sint
+            | Self::Rg16Unorm
+            | Self::Rg16Snorm
+            | Self::Rg16Uint
+            | Self::Rg16Sint
+            | Self::Rg16Float
+            | Self::Rg32Uint
+            | Self::Rg32Sint
+            | Self::Rg32Float => 2,
+
+            Self::Rgba8Unorm
+            | Self::Rgba8UnormSrgb
+            | Self::Rgba8Snorm
+            | Self::Rgba8Uint
+            | Self::Rgba8Sint
+            | Self::Bgra8Unorm
+            | Self::Bgra8UnormSrgb
+            | Self::Rgba16Unorm
+            | Self::Rgba16Snorm
+            | Self::Rgba16Uint
+            | Self::Rgba16Sint
+            | Self::Rgba16Float
+            | Self::Rgba32Uint
+            | Self::Rgba32Sint
+            | Self::Rgba32Float => 4,
+
+            Self::Rgb9e5Ufloat | Self::Rg11b10Float => 3,
+            Self::Rgb10a2Unorm => 4,
+
+            Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
+
+            Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
+                TextureAspect::All => 2,
+                TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
+            },
+
+            Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
+            Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,
+            Self::Bc6hRgbUfloat | Self::Bc6hRgbFloat => 3,
+            Self::Bc1RgbaUnorm
+            | Self::Bc1RgbaUnormSrgb
+            | Self::Bc2RgbaUnorm
+            | Self::Bc2RgbaUnormSrgb
+            | Self::Bc3RgbaUnorm
+            | Self::Bc3RgbaUnormSrgb
+            | Self::Bc7RgbaUnorm
+            | Self::Bc7RgbaUnormSrgb => 4,
+
+            Self::EacR11Unorm | Self::EacR11Snorm => 1,
+            Self::EacRg11Unorm | Self::EacRg11Snorm => 2,
+            Self::Etc2Rgb8Unorm | Self::Etc2Rgb8UnormSrgb => 3,
+            Self::Etc2Rgb8A1Unorm
+            | Self::Etc2Rgb8A1UnormSrgb
+            | Self::Etc2Rgba8Unorm
+            | Self::Etc2Rgba8UnormSrgb => 4,
+
+            Self::Astc { .. } => 4,
         }
     }
 
@@ -4492,6 +4595,10 @@ pub struct SurfaceCapabilities {
     ///
     /// Will return at least one element, CompositeAlphaMode::Opaque or CompositeAlphaMode::Inherit.
     pub alpha_modes: Vec<CompositeAlphaMode>,
+    /// Bitflag of supported texture usages for the surface to use with the given adapter.
+    ///
+    /// The usage TextureUsages::RENDER_ATTACHMENT is guaranteed.
+    pub usages: TextureUsages,
 }
 
 impl Default for SurfaceCapabilities {
@@ -4500,6 +4607,7 @@ impl Default for SurfaceCapabilities {
             formats: Vec::new(),
             present_modes: Vec::new(),
             alpha_modes: vec![CompositeAlphaMode::Opaque],
+            usages: TextureUsages::RENDER_ATTACHMENT,
         }
     }
 }
@@ -5784,7 +5892,7 @@ pub enum ExternalImageSource {
     HTMLCanvasElement(web_sys::HtmlCanvasElement),
     /// Copy from a off-screen canvas.
     ///
-    /// Requies [`DownlevelFlags::EXTERNAL_TEXTURE_OFFSCREEN_CANVAS`]
+    /// Requies [`DownlevelFlags::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES`]
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
@@ -5825,9 +5933,17 @@ impl std::ops::Deref for ExternalImageSource {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for ExternalImageSource {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for ExternalImageSource {}
 
 /// Color spaces supported on the web.
@@ -6202,9 +6318,9 @@ pub enum Dx12Compiler {
     /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
     Dxc {
-        /// Path to the `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
-        /// Path to the `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxc_path: Option<PathBuf>,
     },
 }
@@ -6224,4 +6340,75 @@ impl Default for InstanceDescriptor {
             dx12_shader_compiler: Dx12Compiler::default(),
         }
     }
+}
+
+pub use send_sync::*;
+
+#[doc(hidden)]
+mod send_sync {
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    pub trait WasmNotSend: Send {}
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    impl<T: Send> WasmNotSend for T {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    pub trait WasmNotSend {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    impl<T> WasmNotSend for T {}
+
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    pub trait WasmNotSync: Sync {}
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    ))]
+    impl<T: Sync> WasmNotSync for T {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    pub trait WasmNotSync {}
+    #[cfg(not(any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )))]
+    impl<T> WasmNotSync for T {}
 }

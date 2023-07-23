@@ -131,6 +131,31 @@ pub fn map_texture_usage(
     u
 }
 
+pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages {
+    let mut u = wgt::TextureUsages::empty();
+    u.set(
+        wgt::TextureUsages::COPY_SRC,
+        uses.contains(hal::TextureUses::COPY_SRC),
+    );
+    u.set(
+        wgt::TextureUsages::COPY_DST,
+        uses.contains(hal::TextureUses::COPY_DST),
+    );
+    u.set(
+        wgt::TextureUsages::TEXTURE_BINDING,
+        uses.contains(hal::TextureUses::RESOURCE),
+    );
+    u.set(
+        wgt::TextureUsages::STORAGE_BINDING,
+        uses.contains(hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE),
+    );
+    u.set(
+        wgt::TextureUsages::RENDER_ATTACHMENT,
+        uses.contains(hal::TextureUses::COLOR_TARGET),
+    );
+    u
+}
+
 pub fn check_texture_dimension_size(
     dimension: wgt::TextureDimension,
     wgt::Extent3d {

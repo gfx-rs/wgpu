@@ -397,8 +397,27 @@ impl super::Adapter {
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
         {
-            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
-            features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+            #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+            {
+                if context
+                    .glow_context
+                    .compressed_texture_astc_supports_ldr_profile()
+                {
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                }
+                if context
+                    .glow_context
+                    .compressed_texture_astc_supports_hdr_profile()
+                {
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+                }
+            }
+
+            #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+            {
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
+            }
         } else {
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC,
@@ -585,7 +604,7 @@ impl super::Adapter {
         let downlevel_defaults = wgt::DownlevelLimits {};
 
         // Drop the GL guard so we can move the context into AdapterShared
-        // ( on WASM the gl handle is just a ref so we tell clippy to allow
+        // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
         #[allow(clippy::drop_ref)]
         drop(gl);
@@ -936,10 +955,17 @@ impl super::AdapterShared {
     }
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for super::Adapter {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for super::Adapter {}
 
 #[cfg(test)]

@@ -16,22 +16,23 @@ The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It 
 
 The repository hosts the following libraries:
 
-  - [![Crates.io](https://img.shields.io/crates/v/wgpu.svg?label=wgpu)](https://crates.io/crates/wgpu) [![docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu/) - User facing Rust API.
-  - [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - Internal WebGPU implementation.
-  - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
-  - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
-  - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
+- [![Crates.io](https://img.shields.io/crates/v/wgpu.svg?label=wgpu)](https://crates.io/crates/wgpu) [![docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu/) - User facing Rust API.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - Internal WebGPU implementation.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
+- [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
 The following binaries:
-  - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
-  - `player` - standalone application for replaying the API traces.
-  - `wgpu-info` - program that prints out information about all the adapters on the system or invokes a command for every adapter.
+
+- `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
+- `player` - standalone application for replaying the API traces.
+- `wgpu-info` - program that prints out information about all the adapters on the system or invokes a command for every adapter.
 
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.64**.
+Minimum Supported Rust Version is **1.65**.
 It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
 This version can only be upgraded in breaking releases.
 
@@ -42,7 +43,7 @@ determined by the value of `MINIMUM_RUST_VERSION` in
 vendor` to extract only those crates it actually uses, so the
 workspace's other crates can have more recent MSRVs.
 
-*Note for Rust 1.64*: The workspace itself can even use a newer MSRV
+_Note for Rust 1.64_: The workspace itself can even use a newer MSRV
 than Firefox, as long as the vendoring step's `Cargo.toml` rewriting
 removes any features Firefox's MSRV couldn't handle. For example,
 `wgpu` can use manifest key inheritance, added in Rust 1.64, even
@@ -56,9 +57,10 @@ files, producing 1.63-compatible files.
 
 ### Rust
 
-Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --example name`. See the [list of examples](wgpu/examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
+Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --bin name`. See the [list of examples](examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
 
 If you are looking for a wgpu tutorial, look at the following:
+
 - https://sotrh.github.io/learn-wgpu/
 
 ### C/C++
@@ -66,6 +68,7 @@ If you are looking for a wgpu tutorial, look at the following:
 To use wgpu in C/C++, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native).
 
 If you are looking for a wgpu C++ tutorial, look at the following:
+
 - https://eliemichel.github.io/LearnWebGPU/
 
 ### Others
@@ -74,8 +77,8 @@ If you want to use wgpu in other languages, there are many bindings to wgpu-nati
 
 ## Community
 
-
 We have the Matrix space [![Matrix Space](https://img.shields.io/static/v1?label=Space&message=%23Wgpu&color=blue&logo=matrix)](https://matrix.to/#/#Wgpu:matrix.org) with a few different rooms that form the wgpu community:
+
 - [![Dev Matrix](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of the library's development.
 - [![User Matrix](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
 - [![Random Matrix](https://img.shields.io/static/v1?label=random&message=%23wgpu-random&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-random:matrix.org) - discussion of everything else.
@@ -86,14 +89,14 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-   API   |    Windows                     |  Linux & Android          |    macOS & iOS      |
-  -----  | ------------------------------ | ------------------------- | ------------------- |
-  Vulkan | :white_check_mark:             | :white_check_mark:        | :ok: (vulkan-portability) |
-  Metal  |                                |                           | :white_check_mark:  |
-  DX12   | :white_check_mark: (W10+ only) |                           |                     |
-  DX11   | :hammer_and_wrench:            |                           |                     |
-  GLES3  |                                | :ok:                      |                     |
-  Angle  | :ok:                           | :ok:                      | :ok: (macOS only) |
+| API    | Windows                        | Linux & Android    | macOS & iOS               |
+| ------ | ------------------------------ | ------------------ | ------------------------- |
+| Vulkan | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |
+| Metal  |                                |                    | :white_check_mark:        |
+| DX12   | :white_check_mark: (W10+ only) |                    |                           |
+| DX11   | :hammer_and_wrench:            |                    |                           |
+| GLES3  |                                | :ok:               |                           |
+| Angle  | :ok:                           | :ok:               | :ok: (macOS only)         |
 
 :white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
 
@@ -141,13 +144,13 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI if possible. The current state of CI testing:
 
-| Backend/Platform | Tests              | CTS                 | Notes                                 |
-| ---------------- | -------------------|---------------------|-------------------------------------- |
-| DX12/Windows 10  | :heavy_check_mark: | :heavy_check_mark:  | using WARP                            |
-| DX11/Windows 10  | :construction:     | —                   | using WARP                            |
-| Metal/MacOS      | —                  | —                   | metal requires GPU                    |
-| Vulkan/Linux     | :heavy_check_mark: | :x:                 | using lavapipe, [cts hangs][cts-hang] |
-| GLES/Linux       | :heavy_check_mark: | —                   | using llvmpipe                        |
+| Backend/Platform | Tests              | CTS                | Notes                                 |
+| ---------------- | ------------------ | ------------------ | ------------------------------------- |
+| DX12/Windows 10  | :heavy_check_mark: | :heavy_check_mark: | using WARP                            |
+| DX11/Windows 10  | :construction:     | —                  | using WARP                            |
+| Metal/MacOS      | —                  | —                  | metal requires GPU                    |
+| Vulkan/Linux     | :heavy_check_mark: | :x:                | using lavapipe, [cts hangs][cts-hang] |
+| GLES/Linux       | :heavy_check_mark: | —                  | using llvmpipe                        |
 
 [cts-hang]: https://github.com/gfx-rs/wgpu/issues/1974
 
@@ -245,6 +248,6 @@ Exactly which WGSL features `wgpu` supports depends on how you are using it:
 
 wgpu uses the coordinate systems of D3D and Metal:
 
-Render | Texture
--------|--------
-![render_coordinates](./etc/render_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png)
+| Render                                              | Texture                                               |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| ![render_coordinates](./etc/render_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png) |

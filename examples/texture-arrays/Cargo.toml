@@ -1,0 +1,21 @@
+[package]
+name = "wgpu-texture-arrays-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu texture arrays example"
+publish = false
+
+[[bin]]
+name = "texture-arrays"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true

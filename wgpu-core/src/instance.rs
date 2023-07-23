@@ -521,7 +521,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(target_os = "emscripten"),
+        feature = "gles"
+    ))]
     pub fn create_surface_webgl_canvas(
         &self,
         canvas: web_sys::HtmlCanvasElement,
@@ -548,7 +552,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(target_os = "emscripten"),
+        feature = "gles"
+    ))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
         canvas: web_sys::OffscreenCanvas,
@@ -889,6 +897,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // hardware GPU (integrated or discrete).
             PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
+            PowerPreference::None => {
+                let option_min = |a: Option<usize>, b: Option<usize>| {
+                    if let (Some(a), Some(b)) = (a, b) {
+                        Some(a.min(b))
+                    } else {
+                        a.or(b)
+                    }
+                };
+                // Pick the lowest id of these types
+                option_min(option_min(discrete, integrated), other)
+            }
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);

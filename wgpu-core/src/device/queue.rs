@@ -37,6 +37,13 @@ pub struct SubmittedWorkDoneClosureC {
     pub user_data: *mut u8,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for SubmittedWorkDoneClosureC {}
 
 pub struct SubmittedWorkDoneClosure {
@@ -45,17 +52,30 @@ pub struct SubmittedWorkDoneClosure {
     inner: SubmittedWorkDoneClosureInner,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
+
 enum SubmittedWorkDoneClosureInner {
-    Rust {
-        callback: Box<dyn FnOnce() + Send + 'static>,
-    },
-    C {
-        inner: SubmittedWorkDoneClosureC,
-    },
+    Rust { callback: SubmittedWorkDoneCallback },
+    C { inner: SubmittedWorkDoneClosureC },
 }
 
 impl SubmittedWorkDoneClosure {
-    pub fn from_rust(callback: Box<dyn FnOnce() + Send + 'static>) -> Self {
+    pub fn from_rust(callback: SubmittedWorkDoneCallback) -> Self {
         Self {
             inner: SubmittedWorkDoneClosureInner::Rust { callback },
         }
