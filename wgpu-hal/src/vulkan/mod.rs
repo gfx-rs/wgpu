@@ -348,7 +348,7 @@ impl TextureView {
         self.raw
     }
 
-    fn aspects(&self) -> crate::FormatAspects {
+    pub fn aspects(&self) -> crate::FormatAspects {
         self.attachment.view_format.into()
     }
 }
