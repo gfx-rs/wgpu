@@ -155,11 +155,11 @@ flagged as errors as well.
 [`IdentityHandlerFactory<I>`]: crate::identity::IdentityHandlerFactory
 */
 
+pub use crate::hal_api::HalApi;
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
     device::Device,
-    hal_api::HalApi,
     id,
     identity::GlobalIdentityHandlerFactory,
     instance::{Adapter, HalSurface, Instance, Surface},
