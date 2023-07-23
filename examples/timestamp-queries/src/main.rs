@@ -418,20 +418,29 @@ mod tests {
             compute_start_end_timestamps,
             compute_inside_timestamp,
         } = QueryResults::from_raw_results(raw_results, timestamps_inside_passes);
+
+        // Timestamps may wrap around, so can't really only reason about deltas!
+        let render_delta =
+            render_start_end_timestamps[1].wrapping_sub(render_start_end_timestamps[0]);
+        assert!(render_delta > 0);
+        let compute_delta =
+            compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
+        assert!(compute_delta > 0);
+
         // TODO: Metal encoder timestamps aren't implemented yet.
         if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
-            assert!(encoder_timestamps[0] > 0);
-            assert!(encoder_timestamps[1] > 0);
+            let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
+            assert!(encoder_delta > 0);
+            assert!(encoder_delta >= render_delta + compute_delta);
         }
-        assert!(render_start_end_timestamps[0] > 0);
-        assert!(render_start_end_timestamps[1] > 0);
-        assert!(render_inside_timestamp
-            .map(|t| t > 0)
-            .unwrap_or(!timestamps_inside_passes));
-        assert!(compute_start_end_timestamps[0] > 0);
-        assert!(compute_start_end_timestamps[1] > 0);
-        assert!(compute_inside_timestamp
-            .map(|t| t > 0)
-            .unwrap_or(!timestamps_inside_passes));
+
+        if let Some(render_inside_timestamp) = render_inside_timestamp {
+            assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
+            assert!(render_inside_timestamp <= render_start_end_timestamps[1]);
+        }
+        if let Some(compute_inside_timestamp) = compute_inside_timestamp {
+            assert!(compute_inside_timestamp >= compute_start_end_timestamps[0]);
+            assert!(compute_inside_timestamp <= compute_start_end_timestamps[1]);
+        }
     }
 }
