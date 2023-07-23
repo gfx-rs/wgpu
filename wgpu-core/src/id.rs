@@ -42,10 +42,10 @@ type Dummy = hal::api::Empty;
 /// `X<Empty>` type with the resource type `X<A>`, for some specific backend
 /// `A`.
 ///
-/// [`Global`]: crate::hub::Global
+/// [`Global`]: crate::global::Global
 /// [`Hub`]: crate::hub::Hub
 /// [`Hub<A>`]: crate::hub::Hub
-/// [`Storage`]: crate::hub::Storage
+/// [`Storage`]: crate::storage::Storage
 /// [`Texture<A>`]: crate::resource::Texture
 /// [`Index`]: std::ops::Index
 /// [`IndexMut`]: std::ops::IndexMut
@@ -228,10 +228,6 @@ pub type ComputePassEncoderId = *mut crate::command::ComputePass;
 pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
 pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
 pub type QuerySetId = Id<crate::resource::QuerySet<Dummy>>;
-
-// Ray tracing
-pub type BlasId = Id<crate::resource::Blas<Dummy>>;
-pub type TlasId = Id<crate::resource::Tlas<Dummy>>;
 
 #[test]
 fn test_id_backend() {

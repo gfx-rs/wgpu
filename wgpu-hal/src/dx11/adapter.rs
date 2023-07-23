@@ -28,6 +28,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         todo!()
     }
+
+    fn texture_format_as_hal(
+        &self,
+        texture_format: wgt::TextureFormat,
+    ) -> <crate::dx11::Api as crate::Api>::TextureFormat {
+        todo!()
+    }
 }
 
 impl super::Adapter {

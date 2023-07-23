@@ -27,7 +27,7 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 mod adapter;
 mod command;
-mod conv;
+pub mod conv;
 mod device;
 mod instance;
 
@@ -63,7 +63,6 @@ impl crate::Api for Api {
     type Sampler = Sampler;
     type QuerySet = QuerySet;
     type Fence = Fence;
-    type AccelerationStructure = AccelerationStructure;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -71,11 +70,34 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type TextureFormat = vk::Format;
 }
 
 struct DebugUtils {
     extension: ext::DebugUtils,
     messenger: vk::DebugUtilsMessengerEXT,
+
+    /// Owning pointer to the debug messenger callback user data.
+    ///
+    /// `InstanceShared::drop` destroys the debug messenger before
+    /// dropping this, so the callback should never receive a dangling
+    /// user data pointer.
+    #[allow(dead_code)]
+    callback_data: Box<DebugUtilsMessengerUserData>,
+}
+
+/// User data needed by `instance::debug_utils_messenger_callback`.
+///
+/// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
+/// pointer refers to one of these values.
+#[derive(Debug)]
+pub struct DebugUtilsMessengerUserData {
+    /// Validation layer description, from `vk::LayerProperties`.
+    validation_layer_description: std::ffi::CString,
+
+    /// Validation layer specification version, from `vk::LayerProperties`.
+    validation_layer_spec_version: u32,
 }
 
 pub struct InstanceShared {
@@ -148,12 +170,6 @@ enum ExtensionFn<T> {
 struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::DrawIndirectCount>,
     timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
-    ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
-}
-
-struct RayTracingDeviceExtensionFunctions {
-    acceleration_structure: khr::AccelerationStructure,
-    buffer_device_address: khr::BufferDeviceAddress,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed
@@ -291,14 +307,7 @@ pub struct Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-}
-
-#[derive(Debug)]
-pub struct AccelerationStructure {
-    raw: vk::AccelerationStructureKHR,
-    buffer: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
 #[derive(Debug)]
@@ -327,6 +336,19 @@ pub struct TextureView {
     raw: vk::ImageView,
     layers: NonZeroU32,
     attachment: FramebufferAttachment,
+}
+
+impl TextureView {
+    /// # Safety
+    ///
+    /// - The image view handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::ImageView {
+        self.raw
+    }
+
+    fn aspects(&self) -> crate::FormatAspects {
+        self.attachment.view_format.into()
+    }
 }
 
 #[derive(Debug)]
@@ -391,6 +413,15 @@ pub struct CommandEncoder {
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
     rpass_debug_marker_active: bool,
+}
+
+impl CommandEncoder {
+    /// # Safety
+    ///
+    /// - The commmand buffer handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.active
+    }
 }
 
 impl fmt::Debug for CommandEncoder {

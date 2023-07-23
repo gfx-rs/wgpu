@@ -175,7 +175,7 @@ impl super::Device {
             match var.space {
                 naga::AddressSpace::WorkGroup => {
                     if !ep_info[var_handle].is_empty() {
-                        let size = module.types[var.ty].inner.size(&module.constants);
+                        let size = module.types[var.ty].inner.size(module.to_ctx());
                         wg_memory_sizes.push(size);
                     }
                 }
@@ -263,6 +263,10 @@ impl super::Device {
         }
     }
 
+    pub unsafe fn buffer_from_raw(raw: metal::Buffer, size: wgt::BufferAddress) -> super::Buffer {
+        super::Buffer { raw, size }
+    }
+
     pub fn raw_device(&self) -> &Mutex<metal::Device> {
         &self.shared.device
     }
@@ -325,7 +329,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        use foreign_types::ForeignTypeRef;
+        use metal::foreign_types::ForeignType as _;
 
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 
@@ -632,7 +636,6 @@ impl crate::Device<super::Api> for super::Device {
                                 wgt::StorageTextureAccess::ReadWrite => true,
                             };
                         }
-                        wgt::BindingType::AccelerationStructure => unimplemented!(),
                     }
 
                     let br = naga::ResourceBinding {
@@ -764,7 +767,6 @@ impl crate::Device<super::Api> for super::Device {
                         );
                         counter.textures += size;
                     }
-                    wgt::BindingType::AccelerationStructure => unimplemented!(),
                 }
             }
         }
@@ -1174,33 +1176,5 @@ impl crate::Device<super::Api> for super::Device {
             default_capture_scope.end_scope();
         }
         shared_capture_manager.stop_capture();
-    }
-
-    unsafe fn get_acceleration_structure_build_sizes(
-        &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Api>,
-    ) -> crate::AccelerationStructureBuildSizes {
-        unimplemented!()
-    }
-
-    unsafe fn get_acceleration_structure_device_address(
-        &self,
-        _acceleration_structure: &super::AccelerationStructure,
-    ) -> wgt::BufferAddress {
-        unimplemented!()
-    }
-
-    unsafe fn create_acceleration_structure(
-        &self,
-        _desc: &crate::AccelerationStructureDescriptor,
-    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        unimplemented!()
-    }
-
-    unsafe fn destroy_acceleration_structure(
-        &self,
-        _acceleration_structure: super::AccelerationStructure,
-    ) {
-        unimplemented!()
     }
 }

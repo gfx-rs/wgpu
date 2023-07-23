@@ -5,7 +5,6 @@ mod compute;
 mod draw;
 mod memory_init;
 mod query;
-mod ray_tracing;
 mod render;
 mod transfer;
 
@@ -20,12 +19,15 @@ use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::error::{ErrorFormatter, PrettyError};
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::ray_tracing::{BlasAction, TlasAction};
 use crate::track::{Tracker, UsageScope};
 use crate::{
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::GlobalIdentityHandlerFactory,
     resource::{Buffer, Texture},
+    storage::Storage,
     Label, Stored,
 };
 
@@ -44,7 +46,7 @@ enum CommandEncoderStatus {
     Error,
 }
 
-struct CommandEncoder<A: hal::Api> {
+pub struct CommandEncoder<A: hal::Api> {
     raw: A::CommandEncoder,
     list: Vec<A::CommandBuffer>,
     is_open: bool,
@@ -53,6 +55,15 @@ struct CommandEncoder<A: hal::Api> {
 
 //TODO: handle errors better
 impl<A: hal::Api> CommandEncoder<A> {
+    /// Closes the live encoder
+    fn close_and_swap(&mut self) {
+        if self.is_open {
+            self.is_open = false;
+            let new = unsafe { self.raw.end_encoding().unwrap() };
+            self.list.insert(self.list.len() - 1, new);
+        }
+    }
+
     fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
@@ -68,7 +79,7 @@ impl<A: hal::Api> CommandEncoder<A> {
         }
     }
 
-    fn open(&mut self) -> &mut A::CommandEncoder {
+    pub fn open(&mut self) -> &mut A::CommandEncoder {
         if !self.is_open {
             self.is_open = true;
             let label = self.label.as_deref();
@@ -89,22 +100,18 @@ pub struct BakedCommands<A: HalApi> {
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
 pub(crate) struct DestroyedTextureError(pub id::TextureId);
 
 pub struct CommandBuffer<A: HalApi> {
-    encoder: CommandEncoder<A>,
+    pub(crate) encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
     limits: wgt::Limits,
     support_clear_texture: bool,
     #[cfg(feature = "trace")]
@@ -133,8 +140,6 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: Tracker::new(),
             buffer_memory_init_actions: Default::default(),
             texture_memory_actions: Default::default(),
-            blas_actions: Default::default(),
-            tlas_actions: Default::default(),
             limits,
             support_clear_texture: features.contains(wgt::Features::CLEAR_TEXTURE),
             #[cfg(feature = "trace")]
@@ -231,13 +236,11 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: self.trackers,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
-            blas_actions: self.blas_actions,
-            tlas_actions: self.tlas_actions,
         }
     }
 }
 
-impl<A: HalApi> crate::hub::Resource for CommandBuffer<A> {
+impl<A: HalApi> crate::resource::Resource for CommandBuffer<A> {
     const TYPE: &'static str = "CommandBuffer";
 
     fn life_guard(&self) -> &crate::LifeGuard {

@@ -1,7 +1,10 @@
 use crate::{
     device::{DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Resource, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{AdapterId, DeviceId, SurfaceId, TextureId, Valid},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     track::TextureSelector,
     validation::MissingBufferUsageError,
@@ -11,7 +14,18 @@ use crate::{
 use smallvec::SmallVec;
 use thiserror::Error;
 
-use std::{borrow::Borrow, num::NonZeroU64, ops::Range, ptr::NonNull};
+use std::{borrow::Borrow, ops::Range, ptr::NonNull};
+
+pub trait Resource {
+    const TYPE: &'static str;
+    fn life_guard(&self) -> &LifeGuard;
+    fn label(&self) -> &str {
+        #[cfg(debug_assertions)]
+        return &self.life_guard().label;
+        #[cfg(not(debug_assertions))]
+        return "";
+    }
+}
 
 /// The status code provided to the buffer mapping callback.
 ///
@@ -65,7 +79,21 @@ pub(crate) enum BufferMapState<A: hal::Api> {
     Idle,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: hal::Api> Send for BufferMapState<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: hal::Api> Sync for BufferMapState<A> {}
 
 #[repr(C)]
@@ -74,6 +102,13 @@ pub struct BufferMapCallbackC {
     pub user_data: *mut u8,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMapCallbackC {}
 
 pub struct BufferMapCallback {
@@ -82,17 +117,30 @@ pub struct BufferMapCallback {
     inner: Option<BufferMapCallbackInner>,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type BufferMapCallbackCallback = Box<dyn FnOnce(BufferAccessResult) + 'static>;
+
 enum BufferMapCallbackInner {
-    Rust {
-        callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>,
-    },
-    C {
-        inner: BufferMapCallbackC,
-    },
+    Rust { callback: BufferMapCallbackCallback },
+    C { inner: BufferMapCallbackC },
 }
 
 impl BufferMapCallback {
-    pub fn from_rust(callback: Box<dyn FnOnce(BufferAccessResult) + Send + 'static>) -> Self {
+    pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
         Self {
             inner: Some(BufferMapCallbackInner::Rust { callback }),
         }
@@ -378,11 +426,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         id: TextureId,
         hal_texture_callback: F,
-    ) {
+    ) -> R {
         profiling::scope!("Texture::as_hal");
 
         let hub = A::hub(self);
@@ -391,7 +439,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let texture = guard.try_get(id).ok().flatten();
         let hal_texture = texture.and_then(|tex| tex.inner.as_raw());
 
-        hal_texture_callback(hal_texture);
+        hal_texture_callback(hal_texture)
+    }
+
+    /// # Safety
+    ///
+    /// - The raw texture view handle must not be manually destroyed
+    pub unsafe fn texture_view_as_hal<A: HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+        &self,
+        id: TextureViewId,
+        hal_texture_view_callback: F,
+    ) -> R {
+        profiling::scope!("TextureView::as_hal");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (guard, _) = hub.texture_views.read(&mut token);
+        let texture_view = guard.try_get(id).ok().flatten();
+        let hal_texture_view = texture_view.map(|tex| &tex.raw);
+
+        hal_texture_view_callback(hal_texture_view)
     }
 
     /// # Safety
@@ -412,6 +479,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
 
         hal_adapter_callback(hal_adapter)
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub fn texture_format_as_hal<A: HalApi>(
+        &self,
+        adapter: AdapterId,
+        texture_format: wgt::TextureFormat,
+    ) -> Option<A::TextureFormat> {
+        use hal::Adapter;
+
+        profiling::scope!("TextureFormat::as_hal");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (guard, _) = hub.adapters.read(&mut token);
+        let adapter = guard.try_get(adapter).ok().flatten();
+        let hal_adapter = adapter.map(|adapter| &adapter.raw.adapter);
+
+        hal_adapter.map(|hal_adapter| hal_adapter.texture_format_as_hal(texture_format))
     }
 
     /// # Safety
@@ -450,6 +537,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map(|surface| &mut surface.raw);
 
         hal_surface_callback(hal_surface)
+    }
+
+    /// # Safety
+    /// - The raw command encoder handle must not be manually destroyed
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
+        &self,
+        id: CommandEncoderId,
+        hal_command_encoder_callback: F,
+    ) -> R {
+        profiling::scope!("CommandEncoder::as_hal_mut");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (mut guard, _) = hub.command_buffers.write(&mut token);
+        let command_encoder = guard.get_mut(id).ok();
+        let hal_command_encoder = command_encoder.map(|encoder| encoder.encoder.open());
+
+        hal_command_encoder_callback(hal_command_encoder)
     }
 }
 
@@ -523,7 +632,7 @@ pub enum CreateTextureError {
     InvalidSampleCount(u32, wgt::TextureFormat),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
-    #[error("Texture format {0:?} can't be used due to missing features.")]
+    #[error("Texture format {0:?} can't be used due to missing features")]
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
@@ -803,48 +912,4 @@ pub enum DestroyError {
     Invalid,
     #[error("Resource is already destroyed")]
     AlreadyDestroyed,
-}
-
-pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
-pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
-
-pub struct Blas<A: hal::Api> {
-    pub(crate) raw: Option<A::AccelerationStructure>,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
-    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
-    pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
-    pub(crate) flags: wgt::AccelerationStructureFlags,
-    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
-    pub(crate) built_index: Option<NonZeroU64>,
-    pub(crate) handle: u64,
-}
-
-impl<A: hal::Api> Resource for Blas<A> {
-    const TYPE: &'static str = "Blas";
-
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
-    }
-}
-
-pub struct Tlas<A: hal::Api> {
-    pub(crate) raw: Option<A::AccelerationStructure>,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
-    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
-    pub(crate) max_instance_count: u32,
-    pub(crate) flags: wgt::AccelerationStructureFlags,
-    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
-    pub(crate) built_index: Option<NonZeroU64>,
-    pub(crate) dependencies: Vec<crate::id::BlasId>,
-    pub(crate) instance_buffer: Option<A::Buffer>,
-}
-
-impl<A: hal::Api> Resource for Tlas<A> {
-    const TYPE: &'static str = "Tlas";
-
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
-    }
 }

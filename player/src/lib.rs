@@ -5,7 +5,7 @@
  *   which is basically everything except for BGL and shader modules,
  *   so that we don't accidentally try to use the same ID.
 !*/
-
+#![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
 use wgc::device::trace;
@@ -15,7 +15,9 @@ use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
 #[derive(Debug)]
 pub struct IdentityPassThrough<I>(PhantomData<I>);
 
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandler<I> for IdentityPassThrough<I> {
+impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandler<I>
+    for IdentityPassThrough<I>
+{
     type Input = I;
     fn process(&self, id: I, backend: wgt::Backend) -> I {
         let (index, epoch, _backend) = id.unzip();
@@ -26,7 +28,7 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandler<I> for Ident
 
 pub struct IdentityPassThroughFactory;
 
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
+impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I>
     for IdentityPassThroughFactory
 {
     type Filter = IdentityPassThrough<I>;
@@ -34,25 +36,25 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
         IdentityPassThrough(PhantomData)
     }
 }
-impl wgc::hub::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
+impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
-    fn encode_commands<A: wgc::hub::HalApi>(
+    fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
     ) -> wgc::id::CommandBufferId;
-    fn process<A: wgc::hub::HalApi>(
+    fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::hub::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager,
     );
 }
 
-impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
-    fn encode_commands<A: wgc::hub::HalApi>(
+impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
+    fn encode_commands<A: wgc::hal_api::HalApi>(
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
@@ -136,94 +138,6 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     )
                     .unwrap();
                 }
-                trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
-                    let blas_iter = blas.iter().map(|x| {
-                        let geometries = match &x.geometries {
-                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                                triangle_geometries,
-                            ) => {
-                                let iter = triangle_geometries.iter().map(|tg| {
-                                    wgc::ray_tracing::BlasTriangleGeometry {
-                                        size: &tg.size,
-                                        vertex_buffer: tg.vertex_buffer,
-                                        index_buffer: tg.index_buffer,
-                                        transform_buffer: tg.transform_buffer,
-                                        first_vertex: tg.first_vertex,
-                                        vertex_stride: tg.vertex_stride,
-                                        index_buffer_offset: tg.index_buffer_offset,
-                                        transform_buffer_offset: tg.transform_buffer_offset,
-                                    }
-                                });
-                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                            }
-                        };
-                        wgc::ray_tracing::BlasBuildEntry {
-                            blas_id: x.blas_id,
-                            geometries,
-                        }
-                    });
-
-                    if !tlas.is_empty() {
-                        log::error!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable! skipping tlas build");
-                    }
-
-                    self.command_encoder_build_acceleration_structures_unsafe_tlas::<A>(
-                        encoder,
-                        blas_iter,
-                        std::iter::empty(),
-                    )
-                    .unwrap();
-                }
-                trace::Command::BuildAccelerationStructures { blas, tlas } => {
-                    let blas_iter = blas.iter().map(|x| {
-                        let geometries = match &x.geometries {
-                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                                triangle_geometries,
-                            ) => {
-                                let iter = triangle_geometries.iter().map(|tg| {
-                                    wgc::ray_tracing::BlasTriangleGeometry {
-                                        size: &tg.size,
-                                        vertex_buffer: tg.vertex_buffer,
-                                        index_buffer: tg.index_buffer,
-                                        transform_buffer: tg.transform_buffer,
-                                        first_vertex: tg.first_vertex,
-                                        vertex_stride: tg.vertex_stride,
-                                        index_buffer_offset: tg.index_buffer_offset,
-                                        transform_buffer_offset: tg.transform_buffer_offset,
-                                    }
-                                });
-                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                            }
-                        };
-                        wgc::ray_tracing::BlasBuildEntry {
-                            blas_id: x.blas_id,
-                            geometries,
-                        }
-                    });
-
-                    let tlas_iter = tlas.iter().map(|x| {
-                        let instances = x.instances.iter().map(|instance| {
-                            instance
-                                .as_ref()
-                                .map(|instance| wgc::ray_tracing::TlasInstance {
-                                    blas_id: instance.blas_id,
-                                    transform: &instance.transform,
-                                    custom_index: instance.custom_index,
-                                    mask: instance.mask,
-                                })
-                        });
-                        wgc::ray_tracing::TlasPackage {
-                            tlas_id: x.tlas_id,
-                            instances: Box::new(instances),
-                            lowest_unmodified: x.lowest_unmodified,
-                        }
-                    });
-
-                    self.command_encoder_build_acceleration_structures::<A>(
-                        encoder, blas_iter, tlas_iter,
-                    )
-                    .unwrap();
-                }
             }
         }
         let (cmd_buf, error) = self
@@ -234,12 +148,12 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
         cmd_buf
     }
 
-    fn process<A: wgc::hub::HalApi>(
+    fn process<A: wgc::hal_api::HalApi>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::hub::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager,
     ) {
         use wgc::device::trace::Action;
         log::info!("action {:?}", action);
@@ -468,26 +382,6 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
                 self.queue_submit::<A>(device, &[cmdbuf]).unwrap();
-            }
-            Action::CreateBlas { id, desc, sizes } => {
-                self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_blas::<A>(device, &desc, sizes, id);
-            }
-            Action::FreeBlas(id) => {
-                self.blas_destroy::<A>(id).unwrap();
-            }
-            Action::DestroyBlas(id) => {
-                self.blas_drop::<A>(id, true);
-            }
-            Action::CreateTlas { id, desc } => {
-                self.device_maintain_ids::<A>(device).unwrap();
-                self.device_create_tlas::<A>(device, &desc, id);
-            }
-            Action::FreeTlas(id) => {
-                self.tlas_destroy::<A>(id).unwrap();
-            }
-            Action::DestroyTlas(id) => {
-                self.tlas_drop::<A>(id, true);
             }
         }
     }

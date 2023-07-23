@@ -5,8 +5,11 @@ use crate::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
-    hub::{GlobalIdentityHandlerFactory, HalApi, Hub, Token},
-    id, resource,
+    hal_api::HalApi,
+    hub::{Hub, Token},
+    id,
+    identity::GlobalIdentityHandlerFactory,
+    resource,
     track::{BindGroupStates, RenderBundleScope, Tracker},
     RefCount, Stored, SubmissionIndex,
 };
@@ -32,8 +35,6 @@ pub(super) struct SuspectedResources {
     pub(super) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
     pub(super) render_bundles: Vec<id::Valid<id::RenderBundleId>>,
     pub(super) query_sets: Vec<id::Valid<id::QuerySetId>>,
-    pub(super) blas_s: Vec<id::Valid<id::BlasId>>,
-    pub(super) tlas_s: Vec<id::Valid<id::TlasId>>,
 }
 
 impl SuspectedResources {
@@ -49,8 +50,6 @@ impl SuspectedResources {
         self.pipeline_layouts.clear();
         self.render_bundles.clear();
         self.query_sets.clear();
-        self.blas_s.clear();
-        self.tlas_s.clear();
     }
 
     pub(super) fn extend(&mut self, other: &Self) {
@@ -69,8 +68,6 @@ impl SuspectedResources {
             .extend_from_slice(&other.pipeline_layouts);
         self.render_bundles.extend_from_slice(&other.render_bundles);
         self.query_sets.extend_from_slice(&other.query_sets);
-        self.blas_s.extend_from_slice(&other.blas_s);
-        self.tlas_s.extend_from_slice(&other.tlas_s);
     }
 
     pub(super) fn add_render_bundle_scope<A: HalApi>(&mut self, trackers: &RenderBundleScope<A>) {
@@ -87,7 +84,6 @@ impl SuspectedResources {
         self.textures.extend(trackers.textures.used());
         self.texture_views.extend(trackers.views.used());
         self.samplers.extend(trackers.samplers.used());
-        self.tlas_s.extend(trackers.acceleration_structures.used());
     }
 }
 
@@ -104,7 +100,6 @@ struct NonReferencedResources<A: hal::Api> {
     bind_group_layouts: Vec<A::BindGroupLayout>,
     pipeline_layouts: Vec<A::PipelineLayout>,
     query_sets: Vec<A::QuerySet>,
-    acceleration_structures: Vec<A::AccelerationStructure>,
 }
 
 impl<A: hal::Api> NonReferencedResources<A> {
@@ -120,7 +115,6 @@ impl<A: hal::Api> NonReferencedResources<A> {
             bind_group_layouts: Vec::new(),
             pipeline_layouts: Vec::new(),
             query_sets: Vec::new(),
-            acceleration_structures: Vec::new(),
         }
     }
 
@@ -133,8 +127,6 @@ impl<A: hal::Api> NonReferencedResources<A> {
         self.compute_pipes.extend(other.compute_pipes);
         self.render_pipes.extend(other.render_pipes);
         self.query_sets.extend(other.query_sets);
-        self.acceleration_structures
-            .extend(other.acceleration_structures);
         assert!(other.bind_group_layouts.is_empty());
         assert!(other.pipeline_layouts.is_empty());
     }
@@ -198,12 +190,6 @@ impl<A: hal::Api> NonReferencedResources<A> {
             profiling::scope!("destroy_query_sets");
             for raw in self.query_sets.drain(..) {
                 unsafe { device.destroy_query_set(raw) };
-            }
-        }
-        if !self.acceleration_structures.is_empty() {
-            profiling::scope!("destroy_acceleration_structures");
-            for raw in self.acceleration_structures.drain(..) {
-                unsafe { device.destroy_acceleration_structure(raw) };
             }
         }
     }
@@ -353,9 +339,6 @@ impl<A: hal::Api> LifetimeTracker<A> {
                     last_resources.textures.push(raw);
                     last_resources.texture_views.extend(views);
                 }
-                TempResource::AccelerationStructure(raw) => {
-                    last_resources.acceleration_structures.push(raw)
-                }
             }
         }
 
@@ -459,7 +442,6 @@ impl<A: hal::Api> LifetimeTracker<A> {
                 resources.texture_views.extend(views);
                 resources.textures.push(raw);
             }
-            TempResource::AccelerationStructure(raw) => resources.acceleration_structures.push(raw),
         }
     }
 
@@ -810,63 +792,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                             .query_sets
                             .push(res.raw);
-                    }
-                }
-            }
-        }
-
-        if !self.suspected_resources.blas_s.is_empty() {
-            let (mut guard, _) = hub.blas_s.write(token);
-            let mut trackers = trackers.lock();
-
-            for id in self.suspected_resources.blas_s.drain(..) {
-                if trackers.blas_s.remove_abandoned(id) {
-                    log::debug!("Blas {:?} will be destroyed", id);
-                    #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyBlas(id.0));
-                    }
-
-                    if let Some(res) = hub.blas_s.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.life_count();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .acceleration_structures
-                            .extend(res.raw);
-                    }
-                }
-            }
-        }
-
-        if !self.suspected_resources.tlas_s.is_empty() {
-            let (mut guard, _) = hub.tlas_s.write(token);
-            let mut trackers = trackers.lock();
-
-            for id in self.suspected_resources.tlas_s.drain(..) {
-                if trackers.tlas_s.remove_abandoned(id) {
-                    log::debug!("Tlas {:?} will be destroyed", id);
-                    #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyTlas(id.0));
-                    }
-
-                    if let Some(res) = hub.tlas_s.unregister_locked(id.0, &mut *guard) {
-                        let submit_index = res.life_guard.life_count();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .acceleration_structures
-                            .extend(res.raw);
-
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .buffers
-                            .extend(res.instance_buffer);
                     }
                 }
             }

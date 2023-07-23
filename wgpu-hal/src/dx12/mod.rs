@@ -50,7 +50,7 @@ use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
-    shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
+    shared::{dxgi, dxgi1_4, dxgiformat, dxgitype, windef, winerror},
     um::{d3d12 as d3d12_ty, dcomp, synchapi, winbase, winnt},
     Interface as _,
 };
@@ -83,7 +83,7 @@ impl crate::Api for Api {
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
 
-    type AccelerationStructure = AccelerationStructure;
+    type TextureFormat = dxgiformat::DXGI_FORMAT;
 }
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
@@ -178,6 +178,7 @@ struct PrivateCapabilities {
     #[allow(unused)] // TODO: Exists until windows-rs is standard, then it can probably be removed?
     heap_create_not_zeroed: bool,
     casting_fully_typed_format_supported: bool,
+    suballocation_supported: bool,
 }
 
 #[derive(Default)]
@@ -609,9 +610,6 @@ pub struct ComputePipeline {
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
-
-#[derive(Debug)]
-pub struct AccelerationStructure {}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> d3d12::WeakPtr<dxgi1_4::IDXGISwapChain3> {

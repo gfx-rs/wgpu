@@ -1,7 +1,7 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
@@ -23,10 +23,11 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
+use wgt::{WasmNotSend, WasmNotSync};
 
 const LABEL: &str = "label";
 
-pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+pub struct Context(wgc::global::Global<wgc::identity::IdentityManagerFactory>);
 
 impl Drop for Context {
     fn drop(&mut self) {
@@ -41,11 +42,11 @@ impl fmt::Debug for Context {
 }
 
 impl Context {
-    pub unsafe fn from_hal_instance<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_hal_instance::<A>(
+            wgc::global::Global::from_hal_instance::<A>(
                 "wgpu",
-                wgc::hub::IdentityManagerFactory,
+                wgc::identity::IdentityManagerFactory,
                 hal_instance,
             )
         })
@@ -54,17 +55,17 @@ impl Context {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn instance_as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn instance_as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe { self.0.instance_as_hal::<A>() }
     }
 
     pub unsafe fn from_core_instance(core_instance: wgc::instance::Instance) -> Self {
         Self(unsafe {
-            wgc::hub::Global::from_instance(wgc::hub::IdentityManagerFactory, core_instance)
+            wgc::global::Global::from_instance(wgc::identity::IdentityManagerFactory, core_instance)
         })
     }
 
-    pub(crate) fn global(&self) -> &wgc::hub::Global<wgc::hub::IdentityManagerFactory> {
+    pub(crate) fn global(&self) -> &wgc::global::Global<wgc::identity::IdentityManagerFactory> {
         &self.0
     }
 
@@ -73,14 +74,18 @@ impl Context {
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| ()))
     }
 
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         unsafe { self.0.create_adapter_from_hal(hal_adapter, ()) }
     }
 
-    pub unsafe fn adapter_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn adapter_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Adapter>) -> R,
+        R,
+    >(
         &self,
         adapter: wgc::id::AdapterId,
         hal_adapter_callback: F,
@@ -91,11 +96,17 @@ impl Context {
         }
     }
 
+    pub fn texture_format_as_hal<A: wgc::hub::HalApi>(
+        &self,
+        adapter: wgc::id::AdapterId,
+        texture_format: wgt::TextureFormat,
+    ) -> Option<A::TextureFormat> {
+        self.0.texture_format_as_hal::<A>(adapter, texture_format)
+    }
+
     pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
         &self,
-        adapter: &wgc::id::AdapterId,
         hal_device: hal::OpenDevice<A>,
-        desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
@@ -124,7 +135,7 @@ impl Context {
         Ok((device, queue))
     }
 
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         device: &Device,
@@ -149,7 +160,39 @@ impl Context {
         }
     }
 
-    pub unsafe fn device_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_buffer: A::Buffer,
+        device: &Device,
+        desc: &BufferDescriptor,
+    ) -> (wgc::id::BufferId, Buffer) {
+        let global = &self.0;
+        let (id, error) = unsafe {
+            global.create_buffer_from_hal::<A>(
+                hal_buffer,
+                device.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                (),
+            )
+        };
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_buffer_from_hal",
+            );
+        }
+        (
+            id,
+            Buffer {
+                error_sink: Arc::clone(&device.error_sink),
+            },
+        )
+    }
+
+    pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
         hal_device_callback: F,
@@ -161,7 +204,7 @@ impl Context {
     }
 
     pub unsafe fn surface_as_hal_mut<
-        A: wgc::hub::HalApi,
+        A: wgc::hal_api::HalApi,
         F: FnOnce(Option<&mut A::Surface>) -> R,
         R,
     >(
@@ -175,18 +218,55 @@ impl Context {
         }
     }
 
-    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn command_encoder_as_hal_mut<
+        A: wgc::hub::HalApi,
+        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
+        R,
+    >(
         &self,
-        texture: &Texture,
-        hal_texture_callback: F,
-    ) {
+        command_encoder: &crate::CommandEncoder,
+        hal_command_encoder_callback: F,
+    ) -> R {
         unsafe {
-            self.0
-                .texture_as_hal::<A, F>(texture.id, hal_texture_callback)
+            self.0.command_encoder_as_hal_mut::<A, F, R>(
+                <<Self as crate::Context>::CommandEncoderId>::from(command_encoder.id.unwrap()),
+                hal_command_encoder_callback,
+            )
         }
     }
 
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
+        &self,
+        texture: &Texture,
+        hal_texture_callback: F,
+    ) -> R {
+        unsafe {
+            self.0
+                .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
+        }
+    }
+
+    #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
+    pub unsafe fn texture_view_as_hal<
+        A: wgc::hub::HalApi,
+        F: FnOnce(Option<&A::TextureView>) -> R,
+        R,
+    >(
+        &self,
+        texture_view: &crate::TextureView,
+        hal_texture_view_callback: F,
+    ) -> R {
+        unsafe {
+            self.0.texture_view_as_hal::<A, F, R>(
+                wgc::id::TextureViewId::from(texture_view.id),
+                hal_texture_view_callback,
+            )
+        }
+    }
+
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.0.generate_report()
     }
 
@@ -259,7 +339,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -293,7 +373,7 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
@@ -302,7 +382,7 @@ impl Context {
     #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         operation: &'static str,
     ) -> ! {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));
@@ -470,16 +550,6 @@ pub struct CommandEncoder {
     open: bool,
 }
 
-#[derive(Debug)]
-pub struct Blas {
-    // error_sink: ErrorSink,
-}
-
-#[derive(Debug)]
-pub struct Tlas {
-    // error_sink: ErrorSink,
-}
-
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type AdapterData = ();
@@ -530,11 +600,6 @@ impl crate::Context for Context {
 
     type RequestAdapterFuture = Ready<Option<(Self::AdapterId, Self::AdapterData)>>;
 
-    type BlasId = wgc::id::BlasId;
-    type BlasData = Blas;
-    type TlasId = wgc::id::TlasId;
-    type TlasData = Tlas;
-
     #[allow(clippy::type_complexity)]
     type RequestDeviceFuture = Ready<
         Result<
@@ -551,9 +616,9 @@ impl crate::Context for Context {
     type PopErrorScopeFuture = Ready<Option<crate::Error>>;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self {
-        Self(wgc::hub::Global::new(
+        Self(wgc::global::Global::new(
             "wgpu",
-            wgc::hub::IdentityManagerFactory,
+            wgc::identity::IdentityManagerFactory,
             instance_desc,
         ))
     }
@@ -1059,9 +1124,6 @@ impl crate::Context for Context {
                             &remaining_arrayed_texture_views[array.len()..];
                         bm::BindingResource::TextureViewArray(Owned(views))
                     }
-                    BindingResource::AccelerationStructure(acceleration_structure) => {
-                        bm::BindingResource::AccelerationStructure(acceleration_structure.id.into())
-                    }
                 },
             })
             .collect::<Vec<_>>();
@@ -1481,7 +1543,7 @@ impl crate::Context for Context {
         buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
@@ -2293,7 +2355,7 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
@@ -2957,215 +3019,6 @@ impl crate::Context for Context {
             )
         }
     }
-
-    fn device_create_blas(
-        &self,
-        device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
-        sizes: wgt::BlasGeometrySizeDescriptors,
-    ) -> (Self::BlasId, Option<u64>, Self::BlasData) {
-        let global = &self.0;
-        let (id, handle, error) = wgc::gfx_select!(device => global.device_create_blas(
-            *device,
-            &desc.map_label(|l| l.map(Borrowed)),
-            sizes,
-            ()
-        ));
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::create_blas",
-            );
-        }
-        (
-            id,
-            handle,
-            Blas {
-                // error_sink: Arc::clone(&device_data.error_sink),
-            },
-        )
-    }
-
-    fn device_create_tlas(
-        &self,
-        device: &Self::DeviceId,
-        device_data: &Self::DeviceData,
-        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
-    ) -> (Self::TlasId, Self::TlasData) {
-        let global = &self.0;
-        let (id, error) = wgc::gfx_select!(device => global.device_create_tlas(
-            *device,
-            &desc.map_label(|l| l.map(Borrowed)),
-            ()
-        ));
-        if let Some(cause) = error {
-            self.handle_error(
-                &device_data.error_sink,
-                cause,
-                LABEL,
-                desc.label,
-                "Device::create_blas",
-            );
-        }
-        (
-            id,
-            Tlas {
-                // error_sink: Arc::clone(&device_data.error_sink),
-            },
-        )
-    }
-
-    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
-        &'a self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasBuildEntry<Self>>,
-    ) {
-        let global = &self.0;
-
-        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<Self>| {
-            let geometries = match e.geometries {
-                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
-                    let iter = triangle_geometries.into_iter().map(|tg| {
-                        wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer,
-                            index_buffer: tg.index_buffer,
-                            transform_buffer: tg.transform_buffer,
-                            size: tg.size,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
-                        }
-                    });
-                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                }
-            };
-            wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas_id,
-                geometries,
-            }
-        });
-
-        let tlas = tlas
-            .into_iter()
-            .map(|e: crate::ray_tracing::ContextTlasBuildEntry<Context>| {
-                wgc::ray_tracing::TlasBuildEntry {
-                    tlas_id: e.tlas_id,
-                    instance_buffer_id: e.instance_buffer_id,
-                    instance_count: e.instance_count,
-                }
-            });
-
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures_unsafe_tlas(
-            *encoder,
-            blas,
-            tlas
-        )) {
-            self.handle_error_nolabel(
-                &encoder_data.error_sink,
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
-    }
-
-    fn command_encoder_build_acceleration_structures<'a>(
-        &'a self,
-        encoder: &Self::CommandEncoderId,
-        encoder_data: &Self::CommandEncoderData,
-        blas: impl Iterator<Item = crate::ray_tracing::ContextBlasBuildEntry<'a, Self>>,
-        tlas: impl Iterator<Item = crate::ray_tracing::ContextTlasPackage<'a, Self>>,
-    ) {
-        let global = &self.0;
-
-        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<Self>| {
-            let geometries = match e.geometries {
-                crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
-                    triangle_geometries,
-                ) => {
-                    let iter = triangle_geometries.into_iter().map(|tg| {
-                        wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer,
-                            index_buffer: tg.index_buffer,
-                            transform_buffer: tg.transform_buffer,
-                            size: tg.size,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
-                        }
-                    });
-                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                }
-            };
-            wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas_id,
-                geometries,
-            }
-        });
-
-        let tlas = tlas.into_iter().map(|e| {
-            let instances = e.instances.into_iter().map(
-                |instance: Option<crate::ray_tracing::ContextTlasInstance<_>>| {
-                    if let Some(instance) = instance {
-                        Some(wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas_id,
-                            transform: instance.transform,
-                            custom_index: instance.custom_index,
-                            mask: instance.mask,
-                        })
-                    } else {
-                        None
-                    }
-                },
-            );
-            wgc::ray_tracing::TlasPackage {
-                tlas_id: e.tlas_id,
-                instances: Box::new(instances),
-                lowest_unmodified: e.lowest_unmodified,
-            }
-        });
-
-        if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_build_acceleration_structures(
-            *encoder,
-            blas,
-            tlas
-        )) {
-            self.handle_error_nolabel(
-                &encoder_data.error_sink,
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
-    }
-
-    fn blas_destroy(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
-        let global = &self.0;
-        let _ = wgc::gfx_select!(blas => global.blas_destroy(*blas));
-    }
-
-    fn blas_drop(&self, blas: &Self::BlasId, _blas_data: &Self::BlasData) {
-        let global = &self.0;
-        wgc::gfx_select!(blas => global.blas_drop(*blas, false))
-    }
-
-    fn tlas_destroy(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
-        let global = &self.0;
-        let _ = wgc::gfx_select!(tlas => global.tlas_destroy(*tlas));
-    }
-
-    fn tlas_drop(&self, tlas: &Self::TlasId, _tlas_data: &Self::TlasData) {
-        let global = &self.0;
-        wgc::gfx_select!(tlas => global.tlas_drop(*tlas, false))
-    }
 }
 
 impl<T> From<ObjectId> for wgc::id::Id<T> {
@@ -3274,7 +3127,21 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMappedRange {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::context::BufferMappedRange for BufferMappedRange {

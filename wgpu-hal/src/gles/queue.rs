@@ -1186,7 +1186,7 @@ impl super::Queue {
             C::SetDepthBias(bias) => {
                 if bias.is_enabled() {
                     unsafe { gl.enable(glow::POLYGON_OFFSET_FILL) };
-                    unsafe { gl.polygon_offset(bias.constant as f32, bias.slope_scale) };
+                    unsafe { gl.polygon_offset(bias.slope_scale, bias.constant as f32) };
                 } else {
                     unsafe { gl.disable(glow::POLYGON_OFFSET_FILL) };
                 }
@@ -1525,8 +1525,15 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 }
 
-// SAFE: WASM doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for super::Queue {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for super::Queue {}

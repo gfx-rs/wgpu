@@ -11,11 +11,15 @@ use crate::{
     },
     device::{MissingDownlevelFlags, MissingFeatures},
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
     resource::{self, Buffer, Texture},
+    storage::Storage,
     track::{Tracker, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
     Label,
@@ -38,7 +42,7 @@ use std::{fmt, mem, str};
 )]
 pub enum ComputeCommand {
     SetBindGroup {
-        index: u8,
+        index: u32,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
     },
@@ -163,7 +167,7 @@ pub enum ComputePassErrorInner {
     #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
-    BindGroupIndexOutOfRange { index: u8, max: u32 },
+    BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
     InvalidPipeline(id::ComputePipelineId),
     #[error("QuerySet {0:?} is invalid")]
@@ -344,7 +348,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf: &mut CommandBuffer<A> =
             CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, encoder_id)
                 .map_pass_err(init_scope)?;
-        // will be reset to true if recording is done without errors
+
+        // We automatically keep extending command buffers over time, and because
+        // we want to insert a command buffer _before_ what we're about to record,
+        // we need to make sure to close the previous one.
+        cmd_buf.encoder.close();
+        // We will reset this to `Recording` if we succeed, acts as a fail-safe.
         cmd_buf.status = CommandEncoderStatus::Error;
         let raw = cmd_buf.encoder.open();
 
@@ -363,8 +372,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
         let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (texture_guard, mut token) = hub.textures.read(&mut token);
-        let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+        let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
             binder: Binder::new(),
@@ -387,14 +395,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None,
             None,
             Some(&*query_set_guard),
-            None,
-            Some(&*tlas_guard),
         );
 
         let hal_desc = hal::ComputePassDescriptor { label: base.label };
         unsafe {
             raw.begin_compute_pass(&hal_desc);
         }
+
+        let mut intermediate_trackers = Tracker::<A>::new();
 
         // Immediate texture inits required because of prior discards. Need to
         // be inserted before texture reads.
@@ -410,7 +418,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let scope = PassErrorScope::SetBindGroup(bind_group_id);
 
                     let max_bind_groups = cmd_buf.limits.max_bind_groups;
-                    if (index as u32) >= max_bind_groups {
+                    if index >= max_bind_groups {
                         return Err(ComputePassErrorInner::BindGroupIndexOutOfRange {
                             index,
                             max: max_bind_groups,
@@ -452,16 +460,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                     }
 
-                    cmd_buf.tlas_actions.extend(
-                        bind_group.used.acceleration_structures.used().map(|id| {
-                            cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
-                            crate::ray_tracing::TlasAction {
-                                id: id.0,
-                                kind: crate::ray_tracing::TlasActionKind::Use,
-                            }
-                        }),
-                    );
-
                     let pipeline_layout_id = state.binder.pipeline_layout_id;
                     let entries = state.binder.assign_group(
                         index as usize,
@@ -477,7 +475,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe {
                                 raw.set_bind_group(
                                     pipeline_layout,
-                                    index as u32 + i as u32,
+                                    index + i as u32,
                                     raw_bg,
                                     &e.dynamic_offsets,
                                 );
@@ -593,19 +591,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         pipeline: state.pipeline,
                     };
 
-                    fixup_discarded_surfaces(
-                        pending_discard_init_fixups.drain(..),
-                        raw,
-                        &texture_guard,
-                        &mut cmd_buf.trackers.textures,
-                        device,
-                    );
-
                     state.is_ready().map_pass_err(scope)?;
                     state
                         .flush_states(
                             raw,
-                            &mut cmd_buf.trackers,
+                            &mut intermediate_trackers,
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
@@ -681,7 +671,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state
                         .flush_states(
                             raw,
-                            &mut cmd_buf.trackers,
+                            &mut intermediate_trackers,
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
@@ -777,20 +767,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             raw.end_compute_pass();
         }
+        // We've successfully recorded the compute pass, bring the
+        // command buffer out of the error state.
         cmd_buf.status = CommandEncoderStatus::Recording;
 
-        // There can be entries left in pending_discard_init_fixups if a bind
-        // group was set, but not used (i.e. no Dispatch occurred)
+        // Stop the current command buffer.
+        cmd_buf.encoder.close();
+
+        // Create a new command buffer, which we will insert _before_ the body of the compute pass.
         //
-        // However, we already altered the discard/init_action state on this
-        // cmd_buf, so we need to apply the promised changes.
+        // Use that buffer to insert barriers and clear discarded images.
+        let transit = cmd_buf.encoder.open();
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
-            raw,
+            transit,
             &texture_guard,
             &mut cmd_buf.trackers.textures,
             device,
         );
+        CommandBuffer::insert_barriers_from_tracker(
+            transit,
+            &mut cmd_buf.trackers,
+            &intermediate_trackers,
+            &*buffer_guard,
+            &*texture_guard,
+        );
+        // Close the command buffer, and swap it with the previous.
+        cmd_buf.encoder.close_and_swap();
 
         Ok(())
     }
@@ -829,7 +832,7 @@ pub mod compute_ffi {
         }
 
         pass.base.commands.push(ComputeCommand::SetBindGroup {
-            index: index.try_into().unwrap(),
+            index,
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });

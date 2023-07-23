@@ -123,19 +123,6 @@ pub enum Action<'a> {
         size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
-    CreateBlas {
-        id: id::BlasId,
-        desc: crate::resource::BlasDescriptor<'a>,
-        sizes: wgt::BlasGeometrySizeDescriptors,
-    },
-    FreeBlas(id::BlasId),
-    DestroyBlas(id::BlasId),
-    CreateTlas {
-        id: id::TlasId,
-        desc: crate::resource::TlasDescriptor<'a>,
-    },
-    FreeTlas(id::TlasId),
-    DestroyTlas(id::TlasId),
 }
 
 #[derive(Debug)]
@@ -194,14 +181,6 @@ pub enum Command {
         base: crate::command::BasePass<crate::command::RenderCommand>,
         target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
-    },
-    BuildAccelerationStructuresUnsafeTlas {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TlasBuildEntry>,
-    },
-    BuildAccelerationStructures {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TraceTlasPackage>,
     },
 }
 

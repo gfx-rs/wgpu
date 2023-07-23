@@ -2,7 +2,7 @@
 
 wgpu-rs is an idiomatic Rust wrapper over [wgpu-core](https://github.com/gfx-rs/wgpu). It's designed to be suitable for general purpose graphics and computation needs of Rust community.
 
-wgpu-rs can target both the natively supported backends and WASM directly.
+wgpu-rs can target both the natively supported backends and Wasm directly.
 
 See our [gallery](https://wgpu.rs/#showcase) and the [wiki page](https://github.com/gfx-rs/wgpu/wiki/Users) for the list of libraries and applications using `wgpu-rs`.
 
@@ -15,13 +15,13 @@ All examples are located under the [examples](examples) directory.
 These examples use the default syntax for running examples, as found in the [Cargo](https://doc.rust-lang.org/cargo/reference/manifest.html#examples) documentation. For example, to run the `cube` example:
 
 ```bash
-cargo run --example cube
+cargo run --bin cube
 ```
 
 The `hello*` examples show bare-bones setup without any helper code. For `hello-compute`, pass 4 numbers separated by spaces as arguments:
 
 ```bash
-cargo run --example hello-compute 1 2 3 4
+cargo run --bin hello-compute 1 2 3 4
 ```
 
 The following environment variables can be used to configure how the framework examples run:
@@ -52,6 +52,7 @@ See [wiki article](https://github.com/gfx-rs/wgpu/wiki/Running-on-the-Web-with-W
 [WGSL](https://gpuweb.github.io/gpuweb/wgsl/) is the main shading language of WebGPU.
 
 Users can run the [naga](https://github.com/gfx-rs/naga) binary in the following way to convert their SPIR-V shaders to WGSL:
+
 ```bash
 cargo run -- <input.spv> <output.wgsl>
 ```

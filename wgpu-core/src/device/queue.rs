@@ -8,8 +8,11 @@ use crate::{
     conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, StagingBuffer, TextureInner},
     track, FastHashSet, SubmissionIndex,
@@ -34,6 +37,13 @@ pub struct SubmittedWorkDoneClosureC {
     pub user_data: *mut u8,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for SubmittedWorkDoneClosureC {}
 
 pub struct SubmittedWorkDoneClosure {
@@ -42,17 +52,30 @@ pub struct SubmittedWorkDoneClosure {
     inner: SubmittedWorkDoneClosureInner,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
+
 enum SubmittedWorkDoneClosureInner {
-    Rust {
-        callback: Box<dyn FnOnce() + Send + 'static>,
-    },
-    C {
-        inner: SubmittedWorkDoneClosureC,
-    },
+    Rust { callback: SubmittedWorkDoneCallback },
+    C { inner: SubmittedWorkDoneClosureC },
 }
 
 impl SubmittedWorkDoneClosure {
-    pub fn from_rust(callback: Box<dyn FnOnce() + Send + 'static>) -> Self {
+    pub fn from_rust(callback: SubmittedWorkDoneCallback) -> Self {
         Self {
             inner: SubmittedWorkDoneClosureInner::Rust { callback },
         }
@@ -106,7 +129,6 @@ pub struct WrappedSubmissionIndex {
 pub enum TempResource<A: hal::Api> {
     Buffer(A::Buffer),
     Texture(A::Texture, SmallVec<[A::TextureView; 1]>),
-    AccelerationStructure(A::AccelerationStructure),
 }
 
 /// A queue execution for a particular command encoder.
@@ -180,9 +202,6 @@ impl<A: hal::Api> PendingWrites<A> {
                         device.destroy_texture_view(view);
                     }
                     device.destroy_texture(texture);
-                },
-                TempResource::AccelerationStructure(acceleration_structure) => unsafe {
-                    device.destroy_acceleration_structure(acceleration_structure);
                 },
             }
         }
@@ -321,10 +340,6 @@ pub enum QueueSubmitError {
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
-    #[error(transparent)]
-    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
-    #[error(transparent)]
-    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -485,7 +500,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     fn queue_validate_write_buffer_impl<A: HalApi>(
         &self,
-        buffer: &super::resource::Buffer<A>,
+        buffer: &crate::resource::Buffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
         buffer_size: u64,
@@ -1066,9 +1081,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let (mut texture_guard, mut token) = hub.textures.write(&mut token);
                     let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
                     let (sampler_guard, mut token) = hub.samplers.read(&mut token);
-                    let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
-                    let (mut blas_guard, mut token) = hub.blas_s.write(&mut token);
-                    let (mut tlas_guard, _) = hub.tlas_s.write(&mut token);
+                    let (query_set_guard, _) = hub.query_sets.read(&mut token);
 
                     //Note: locking the trackers has to be done after the storages
                     let mut trackers = device.trackers.lock();
@@ -1212,16 +1225,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 query_set_guard[sub_id].life_guard.use_at(submit_index);
                             }
                         }
-                        for id in cmdbuf.trackers.blas_s.used() {
-                            if !blas_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.blas_s.push(id);
-                            }
-                        }
-                        for id in cmdbuf.trackers.tlas_s.used() {
-                            if !tlas_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.tlas_s.push(id);
-                            }
-                        }
 
                         let mut baked = cmdbuf.into_baked();
                         // execute resource transitions
@@ -1238,10 +1241,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         baked
                             .initialize_texture_memory(&mut *trackers, &mut *texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
-
-                        baked.validate_blas_actions(&mut *blas_guard)?;
-                        baked.validate_tlas_actions(&*blas_guard, &mut *tlas_guard)?;
-
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(

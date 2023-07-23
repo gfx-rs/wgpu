@@ -24,16 +24,12 @@ pub struct PhysicalDeviceFeatures {
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>,
     image_robustness: Option<vk::PhysicalDeviceImageRobustnessFeaturesEXT>,
     robustness2: Option<vk::PhysicalDeviceRobustness2FeaturesEXT>,
-    depth_clip_enable: Option<vk::PhysicalDeviceDepthClipEnableFeaturesEXT>,
     multiview: Option<vk::PhysicalDeviceMultiviewFeaturesKHR>,
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT>,
     shader_float16: Option<(
         vk::PhysicalDeviceShaderFloat16Int8Features,
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
-    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
-    buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
-    ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
     zero_initialize_workgroup_memory:
         Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
 }
@@ -64,9 +60,6 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.robustness2 {
             info = info.push_next(feature);
         }
-        if let Some(ref mut feature) = self.depth_clip_enable {
-            info = info.push_next(feature);
-        }
         if let Some(ref mut feature) = self.astc_hdr {
             info = info.push_next(feature);
         }
@@ -75,15 +68,6 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(_16bit_feature);
         }
         if let Some(ref mut feature) = self.zero_initialize_workgroup_memory {
-            info = info.push_next(feature);
-        }
-        if let Some(ref mut feature) = self.acceleration_structure {
-            info = info.push_next(feature);
-        }
-        if let Some(ref mut feature) = self.buffer_device_address {
-            info = info.push_next(feature);
-        }
-        if let Some(ref mut feature) = self.ray_query {
             info = info.push_next(feature);
         }
         info
@@ -191,6 +175,7 @@ impl PhysicalDeviceFeatures {
                 .shader_int16(requested_features.contains(wgt::Features::SHADER_I16))
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
+                .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
                 .build(),
             descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
@@ -259,17 +244,6 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            depth_clip_enable: if enabled_extensions.contains(&vk::ExtDepthClipEnableFn::name()) {
-                Some(
-                    vk::PhysicalDeviceDepthClipEnableFeaturesEXT::builder()
-                        .depth_clip_enable(
-                            requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL),
-                        )
-                        .build(),
-                )
-            } else {
-                None
-            },
             multiview: if effective_api_version >= vk::API_VERSION_1_1
                 || enabled_extensions.contains(&vk::KhrMultiviewFn::name())
             {
@@ -300,37 +274,6 @@ impl PhysicalDeviceFeatures {
                         .uniform_and_storage_buffer16_bit_access(true)
                         .build(),
                 ))
-            } else {
-                None
-            },
-            acceleration_structure: if enabled_extensions
-                .contains(&vk::KhrAccelerationStructureFn::name())
-            {
-                Some(
-                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-                        .acceleration_structure(true)
-                        .build(),
-                )
-            } else {
-                None
-            },
-            buffer_device_address: if enabled_extensions
-                .contains(&vk::KhrBufferDeviceAddressFn::name())
-            {
-                Some(
-                    vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::builder()
-                        .buffer_device_address(true)
-                        .build(),
-                )
-            } else {
-                None
-            },
-            ray_query: if enabled_extensions.contains(&vk::KhrRayQueryFn::name()) {
-                Some(
-                    vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
-                        .ray_query(true)
-                        .build(),
-                )
             } else {
                 None
             },
@@ -515,9 +458,7 @@ impl PhysicalDeviceFeatures {
             }
         }
 
-        if let Some(ref feature) = self.depth_clip_enable {
-            features.set(F::DEPTH_CLIP_CONTROL, feature.depth_clip_enable != 0);
-        }
+        features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
@@ -569,18 +510,6 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
-        features.set(
-            F::RAY_TRACING_ACCELERATION_STRUCTURE,
-            caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
-                && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
-                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name()),
-        );
-
-        features.set(
-            F::RAY_QUERY,
-            caps.supports_extension(vk::KhrRayQueryFn::name()),
-        );
-
         let rg11b10ufloat_renderable = supports_format(
             instance,
             phd,
@@ -605,13 +534,12 @@ impl PhysicalDeviceFeatures {
 }
 
 /// Information gathered about a physical device capabilities.
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
-    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The effective driver api version supported by the physical device.
     ///
@@ -750,26 +678,9 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
-        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
-        if requested_features.contains(wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE) {
-            extensions.push(vk::KhrDeferredHostOperationsFn::name());
-            extensions.push(vk::KhrAccelerationStructureFn::name());
-            extensions.push(vk::KhrBufferDeviceAddressFn::name());
-        }
-
-        // Require `VK_KHR_ray_query` if the associated feature was requested
-        if requested_features.contains(wgt::Features::RAY_QUERY) {
-            extensions.push(vk::KhrRayQueryFn::name());
-        }
-
         // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
-        }
-
-        // Require `VK_EXT_depth_clip_enable` if the associated feature was requested
-        if requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
-            extensions.push(vk::ExtDepthClipEnableFn::name());
         }
 
         // Require `VK_KHR_portability_subset` on macOS/iOS
@@ -876,9 +787,6 @@ impl super::InstanceShared {
                 let supports_driver_properties = self.driver_api_version >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
-                let supports_acceleration_structure =
-                    capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
-
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
                 if self.driver_api_version >= vk::API_VERSION_1_1
                     || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
@@ -892,13 +800,6 @@ impl super::InstanceShared {
                     let next = capabilities
                         .descriptor_indexing
                         .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
-                    builder = builder.push_next(next);
-                }
-
-                if supports_acceleration_structure {
-                    let next = capabilities
-                        .acceleration_structure
-                        .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
 
@@ -976,12 +877,6 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
                 builder = builder.push_next(next);
             }
-            if capabilities.supports_extension(vk::ExtDepthClipEnableFn::name()) {
-                let next = features
-                    .depth_clip_enable
-                    .insert(vk::PhysicalDeviceDepthClipEnableFeaturesEXT::default());
-                builder = builder.push_next(next);
-            }
             if capabilities.supports_extension(vk::ExtTextureCompressionAstcHdrFn::name()) {
                 let next = features
                     .astc_hdr
@@ -997,12 +892,6 @@ impl super::InstanceShared {
                 ));
                 builder = builder.push_next(&mut next.0);
                 builder = builder.push_next(&mut next.1);
-            }
-            if capabilities.supports_extension(vk::KhrAccelerationStructureFn::name()) {
-                let next = features
-                    .acceleration_structure
-                    .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
-                builder = builder.push_next(next);
             }
 
             // `VK_KHR_zero_initialize_workgroup_memory` is promoted to 1.3
@@ -1045,8 +934,8 @@ impl super::Instance {
                     .unwrap_or("?")
                     .to_owned()
             },
-            vendor: phd_capabilities.properties.vendor_id as usize,
-            device: phd_capabilities.properties.device_id as usize,
+            vendor: phd_capabilities.properties.vendor_id,
+            device: phd_capabilities.properties.device_id,
             device_type: match phd_capabilities.properties.device_type {
                 ash::vk::PhysicalDeviceType::OTHER => wgt::DeviceType::Other,
                 ash::vk::PhysicalDeviceType::INTEGRATED_GPU => wgt::DeviceType::IntegratedGpu,
@@ -1311,22 +1200,6 @@ impl super::Adapter {
         } else {
             None
         };
-        let ray_tracing_fns = if enabled_extensions.contains(&khr::AccelerationStructure::name())
-            && enabled_extensions.contains(&khr::BufferDeviceAddress::name())
-        {
-            Some(super::RayTracingDeviceExtensionFunctions {
-                acceleration_structure: khr::AccelerationStructure::new(
-                    &self.instance.raw,
-                    &raw_device,
-                ),
-                buffer_device_address: khr::BufferDeviceAddress::new(
-                    &self.instance.raw,
-                    &raw_device,
-                ),
-            })
-        } else {
-            None
-        };
 
         let naga_options = {
             use naga::back::spv;
@@ -1378,9 +1251,6 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
-            if features.contains(wgt::Features::RAY_QUERY) {
-                capabilities.push(spv::Capability::RayQueryKHR);
-            }
             spv::Options {
                 lang_version: (1, 0),
                 flags,
@@ -1430,7 +1300,6 @@ impl super::Adapter {
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
-                ray_tracing: ray_tracing_fns,
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
@@ -1485,8 +1354,7 @@ impl super::Adapter {
                         size: memory_heap.size,
                     })
                     .collect(),
-                buffer_device_address: enabled_extensions
-                    .contains(&khr::BufferDeviceAddress::name()),
+                buffer_device_address: false,
             };
             gpu_alloc::GpuAllocator::new(config, properties)
         };
@@ -1804,6 +1672,13 @@ impl crate::Adapter<super::Api> for super::Adapter {
         {
             wgt::PresentationTimestamp::INVALID_TIMESTAMP
         }
+    }
+
+    fn texture_format_as_hal(
+        &self,
+        texture_format: wgt::TextureFormat,
+    ) -> <super::Api as crate::Api>::TextureFormat {
+        self.private_caps.map_texture_format(texture_format)
     }
 }
 

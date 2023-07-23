@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0.71"
+# Current contents filed as a PR here:
+# <https://github.com/rukai/cargo-run-wasm/pull/37>
+cargo-run-wasm = { version = "0.3.2", git = "https://github.com/ErichDonGubler/cargo-run-wasm", branch = "expose-args" }
+env_logger = "0.10.0"
+log = "0.4.18"
+pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
+
+[workspace]

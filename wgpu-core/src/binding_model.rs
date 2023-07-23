@@ -1,11 +1,10 @@
 use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
-    hub::{HalApi, Resource},
-    id::{
-        BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, TlasId, Valid,
-    },
+    hal_api::HalApi,
+    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, Valid},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
+    resource::Resource,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
@@ -176,8 +175,6 @@ pub enum CreateBindGroupError {
     StorageReadNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageConflict(#[from] UsageConflict),
-    #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(TlasId),
 }
 
 impl PrettyError for CreateBindGroupError {
@@ -304,7 +301,6 @@ pub(crate) struct BindingTypeMaxCountValidator {
     storage_buffers: PerStageBindingTypeCounter,
     storage_textures: PerStageBindingTypeCounter,
     uniform_buffers: PerStageBindingTypeCounter,
-    acceleration_structures: PerStageBindingTypeCounter,
 }
 
 impl BindingTypeMaxCountValidator {
@@ -339,9 +335,6 @@ impl BindingTypeMaxCountValidator {
             }
             wgt::BindingType::StorageTexture { .. } => {
                 self.storage_textures.add(binding.visibility, count);
-            }
-            wgt::BindingType::AccelerationStructure => {
-                self.acceleration_structures.add(binding.visibility, count);
             }
         }
     }
@@ -694,7 +687,6 @@ pub enum BindingResource<'a> {
     SamplerArray(Cow<'a, [SamplerId]>),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
-    AccelerationStructure(TlasId),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -706,7 +698,7 @@ pub enum BindError {
         s1 = if *.actual >= 2 { "s" } else { "" },
     )]
     MismatchedDynamicOffsetCount {
-        group: u8,
+        group: u32,
         actual: usize,
         expected: usize,
     },
@@ -715,7 +707,7 @@ pub enum BindError {
     )]
     UnalignedDynamicBinding {
         idx: usize,
-        group: u8,
+        group: u32,
         binding: u32,
         offset: u32,
         alignment: u32,
@@ -727,7 +719,7 @@ pub enum BindError {
     )]
     DynamicBindingOutOfBounds {
         idx: usize,
-        group: u8,
+        group: u32,
         binding: u32,
         offset: u32,
         buffer_size: wgt::BufferAddress,
@@ -789,7 +781,7 @@ pub struct BindGroup<A: HalApi> {
 impl<A: HalApi> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
-        bind_group_index: u8,
+        bind_group_index: u32,
         offsets: &[wgt::DynamicOffset],
         limits: &wgt::Limits,
     ) -> Result<(), BindError> {

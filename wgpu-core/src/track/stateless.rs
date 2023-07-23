@@ -7,8 +7,9 @@
 use std::marker::PhantomData;
 
 use crate::{
-    hub,
+    hal_api::HalApi,
     id::{TypedId, Valid},
+    resource, storage,
     track::ResourceMetadata,
     RefCount,
 };
@@ -20,7 +21,7 @@ pub(crate) struct StatelessBindGroupSate<T, Id: TypedId> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
+impl<T: resource::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
     pub fn new() -> Self {
         Self {
             resources: Vec::new(),
@@ -44,7 +45,11 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a storage::Storage<T, Id>,
+        id: Id,
+    ) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
         self.resources
@@ -55,13 +60,13 @@ impl<T: hub::Resource, Id: TypedId> StatelessBindGroupSate<T, Id> {
 }
 
 /// Stores all resource state within a command buffer or device.
-pub(crate) struct StatelessTracker<A: hub::HalApi, T, Id: TypedId> {
+pub(crate) struct StatelessTracker<A: HalApi, T, Id: TypedId> {
     metadata: ResourceMetadata<A>,
 
     _phantom: PhantomData<(T, Id)>,
 }
 
-impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
+impl<A: HalApi, T: resource::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
@@ -117,7 +122,11 @@ impl<A: hub::HalApi, T: hub::Resource, Id: TypedId> StatelessTracker<A, T, Id> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a hub::Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(
+        &mut self,
+        storage: &'a storage::Storage<T, Id>,
+        id: Id,
+    ) -> Option<&'a T> {
         let item = storage.get(id).ok()?;
 
         let (index32, epoch, _) = id.unzip();

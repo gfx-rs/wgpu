@@ -280,16 +280,16 @@ impl super::DeviceShared {
         &self,
         buffer: &'a super::Buffer,
         ranges: I,
-    ) -> impl 'a + Iterator<Item = vk::MappedMemoryRange> {
-        let block = buffer.block.lock();
+    ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange>> {
+        let block = buffer.block.as_ref()?.lock();
         let mask = self.private_caps.non_coherent_map_mask;
-        ranges.map(move |range| {
+        Some(ranges.map(move |range| {
             vk::MappedMemoryRange::builder()
                 .memory(*block.memory())
                 .offset((block.offset() + range.start) & !mask)
                 .size((range.end - range.start + mask) & !mask)
                 .build()
-        })
+        }))
     }
 
     unsafe fn free_resources(&self) {
@@ -680,6 +680,17 @@ impl super::Device {
         }
     }
 
+    /// # Safety
+    ///
+    /// - `vk_buffer`'s memory must be managed by the caller
+    /// - Externally imported buffers can't be mapped by `wgpu`
+    pub unsafe fn buffer_from_raw(vk_buffer: vk::Buffer) -> super::Buffer {
+        super::Buffer {
+            raw: vk_buffer,
+            block: None,
+        }
+    }
+
     fn create_shader_module_impl(
         &self,
         spv: &[u32],
@@ -841,21 +852,12 @@ impl crate::Device<super::Api> for super::Device {
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
-        let alignment_mask = if desc.usage.intersects(
-            crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
-                | crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-        ) {
-            16
-        } else {
-            req.alignment
-        } - 1;
-
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
                     size: req.size,
-                    align_mask: alignment_mask,
+                    align_mask: req.alignment - 1,
                     usage: alloc_usage,
                     memory_types: req.memory_type_bits & self.valid_ash_memory_types,
                 },
@@ -877,16 +879,18 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::Buffer {
             raw,
-            block: Mutex::new(block),
+            block: Some(Mutex::new(block)),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
-        unsafe {
-            self.mem_allocator
-                .lock()
-                .dealloc(&*self.shared, buffer.block.into_inner())
-        };
+        if let Some(block) = buffer.block {
+            unsafe {
+                self.mem_allocator
+                    .lock()
+                    .dealloc(&*self.shared, block.into_inner())
+            };
+        }
     }
 
     unsafe fn map_buffer(
@@ -894,48 +898,56 @@ impl crate::Device<super::Api> for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
-        let size = range.end - range.start;
-        let mut block = buffer.block.lock();
-        let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
-        let is_coherent = block
-            .props()
-            .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
-        Ok(crate::BufferMapping { ptr, is_coherent })
+        if let Some(ref block) = buffer.block {
+            let size = range.end - range.start;
+            let mut block = block.lock();
+            let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
+            let is_coherent = block
+                .props()
+                .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
+            Ok(crate::BufferMapping { ptr, is_coherent })
+        } else {
+            Err(crate::DeviceError::OutOfMemory)
+        }
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) -> Result<(), crate::DeviceError> {
-        unsafe { buffer.block.lock().unmap(&*self.shared) };
-        Ok(())
+        if let Some(ref block) = buffer.block {
+            unsafe { block.lock().unmap(&*self.shared) };
+            Ok(())
+        } else {
+            Err(crate::DeviceError::OutOfMemory)
+        }
     }
 
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
-
-        unsafe {
-            self.shared
-                .raw
-                .flush_mapped_memory_ranges(
-                    &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
-                )
+        if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
+            unsafe {
+                self.shared
+                    .raw
+                    .flush_mapped_memory_ranges(
+                        &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
+                    )
+            }
+            .unwrap();
         }
-        .unwrap();
     }
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        let vk_ranges = self.shared.make_memory_ranges(buffer, ranges);
-
-        unsafe {
-            self.shared
-                .raw
-                .invalidate_mapped_memory_ranges(
-                    &smallvec::SmallVec::<[vk::MappedMemoryRange; 32]>::from_iter(vk_ranges),
-                )
+        if let Some(vk_ranges) = self.shared.make_memory_ranges(buffer, ranges) {
+            unsafe {
+                self.shared
+                    .raw
+                    .invalidate_mapped_memory_ranges(&smallvec::SmallVec::<
+                        [vk::MappedMemoryRange; 32],
+                    >::from_iter(vk_ranges))
+            }
+            .unwrap();
         }
-        .unwrap();
     }
 
     unsafe fn create_texture(
@@ -1242,9 +1254,6 @@ impl crate::Device<super::Api> for super::Device {
                 wgt::BindingType::StorageTexture { .. } => {
                     desc_count.storage_image += count;
                 }
-                wgt::BindingType::AccelerationStructure => {
-                    desc_count.acceleration_structure += count;
-                }
             }
         }
 
@@ -1419,10 +1428,6 @@ impl crate::Device<super::Api> for super::Device {
         let mut buffer_infos = Vec::with_capacity(desc.buffers.len());
         let mut sampler_infos = Vec::with_capacity(desc.samplers.len());
         let mut image_infos = Vec::with_capacity(desc.textures.len());
-        let mut acceleration_structure_infos =
-            Vec::with_capacity(desc.acceleration_structures.len());
-        let mut raw_acceleration_structures =
-            Vec::with_capacity(desc.acceleration_structures.len());
         for entry in desc.entries {
             let (ty, size) = desc.layout.types[entry.binding as usize];
             if size == 0 {
@@ -1432,9 +1437,6 @@ impl crate::Device<super::Api> for super::Device {
                 .dst_set(*set.raw())
                 .dst_binding(entry.binding)
                 .descriptor_type(ty);
-
-            let mut extra_descriptor_count = 0;
-
             write = match ty {
                 vk::DescriptorType::SAMPLER => {
                     let index = sampler_infos.len();
@@ -1485,44 +1487,9 @@ impl crate::Device<super::Api> for super::Device {
                     ));
                     write.buffer_info(&buffer_infos[index..])
                 }
-                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
-                    let index = acceleration_structure_infos.len();
-                    let start = entry.resource_index;
-                    let end = start + entry.count;
-
-                    let raw_start = raw_acceleration_structures.len();
-
-                    raw_acceleration_structures.extend(
-                        desc.acceleration_structures[start as usize..end as usize]
-                            .iter()
-                            .map(|acceleration_structure| acceleration_structure.raw),
-                    );
-
-                    let acceleration_structure_info =
-                        vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-                            .acceleration_structures(&raw_acceleration_structures[raw_start..]);
-
-                    // todo: Dereference the struct to get around lifetime issues. Safe as long as we never resize
-                    // `raw_acceleration_structures`.
-                    let acceleration_structure_info: vk::WriteDescriptorSetAccelerationStructureKHR = *acceleration_structure_info;
-
-                    assert!(
-                        index < desc.acceleration_structures.len(),
-                        "Encountered more acceleration structures then expected"
-                    );
-                    acceleration_structure_infos.push(acceleration_structure_info);
-
-                    extra_descriptor_count += 1;
-
-                    write.push_next(&mut acceleration_structure_infos[index])
-                }
                 _ => unreachable!(),
             };
-
-            let mut write = write.build();
-            write.descriptor_count += extra_descriptor_count;
-
-            writes.push(write);
+            writes.push(write.build());
         }
 
         unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
@@ -1665,7 +1632,8 @@ impl crate::Device<super::Api> for super::Device {
         let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::builder()
             .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
             .front_face(conv::map_front_face(desc.primitive.front_face))
-            .line_width(1.0);
+            .line_width(1.0)
+            .depth_clamp_enable(desc.primitive.unclipped_depth);
         if let Some(face) = desc.primitive.cull_mode {
             vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
         }
@@ -1675,13 +1643,6 @@ impl crate::Device<super::Api> for super::Device {
                 .build();
         if desc.primitive.conservative {
             vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
-        }
-        let mut vk_depth_clip_state =
-            vk::PipelineRasterizationDepthClipStateCreateInfoEXT::builder()
-                .depth_clip_enable(false)
-                .build();
-        if desc.primitive.unclipped_depth {
-            vk_rasterization = vk_rasterization.push_next(&mut vk_depth_clip_state);
         }
 
         let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::builder();
@@ -2050,223 +2011,6 @@ impl crate::Device<super::Api> for super::Device {
                 self.render_doc
                     .end_frame_capture(raw_vk_instance_dispatch_table, ptr::null_mut())
             }
-        }
-    }
-
-    unsafe fn get_acceleration_structure_build_sizes<'a>(
-        &self,
-        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
-    ) -> crate::AccelerationStructureBuildSizes {
-        const CAPACITY: usize = 8;
-
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
-
-        let (geometries, primitive_counts) = match *desc.entries {
-            crate::AccelerationStructureEntries::Instances(ref instances) => {
-                let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::default();
-
-                let geometry = vk::AccelerationStructureGeometryKHR::builder()
-                    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
-                    .geometry(vk::AccelerationStructureGeometryDataKHR {
-                        instances: instance_data,
-                    });
-
-                (
-                    smallvec::smallvec![*geometry],
-                    smallvec::smallvec![instances.count],
-                )
-            }
-            crate::AccelerationStructureEntries::Triangles(ref in_geometries) => {
-                let mut primitive_counts =
-                    smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
-                let mut geometries = smallvec::SmallVec::<
-                    [vk::AccelerationStructureGeometryKHR; CAPACITY],
-                >::with_capacity(in_geometries.len());
-
-                for triangles in in_geometries {
-                    let mut triangle_data =
-                        vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
-                            .vertex_format(conv::map_vertex_format(triangles.vertex_format))
-                            .max_vertex(triangles.vertex_count)
-                            .vertex_stride(triangles.vertex_stride);
-
-                    let pritive_count = if let Some(ref indices) = triangles.indices {
-                        triangle_data =
-                            triangle_data.index_type(conv::map_index_format(indices.format));
-                        indices.count / 3
-                    } else {
-                        triangles.vertex_count
-                    };
-
-                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
-                        .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
-                        .geometry(vk::AccelerationStructureGeometryDataKHR {
-                            triangles: *triangle_data,
-                        })
-                        .flags(conv::map_acceleration_structure_geomety_flags(
-                            triangles.flags,
-                        ));
-
-                    geometries.push(*geometry);
-                    primitive_counts.push(pritive_count);
-                }
-                (geometries, primitive_counts)
-            }
-            crate::AccelerationStructureEntries::AABBs(ref in_geometries) => {
-                let mut primitive_counts =
-                    smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
-                let mut geometries = smallvec::SmallVec::<
-                    [vk::AccelerationStructureGeometryKHR; CAPACITY],
-                >::with_capacity(in_geometries.len());
-                for aabb in in_geometries {
-                    let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
-                        .stride(aabb.stride);
-
-                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
-                        .geometry_type(vk::GeometryTypeKHR::AABBS)
-                        .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
-                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
-
-                    geometries.push(*geometry);
-                    primitive_counts.push(aabb.count);
-                }
-                (geometries, primitive_counts)
-            }
-        };
-
-        let ty = match *desc.entries {
-            crate::AccelerationStructureEntries::Instances(_) => {
-                vk::AccelerationStructureTypeKHR::TOP_LEVEL
-            }
-            _ => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
-        };
-
-        let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
-            .ty(ty)
-            .flags(conv::map_acceleration_structure_flags(desc.flags))
-            .geometries(&geometries);
-
-        let raw = unsafe {
-            ray_tracing_functions
-                .acceleration_structure
-                .get_acceleration_structure_build_sizes(
-                    vk::AccelerationStructureBuildTypeKHR::DEVICE,
-                    &geometry_info,
-                    &primitive_counts,
-                )
-        };
-
-        crate::AccelerationStructureBuildSizes {
-            acceleration_structure_size: raw.acceleration_structure_size,
-            update_scratch_size: raw.update_scratch_size,
-            build_scratch_size: raw.build_scratch_size,
-        }
-    }
-
-    unsafe fn get_acceleration_structure_device_address(
-        &self,
-        acceleration_structure: &super::AccelerationStructure,
-    ) -> wgt::BufferAddress {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
-
-        unsafe {
-            ray_tracing_functions
-                .acceleration_structure
-                .get_acceleration_structure_device_address(
-                    &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                        .acceleration_structure(acceleration_structure.raw),
-                )
-        }
-    }
-
-    unsafe fn create_acceleration_structure(
-        &self,
-        desc: &crate::AccelerationStructureDescriptor,
-    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
-
-        let vk_buffer_info = vk::BufferCreateInfo::builder()
-            .size(desc.size)
-            .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-        unsafe {
-            let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
-            let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
-
-            let block = self.mem_allocator.lock().alloc(
-                &*self.shared,
-                gpu_alloc::Request {
-                    size: req.size,
-                    align_mask: req.alignment - 1,
-                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
-                },
-            )?;
-
-            self.shared
-                .raw
-                .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())?;
-
-            if let Some(label) = desc.label {
-                self.shared
-                    .set_object_name(vk::ObjectType::BUFFER, raw_buffer, label);
-            }
-
-            let vk_info = vk::AccelerationStructureCreateInfoKHR::builder()
-                .buffer(raw_buffer)
-                .offset(0)
-                .size(desc.size)
-                .ty(conv::map_acceleration_structure_format(desc.format));
-
-            let raw_acceleration_structure = ray_tracing_functions
-                .acceleration_structure
-                .create_acceleration_structure(&vk_info, None)?;
-
-            if let Some(label) = desc.label {
-                self.shared.set_object_name(
-                    vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
-                    raw_acceleration_structure,
-                    label,
-                );
-            }
-
-            Ok(super::AccelerationStructure {
-                raw: raw_acceleration_structure,
-                buffer: raw_buffer,
-                block: Mutex::new(block),
-            })
-        }
-    }
-
-    unsafe fn destroy_acceleration_structure(
-        &self,
-        acceleration_structure: super::AccelerationStructure,
-    ) {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
-
-        unsafe {
-            ray_tracing_functions
-                .acceleration_structure
-                .destroy_acceleration_structure(acceleration_structure.raw, None);
-            self.shared
-                .raw
-                .destroy_buffer(acceleration_structure.buffer, None);
-            self.mem_allocator
-                .lock()
-                .dealloc(&*self.shared, acceleration_structure.block.into_inner());
         }
     }
 }

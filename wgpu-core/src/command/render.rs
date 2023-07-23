@@ -14,11 +14,15 @@ use crate::{
         RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
     resource::{self, Buffer, Texture, TextureView, TextureViewNotRenderableReason},
+    storage::Storage,
     track::{TextureSelector, UsageConflict, UsageScope},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
@@ -1223,9 +1227,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let cmd_buf: &mut CommandBuffer<A> =
                 CommandBuffer::get_encoder_mut(&mut *cmb_guard, encoder_id)
                     .map_pass_err(init_scope)?;
-            // close everything while the new command encoder is filled
+
+            // We automatically keep extending command buffers over time, and because
+            // we want to insert a command buffer _before_ what we're about to record,
+            // we need to make sure to close the previous one.
             cmd_buf.encoder.close();
-            // will be reset to true if recording is done without errors
+            // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             cmd_buf.status = CommandEncoderStatus::Error;
 
             #[cfg(feature = "trace")]
@@ -1247,8 +1254,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (query_set_guard, mut token) = hub.query_sets.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+            let (view_guard, _) = hub.texture_views.read(&mut token);
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1277,8 +1283,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(&*render_pipeline_guard),
                 Some(&*bundle_guard),
                 Some(&*query_set_guard),
-                None,
-                Some(&*tlas_guard),
             );
 
             let raw = &mut cmd_buf.encoder.raw;
@@ -1308,7 +1312,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let scope = PassErrorScope::SetBindGroup(bind_group_id);
                         let max_bind_groups = device.limits.max_bind_groups;
-                        if (index as u32) >= max_bind_groups {
+                        if index >= max_bind_groups {
                             return Err(RenderCommandError::BindGroupIndexOutOfRange {
                                 index,
                                 max: max_bind_groups,
@@ -1358,16 +1362,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                         }
 
-                        cmd_buf.tlas_actions.extend(
-                            bind_group.used.acceleration_structures.used().map(|id| {
-                                cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
-                                crate::ray_tracing::TlasAction {
-                                    id: id.0,
-                                    kind: crate::ray_tracing::TlasActionKind::Use,
-                                }
-                            }),
-                        );
-
                         let pipeline_layout_id = state.binder.pipeline_layout_id;
                         let entries = state.binder.assign_group(
                             index as usize,
@@ -1385,7 +1379,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 unsafe {
                                     raw.set_bind_group(
                                         pipeline_layout,
-                                        index as u32 + i as u32,
+                                        index + i as u32,
                                         raw_bg,
                                         &e.dynamic_offsets,
                                     );
@@ -1691,9 +1685,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::SetScissor(ref rect) => {
                         let scope = PassErrorScope::SetScissorRect;
-                        if rect.w == 0
-                            || rect.h == 0
-                            || rect.x + rect.w > info.extent.width
+                        if rect.x + rect.w > info.extent.width
                             || rect.y + rect.h > info.extent.height
                         {
                             return Err(RenderCommandError::InvalidScissorRect(*rect, info.extent))
@@ -2188,15 +2180,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        // Before we finish the auxiliary encoder, let's
-        // get our pass back and place it after.
-        //Note: we could just hold onto this raw pass while recording the
-        // auxiliary encoder, but then handling errors and cleaning up
-        // would be more complicated, so we re-use `open()`/`close()`.
-        let pass_raw = cmd_buf.encoder.list.pop().unwrap();
-        cmd_buf.encoder.close();
-        cmd_buf.encoder.list.push(pass_raw);
         cmd_buf.status = CommandEncoderStatus::Recording;
+        cmd_buf.encoder.close_and_swap();
 
         Ok(())
     }
@@ -2238,7 +2223,7 @@ pub mod render_ffi {
         }
 
         pass.base.commands.push(RenderCommand::SetBindGroup {
-            index: index.try_into().unwrap(),
+            index,
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
         });
