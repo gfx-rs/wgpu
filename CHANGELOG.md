@@ -118,6 +118,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 
 - Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
 - Implement depth-clip-control using depthClamp instead of VK_EXT_depth_clip_enable. By @AlbinBernhardssonARM [#3892](https://github.com/gfx-rs/wgpu/pull/3892).
+- Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
 
 #### Metal
 

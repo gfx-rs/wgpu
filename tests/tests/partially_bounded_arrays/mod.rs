@@ -1,7 +1,7 @@
 use std::{borrow::Cow, num::NonZeroU32};
 
-use crate::common::{initialize_test, TestParameters};
 use wasm_bindgen_test::*;
+use wgpu_test::{image::ReadbackBuffers, initialize_test, TestParameters};
 
 #[test]
 #[wasm_bindgen_test]
@@ -14,16 +14,7 @@ fn partially_bounded_array() {
                     | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY
                     | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             )
-            .limits(wgpu::Limits {
-                ..wgpu::Limits::downlevel_defaults()
-            })
-            .backend_failure(
-                wgpu::Backends::GL
-                    | wgpu::Backends::DX11
-                    | wgpu::Backends::METAL
-                    | wgpu::Backends::DX12
-                    | wgpu::Backends::BROWSER_WEBGPU,
-            ),
+            .limits(wgpu::Limits::downlevel_defaults()),
         |ctx| {
             let device = &ctx.device;
 
@@ -47,14 +38,6 @@ fn partially_bounded_array() {
             });
 
             let texture_view = storage_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            let size = std::mem::size_of::<f32>() as u64 * 4_u64;
-            let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -110,47 +93,16 @@ fn partially_bounded_array() {
                 cpass.dispatch_workgroups(1, 1, 1);
             }
 
-            encoder.copy_texture_to_buffer(
-                wgpu::ImageCopyTexture {
-                    texture: &storage_texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::ImageCopyBuffer {
-                    buffer: &staging_buffer,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: None,
-                        rows_per_image: None,
-                    },
-                },
-                wgpu::Extent3d {
-                    width: 1,
-                    height: 1,
-                    depth_or_array_layers: 1,
-                },
-            );
+            let readback_buffers = ReadbackBuffers::new(&ctx.device, &storage_texture);
+            readback_buffers.copy_from(&ctx.device, &mut encoder, &storage_texture);
 
             ctx.queue.submit(Some(encoder.finish()));
 
-            // wait for gpu
-            let buffer_slice = staging_buffer.slice(..);
-            let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
-            buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
-
-            device.poll(wgpu::Maintain::Wait);
-
-            if let Some(Ok(())) = pollster::block_on(receiver.receive()) {
-                let data = buffer_slice.get_mapped_range();
-                let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
-                assert!(result.iter().eq(&[4.0, 3.0, 2.0, 1.0]));
-                // dropped before we unmap the buffer.
-                drop(data);
-                staging_buffer.unmap();
-            } else {
-                panic!("failed!")
-            }
+            assert!(
+                readback_buffers
+                    .check_buffer_contents(device, bytemuck::bytes_of(&[4.0f32, 3.0, 2.0, 1.0])),
+                "texture storage values are incorrect!"
+            );
         },
     )
 }
