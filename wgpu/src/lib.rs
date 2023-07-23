@@ -1041,9 +1041,9 @@ impl<V: Default> Default for Operations<V> {
 pub struct RenderPassTimestampWrites<'a> {
     /// The query set to write to.
     pub query_set: &'a QuerySet,
-    /// The index of the query at which the start timestamp of the pass is written if any.
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
     pub beginning_of_pass_write_index: Option<u32>,
-    /// The index of the query at which the end timestamp of the pass is written if any.
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
 static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
@@ -1482,9 +1482,9 @@ static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 pub struct ComputePassTimestampWrites<'a> {
     /// The query set to write to.
     pub query_set: &'a QuerySet,
-    /// The index of the query at which the start timestamp of the pass is written if any.
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
     pub beginning_of_pass_write_index: Option<u32>,
-    /// The index of the query at which the end timestamp of the pass is written if any.
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
 static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
@@ -4527,9 +4527,8 @@ impl Queue {
     ///
     /// Returns zero if timestamp queries are unsupported.
     ///
-    /// TODO: `<https://github.com/gfx-rs/wgpu/issues/3741>`
-    /// Timestamp values are supposed to represent nanosecond values, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
-    /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required currently.
+    /// Timestamp values are represented in nanosecond values on WebGPU, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
+    /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required.
     pub fn get_timestamp_period(&self) -> f32 {
         DynContext::queue_get_timestamp_period(&*self.context, &self.id, self.data.as_ref())
     }

@@ -198,9 +198,9 @@ pub enum RenderPassTimestampLocation {
 pub struct RenderPassTimestampWrites {
     /// The query set to write the timestamp to.
     pub query_set: id::QuerySetId,
-    /// The index of the query at which the start timestamp of the pass is written if any.
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
     pub beginning_of_pass_write_index: Option<u32>,
-    /// The index of the query at which the end timestamp of the pass is written if any.
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
     pub end_of_pass_write_index: Option<u32>,
 }
 
