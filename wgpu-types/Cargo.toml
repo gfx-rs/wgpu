@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU types"
@@ -32,8 +32,8 @@ bitflags = "2"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.63"
-web-sys = { version = "0.3.60", features = [
+js-sys = "0.3.64"
+web-sys = { version = "0.3.64", features = [
     "ImageBitmap",
     "HtmlVideoElement",
     "HtmlCanvasElement",

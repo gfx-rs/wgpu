@@ -16,7 +16,7 @@ use placed as allocation;
 // This is the fast path using gpu_allocator to suballocate buffers and textures.
 #[cfg(feature = "windows_rs")]
 mod placed {
-    use d3d12::WeakPtr;
+    use d3d12::ComPtr;
     use parking_lot::Mutex;
     use std::ptr;
     use wgt::assertions::StrictAssertUnwrapExt;
@@ -64,7 +64,7 @@ mod placed {
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut WeakPtr<ID3D12Resource>,
+        resource: &mut ComPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
@@ -121,7 +121,7 @@ mod placed {
         device: &crate::dx12::Device,
         desc: &crate::TextureDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut WeakPtr<ID3D12Resource>,
+        resource: &mut ComPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         // It's a workaround for Intel Xe drivers.
         if !device.private_caps.suballocation_supported {
@@ -221,7 +221,7 @@ mod placed {
 // This is the older, slower path where it doesn't suballocate buffers.
 // Tracking issue for when it can be removed: https://github.com/gfx-rs/wgpu/issues/3207
 mod committed {
-    use d3d12::WeakPtr;
+    use d3d12::ComPtr;
     use parking_lot::Mutex;
     use std::ptr;
     use winapi::{
@@ -254,7 +254,7 @@ mod committed {
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut WeakPtr<ID3D12Resource>,
+        resource: &mut ComPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
@@ -301,7 +301,7 @@ mod committed {
         device: &crate::dx12::Device,
         _desc: &crate::TextureDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut WeakPtr<ID3D12Resource>,
+        resource: &mut ComPtr<ID3D12Resource>,
     ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
         let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
             Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,

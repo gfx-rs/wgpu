@@ -22,9 +22,6 @@ impl Drop for super::Adapter {
                 self.report_live_objects();
             }
         }
-        unsafe {
-            self.raw.destroy();
-        }
     }
 }
 
@@ -40,7 +37,6 @@ impl super::Adapter {
                     d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
                 )
             };
-            unsafe { debug_device.destroy() };
         }
     }
 
@@ -58,7 +54,7 @@ impl super::Adapter {
         // Create the device so that we can get the capabilities.
         let device = {
             profiling::scope!("ID3D12Device::create_device");
-            match library.create_device(*adapter, d3d12::FeatureLevel::L11_0) {
+            match library.create_device(&adapter, d3d12::FeatureLevel::L11_0) {
                 Ok(pair) => match pair.into_result() {
                     Ok(device) => device,
                     Err(err) => {
@@ -397,8 +393,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         let device = super::Device::new(
-            self.device,
-            queue,
+            self.device.clone(),
+            queue.clone(),
             self.private_caps,
             &self.library,
             self.dx12_shader_compiler.clone(),

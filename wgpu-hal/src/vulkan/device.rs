@@ -731,7 +731,8 @@ impl super::Device {
                         temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                             index: naga::proc::BoundsCheckPolicy::Unchecked,
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                            image: naga::proc::BoundsCheckPolicy::Unchecked,
+                            image_load: naga::proc::BoundsCheckPolicy::Unchecked,
+                            image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
                     }
@@ -1525,7 +1526,8 @@ impl crate::Device<super::Api> for super::Device {
                     naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                        image: naga::proc::BoundsCheckPolicy::Unchecked,
+                        image_load: naga::proc::BoundsCheckPolicy::Unchecked,
+                        image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }

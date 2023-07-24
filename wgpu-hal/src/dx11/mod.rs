@@ -57,7 +57,7 @@ unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
 
 d3d12::weak_com_inheritance_chain! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Clone, PartialEq)]
     enum D3D11Device {
         Device(d3d11::ID3D11Device), from_device, as_device, device;
         Device1(d3d11_1::ID3D11Device1), from_device1, as_device1, unwrap_device1;

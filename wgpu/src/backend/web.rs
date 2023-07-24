@@ -986,10 +986,15 @@ impl crate::context::Context for Context {
         //assert!(backends.contains(wgt::Backends::BROWSER_WEBGPU));
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
-            wgt::PowerPreference::LowPower => web_sys::GpuPowerPreference::LowPower,
-            wgt::PowerPreference::HighPerformance => web_sys::GpuPowerPreference::HighPerformance,
+            wgt::PowerPreference::None => None,
+            wgt::PowerPreference::LowPower => Some(web_sys::GpuPowerPreference::LowPower),
+            wgt::PowerPreference::HighPerformance => {
+                Some(web_sys::GpuPowerPreference::HighPerformance)
+            }
         };
-        mapped_options.power_preference(mapped_power_preference);
+        if let Some(mapped_pref) = mapped_power_preference {
+            mapped_options.power_preference(mapped_pref);
+        }
         let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
 
         MakeSendFuture::new(
@@ -1160,6 +1165,8 @@ impl crate::context::Context for Context {
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
+            usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
     }
 

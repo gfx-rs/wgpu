@@ -221,7 +221,8 @@ impl super::Device {
         let policies = naga::proc::BoundsCheckPolicies {
             index: BoundsCheckPolicy::Unchecked,
             buffer: BoundsCheckPolicy::Unchecked,
-            image: image_check,
+            image_load: image_check,
+            image_store: image_check,
             binding_array: BoundsCheckPolicy::Unchecked,
         };
 

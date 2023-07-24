@@ -75,6 +75,13 @@ fn test_multithreaded_compute() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .specific_failure(None, None, Some("V3D"), true)
+            // https://github.com/gfx-rs/wgpu/issues/3944
+            .specific_failure(
+                Some(wgpu::Backends::VULKAN),
+                None,
+                Some("swiftshader"),
+                true,
+            )
             // https://github.com/gfx-rs/wgpu/issues/3250
             .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
         |ctx| {
