@@ -1535,7 +1535,7 @@ impl<A: HalApi> Device<A> {
                             }
                         },
                     )
-                },
+                }
                 Bt::AccelerationStructure => todo!(),
             };
 
@@ -2023,7 +2023,7 @@ impl<A: HalApi> Device<A> {
             buffers: &hal_buffers,
             samplers: &hal_samplers,
             textures: &hal_textures,
-            acceleration_structures: &[]
+            acceleration_structures: &[],
         };
         let raw = unsafe {
             self.raw

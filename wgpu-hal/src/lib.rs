@@ -179,7 +179,7 @@ pub trait Api: Clone + Sized {
     type RenderPipeline: WasmNotSend + WasmNotSync;
     type ComputePipeline: WasmNotSend + WasmNotSync;
 
-    type AccelerationStructure: fmt::Debug + WasmNotSend + Sync + 'static;
+    type AccelerationStructure: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
 }
 
 pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
