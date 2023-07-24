@@ -76,6 +76,27 @@ impl crate::Api for Api {
 struct DebugUtils {
     extension: ext::DebugUtils,
     messenger: vk::DebugUtilsMessengerEXT,
+
+    /// Owning pointer to the debug messenger callback user data.
+    ///
+    /// `InstanceShared::drop` destroys the debug messenger before
+    /// dropping this, so the callback should never receive a dangling
+    /// user data pointer.
+    #[allow(dead_code)]
+    callback_data: Box<DebugUtilsMessengerUserData>,
+}
+
+/// User data needed by `instance::debug_utils_messenger_callback`.
+///
+/// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
+/// pointer refers to one of these values.
+#[derive(Debug)]
+pub struct DebugUtilsMessengerUserData {
+    /// Validation layer description, from `vk::LayerProperties`.
+    validation_layer_description: std::ffi::CString,
+
+    /// Validation layer specification version, from `vk::LayerProperties`.
+    validation_layer_spec_version: u32,
 }
 
 pub struct InstanceShared {
@@ -175,6 +196,8 @@ struct PrivateCapabilities {
     non_coherent_map_mask: wgt::BufferAddress,
     robust_buffer_access: bool,
     robust_image_access: bool,
+    robust_buffer_access2: bool,
+    robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
 }
 
@@ -269,7 +292,7 @@ pub struct Device {
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
-    naga_options: naga::back::spv::Options,
+    naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
@@ -291,7 +314,7 @@ pub struct Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
 }
 
 #[derive(Debug)]

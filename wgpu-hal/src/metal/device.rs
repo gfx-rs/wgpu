@@ -99,7 +99,8 @@ impl super::Device {
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
                 index: bounds_check_policy,
                 buffer: bounds_check_policy,
-                image: bounds_check_policy,
+                image_load: bounds_check_policy,
+                image_store: bounds_check_policy,
                 // TODO: support bounds checks on binding arrays
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
@@ -107,7 +108,7 @@ impl super::Device {
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
-            allow_point_size: match primitive_class {
+            allow_and_force_point_size: match primitive_class {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
@@ -175,7 +176,7 @@ impl super::Device {
             match var.space {
                 naga::AddressSpace::WorkGroup => {
                     if !ep_info[var_handle].is_empty() {
-                        let size = module.types[var.ty].inner.size(&module.constants);
+                        let size = module.types[var.ty].inner.size(module.to_ctx());
                         wg_memory_sizes.push(size);
                     }
                 }
@@ -263,6 +264,10 @@ impl super::Device {
         }
     }
 
+    pub unsafe fn buffer_from_raw(raw: metal::Buffer, size: wgt::BufferAddress) -> super::Buffer {
+        super::Buffer { raw, size }
+    }
+
     pub fn raw_device(&self) -> &Mutex<metal::Device> {
         &self.shared.device
     }
@@ -325,7 +330,7 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::TextureDescriptor,
     ) -> DeviceResult<super::Texture> {
-        use foreign_types::ForeignTypeRef;
+        use metal::foreign_types::ForeignType as _;
 
         let mtl_format = self.shared.private_caps.map_format(desc.format);
 

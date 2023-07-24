@@ -40,6 +40,140 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### Vulkan
+- Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
+
+## v0.17.0 (2023-07-20)
+
+This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
+
+### Major Changes
+
+This release was fairly minor as breaking changes go.
+
+#### `wgpu` types now `!Send` `!Sync` on wasm
+
+Up until this point, wgpu has made the assumption that threads do not exist on wasm. With the rise of libraries like [`wasm_thread`](https://crates.io/crates/wasm_thread) making it easier and easier to do wasm multithreading this assumption is no longer sound. As all wgpu objects contain references into the JS heap, they cannot leave the thread they started on. 
+
+As we understand that this change might be very inconvenient for users who don't care about wasm threading, there is a crate feature which re-enables the old behavior: `fragile-send-sync-non-atomic-wasm`. So long as you don't compile your code with `-Ctarget-feature=+atomics`, `Send` and `Sync` will be implemented again on wgpu types on wasm. As the name implies, especially for libraries, this is very fragile, as you don't know if a user will want to compile with atomics (and therefore threads) or not.
+
+By @daxpedda in [#3691](https://github.com/gfx-rs/wgpu/pull/3691)
+
+#### Power Preference is now optional
+
+The `power_preference` field of `RequestAdapterOptions` is now optional. If it is `PowerPreference::None`, we will choose the first available adapter, preferring GPU adapters over CPU adapters.
+
+By @Aaron1011 in [#3903](https://github.com/gfx-rs/wgpu/pull/3903)
+
+#### `initialize_adapter_from_env` argument changes
+
+Removed the backend_bits parameter from `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default`. If you want to limit the backends used by this function, only enable the wanted backends in the instance.
+
+Added a compatible surface parameter, to ensure the given device is able to be presented onto the given surface.
+
+```diff
+- wgpu::util::initialize_adapter_from_env(instance, backend_bits);
++ wgpu::util::initialize_adapter_from_env(instance, Some(&compatible_surface));
+```
+
+By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](https://github.com/gfx-rs/wgpu/pull/3905)
+
+#### Misc Breaking Changes
+
+- Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+
+### Changes
+
+- Added support for importing external buffers using `buffer_from_raw` (Dx12, Metal, Vulkan) and `create_buffer_from_hal`. By @AdrianEddy in [#3355](https://github.com/gfx-rs/wgpu/pull/3355)
+
+
+#### Vulkan
+
+- Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
+
+### Added/New Features
+
+- Empty scissor rects are allowed now, matching the specification. by @PJB3005 in [#3863](https://github.com/gfx-rs/wgpu/pull/3863).
+- Add back components info to `TextureFormat`s. By @teoxoy in [#3843](https://github.com/gfx-rs/wgpu/pull/3843).
+
+### Documentation
+
+- Better documentation for draw, draw_indexed, set_viewport and set_scissor_rect. By @genusistimelord in [#3860](https://github.com/gfx-rs/wgpu/pull/3860)
+- Fix link to `GPUVertexBufferLayout`. By @fornwall in [#3906](https://github.com/gfx-rs/wgpu/pull/3906)
+- Document feature requirements for `DEPTH32FLOAT_STENCIL8` by @ErichDonGubler in [#3734](https://github.com/gfx-rs/wgpu/pull/3734).
+- Flesh out docs. for `AdapterInfo::{device,vendor}` by @ErichDonGubler in [#3763](https://github.com/gfx-rs/wgpu/pull/3763).
+- Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
+- Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [#3928](https://github.com/gfx-rs/wgpu/pull/3928)
+- Update `max_bindings_per_bind_group` limit to reflect spec changes by @ErichDonGubler and @nical in [#3943](https://github.com/gfx-rs/wgpu/pull/3943) [#3942](https://github.com/gfx-rs/wgpu/pull/3942)
+
+### Bug Fixes
+
+#### General
+
+- Fix order of arguments to glPolygonOffset by @komadori in [#3783](https://github.com/gfx-rs/wgpu/pull/3783).
+- Fix OpenGL/EGL backend not respecting non-sRGB texture formats in `SurfaceConfiguration`. by @liquidev in [#3817](https://github.com/gfx-rs/wgpu/pull/3817)
+- Make write- and read-only marked buffers match non-readonly layouts. by @fornwall in [#3893](https://github.com/gfx-rs/wgpu/pull/3893)
+- Fix leaking X11 connections. by @wez in [#3924](https://github.com/gfx-rs/wgpu/pull/3924)
+- Fix ASTC feature selection in the webgl backend. by @expenses in [#3934](https://github.com/gfx-rs/wgpu/pull/3934)
+- Fix Multiview to disable validation of TextureViewDimension and ArrayLayerCount. By @MalekiRe in [#3779](https://github.com/gfx-rs/wgpu/pull/3779#issue-1713269437).
+
+#### Vulkan
+
+- Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
+- Implement depth-clip-control using depthClamp instead of VK_EXT_depth_clip_enable. By @AlbinBernhardssonARM [#3892](https://github.com/gfx-rs/wgpu/pull/3892).
+- Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
+
+#### Metal
+
+- Fix renderpasses being used inside of renderpasses. By @cwfitzgerald in [#3828](https://github.com/gfx-rs/wgpu/pull/3828)
+- Support (simulated) visionOS. By @jinleili in [#3883](https://github.com/gfx-rs/wgpu/pull/3883)
+
+#### DX12
+
+- Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
+
+#### WebGPU
+
+- Use `get_preferred_canvas_format()` to fill `formats` of `SurfaceCapabilities`. By @jinleili in [#3744](https://github.com/gfx-rs/wgpu/pull/3744)
+
+### Examples
+
+- Publish examples to wgpu.rs on updates to trunk branch instead of gecko. By @paul-hansen in [#3750](https://github.com/gfx-rs/wgpu/pull/3750)
+- Ignore the exception values generated by the winit resize event. By @jinleili in [#3916](https://github.com/gfx-rs/wgpu/pull/3916)
+
+## v0.16.3 (2023-07-19)
+
+### Changes
+
+#### General
+
+- Make the `Id` type that is exposed when using the `expose-ids` feature implement `Send` and `Sync` again. This was unintentionally changed by the v0.16.0 release and is now fixed.
+
+## v0.16.2 (2023-07-09)
+
+### Changes
+
+#### DX12
+
+- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
+
+## v0.16.1 (2023-05-24)
+
+### Bug Fixes
+
+- Fix missing 4X MSAA support on some OpenGL backends. By @emilk in [#3780](https://github.com/gfx-rs/wgpu/pull/3780)
+
+#### General
+
+- Fix crash on dropping `wgpu::CommandBuffer`. By @wumpf in [#3726](https://github.com/gfx-rs/wgpu/pull/3726).
+- Use `u32`s internally for bind group indices, rather than `u8`. By @ErichDonGubler in [#3743](https://github.com/gfx-rs/wgpu/pull/3743).
+
+#### WebGPU
+
+* Fix crash when calling `create_surface_from_canvas`. By @grovesNL in [#3718](https://github.com/gfx-rs/wgpu/pull/3718)
+
 ## v0.16.0 (2023-04-19)
 
 ### Major changes
@@ -177,6 +311,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Report error messages from DXC compile. By @Davidster in [#3632](https://github.com/gfx-rs/wgpu/pull/3632)
 - Error in native when using a filterable `TextureSampleType::Float` on a multisample `BindingType::Texture`. By @mockersf in [#3686](https://github.com/gfx-rs/wgpu/pull/3686)
 - On Web, the size of the canvas is adjusted when using `Surface::configure()`. If the canvas was given an explicit size (via CSS), this will not affect the visual size of the canvas. By @daxpedda in [#3690](https://github.com/gfx-rs/wgpu/pull/3690)
+- Added `Global::create_render_bundle_error`. By @jimblandy in [#3746](https://github.com/gfx-rs/wgpu/pull/3746)
 
 #### WebGPU
 
@@ -282,7 +417,7 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 ### Documentation
 
 #### General
-- Build for WASM on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
+- Build for Wasm on docs.rs. By @daxpedda in [#3462](https://github.com/gfx-rs/wgpu/pull/3428)
 
 
 ## wgpu-0.15.0 (2023-01-25)
@@ -1668,7 +1803,7 @@ DeviceDescriptor {
   - better error messages
   - timestamp and pipeline statistics queries
   - ETC2 and ASTC compressed textures
-  - (beta) targeting WASM with WebGL backend
+  - (beta) targeting Wasm with WebGL backend
   - reduced dependencies
   - Native-only:
     - clamp-to-border addressing

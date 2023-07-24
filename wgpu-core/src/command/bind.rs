@@ -1,9 +1,10 @@
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hub::{HalApi, Storage},
+    hal_api::HalApi,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
     pipeline::LateSizedBufferGroup,
+    storage::Storage,
     Stored,
 };
 

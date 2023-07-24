@@ -66,9 +66,6 @@ pub(super) fn compile_fxc(
                     )
                 };
                 let _ = write!(full_msg, ": {}", String::from_utf8_lossy(message));
-                unsafe {
-                    error.destroy();
-                }
             }
             (
                 Err(crate::PipelineError::Linkage(stage_bit, full_msg)),
