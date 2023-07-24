@@ -186,6 +186,8 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
                 if existing_ref_count <= 3 {
                     self.metadata.remove(index);
                     return true;
+                } else {
+                    log::info!("{:?} is still referenced from {}", self.metadata.get_resource_unchecked(index).label(), existing_ref_count);
                 }
             }
         }

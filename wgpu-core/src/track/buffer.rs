@@ -11,7 +11,7 @@ use super::PendingTransition;
 use crate::{
     hal_api::HalApi,
     id::{BufferId, TypedId, Valid},
-    resource::Buffer,
+    resource::{Buffer, Resource},
     storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -554,6 +554,8 @@ impl<A: HalApi> BufferTracker<A> {
                 if existing_ref_count <= 3 {
                     self.metadata.remove(index);
                     return true;
+                } else {
+                    log::info!("{:?} is still referenced from {}", self.metadata.get_resource_unchecked(index).as_info().label(), existing_ref_count);
                 }
             }
         }

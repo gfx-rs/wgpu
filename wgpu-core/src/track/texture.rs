@@ -23,7 +23,7 @@ use super::{range::RangedStates, PendingTransition};
 use crate::{
     hal_api::HalApi,
     id::{TextureId, TypedId, Valid},
-    resource::Texture,
+    resource::{Texture, Resource},
     storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -720,6 +720,8 @@ impl<A: HalApi> TextureTracker<A> {
                     self.end_set.complex.remove(&index);
                     self.metadata.remove(index);
                     return true;
+                } else {
+                    log::info!("{:?} is still referenced from {}", self.metadata.get_resource_unchecked(index).as_info().label(), existing_ref_count);
                 }
             }
         }
