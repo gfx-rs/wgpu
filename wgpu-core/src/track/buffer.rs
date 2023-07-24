@@ -555,7 +555,14 @@ impl<A: HalApi> BufferTracker<A> {
                     self.metadata.remove(index);
                     return true;
                 } else {
-                    log::info!("{:?} is still referenced from {}", self.metadata.get_resource_unchecked(index).as_info().label(), existing_ref_count);
+                    log::info!(
+                        "{:?} is still referenced from {}",
+                        self.metadata
+                            .get_resource_unchecked(index)
+                            .as_info()
+                            .label(),
+                        existing_ref_count
+                    );
                 }
             }
         }
