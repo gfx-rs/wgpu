@@ -71,9 +71,7 @@ smallvec = "1"
 thiserror = "1"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
-version = "0.13.0"
+workspace = true
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
