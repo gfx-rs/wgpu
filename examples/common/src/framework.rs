@@ -453,7 +453,7 @@ pub fn run<E: Example>(title: &str) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn run<E: Example>(title: &str) {
-    use wasm_bindgen::{prelude::*, JsCast};
+    use wasm_bindgen::prelude::*;
 
     let title = title.to_owned();
     wasm_bindgen_futures::spawn_local(async move {
