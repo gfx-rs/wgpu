@@ -1,5 +1,93 @@
 # Change Log
 
+## v0.13 (2023-07-21)
+
+#### GENERAL
+
+- Move from `make` to `cargo xtask` workflows. ([#2297](https://github.com/gfx-rs/naga/pull/2297)) **@ErichDonGubler**
+- Omit non referenced expressions from output. ([#2378](https://github.com/gfx-rs/naga/pull/2378)) **@teoxoy**
+- Bump `bitflags` to v2. ([#2358](https://github.com/gfx-rs/naga/pull/2358)) **@daxpedda**
+- Implement `workgroupUniformLoad`. ([#2201](https://github.com/gfx-rs/naga/pull/2201)) **@DJMcNab**
+
+#### API
+
+- Expose early depth test field. ([#2393](https://github.com/gfx-rs/naga/pull/2393)) **@Joeoc2001**
+- Split image bounds check policy. ([#2265](https://github.com/gfx-rs/naga/pull/2265)) **@teoxoy**
+- Change type of constant sized arrays to `NonZeroU32`. ([#2337](https://github.com/gfx-rs/naga/pull/2337)) **@teoxoy**
+- Introduce `GlobalCtx`. ([#2335](https://github.com/gfx-rs/naga/pull/2335)) **@teoxoy**
+- Introduce `Expression::Literal`. ([#2333](https://github.com/gfx-rs/naga/pull/2333)) **@teoxoy**
+- Introduce `Expression::ZeroValue`. ([#2332](https://github.com/gfx-rs/naga/pull/2332)) **@teoxoy**
+- Add support for const-expressions (only at the API level, functionality is still WIP). ([#2266](https://github.com/gfx-rs/naga/pull/2266)) **@teoxoy**, **@jimblandy**
+
+#### DOCS
+
+- Document which expressions are in scope for a `break_if` expression. ([#2326](https://github.com/gfx-rs/naga/pull/2326)) **@jimblandy**
+
+#### VALIDATOR
+
+- Don't `use std::opsIndex`, used only when `"validate"` is on. ([#2383](https://github.com/gfx-rs/naga/pull/2383)) **@jimblandy**
+- Remove unneeded `ConstantError::Unresolved{Component,Size}`. ([#2330](https://github.com/gfx-rs/naga/pull/2330)) **@ErichDonGubler**
+- Remove `TypeError::UnresolvedBase`. ([#2308](https://github.com/gfx-rs/naga/pull/2308)) **@ErichDonGubler**
+
+#### WGSL-IN
+
+- Error on param redefinition. ([#2342](https://github.com/gfx-rs/naga/pull/2342)) **@SparkyPotato**
+
+#### SPV-IN
+
+- Improve documentation for SPIR-V control flow parsing. ([#2324](https://github.com/gfx-rs/naga/pull/2324)) **@jimblandy**
+- Obey the `is_depth` field of `OpTypeImage`. ([#2341](https://github.com/gfx-rs/naga/pull/2341)) **@expenses**
+- Convert conditional backedges to `break if`. ([#2290](https://github.com/gfx-rs/naga/pull/2290)) **@eddyb**
+
+#### GLSL-IN
+
+- Support commas in structure definitions. ([#2400](https://github.com/gfx-rs/naga/pull/2400)) **@fornwall**
+
+#### SPV-OUT
+
+- Add debug info. ([#2379](https://github.com/gfx-rs/naga/pull/2379)) **@wicast**
+- Use `IndexSet` instead of `HashSet` for iterated sets (capabilities/extensions). ([#2389](https://github.com/gfx-rs/naga/pull/2389)) **@eddyb**
+- Support array bindings of buffers. ([#2282](https://github.com/gfx-rs/naga/pull/2282)) **@kvark**
+
+#### MSL-OUT
+
+- Rename `allow_point_size` to `allow_and_force_point_size`. ([#2280](https://github.com/gfx-rs/naga/pull/2280)) **@teoxoy**
+- Initialize arrays inline. ([#2331](https://github.com/gfx-rs/naga/pull/2331)) **@teoxoy**
+
+#### HLSL-OUT
+
+- Implement Pack/Unpack for HLSL. ([#2353](https://github.com/gfx-rs/naga/pull/2353)) **@Elabajaba**
+- Complete HLSL reserved symbols. ([#2367](https://github.com/gfx-rs/naga/pull/2367)) **@teoxoy**
+- Handle case insensitive FXC keywords. ([#2347](https://github.com/gfx-rs/naga/pull/2347)) **@PJB3005**
+- Fix return type for firstbitlow/high. ([#2315](https://github.com/gfx-rs/naga/pull/2315)) **@evahop**
+
+#### GLSL-OUT
+
+- `textureSize` level must be a signed integer. ([#2397](https://github.com/gfx-rs/naga/pull/2397)) **@nical**
+- Fix functions with array return type. ([#2382](https://github.com/gfx-rs/naga/pull/2382)) **@Gordon-F**
+
+#### WGSL-OUT
+
+- Output `@interpolate(flat)` attribute for integer locations. ([#2318](https://github.com/gfx-rs/naga/pull/2318)) **@expenses**
+
+## v0.12.3 (2023-07-09)
+
+#### WGSL-OUT
+
+- (Backport) Output `@interpolate(flat)` attribute for integer locations. ([#2318](https://github.com/gfx-rs/naga/pull/2318)) **@expenses**
+
+## v0.12.2 (2023-05-30)
+
+#### SPV-OUT
+
+- (Backport) Support array bindings of buffers. ([#2282](https://github.com/gfx-rs/naga/pull/2282)) **@kvark**
+
+## v0.12.1 (2023-05-18)
+
+#### SPV-IN
+
+- (Backport) Convert conditional backedges to `break if`. ([#2290](https://github.com/gfx-rs/naga/pull/2290)) **@eddyb**
+
 ## v0.12 (2023-04-19)
 
 #### GENERAL
@@ -70,6 +158,12 @@
 
 - Skip `invariant` for `gl_FragCoord` on WebGL2. ([#2254](https://github.com/gfx-rs/naga/pull/2254)) **@grovesNL**
 - Inject default `gl_PointSize = 1.0` in vertex shaders if `FORCE_POINT_SIZE` option was set. ([#2223](https://github.com/gfx-rs/naga/pull/2223)) **@REASY**
+
+## v0.11.1 (2023-05-18)
+
+#### SPV-IN
+
+- (Backport) Convert conditional backedges to `break if`. ([#2290](https://github.com/gfx-rs/naga/pull/2290)) **@eddyb**
 
 ## v0.11 (2023-01-25)
 
@@ -162,6 +256,14 @@
 #### WGSL-OUT
 
 - Write correct scalar kind when `width != 4` ([#1514](https://github.com/gfx-rs/naga/pull/1514)) **@fintelia**
+
+## v0.10.1 (2023-06-21)
+
+SPV-OUT
+- Backport #2389 (Use `IndexSet` instead of `HashSet` for iterated sets (capabilities/extensions)) by @eddyb, @jimblandy in https://github.com/gfx-rs/naga/pull/2391
+
+SPV-IN
+- Backport #2290 (Convert conditional backedges to `break if`) by @eddyb in https://github.com/gfx-rs/naga/pull/2387
 
 ## v0.10 (2022-10-05)
 
