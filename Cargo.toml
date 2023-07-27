@@ -17,7 +17,9 @@ members = [
     "wgpu-types",
     "wgpu",
 ]
-exclude = []
+exclude = [
+    "d3d12",
+]
 default-members = [
     "examples/*",
     "naga",
@@ -136,7 +138,7 @@ gpu-allocator = { version = "0.23", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ] }
-d3d12 = "0.7.0"
+d3d12 = { version = "0.7.0", path = "./d3d12/" }
 range-alloc = "0.1"
 winapi = "0.3"
 hassle-rs = "0.10.0"
@@ -175,7 +177,6 @@ termcolor = "1.3.0"
 
 [patch.crates-io]
 #glow = { path = "../glow" }
-#d3d12 = { path = "../d3d12-rs" }
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
