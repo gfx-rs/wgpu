@@ -648,9 +648,7 @@ impl crate::Surface<Api> for Surface {
             }
             None => {
                 let desc = d3d12::SwapchainDesc {
-                    alpha_mode: auxil::dxgi::conv::map_acomposite_alpha_mode(
-                        config.composite_alpha_mode,
-                    ),
+                    alpha_mode: map_acomposite_alpha_mode(config.composite_alpha_mode),
                     width: config.extent.width,
                     height: config.extent.height,
                     format: non_srgb_format,
@@ -881,4 +879,8 @@ impl crate::Queue<Api> for Queue {
         unsafe { self.raw.GetTimestampFrequency(&mut frequency) };
         (1_000_000_000.0 / frequency as f64) as f32
     }
+}
+
+fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> d3d12::AlphaMode {
+    d3d12::AlphaMode::Ignore
 }

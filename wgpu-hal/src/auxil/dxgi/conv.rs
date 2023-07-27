@@ -252,7 +252,3 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> dxgiformat::DXGI_FORMAT {
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }
-
-pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> d3d12::AlphaMode {
-    d3d12::AlphaMode::Ignore
-}
