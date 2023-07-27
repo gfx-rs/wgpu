@@ -20,7 +20,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
     for cur_index in 0.. {
         if let Some(factory6) = factory.as_factory6() {
             profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
-            // We're already at dxgi1.6, we can grab IDXGIAdapater4 directly
+            // We're already at dxgi1.6, we can grab IDXGIAdapter4 directly
             let mut adapter4 = d3d12::ComPtr::<dxgi1_6::IDXGIAdapter4>::null();
             let hr = unsafe {
                 factory6.EnumAdapterByGpuPreference(
