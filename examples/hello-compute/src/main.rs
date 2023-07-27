@@ -75,8 +75,7 @@ async fn execute_gpu_inner(
     });
 
     // Gets the size in bytes of the buffer.
-    let slice_size = numbers.len() * std::mem::size_of::<u32>();
-    let size = slice_size as wgpu::BufferAddress;
+    let size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
 
     // Instantiates buffer without data.
     // `usage` of buffer specifies how it can be used:
