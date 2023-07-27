@@ -12,7 +12,9 @@ members = [
     "wgpu-types",
     "tests",
 ]
-exclude = []
+exclude = [
+    "d3d12",
+]
 default-members = [
     "examples/*",
     "player",
@@ -109,7 +111,7 @@ android_system_properties = "0.1.1"
 # DX dependencies
 bit-set = "0.5"
 gpu-allocator = { version = "0.21", default_features = false, features = ["d3d12", "windows", "public-winapi"] }
-d3d12 = "0.7.0"
+d3d12 = { path = "./d3d12/" }
 range-alloc = "0.1"
 winapi = "0.3"
 hassle-rs = "0.10.0"

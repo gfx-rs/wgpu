@@ -97,7 +97,7 @@ gpu-allocator = { version = "0.22", default_features = false, features = ["d3d12
 hassle-rs = { version = "0.10", optional = true }
 
 winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
-d3d12 = { version = "0.7", features = ["libloading"], optional = true }
+d3d12 = { path = "../d3d12/", features = ["libloading"], optional = true }
 
 [target.'cfg(any(target_os="macos", target_os="ios"))'.dependencies]
 # backend: Metal

@@ -1025,7 +1025,7 @@ impl crate::Device<super::Api> for super::Device {
         if !error.is_null() {
             log::error!(
                 "Root signature serialization error: {:?}",
-                unsafe { error.as_c_str() }.to_str().unwrap()
+                error.as_c_str().to_str().unwrap()
             );
             return Err(crate::DeviceError::Lost);
         }

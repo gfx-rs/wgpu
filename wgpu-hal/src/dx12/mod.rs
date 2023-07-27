@@ -666,39 +666,45 @@ impl crate::Surface<Api> for Surface {
                 let swap_chain1 = match self.target {
                     SurfaceTarget::Visual(_) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
-                        self.factory
-                            .unwrap_factory2()
-                            .create_swapchain_for_composition(
-                                device.present_queue.as_mut_ptr() as *mut _,
-                                &desc,
-                            )
-                            .into_result()
+                        unsafe {
+                            self.factory
+                                .unwrap_factory2()
+                                .create_swapchain_for_composition(
+                                    device.present_queue.as_mut_ptr() as *mut _,
+                                    &desc,
+                                )
+                                .into_result()
+                        }
                     }
                     SurfaceTarget::SurfaceHandle(handle) => {
                         profiling::scope!(
                             "IDXGIFactoryMedia::CreateSwapChainForCompositionSurfaceHandle"
                         );
-                        self.factory_media
-                            .clone()
-                            .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
-                            .create_swapchain_for_composition_surface_handle(
-                                device.present_queue.as_mut_ptr() as *mut _,
-                                handle,
-                                &desc,
-                            )
-                            .into_result()
+                        unsafe {
+                            self.factory_media
+                                .clone()
+                                .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
+                                .create_swapchain_for_composition_surface_handle(
+                                    device.present_queue.as_mut_ptr() as *mut _,
+                                    handle,
+                                    &desc,
+                                )
+                                .into_result()
+                        }
                     }
                     SurfaceTarget::WndHandle(hwnd) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForHwnd");
-                        self.factory
-                            .as_factory2()
-                            .unwrap()
-                            .create_swapchain_for_hwnd(
-                                device.present_queue.as_mut_ptr() as *mut _,
-                                hwnd,
-                                &desc,
-                            )
-                            .into_result()
+                        unsafe {
+                            self.factory
+                                .as_factory2()
+                                .unwrap()
+                                .create_swapchain_for_hwnd(
+                                    device.present_queue.as_mut_ptr() as *mut _,
+                                    hwnd,
+                                    &desc,
+                                )
+                                .into_result()
+                        }
                     }
                 };
 
