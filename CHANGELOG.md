@@ -111,6 +111,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
 - Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [#3928](https://github.com/gfx-rs/wgpu/pull/3928)
 - Update `max_bindings_per_bind_group` limit to reflect spec changes by @ErichDonGubler and @nical in [#3943](https://github.com/gfx-rs/wgpu/pull/3943) [#3942](https://github.com/gfx-rs/wgpu/pull/3942)
+- Add better docs for `Limits`, listing the actual limits returned by `downlevel_defaults` and `downlevel_webgl2_defaults` by @JustAnotherCodemonkey in [#3988](https://github.com/gfx-rs/wgpu/pull/3988)
 
 ### Bug Fixes
 
