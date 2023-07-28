@@ -40,6 +40,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+- Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
+
 ### Bug Fixes
 
 #### General
