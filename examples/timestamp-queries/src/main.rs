@@ -139,7 +139,8 @@ impl Queries {
     fn resolve(&self, encoder: &mut wgpu::CommandEncoder) {
         encoder.resolve_query_set(
             &self.set,
-            0..self.num_queries as u32,
+            // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Musn't be larger than the number valid queries in the set.
+            0..self.next_unused_query as u32,
             &self.resolve_buffer,
             0,
         );
@@ -441,11 +442,10 @@ mod tests {
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
-                )
-                | ctx
-                | {
-                    test_timestamps(ctx, true);
-                },
+                ),
+            |ctx| {
+                test_timestamps(ctx, true);
+            },
         );
     }
 
