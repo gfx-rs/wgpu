@@ -442,11 +442,10 @@ mod tests {
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 )
-                // Reports zero timestamp periods on MoltenVK.
-                .molten_vk_failure(),
-            |ctx| {
-                test_timestamps(ctx, true);
-            },
+                | ctx
+                | {
+                    test_timestamps(ctx, true);
+                },
         );
     }
 
