@@ -3498,7 +3498,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-test",
- "winit",
+ "winit 0.28.6",
 ]
 
 [[package]]

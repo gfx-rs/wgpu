@@ -411,6 +411,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
+        // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
         cmd_buf
             .buffer_memory_init_actions
             .extend(dst_buffer.initialization_status.create_action(

@@ -24,6 +24,7 @@ struct Queries {
     resolve_buffer: wgpu::Buffer,
     destination_buffer: wgpu::Buffer,
     num_queries: u64,
+    next_unused_query: u32,
 }
 
 struct QueryResults {
@@ -49,12 +50,27 @@ impl QueryResults {
     fn from_raw_results(timestamps: Vec<u64>, timestamps_inside_passes: bool) -> Self {
         assert_eq!(timestamps.len(), Self::NUM_QUERIES as usize);
 
+        let mut next_slot = 0;
+        let mut get_next_slot = || {
+            let slot = timestamps[next_slot];
+            next_slot += 1;
+            slot
+        };
+
+        let mut encoder_timestamps = [0, 0];
+        encoder_timestamps[0] = get_next_slot();
+        let render_start_end_timestamps = [get_next_slot(), get_next_slot()];
+        let render_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let compute_start_end_timestamps = [get_next_slot(), get_next_slot()];
+        let compute_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        encoder_timestamps[1] = get_next_slot();
+
         QueryResults {
-            encoder_timestamps: [timestamps[0], timestamps[1]],
-            render_start_end_timestamps: [timestamps[2], timestamps[4]],
-            render_inside_timestamp: timestamps_inside_passes.then_some(timestamps[3]),
-            compute_start_end_timestamps: [timestamps[5], timestamps[7]],
-            compute_inside_timestamp: timestamps_inside_passes.then_some(timestamps[6]),
+            encoder_timestamps,
+            render_start_end_timestamps,
+            render_inside_timestamp,
+            compute_start_end_timestamps,
+            compute_inside_timestamp,
         }
     }
 
@@ -116,6 +132,7 @@ impl Queries {
                 mapped_at_creation: false,
             }),
             num_queries,
+            next_unused_query: 0,
         }
     }
 
@@ -157,7 +174,11 @@ impl Queries {
 
 async fn run() {
     // Instantiates instance of WebGPU
-    let instance = wgpu::Instance::default();
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+    });
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
@@ -210,21 +231,35 @@ fn submit_render_and_compute_pass_with_queries(
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-    let queries = Queries::new(device, QueryResults::NUM_QUERIES);
+    let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
     });
 
-    encoder.write_timestamp(&queries.set, 0);
+    encoder.write_timestamp(&queries.set, queries.next_unused_query);
+    queries.next_unused_query += 1;
 
     // Render two triangles and profile it.
-    render_pass(device, &shader, &mut encoder, &queries.set, 2);
+    render_pass(
+        device,
+        &shader,
+        &mut encoder,
+        &queries.set,
+        &mut queries.next_unused_query,
+    );
 
     // Compute a hash function on a single thread a bunch of time and profile it.
-    compute_pass(device, &shader, &mut encoder, &queries.set, 5);
+    compute_pass(
+        device,
+        &shader,
+        &mut encoder,
+        &queries.set,
+        &mut queries.next_unused_query,
+    );
 
-    encoder.write_timestamp(&queries.set, 1);
+    encoder.write_timestamp(&queries.set, queries.next_unused_query);
+    queries.next_unused_query += 1;
 
     queries.resolve(&mut encoder);
     queue.submit(Some(encoder.finish()));
@@ -237,7 +272,7 @@ fn compute_pass(
     module: &wgpu::ShaderModule,
     encoder: &mut wgpu::CommandEncoder,
     query_set: &wgpu::QuerySet,
-    query_offset: u32,
+    next_unused_query: &mut u32,
 ) {
     let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Storage Buffer"),
@@ -264,10 +299,11 @@ fn compute_pass(
         label: None,
         timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
             query_set,
-            beginning_of_pass_write_index: Some(query_offset),
-            end_of_pass_write_index: Some(query_offset + 2),
+            beginning_of_pass_write_index: Some(*next_unused_query),
+            end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
     });
+    *next_unused_query += 2;
     cpass.set_pipeline(&compute_pipeline);
     cpass.set_bind_group(0, &bind_group, &[]);
     cpass.dispatch_workgroups(1, 1, 1);
@@ -275,7 +311,8 @@ fn compute_pass(
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
     {
-        cpass.write_timestamp(query_set, query_offset + 1);
+        cpass.write_timestamp(query_set, *next_unused_query);
+        *next_unused_query += 1;
     }
     cpass.dispatch_workgroups(1, 1, 1);
 }
@@ -285,7 +322,7 @@ fn render_pass(
     module: &wgpu::ShaderModule,
     encoder: &mut wgpu::CommandEncoder,
     query_set: &wgpu::QuerySet,
-    query_offset: u32,
+    next_unused_query: &mut u32,
 ) {
     let format = wgpu::TextureFormat::Rgba8Unorm;
 
@@ -343,10 +380,11 @@ fn render_pass(
         depth_stencil_attachment: None,
         timestamp_writes: Some(wgpu::RenderPassTimestampWrites {
             query_set,
-            beginning_of_pass_write_index: Some(query_offset),
-            end_of_pass_write_index: Some(query_offset + 2),
+            beginning_of_pass_write_index: Some(*next_unused_query),
+            end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
     });
+    *next_unused_query += 2;
 
     rpass.set_pipeline(&render_pipeline);
 
@@ -355,7 +393,8 @@ fn render_pass(
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES)
     {
-        rpass.write_timestamp(query_set, query_offset + 1);
+        rpass.write_timestamp(query_set, *next_unused_query);
+        *next_unused_query += 1;
     }
 
     rpass.draw(0..3, 0..1);
@@ -414,7 +453,6 @@ mod tests {
     fn test_timestamps(ctx: wgpu_test::TestingContext, timestamps_inside_passes: bool) {
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
         let raw_results = queries.wait_for_results(&ctx.device);
-
         let QueryResults {
             encoder_timestamps,
             render_start_end_timestamps,
@@ -424,12 +462,11 @@ mod tests {
         } = QueryResults::from_raw_results(raw_results, timestamps_inside_passes);
 
         // Timestamps may wrap around, so can't really only reason about deltas!
+        // Making things worse, deltas are allowed to be zero.
         let render_delta =
             render_start_end_timestamps[1].wrapping_sub(render_start_end_timestamps[0]);
-        assert!(render_delta > 0);
         let compute_delta =
             compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
-        assert!(compute_delta > 0);
 
         // TODO: Metal encoder timestamps aren't implemented yet.
         if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
