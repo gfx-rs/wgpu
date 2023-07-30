@@ -963,7 +963,7 @@ impl Default for Limits {
 
 impl Limits {
     /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
-    /// 
+    ///
     /// Those limits are as follows:
     /// - max_texture_dimension_1d: 2048
     /// - max_texture_dimension_2d: 2048
@@ -1029,7 +1029,7 @@ impl Limits {
     }
 
     /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
-    /// 
+    ///
     /// Those limits are as follows:
     /// - max_texture_dimension_1d: 2048
     /// - max_texture_dimension_2d: 2048
