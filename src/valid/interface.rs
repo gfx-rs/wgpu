@@ -33,6 +33,8 @@ pub enum GlobalVariableError {
     ),
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
+    #[error("Storage address space doesn't support write-only access")]
+    StorageAddressSpaceWriteOnlyNotSupported,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -416,7 +418,7 @@ impl super::Validator {
             crate::AddressSpace::Function => {
                 return Err(GlobalVariableError::InvalidUsage(var.space))
             }
-            crate::AddressSpace::Storage { .. } => {
+            crate::AddressSpace::Storage { access } => {
                 if let Err((ty_handle, disalignment)) = type_info.storage_layout {
                     if self.flags.contains(super::ValidationFlags::STRUCT_LAYOUTS) {
                         return Err(GlobalVariableError::Alignment(
@@ -425,6 +427,9 @@ impl super::Validator {
                             disalignment,
                         ));
                     }
+                }
+                if access == crate::StorageAccess::STORE {
+                    return Err(GlobalVariableError::StorageAddressSpaceWriteOnlyNotSupported);
                 }
                 (TypeFlags::DATA | TypeFlags::HOST_SHAREABLE, true)
             }
