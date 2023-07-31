@@ -537,6 +537,9 @@ pub enum TextureClearMode<A: HalApi> {
         clear_views: SmallVec<[Arc<TextureView<A>>; 1]>,
         is_color: bool,
     },
+    Surface {
+        clear_view: Option<A::TextureView>,
+    },
     // Texture can't be cleared, attempting to do so will cause panic.
     // (either because it is impossible for the type of texture or it is being destroyed)
     None,
@@ -561,13 +564,21 @@ impl<A: HalApi> Drop for Texture<A> {
         use hal::Device;
         let mut clear_mode = self.clear_mode.write();
         let clear_mode = &mut *clear_mode;
-        if let TextureClearMode::RenderPass {
-            ref mut clear_views,
-            ..
-        } = *clear_mode
-        {
-            clear_views.clear();
-        }
+        match *clear_mode {
+            TextureClearMode::Surface {
+                ref mut clear_view, ..
+            } => {
+                let view = clear_view.take();
+                drop(view);
+            }
+            TextureClearMode::RenderPass {
+                ref mut clear_views,
+                ..
+            } => {
+                clear_views.clear();
+            }
+            _ => {}
+        };
         if self.inner.is_none() {
             return;
         }
@@ -594,6 +605,7 @@ impl<A: HalApi> Texture<A> {
             TextureClearMode::None => {
                 panic!("Given texture can't be cleared")
             }
+            TextureClearMode::Surface { ref clear_view, .. } => clear_view.as_ref().unwrap(),
             TextureClearMode::RenderPass {
                 ref clear_views, ..
             } => {
@@ -724,6 +736,8 @@ pub enum TextureDimensionError {
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
+    #[error(transparent)]
+    CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
     #[error(transparent)]

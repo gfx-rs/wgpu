@@ -32,7 +32,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use smallvec::SmallVec;
+
 use thiserror::Error;
 use wgt::{TextureFormat, TextureSampleType, TextureViewDimension};
 
@@ -700,26 +700,7 @@ impl<A: HalApi> Device<A> {
             self.require_downlevel_flags(wgt::DownlevelFlags::VIEW_FORMATS)?;
         }
 
-        // Enforce having COPY_DST/DEPTH_STENCIL_WRITE/COLOR_TARGET otherwise we
-        // wouldn't be able to initialize the texture.
-        let hal_usage = conv::map_texture_usage(desc.usage, desc.format.into())
-            | if desc.format.is_depth_stencil_format() {
-                hal::TextureUses::DEPTH_STENCIL_WRITE
-            } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
-                hal::TextureUses::COPY_DST // (set already)
-            } else {
-                // Use COPY_DST only if we can't use COLOR_TARGET
-                if format_features
-                    .allowed_usages
-                    .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-                    && desc.dimension == wgt::TextureDimension::D2
-                // Render targets dimension must be 2d
-                {
-                    hal::TextureUses::COLOR_TARGET
-                } else {
-                    hal::TextureUses::COPY_DST
-                }
-            };
+        let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
         let hal_desc = hal::TextureDescriptor {
             label: desc.label.borrow_option(),
@@ -741,19 +722,7 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        let clear_mode = if hal_usage
-            .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
-        {
-            let is_color = !desc.format.is_depth_stencil_format();
-            let clear_views = SmallVec::new();
-            resource::TextureClearMode::RenderPass {
-                clear_views,
-                is_color,
-            }
-        } else {
-            resource::TextureClearMode::BufferCopy
-        };
-
+        let clear_mode = resource::TextureClearMode::BufferCopy;
         let mut texture = self.create_texture_from_hal(
             raw_texture,
             hal_usage,

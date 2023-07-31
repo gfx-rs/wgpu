@@ -17,7 +17,7 @@
             ),
             data: "quad.wgsl",
         ),
-        CreateTexture(Id(0, 1, Empty), Some(Id(0, 1, Empty)), (
+        CreateTexture(Id(0, 1, Empty), (
             label: Some("Output Texture"),
             size: (
                 width: 64,
@@ -30,6 +30,11 @@
             usage: 27,
             view_formats: [],
         )),
+        CreateTextureView(
+            id: Id(0, 1, Empty),
+            parent_id: Id(0, 1, Empty),
+            desc: (),
+        ),
         CreateBuffer(
             Id(0, 1, Empty),
             (

@@ -83,7 +83,7 @@ pub fn op_webgpu_create_texture(
     let (val, maybe_err) = gfx_select!(device => instance.device_create_texture(
       device,
       &descriptor,
-      (), Some(())
+      ()
     ));
 
     let rid = state.resource_table.add(WebGpuTexture {

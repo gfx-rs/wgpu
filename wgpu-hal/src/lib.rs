@@ -154,7 +154,7 @@ pub enum SurfaceError {
 #[error("Not supported")]
 pub struct InstanceError;
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + Sized + std::fmt::Debug {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;

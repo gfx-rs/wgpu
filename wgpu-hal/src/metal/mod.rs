@@ -36,7 +36,7 @@ use arrayvec::ArrayVec;
 use metal::foreign_types::ForeignTypeRef as _;
 use parking_lot::{Mutex, RwLock};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 type ResourceIndex = u32;

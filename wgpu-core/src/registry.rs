@@ -49,6 +49,7 @@ pub(crate) struct FutureId<'a, I: id::TypedId, T: Resource<I>> {
 }
 
 impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
+    #[allow(dead_code)]
     pub fn id(&self) -> I {
         self.id
     }

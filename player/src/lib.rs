@@ -180,9 +180,9 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             Action::DestroyBuffer(id) => {
                 self.buffer_drop::<A>(id, true);
             }
-            Action::CreateTexture(id, tv_id, desc) => {
+            Action::CreateTexture(id, desc) => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                let (_, error) = self.device_create_texture::<A>(device, &desc, id, tv_id);
+                let (_, error) = self.device_create_texture::<A>(device, &desc, id);
                 if let Some(e) = error {
                     panic!("{:?}", e);
                 }

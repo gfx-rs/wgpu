@@ -1310,7 +1310,7 @@ impl crate::Context for Context {
         let (id, error) = wgc::gfx_select!(device => global.device_create_texture(
             *device,
             &wgt_desc,
-            (), Some(())
+            ()
         ));
         if let Some(cause) = error {
             self.handle_error(

@@ -261,7 +261,9 @@ pub(crate) fn clear_texture<A: HalApi>(
         TextureClearMode::RenderPass {
             is_color: false, ..
         } => hal::TextureUses::DEPTH_STENCIL_WRITE,
-        TextureClearMode::RenderPass { is_color: true, .. } => hal::TextureUses::COLOR_TARGET,
+        TextureClearMode::Surface { .. } | TextureClearMode::RenderPass { is_color: true, .. } => {
+            hal::TextureUses::COLOR_TARGET
+        }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(dst_texture_id.0));
         }
@@ -303,6 +305,9 @@ pub(crate) fn clear_texture<A: HalApi>(
             encoder,
             dst_raw,
         ),
+        TextureClearMode::Surface { .. } => {
+            clear_texture_via_render_passes(dst_texture, range, true, encoder)?
+        }
         TextureClearMode::RenderPass { is_color, .. } => {
             clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }

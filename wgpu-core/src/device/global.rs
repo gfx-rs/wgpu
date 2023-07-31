@@ -11,7 +11,7 @@ use crate::{
     instance::{self, Adapter, Surface},
     pipeline, present,
     resource::{self, Buffer, BufferAccessResult, BufferMapState, Resource},
-    resource::{BufferAccessError, BufferMapOperation, TextureClearMode},
+    resource::{BufferAccessError, BufferMapOperation},
     validation::check_buffer_usage,
     FastHashMap, Label, LabelHelpers as _,
 };
@@ -555,16 +555,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
-        idtv_in: Option<Input<G, id::TextureViewId>>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
         profiling::scope!("Device::create_texture");
 
         let hub = A::hub(self);
 
         let fid = hub.textures.prepare(id_in);
-        let mut fid_tv = idtv_in
-            .as_ref()
-            .map(|id| hub.texture_views.prepare(id.clone()));
 
         let error = loop {
             let device = match hub.devices.get(device_id) {
@@ -573,11 +569,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTexture(
-                    fid.id(),
-                    fid_tv.as_ref().map(|id| id.id()),
-                    desc.clone(),
-                ));
+                trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
             let texture = match device.create_texture(device_id, &device.adapter, desc) {
@@ -587,54 +579,44 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, resource) = fid.assign(texture);
             log::info!("Created Texture {:?} with {:?}", id, desc);
 
-            if let TextureClearMode::RenderPass {
-                ref mut clear_views,
-                is_color: _,
-            } = *resource.clear_mode.write()
+            let format_features = device
+                .describe_format_features(&device.adapter, desc.format)
+                .unwrap();
+            let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
+            if hal_usage
+                .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
             {
-                if idtv_in.is_some() {
-                    let dimension = match desc.dimension {
-                        wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                        wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                        wgt::TextureDimension::D3 => unreachable!(),
-                    };
+                let is_color = !desc.format.is_depth_stencil_format();
+                let dimension = match desc.dimension {
+                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                    wgt::TextureDimension::D3 => unreachable!(),
+                };
 
-                    for mip_level in 0..desc.mip_level_count {
-                        for array_layer in 0..desc.size.depth_or_array_layers {
-                            let descriptor = resource::TextureViewDescriptor {
-                                label: Some(Cow::Borrowed("(wgpu internal) clear texture view")),
-                                format: Some(desc.format),
-                                dimension: Some(dimension),
-                                range: wgt::ImageSubresourceRange {
-                                    aspect: wgt::TextureAspect::All,
-                                    base_mip_level: mip_level,
-                                    mip_level_count: Some(1),
-                                    base_array_layer: array_layer,
-                                    array_layer_count: Some(1),
-                                },
-                            };
-
-                            let texture_view = device
-                                .create_texture_view(&resource, id.0, &descriptor)
-                                .unwrap();
-                            let fid_tv = if fid_tv.is_some() {
-                                fid_tv.take().unwrap()
-                            } else {
-                                hub.texture_views.prepare(idtv_in.clone().unwrap())
-                            };
-                            let (tv_id, texture_view) = fid_tv.assign(texture_view);
-                            log::info!("Created TextureView {:?} for texture {:?}", tv_id, id);
-
-                            clear_views.push(texture_view.clone());
-
-                            device
-                                .trackers
-                                .lock()
-                                .views
-                                .insert_single(tv_id, texture_view);
-                        }
+                let mut clear_views = SmallVec::new();
+                for mip_level in 0..desc.mip_level_count {
+                    for array_layer in 0..desc.size.depth_or_array_layers {
+                        let desc = resource::TextureViewDescriptor {
+                            label: Some(Cow::Borrowed("(wgpu internal) clear texture view")),
+                            format: Some(desc.format),
+                            dimension: Some(dimension),
+                            range: wgt::ImageSubresourceRange {
+                                aspect: wgt::TextureAspect::All,
+                                base_mip_level: mip_level,
+                                mip_level_count: Some(1),
+                                base_array_layer: array_layer,
+                                array_layer_count: Some(1),
+                            },
+                        };
+                        let view = device.create_texture_view(&resource, id.0, &desc).unwrap();
+                        clear_views.push(Arc::new(view));
                     }
                 }
+                let mut clear_mode = resource.clear_mode.write();
+                *clear_mode = resource::TextureClearMode::RenderPass {
+                    clear_views,
+                    is_color,
+                };
             }
 
             device.trackers.lock().textures.insert_single(
@@ -678,7 +660,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // recorded in the replay
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTexture(fid.id(), None, desc.clone()));
+                trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
             let format_features = match device
@@ -802,6 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         ) {
             resource::TextureClearMode::BufferCopy => SmallVec::new(),
             resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
+            resource::TextureClearMode::Surface { .. } => SmallVec::new(),
             resource::TextureClearMode::None => SmallVec::new(),
         };
 

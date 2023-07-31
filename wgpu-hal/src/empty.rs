@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 pub struct Context;
 #[derive(Debug)]

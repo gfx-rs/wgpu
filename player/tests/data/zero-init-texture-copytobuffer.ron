@@ -10,7 +10,7 @@
         // MISSING: Partial copies
     ],
     actions: [
-        CreateTexture(Id(0, 1, Empty), Some(Id(0, 1, Empty)), (
+        CreateTexture(Id(0, 1, Empty), (
             label: Some("Copy To Buffer Texture"),
             size: (
                 width: 64,

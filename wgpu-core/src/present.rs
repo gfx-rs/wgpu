@@ -10,7 +10,7 @@ extract it from the hub.
 !*/
 
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Borrow,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -176,25 +176,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     flags: wgt::TextureFormatFeatureFlags::MULTISAMPLE_X4
                         | wgt::TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE,
                 };
-                let mut clear_views = smallvec::SmallVec::new();
-
-                let descriptor = resource::TextureViewDescriptor {
-                    label: Some(Cow::Borrowed("(wgpu internal) clear surface texture view")),
-                    format: Some(config.format),
-                    dimension: Some(wgt::TextureViewDimension::D2),
+                let clear_view_desc = hal::TextureViewDescriptor {
+                    label: Some("(wgpu internal) clear surface texture view"),
+                    format: config.format,
+                    dimension: wgt::TextureViewDimension::D2,
+                    usage: hal::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
                 };
-                let view = device
-                    .create_texture_inner_view(
+                let clear_view = unsafe {
+                    hal::Device::create_texture_view(
+                        device.raw(),
                         ast.texture.borrow(),
-                        fid.id(),
-                        &texture_desc,
-                        &hal::TextureUses::COLOR_TARGET,
-                        &format_features,
-                        &descriptor,
+                        &clear_view_desc,
                     )
-                    .unwrap();
-                clear_views.push(Arc::new(view));
+                }
+                .map_err(DeviceError::from)?;
 
                 let mut presentation = surface.presentation.lock();
                 let present = presentation.as_mut().unwrap();
@@ -214,9 +210,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         mips: 0..1,
                     },
                     info: ResourceInfo::new("<Surface>"),
-                    clear_mode: RwLock::new(resource::TextureClearMode::RenderPass {
-                        clear_views,
-                        is_color: true,
+                    clear_mode: RwLock::new(resource::TextureClearMode::Surface {
+                        clear_view: Some(clear_view),
                     }),
                 };
 
@@ -310,12 +305,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
                     let mut clear_mode = texture.clear_mode.write();
                     let clear_mode = &mut *clear_mode;
-                    if let resource::TextureClearMode::RenderPass {
-                        ref mut clear_views,
-                        ..
+                    if let resource::TextureClearMode::Surface {
+                        ref mut clear_view, ..
                     } = *clear_mode
                     {
-                        clear_views.clear();
+                        let view = clear_view.take().unwrap();
+                        drop(view);
                     }
 
                     let suf = A::get_surface(&surface);
