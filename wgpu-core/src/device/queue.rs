@@ -1174,7 +1174,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         unsafe { device.raw().unmap_buffer(raw_buf) }
                                             .map_err(DeviceError::from)?;
                                     }
-                                    device.temp_suspected.lock().buffers.push(buffer.clone());
+                                    device
+                                        .temp_suspected
+                                        .lock()
+                                        .buffers
+                                        .insert(id.0, buffer.clone());
                                 } else {
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
@@ -1196,7 +1200,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 };
                                 texture.info.use_at(submit_index);
                                 if texture.is_unique() {
-                                    device.temp_suspected.lock().textures.push(texture.clone());
+                                    device
+                                        .temp_suspected
+                                        .lock()
+                                        .textures
+                                        .insert(id.0, texture.clone());
                                 }
                                 if should_extend {
                                     unsafe {
@@ -1215,11 +1223,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             for texture_view in cmd_buf_trackers.views.used_resources() {
                                 texture_view.info.use_at(submit_index);
                                 if texture_view.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
-                                        .texture_views
-                                        .push(texture_view.clone());
+                                    device.temp_suspected.lock().texture_views.insert(
+                                        texture_view.as_info().id().0,
+                                        texture_view.clone(),
+                                    );
                                 }
                             }
                             {
@@ -1238,7 +1245,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         sampler_guard[sub_id].info.use_at(submit_index);
                                     }
                                     if bg.is_unique() {
-                                        device.temp_suspected.lock().bind_groups.push(bg.clone());
+                                        device
+                                            .temp_suspected
+                                            .lock()
+                                            .bind_groups
+                                            .insert(bg.as_info().id().0, bg.clone());
                                     }
                                 }
                             }
@@ -1248,11 +1259,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
-                                        .compute_pipelines
-                                        .push(compute_pipeline.clone());
+                                    device.temp_suspected.lock().compute_pipelines.insert(
+                                        compute_pipeline.as_info().id().0,
+                                        compute_pipeline.clone(),
+                                    );
                                 }
                             }
                             for render_pipeline in
@@ -1260,11 +1270,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
-                                        .render_pipelines
-                                        .push(render_pipeline.clone());
+                                    device.temp_suspected.lock().render_pipelines.insert(
+                                        render_pipeline.as_info().id().0,
+                                        render_pipeline.clone(),
+                                    );
                                 }
                             }
                             for query_set in cmd_buf_trackers.query_sets.used_resources() {
@@ -1274,7 +1283,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .temp_suspected
                                         .lock()
                                         .query_sets
-                                        .push(query_set.clone());
+                                        .insert(query_set.as_info().id().0, query_set.clone());
                                 }
                             }
                             for bundle in cmd_buf_trackers.bundles.used_resources() {
@@ -1294,7 +1303,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .temp_suspected
                                         .lock()
                                         .render_bundles
-                                        .push(bundle.clone());
+                                        .insert(bundle.as_info().id().0, bundle.clone());
                                 }
                             }
                         }

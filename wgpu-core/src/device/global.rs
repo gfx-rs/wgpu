@@ -538,7 +538,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .lock_life()
                     .suspected_resources
                     .buffers
-                    .push(buffer.clone());
+                    .insert(buffer_id, buffer.clone());
             }
         }
 
@@ -847,7 +847,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             {
                 life_lock.future_suspected_textures.push(texture.clone());
             } else {
-                life_lock.suspected_resources.textures.push(texture.clone());
+                life_lock
+                    .suspected_resources
+                    .textures
+                    .insert(texture_id, texture.clone());
             }
         }
 
@@ -933,7 +936,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .texture_views
-            .push(view.clone());
+            .insert(texture_view_id, view.clone());
 
         if wait {
             match view.device.wait_for_submit(last_submit_index) {
@@ -1012,7 +1015,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .samplers
-            .push(sampler.clone());
+            .insert(sampler_id, sampler.clone());
     }
 
     pub fn device_create_bind_group_layout<A: HalApi>(
@@ -1111,7 +1114,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .bind_group_layouts
-            .push(layout.clone());
+            .insert(bind_group_layout_id, layout.clone());
     }
 
     pub fn device_create_pipeline_layout<A: HalApi>(
@@ -1185,7 +1188,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .pipeline_layouts
-            .push(layout.clone());
+            .insert(pipeline_layout_id, layout.clone());
     }
 
     pub fn device_create_bind_group<A: HalApi>(
@@ -1259,7 +1262,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .bind_groups
-            .push(bind_group.clone());
+            .insert(bind_group_id, bind_group.clone());
     }
 
     pub fn device_create_shader_module<A: HalApi>(
@@ -1542,7 +1545,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .render_bundles
-            .push(bundle.clone());
+            .insert(render_bundle_id, bundle.clone());
     }
 
     pub fn device_create_query_set<A: HalApi>(
@@ -1612,7 +1615,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life()
             .suspected_resources
             .query_sets
-            .push(query_set.clone());
+            .insert(query_set_id, query_set.clone());
     }
 
     pub fn query_set_label<A: HalApi>(&self, id: id::QuerySetId) -> String {
@@ -1737,9 +1740,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         life_lock
             .suspected_resources
             .render_pipelines
-            .push(pipeline.clone());
+            .insert(render_pipeline_id, pipeline.clone());
         let layout = hub.pipeline_layouts.get(layout_id.0).unwrap();
-        life_lock.suspected_resources.pipeline_layouts.push(layout);
+        life_lock
+            .suspected_resources
+            .pipeline_layouts
+            .insert(layout_id.0, layout);
     }
 
     pub fn device_create_compute_pipeline<A: HalApi>(
@@ -1860,9 +1866,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         life_lock
             .suspected_resources
             .compute_pipelines
-            .push(pipeline.clone());
+            .insert(compute_pipeline_id, pipeline.clone());
         let layout = hub.pipeline_layouts.get(layout_id.0).unwrap();
-        life_lock.suspected_resources.pipeline_layouts.push(layout);
+        life_lock
+            .suspected_resources
+            .pipeline_layouts
+            .insert(layout_id.0, layout);
     }
 
     pub fn surface_configure<A: HalApi>(

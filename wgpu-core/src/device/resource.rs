@@ -350,42 +350,58 @@ impl<A: HalApi> Device<A> {
         {
             for resource in trackers.buffers.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.buffers.push(resource.clone());
+                    temp_suspected
+                        .buffers
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.textures.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.textures.push(resource.clone());
+                    temp_suspected
+                        .textures
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.views.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.texture_views.push(resource.clone());
+                    temp_suspected
+                        .texture_views
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.bind_groups.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.bind_groups.push(resource.clone());
+                    temp_suspected
+                        .bind_groups
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.samplers.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.samplers.push(resource.clone());
+                    temp_suspected
+                        .samplers
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.compute_pipelines.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.compute_pipelines.push(resource.clone());
+                    temp_suspected
+                        .compute_pipelines
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.render_pipelines.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.render_pipelines.push(resource.clone());
+                    temp_suspected
+                        .render_pipelines
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
             for resource in trackers.query_sets.used_resources() {
                 if resource.is_unique() {
-                    temp_suspected.query_sets.push(resource.clone());
+                    temp_suspected
+                        .query_sets
+                        .insert(resource.as_info().id().0, resource.clone());
                 }
             }
         }
