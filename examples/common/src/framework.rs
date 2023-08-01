@@ -12,9 +12,9 @@ use winit::{
 
 #[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
-    use std::{mem::size_of, slice::from_raw_parts};
+    use std::{mem::size_of_val, slice::from_raw_parts};
 
-    unsafe { from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>()) }
+    unsafe { from_raw_parts(data.as_ptr() as *const u8, size_of_val(data)) }
 }
 
 #[allow(dead_code)]
@@ -453,7 +453,7 @@ pub fn run<E: Example>(title: &str) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn run<E: Example>(title: &str) {
-    use wasm_bindgen::{prelude::*, JsCast};
+    use wasm_bindgen::prelude::*;
 
     let title = title.to_owned();
     wasm_bindgen_futures::spawn_local(async move {

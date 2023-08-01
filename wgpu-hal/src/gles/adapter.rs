@@ -606,7 +606,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[allow(clippy::drop_ref)]
+        #[cfg_attr(target_arch = "wasm32", allow(clippy::drop_ref))]
         drop(gl);
 
         Some(crate::ExposedAdapter {

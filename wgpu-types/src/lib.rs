@@ -6311,7 +6311,7 @@ pub enum Dx12Compiler {
     Dxc {
         /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
-        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxc_path: Option<PathBuf>,
     },
 }
