@@ -351,6 +351,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     let instance = Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler,
+        force_angle_gles31: true,
     });
     let surface_guard;
     let compatible_surface;

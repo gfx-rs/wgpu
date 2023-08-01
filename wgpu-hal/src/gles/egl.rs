@@ -491,6 +491,7 @@ impl Inner {
         flags: crate::InstanceFlags,
         egl: Arc<EglInstance>,
         display: khronos_egl::Display,
+        angle_force_gles31: bool,
     ) -> Result<Self, crate::InstanceError> {
         let version = egl.initialize(display).map_err(|_| crate::InstanceError)?;
         let vendor = egl
@@ -542,9 +543,15 @@ impl Inner {
 
         //TODO: make it so `Device` == EGL Context
         let mut context_attributes = vec![
-            khronos_egl::CONTEXT_CLIENT_VERSION,
+            khronos_egl::CONTEXT_MAJOR_VERSION,
             3, // Request GLES 3.0 or higher
         ];
+
+        if angle_force_gles31 {
+            context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+            context_attributes.push(1);
+        }
+
         if flags.contains(crate::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
                 log::info!("\tEGL context: +debug");
@@ -836,7 +843,7 @@ impl crate::Instance<super::Api> for Instance {
             unsafe { (function)(Some(egl_debug_proc), attributes.as_ptr()) };
         }
 
-        let inner = Inner::create(desc.flags, egl, display)?;
+        let inner = Inner::create(desc.flags, egl, display, desc.force_angle_gles31)?;
 
         Ok(Instance {
             wsi: WindowSystemInterface {
@@ -919,7 +926,7 @@ impl crate::Instance<super::Api> for Instance {
                         .unwrap();
 
                     let new_inner =
-                        Inner::create(self.flags, Arc::clone(&inner.egl.instance), display)
+                        Inner::create(self.flags, Arc::clone(&inner.egl.instance), display, false)
                             .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);

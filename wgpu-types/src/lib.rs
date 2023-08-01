@@ -6322,6 +6322,8 @@ pub struct InstanceDescriptor {
     pub backends: Backends,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
+    /// Force ANGLE to support GLES 3.1, even on nonconformant implementations like D3D11.
+    pub force_angle_gles31: bool,
 }
 
 impl Default for InstanceDescriptor {
@@ -6329,6 +6331,7 @@ impl Default for InstanceDescriptor {
         Self {
             backends: Backends::all(),
             dx12_shader_compiler: Dx12Compiler::default(),
+            force_angle_gles31: false,
         }
     }
 }
