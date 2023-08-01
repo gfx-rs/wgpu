@@ -40,9 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added/New Features
+
+- Add `force_angle_gles31` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
+
 ### Changes
 
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
+
 
 ### Bug Fixes
 
