@@ -1,5 +1,11 @@
 # Change Log
 
+## Unreleased
+
+#### GENERAL
+
+- Bump MSRV to 1.65 ([#2420](https://github.com/gfx-rs/naga/pull/2420)) **@jimblandy**
+
 ## v0.13 (2023-07-21)
 
 #### GENERAL

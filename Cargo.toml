@@ -10,7 +10,7 @@ keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 resolver = "2"
-rust-version = "1.63"
+rust-version = "1.65"
 
 [package.metadata.docs.rs]
 all-features = true
