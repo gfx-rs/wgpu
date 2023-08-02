@@ -2725,33 +2725,6 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     (offset, size)
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::BufferSize;
-
-    #[test]
-    fn range_to_offset_size_works() {
-        assert_eq!(crate::range_to_offset_size(0..2), (0, BufferSize::new(2)));
-        assert_eq!(crate::range_to_offset_size(2..5), (2, BufferSize::new(3)));
-        assert_eq!(crate::range_to_offset_size(..), (0, None));
-        assert_eq!(crate::range_to_offset_size(21..), (21, None));
-        assert_eq!(crate::range_to_offset_size(0..), (0, None));
-        assert_eq!(crate::range_to_offset_size(..21), (0, BufferSize::new(21)));
-    }
-
-    #[test]
-    #[should_panic]
-    fn range_to_offset_size_panics_for_empty_range() {
-        crate::range_to_offset_size(123..123);
-    }
-
-    #[test]
-    #[should_panic]
-    fn range_to_offset_size_panics_for_unbounded_empty_range() {
-        crate::range_to_offset_size(..0);
-    }
-}
-
 /// Read only view into a mapped buffer.
 #[derive(Debug)]
 pub struct BufferView<'a> {
@@ -5071,5 +5044,32 @@ mod send_sync {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.debug_struct("Any").finish_non_exhaustive()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::BufferSize;
+
+    #[test]
+    fn range_to_offset_size_works() {
+        assert_eq!(crate::range_to_offset_size(0..2), (0, BufferSize::new(2)));
+        assert_eq!(crate::range_to_offset_size(2..5), (2, BufferSize::new(3)));
+        assert_eq!(crate::range_to_offset_size(..), (0, None));
+        assert_eq!(crate::range_to_offset_size(21..), (21, None));
+        assert_eq!(crate::range_to_offset_size(0..), (0, None));
+        assert_eq!(crate::range_to_offset_size(..21), (0, BufferSize::new(21)));
+    }
+
+    #[test]
+    #[should_panic]
+    fn range_to_offset_size_panics_for_empty_range() {
+        crate::range_to_offset_size(123..123);
+    }
+
+    #[test]
+    #[should_panic]
+    fn range_to_offset_size_panics_for_unbounded_empty_range() {
+        crate::range_to_offset_size(..0);
     }
 }

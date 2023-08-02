@@ -60,7 +60,7 @@ pub mod dx12;
 /// A dummy API implementation.
 pub mod empty;
 /// GLES API internals.
-#[cfg(all(feature = "gles"))]
+#[cfg(feature = "gles")]
 pub mod gles;
 /// Metal API internals.
 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]

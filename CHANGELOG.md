@@ -55,6 +55,19 @@ let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
+### Changes
+
+- Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
+
+### Bug Fixes
+
+#### General
+
+- Derive storage bindings via `naga::StorageAccess` instead of `naga::GlobalUse`. By @teoxoy in [#3985](https://github.com/gfx-rs/wgpu/pull/3985).
+
+#### Vulkan
+- Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
+
 ## v0.17.0 (2023-07-20)
 
 This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
@@ -79,7 +92,7 @@ By @Aaron1011 in [#3903](https://github.com/gfx-rs/wgpu/pull/3903)
 
 #### `initialize_adapter_from_env` argument changes
 
-Removed the backend_bits parameter from `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default`. If you want to limit the backends used by this function, only enable the watned backends in the instance.
+Removed the backend_bits parameter from `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default`. If you want to limit the backends used by this function, only enable the wanted backends in the instance.
 
 Added a compatible surface parameter, to ensure the given device is able to be presented onto the given surface.
 
@@ -117,6 +130,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
 - Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [#3928](https://github.com/gfx-rs/wgpu/pull/3928)
 - Update `max_bindings_per_bind_group` limit to reflect spec changes by @ErichDonGubler and @nical in [#3943](https://github.com/gfx-rs/wgpu/pull/3943) [#3942](https://github.com/gfx-rs/wgpu/pull/3942)
+- Add better docs for `Limits`, listing the actual limits returned by `downlevel_defaults` and `downlevel_webgl2_defaults` by @JustAnotherCodemonkey in [#3988](https://github.com/gfx-rs/wgpu/pull/3988)
 
 ### Bug Fixes
 
@@ -133,6 +147,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 
 - Fix incorrect aspect in barriers when using emulated Stencil8 textures. By @cwfitzgerald in [#3833](https://github.com/gfx-rs/wgpu/pull/3833).
 - Implement depth-clip-control using depthClamp instead of VK_EXT_depth_clip_enable. By @AlbinBernhardssonARM [#3892](https://github.com/gfx-rs/wgpu/pull/3892).
+- Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
 
 #### Metal
 

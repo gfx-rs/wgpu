@@ -222,7 +222,7 @@ impl super::Device {
             index: BoundsCheckPolicy::Unchecked,
             buffer: BoundsCheckPolicy::Unchecked,
             image_load: image_check,
-            image_store: image_check,
+            image_store: BoundsCheckPolicy::Unchecked,
             binding_array: BoundsCheckPolicy::Unchecked,
         };
 

@@ -14,6 +14,7 @@ mod example_wgsl;
 mod external_texture;
 mod instance;
 mod occlusion_query;
+mod partially_bounded_arrays;
 mod poll;
 mod queue_transfer;
 mod resource_descriptor_accessor;
