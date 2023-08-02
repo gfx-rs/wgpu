@@ -273,6 +273,7 @@ impl wgpu_example::framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
 
@@ -293,6 +294,7 @@ impl wgpu_example::framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
 

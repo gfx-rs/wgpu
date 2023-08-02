@@ -864,6 +864,13 @@ pub struct QuerySet {
         not(target_feature = "atomics")
     )
 ))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 impl Drop for QuerySet {
@@ -1029,6 +1036,31 @@ impl<V: Default> Default for Operations<V> {
         }
     }
 }
+
+/// Describes the timestamp writes of a render pass.
+///
+/// For use with [`RenderPassDescriptor`].
+/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
+///
+/// Corresponds to [WebGPU `GPURenderPassTimestampWrite`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrites).
+#[derive(Clone, Debug)]
+pub struct RenderPassTimestampWrites<'a> {
+    /// The query set to write to.
+    pub query_set: &'a QuerySet,
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
+    pub end_of_pass_write_index: Option<u32>,
+}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
 
 /// Describes a color attachment to a [`RenderPass`].
 ///
@@ -1337,6 +1369,10 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    /// Defines which timestamp values will be written for this pass, and where to write them to.
+    ///
+    /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'tex QuerySet>,
 }
@@ -1451,17 +1487,53 @@ pub struct RenderPipelineDescriptor<'a> {
 ))]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 
+/// Describes the timestamp writes of a compute pass.
+///
+/// For use with [`ComputePassDescriptor`].
+/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
+///
+/// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrites).
+#[derive(Clone, Debug)]
+pub struct ComputePassTimestampWrites<'a> {
+    /// The query set to write to.
+    pub query_set: &'a QuerySet,
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
+    pub end_of_pass_write_index: Option<u32>,
+}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
+
 /// Describes the attachments of a compute pass.
 ///
 /// For use with [`CommandEncoder::begin_compute_pass`].
 ///
 /// Corresponds to [WebGPU `GPUComputePassDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepassdescriptor).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
+    /// Defines which timestamp values will be written for this pass, and where to write them to.
+    ///
+    /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
 
 /// Describes a compute pipeline.
@@ -4480,6 +4552,9 @@ impl Queue {
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
     ///
     /// Returns zero if timestamp queries are unsupported.
+    ///
+    /// Timestamp values are represented in nanosecond values on WebGPU, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
+    /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required.
     pub fn get_timestamp_period(&self) -> f32 {
         DynContext::queue_get_timestamp_period(&*self.context, &self.id, self.data.as_ref())
     }

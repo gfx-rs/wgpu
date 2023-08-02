@@ -137,6 +137,7 @@ fn reinterpret(
             view: &target_view,
         })],
         depth_stencil_attachment: None,
+        timestamp_writes: None,
         occlusion_query_set: None,
     });
     rpass.set_pipeline(&pipeline);

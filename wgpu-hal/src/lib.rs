@@ -118,6 +118,8 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Device is lost")]
     Lost,
+    #[error("Creation of a resource failed for a reason other than running out of memory.")]
+    ResourceCreationFailed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
@@ -542,7 +544,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
     // compute passes
 
     // Begins a compute pass, clears all active bindings.
-    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor);
+    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<A>);
     unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &A::ComputePipeline);
@@ -1264,6 +1266,24 @@ pub struct DepthStencilAttachment<'a, A: Api> {
     pub clear_value: (f32, u32),
 }
 
+#[derive(Debug)]
+pub struct RenderPassTimestampWrites<'a, A: Api> {
+    pub query_set: &'a A::QuerySet,
+    pub beginning_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for RenderPassTimestampWrites<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
@@ -1272,11 +1292,31 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'a, A>>,
+}
+
+#[derive(Debug)]
+pub struct ComputePassTimestampWrites<'a, A: Api> {
+    pub query_set: &'a A::QuerySet,
+    pub beginning_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for ComputePassTimestampWrites<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
-pub struct ComputePassDescriptor<'a> {
+pub struct ComputePassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
 }
 
 /// Stores if any API validation error has occurred in this process

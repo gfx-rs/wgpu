@@ -400,6 +400,10 @@ pub struct CommandEncoder {
     /// If this is true, the active renderpass enabled a debug span,
     /// and needs to be disabled on renderpass close.
     rpass_debug_marker_active: bool,
+
+    /// If set, the end of the next render/compute pass will write a timestamp at
+    /// the given pool & location.
+    end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 }
 
 impl fmt::Debug for CommandEncoder {

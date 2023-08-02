@@ -27,6 +27,33 @@ impl crate::Adapter<super::Api> for super::Adapter {
             .device
             .lock()
             .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
+
+        // Acquiring the meaning of timestamp ticks is hard with Metal!
+        // The only thing there is is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
+        // Users are supposed to call this method twice and calculate the difference,
+        // see "Converting GPU Timestamps into CPU Time":
+        // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
+        // Not only does this mean we get an approximate value, this is as also *very slow*!
+        // Chromium opted to solve this using a linear regression that they stop at some point
+        // https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/dawn/src/dawn/native/metal/DeviceMTL.mm;drc=76be2f9f117654f3fe4faa477b0445114fccedda;bpv=0;bpt=1;l=46
+        // Generally, the assumption is that timestamp values aren't changing over time, after all all other APIs provide stable values.
+        //
+        // We should do as Chromium does for the general case, but this requires quite some state tracking
+        // and doesn't even provide perfectly accurate values, especially at the start of the application when
+        // we didn't have the chance to sample a lot of values just yet.
+        //
+        // So instead, we're doing the dangerous but easy thing and use our "knowledge" of timestamps
+        // conversions on different devices, after all Metal isn't supported on that many ;)
+        // Based on:
+        // * https://github.com/gfx-rs/wgpu/pull/2528
+        // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
+        let timestamp_period = if self.shared.device.lock().name().starts_with("Intel") {
+            83.333
+        } else {
+            // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
+            1.0
+        };
+
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
@@ -34,6 +61,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             },
             queue: super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
+                timestamp_period,
             },
         })
     }
@@ -745,6 +773,13 @@ impl super::PrivateCapabilities {
             } else {
                 None
             },
+            support_timestamp_query: version.at_least((11, 0), (14, 0), os_is_mac)
+                && device
+                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary),
+            support_timestamp_query_in_passes: version.at_least((11, 0), (14, 0), os_is_mac)
+                && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary)
+                && device
+                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary),
         }
     }
 
@@ -772,6 +807,12 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::MULTI_DRAW_INDIRECT;
 
+        features.set(F::TIMESTAMP_QUERY, self.support_timestamp_query);
+        // TODO: Not yet implemented.
+        // features.set(
+        //     F::TIMESTAMP_QUERY_INSIDE_PASSES,
+        //     self.support_timestamp_query_in_passes,
+        // );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);

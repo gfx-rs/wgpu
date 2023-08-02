@@ -644,6 +644,7 @@ impl crate::Device<super::Api> for super::Device {
             free_lists: Vec::new(),
             pass: super::PassState::new(),
             temp: super::Temp::default(),
+            end_of_pass_timer_query: None,
         })
     }
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {

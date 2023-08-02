@@ -144,6 +144,7 @@ fn pass_reset_vertex_buffer() {
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
             occlusion_query_set: None,
         });
 
@@ -178,6 +179,7 @@ fn pass_reset_vertex_buffer() {
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
             occlusion_query_set: None,
         });
 

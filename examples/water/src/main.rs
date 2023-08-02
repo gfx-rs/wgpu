@@ -752,6 +752,7 @@ impl wgpu_example::framework::Example for Example {
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
 
@@ -778,6 +779,7 @@ impl wgpu_example::framework::Example for Example {
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
@@ -803,6 +805,7 @@ impl wgpu_example::framework::Example for Example {
                     depth_ops: None,
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
 

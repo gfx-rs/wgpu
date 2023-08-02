@@ -73,6 +73,7 @@ fn occlusion_query() {
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
                 occlusion_query_set: Some(&query_set),
             });
             render_pass.set_pipeline(&pipeline);

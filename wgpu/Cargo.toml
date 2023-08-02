@@ -154,6 +154,7 @@ web-sys = { workspace = true, features = [
     "GpuCompilationMessageType",
     "GpuComputePassDescriptor",
     "GpuComputePassEncoder",
+    "GpuComputePassTimestampWrite",
     "GpuComputePipeline",
     "GpuComputePipelineDescriptor",
     "GpuCullMode",

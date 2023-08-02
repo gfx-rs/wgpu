@@ -777,6 +777,7 @@ impl wgpu_example::framework::Example for Example {
                         }),
                         stencil_ops: None,
                     }),
+                    timestamp_writes: None,
                     occlusion_query_set: None,
                 });
                 pass.set_pipeline(&self.shadow_pass.pipeline);
@@ -820,6 +821,7 @@ impl wgpu_example::framework::Example for Example {
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
             pass.set_pipeline(&self.forward_pass.pipeline);

@@ -3484,6 +3484,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-timestamp-queries-example"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "pollster",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "wgpu",
+ "wgpu-test",
+ "winit 0.28.6",
+]
+
+[[package]]
 name = "wgpu-types"
 version = "0.17.0"
 dependencies = [

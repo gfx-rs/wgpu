@@ -154,6 +154,7 @@ impl<'ctx> TestCase<'ctx> {
                         store: true,
                     }),
                 }),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
             ctx.queue.submit([encoder.finish()]);
@@ -238,6 +239,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
     }
@@ -262,6 +264,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
     }
@@ -286,6 +289,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: None,
                 occlusion_query_set: None,
             });
     }
