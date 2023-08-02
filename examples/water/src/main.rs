@@ -753,6 +753,7 @@ impl wgpu_example::framework::Example for Example {
                     stencil_ops: None,
                 }),
                 timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.execute_bundles([&self.terrain_bundle]);
@@ -779,6 +780,7 @@ impl wgpu_example::framework::Example for Example {
                     stencil_ops: None,
                 }),
                 timestamp_writes: None,
+                occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
             rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
@@ -804,6 +806,7 @@ impl wgpu_example::framework::Example for Example {
                     stencil_ops: None,
                 }),
                 timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_pipeline(&self.water_pipeline);

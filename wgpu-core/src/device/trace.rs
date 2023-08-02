@@ -183,6 +183,7 @@ pub enum Command {
         target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<crate::command::RenderPassTimestampWrites>,
+        occlusion_query_set_id: Option<id::QuerySetId>,
     },
 }
 

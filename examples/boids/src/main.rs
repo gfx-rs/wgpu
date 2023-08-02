@@ -284,6 +284,7 @@ impl wgpu_example::framework::Example for Example {
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
             timestamp_writes: None,
+            occlusion_query_set: None,
         };
 
         // get command encoder

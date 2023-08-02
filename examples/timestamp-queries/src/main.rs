@@ -382,6 +382,7 @@ fn render_pass(
             beginning_of_pass_write_index: Some(*next_unused_query),
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
+        occlusion_query_set: None,
     });
     *next_unused_query += 2;
 

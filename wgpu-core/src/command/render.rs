@@ -3,7 +3,7 @@ use crate::{
     command::{
         self,
         bind::Binder,
-        end_pipeline_statistics_query,
+        end_occlusion_query, end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         BasePass, BasePassRef, BindGroupStateChange, CommandBuffer, CommandEncoderError,
         CommandEncoderStatus, DrawError, ExecutionError, MapPassErr, PassErrorScope, QueryUseError,
@@ -214,6 +214,8 @@ pub struct RenderPassDescriptor<'a> {
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
     /// Defines where and when timestamp values will be written for this pass.
     pub timestamp_writes: Option<&'a RenderPassTimestampWrites>,
+    /// Defines where the occlusion query results will be stored for this pass.
+    pub occlusion_query_set: Option<id::QuerySetId>,
 }
 
 #[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
@@ -223,6 +225,7 @@ pub struct RenderPass {
     color_targets: ArrayVec<Option<RenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil_target: Option<RenderPassDepthStencilAttachment>,
     timestamp_writes: Option<RenderPassTimestampWrites>,
+    occlusion_query_set_id: Option<id::QuerySetId>,
 
     // Resource binding dedupe state.
     #[cfg_attr(feature = "serial-pass", serde(skip))]
@@ -239,6 +242,7 @@ impl RenderPass {
             color_targets: desc.color_attachments.iter().cloned().collect(),
             depth_stencil_target: desc.depth_stencil_attachment.cloned(),
             timestamp_writes: desc.timestamp_writes.cloned(),
+            occlusion_query_set_id: desc.occlusion_query_set,
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -256,6 +260,7 @@ impl RenderPass {
             target_colors: self.color_targets.into_iter().collect(),
             target_depth_stencil: self.depth_stencil_target,
             timestamp_writes: self.timestamp_writes,
+            occlusion_query_set_id: self.occlusion_query_set_id,
         }
     }
 
@@ -621,6 +626,8 @@ pub enum RenderPassErrorInner {
     MultiViewDimensionMismatch,
     #[error("QuerySet {0:?} is invalid")]
     InvalidQuerySet(id::QuerySetId),
+    #[error("missing occlusion query set")]
+    MissingOcclusionQuerySet,
 }
 
 impl PrettyError for RenderPassErrorInner {
@@ -1265,6 +1272,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &pass.color_targets,
             pass.depth_stencil_target.as_ref(),
             pass.timestamp_writes.as_ref(),
+            pass.occlusion_query_set_id,
         )
     }
 
@@ -1276,6 +1284,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
+        occlusion_query_set_id: Option<id::QuerySetId>,
     ) -> Result<(), RenderPassError> {
         profiling::scope!("CommandEncoder::run_render_pass");
         let init_scope = PassErrorScope::Pass(encoder_id);
@@ -1307,6 +1316,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     target_colors: color_attachments.to_vec(),
                     target_depth_stencil: depth_stencil_attachment.cloned(),
                     timestamp_writes: timestamp_writes.cloned(),
+                    occlusion_query_set_id,
                 });
             }
 
@@ -2094,6 +2104,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             )
                             .map_pass_err(scope)?;
                     }
+                    RenderCommand::BeginOcclusionQuery { query_index } => {
+                        let scope = PassErrorScope::BeginOcclusionQuery;
+
+                        let query_set_id = occlusion_query_set_id
+                            .ok_or(RenderPassErrorInner::MissingOcclusionQuerySet)
+                            .map_pass_err(scope)?;
+
+                        let query_set = cmd_buf
+                            .trackers
+                            .query_sets
+                            .add_single(&*query_set_guard, query_set_id)
+                            .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
+                            .map_pass_err(scope)?;
+
+                        query_set
+                            .validate_and_begin_occlusion_query(
+                                raw,
+                                query_set_id,
+                                query_index,
+                                Some(&mut cmd_buf.pending_query_resets),
+                                &mut active_query,
+                            )
+                            .map_pass_err(scope)?;
+                    }
+                    RenderCommand::EndOcclusionQuery => {
+                        let scope = PassErrorScope::EndOcclusionQuery;
+
+                        end_occlusion_query(raw, &*query_set_guard, &mut active_query)
+                            .map_pass_err(scope)?;
+                    }
                     RenderCommand::BeginPipelineStatisticsQuery {
                         query_set_id,
                         query_index,
@@ -2610,6 +2650,21 @@ pub mod render_ffi {
             query_set_id,
             query_index,
         });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_begin_occlusion_query(
+        pass: &mut RenderPass,
+        query_index: u32,
+    ) {
+        pass.base
+            .commands
+            .push(RenderCommand::BeginOcclusionQuery { query_index });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_end_occlusion_query(pass: &mut RenderPass) {
+        pass.base.commands.push(RenderCommand::EndOcclusionQuery);
     }
 
     #[no_mangle]

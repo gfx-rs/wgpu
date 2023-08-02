@@ -1373,6 +1373,8 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     ///
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
     pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
+    /// Defines where the occlusion query results will be stored for this pass.
+    pub occlusion_query_set: Option<&'tex QuerySet>,
 }
 #[cfg(any(
     not(target_arch = "wasm32"),
@@ -3888,6 +3890,29 @@ impl<'a> RenderPass<'a> {
             query_set.data.as_ref(),
             query_index,
         )
+    }
+}
+
+impl<'a> RenderPass<'a> {
+    /// Start a occlusion query on this render pass. It can be ended with
+    /// `end_occlusion_query`. Occlusion queries may not be nested.
+    pub fn begin_occlusion_query(&mut self, query_index: u32) {
+        DynContext::render_pass_begin_occlusion_query(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            query_index,
+        );
+    }
+
+    /// End the occlusion query on this render pass. It can be started with
+    /// `begin_occlusion_query`. Occlusion queries may not be nested.
+    pub fn end_occlusion_query(&mut self) {
+        DynContext::render_pass_end_occlusion_query(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+        );
     }
 }
 
