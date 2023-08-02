@@ -385,7 +385,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPassDescriptor::new();
-            //TODO: set visibility results buffer
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
@@ -454,11 +453,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 }
             }
 
-            if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
-                let sba_descriptor = descriptor
-                    .sample_buffer_attachments()
-                    .object_at(0 as _)
-                    .unwrap();
+            if let Some(ref timestamp_writes) = desc.timestamp_writes {
+                let sba_descriptor = descriptor.sample_buffer_attachments().object_at(0).unwrap();
                 sba_descriptor.set_sample_buffer(
                     timestamp_writes
                         .query_set
@@ -473,6 +469,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 if let Some(end_index) = timestamp_writes.end_of_pass_write_index {
                     sba_descriptor.set_end_of_fragment_sample_index(end_index as _);
                 }
+            }
+
+            if let Some(occlusion_query_set) = desc.occlusion_query_set {
+                descriptor
+                    .set_visibility_result_buffer(Some(occlusion_query_set.raw_buffer.as_ref()))
             }
 
             let raw = self.raw_cmd_buf.as_ref().unwrap();

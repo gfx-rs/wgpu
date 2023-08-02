@@ -758,6 +758,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
+        occlusion_query_set: Option<id::QuerySetId>,
         cmd_buf: &mut CommandBuffer<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
@@ -1151,6 +1152,18 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             None
         };
 
+        let occlusion_query_set = if let Some(occlusion_query_set) = occlusion_query_set {
+            let query_set = cmd_buf
+                .trackers
+                .query_sets
+                .add_single(query_set_guard, occlusion_query_set)
+                .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
+
+            Some(&query_set.raw)
+        } else {
+            None
+        };
+
         let hal_desc = hal::RenderPassDescriptor {
             label,
             extent,
@@ -1159,6 +1172,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             depth_stencil_attachment: depth_stencil,
             multiview,
             timestamp_writes,
+            occlusion_query_set,
         };
         unsafe {
             cmd_buf.encoder.raw.begin_render_pass(&hal_desc);
@@ -1247,6 +1261,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }),
                 multiview: self.multiview,
                 timestamp_writes: None,
+                occlusion_query_set: None,
             };
             unsafe {
                 raw.begin_render_pass(&desc);
@@ -1343,6 +1358,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 color_attachments,
                 depth_stencil_attachment,
                 timestamp_writes,
+                occlusion_query_set_id,
                 cmd_buf,
                 &*view_guard,
                 &*buffer_guard,
