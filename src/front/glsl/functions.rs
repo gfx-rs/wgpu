@@ -1304,6 +1304,36 @@ impl Frontend {
         Ok(())
     }
 
+    /// Create a Naga [`EntryPoint`] that calls the GLSL `main` function.
+    ///
+    /// We compile the GLSL `main` function as an ordinary Naga [`Function`].
+    /// This function synthesizes a Naga [`EntryPoint`] to call that.
+    ///
+    /// Each GLSL input and output variable (including builtins) becomes a Naga
+    /// [`GlobalVariable`]s in the [`Private`] address space, which `main` can
+    /// access in the usual way.
+    ///
+    /// The `EntryPoint` we synthesize here has an argument for each GLSL input
+    /// variable, and returns a struct with a member for each GLSL output
+    /// variable. The entry point contains code to:
+    ///
+    /// - copy its arguments into the Naga globals representing the GLSL input
+    ///   variables,
+    ///
+    /// - call the Naga `Function` representing the GLSL `main` function, and then
+    ///
+    /// - build its return value from whatever values the GLSL `main` left in
+    ///   the Naga globals representing GLSL `output` variables.
+    ///
+    /// Upon entry, [`ctx.body`] should contain code, accumulated by prior calls
+    /// to [`ParsingContext::parse_external_declaration`][pxd], to initialize
+    /// private global variables as needed. This code gets spliced into the
+    /// entry point before the call to `main`.
+    ///
+    /// [`GlobalVariable`]: crate::GlobalVariable
+    /// [`Private`]: crate::AddressSpace::Private
+    /// [`ctx.body`]: Context::body
+    /// [pxd]: super::ParsingContext::parse_external_declaration
     pub(crate) fn add_entry_point(
         &mut self,
         function: Handle<Function>,
