@@ -597,11 +597,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                     let mut trackers = trackers.lock();
                     trackers.views.remove_abandoned(id)
                 };
-                println!(
-                    "TextureView {:?} examined with refcount {}",
-                    id,
-                    Arc::strong_count(view)
-                );
                 if is_removed {
                     log::info!("TextureView {:?} is removed from registry", id);
                     f(view_id);

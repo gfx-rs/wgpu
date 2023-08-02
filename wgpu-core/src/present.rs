@@ -310,7 +310,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } = *clear_mode
                     {
                         let view = clear_view.take().unwrap();
-                        drop(view);
+                        unsafe {
+                            use hal::Device;
+                            device.raw().destroy_texture_view(view);
+                        }
                     }
 
                     let suf = A::get_surface(&surface);

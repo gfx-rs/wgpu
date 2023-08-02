@@ -83,10 +83,10 @@ impl<Id: TypedId> ResourceInfo<Id> {
         let mut label = String::new();
         #[cfg(debug_assertions)]
         {
-            label = self.label.clone();
+            label = format!("[{}] ", self.label);
         }
         if let Some(id) = self.id.as_ref() {
-            label = format!("{:?}", id);
+            label.push_str(format!("{:?}", id).as_str());
         }
         label
     }
@@ -568,8 +568,11 @@ impl<A: HalApi> Drop for Texture<A> {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
             } => {
-                let view = clear_view.take();
-                drop(view);
+                if let Some(view) = clear_view.take() {
+                    unsafe {
+                        self.device.raw().destroy_texture_view(view);
+                    }
+                }
             }
             TextureClearMode::RenderPass {
                 ref mut clear_views,
