@@ -188,19 +188,17 @@ async fn run() {
         .expect("Failed to request adapter.");
 
     // Check timestamp features.
-    if adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY) {
+    let features = adapter.features()
+        & (wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES);
+    if features.contains(wgpu::Features::TIMESTAMP_QUERY) {
         println!("Adapter supports timestamp queries.");
     } else {
         println!("Adapter does not support timestamp queries, aborting.");
         return;
     }
-    let mut features = wgpu::Features::TIMESTAMP_QUERY;
-    let timestamps_inside_passes = adapter
-        .features()
-        .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES);
+    let timestamps_inside_passes = features.contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES);
     if timestamps_inside_passes {
         println!("Adapter supports timestamp queries within passes.");
-        features |= wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
     } else {
         println!("Adapter does not support timestamp queries within passes.");
     }
