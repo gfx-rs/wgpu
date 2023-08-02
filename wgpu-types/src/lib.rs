@@ -847,7 +847,7 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
-    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000.
+    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000. Higher is "better".
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
     pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
@@ -863,14 +863,15 @@ pub struct Limits {
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
-    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KB. Higher is "better".
+    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KiB. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
-    /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MB. Higher is "better".
+    /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MiB. Higher is "better".
     pub max_storage_buffer_binding_size: u32,
     /// Maximum length of `VertexState::buffers` when creating a `RenderPipeline`.
     /// Defaults to 8. Higher is "better".
     pub max_vertex_buffers: u32,
     /// A limit above which buffer allocations are guaranteed to fail.
+    /// Defaults to 256 MiB. Higher is "better".
     ///
     /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
     /// fragmentation and other factors.
@@ -892,24 +893,25 @@ pub struct Limits {
     pub min_storage_buffer_offset_alignment: u32,
     /// Maximum allowed number of components (scalars) of input or output locations for
     /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
+    /// Higher is "better".
     pub max_inter_stage_shader_components: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
-    /// 16352.
+    /// 16352. Higher is "better".
     pub max_compute_workgroup_storage_size: u32,
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
-    /// Defaults to 256.
+    /// Defaults to 256. Higher is "better".
     pub max_compute_invocations_per_workgroup: u32,
     /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256.
+    /// Defaults to 256. Higher is "better".
     pub max_compute_workgroup_size_x: u32,
     /// The maximum value of the workgroup_size Y dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256.
+    /// Defaults to 256. Higher is "better".
     pub max_compute_workgroup_size_y: u32,
     /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 64.
+    /// Defaults to 64. Higher is "better".
     pub max_compute_workgroup_size_z: u32,
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
-    /// Defaults to 65535.
+    /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
     /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
@@ -942,7 +944,7 @@ impl Default for Limits {
             max_uniform_buffer_binding_size: 64 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
-            max_buffer_size: 1 << 28,
+            max_buffer_size: 256 << 20,
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
             min_uniform_buffer_offset_alignment: 256,
@@ -961,6 +963,42 @@ impl Default for Limits {
 
 impl Limits {
     /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
+    ///
+    /// Those limits are as follows (different from default are marked with *):
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::downlevel_defaults(), Limits {
+    ///     max_texture_dimension_1d: 2048, // *
+    ///     max_texture_dimension_2d: 2048, // *
+    ///     max_texture_dimension_3d: 256, // *
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 4, // *
+    ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_uniform_buffers_per_shader_stage: 12,
+    ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
+    ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
+    ///     max_vertex_buffers: 8,
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 2048,
+    ///     max_push_constant_size: 0,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_compute_workgroup_storage_size: 16352,
+    ///     max_compute_invocations_per_workgroup: 256,
+    ///     max_compute_workgroup_size_x: 256,
+    ///     max_compute_workgroup_size_y: 256,
+    ///     max_compute_workgroup_size_z: 64,
+    ///     max_compute_workgroups_per_dimension: 65535,
+    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    /// });
+    /// ```
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -991,11 +1029,48 @@ impl Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 28,
+            max_buffer_size: 256 << 20,
         }
     }
 
     /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    ///
+    /// Those limits are as follows (different from `downlevel_defaults` are marked with +,
+    /// *'s from `downlevel_defaults` shown as well.):
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::downlevel_webgl2_defaults(), Limits {
+    ///     max_texture_dimension_1d: 2048, // *
+    ///     max_texture_dimension_2d: 2048, // *
+    ///     max_texture_dimension_3d: 256, // *
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 0, // +
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 0, // * +
+    ///     max_storage_textures_per_shader_stage: 0, // +
+    ///     max_uniform_buffers_per_shader_stage: 11, // +
+    ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
+    ///     max_storage_buffer_binding_size: 0, // * +
+    ///     max_vertex_buffers: 8,
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 255, // +
+    ///     max_push_constant_size: 0,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_compute_workgroup_storage_size: 0, // +
+    ///     max_compute_invocations_per_workgroup: 0, // +
+    ///     max_compute_workgroup_size_x: 0, // +
+    ///     max_compute_workgroup_size_y: 0, // +
+    ///     max_compute_workgroup_size_z: 0, // +
+    ///     max_compute_workgroups_per_dimension: 0, // +
+    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    /// });
+    /// ```
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
