@@ -436,7 +436,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .or(tw.end_of_pass_write_index)
                     .map(|i| i..i + 1)
             };
-            // Range should always be Some, both values being None should lead to a validation err.r
+            // Range should always be Some, both values being None should lead to a validation error.
             // But no point in erroring over that nuance here!
             if let Some(range) = range {
                 unsafe {

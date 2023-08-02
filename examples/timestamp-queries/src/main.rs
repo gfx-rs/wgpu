@@ -174,7 +174,7 @@ impl Queries {
 }
 
 async fn run() {
-    // Instantiates instance of WebGPU
+    // Instantiates instance of wgpu
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
@@ -194,7 +194,7 @@ async fn run() {
         println!("Adapter does not support timestamp queries, aborting.");
         return;
     }
-    let mut features = wgpu::Features::empty() | wgpu::Features::TIMESTAMP_QUERY;
+    let mut features = wgpu::Features::TIMESTAMP_QUERY;
     let timestamps_inside_passes = adapter
         .features()
         .contains(wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES);
