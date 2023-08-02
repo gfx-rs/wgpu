@@ -242,7 +242,7 @@ impl<'w> BlockContext<'w> {
                 let init = self.ir_module.constants[handle].init;
                 self.writer.constant_ids[init.index()]
             }
-            crate::Expression::ZeroValue(_) => self.writer.write_constant_null(result_type_id),
+            crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
             crate::Expression::Compose {
                 ty: _,
                 ref components,
@@ -1658,7 +1658,7 @@ impl<'w> BlockContext<'w> {
         size: u32,
         block: &mut Block,
     ) {
-        let mut partial_sum = self.writer.write_constant_null(result_type_id);
+        let mut partial_sum = self.writer.get_constant_null(result_type_id);
         let last_component = size - 1;
         for index in 0..=last_component {
             // compute the product of the current components
@@ -2315,7 +2315,7 @@ impl<'w> BlockContext<'w> {
             BlockExit::Return => match self.ir_function.result {
                 Some(ref result) if self.function.entry_point_context.is_none() => {
                     let type_id = self.get_type_id(LookupType::Handle(result.ty));
-                    let null_id = self.writer.write_constant_null(type_id);
+                    let null_id = self.writer.get_constant_null(type_id);
                     Instruction::return_value(null_id)
                 }
                 _ => Instruction::return_void(),

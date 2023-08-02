@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 310
+; Bound: 299
 OpCapability Shader
 OpCapability Sampled1D
 OpCapability Image1D
@@ -178,21 +178,10 @@ OpDecorate %267 Location 0
 %270 = OpTypeFunction %2
 %280 = OpConstant  %5  0
 %281 = OpConstantNull  %8
-%282 = OpConstantNull  %8
-%283 = OpConstant  %10  0
-%284 = OpConstantNull  %8
-%285 = OpConstantNull  %12
-%286 = OpConstantNull  %8
-%287 = OpConstantNull  %6
-%288 = OpConstantNull  %8
-%289 = OpConstantNull  %6
-%290 = OpConstantNull  %8
-%291 = OpConstantNull  %6
-%292 = OpConstantNull  %8
-%293 = OpConstantNull  %6
-%294 = OpConstantNull  %12
-%295 = OpConstantNull  %6
-%296 = OpConstant  %4  0.0
+%282 = OpConstant  %10  0
+%283 = OpConstantNull  %12
+%284 = OpConstantNull  %6
+%285 = OpConstant  %4  0.0
 %48 = OpFunction  %6  None %49
 %46 = OpFunctionParameter  %5
 %47 = OpFunctionParameter  %5
@@ -448,20 +437,20 @@ OpFunctionEnd
 %277 = OpLoad  %18  %39
 %278 = OpLoad  %19  %41
 %279 = OpLoad  %20  %43
-OpBranch %297
-%297 = OpLabel
-%298 = OpFunctionCall  %6  %48 %280 %280
-%299 = OpFunctionCall  %6  %63 %281 %280
-%300 = OpFunctionCall  %6  %79 %282 %283 %280
-%301 = OpFunctionCall  %6  %97 %284 %280 %280
-%302 = OpFunctionCall  %6  %113 %285 %280
-%303 = OpFunctionCall  %6  %128 %286 %280
-%304 = OpFunctionCall  %2  %210 %280 %287
-%305 = OpFunctionCall  %2  %220 %288 %289
-%306 = OpFunctionCall  %2  %232 %290 %283 %291
-%307 = OpFunctionCall  %2  %246 %292 %280 %293
-%308 = OpFunctionCall  %2  %258 %294 %295
-%309 = OpCompositeConstruct  %6  %296 %296 %296 %296
-OpStore %267 %309
+OpBranch %286
+%286 = OpLabel
+%287 = OpFunctionCall  %6  %48 %280 %280
+%288 = OpFunctionCall  %6  %63 %281 %280
+%289 = OpFunctionCall  %6  %79 %281 %282 %280
+%290 = OpFunctionCall  %6  %97 %281 %280 %280
+%291 = OpFunctionCall  %6  %113 %283 %280
+%292 = OpFunctionCall  %6  %128 %281 %280
+%293 = OpFunctionCall  %2  %210 %280 %284
+%294 = OpFunctionCall  %2  %220 %281 %284
+%295 = OpFunctionCall  %2  %232 %281 %282 %284
+%296 = OpFunctionCall  %2  %246 %281 %280 %284
+%297 = OpFunctionCall  %2  %258 %283 %284
+%298 = OpCompositeConstruct  %6  %285 %285 %285 %285
+OpStore %267 %298
 OpReturn
 OpFunctionEnd

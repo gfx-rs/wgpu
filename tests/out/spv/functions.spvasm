@@ -1,12 +1,12 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 79
+; Bound: 78
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %74 "main"
-OpExecutionMode %74 LocalSize 1 1 1
+OpEntryPoint GLCompute %73 "main"
+OpExecutionMode %73 LocalSize 1 1 1
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 2
@@ -25,8 +25,7 @@ OpExecutionMode %74 LocalSize 1 1 1
 %26 = OpConstant  %5  2
 %31 = OpConstantNull  %5
 %42 = OpConstantNull  %8
-%57 = OpConstantNull  %5
-%75 = OpTypeFunction %2
+%74 = OpTypeFunction %2
 %11 = OpFunction  %3  None %12
 %10 = OpLabel
 OpBranch %15
@@ -67,29 +66,29 @@ OpBranch %27
 %41 = OpIAdd  %8  %50 %53
 %54 = OpCompositeConstruct  %9  %25 %25 %25 %25
 %55 = OpCompositeConstruct  %9  %26 %26 %26 %26
-%58 = OpCompositeExtract  %5  %54 0
-%59 = OpCompositeExtract  %5  %55 0
-%60 = OpIMul  %5  %58 %59
-%61 = OpIAdd  %5  %57 %60
-%62 = OpCompositeExtract  %5  %54 1
-%63 = OpCompositeExtract  %5  %55 1
-%64 = OpIMul  %5  %62 %63
-%65 = OpIAdd  %5  %61 %64
-%66 = OpCompositeExtract  %5  %54 2
-%67 = OpCompositeExtract  %5  %55 2
-%68 = OpIMul  %5  %66 %67
-%69 = OpIAdd  %5  %65 %68
-%70 = OpCompositeExtract  %5  %54 3
-%71 = OpCompositeExtract  %5  %55 3
-%72 = OpIMul  %5  %70 %71
-%56 = OpIAdd  %5  %69 %72
+%57 = OpCompositeExtract  %5  %54 0
+%58 = OpCompositeExtract  %5  %55 0
+%59 = OpIMul  %5  %57 %58
+%60 = OpIAdd  %5  %31 %59
+%61 = OpCompositeExtract  %5  %54 1
+%62 = OpCompositeExtract  %5  %55 1
+%63 = OpIMul  %5  %61 %62
+%64 = OpIAdd  %5  %60 %63
+%65 = OpCompositeExtract  %5  %54 2
+%66 = OpCompositeExtract  %5  %55 2
+%67 = OpIMul  %5  %65 %66
+%68 = OpIAdd  %5  %64 %67
+%69 = OpCompositeExtract  %5  %54 3
+%70 = OpCompositeExtract  %5  %55 3
+%71 = OpIMul  %5  %69 %70
+%56 = OpIAdd  %5  %68 %71
 OpReturnValue %56
 OpFunctionEnd
-%74 = OpFunction  %2  None %75
-%73 = OpLabel
-OpBranch %76
-%76 = OpLabel
-%77 = OpFunctionCall  %3  %11
-%78 = OpFunctionCall  %5  %21
+%73 = OpFunction  %2  None %74
+%72 = OpLabel
+OpBranch %75
+%75 = OpLabel
+%76 = OpFunctionCall  %3  %11
+%77 = OpFunctionCall  %5  %21
 OpReturn
 OpFunctionEnd

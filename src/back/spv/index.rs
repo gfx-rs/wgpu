@@ -304,7 +304,7 @@ impl<'w> BlockContext<'w> {
         F: FnOnce(&mut IdGenerator, &mut Block) -> Word,
     {
         // For the out-of-bounds case, we produce a zero value.
-        let null_id = self.writer.write_constant_null(result_type);
+        let null_id = self.writer.get_constant_null(result_type);
 
         let mut selection = Selection::start(block, result_type);
 

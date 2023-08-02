@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 65
+; Bound: 63
 OpCapability Shader
 OpCapability ShaderNonUniform
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -24,7 +24,7 @@ OpMemberDecorate %16 0 Offset 0
 OpDecorate %23 Location 0
 OpDecorate %23 Flat
 OpDecorate %26 Location 0
-OpDecorate %56 NonUniform
+OpDecorate %55 NonUniform
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3
@@ -55,8 +55,6 @@ OpDecorate %56 NonUniform
 %39 = OpTypePointer StorageBuffer %5
 %40 = OpTypePointer StorageBuffer %3
 %46 = OpTypeBool
-%48 = OpConstantNull  %3
-%57 = OpConstantNull  %3
 %28 = OpFunction  %2  None %29
 %21 = OpLabel
 %18 = OpVariable  %19  Function %20
@@ -75,30 +73,30 @@ OpStore %18 %31
 %44 = OpIAdd  %3  %43 %42
 OpStore %18 %44
 %45 = OpULessThan  %46  %37 %7
-OpSelectionMerge %49 None
-OpBranchConditional %45 %50 %49
-%50 = OpLabel
-%47 = OpAccessChain  %40  %11 %37 %31
-%51 = OpLoad  %3  %47
-OpBranch %49
+OpSelectionMerge %48 None
+OpBranchConditional %45 %49 %48
 %49 = OpLabel
-%52 = OpPhi  %3  %48 %34 %51 %50
-%53 = OpLoad  %3  %18
-%54 = OpIAdd  %3  %53 %52
-OpStore %18 %54
-%55 = OpULessThan  %46  %38 %7
-OpSelectionMerge %58 None
-OpBranchConditional %55 %59 %58
-%59 = OpLabel
-%56 = OpAccessChain  %40  %11 %38 %31
-%60 = OpLoad  %3  %56
-OpBranch %58
-%58 = OpLabel
-%61 = OpPhi  %3  %57 %49 %60 %59
+%47 = OpAccessChain  %40  %11 %37 %31
+%50 = OpLoad  %3  %47
+OpBranch %48
+%48 = OpLabel
+%51 = OpPhi  %3  %20 %34 %50 %49
+%52 = OpLoad  %3  %18
+%53 = OpIAdd  %3  %52 %51
+OpStore %18 %53
+%54 = OpULessThan  %46  %38 %7
+OpSelectionMerge %56 None
+OpBranchConditional %54 %57 %56
+%57 = OpLabel
+%55 = OpAccessChain  %40  %11 %38 %31
+%58 = OpLoad  %3  %55
+OpBranch %56
+%56 = OpLabel
+%59 = OpPhi  %3  %20 %48 %58 %57
+%60 = OpLoad  %3  %18
+%61 = OpIAdd  %3  %60 %59
+OpStore %18 %61
 %62 = OpLoad  %3  %18
-%63 = OpIAdd  %3  %62 %61
-OpStore %18 %63
-%64 = OpLoad  %3  %18
-OpStore %26 %64
+OpStore %26 %62
 OpReturn
 OpFunctionEnd

@@ -189,7 +189,7 @@ impl Access for Load {
     }
 
     fn out_of_bounds_value(&self, ctx: &mut BlockContext<'_>) -> Word {
-        ctx.writer.write_constant_null(self.type_id)
+        ctx.writer.get_constant_null(self.type_id)
     }
 }
 

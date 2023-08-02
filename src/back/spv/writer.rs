@@ -356,7 +356,7 @@ impl Writer {
                     crate::TypeInner::RayQuery => None,
                     _ => {
                         let type_id = self.get_type_id(LookupType::Handle(variable.ty));
-                        Some(self.write_constant_null(type_id))
+                        Some(self.get_constant_null(type_id))
                     }
                 }),
             );
@@ -1206,6 +1206,16 @@ impl Writer {
             .to_words(&mut self.logical_layout.declarations);
     }
 
+    pub(super) fn get_constant_null(&mut self, type_id: Word) -> Word {
+        let null = CachedConstant::ZeroValue(type_id);
+        if let Some(&id) = self.cached_constants.get(&null) {
+            return id;
+        }
+        let id = self.write_constant_null(type_id);
+        self.cached_constants.insert(null, id);
+        id
+    }
+
     pub(super) fn write_constant_null(&mut self, type_id: Word) -> Word {
         let null_id = self.id_gen.next();
         Instruction::constant_null(type_id, null_id)
@@ -1226,7 +1236,7 @@ impl Writer {
             }
             crate::Expression::ZeroValue(ty) => {
                 let type_id = self.get_type_id(LookupType::Handle(ty));
-                self.write_constant_null(type_id)
+                self.get_constant_null(type_id)
             }
             crate::Expression::Compose { ty, ref components } => {
                 let component_ids: Vec<_> = components
@@ -1289,7 +1299,7 @@ impl Writer {
                 // get wrapped, and we're initializing `WorkGroup` variables.
                 let var_id = self.global_variables[handle.index()].var_id;
                 let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
-                let init_word = self.write_constant_null(var_type_id);
+                let init_word = self.get_constant_null(var_type_id);
                 Instruction::store(var_id, init_word, None)
             })
             .collect::<Vec<_>>();
@@ -1327,7 +1337,7 @@ impl Writer {
             id
         };
 
-        let zero_id = self.write_constant_null(uint3_type_id);
+        let zero_id = self.get_constant_null(uint3_type_id);
         let bool3_type_id = self.get_bool3_type_id();
 
         let eq_id = self.id_gen.next();
@@ -1663,7 +1673,7 @@ impl Writer {
         let init_word = match (global_variable.space, self.zero_initialize_workgroup_memory) {
             (crate::AddressSpace::Private, _)
             | (crate::AddressSpace::WorkGroup, super::ZeroInitializeWorkgroupMemoryMode::Native) => {
-                init_word.or_else(|| Some(self.write_constant_null(inner_type_id)))
+                init_word.or_else(|| Some(self.get_constant_null(inner_type_id)))
             }
             _ => init_word,
         };
