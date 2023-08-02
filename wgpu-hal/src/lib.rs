@@ -465,7 +465,13 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
 
     // queries
 
+    /// # Safety:
+    ///
+    /// - If `set` is an occlusion query set, it must be the same one as used in the [`RenderPassDescriptor::occlusion_query_set`] parameter.
     unsafe fn begin_query(&mut self, set: &A::QuerySet, index: u32);
+    /// # Safety:
+    ///
+    /// - If `set` is an occlusion query set, it must be the same one as used in the [`RenderPassDescriptor::occlusion_query_set`] parameter.
     unsafe fn end_query(&mut self, set: &A::QuerySet, index: u32);
     unsafe fn write_timestamp(&mut self, set: &A::QuerySet, index: u32);
     unsafe fn reset_queries(&mut self, set: &A::QuerySet, range: Range<u32>);
@@ -1293,6 +1299,7 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
     pub timestamp_writes: Option<RenderPassTimestampWrites<'a, A>>,
+    pub occlusion_query_set: Option<&'a A::QuerySet>,
 }
 
 #[derive(Debug)]
