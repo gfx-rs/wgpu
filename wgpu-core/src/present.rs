@@ -154,7 +154,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     label: Some("(wgpu internal) clear surface texture view"),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
-                    usage: hal::TextureUses::COLOR_TARGET,
+                    usage: hal::TextureUses::empty(),
                     range: wgt::ImageSubresourceRange::default(),
                 };
                 let mut clear_views = smallvec::SmallVec::new();

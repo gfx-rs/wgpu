@@ -596,6 +596,9 @@ impl crate::Queue<Api> for Queue {
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         let ssc = surface.swapchain.as_ref().unwrap();
+        if ssc.device.raw.handle() != self.device.raw.handle() {
+            return Err(crate::SurfaceError::Outdated);
+        }
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
