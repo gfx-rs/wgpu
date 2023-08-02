@@ -129,12 +129,14 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     base,
                     target_colors,
                     target_depth_stencil,
+                    occlusion_query_set_id,
                 } => {
                     self.command_encoder_run_render_pass_impl::<A>(
                         encoder,
                         base.as_ref(),
                         &target_colors,
                         target_depth_stencil.as_ref(),
+                        occlusion_query_set_id,
                     )
                     .unwrap();
                 }

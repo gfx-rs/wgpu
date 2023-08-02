@@ -379,6 +379,7 @@ impl wgpu_example::framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                occlusion_query_set: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);

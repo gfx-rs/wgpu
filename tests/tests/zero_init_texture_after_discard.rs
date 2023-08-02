@@ -154,6 +154,7 @@ impl<'ctx> TestCase<'ctx> {
                         store: true,
                     }),
                 }),
+                occlusion_query_set: None,
             });
             ctx.queue.submit([encoder.finish()]);
         } else {
@@ -237,6 +238,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                occlusion_query_set: None,
             });
     }
 
@@ -260,6 +262,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                occlusion_query_set: None,
             });
     }
 
@@ -283,6 +286,7 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                occlusion_query_set: None,
             });
     }
 

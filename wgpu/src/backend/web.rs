@@ -3217,6 +3217,23 @@ impl crate::context::Context for Context {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
     }
 
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+        _query_index: u32,
+    ) {
+        // Not available in gecko yet
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+    ) {
+        // Not available in gecko yet
+    }
+
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         _pass: &mut Self::RenderPassId,
