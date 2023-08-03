@@ -18,7 +18,7 @@ The example starts with two arrays of numbers. One where `a[i] = i` and the othe
   - No set of workgroups can be guaranteed to execute in any predictable or reliable order in relation to each other.
 - Ths size of a workgroup is defined with the `@workgroup_size` attribute on a compute shader main function.
 - The location of an invocation within its workgroup grid can be got with `@builtin(local_invocation_id)`.
-- The location of an invocation within the total compute shader grid can be gotten with `@builtin(global_invocation_id)`.
+- The location of an invocation within the entire compute shader grid can be gotten with `@builtin(global_invocation_id)`.
 - The location of an invocation's workgroup within the dispatch grid can be gotten with `@builtin(workgroup_id)`.
 - Workgroups share memory within the `workgroup` address space. Workgroup memory is similar to private memory but it is shared within a workgroup. Invocations within a workgroup will see the same memory but invocations across workgroups will be accessing different memory.
 
@@ -58,3 +58,11 @@ As mentioned above, invocations exist both within the context of a workgroup gri
 ## Barriers and Workgroups
 
 Arguably, workgroups are at their most useful when being used alongside barriers. Since barriers are already explained more thoroughly in the hello-synchronization example, this section will be short. Despite affecting different memory address spaces, all synchronization functions affect invocations on a workgroup level, synchronizing the workgroup. See [hello-synchronization/README.md](../hello-synchronization/README.md) for more.
+
+## Links to Technical Resources
+
+For a rather long explainer, this README may still leave the more technically minded person with questions. The specifications for both WebGPU and WGSL ("WebGPU Shading Language") are long and it's rather unintuitive that by far the vast majority of specification on how workgroups and compute shaders more generally work, is all in the WGSL spec. Below are some links into the specifications at a couple interesting points:
+
+- [Here](https://www.w3.org/TR/WGSL/#compute-shader-workgroups) is the main section on workgroups and outlines important terminology in technical terms. It is recommended that everyone looking for something in this section of this README start by reading this.
+- [Here](https://www.w3.org/TR/webgpu/#computing-operations) is a section on compute shaders from a WebGPU perspective (instead of WGSL). It's still a stub but hopefully it will grow in the future.
+- Don't forget your [`@builtin()`'s](https://www.w3.org/TR/WGSL/#builtin-inputs-outputs)!
