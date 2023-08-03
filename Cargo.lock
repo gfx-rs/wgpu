@@ -3283,6 +3283,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
+ "wgpu-example",
  "winit",
 ]
 
@@ -3363,6 +3364,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgpu-example",
  "wgpu-test",
 ]
 

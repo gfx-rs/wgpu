@@ -15,13 +15,14 @@
 //! repeated-compute for code that is more thoroughly commented.
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::io::Write;
+use wgpu_example::framework::output_image_native;
+
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
+use wgpu_example::framework::output_image_wasm;
 
 const TEXTURE_DIMS: (usize, usize) = (512, 512);
 
-async fn run(path: Option<String>) {
+async fn run(_path: Option<String>) {
     let mut texture_data = vec![0u8; TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4];
 
     let instance = wgpu::Instance::default();
@@ -152,83 +153,10 @@ async fn run(path: Option<String>) {
     output_staging_buffer.unmap();
 
     #[cfg(not(target_arch = "wasm32"))]
-    output_image_native(texture_data.to_vec(), path);
+    output_image_native(texture_data.to_vec(), TEXTURE_DIMS, _path.unwrap());
     #[cfg(target_arch = "wasm32")]
-    output_image_wasm(texture_data.to_vec(), path);
+    output_image_wasm(texture_data.to_vec(), TEXTURE_DIMS);
     log::info!("Done.")
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn output_image_native(image_data: Vec<u8>, path: Option<String>) {
-    let mut png_data = Vec::<u8>::with_capacity(image_data.len());
-    let mut encoder = png::Encoder::new(
-        std::io::Cursor::new(&mut png_data),
-        TEXTURE_DIMS.0 as u32,
-        TEXTURE_DIMS.1 as u32,
-    );
-    encoder.set_color(png::ColorType::Rgba);
-    let mut png_writer = encoder.write_header().unwrap();
-    png_writer.write_image_data(&image_data[..]).unwrap();
-    png_writer.finish().unwrap();
-    log::info!("Png file encoded in memory.");
-
-    if let Some(p) = path {
-        let mut file = std::fs::File::create(p).unwrap();
-        file.write_all(&png_data[..]).unwrap();
-    } else {
-        log::warn!("No path specified. No file ultimately emitted.");
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn output_image_wasm(image_data: Vec<u8>, _path: Option<String>) {
-    let document = web_sys::window().unwrap().document().unwrap();
-    let body = document.body().unwrap();
-    let canvas = document
-        .create_element("canvas")
-        .unwrap()
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .unwrap();
-    // We don't want to show the canvas, we just want it to exist in the background.
-    canvas.set_attribute("hidden", "true").unwrap();
-    let image_dimension_strings = (TEXTURE_DIMS.0.to_string(), TEXTURE_DIMS.1.to_string());
-    canvas
-        .set_attribute("width", image_dimension_strings.0.as_str())
-        .unwrap();
-    canvas
-        .set_attribute("height", image_dimension_strings.1.as_str())
-        .unwrap();
-    canvas.set_attribute("background-color", "red").unwrap();
-    body.append_child(&canvas).unwrap();
-    log::info!("Set up canvas.");
-    let context = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .unwrap();
-    let image_data = web_sys::ImageData::new_with_u8_clamped_array(
-        wasm_bindgen::Clamped(&image_data),
-        TEXTURE_DIMS.0 as u32,
-    )
-    .unwrap();
-    context.put_image_data(&image_data, 0.0, 0.0).unwrap();
-    log::info!("Put image data in canvas.");
-    // The canvas is now the image we ultimately want. We can create a data url from it now.
-    let data_url = canvas.to_data_url().unwrap();
-    let image_element = document
-        .create_element("img")
-        .unwrap()
-        .dyn_into::<web_sys::HtmlImageElement>()
-        .unwrap();
-    image_element.set_src(&data_url);
-    body.append_child(&image_element).unwrap();
-    log::info!("Created image element with data url.");
-    body.set_inner_html(
-        &(body.inner_html()
-            + r#"<p>The above image is for you!
-        You can drag it to your desktop to download.</p>"#),
-    );
 }
 
 fn main() {
