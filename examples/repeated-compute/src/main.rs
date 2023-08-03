@@ -40,8 +40,8 @@ fn generate_rand() -> u16 {
 async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     log::info!("Beginning GPU compute on data {local_buffer:?}.");
     // Local buffer contents -> GPU storage buffer
-    /* Adds a write buffer command to the queue. This command is more complicated
-    than it appears. */
+    // Adds a write buffer command to the queue. This command is more complicated
+    // than it appears.
     context.queue.write_buffer(
         &context.storage_buffer,
         0,
@@ -76,27 +76,32 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     log::info!("Submitted commands.");
 
     // Finally time to get our results.
-    /* First we get a buffer slice which represents a chunk of the buffer (which we
-    can't access yet). */
+    // First we get a buffer slice which represents a chunk of the buffer (which we
+    // can't access yet).
     // We want the whole thing so use unbounded range.
     let buffer_slice = context.output_staging_buffer.slice(..);
-    /* Now things get complicated. WebGPU, for safety reasons, only allows either the GPU
-    or CPU to access a buffer's contents at a time. We need to "map" the buffer which means
-    flipping ownership of the buffer over to the CPU and making access legal. We do this
-    with `BufferSlice::map_async`. The problem is that map_async is not an async function
-    and we can't await it. What we need to do instead is pass in a closure that will
-    be executed when the slice is either mapped or the mapping has failed. The problem
-    with this is that we don't have a reliable way to wait in the main code for the buffer
-    to be mapped and even worse, calling get_mapped_range or get_mapped_range_mut prematurely
-    will cause a panic, not return an error. Using async channels solves this as awaiting
-    the recieving of a message from the passed closure will force the outside code to wait.
-    It also doesn't hurt if the closure finishes before the outside code catches up as
-    the message is buffered and recieving will just pick that up. */
+    // Now things get complicated. WebGPU, for safety reasons, only allows either the GPU
+    // or CPU to access a buffer's contents at a time. We need to "map" the buffer which means
+    // flipping ownership of the buffer over to the CPU and making access legal. We do this
+    // with `BufferSlice::map_async`.
+    //
+    // The problem is that map_async is not an async function so we can't await it. What
+    // we need to do instead is pass in a closure that will be executed when the slice is
+    // either mapped or the mapping has failed.
+    //
+    // The problem with this is that we don't have a reliable way to wait in the main
+    // code for the buffer to be mapped and even worse, calling get_mapped_range or
+    // get_mapped_range_mut prematurely will cause a panic, not return an error.
+    //
+    // Using async channels solves this as awaiting the receiving of a message from
+    // the passed closure will force the outside code to wait. It also doesn't hurt
+    // if the closure finishes before the outside code catches up as the message is
+    // buffered and receiving will just pick that up.
     let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
-    /* In order for the mapping to be completed, one of three things must happen.
-    One of those can be calling `Device::poll`. This isn't necessary on the web as devices
-    are polled automatically but natively, we need to make sure this happens manually. */
+    // In order for the mapping to be completed, one of three things must happen.
+    // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
+    // are polled automatically but natively, we need to make sure this happens manually.
     // `Maintain::Wait` will cause the thread to wait on native but not the web.
     context.device.poll(wgpu::Maintain::Wait);
     log::info!("Device polled.");
@@ -109,8 +114,8 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
         local_buffer.copy_from_slice(bytemuck::cast_slice(&view));
     }
     log::info!("Results written to local buffer.");
-    /* We need to make sure all `BufferView`'s are dropped before we do what we're about
-    to do. */
+    // We need to make sure all `BufferView`'s are dropped before we do what we're about
+    // to do.
     // Unmap so that we can copy to the staging buffer in the next iteration.
     context.output_staging_buffer.unmap();
 }
@@ -185,12 +190,12 @@ impl WgpuContext {
                 | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        /* In WebGPU (unlike many graphics libraries), you aren't allowed to map
-        primary buffers (anthing that has any use that isn't COPY_SRC, COPY_DST,
-        MAP_READ, or MAP_WRITE) (as in get pointers to their memory from the CPU).
-        In WebGPU, the idea is that you copy the data into a specialized reading
-        buffer and then read from there. Same would be true for writes if it weren't
-        for the Queue::write_buffer method. */
+        // In WebGPU (unlike many graphics libraries), you aren't allowed to map
+        // primary buffers (anything that has any use that isn't COPY_SRC, COPY_DST,
+        // MAP_READ, or MAP_WRITE) (as in get pointers to their memory from the CPU).
+        // In WebGPU, the idea is that you copy the data into a specialized reading
+        // buffer and then read from there. Same would be true for writes if it weren't
+        // for the Queue::write_buffer method.
         let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size as wgpu::BufferAddress,
@@ -213,8 +218,8 @@ impl WgpuContext {
                 count: None,
             }],
         });
-        /* This ties actual resources stored in the GPU to our metaphorical function
-        through the binding slots we defined above. */
+        // This ties actual resources stored in the GPU to our metaphorical function
+        // through the binding slots we defined above.
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bind_group_layout,
