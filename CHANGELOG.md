@@ -42,6 +42,15 @@ Bottom level categories:
 
 ### Major changes
 
+#### Pass timestamp queries
+
+Addition of `TimestampWrites` to compute and render passes to allow profiling.
+This brings us in line with the spec.
+
+Added new example to demonstrate the various kinds of timestamps.
+
+By @FL33TW00D & @wumpf in [#3636](https://github.com/gfx-rs/wgpu/pull/3636).
+
 #### Occlusion Query Support
 
 The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
@@ -298,15 +307,6 @@ Some texture format names have changed to get back in line with the spec.
 ```
 
 By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
-
-#### Pass timestamp queries
-
-Addition of `TimestampWrites` to compute and render passes to allow profiling.
-This brings us in line with the spec.
-
-Added new example to demonstrate the various kinds of timestamps.
-
-By @FL33TW00D & @wumpf in [#3636](https://github.com/gfx-rs/wgpu/pull/3636).
 
 #### Misc Breaking Changes
 
