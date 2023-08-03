@@ -99,6 +99,7 @@ Bottom level categories:
 - Added example uniform-values. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 - Added example hello-workgroups. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 - Added example hello-synchronization. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
+- Moved `output_image_native` and `output_image_wasm` functions into wgpu-example both to reduce redundancy in the other examples of this PR and for posterity. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 
 #### General
 
