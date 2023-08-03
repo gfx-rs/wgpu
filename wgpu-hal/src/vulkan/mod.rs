@@ -96,6 +96,10 @@ pub struct DebugUtilsMessengerUserData {
 
     /// Validation layer specification version, from `vk::LayerProperties`.
     validation_layer_spec_version: u32,
+
+    /// If the OBS layer is present. OBS never increments the version of their layer,
+    /// so there's no reason to have the version.
+    has_obs_layer: bool,
 }
 
 pub struct InstanceShared {
