@@ -257,8 +257,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             wgpu_context_ref.queue.write_buffer(
                 &wgpu_context_ref.uniform_buffer,
                 0,
-                /* Ew gross I know. We have to do this to circumvent bytemuck's requirement
-                that AppState implement POD (Plain Old Data). */
+                // Ew gross I know. We have to do this to circumvent bytemuck's requirement
+                // that AppState implement POD (Plain Old Data).
                 bytemuck::bytes_of(&[
                     state_ref.cursor_pos[0],
                     state_ref.cursor_pos[1],
