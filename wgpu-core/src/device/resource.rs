@@ -1276,6 +1276,10 @@ impl<A: HalApi> Device<A> {
                 .flags
                 .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
         );
+        caps.set(
+            Caps::DUAL_SOURCE_BLENDING,
+            self.features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
@@ -2560,6 +2564,7 @@ impl<A: HalApi> Device<A> {
         let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
         let mut total_attributes = 0;
+        let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
             vertex_steps.push(pipeline::VertexStep {
                 stride: vb_state.array_stride,
@@ -2701,6 +2706,25 @@ impl<A: HalApi> Device<A> {
                         break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
                     }
 
+                    if let Some(blend_mode) = cs.blend {
+                        for factor in [
+                            blend_mode.color.src_factor,
+                            blend_mode.color.dst_factor,
+                            blend_mode.alpha.src_factor,
+                            blend_mode.alpha.dst_factor,
+                        ] {
+                            if factor.ref_second_blend_source() {
+                                if i == 0 {
+                                    self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
+                                    pipeline_expects_dual_source_blending = true;
+                                    break;
+                                } else {
+                                    return Err(crate::pipeline::CreateRenderPipelineError
+                            ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
+                                }
+                            }
+                        }
+                    }
                     break None;
                 };
                 if let Some(e) = error {
@@ -2807,6 +2831,14 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
                 validated_stages |= flag;
+
+                let dual_source = interface.has_dual_source_blending_entry_point();
+                if !pipeline_expects_dual_source_blending && dual_source {
+                    return Err(pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending);
+                }
+                if pipeline_expects_dual_source_blending && !dual_source {
+                    return Err(pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending);
+                }
             }
 
             hal::ProgrammableStage {

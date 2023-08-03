@@ -781,7 +781,19 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const SHADER_EARLY_DEPTH_TEST = 1 << 62;
 
-        // 62..64 available
+        /// Allows two outputs from a shader to be used for blending.
+        /// Note that dual-source blending doesn't support multiple render targets.
+        ///
+        /// For more info see the OpenGL ES extension GL_EXT_blend_func_extended.
+        ///
+        /// Supported platforms:
+        /// - OpenGL ES (with GL_EXT_blend_func_extended)
+        /// - Metal (with MSL 1.2+)
+        /// - Vulkan (with dualSrcBlend)
+        /// - DX12
+        const DUAL_SOURCE_BLENDING = 1 << 63;
+
+        // no more space left
     }
 }
 
@@ -1549,6 +1561,8 @@ impl TextureViewDimension {
 ///
 /// Corresponds to [WebGPU `GPUBlendFactor`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpublendfactor).
+/// Values using S1 requires [`Features::DUAL_SOURCE_BLENDING`] and can only be
+/// used with the first render target.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1581,6 +1595,29 @@ pub enum BlendFactor {
     Constant = 11,
     /// 1.0 - Constant
     OneMinusConstant = 12,
+    /// S1.component
+    Src1 = 13,
+    /// 1.0 - S1.component
+    OneMinusSrc1 = 14,
+    /// S1.alpha
+    Src1Alpha = 15,
+    /// 1.0 - S1.alpha
+    OneMinusSrc1Alpha = 16,
+}
+
+impl BlendFactor {
+    /// Returns `true` if the blend factor references the second blend source.
+    ///
+    /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
+    pub fn ref_second_blend_source(&self) -> bool {
+        match self {
+            BlendFactor::Src1
+            | BlendFactor::OneMinusSrc1
+            | BlendFactor::Src1Alpha
+            | BlendFactor::OneMinusSrc1Alpha => true,
+            _ => false,
+        }
+    }
 }
 
 /// Alpha blend operation.

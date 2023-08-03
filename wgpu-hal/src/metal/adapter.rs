@@ -796,6 +796,7 @@ impl super::PrivateCapabilities {
                 None
             },
             timestamp_query_support,
+            blend_func_extended: version.at_least((11, 0), (14, 0), os_is_mac),
         }
     }
 
@@ -832,6 +833,10 @@ impl super::PrivateCapabilities {
             F::TIMESTAMP_QUERY_INSIDE_PASSES,
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
+        );
+        features.set(
+            F::DUAL_SOURCE_BLENDING,
+            self.msl_version >= MTLLanguageVersion::V1_2,
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
