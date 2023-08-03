@@ -30,7 +30,9 @@ When you call `ComputePass::dispatch_workgroups`, the function dispatches multip
 | W | W | W | W | W |
 | W | W | W | W | W |
 
-Where each W is a workgroup. If you want your shader to consider what workgroup the current invocation is in, add a function argument with type `vec3<u32>` and with the attribute `@builtin(workgroup_id)`. Note here that in this example, the term "dispatch grid" is used throughout even though it's not a proper term within WGSL. The specification refers to "workgroup grids" where cells / points are invocations within a workgroup and "compute shader grids" where cells / points are also invocations but for the entire dispatch. Nowhere in the WGSL specification does it ever refer to "dispatch grids." It only ever, in poor grammar, refers to the `workgroup_id` as ["the position of the workgroup in overall compute shader grid"](https://www.w3.org/TR/2023/WD-WGSL-20230629/#workgroup-id-builtin-value) although it does provide a formula to get the workgroup id (["`⌊ CSi ÷ workgroup_size_x ⌋, ⌊ CSj ÷ workgroup_size_y ⌋, ⌊ CSk ÷ workgroup_size_z ⌋`"](https://www.w3.org/TR/2023/WD-WGSL-20230629/#workgroup-id) where CSi, j, and k refer the x, y, and z of a invocation's global invocation id) which is all we need to know what it actually measures. All in all, this example will use the idea of "dispatch grids" because they are convenient.
+Where each W is a workgroup. If you want your shader to consider what workgroup within the dispatch the current invocation is in, add a function argument with type `vec3<u32>` and with the attribute `@builtin(workgroup_id)`.
+
+Note here that in this example, the term "dispatch grid" is used throughout to mean the grid of workgroups within the dispatch but is not a proper term within WGSL. Other terms to know though that are proper are "workgroup grid" which refers to the invocations in a single _workgroup_ and "compute shader grid" which refers to the grid of _all_ the invocations in the _entire dispatch_.
 
 ### Within the Workgroup
 
