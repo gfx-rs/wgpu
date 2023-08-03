@@ -7,8 +7,8 @@ use wgpu_example::framework::output_image_wasm;
 const TEXTURE_DIMS: (usize, usize) = (512, 512);
 
 async fn run(_path: Option<String>) {
-    /* This will later store the raw pixel value data locally. We'll create it now as
-    a convenient size reference. */
+    // This will later store the raw pixel value data locally. We'll create it now as
+    // a convenient size reference.
     let mut texture_data = Vec::<u8>::with_capacity(TEXTURE_DIMS.0 * TEXTURE_DIMS.1 * 4);
 
     let instance = wgpu::Instance::default();
@@ -109,8 +109,8 @@ async fn run(_path: Option<String>) {
             buffer: &output_staging_buffer,
             layout: wgpu::ImageDataLayout {
                 offset: 0,
-                /* This needs to be a multiple of 256. Normally we would need to pad
-                it but we here know it will work out anyways. */
+                // This needs to be a multiple of 256. Normally we would need to pad
+                // it but we here know it will work out anyways.
                 bytes_per_row: Some((TEXTURE_DIMS.0 * 4) as u32),
                 rows_per_image: Some(TEXTURE_DIMS.1 as u32),
             },
