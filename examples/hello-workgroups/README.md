@@ -10,7 +10,6 @@ The example starts with two arrays of numbers. One where `a[i] = i` and the othe
 
 ### TLDR / Key Takeaways
 
-- Workgroups are 3d grids of invocations that are guaranteed to execute in parallel.
 - Workgroups fit in a 3d grid of workgroups executed in a single dispatch.
 - All invocations in a workgroup are guaranteed to execute concurrently.
 - Workgroups carry no other guarantees for concurrency outside of those individual workgroups, meaning...
