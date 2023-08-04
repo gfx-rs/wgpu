@@ -482,9 +482,10 @@ struct Inner {
     config: khronos_egl::Config,
     #[cfg_attr(target_os = "emscripten", allow(dead_code))]
     wl_display: Option<*mut raw::c_void>,
+    #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+    force_gles_minor_version: wgt::Gles3MinorVersion,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
-    force_gles_minor_version: wgt::Gles3MinorVersion,
 }
 
 impl Inner {
