@@ -271,6 +271,7 @@ impl<'w> BlockContext<'w> {
                     crate::TypeInner::Vector { .. } => {
                         self.write_vector_access(expr_handle, base, index, block)?
                     }
+                    // Only binding arrays in the Handle address space will take this path (due to `is_intermediate`)
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
@@ -347,6 +348,7 @@ impl<'w> BlockContext<'w> {
                         ));
                         id
                     }
+                    // Only binding arrays in the Handle address space will take this path (due to `is_intermediate`)
                     crate::TypeInner::BindingArray {
                         base: binding_type, ..
                     } => {
@@ -1426,8 +1428,8 @@ impl<'w> BlockContext<'w> {
     ) -> Result<ExpressionPointer, Error> {
         let result_lookup_ty = match self.fun_info[expr_handle].ty {
             TypeResolution::Handle(ty_handle) => match return_type_override {
-                // We use the return type override as a special case for binding arrays as the OpAccessChain
-                // needs to return a pointer, but indexing into a binding array just gives you the type of
+                // We use the return type override as a special case for handle binding arrays as the OpAccessChain
+                // needs to return a pointer, but indexing into a handle binding array just gives you the type of
                 // the binding in the IR.
                 Some(ty) => ty,
                 None => LookupType::Handle(ty_handle),
