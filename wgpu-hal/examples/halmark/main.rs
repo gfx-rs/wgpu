@@ -679,6 +679,8 @@ impl<A: hal::Api> Example<A> {
             })],
             depth_stencil_attachment: None,
             multiview: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         };
         unsafe {
             ctx.encoder.begin_render_pass(&pass_desc);

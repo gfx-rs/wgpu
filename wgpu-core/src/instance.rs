@@ -352,6 +352,7 @@ impl<A: HalApi> Adapter<A> {
             |err| match err {
                 hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
                 hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+                hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
             },
         )?;
 

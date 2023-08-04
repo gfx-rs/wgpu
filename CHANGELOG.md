@@ -40,6 +40,30 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### Pass timestamp queries
+
+Addition of `TimestampWrites` to compute and render passes to allow profiling.
+This brings us in line with the spec.
+
+Added new example to demonstrate the various kinds of timestamps.
+
+By @FL33TW00D & @wumpf in [#3636](https://github.com/gfx-rs/wgpu/pull/3636).
+
+#### Occlusion Query Support
+
+The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
+
+```diff
+let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+  // ...
++ occlusion_query_set: None,
+});
+```
+
+By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
+
 ### Changes
 
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)

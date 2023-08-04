@@ -47,6 +47,19 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    // Silence Vulkan Validation error "VUID-VkRenderPassBeginInfo-framebuffer-04627"
+    // if the OBS layer is enabled. This is a bug in the OBS layer. As the OBS layer
+    // does not have a version number they increment, there is no way to qualify the
+    // supression of the error to a specific version of the OBS layer.
+    //
+    // See https://github.com/obsproject/obs-studio/issues/9353
+    const VUID_VKRENDERPASSBEGININFO_FRAMEBUFFER_04627: i32 = 0x45125641;
+    if cd.message_id_number == VUID_VKRENDERPASSBEGININFO_FRAMEBUFFER_04627
+        && user_data.has_obs_layer
+    {
+        return vk::FALSE;
+    }
+
     let level = match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Debug,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,
@@ -593,6 +606,9 @@ impl crate::Instance<super::Api> for super::Instance {
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
         let has_nv_optimus = find_layer(&instance_layers, nv_optimus_layer).is_some();
 
+        let obs_layer = CStr::from_bytes_with_nul(b"VK_LAYER_OBS_HOOK\0").unwrap();
+        let has_obs_layer = find_layer(&instance_layers, obs_layer).is_some();
+
         let mut layers: Vec<&'static CStr> = Vec::new();
 
         // Request validation layer if asked.
@@ -609,6 +625,7 @@ impl crate::Instance<super::Api> for super::Instance {
                     .unwrap()
                     .to_owned(),
                     validation_layer_spec_version: layer_properties.spec_version,
+                    has_obs_layer,
                 });
             } else {
                 log::warn!(

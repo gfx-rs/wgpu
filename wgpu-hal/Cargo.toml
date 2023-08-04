@@ -103,7 +103,7 @@ d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 # backend: Metal
 block = { version = "0.1", optional = true }
 
-metal = { version = "0.26.0", default_features = false }
+metal = "0.26.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
