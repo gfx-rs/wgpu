@@ -309,6 +309,14 @@ impl<'w> BlockContext<'w> {
                             None,
                         ));
 
+                        // Subsequent image operations require the image/sampler to be decorated as NonUniform
+                        // if the image/sampler binding array was accessed with a non-uniform index
+                        // see VUID-RuntimeSpirv-NonUniform-06274
+                        if self.fun_info[index].uniformity.non_uniform_result.is_some() {
+                            self.writer
+                                .decorate_non_uniform_binding_array_access(load_id)?;
+                        }
+
                         load_id
                     }
                     ref other => {
@@ -1456,12 +1464,20 @@ impl<'w> BlockContext<'w> {
                     if let crate::Expression::GlobalVariable(var_handle) =
                         self.ir_function.expressions[base]
                     {
-                        let gvar = &self.ir_module.global_variables[var_handle];
-                        if let crate::TypeInner::BindingArray { .. } =
-                            self.ir_module.types[gvar.ty].inner
-                        {
-                            is_non_uniform_binding_array |=
-                                self.fun_info[index].uniformity.non_uniform_result.is_some();
+                        let gvar: &crate::GlobalVariable =
+                            &self.ir_module.global_variables[var_handle];
+                        match gvar.space {
+                            crate::AddressSpace::Storage { .. } | crate::AddressSpace::Uniform => {
+                                if let crate::TypeInner::BindingArray { .. } =
+                                    self.ir_module.types[gvar.ty].inner
+                                {
+                                    is_non_uniform_binding_array = self.fun_info[index]
+                                        .uniformity
+                                        .non_uniform_result
+                                        .is_some();
+                                }
+                            }
+                            _ => {}
                         }
                     }
 
@@ -1545,6 +1561,9 @@ impl<'w> BlockContext<'w> {
             };
             (pointer_id, expr_pointer)
         };
+        // Subsequent load, store and atomic operations require the pointer to be decorated as NonUniform
+        // if the buffer binding array was accessed with a non-uniform index
+        // see VUID-RuntimeSpirv-NonUniform-06274
         if is_non_uniform_binding_array {
             self.writer
                 .decorate_non_uniform_binding_array_access(pointer_id)?;

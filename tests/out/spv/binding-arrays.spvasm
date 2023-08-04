@@ -35,28 +35,28 @@ OpMemberDecorate %47 0 Offset 0
 OpDecorate %63 Location 0
 OpDecorate %63 Flat
 OpDecorate %66 Location 0
-OpDecorate %95 NonUniform
-OpDecorate %118 NonUniform
-OpDecorate %120 NonUniform
-OpDecorate %145 NonUniform
-OpDecorate %147 NonUniform
-OpDecorate %183 NonUniform
-OpDecorate %211 NonUniform
-OpDecorate %227 NonUniform
-OpDecorate %243 NonUniform
-OpDecorate %264 NonUniform
-OpDecorate %266 NonUniform
-OpDecorate %288 NonUniform
-OpDecorate %290 NonUniform
-OpDecorate %312 NonUniform
-OpDecorate %314 NonUniform
-OpDecorate %336 NonUniform
-OpDecorate %338 NonUniform
-OpDecorate %360 NonUniform
-OpDecorate %362 NonUniform
-OpDecorate %384 NonUniform
-OpDecorate %386 NonUniform
-OpDecorate %409 NonUniform
+OpDecorate %96 NonUniform
+OpDecorate %119 NonUniform
+OpDecorate %121 NonUniform
+OpDecorate %146 NonUniform
+OpDecorate %148 NonUniform
+OpDecorate %184 NonUniform
+OpDecorate %212 NonUniform
+OpDecorate %228 NonUniform
+OpDecorate %244 NonUniform
+OpDecorate %265 NonUniform
+OpDecorate %267 NonUniform
+OpDecorate %289 NonUniform
+OpDecorate %291 NonUniform
+OpDecorate %313 NonUniform
+OpDecorate %315 NonUniform
+OpDecorate %337 NonUniform
+OpDecorate %339 NonUniform
+OpDecorate %361 NonUniform
+OpDecorate %363 NonUniform
+OpDecorate %385 NonUniform
+OpDecorate %387 NonUniform
+OpDecorate %410 NonUniform
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeStruct %3
