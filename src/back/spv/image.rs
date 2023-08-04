@@ -379,7 +379,7 @@ impl<'w> BlockContext<'w> {
         })
     }
 
-    pub(super) fn get_image_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
+    pub(super) fn get_handle_id(&mut self, expr_handle: Handle<crate::Expression>) -> Word {
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::GlobalVariable(handle) => {
                 self.writer.global_variables[handle.index()].handle_id
@@ -745,7 +745,7 @@ impl<'w> BlockContext<'w> {
         sample: Option<Handle<crate::Expression>>,
         block: &mut Block,
     ) -> Result<Word, Error> {
-        let image_id = self.get_image_id(image);
+        let image_id = self.get_handle_id(image);
         let image_type = self.fun_info[image].ty.inner_with(&self.ir_module.types);
         let image_class = match *image_type {
             crate::TypeInner::Image { class, .. } => class,
@@ -830,7 +830,7 @@ impl<'w> BlockContext<'w> {
     ) -> Result<Word, Error> {
         use super::instructions::SampleLod;
         // image
-        let image_id = self.get_image_id(image);
+        let image_id = self.get_handle_id(image);
         let image_type = self.fun_info[image].ty.handle().unwrap();
         // SPIR-V doesn't know about our `Depth` class, and it returns
         // `vec4<f32>`, so we need to grab the first component out of it.
@@ -857,7 +857,7 @@ impl<'w> BlockContext<'w> {
         let sampled_image_type_id =
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
-        let sampler_id = self.get_image_id(sampler);
+        let sampler_id = self.get_handle_id(sampler);
         let coordinates_id = self
             .write_image_coordinates(coordinate, array_index, block)?
             .value_id;
@@ -1013,7 +1013,7 @@ impl<'w> BlockContext<'w> {
     ) -> Result<Word, Error> {
         use crate::{ImageClass as Ic, ImageDimension as Id, ImageQuery as Iq};
 
-        let image_id = self.get_image_id(image);
+        let image_id = self.get_handle_id(image);
         let image_type = self.fun_info[image].ty.handle().unwrap();
         let (dim, arrayed, class) = match self.ir_module.types[image_type].inner {
             crate::TypeInner::Image {
@@ -1164,7 +1164,7 @@ impl<'w> BlockContext<'w> {
         value: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<(), Error> {
-        let image_id = self.get_image_id(image);
+        let image_id = self.get_handle_id(image);
         let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
         let value_id = self.cached[value];
 

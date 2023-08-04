@@ -20,7 +20,7 @@ impl<'w> BlockContext<'w> {
             } => {
                 //Note: composite extract indices and types must match `generate_ray_desc_type`
                 let desc_id = self.cached[descriptor];
-                let acc_struct_id = self.get_image_id(acceleration_structure);
+                let acc_struct_id = self.get_handle_id(acceleration_structure);
                 let width = 4;
 
                 let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
