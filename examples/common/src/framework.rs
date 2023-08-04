@@ -160,7 +160,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler,
-        gles_minor_version: gles_minor_version,
+        gles_minor_version,
     });
     let (size, surface) = unsafe {
         let size = window.inner_size();
