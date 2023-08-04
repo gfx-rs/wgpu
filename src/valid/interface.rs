@@ -409,7 +409,12 @@ impl super::Validator {
             // A binding array is (mostly) supposed to behave the same as a
             // series of individually bound resources, so we can (mostly)
             // validate a `binding_array<T>` as if it were just a plain `T`.
-            crate::TypeInner::BindingArray { base, .. } => base,
+            crate::TypeInner::BindingArray { base, .. } => match var.space {
+                crate::AddressSpace::Storage { .. }
+                | crate::AddressSpace::Uniform
+                | crate::AddressSpace::Handle => base,
+                _ => return Err(GlobalVariableError::InvalidUsage(var.space)),
+            },
             _ => var.ty,
         };
         let type_info = &self.types[inner_ty.index()];
