@@ -200,97 +200,100 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     // (6)
     let mut state = Some(AppState::default());
     let main_window_id = wgpu_context.as_ref().unwrap().window.id();
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::LoopDestroyed => {
-            wgpu_context = None;
-            state = None;
-        }
-        Event::WindowEvent { window_id, event } if window_id == main_window_id => match event {
-            WindowEvent::CloseRequested => {
-                control_flow.set_exit();
+    event_loop.run(move |event, _, control_flow| {
+        control_flow.set_wait();
+        match event {
+            Event::LoopDestroyed => {
+                wgpu_context = None;
+                state = None;
             }
-            WindowEvent::KeyboardInput { input, .. } => {
-                let state_mut = state.as_mut().unwrap();
-                let wgpu_context_ref = wgpu_context.as_ref().unwrap();
-                if let Some(virtual_keycode) = input.virtual_keycode {
-                    // (7a)
-                    match virtual_keycode {
-                        VirtualKeyCode::Escape => control_flow.set_exit(),
-                        VirtualKeyCode::Up => state_mut.translate_view(1, 1),
-                        VirtualKeyCode::Down => state_mut.translate_view(-1, 1),
-                        VirtualKeyCode::Left => state_mut.translate_view(-1, 0),
-                        VirtualKeyCode::Right => state_mut.translate_view(1, 0),
-                        VirtualKeyCode::U => state_mut.max_iterations += 3.0,
-                        VirtualKeyCode::D => state_mut.max_iterations -= 3.0,
-                        _ => {}
+            Event::WindowEvent { window_id, event } if window_id == main_window_id => match event {
+                WindowEvent::CloseRequested => {
+                    control_flow.set_exit();
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    let state_mut = state.as_mut().unwrap();
+                    let wgpu_context_ref = wgpu_context.as_ref().unwrap();
+                    if let Some(virtual_keycode) = input.virtual_keycode {
+                        // (7a)
+                        match virtual_keycode {
+                            VirtualKeyCode::Escape => control_flow.set_exit(),
+                            VirtualKeyCode::Up => state_mut.translate_view(1, 1),
+                            VirtualKeyCode::Down => state_mut.translate_view(-1, 1),
+                            VirtualKeyCode::Left => state_mut.translate_view(-1, 0),
+                            VirtualKeyCode::Right => state_mut.translate_view(1, 0),
+                            VirtualKeyCode::U => state_mut.max_iterations += 3.0,
+                            VirtualKeyCode::D => state_mut.max_iterations -= 3.0,
+                            _ => {}
+                        }
+                        wgpu_context_ref.window.request_redraw();
                     }
+                }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    let change = match delta {
+                        winit::event::MouseScrollDelta::LineDelta(_, vertical) => vertical,
+                        winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / 20.0,
+                    };
+                    let state_mut = state.as_mut().unwrap();
+                    let wgpu_context_ref = wgpu_context.as_ref().unwrap();
+                    // (7b)
+                    state_mut.zoom(change);
                     wgpu_context_ref.window.request_redraw();
                 }
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                let change = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, vertical) => vertical,
-                    winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / 20.0,
-                };
-                let state_mut = state.as_mut().unwrap();
+                WindowEvent::Resized(new_size) => {
+                    let wgpu_context_mut = wgpu_context.as_mut().unwrap();
+                    wgpu_context_mut.resize(new_size);
+                    wgpu_context_mut.window.request_redraw();
+                }
+                _ => {}
+            },
+            Event::RedrawRequested(id) if id == main_window_id => {
                 let wgpu_context_ref = wgpu_context.as_ref().unwrap();
-                // (7b)
-                state_mut.zoom(change);
-                wgpu_context_ref.window.request_redraw();
-            }
-            WindowEvent::Resized(new_size) => {
-                let wgpu_context_mut = wgpu_context.as_mut().unwrap();
-                wgpu_context_mut.resize(new_size);
-                wgpu_context_mut.window.request_redraw();
+                let state_ref = state.as_ref().unwrap();
+                let frame = wgpu_context_ref.surface.get_current_texture().unwrap();
+                let view = frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                // (8)
+                wgpu_context_ref.queue.write_buffer(
+                    &wgpu_context_ref.uniform_buffer,
+                    0,
+                    // Ew gross I know. We have to do this to circumvent bytemuck's requirement
+                    // that AppState implement POD (Plain Old Data).
+                    bytemuck::bytes_of(&[
+                        state_ref.cursor_pos[0],
+                        state_ref.cursor_pos[1],
+                        state_ref.zoom,
+                        state_ref.max_iterations,
+                    ]),
+                );
+                let mut encoder = wgpu_context_ref
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                {
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: None,
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                                store: true,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                    });
+                    render_pass.set_pipeline(&wgpu_context_ref.pipeline);
+                    // (9)
+                    render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
+                    render_pass.draw(0..3, 0..1);
+                }
+                wgpu_context_ref.queue.submit(Some(encoder.finish()));
+                frame.present();
             }
             _ => {}
-        },
-        Event::RedrawRequested(id) if id == main_window_id => {
-            let wgpu_context_ref = wgpu_context.as_ref().unwrap();
-            let state_ref = state.as_ref().unwrap();
-            let frame = wgpu_context_ref.surface.get_current_texture().unwrap();
-            let view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-
-            // (8)
-            wgpu_context_ref.queue.write_buffer(
-                &wgpu_context_ref.uniform_buffer,
-                0,
-                // Ew gross I know. We have to do this to circumvent bytemuck's requirement
-                // that AppState implement POD (Plain Old Data).
-                bytemuck::bytes_of(&[
-                    state_ref.cursor_pos[0],
-                    state_ref.cursor_pos[1],
-                    state_ref.zoom,
-                    state_ref.max_iterations,
-                ]),
-            );
-            let mut encoder = wgpu_context_ref
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
-                render_pass.set_pipeline(&wgpu_context_ref.pipeline);
-                // (9)
-                render_pass.set_bind_group(0, &wgpu_context_ref.bind_group, &[]);
-                render_pass.draw(0..3, 0..1);
-            }
-            wgpu_context_ref.queue.submit(Some(encoder.finish()));
-            frame.present();
         }
-        _ => {}
     });
 }
 
@@ -303,7 +306,7 @@ fn main() {
         .unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
-        env_logger::init();
+        env_logger::builder().format_timestamp_nanos().init();
         pollster::block_on(run(event_loop, window));
     }
     #[cfg(target_arch = "wasm32")]
