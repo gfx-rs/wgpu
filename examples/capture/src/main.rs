@@ -105,6 +105,8 @@ async fn create_red_image_with_dimensions(
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         // Copy the data from the texture to the buffer

@@ -347,6 +347,10 @@ pub struct CommandEncoder {
     free_lists: Vec<d3d12::GraphicsCommandList>,
     pass: PassState,
     temp: Temp,
+
+    /// If set, the end of the next render/compute pass will write a timestamp at
+    /// the given pool & location.
+    end_of_pass_timer_query: Option<(d3d12::QueryHeap, u32)>,
 }
 
 unsafe impl Send for CommandEncoder {}

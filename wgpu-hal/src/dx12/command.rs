@@ -228,6 +228,21 @@ impl super::CommandEncoder {
         self.pass.layout = layout.clone();
         self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
     }
+
+    fn write_pass_end_timestamp_if_requested(&mut self) {
+        if let Some((query_set_raw, index)) = self.end_of_pass_timer_query.take() {
+            use crate::CommandEncoder as _;
+            unsafe {
+                self.write_timestamp(
+                    &crate::dx12::QuerySet {
+                        raw: query_set_raw,
+                        raw_ty: d3d12_ty::D3D12_QUERY_TYPE_TIMESTAMP,
+                    },
+                    index,
+                );
+            }
+        }
+    }
 }
 
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
@@ -656,6 +671,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
         unsafe { self.begin_pass(super::PassKind::Render, desc.label) };
+
+        // Start timestamp if any (before all other commands but after debug marker)
+        if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
+            if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
+                unsafe {
+                    self.write_timestamp(timestamp_writes.query_set, index);
+                }
+            }
+            self.end_of_pass_timer_query = timestamp_writes
+                .end_of_pass_write_index
+                .map(|index| (timestamp_writes.query_set.raw.clone(), index));
+        }
+
         let mut color_views = [d3d12::CpuDescriptor { ptr: 0 }; crate::MAX_COLOR_ATTACHMENTS];
         for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
             if let Some(cat) = cat.as_ref() {
@@ -824,6 +852,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 };
             }
         }
+
+        self.write_pass_end_timestamp_if_requested();
 
         unsafe { self.end_pass() };
     }
@@ -1109,10 +1139,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass<'a>(
+        &mut self,
+        desc: &crate::ComputePassDescriptor<'a, super::Api>,
+    ) {
         unsafe { self.begin_pass(super::PassKind::Compute, desc.label) };
+
+        if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
+            if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
+                unsafe {
+                    self.write_timestamp(timestamp_writes.query_set, index);
+                }
+            }
+            self.end_of_pass_timer_query = timestamp_writes
+                .end_of_pass_write_index
+                .map(|index| (timestamp_writes.query_set.raw.clone(), index));
+        }
     }
     unsafe fn end_compute_pass(&mut self) {
+        self.write_pass_end_timestamp_if_requested();
         unsafe { self.end_pass() };
     }
 

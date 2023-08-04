@@ -40,6 +40,30 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### Pass timestamp queries
+
+Addition of `TimestampWrites` to compute and render passes to allow profiling.
+This brings us in line with the spec.
+
+Added new example to demonstrate the various kinds of timestamps.
+
+By @FL33TW00D & @wumpf in [#3636](https://github.com/gfx-rs/wgpu/pull/3636).
+
+#### Occlusion Query Support
+
+The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
+
+```diff
+let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+  // ...
++ occlusion_query_set: None,
+});
+```
+
+By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
+
 ### Added/New Features
 
 - Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
@@ -120,6 +144,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 - Spell out which sizes are in bytes. By @jimblandy in [#3773](https://github.com/gfx-rs/wgpu/pull/3773).
 - Validate that `descriptor.usage` is not empty in `create_buffer` by @nical in [#3928](https://github.com/gfx-rs/wgpu/pull/3928)
 - Update `max_bindings_per_bind_group` limit to reflect spec changes by @ErichDonGubler and @nical in [#3943](https://github.com/gfx-rs/wgpu/pull/3943) [#3942](https://github.com/gfx-rs/wgpu/pull/3942)
+- Add better docs for `Limits`, listing the actual limits returned by `downlevel_defaults` and `downlevel_webgl2_defaults` by @JustAnotherCodemonkey in [#3988](https://github.com/gfx-rs/wgpu/pull/3988)
 
 ### Bug Fixes
 

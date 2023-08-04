@@ -95,6 +95,10 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         hal::BufferUses::INDIRECT,
         usage.contains(wgt::BufferUsages::INDIRECT),
     );
+    u.set(
+        hal::BufferUses::QUERY_RESOLVE,
+        usage.contains(wgt::BufferUsages::QUERY_RESOLVE),
+    );
     u
 }
 

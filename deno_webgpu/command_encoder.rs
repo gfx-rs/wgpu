@@ -98,6 +98,7 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
     label: Option<String>,
     color_attachments: Vec<Option<GpuRenderPassColorAttachment>>,
     depth_stencil_attachment: Option<GpuRenderPassDepthStencilAttachment>,
+    occlusion_query_set: Option<ResourceId>,
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -171,10 +172,17 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
             });
     }
 
+    let occlusion_query_set_resource = occlusion_query_set
+        .map(|rid| state.resource_table.get::<super::WebGpuQuerySet>(rid))
+        .transpose()?
+        .map(|query_set| query_set.1);
+
     let descriptor = wgpu_core::command::RenderPassDescriptor {
         label: label.map(Cow::from),
         color_attachments: Cow::from(color_attachments),
         depth_stencil_attachment: processed_depth_stencil_attachment.as_ref(),
+        timestamp_writes: None,
+        occlusion_query_set: occlusion_query_set_resource,
     };
 
     let render_pass = wgpu_core::command::RenderPass::new(command_encoder_resource.1, &descriptor);
@@ -200,6 +208,7 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
 
     let descriptor = wgpu_core::command::ComputePassDescriptor {
         label: label.map(Cow::from),
+        timestamp_writes: None,
     };
 
     let compute_pass =
