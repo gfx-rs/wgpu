@@ -119,8 +119,8 @@ libc = "0.2"
 android_system_properties = "0.1.1"
 
 [dependencies.naga]
-# git = "https://github.com/gfx-rs/naga"
-# rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+git = "https://github.com/gfx-rs/naga"
+rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
 version = "0.13.0"
 features = ["clone"]
 
