@@ -2145,7 +2145,7 @@ impl Adapter {
     /// Returns the inner hal TextureFormat. The hal texture format will be `None` if the
     /// backend type argument does not match with this wgpu TextureFormat.
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-    pub fn texture_format_as_hal<A: wgc::hub::HalApi>(
+    pub fn texture_format_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         texture_format: TextureFormat,
     ) -> Option<A::TextureFormat> {
@@ -2956,7 +2956,7 @@ impl Texture {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
         &self,
         hal_texture_callback: F,
     ) -> R {
@@ -3076,7 +3076,7 @@ impl TextureView {
     ///
     /// - The raw handle obtained from the hal TextureView must not be manually destroyed
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
         &self,
         hal_texture_view_callback: F,
     ) -> R {
@@ -3314,7 +3314,7 @@ impl CommandEncoder {
     /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn as_hal_mut<
-        A: wgc::hub::HalApi,
+        A: wgc::hal_api::HalApi,
         F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
         R,
     >(

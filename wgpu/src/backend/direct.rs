@@ -96,7 +96,7 @@ impl Context {
         }
     }
 
-    pub fn texture_format_as_hal<A: wgc::hub::HalApi>(
+    pub fn texture_format_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: wgc::id::AdapterId,
         texture_format: wgt::TextureFormat,
@@ -222,7 +222,7 @@ impl Context {
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn command_encoder_as_hal_mut<
-        A: wgc::hub::HalApi,
+        A: wgc::hal_api::HalApi,
         F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
         R,
     >(
@@ -239,7 +239,11 @@ impl Context {
     }
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
-    pub unsafe fn texture_as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
+    pub unsafe fn texture_as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::Texture>) -> R,
+        R,
+    >(
         &self,
         texture: &Texture,
         hal_texture_callback: F,
@@ -252,7 +256,7 @@ impl Context {
 
     #[cfg(any(not(target_arch = "wasm32"), feature = "emscripten"))]
     pub unsafe fn texture_view_as_hal<
-        A: wgc::hub::HalApi,
+        A: wgc::hal_api::HalApi,
         F: FnOnce(Option<&A::TextureView>) -> R,
         R,
     >(
