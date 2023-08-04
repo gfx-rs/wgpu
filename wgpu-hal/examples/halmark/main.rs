@@ -96,7 +96,7 @@ impl<A: hal::Api> Example<A> {
             },
             // Can't rely on having DXC available, so use FXC instead
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
-            force_angle_gles31: false,
+            gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {

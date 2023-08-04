@@ -6316,14 +6316,33 @@ pub enum Dx12Compiler {
     },
 }
 
+/// Selects which OpenGL ES 3 minor version to request.
+///
+/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1 on APIs like D3D11.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub enum Gles3MinorVersion {
+    /// No explicit minor version is requested, the driver automatically picks the highest available.
+    #[default]
+    Automatic,
+
+    /// Request an ES 3.0 context.
+    Version0,
+
+    /// Request an ES 3.1 context.
+    Version1,
+
+    /// Request an ES 3.2 context.
+    Version2,
+}
+
 /// Options for creating an instance.
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
     pub backends: Backends,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
-    /// Force ANGLE to support GLES 3.1, even on nonconformant implementations like D3D11.
-    pub force_angle_gles31: bool,
+    /// Which OpenGL ES 3 minor version to request.
+    pub gles_minor_version: Gles3MinorVersion,
 }
 
 impl Default for InstanceDescriptor {
@@ -6331,7 +6350,7 @@ impl Default for InstanceDescriptor {
         Self {
             backends: Backends::all(),
             dx12_shader_compiler: Dx12Compiler::default(),
-            force_angle_gles31: false,
+            gles_minor_version: Gles3MinorVersion::default(),
         }
     }
 }

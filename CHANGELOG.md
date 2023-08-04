@@ -42,7 +42,7 @@ Bottom level categories:
 
 ### Added/New Features
 
-- Add `force_angle_gles31` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
+- Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
 
 ### Changes
 

@@ -114,3 +114,22 @@ pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
         },
     )
 }
+
+/// Choose which minor OpenGL ES version to use from the environment variable `WGPU_GLES_MINOR_VERSION`.
+///
+/// Possible values are `0`, `1`, `2` or `automatic`. Case insensitive.
+pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
+    Some(
+        match std::env::var("WGPU_GLES_MINOR_VERSION")
+            .as_deref()
+            .map(str::to_lowercase)
+            .as_deref()
+        {
+            Ok("automatic") => wgt::Gles3MinorVersion::Automatic,
+            Ok("0") => wgt::Gles3MinorVersion::Version0,
+            Ok("1") => wgt::Gles3MinorVersion::Version1,
+            Ok("2") => wgt::Gles3MinorVersion::Version2,
+            _ => return None,
+        },
+    )
+}
