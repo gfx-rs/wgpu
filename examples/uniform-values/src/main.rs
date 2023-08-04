@@ -298,6 +298,7 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = winit::window::WindowBuilder::new()
         .with_title("Remember: Use U/D to change sample count!")
+        .with_inner_size(winit::dpi::LogicalSize::new(900, 900))
         .build(&event_loop)
         .unwrap();
     #[cfg(not(target_arch = "wasm32"))]
