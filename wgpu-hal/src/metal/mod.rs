@@ -722,7 +722,7 @@ pub struct ComputePipeline {
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QuerySet {
     raw_buffer: metal::Buffer,
     //Metal has a custom buffer for counters.
@@ -805,6 +805,9 @@ struct CommandState {
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,
+
+    /// Timer query that should be executed when the next pass starts.
+    pending_timer_queries: Vec<(QuerySet, u32)>,
 }
 
 pub struct CommandEncoder {
