@@ -417,19 +417,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         // Try to use an existing encoder for timestamp query if possible.
         // This works only if it's supported for the active encoder.
-        if let (true, Some(ref encoder)) = (
+        if let (true, Some(encoder)) = (
             support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
-            &self.state.blit,
+            self.state.blit.as_ref(),
         ) {
             encoder.sample_counters_in_buffer(sample_buffer, index as _, with_barrier);
-        } else if let (true, Some(ref encoder)) = (
+        } else if let (true, Some(encoder)) = (
             support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
-            &self.state.render,
+            self.state.render.as_ref(),
         ) {
             encoder.sample_counters_in_buffer(sample_buffer, index as _, with_barrier);
-        } else if let (true, Some(ref encoder)) = (
+        } else if let (true, Some(encoder)) = (
             support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
-            &self.state.compute,
+            self.state.compute.as_ref(),
         ) {
             encoder.sample_counters_in_buffer(sample_buffer, index as _, with_barrier);
         } else {
