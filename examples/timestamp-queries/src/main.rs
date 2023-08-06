@@ -464,13 +464,10 @@ mod tests {
             render_start_end_timestamps[1].wrapping_sub(render_start_end_timestamps[0]);
         let compute_delta =
             compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
+        let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
-        // TODO: Metal encoder timestamps aren't implemented yet.
-        if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
-            let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
-            assert!(encoder_delta > 0);
-            assert!(encoder_delta >= render_delta + compute_delta);
-        }
+        assert!(encoder_delta > 0);
+        assert!(encoder_delta >= render_delta + compute_delta);
 
         if let Some(render_inside_timestamp) = render_inside_timestamp {
             assert!(render_inside_timestamp >= render_start_end_timestamps[0]);
