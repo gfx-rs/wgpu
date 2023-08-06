@@ -60,9 +60,9 @@ impl QueryResults {
         let mut encoder_timestamps = [0, 0];
         encoder_timestamps[0] = get_next_slot();
         let render_start_end_timestamps = [get_next_slot(), get_next_slot()];
-        let render_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let render_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         let compute_start_end_timestamps = [get_next_slot(), get_next_slot()];
-        let compute_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let compute_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         encoder_timestamps[1] = get_next_slot();
 
         QueryResults {
