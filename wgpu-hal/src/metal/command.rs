@@ -1,4 +1,4 @@
-use super::{conv, AsNative};
+use super::{conv, AsNative, TimestampQuerySupport};
 use crate::CommandEncoder as _;
 use std::{borrow::Cow, mem, ops::Range};
 
@@ -322,16 +322,42 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             _ => {}
         }
     }
-    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {
-        // TODO: If MTLCounterSamplingPoint::AtDrawBoundary/AtBlitBoundary/AtDispatchBoundary is supported,
-        //       we don't need to insert a new encoder, but can instead use respective current one.
-        //let encoder = self.enter_any().unwrap_or_else(|| self.enter_blit());
+    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
+        let support = self.shared.private_caps.timestamp_query_support;
+        debug_assert!(
+            support.contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+            "Timestamp queries are not supported"
+        );
+        let sample_buffer = set.counter_sample_buffer.as_ref().unwrap();
+        let with_barrier = true;
 
-        // TODO: Otherwise, we need to create a new blit command encoder with a descriptor that inserts the timestamps.
-        // Note that as of writing creating a new encoder is not exposed by the metal crate.
-        // https://developer.apple.com/documentation/metal/mtlcommandbuffer/3564431-makeblitcommandencoder
+        // Try to use an existing encoder for timestamp query if possible.
+        // This works only if it's supported for the active encoder.
+        if let (true, Some(ref encoder)) = (
+            support.contains(TimestampQuerySupport::ON_BLIT_ENCODER),
+            &self.state.blit,
+        ) {
+            encoder.sample_counters_in_buffer(sample_buffer, index as u64, with_barrier);
+        } else if let (true, Some(ref encoder)) = (
+            support.contains(TimestampQuerySupport::ON_RENDER_ENCODER),
+            &self.state.render,
+        ) {
+            encoder.sample_counters_in_buffer(sample_buffer, index as u64, with_barrier);
+        } else if let (true, Some(ref encoder)) = (
+            support.contains(TimestampQuerySupport::ON_COMPUTE_ENCODER),
+            &self.state.compute,
+        ) {
+            encoder.sample_counters_in_buffer(sample_buffer, index as u64, with_barrier);
+        } else {
+            // Otherwise, we need to create a new encoder with a descriptor that inserts the timestamps.
+            // We create a blit encoder since this is the simplest and most fitting encoder for operations on
+            // a wgpu encoder.
 
-        // TODO: Enable respective test in `examples/timestamp-queries/src/tests.rs`.
+            // Note that as of writing creating a new encoder is not exposed by the metal crate.
+            // https://developer.apple.com/documentation/metal/mtlcommandbuffer/3564431-makeblitcommandencoder
+
+            // TODO:
+        };
     }
 
     unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {
@@ -342,6 +368,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
         encoder.fill_buffer(&set.raw_buffer, raw_range, 0);
     }
+
     unsafe fn copy_query_results(
         &mut self,
         set: &super::QuerySet,
