@@ -79,8 +79,8 @@ impl QueryResults {
         let elapsed_us = |start, end: u64| end.wrapping_sub(start) as f64 * period as f64 / 1000.0;
 
         println!(
-            "Elapsed time render + compute: {:.2} μs",
-            elapsed_us(self.encoder_timestamps[0], self.encoder_timestamps[1])
+            "Elapsed time before render until after compute: {:.2} μs",
+            elapsed_us(self.encoder_timestamps[0], self.encoder_timestamps[1]),
         );
         println!(
             "Elapsed time render pass: {:.2} μs",
