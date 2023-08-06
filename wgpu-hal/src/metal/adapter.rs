@@ -828,12 +828,11 @@ impl super::PrivateCapabilities {
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
         );
-        // TODO: Not yet implemented.
-        // features.set(
-        //     F::TIMESTAMP_QUERY_INSIDE_PASSES,
-        //     self.timestamp_query_support
-        //         .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
-        // );
+        features.set(
+            F::TIMESTAMP_QUERY_INSIDE_PASSES,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
+        );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
