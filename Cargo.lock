@@ -1551,6 +1551,7 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.26.0"
+source = "git+https://github.com/Wumpf/metal-rs?branch=more-timer-support#f24a59ece22321f152b0d9a97c36a18463e9d54f"
 dependencies = [
  "bitflags 2.4.0",
  "block",
