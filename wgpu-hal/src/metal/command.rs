@@ -21,6 +21,20 @@ impl Default for super::CommandState {
     }
 }
 
+impl Drop for super::CommandState {
+    fn drop(&mut self) {
+        if let Some(ref encoder) = self.blit {
+            encoder.end_encoding();
+        }
+        if let Some(ref encoder) = self.render {
+            encoder.end_encoding();
+        }
+        if let Some(ref encoder) = self.compute {
+            encoder.end_encoding();
+        }
+    }
+}
+
 impl super::CommandEncoder {
     fn enter_blit(&mut self) -> &metal::BlitCommandEncoderRef {
         if self.state.blit.is_none() {
