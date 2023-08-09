@@ -62,6 +62,14 @@ let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 });
 ```
 
+By @bradwerth in [#4203](https://github.com/gfx-rs/wgpu/pull/4023)
+
+### Bug Fixes
+
+#### Metal
+
+- Ensure that MTLCommandEncoder calls endEncoding before it is deallocated.
+
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 ### Changes
@@ -87,7 +95,7 @@ This release was fairly minor as breaking changes go.
 
 #### `wgpu` types now `!Send` `!Sync` on wasm
 
-Up until this point, wgpu has made the assumption that threads do not exist on wasm. With the rise of libraries like [`wasm_thread`](https://crates.io/crates/wasm_thread) making it easier and easier to do wasm multithreading this assumption is no longer sound. As all wgpu objects contain references into the JS heap, they cannot leave the thread they started on. 
+Up until this point, wgpu has made the assumption that threads do not exist on wasm. With the rise of libraries like [`wasm_thread`](https://crates.io/crates/wasm_thread) making it easier and easier to do wasm multithreading this assumption is no longer sound. As all wgpu objects contain references into the JS heap, they cannot leave the thread they started on.
 
 As we understand that this change might be very inconvenient for users who don't care about wasm threading, there is a crate feature which re-enables the old behavior: `fragile-send-sync-non-atomic-wasm`. So long as you don't compile your code with `-Ctarget-feature=+atomics`, `Send` and `Sync` will be implemented again on wgpu types on wasm. As the name implies, especially for libraries, this is very fragile, as you don't know if a user will want to compile with atomics (and therefore threads) or not.
 
