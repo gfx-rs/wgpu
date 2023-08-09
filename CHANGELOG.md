@@ -38,6 +38,14 @@ Bottom level categories:
 - Hal
 -->
 
+By @bradwerth in [#4203](https://github.com/gfx-rs/wgpu/pull/4023)
+
+### Bug Fixes
+
+#### Metal
+
+- Ensure that MTLCommandEncoder calls endEncoding before it is deallocated.
+
 ## Unreleased
 
 ### Major changes
@@ -61,14 +69,6 @@ let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 + occlusion_query_set: None,
 });
 ```
-
-By @bradwerth in [#4203](https://github.com/gfx-rs/wgpu/pull/4023)
-
-### Bug Fixes
-
-#### Metal
-
-- Ensure that MTLCommandEncoder calls endEncoding before it is deallocated.
 
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
