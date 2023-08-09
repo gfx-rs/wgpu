@@ -25,9 +25,9 @@ pub struct HalSurface<A: hal::Api> {
 #[derive(Clone, Debug, Error)]
 #[error("Limit '{name}' value {requested} is better than allowed {allowed}")]
 pub struct FailedLimit {
-    name: &'static str,
-    requested: u64,
-    allowed: u64,
+    pub name: &'static str,
+    pub requested: u64,
+    pub allowed: u64,
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
@@ -1091,6 +1091,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
+    }
+
+    /// Creates a device in the error sate.
+    pub fn adapter_request_device_error<A: HalApi>(
+        &self,
+        label: &crate::Label,
+        id_in: Input<G, DeviceId>,
+    ) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let fid = hub.devices.prepare(id_in);
+        fid.assign_error(label.borrow_or_default(), &mut token);
     }
 
     /// # Safety
