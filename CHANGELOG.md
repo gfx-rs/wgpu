@@ -38,6 +38,14 @@ Bottom level categories:
 - Hal
 -->
 
+By @bradwerth in [#4203](https://github.com/gfx-rs/wgpu/pull/4023)
+
+### Bug Fixes
+
+#### Metal
+
+- Ensure that MTLCommandEncoder calls endEncoding before it is deallocated.
+
 ## Unreleased
 
 ### Major changes
