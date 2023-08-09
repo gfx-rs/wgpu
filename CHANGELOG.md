@@ -166,6 +166,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 #### DX12
 
 - Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
+- Change the `max_buffer_size` limit from `u64::MAX` to `i32::MAX`. By @nical in [#4020](https://github.com/gfx-rs/wgpu/pull/4020)
 
 #### WebGPU
 
