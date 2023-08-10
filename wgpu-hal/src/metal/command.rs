@@ -23,6 +23,12 @@ impl Default for super::CommandState {
 
 impl Drop for super::CommandState {
     fn drop(&mut self) {
+        // Metal asserts when a MTLCommandEncoder is deallocated without a call
+        // to endEncoding. This isn't documented at
+        // https://developer.apple.com/documentation/metal/mtlcommandencoder?language=objc
+        // but it manifests as a crash with the message 'Command encoder released without
+        // endEncoding'. To prevent this, we explicitiy call end_encoding on any
+        // encoders we are tracking. Redundant calls appear to be harmless.
         if let Some(ref encoder) = self.blit {
             encoder.end_encoding();
         }
