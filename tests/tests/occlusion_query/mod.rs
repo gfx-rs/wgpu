@@ -27,6 +27,7 @@ fn occlusion_query() {
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Shader module"),
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+                debug: false,
             });
         let pipeline = ctx
             .device

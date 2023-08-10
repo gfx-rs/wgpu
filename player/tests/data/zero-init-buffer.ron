@@ -79,6 +79,7 @@
             desc: (
                 label: None,
                 flags: (bits: 3),
+                debug: false,
             ),
             data: "zero-init-buffer-for-binding.wgsl",
         ),

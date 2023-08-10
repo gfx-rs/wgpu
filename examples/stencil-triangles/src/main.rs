@@ -56,6 +56,7 @@ impl wgpu_example::framework::Example for Triangles {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            debug: false,
         });
 
         let vertex_buffers = [wgpu::VertexBufferLayout {

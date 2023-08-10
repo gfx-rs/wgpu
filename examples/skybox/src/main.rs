@@ -171,6 +171,7 @@ impl wgpu_example::framework::Example for Skybox {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            debug: false,
         });
 
         let camera = Camera {

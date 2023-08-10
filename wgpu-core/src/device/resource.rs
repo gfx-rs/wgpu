@@ -1276,6 +1276,19 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
         );
 
+        let debug_source = if desc.debug {
+            Some(hal::DebugSource {
+                file_name: Cow::Owned(
+                    desc.label
+                        .as_ref()
+                        .map_or("shader".to_string(), |l| l.to_string()),
+                ),
+                source_code: Cow::Owned(source.clone()),
+            })
+        } else {
+            None
+        };
+
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
             .map_err(|inner| {
@@ -1286,7 +1299,12 @@ impl<A: HalApi> Device<A> {
                 })
             })?;
         let interface = validation::Interface::new(&module, &info, self.limits.clone());
-        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
+
+        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
+            module,
+            info,
+            debug_source,
+        });
 
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.borrow_option(),
