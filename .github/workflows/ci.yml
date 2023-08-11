@@ -26,7 +26,7 @@ jobs:
           tool: cargo-hack
 
       # -Z avoid-dev-deps doesn't work
-      - run: cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions --offline
+      - run: cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions
 
       - name: Test all features
         run: cargo +$MSRV clippy --all-features --workspace -- -D warnings

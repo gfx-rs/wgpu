@@ -44,8 +44,8 @@ name = "criterion"
 harness = false
 
 [dependencies]
-arbitrary = { version = "1.0.2", features = ["derive"], optional = true }
-bitflags = "2"
+arbitrary = { version = "1.3", features = ["derive"], optional = true }
+bitflags = "2.2"
 bit-set = "0.5"
 termcolor = { version = "1.0.4", optional = true }
 # remove termcolor dep when updating to the next version of codespan-reporting
