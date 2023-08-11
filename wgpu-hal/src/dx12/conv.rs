@@ -213,12 +213,12 @@ pub fn map_topology(
 
 pub fn map_polygon_mode(mode: wgt::PolygonMode) -> d3d12_ty::D3D12_FILL_MODE {
     match mode {
-        wgt::PolygonMode::Point => {
-            log::error!("Point rasterization is not supported");
-            d3d12_ty::D3D12_FILL_MODE_WIREFRAME
-        }
-        wgt::PolygonMode::Line => d3d12_ty::D3D12_FILL_MODE_WIREFRAME,
         wgt::PolygonMode::Fill => d3d12_ty::D3D12_FILL_MODE_SOLID,
+        wgt::PolygonMode::Line => d3d12_ty::D3D12_FILL_MODE_WIREFRAME,
+        wgt::PolygonMode::Point => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_POINT
+        ),
     }
 }
 
