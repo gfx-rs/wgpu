@@ -67,6 +67,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 ### Changes
 
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
+- Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 
 ### Bug Fixes
 
