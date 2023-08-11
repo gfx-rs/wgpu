@@ -1,5 +1,6 @@
 use super::{conv, AsNative};
 use std::{borrow::Cow, mem, ops::Range};
+use crate::CommandEncoder as _;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -17,26 +18,6 @@ impl Default for super::CommandState {
             storage_buffer_length_map: Default::default(),
             work_group_memory_sizes: Vec::new(),
             push_constants: Vec::new(),
-        }
-    }
-}
-
-impl Drop for super::CommandState {
-    fn drop(&mut self) {
-        // Metal asserts when a MTLCommandEncoder is deallocated without a call
-        // to endEncoding. This isn't documented at
-        // https://developer.apple.com/documentation/metal/mtlcommandencoder?language=objc
-        // but it manifests as a crash with the message 'Command encoder released without
-        // endEncoding'. To prevent this, we explicitiy call end_encoding on any
-        // encoders we are tracking. Redundant calls appear to be harmless.
-        if let Some(ref encoder) = self.blit {
-            encoder.end_encoding();
-        }
-        if let Some(ref encoder) = self.render {
-            encoder.end_encoding();
-        }
-        if let Some(ref encoder) = self.compute {
-            encoder.end_encoding();
         }
     }
 }
@@ -1072,5 +1053,19 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.state.compute.as_ref().unwrap();
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
+    }
+}
+
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        // Metal asserts when a MTLCommandEncoder is deallocated without a call
+        // to endEncoding. This isn't documented at
+        // https://developer.apple.com/documentation/metal/mtlcommandencoder?language=objc
+        // but it manifests as a crash with the message 'Command encoder released without
+        // endEncoding'. To prevent this, we explicitiy call discard_encoding, which
+        // calls end_encoding on any still-held metal::CommandEncoders.
+        unsafe {
+            self.discard_encoding();
+        }
     }
 }
