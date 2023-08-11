@@ -481,3 +481,31 @@ fn parse_alias() {
     )
     .unwrap();
 }
+
+#[test]
+fn parse_texture_load_store_expecting_four_args() {
+    for (func, texture) in [
+        (
+            "textureStore",
+            "texture_storage_2d_array<rg11b10float, write>",
+        ),
+        ("textureLoad", "texture_2d_array<i32>"),
+    ] {
+        let error = parse_str(&format!(
+            "
+            @group(0) @binding(0) var tex_los_res: {texture};
+            @compute
+            @workgroup_size(1)
+            fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
+                var color = vec4(1, 1, 1, 1);
+                {func}(tex_los_res, id, color);
+            }}
+            "
+        ))
+        .unwrap_err();
+        assert_eq!(
+            error.message(),
+            "wrong number of arguments: expected 4, found 3"
+        );
+    }
+}
