@@ -94,7 +94,8 @@ impl super::Adapter {
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO;
+            | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
+            | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER;
         let mut downlevel = wgt::DownlevelFlags::BASE_VERTEX
             | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL
             | wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER
@@ -132,6 +133,8 @@ impl super::Adapter {
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;
             features |= wgt::Features::SHADER_PRIMITIVE_INDEX;
+            features |= wgt::Features::DEPTH32FLOAT_STENCIL8;
+            features |= wgt::Features::RG11B10UFLOAT_RENDERABLE;
         }
 
         if feature_level >= FL10_1 {
