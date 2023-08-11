@@ -679,7 +679,6 @@ bitflags::bitflags! {
         /// This allows only drawing the vertices of polygons/triangles instead of filled
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.

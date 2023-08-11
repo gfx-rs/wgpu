@@ -242,7 +242,6 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
             | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::POLYGON_MODE_POINT
             | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
