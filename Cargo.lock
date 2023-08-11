@@ -3459,6 +3459,7 @@ dependencies = [
  "log",
  "naga",
  "nv-flip",
+ "parking_lot",
  "png",
  "pollster",
  "raw-window-handle 0.5.2",

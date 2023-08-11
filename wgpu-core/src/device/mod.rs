@@ -181,6 +181,9 @@ impl UserClosures {
     fn fire(self) {
         // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
+
+        // Mappings _must_ be fired before submissions, as the spec requires all mapping callbacks that are registered before
+        // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (operation, status) in self.mappings {
             operation.callback.call(status);
         }
