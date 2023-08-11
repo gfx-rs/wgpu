@@ -10,9 +10,9 @@ use wgpu::*;
 /// and on_submitted_work_done callbacks. Specifically, all map_async callbacks that are initiated
 /// before a given on_submitted_work_done callback must be invoked before the on_submitted_work_done
 /// callback is invoked.
-/// 
+///
 /// We previously immediately invoked on_submitted_work_done callbacks if there was no active submission
-/// to add them to. This is incorrect, as we do not immediatley invoke map_async callbacks. 
+/// to add them to. This is incorrect, as we do not immediatley invoke map_async callbacks.
 #[wasm_bindgen_test]
 #[test]
 fn queue_submitted_callback_ordering() {
