@@ -4302,73 +4302,73 @@ pub struct VertexAttribute {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum VertexFormat {
-    /// Two unsigned bytes (u8). `uvec2` in shaders.
+    /// Two unsigned bytes (u8). `vec2<u32>` in shaders.
     Uint8x2 = 0,
-    /// Four unsigned bytes (u8). `uvec4` in shaders.
+    /// Four unsigned bytes (u8). `vec4<u32>` in shaders.
     Uint8x4 = 1,
-    /// Two signed bytes (i8). `ivec2` in shaders.
+    /// Two signed bytes (i8). `vec2<i32>` in shaders.
     Sint8x2 = 2,
-    /// Four signed bytes (i8). `ivec4` in shaders.
+    /// Four signed bytes (i8). `vec4<i32>` in shaders.
     Sint8x4 = 3,
-    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2` in shaders.
+    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2<f32>` in shaders.
     Unorm8x2 = 4,
-    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4` in shaders.
+    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 5,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2` in shaders.
+    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 6,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4` in shaders.
+    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 7,
-    /// Two unsigned shorts (u16). `uvec2` in shaders.
+    /// Two unsigned shorts (u16). `vec2<u32>` in shaders.
     Uint16x2 = 8,
-    /// Four unsigned shorts (u16). `uvec4` in shaders.
+    /// Four unsigned shorts (u16). `vec4<u32>` in shaders.
     Uint16x4 = 9,
-    /// Two signed shorts (i16). `ivec2` in shaders.
+    /// Two signed shorts (i16). `vec2<i32>` in shaders.
     Sint16x2 = 10,
-    /// Four signed shorts (i16). `ivec4` in shaders.
+    /// Four signed shorts (i16). `vec4<i32>` in shaders.
     Sint16x4 = 11,
-    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2` in shaders.
+    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2<f32>` in shaders.
     Unorm16x2 = 12,
-    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4` in shaders.
+    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 13,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2` in shaders.
+    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 14,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4` in shaders.
+    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 15,
-    /// Two half-precision floats (no Rust equiv). `vec2` in shaders.
+    /// Two half-precision floats (no Rust equiv). `vec2<f16>` in shaders.
     Float16x2 = 16,
-    /// Four half-precision floats (no Rust equiv). `vec4` in shaders.
+    /// Four half-precision floats (no Rust equiv). `vec4<f16>` in shaders.
     Float16x4 = 17,
-    /// One single-precision float (f32). `float` in shaders.
+    /// One single-precision float (f32). `f32` in shaders.
     Float32 = 18,
-    /// Two single-precision floats (f32). `vec2` in shaders.
+    /// Two single-precision floats (f32). `vec2<f32>` in shaders.
     Float32x2 = 19,
-    /// Three single-precision floats (f32). `vec3` in shaders.
+    /// Three single-precision floats (f32). `vec3<f32>` in shaders.
     Float32x3 = 20,
-    /// Four single-precision floats (f32). `vec4` in shaders.
+    /// Four single-precision floats (f32). `vec4<f32>` in shaders.
     Float32x4 = 21,
-    /// One unsigned int (u32). `uint` in shaders.
+    /// One unsigned int (u32). `u32` in shaders.
     Uint32 = 22,
-    /// Two unsigned ints (u32). `uvec2` in shaders.
+    /// Two unsigned ints (u32). `vec2<u32>` in shaders.
     Uint32x2 = 23,
-    /// Three unsigned ints (u32). `uvec3` in shaders.
+    /// Three unsigned ints (u32). `vec3<u32>` in shaders.
     Uint32x3 = 24,
-    /// Four unsigned ints (u32). `uvec4` in shaders.
+    /// Four unsigned ints (u32). `vec4<u32>` in shaders.
     Uint32x4 = 25,
-    /// One signed int (i32). `int` in shaders.
+    /// One signed int (i32). `i32` in shaders.
     Sint32 = 26,
-    /// Two signed ints (i32). `ivec2` in shaders.
+    /// Two signed ints (i32). `vec2<i32>` in shaders.
     Sint32x2 = 27,
-    /// Three signed ints (i32). `ivec3` in shaders.
+    /// Three signed ints (i32). `vec3<i32>` in shaders.
     Sint32x3 = 28,
-    /// Four signed ints (i32). `ivec4` in shaders.
+    /// Four signed ints (i32). `vec4<i32>` in shaders.
     Sint32x4 = 29,
-    /// One double-precision float (f64). `double` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// One double-precision float (f64). `f64` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64 = 30,
-    /// Two double-precision floats (f64). `dvec2` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Two double-precision floats (f64). `vec2<f64>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x2 = 31,
-    /// Three double-precision floats (f64). `dvec3` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Three double-precision floats (f64). `vec3<f64>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x3 = 32,
-    /// Four double-precision floats (f64). `dvec4` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Four double-precision floats (f64). `vec4<f64>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x4 = 33,
 }
 
