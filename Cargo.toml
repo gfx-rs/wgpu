@@ -28,8 +28,8 @@ dot-out = []
 glsl-in = ["pp-rs"]
 glsl-out = []
 msl-out = []
-serialize = ["serde", "bitflags/serde", "indexmap/serde-1"]
-deserialize = ["serde", "bitflags/serde", "indexmap/serde-1"]
+serialize = ["serde", "bitflags/serde", "indexmap/serde"]
+deserialize = ["serde", "bitflags/serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
@@ -53,7 +53,7 @@ termcolor = { version = "1.0.4", optional = true }
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
 codespan-reporting = { version = "0.11.0", optional = true }
 rustc-hash = "1.1.0"
-indexmap = { version = "1.9.2", features = ["std"] }
+indexmap = { version = "2", features = ["std"] }
 log = "0.4"
 num-traits = "0.2"
 spirv = { version = "0.2", optional = true }
