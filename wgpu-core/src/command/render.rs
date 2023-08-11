@@ -958,13 +958,15 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
             }
 
-            if at.depth.read_only || at.stencil.read_only {
-                device.require_downlevel_flags(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)?;
-            }
-
             (is_depth_read_only, is_stencil_read_only) = at.depth_stencil_read_only(ds_aspects)?;
 
-            let usage = if is_depth_read_only && is_stencil_read_only {
+            let usage = if is_depth_read_only
+                && is_stencil_read_only
+                && device
+                    .downlevel
+                    .flags
+                    .contains(wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL)
+            {
                 hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::RESOURCE
             } else {
                 hal::TextureUses::DEPTH_STENCIL_WRITE
