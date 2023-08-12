@@ -2979,6 +2979,26 @@ impl<'a> BufferSlice<'a> {
         BufferView { slice: *self, data }
     }
 
+    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    ///
+    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
+    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
+    /// ArrayBuffer that we mapped the data into in js.
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        DynContext::buffer_get_mapped_range_as_array_buffer(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.buffer.data.as_ref(),
+            self.offset..end,
+        )
+    }
+
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
