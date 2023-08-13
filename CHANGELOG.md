@@ -80,6 +80,8 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 - Don't pass `vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR` unless the `VK_KHR_portability_enumeration` extension is available. By @jimblandy in[#4038](https://github.com/gfx-rs/wgpu/pull/4038).
 
+- Enhancement of [#4038], using ash's definition instead of hard-coded c_str. By @hybcloud in[#4044](https://github.com/gfx-rs/wgpu/pull/4044).
+
 #### DX12
 
 - DX12 doesn't support `Features::POLYGON_MODE_POINT``. By @teoxoy in [#4032](https://github.com/gfx-rs/wgpu/pull/4032).

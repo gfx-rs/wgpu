@@ -228,8 +228,7 @@ impl super::Instance {
         if cfg!(target_os = "macos") {
             // VK_EXT_metal_surface
             extensions.push(ext::MetalSurface::name());
-            extensions
-                .push(CStr::from_bytes_with_nul(b"VK_KHR_portability_enumeration\0").unwrap());
+            extensions.push(ash::vk::KhrPortabilityEnumerationFn::name());
         }
 
         if flags.contains(crate::InstanceFlags::DEBUG) {
@@ -589,11 +588,6 @@ impl crate::Instance<super::Api> for super::Instance {
 
         let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
 
-        let portability_enumeration_extension =
-            CStr::from_bytes_with_nul(b"VK_KHR_portability_enumeration\0").unwrap();
-        let has_portability_enumeration_extension =
-            extensions.contains(&portability_enumeration_extension);
-
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
             crate::InstanceError
@@ -667,7 +661,7 @@ impl crate::Instance<super::Api> for super::Instance {
         // Avoid VUID-VkInstanceCreateInfo-flags-06559: Only ask the instance to
         // enumerate incomplete Vulkan implementations (which we need on Mac) if
         // we managed to find the extension that provides the flag.
-        if has_portability_enumeration_extension {
+        if extensions.contains(&ash::vk::KhrPortabilityEnumerationFn::name()) {
             flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
         }
 
