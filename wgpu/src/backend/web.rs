@@ -1890,16 +1890,26 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
-        let array_buffer = buffer_data.0.get_mapped_range_with_f64_and_f64(
-            sub_range.start as f64,
-            (sub_range.end - sub_range.start) as f64,
-        );
+        let array_buffer =
+            self.buffer_get_mapped_range_as_array_buffer(_buffer, buffer_data, sub_range);
         let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
         let temporary_mapping = actual_mapping.to_vec();
         Box::new(BufferMappedRange {
             actual_mapping,
             temporary_mapping,
         })
+    }
+
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        _buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
