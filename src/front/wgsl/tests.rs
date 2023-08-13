@@ -509,3 +509,42 @@ fn parse_texture_load_store_expecting_four_args() {
         );
     }
 }
+
+#[test]
+fn parse_repeated_attributes() {
+    use crate::{
+        front::wgsl::{error::Error, Frontend},
+        Span,
+    };
+
+    let template_vs = "@vertex fn vs() -> __REPLACE__ vec4<f32> { return vec4<f32>(0.0); }";
+    let template_struct = "struct A { __REPLACE__ data: vec3<f32> }";
+    let template_resource = "__REPLACE__ var tex_los_res: texture_2d_array<i32>;";
+    let template_stage = "__REPLACE__ fn vs() -> vec4<f32> { return vec4<f32>(0.0); }";
+    for (attribute, template) in [
+        ("align(16)", template_struct),
+        ("binding(0)", template_resource),
+        ("builtin(position)", template_vs),
+        ("compute", template_stage),
+        ("fragment", template_stage),
+        ("group(0)", template_resource),
+        ("interpolate(flat)", template_vs),
+        ("invariant", template_vs),
+        ("location(0)", template_vs),
+        ("size(16)", template_struct),
+        ("vertex", template_stage),
+        ("early_depth_test(less_equal)", template_resource),
+    ] {
+        let shader = template.replace("__REPLACE__", &format!("@{attribute} @{attribute}"));
+        let name_length = attribute.rfind('(').unwrap_or(attribute.len()) as u32;
+        let span_start = shader.rfind(attribute).unwrap() as u32;
+        let span_end = span_start + name_length;
+        let expected_span = Span::new(span_start, span_end);
+
+        let result = Frontend::new().inner(&shader);
+        assert!(matches!(
+            result.unwrap_err(),
+            Error::RepeatedAttribute(span) if span == expected_span
+        ));
+    }
+}

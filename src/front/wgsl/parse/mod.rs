@@ -120,13 +120,33 @@ enum Rule {
     GeneralExpr,
 }
 
+struct ParsedAttribute<T> {
+    value: Option<T>,
+}
+
+impl<T> Default for ParsedAttribute<T> {
+    fn default() -> Self {
+        Self { value: None }
+    }
+}
+
+impl<T> ParsedAttribute<T> {
+    fn set(&mut self, value: T, name_span: Span) -> Result<(), Error<'static>> {
+        if self.value.is_some() {
+            return Err(Error::RepeatedAttribute(name_span));
+        }
+        self.value = Some(value);
+        Ok(())
+    }
+}
+
 #[derive(Default)]
 struct BindingParser {
-    location: Option<u32>,
-    built_in: Option<crate::BuiltIn>,
-    interpolation: Option<crate::Interpolation>,
-    sampling: Option<crate::Sampling>,
-    invariant: bool,
+    location: ParsedAttribute<u32>,
+    built_in: ParsedAttribute<crate::BuiltIn>,
+    interpolation: ParsedAttribute<crate::Interpolation>,
+    sampling: ParsedAttribute<crate::Sampling>,
+    invariant: ParsedAttribute<bool>,
 }
 
 impl BindingParser {
@@ -139,38 +159,44 @@ impl BindingParser {
         match name {
             "location" => {
                 lexer.expect(Token::Paren('('))?;
-                self.location = Some(Parser::non_negative_i32_literal(lexer)?);
+                self.location
+                    .set(Parser::non_negative_i32_literal(lexer)?, name_span)?;
                 lexer.expect(Token::Paren(')'))?;
             }
             "builtin" => {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
-                self.built_in = Some(conv::map_built_in(raw, span)?);
+                self.built_in
+                    .set(conv::map_built_in(raw, span)?, name_span)?;
                 lexer.expect(Token::Paren(')'))?;
             }
             "interpolate" => {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
-                self.interpolation = Some(conv::map_interpolation(raw, span)?);
+                self.interpolation
+                    .set(conv::map_interpolation(raw, span)?, name_span)?;
                 if lexer.skip(Token::Separator(',')) {
                     let (raw, span) = lexer.next_ident_with_span()?;
-                    self.sampling = Some(conv::map_sampling(raw, span)?);
+                    self.sampling
+                        .set(conv::map_sampling(raw, span)?, name_span)?;
                 }
                 lexer.expect(Token::Paren(')'))?;
             }
-            "invariant" => self.invariant = true,
+            "invariant" => {
+                self.invariant.set(true, name_span)?;
+            }
             _ => return Err(Error::UnknownAttribute(name_span)),
         }
         Ok(())
     }
 
-    const fn finish<'a>(self, span: Span) -> Result<Option<crate::Binding>, Error<'a>> {
+    fn finish<'a>(self, span: Span) -> Result<Option<crate::Binding>, Error<'a>> {
         match (
-            self.location,
-            self.built_in,
-            self.interpolation,
-            self.sampling,
-            self.invariant,
+            self.location.value,
+            self.built_in.value,
+            self.interpolation.value,
+            self.sampling.value,
+            self.invariant.value.unwrap_or_default(),
         ) {
             (None, None, None, None, false) => Ok(None),
             (Some(location), None, interpolation, sampling, false) => {
@@ -990,22 +1016,22 @@ impl Parser {
                     ExpectedToken::Token(Token::Separator(',')),
                 ));
             }
-            let (mut size, mut align) = (None, None);
+            let (mut size, mut align) = (ParsedAttribute::default(), ParsedAttribute::default());
             self.push_rule_span(Rule::Attribute, lexer);
             let mut bind_parser = BindingParser::default();
             while lexer.skip(Token::Attribute) {
                 match lexer.next_ident_with_span()? {
-                    ("size", _) => {
+                    ("size", name_span) => {
                         lexer.expect(Token::Paren('('))?;
                         let (value, span) = lexer.capture_span(Self::non_negative_i32_literal)?;
                         lexer.expect(Token::Paren(')'))?;
-                        size = Some((value, span));
+                        size.set((value, span), name_span)?;
                     }
-                    ("align", _) => {
+                    ("align", name_span) => {
                         lexer.expect(Token::Paren('('))?;
                         let (value, span) = lexer.capture_span(Self::non_negative_i32_literal)?;
                         lexer.expect(Token::Paren(')'))?;
-                        align = Some((value, span));
+                        align.set((value, span), name_span)?;
                     }
                     (word, word_span) => bind_parser.parse(lexer, word, word_span)?,
                 }
@@ -1023,8 +1049,8 @@ impl Parser {
                 name,
                 ty,
                 binding,
-                size,
-                align,
+                size: size.value,
+                align: align.value,
             });
         }
 
@@ -2131,32 +2157,33 @@ impl Parser {
     ) -> Result<(), Error<'a>> {
         // read attributes
         let mut binding = None;
-        let mut stage = None;
+        let mut stage = ParsedAttribute::default();
         let mut workgroup_size = [0u32; 3];
-        let mut early_depth_test = None;
-        let (mut bind_index, mut bind_group) = (None, None);
+        let mut early_depth_test = ParsedAttribute::default();
+        let (mut bind_index, mut bind_group) =
+            (ParsedAttribute::default(), ParsedAttribute::default());
 
         self.push_rule_span(Rule::Attribute, lexer);
         while lexer.skip(Token::Attribute) {
             match lexer.next_ident_with_span()? {
-                ("binding", _) => {
+                ("binding", name_span) => {
                     lexer.expect(Token::Paren('('))?;
-                    bind_index = Some(Self::non_negative_i32_literal(lexer)?);
+                    bind_index.set(Self::non_negative_i32_literal(lexer)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("group", _) => {
+                ("group", name_span) => {
                     lexer.expect(Token::Paren('('))?;
-                    bind_group = Some(Self::non_negative_i32_literal(lexer)?);
+                    bind_group.set(Self::non_negative_i32_literal(lexer)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
-                ("vertex", _) => {
-                    stage = Some(crate::ShaderStage::Vertex);
+                ("vertex", name_span) => {
+                    stage.set(crate::ShaderStage::Vertex, name_span)?;
                 }
-                ("fragment", _) => {
-                    stage = Some(crate::ShaderStage::Fragment);
+                ("fragment", name_span) => {
+                    stage.set(crate::ShaderStage::Fragment, name_span)?;
                 }
-                ("compute", _) => {
-                    stage = Some(crate::ShaderStage::Compute);
+                ("compute", name_span) => {
+                    stage.set(crate::ShaderStage::Compute, name_span)?;
                 }
                 ("workgroup_size", _) => {
                     lexer.expect(Token::Paren('('))?;
@@ -2175,7 +2202,7 @@ impl Parser {
                         }
                     }
                 }
-                ("early_depth_test", _) => {
+                ("early_depth_test", name_span) => {
                     let conservative = if lexer.skip(Token::Paren('(')) {
                         let (ident, ident_span) = lexer.next_ident_with_span()?;
                         let value = conv::map_conservative_depth(ident, ident_span)?;
@@ -2184,14 +2211,14 @@ impl Parser {
                     } else {
                         None
                     };
-                    early_depth_test = Some(crate::EarlyDepthTest { conservative });
+                    early_depth_test.set(crate::EarlyDepthTest { conservative }, name_span)?;
                 }
                 (_, word_span) => return Err(Error::UnknownAttribute(word_span)),
             }
         }
 
         let attrib_span = self.pop_rule_span(lexer);
-        match (bind_group, bind_index) {
+        match (bind_group.value, bind_index.value) {
             (Some(group), Some(index)) => {
                 binding = Some(crate::ResourceBinding {
                     group,
@@ -2254,9 +2281,9 @@ impl Parser {
             (Token::Word("fn"), _) => {
                 let function = self.function_decl(lexer, out, &mut dependencies)?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
-                    entry_point: stage.map(|stage| ast::EntryPoint {
+                    entry_point: stage.value.map(|stage| ast::EntryPoint {
                         stage,
-                        early_depth_test,
+                        early_depth_test: early_depth_test.value,
                         workgroup_size,
                     }),
                     ..function
