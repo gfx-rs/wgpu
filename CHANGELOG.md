@@ -122,6 +122,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 #### Misc Breaking Changes
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
+- Optionally specify extra limits at the instance level by @nical in [#4053](https://github.com/gfx-rs/wgpu/pull/4053)
 
 ### Changes
 
