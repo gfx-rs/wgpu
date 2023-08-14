@@ -6,6 +6,7 @@ fn initialize() {
     let _ = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
         dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+        extra_limits: None,
     });
 }
 
@@ -13,6 +14,7 @@ fn request_adapter_inner(power: wgt::PowerPreference) {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
         dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+        extra_limits: None,
     });
 
     let _adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

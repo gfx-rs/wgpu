@@ -26,13 +26,15 @@ pub struct GlobalReport {
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
     pub surfaces: Registry<Surface, id::SurfaceId, G>,
+    pub extra_limits: Option<Box<wgt::Limits>>,
     pub(crate) hubs: Hubs<G>,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G, instance_desc: wgt::InstanceDescriptor) -> Self {
+    pub fn new(name: &str, factory: G, mut instance_desc: wgt::InstanceDescriptor) -> Self {
         profiling::scope!("Global::new");
         Self {
+            extra_limits: instance_desc.extra_limits.take(),
             instance: Instance::new(name, instance_desc),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
@@ -52,6 +54,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             instance: A::create_instance_from_hal(name, hal_instance),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
+            extra_limits: None,
         }
     }
 
@@ -71,6 +74,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             instance,
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
+            extra_limits: None,
         }
     }
 

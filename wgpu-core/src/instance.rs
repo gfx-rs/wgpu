@@ -695,7 +695,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hal_adapters = unsafe { inst.enumerate_adapters() };
         for raw in hal_adapters {
-            let adapter = Adapter::new(raw);
+            let mut adapter = Adapter::new(raw);
+
+            if let Some(extra_limits) = self.extra_limits.as_deref() {
+                adapter.raw.capabilities.limits =
+                    adapter.raw.capabilities.limits.restrict(extra_limits);
+            }
+
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
             let id = hub
                 .adapters
@@ -772,6 +778,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             compatible_surface: Option<&Surface>,
             force_software: bool,
             device_types: &mut Vec<wgt::DeviceType>,
+            extra_limits: Option<&wgt::Limits>,
         ) -> (Option<I>, Vec<hal::ExposedAdapter<A>>) {
             let id = inputs.find(A::VARIANT);
             match instance {
@@ -792,6 +799,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     .is_some()
                         });
                     }
+                    if let Some(extra_limits) = extra_limits {
+                        for adapter in &mut adapters {
+                            adapter.capabilities.limits =
+                                adapter.capabilities.limits.restrict(extra_limits);
+                        }
+                    }
                     device_types.extend(adapters.iter().map(|ad| ad.info.device_type));
                     (id, adapters)
                 }
@@ -811,6 +824,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .transpose()?;
         let mut device_types = Vec::new();
 
+        let extra_limits = self.extra_limits.as_deref();
+
         #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
         let (id_vulkan, adapters_vk) = gather(
             hal::api::Vulkan,
@@ -819,6 +834,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             compatible_surface,
             desc.force_fallback_adapter,
             &mut device_types,
+            extra_limits,
         );
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         let (id_metal, adapters_metal) = gather(
@@ -828,6 +844,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             compatible_surface,
             desc.force_fallback_adapter,
             &mut device_types,
+            extra_limits,
         );
         #[cfg(all(feature = "dx12", windows))]
         let (id_dx12, adapters_dx12) = gather(
@@ -837,6 +854,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             compatible_surface,
             desc.force_fallback_adapter,
             &mut device_types,
+            extra_limits,
         );
         #[cfg(all(feature = "dx11", windows))]
         let (id_dx11, adapters_dx11) = gather(
@@ -846,6 +864,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             compatible_surface,
             desc.force_fallback_adapter,
             &mut device_types,
+            extra_limits,
         );
         #[cfg(feature = "gles")]
         let (id_gl, adapters_gl) = gather(
@@ -855,6 +874,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             compatible_surface,
             desc.force_fallback_adapter,
             &mut device_types,
+            extra_limits,
         );
 
         // need to free the token to be used by `select`

@@ -406,6 +406,7 @@ pub async fn op_webgpu_request_adapter(
             wgpu_types::InstanceDescriptor {
                 backends,
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+                extra_limits: None,
             },
         )));
         state.borrow::<Instance>()

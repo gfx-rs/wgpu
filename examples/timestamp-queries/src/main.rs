@@ -179,6 +179,7 @@ async fn run() {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+        extra_limits: None,
     });
 
     // `request_adapter` instantiates the general connection to the GPU

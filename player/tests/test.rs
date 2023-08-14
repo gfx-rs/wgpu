@@ -185,6 +185,7 @@ impl Corpus {
             wgt::InstanceDescriptor {
                 backends: corpus.backends,
                 dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+                extra_limits: None,
             },
         );
         for &backend in BACKENDS {
