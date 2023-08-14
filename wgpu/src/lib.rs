@@ -4580,8 +4580,8 @@ impl Queue {
     }
 
     /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks attached to the same submission have also
-    /// been called.
+    /// being called implies that all mapped buffer callbacks which were registered before this call will
+    /// have been called.
     ///
     /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
     /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
