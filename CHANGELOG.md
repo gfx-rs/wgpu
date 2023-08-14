@@ -85,6 +85,10 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 - DX12 doesn't support `Features::POLYGON_MODE_POINT``. By @teoxoy in [#4032](https://github.com/gfx-rs/wgpu/pull/4032).
 
+### Documentation
+
+- Add an overview of `RenderPass` and how render state works. By @kpreid in [#4055](https://github.com/gfx-rs/wgpu/pull/4055)
+
 ## v0.17.0 (2023-07-20)
 
 This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
