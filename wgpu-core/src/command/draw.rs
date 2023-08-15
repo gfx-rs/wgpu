@@ -89,8 +89,8 @@ pub enum RenderCommandError {
     MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
-    #[error("Viewport width {0} and/or height {1} are less than or equal to 0")]
-    InvalidViewportDimension(f32, f32),
+    #[error("Viewport has invalid rect {0:?}; origin and/or size is less than or equal to 0, and/or is not contained in the render target {1:?}")]
+    InvalidViewportRect(Rect<f32>, wgt::Extent3d),
     #[error("Viewport minDepth {0} and/or maxDepth {1} are not in [0, 1]")]
     InvalidViewportDepth(f32, f32),
     #[error("Scissor {0:?} is not contained in the render target {1:?}")]

@@ -1727,9 +1727,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth_max,
                     } => {
                         let scope = PassErrorScope::SetViewport;
-                        if rect.w <= 0.0 || rect.h <= 0.0 {
-                            return Err(RenderCommandError::InvalidViewportDimension(
-                                rect.w, rect.h,
+                        if rect.x < 0.0
+                            || rect.y < 0.0
+                            || rect.w <= 0.0
+                            || rect.h <= 0.0
+                            || rect.x + rect.w > info.extent.width as f32
+                            || rect.y + rect.h > info.extent.height as f32
+                        {
+                            return Err(RenderCommandError::InvalidViewportRect(
+                                *rect,
+                                info.extent,
                             ))
                             .map_pass_err(scope);
                         }
