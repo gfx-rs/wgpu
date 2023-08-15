@@ -679,7 +679,6 @@ bitflags::bitflags! {
         /// This allows only drawing the vertices of polygons/triangles instead of filled
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.
@@ -1270,8 +1269,8 @@ bitflags::bitflags! {
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
         const BASE_VERTEX = 1 << 3;
-        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil
-        /// attachment.
+        /// Supports reading from a depth/stencil texture while using it as a read-only
+        /// depth/stencil attachment.
         ///
         /// The WebGL2 and GLES backends do not support RODS.
         const READ_ONLY_DEPTH_STENCIL = 1 << 4;

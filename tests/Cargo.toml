@@ -24,6 +24,7 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 env_logger.workspace = true
 log.workspace = true
+parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
 wgpu.workspace = true

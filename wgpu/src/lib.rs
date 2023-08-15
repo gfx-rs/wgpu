@@ -764,9 +764,21 @@ impl Drop for CommandEncoder {
     }
 }
 
-/// In-progress recording of a render pass.
+/// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
 ///
-/// It can be created with [`CommandEncoder::begin_render_pass`].
+/// It can be created with [`CommandEncoder::begin_render_pass()`], whose [`RenderPassDescriptor`]
+/// specifies the attachments (textures) that will be rendered to.
+///
+/// Most of the methods on `RenderPass` serve one of two purposes, identifiable by their names:
+///
+/// * `draw_*()`: Drawing (that is, encoding a render command, which, when executed by the GPU, will
+///   rasterize something and execute shaders).
+/// * `set_*()`: Setting part of the [render state](https://gpuweb.github.io/gpuweb/#renderstate)
+///   for future drawing commands.
+///
+/// A render pass may contain any number of drawing commands, and before/between each command the
+/// render state may be updated however you wish; each drawing command will be executed using the
+/// render state that has been set when the `draw_*()` function is called.
 ///
 /// Corresponds to [WebGPU `GPURenderPassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
@@ -2979,6 +2991,26 @@ impl<'a> BufferSlice<'a> {
         BufferView { slice: *self, data }
     }
 
+    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    ///
+    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
+    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
+    /// ArrayBuffer that we mapped the data into in js.
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        DynContext::buffer_get_mapped_range_as_array_buffer(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.buffer.data.as_ref(),
+            self.offset..end,
+        )
+    }
+
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
@@ -3396,11 +3428,14 @@ impl CommandEncoder {
 
 impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
-    /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
+    /// in the active pipeline when any `draw_*()` method is called must match the layout of
+    /// this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    ///
+    /// Subsequent draw calls’ shader executions will be able to access data in these bind groups.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -3434,6 +3469,8 @@ impl<'a> RenderPass<'a> {
     /// Sets the blend color as used by some of the blending modes.
     ///
     /// Subsequent blending tests will test against this value.
+    /// If this method has not been called, the blend constant defaults to [`Color::TRANSPARENT`]
+    /// (all components zero).
     pub fn set_blend_constant(&mut self, color: Color) {
         DynContext::render_pass_set_blend_constant(
             &*self.parent.context,
@@ -3487,6 +3524,11 @@ impl<'a> RenderPass<'a> {
     /// After transformation into [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
     /// Subsequent draw calls will discard any fragments which fall outside the scissor rectangle.
+    /// If this method has not been called, the scissor rectangle defaults to the entire bounds of
+    /// the render targets.
+    ///
+    /// The function of the scissor rectangle resembles [`set_viewport()`](Self::set_viewport),
+    /// but it does not affect the coordinate system, only which fragments are discarded.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
@@ -3502,7 +3544,9 @@ impl<'a> RenderPass<'a> {
     /// Sets the viewport used during the rasterization stage to linearly map
     /// from [normalized device coordinates](https://www.w3.org/TR/webgpu/#ndc) to [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
-    /// Subsequent draw calls will draw any fragments in this region.
+    /// Subsequent draw calls will only draw within this region.
+    /// If this method has not been called, the viewport defaults to the entire bounds of the render
+    /// targets.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
         DynContext::render_pass_set_viewport(
             &*self.parent.context,
@@ -3520,6 +3564,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the stencil reference.
     ///
     /// Subsequent stencil tests will test against this value.
+    /// If this method has not been called, the stencil reference value defaults to `0`.
     pub fn set_stencil_reference(&mut self, reference: u32) {
         DynContext::render_pass_set_stencil_reference(
             &*self.parent.context,
@@ -3547,6 +3592,9 @@ impl<'a> RenderPass<'a> {
     ///     }
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.parent.context,
@@ -3607,6 +3655,9 @@ impl<'a> RenderPass<'a> {
     ///     }
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.parent.context,
@@ -3623,6 +3674,9 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
@@ -3641,6 +3695,9 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3658,6 +3715,9 @@ impl<'a> RenderPass<'a> {
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.
+    ///
+    /// Commands in the bundle do not inherit this render pass's current render state, and after the
+    /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
     pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle> + 'a>(
         &mut self,
         render_bundles: I,
@@ -3683,8 +3743,10 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3709,8 +3771,10 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3740,7 +3804,6 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
     ///
     /// The structure expected in `count_buffer` is the following:
@@ -3751,6 +3814,9 @@ impl<'a> RenderPass<'a> {
     ///     count: u32, // Number of draw calls to issue.
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect_count(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3795,6 +3861,9 @@ impl<'a> RenderPass<'a> {
     ///     count: u32, // Number of draw calls to issue.
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect_count(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4560,8 +4629,8 @@ impl Queue {
     }
 
     /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks attached to the same submission have also
-    /// been called.
+    /// being called implies that all mapped buffer callbacks which were registered before this call will
+    /// have been called.
     ///
     /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
     /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
