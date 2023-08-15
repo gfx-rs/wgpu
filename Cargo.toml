@@ -51,7 +51,7 @@ version = "0.17"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+rev = "7a19f3af909202c7eafd36633b5584bfbb353ecb"
 version = "0.13.0"
 
 [workspace.dependencies]
@@ -141,7 +141,7 @@ deno_url = "0.106.0"
 deno_web = "0.137.0"
 deno_webidl = "0.106.0"
 deno_webgpu = { path = "./deno_webgpu" }
-tokio = "1.30.0"
+tokio = "1.31.0"
 termcolor = "1.2.0"
 
 [patch."https://github.com/gfx-rs/naga"]

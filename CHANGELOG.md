@@ -74,6 +74,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 #### General
 
 - Derive storage bindings via `naga::StorageAccess` instead of `naga::GlobalUse`. By @teoxoy in [#3985](https://github.com/gfx-rs/wgpu/pull/3985).
+- `Queue::on_submitted_work_done` callbacks will now always be called after all previous `BufferSlice::map_async` callbacks, even when there are no active submissions. By @cwfitzgerald in [#4036](https://github.com/gfx-rs/wgpu/pull/4036).
 
 #### Vulkan
 - Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
@@ -85,6 +86,10 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 #### DX12
 
 - DX12 doesn't support `Features::POLYGON_MODE_POINT``. By @teoxoy in [#4032](https://github.com/gfx-rs/wgpu/pull/4032).
+
+### Documentation
+
+- Add an overview of `RenderPass` and how render state works. By @kpreid in [#4055](https://github.com/gfx-rs/wgpu/pull/4055)
 
 ## v0.17.0 (2023-07-20)
 
