@@ -787,6 +787,7 @@ pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: InstanceFlags,
     pub dx12_shader_compiler: wgt::Dx12Compiler,
+    pub gles_minor_version: wgt::Gles3MinorVersion,
 }
 
 #[derive(Clone, Debug)]

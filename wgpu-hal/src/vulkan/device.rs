@@ -1193,16 +1193,10 @@ impl crate::Device<super::Api> for super::Device {
     }
     unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
         unsafe {
-            if !cmd_encoder.free.is_empty() {
-                self.shared
-                    .raw
-                    .free_command_buffers(cmd_encoder.raw, &cmd_encoder.free)
-            }
-            if !cmd_encoder.discarded.is_empty() {
-                self.shared
-                    .raw
-                    .free_command_buffers(cmd_encoder.raw, &cmd_encoder.discarded)
-            }
+            // `vkDestroyCommandPool` also frees any command buffers allocated
+            // from that pool, so there's no need to explicitly call
+            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
+            // fields.
             self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
         }
     }
