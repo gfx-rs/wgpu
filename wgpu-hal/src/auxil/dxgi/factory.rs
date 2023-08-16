@@ -130,10 +130,10 @@ pub fn create_factory(
             Ok(factory) => Some(factory),
             // We hard error here as we _should have_ been able to make a factory4 but couldn't.
             Err(err) => {
-                return Err(crate::InstanceError::with_source(
-                    String::from("failed to create IDXGIFactory4"),
-                    err,
-                ));
+                // err is a Cow<str>, not an Error implementor
+                return Err(crate::InstanceError::new(format!(
+                    "failed to create IDXGIFactory4: {err:?}"
+                )));
             }
         },
         // If we require factory4, hard error.
@@ -159,10 +159,10 @@ pub fn create_factory(
             }
             // If we require factory6, hard error.
             Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
-                return Err(crate::InstanceError::with_source(
-                    format!("failed to cast IDXGIFactory4 to IDXGIFactory6"),
-                    err,
-                ));
+                // err is a Cow<str>, not an Error implementor
+                return Err(crate::InstanceError::new(format!(
+                    "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
+                )));
             }
             // If we don't print it to info.
             Err(err) => {
@@ -177,16 +177,16 @@ pub fn create_factory(
         Ok(pair) => match pair.into_result() {
             Ok(factory) => factory,
             Err(err) => {
-                return Err(crate::InstanceError::with_source(
-                    format!("failed to create IDXGIFactory1"),
-                    err,
-                ));
+                // err is a Cow<str>, not an Error implementor
+                return Err(crate::InstanceError::new(format!(
+                    "failed to create IDXGIFactory1: {err:?}"
+                )));
             }
         },
         // We always require at least factory1, so hard error
         Err(err) => {
             return Err(crate::InstanceError::with_source(
-                format!("IDXGIFactory1 creation function not found"),
+                String::from("IDXGIFactory1 creation function not found"),
                 err,
             ));
         }
@@ -200,10 +200,10 @@ pub fn create_factory(
         }
         // If we require factory2, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
-            return Err(crate::InstanceError::with_source(
-                format!("failed to cast IDXGIFactory1 to IDXGIFactory2"),
-                err,
-            ));
+            // err is a Cow<str>, not an Error implementor
+            return Err(crate::InstanceError::new(format!(
+                "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
+            )));
         }
         // If we don't print it to info.
         Err(err) => {
