@@ -648,7 +648,7 @@ impl crate::Device<super::Api> for super::Device {
         })
     }
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
-        if let Some(list) = encoder.list {
+        if let Some(list) = &encoder.list {
             list.close();
         }
     }
