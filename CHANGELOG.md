@@ -42,6 +42,12 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### DX12
+
+- Ensure that CommandAllocator closes the command list before it is reset.
+
+By @bradwerth in [#4203](https://github.com/gfx-rs/wgpu/pull/4023)
+
 #### Metal
 
 - Ensure that MTLCommandEncoder calls endEncoding before it is deallocated.
