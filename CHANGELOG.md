@@ -64,6 +64,10 @@ let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
+### Added/New Features
+
+- Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
+
 ### Changes
 
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
@@ -73,6 +77,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 #### Vulkan
 
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
+
 
 ### Bug Fixes
 

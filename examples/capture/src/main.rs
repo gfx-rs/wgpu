@@ -40,6 +40,7 @@ async fn create_red_image_with_dimensions(
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+        gles_minor_version: wgpu::Gles3MinorVersion::default(),
     });
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())

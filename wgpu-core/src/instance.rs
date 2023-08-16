@@ -82,6 +82,7 @@ impl Instance {
                     name: "wgpu",
                     flags,
                     dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
+                    gles_minor_version: instance_desc.gles_minor_version,
                 };
                 unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
