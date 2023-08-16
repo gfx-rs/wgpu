@@ -4896,7 +4896,7 @@ impl<T> Clone for Id<T> {
 impl<T> Copy for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
-impl<T> Debug for Id<T> {
+impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0).finish()
     }
