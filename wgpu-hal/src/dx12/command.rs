@@ -1,4 +1,5 @@
 use crate::auxil::{self, dxgi::result::HResult as _};
+use crate::CommandEncoder as _;
 
 use super::conv;
 use std::{mem, ops::Range, ptr};
@@ -1190,5 +1191,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 0,
             )
         };
+    }
+}
+
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        // DX12 throws an exception when an encoder is dropped without being closed.
+        // To prevent this, we explicitiy call discard_encoding.
+        unsafe {
+            self.discard_encoding();
+        }
     }
 }

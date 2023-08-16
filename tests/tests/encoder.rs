@@ -1,6 +1,6 @@
 use wasm_bindgen_test::*;
-use wgpu_test::{fail, initialize_test, TestParameters};
 use wgpu::RenderPassDescriptor;
+use wgpu_test::{fail, initialize_test, TestParameters};
 
 #[test]
 #[wasm_bindgen_test]
@@ -22,7 +22,11 @@ fn drop_encoder_after_error() {
 
         let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            size: wgpu::Extent3d { width: 100, height: 100, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: 100,
+                height: 100,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,

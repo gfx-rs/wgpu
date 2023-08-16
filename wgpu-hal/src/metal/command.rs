@@ -1,6 +1,6 @@
 use super::{conv, AsNative};
-use std::{borrow::Cow, mem, ops::Range};
 use crate::CommandEncoder as _;
+use std::{borrow::Cow, mem, ops::Range};
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -1058,7 +1058,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
 impl Drop for super::CommandEncoder {
     fn drop(&mut self) {
-        // Metal asserts when a MTLCommandEncoder is deallocated without a call
+        // Metal raises an assert when a MTLCommandEncoder is deallocated without a call
         // to endEncoding. This isn't documented at
         // https://developer.apple.com/documentation/metal/mtlcommandencoder?language=objc
         // but it manifests as a crash with the message 'Command encoder released without
