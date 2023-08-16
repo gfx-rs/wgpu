@@ -913,7 +913,7 @@ impl crate::Instance<super::Api> for Instance {
                 };
 
                 if ret != 0 {
-                    return Err(crate::InstanceError::new(format(
+                    return Err(crate::InstanceError::new(format!(
                         "error {ret} returned from ANativeWindow_setBuffersGeometry",
                     )));
                 }
