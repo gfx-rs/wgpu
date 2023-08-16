@@ -283,7 +283,10 @@ fn choose_config(
         }
     }
 
-    Err(crate::InstanceError)
+    // TODO: include diagnostic details that are currently logged
+    Err(crate::InstanceError::new(String::from(
+        "unable to find an acceptable EGL framebuffer configuration",
+    )))
 }
 
 fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
@@ -495,7 +498,12 @@ impl Inner {
         display: khronos_egl::Display,
         force_gles_minor_version: wgt::Gles3MinorVersion,
     ) -> Result<Self, crate::InstanceError> {
-        let version = egl.initialize(display).map_err(|_| crate::InstanceError)?;
+        let version = egl.initialize(display).map_err(|e| {
+            crate::InstanceError::with_source(
+                String::from("failed to initialize EGL display connection"),
+                e,
+            )
+        })?;
         let vendor = egl
             .query_string(Some(display), khronos_egl::VENDOR)
             .unwrap();
@@ -599,8 +607,10 @@ impl Inner {
         let context = match egl.create_context(display, config, None, &context_attributes) {
             Ok(context) => context,
             Err(e) => {
-                log::warn!("unable to create GLES 3.x context: {:?}", e);
-                return Err(crate::InstanceError);
+                return Err(crate::InstanceError::with_source(
+                    String::from("unable to create GLES 3.x context"),
+                    e,
+                ));
             }
         };
 
@@ -623,8 +633,10 @@ impl Inner {
             egl.create_pbuffer_surface(display, config, &attributes)
                 .map(Some)
                 .map_err(|e| {
-                    log::warn!("Error in create_pbuffer_surface: {:?}", e);
-                    crate::InstanceError
+                    crate::InstanceError::with_source(
+                        String::from("error in create_pbuffer_surface"),
+                        e,
+                    )
                 })?
         };
 
@@ -734,8 +746,10 @@ impl crate::Instance<super::Api> for Instance {
         let egl = match egl_result {
             Ok(egl) => Arc::new(egl),
             Err(e) => {
-                log::info!("Unable to open libEGL: {:?}", e);
-                return Err(crate::InstanceError);
+                return Err(crate::InstanceError::with_source(
+                    String::from("unable to open libEGL"),
+                    e,
+                ));
             }
         };
 
@@ -899,8 +913,9 @@ impl crate::Instance<super::Api> for Instance {
                 };
 
                 if ret != 0 {
-                    log::error!("Error returned from ANativeWindow_setBuffersGeometry");
-                    return Err(crate::InstanceError);
+                    return Err(crate::InstanceError::new(format(
+                        "error {ret} returned from ANativeWindow_setBuffersGeometry",
+                    )));
                 }
             }
             #[cfg(not(target_os = "emscripten"))]
@@ -938,8 +953,7 @@ impl crate::Instance<super::Api> for Instance {
                         Arc::clone(&inner.egl.instance),
                         display,
                         inner.force_gles_minor_version,
-                    )
-                    .map_err(|_| crate::InstanceError)?;
+                    )?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
                     inner.wl_display = Some(display_handle.display);
@@ -950,8 +964,9 @@ impl crate::Instance<super::Api> for Instance {
             #[cfg(target_os = "emscripten")]
             (Rwh::Web(_), _) => {}
             other => {
-                log::error!("Unsupported window: {:?}", other);
-                return Err(crate::InstanceError);
+                return Err(crate::InstanceError::new(format!(
+                    "unsupported window: {other:?}"
+                )));
             }
         };
 

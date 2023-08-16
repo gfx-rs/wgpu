@@ -65,14 +65,16 @@ impl Instance {
                 // “not supported” could include “insufficient GPU resources” or “the GPU process
                 // previously crashed”. So, we must return it as an `Err` since it could occur
                 // for circumstances outside the application author's control.
-                return Err(crate::InstanceError);
+                return Err(crate::InstanceError::new(String::from(
+                    "canvas.getContext() returned null; webgl2 not available or canvas already in use"
+                )));
             }
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
-                // A thrown exception indicates misuse of the canvas state. Ideally we wouldn't
-                // panic in this case, but for now, `InstanceError` conveys no detail, so it
-                // is more informative to panic with a specific message.
-                panic!("canvas.getContext() threw {js_error:?}")
+                // A thrown exception indicates misuse of the canvas state.
+                return Err(crate::InstanceError::new(format!(
+                    "canvas.getContext() threw exception {js_error:?}",
+                )));
             }
         };
 
@@ -153,7 +155,9 @@ impl crate::Instance<super::Api> for Instance {
 
             self.create_surface_from_canvas(canvas)
         } else {
-            Err(crate::InstanceError)
+            Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a web handle"
+            )))
         }
     }
 
