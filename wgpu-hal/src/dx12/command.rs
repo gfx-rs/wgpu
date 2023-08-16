@@ -1193,13 +1193,3 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
     }
 }
-
-impl Drop for super::CommandEncoder {
-    fn drop(&mut self) {
-        // DX12 throws an exception when an encoder is dropped without being closed.
-        // To prevent this, we explicitiy call discard_encoding.
-        unsafe {
-            self.discard_encoding();
-        }
-    }
-}

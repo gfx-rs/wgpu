@@ -15,7 +15,15 @@ fn drop_encoder() {
 
 #[test]
 fn drop_encoder_after_error() {
-    initialize_test(TestParameters::default(), |ctx| {
+    // This test crashes on DX12 with the exception:
+    //
+    // ID3D12CommandAllocator::Reset: The command allocator cannot be reset because a
+    // command list is currently being recorded with the allocator. [ EXECUTION ERROR
+    // #543: COMMAND_ALLOCATOR_CANNOT_RESET]
+    //
+    // For now, we mark the test as failing on DX12.
+    let parameters = TestParameters::default().backend_failure(wgpu::Backends::DX12);
+    initialize_test(parameters, |ctx| {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
