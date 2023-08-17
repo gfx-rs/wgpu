@@ -1890,16 +1890,26 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
-        let array_buffer = buffer_data.0.get_mapped_range_with_f64_and_f64(
-            sub_range.start as f64,
-            (sub_range.end - sub_range.start) as f64,
-        );
+        let array_buffer =
+            self.buffer_get_mapped_range_as_array_buffer(_buffer, buffer_data, sub_range);
         let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
         let temporary_mapping = actual_mapping.to_vec();
         Box::new(BufferMappedRange {
             actual_mapping,
             temporary_mapping,
         })
+    }
+
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        _buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
@@ -2559,7 +2569,8 @@ impl crate::context::Context for Context {
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
     ) -> f32 {
-        1.0 //TODO
+        // Timestamp values are always in nanoseconds, see https://gpuweb.github.io/gpuweb/#timestamp
+        1.0
     }
 
     fn queue_on_submitted_work_done(
@@ -2593,15 +2604,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn compute_pass_set_push_constants(
@@ -2718,15 +2733,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        encoder_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            encoder_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            encoder_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -2933,15 +2952,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_pass_set_index_buffer(
@@ -3215,6 +3238,23 @@ impl crate::context::Context for Context {
         _query_index: u32,
     ) {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+    }
+
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+        _query_index: u32,
+    ) {
+        // Not available in gecko yet
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+    ) {
+        // Not available in gecko yet
     }
 
     fn render_pass_begin_pipeline_statistics_query(

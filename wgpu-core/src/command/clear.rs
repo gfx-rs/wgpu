@@ -472,6 +472,8 @@ fn clear_texture_via_render_passes<A: HalApi>(
                     color_attachments,
                     depth_stencil_attachment,
                     multiview: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
                 });
                 encoder.end_render_pass();
             }

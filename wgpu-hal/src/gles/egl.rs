@@ -482,6 +482,8 @@ struct Inner {
     config: khronos_egl::Config,
     #[cfg_attr(target_os = "emscripten", allow(dead_code))]
     wl_display: Option<*mut raw::c_void>,
+    #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+    force_gles_minor_version: wgt::Gles3MinorVersion,
     /// Method by which the framebuffer should support srgb
     srgb_kind: SrgbFrameBufferKind,
 }
@@ -491,6 +493,7 @@ impl Inner {
         flags: crate::InstanceFlags,
         egl: Arc<EglInstance>,
         display: khronos_egl::Display,
+        force_gles_minor_version: wgt::Gles3MinorVersion,
     ) -> Result<Self, crate::InstanceError> {
         let version = egl.initialize(display).map_err(|_| crate::InstanceError)?;
         let vendor = egl
@@ -542,9 +545,20 @@ impl Inner {
 
         //TODO: make it so `Device` == EGL Context
         let mut context_attributes = vec![
-            khronos_egl::CONTEXT_CLIENT_VERSION,
+            khronos_egl::CONTEXT_MAJOR_VERSION,
             3, // Request GLES 3.0 or higher
         ];
+
+        if force_gles_minor_version != wgt::Gles3MinorVersion::Automatic {
+            context_attributes.push(khronos_egl::CONTEXT_MINOR_VERSION);
+            context_attributes.push(match force_gles_minor_version {
+                wgt::Gles3MinorVersion::Version0 => 0,
+                wgt::Gles3MinorVersion::Version1 => 1,
+                wgt::Gles3MinorVersion::Version2 => 2,
+                _ => unreachable!(),
+            });
+        }
+
         if flags.contains(crate::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
                 log::debug!("\tEGL context: +debug");
@@ -627,6 +641,7 @@ impl Inner {
             config,
             wl_display: None,
             srgb_kind,
+            force_gles_minor_version,
         })
     }
 }
@@ -836,7 +851,7 @@ impl crate::Instance<super::Api> for Instance {
             unsafe { (function)(Some(egl_debug_proc), attributes.as_ptr()) };
         }
 
-        let inner = Inner::create(desc.flags, egl, display)?;
+        let inner = Inner::create(desc.flags, egl, display, desc.gles_minor_version)?;
 
         Ok(Instance {
             wsi: WindowSystemInterface {
@@ -918,9 +933,13 @@ impl crate::Instance<super::Api> for Instance {
                         )
                         .unwrap();
 
-                    let new_inner =
-                        Inner::create(self.flags, Arc::clone(&inner.egl.instance), display)
-                            .map_err(|_| crate::InstanceError)?;
+                    let new_inner = Inner::create(
+                        self.flags,
+                        Arc::clone(&inner.egl.instance),
+                        display,
+                        inner.force_gles_minor_version,
+                    )
+                    .map_err(|_| crate::InstanceError)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
                     inner.wl_display = Some(display_handle.display);

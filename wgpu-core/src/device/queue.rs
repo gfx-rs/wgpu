@@ -1501,15 +1501,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
         //TODO: flush pending writes
-        let closure_opt = {
-            let hub = A::hub(self);
-            match hub.devices.get(queue_id) {
-                Ok(device) => device.lock_life().add_work_done_closure(closure),
-                Err(_) => return Err(InvalidQueue),
-            }
-        };
-        if let Some(closure) = closure_opt {
-            closure.call();
+        let hub = A::hub(self);
+        match hub.devices.get(queue_id) {
+            Ok(device) => device.lock_life().add_work_done_closure(closure),
+            Err(_) => return Err(InvalidQueue),
         }
         Ok(())
     }

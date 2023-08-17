@@ -217,6 +217,9 @@ struct ActiveSubmission<A: HalApi> {
     mapped: Vec<Arc<Buffer<A>>>,
 
     encoders: Vec<EncoderInFlight<A>>,
+
+    /// List of queue "on_submitted_work_done" closures to be called once this
+    /// submission has completed.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
 }
 
@@ -302,6 +305,12 @@ pub(crate) struct LifetimeTracker<A: HalApi> {
     /// Buffers the user has asked us to map, and which are not used by any
     /// queue submission still in flight.
     ready_to_map: Vec<Arc<Buffer<A>>>,
+  
+    /// Queue "on_submitted_work_done" closures that were initiated for while there is no
+    /// currently pending submissions. These cannot be immeidately invoked as they
+    /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
+    /// here until the next time the device is maintained.
+    work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
@@ -314,6 +323,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             active: Vec::new(),
             free_resources: NonReferencedResources::new(),
             ready_to_map: Vec::new(),
+            work_done_closures: SmallVec::new(),
         }
     }
 
@@ -403,7 +413,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             .position(|a| a.index > last_done)
             .unwrap_or(self.active.len());
 
-        let mut work_done_closures = SmallVec::new();
+        let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
             log::info!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
@@ -443,18 +453,16 @@ impl<A: HalApi> LifetimeTracker<A> {
         }
     }
 
-    pub fn add_work_done_closure(
-        &mut self,
-        closure: SubmittedWorkDoneClosure,
-    ) -> Option<SubmittedWorkDoneClosure> {
+    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);
-                None
             }
-            // Note: we can't immediately invoke the closure, since it assumes
-            // nothing is currently locked in the hubs.
-            None => Some(closure),
+            // We must defer the closure until all previously occuring map_async closures
+            // have fired. This is required by the spec.
+            None => {
+                self.work_done_closures.push(closure);
+            }
         }
     }
 }

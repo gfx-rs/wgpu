@@ -2,6 +2,7 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 mod regression {
     mod issue_3457;
+    mod issue_4024;
 }
 
 mod buffer;
@@ -13,6 +14,7 @@ mod encoder;
 mod example_wgsl;
 mod external_texture;
 mod instance;
+mod occlusion_query;
 mod partially_bounded_arrays;
 mod poll;
 mod queue_transfer;

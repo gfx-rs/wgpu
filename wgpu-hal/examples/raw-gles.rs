@@ -175,6 +175,8 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         })],
         depth_stencil_attachment: None,
         multiview: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
     };
     unsafe {
         encoder.begin_encoding(None).unwrap();

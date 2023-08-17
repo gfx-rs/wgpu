@@ -46,12 +46,12 @@ impl<A: HalApi> QueryResetMap<A> {
     }
 
     pub fn reset_queries(
-        self,
+        &mut self,
         raw_encoder: &mut A::CommandEncoder,
         query_set_storage: &Storage<QuerySet<A>, id::QuerySetId>,
         backend: wgt::Backend,
     ) -> Result<(), id::QuerySetId> {
-        for (query_set_id, (state, epoch)) in self.map.into_iter() {
+        for (query_set_id, (state, epoch)) in self.map.drain() {
             let id = Id::zip(query_set_id, epoch, backend);
             let query_set = query_set_storage.get(id).map_err(|_| id)?;
 
@@ -239,6 +239,40 @@ impl<A: HalApi> QuerySet<A> {
         Ok(())
     }
 
+    pub(super) fn validate_and_begin_occlusion_query(
+        &self,
+        raw_encoder: &mut A::CommandEncoder,
+        query_set_id: id::QuerySetId,
+        query_index: u32,
+        reset_state: Option<&mut QueryResetMap<A>>,
+        active_query: &mut Option<(id::QuerySetId, u32)>,
+    ) -> Result<(), QueryUseError> {
+        let needs_reset = reset_state.is_none();
+        let query_set = self.validate_query(
+            query_set_id,
+            SimplifiedQueryType::Occlusion,
+            query_index,
+            reset_state,
+        )?;
+
+        if let Some((_old_id, old_idx)) = active_query.replace((query_set_id, query_index)) {
+            return Err(QueryUseError::AlreadyStarted {
+                active_query_index: old_idx,
+                new_query_index: query_index,
+            });
+        }
+
+        unsafe {
+            // If we don't have a reset state tracker which can defer resets, we must reset now.
+            if needs_reset {
+                raw_encoder.reset_queries(&self.raw, query_index..(query_index + 1));
+            }
+            raw_encoder.begin_query(query_set, query_index);
+        }
+
+        Ok(())
+    }
+
     pub(super) fn validate_and_begin_pipeline_statistics_query(
         &self,
         raw_encoder: &mut A::CommandEncoder,
@@ -271,6 +305,23 @@ impl<A: HalApi> QuerySet<A> {
         }
 
         Ok(())
+    }
+}
+
+pub(super) fn end_occlusion_query<A: HalApi>(
+    raw_encoder: &mut A::CommandEncoder,
+    storage: &Storage<QuerySet<A>, id::QuerySetId>,
+    active_query: &mut Option<(id::QuerySetId, u32)>,
+) -> Result<(), QueryUseError> {
+    if let Some((query_set_id, query_index)) = active_query.take() {
+        // We can unwrap here as the validity was validated when the active query was set
+        let query_set = storage.get(query_set_id).unwrap();
+
+        unsafe { raw_encoder.end_query(&query_set.raw, query_index) };
+
+        Ok(())
+    } else {
+        Err(QueryUseError::AlreadyStopped)
     }
 }
 
@@ -414,6 +465,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .into());
         }
 
+        // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
         buffer_memory_init_actions.extend(dst_buffer.initialization_status.read().create_action(
             destination,
             buffer_start_offset..buffer_end_offset,

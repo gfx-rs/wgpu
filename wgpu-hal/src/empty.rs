@@ -403,7 +403,7 @@ impl crate::CommandEncoder<Api> for Encoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {}
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<Api>) {}
     unsafe fn end_compute_pass(&mut self) {}
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &Resource) {}

@@ -117,6 +117,7 @@ pub struct CommandBufferMutable<A: HalApi> {
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
+    pub(crate) pending_query_resets: QueryResetMap<A>,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }
@@ -183,6 +184,7 @@ impl<A: HalApi> CommandBuffer<A> {
                 trackers: Tracker::new(),
                 buffer_memory_init_actions: Default::default(),
                 texture_memory_actions: Default::default(),
+                pending_query_resets: QueryResetMap::new(),
                 #[cfg(feature = "trace")]
                 commands: if enable_tracing {
                     Some(Vec::new())
@@ -660,6 +662,10 @@ pub enum PassErrorScope {
     QueryReset,
     #[error("In a write_timestamp command")]
     WriteTimestamp,
+    #[error("In a begin_occlusion_query command")]
+    BeginOcclusionQuery,
+    #[error("In a end_occlusion_query command")]
+    EndOcclusionQuery,
     #[error("In a begin_pipeline_statistics_query command")]
     BeginPipelineStatisticsQuery,
     #[error("In a end_pipeline_statistics_query command")]

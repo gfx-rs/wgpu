@@ -103,7 +103,7 @@ d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 # backend: Metal
 block = { version = "0.1", optional = true }
 
-metal = { version = "0.26.0", default_features = false }
+metal = "0.26.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
@@ -119,12 +119,16 @@ libc = "0.2"
 android_system_properties = "0.1.1"
 
 [dependencies.naga]
-workspace = true
+git = "https://github.com/gfx-rs/naga"
+rev = "7a19f3af909202c7eafd36633b5584bfbb353ecb"
+version = "0.13.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
-workspace = true
+git = "https://github.com/gfx-rs/naga"
+rev = "7a19f3af909202c7eafd36633b5584bfbb353ecb"
+version = "0.13.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
