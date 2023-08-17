@@ -46,6 +46,7 @@ use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops
 
 use super::{
     memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
+    QueryResetMap,
 };
 
 /// Operation to perform to the output attachment at the start of a renderpass.
@@ -760,7 +761,10 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&RenderPassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
-        cmd_buf: &mut CommandBufferMutable<A>,
+        encoder: &mut CommandEncoder<A>,
+        trackers: &mut Tracker<A>,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+        pending_query_resets: &mut QueryResetMap<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
         texture_guard: &'a Storage<Texture<A>, id::TextureId>,
@@ -854,7 +858,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut depth_stencil = None;
 
         if let Some(at) = depth_stencil_attachment {
-            let view: &TextureView<A> = tracker
+            let view: &TextureView<A> = trackers
                 .views
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -991,7 +995,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 colors.push(None);
                 continue;
             };
-            let color_view: &TextureView<A> = tracker
+            let color_view: &TextureView<A> = trackers
                 .views
                 .add_single(view_guard, at.view)
                 .ok_or(RenderPassErrorInner::InvalidAttachment(at.view))?;
@@ -1026,7 +1030,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
 
             let mut hal_resolve_target = None;
             if let Some(resolve_target) = at.resolve_target {
-                let resolve_view: &TextureView<A> = tracker
+                let resolve_view: &TextureView<A> = trackers
                     .views
                     .add_single(view_guard, resolve_target)
                     .ok_or(RenderPassErrorInner::InvalidAttachment(resolve_target))?;
@@ -1130,25 +1134,20 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         };
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
-            let query_set = cmd_buf
-                .trackers
+            let query_set = trackers
                 .query_sets
                 .add_single(query_set_guard, tw.query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(tw.query_set))?;
 
             if let Some(index) = tw.beginning_of_pass_write_index {
-                cmd_buf
-                    .pending_query_resets
-                    .use_query_set(tw.query_set, query_set, index);
+                pending_query_resets.use_query_set(tw.query_set, query_set, index);
             }
             if let Some(index) = tw.end_of_pass_write_index {
-                cmd_buf
-                    .pending_query_resets
-                    .use_query_set(tw.query_set, query_set, index);
+                pending_query_resets.use_query_set(tw.query_set, query_set, index);
             }
 
             Some(hal::RenderPassTimestampWrites {
-                query_set: &query_set.raw,
+                query_set: query_set.raw.as_ref().unwrap(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
@@ -1157,13 +1156,12 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         };
 
         let occlusion_query_set = if let Some(occlusion_query_set) = occlusion_query_set {
-            let query_set = cmd_buf
-                .trackers
+            let query_set = trackers
                 .query_sets
                 .add_single(query_set_guard, occlusion_query_set)
                 .ok_or(RenderPassErrorInner::InvalidQuerySet(occlusion_query_set))?;
 
-            Some(&query_set.raw)
+            Some(query_set.raw.as_ref().unwrap())
         } else {
             None
         };
@@ -1309,7 +1307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let (scope, query_reset_state, pending_discard_init_fixups) = {
+        let (scope, pending_discard_init_fixups) = {
             let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
@@ -1330,6 +1328,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let tracker = &mut cmd_buf_data.trackers;
             let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
             let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
+            let pending_query_resets = &mut cmd_buf_data.pending_query_resets;
 
             // We automatically keep extending command buffers over time, and because
             // we want to insert a command buffer _before_ what we're about to record,
@@ -1361,7 +1360,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil_attachment,
                 timestamp_writes,
                 occlusion_query_set_id,
-                &mut cmd_buf_data,
+                encoder,
+                tracker,
+                texture_memory_actions,
+                pending_query_resets,
                 &*view_guard,
                 &*buffer_guard,
                 &*texture_guard,
@@ -2124,7 +2126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut cmd_buf.pending_query_resets),
+                                Some(&mut cmd_buf_data.pending_query_resets),
                             )
                             .map_pass_err(scope)?;
                     }
@@ -2135,8 +2137,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderPassErrorInner::MissingOcclusionQuerySet)
                             .map_pass_err(scope)?;
 
-                        let query_set = cmd_buf
-                            .trackers
+                        let query_set = tracker
                             .query_sets
                             .add_single(&*query_set_guard, query_set_id)
                             .ok_or(RenderCommandError::InvalidQuerySet(query_set_id))
@@ -2147,7 +2148,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut cmd_buf.pending_query_resets),
+                                Some(&mut cmd_buf_data.pending_query_resets),
                                 &mut active_query,
                             )
                             .map_pass_err(scope)?;
@@ -2175,7 +2176,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 raw,
                                 query_set_id,
                                 query_index,
-                                Some(&mut cmd_buf.pending_query_resets),
+                                Some(&mut cmd_buf_data.pending_query_resets),
                                 &mut active_query,
                             )
                             .map_pass_err(scope)?;
@@ -2270,7 +2271,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
 
             encoder.close();
-            (trackers, query_reset_state, pending_discard_init_fixups)
+            (trackers, pending_discard_init_fixups)
         };
 
         let query_set_guard = hub.query_sets.read();
@@ -2296,7 +2297,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &cmd_buf.device,
             );
 
-            cmd_buf
+            cmd_buf_data
                 .pending_query_resets
                 .reset_queries(
                     transit,

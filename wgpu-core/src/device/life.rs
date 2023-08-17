@@ -305,7 +305,7 @@ pub(crate) struct LifetimeTracker<A: HalApi> {
     /// Buffers the user has asked us to map, and which are not used by any
     /// queue submission still in flight.
     ready_to_map: Vec<Arc<Buffer<A>>>,
-  
+
     /// Queue "on_submitted_work_done" closures that were initiated for while there is no
     /// currently pending submissions. These cannot be immeidately invoked as they
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them

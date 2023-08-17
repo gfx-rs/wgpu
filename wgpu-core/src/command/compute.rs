@@ -415,8 +415,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut active_query = None;
 
         let timestamp_writes = if let Some(tw) = timestamp_writes {
-            let query_set: &resource::QuerySet<A> = cmd_buf
-                .trackers
+            let query_set: &resource::QuerySet<A> = tracker
                 .query_sets
                 .add_single(&*query_set_guard, tw.query_set)
                 .ok_or(ComputePassErrorInner::InvalidQuerySet(tw.query_set))
@@ -437,12 +436,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // But no point in erroring over that nuance here!
             if let Some(range) = range {
                 unsafe {
-                    raw.reset_queries(&query_set.raw, range);
+                    raw.reset_queries(query_set.raw.as_ref().unwrap(), range);
                 }
             }
 
             Some(hal::ComputePassTimestampWrites {
-                query_set: &query_set.raw,
+                query_set: query_set.raw.as_ref().unwrap(),
                 beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
                 end_of_pass_write_index: tw.end_of_pass_write_index,
             })
