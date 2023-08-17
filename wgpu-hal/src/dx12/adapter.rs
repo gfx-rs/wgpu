@@ -257,7 +257,7 @@ impl super::Adapter {
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
 
-        if max_feature_level >= d3d12::FeatureLevel::L11_1 {
+        if max_feature_level as u32 >= d3d12::FeatureLevel::L11_1 as u32 {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
