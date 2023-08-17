@@ -122,7 +122,7 @@ where
     pub(crate) fn is_unique(&self, id: I) -> Result<bool, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
-            Some(&Element::Occupied(ref v, epoch)) => (Ok(Arc::strong_count(v) == 1), epoch),
+            Some(&Element::Occupied(ref v, epoch)) => (Ok(v.is_unique()), epoch),
             Some(&Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
             Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
