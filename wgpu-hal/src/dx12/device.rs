@@ -16,6 +16,7 @@ impl super::Device {
     pub(super) fn new(
         raw: d3d12::Device,
         present_queue: d3d12::CommandQueue,
+        limits: &wgt::Limits,
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
         dx12_shader_compiler: wgt::Dx12Compiler,
@@ -92,7 +93,7 @@ impl super::Device {
         };
 
         // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
-        let capacity_views = 1_000_000;
+        let capacity_views = limits.max_non_sampler_bindings as u64;
         let capacity_samplers = 2_048;
 
         let shared = super::DeviceShared {

@@ -755,6 +755,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
             max_buffer_size,
+            max_non_sampler_bindings: std::u32::MAX,
         }
     }
 

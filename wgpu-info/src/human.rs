@@ -124,6 +124,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_compute_workgroup_size_y,
         max_compute_workgroup_size_z,
         max_compute_workgroups_per_dimension,
+        max_non_sampler_bindings,
     } = limits;
     writeln!(output, "\t\t                        Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                        Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
@@ -154,6 +155,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                    Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
     writeln!(output, "\t\t                    Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
     writeln!(output, "\t\t            Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
+
+    // This one reflects more of a wgpu implementation limitations than a hardware limit
+    // so don't show it here.
+    let _ = max_non_sampler_bindings;
 
     //////////////////////////
     // Downlevel Properties //

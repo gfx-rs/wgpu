@@ -931,6 +931,12 @@ pub struct Limits {
     /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
+
+    /// Maximum number of live non-sampler bindings.
+    ///
+    /// This limit only affects the d3d12 backend. Using a large number will allow the device
+    /// to create many bind groups at the cost of a large up-front allocation at device creation.
+    pub max_non_sampler_bindings: u32,
 }
 
 impl Default for Limits {
@@ -965,6 +971,7 @@ impl Default for Limits {
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
             max_push_constant_size: 0,
+            max_non_sampler_bindings: 1_000_000,
         }
     }
 }
@@ -1005,6 +1012,7 @@ impl Limits {
     ///     max_compute_workgroup_size_z: 64,
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
     pub fn downlevel_defaults() -> Self {
@@ -1038,6 +1046,7 @@ impl Limits {
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
             max_buffer_size: 256 << 20,
+            max_non_sampler_bindings: 1_000_000,
         }
     }
 
@@ -1076,7 +1085,8 @@ impl Limits {
     ///     max_compute_workgroup_size_y: 0, // +
     ///     max_compute_workgroup_size_z: 0, // +
     ///     max_compute_workgroups_per_dimension: 0, // +
-    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_buffer_size: 256 << 20, // (256 MiB),
+    ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
     pub fn downlevel_webgl2_defaults() -> Self {
@@ -1193,6 +1203,7 @@ impl Limits {
         compare!(max_compute_workgroup_size_z, Less);
         compare!(max_compute_workgroups_per_dimension, Less);
         compare!(max_buffer_size, Less);
+        compare!(max_non_sampler_bindings, Less);
     }
 }
 

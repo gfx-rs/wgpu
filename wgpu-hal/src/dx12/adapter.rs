@@ -361,6 +361,7 @@ impl super::Adapter {
                     // This limit is chosen to avoid potential issues with drivers should they internally
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
+                    max_non_sampler_bindings: 1_000_000,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -382,7 +383,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
         _features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
@@ -399,6 +400,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let device = super::Device::new(
             self.device.clone(),
             queue.clone(),
+            limits,
             self.private_caps,
             &self.library,
             self.dx12_shader_compiler.clone(),
