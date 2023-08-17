@@ -1085,15 +1085,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
                 {
                     // If there is an equivalent BGL, just bump the refcount and return it.
-                    // This is only applicable to identity filters that generate their IDs,
-                    // which use PhantomData as their identity.
-                    // In practice this means:
+                    // This is only applicable if ids are generated in wgpu. In practice:
                     //  - wgpu users take this branch and return the existing
                     //    id without using the indirection layer in BindGroupLayout.
                     //  - Other users like gecko or the replay tool use don't take
                     //    the branch and instead rely on the indirection to use the
                     //    proper bind group layout id.
-                    if std::mem::size_of::<Input<G, id::BindGroupLayoutId>>() == 0 {
+                    if G::ids_are_generated_in_wgpu() {
                         return (id, None);
                     }
 
