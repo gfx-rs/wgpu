@@ -1129,6 +1129,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
+
+    pub fn adapter_restrict_limits<A: HalApi>(&self, adapter_id: AdapterId, limits: &wgt::Limits) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (mut adapter_guard, _) = hub.adapters.write(&mut token);
+        let adapter = adapter_guard.get_mut(adapter_id).unwrap();
+        adapter.raw.capabilities.limits = adapter.raw.capabilities.limits.restrict(limits);
+    }
 }
 
 /// Generates a set of backends from a comma separated list of case-insensitive backend names.

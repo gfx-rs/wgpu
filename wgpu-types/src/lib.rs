@@ -1194,6 +1194,61 @@ impl Limits {
         compare!(max_compute_workgroups_per_dimension, Less);
         compare!(max_buffer_size, Less);
     }
+
+    /// Combine limits to make a more restrictive set of limits.
+    pub fn restrict(&self, restrictions: &Self) -> Self {
+        macro_rules! combine_limits {
+            (
+                keep lowest: {
+                    $($name_lo:ident),+
+                }
+                keep highest: {
+                    $($name_hi:ident),+
+                }
+            ) => (
+                Self {
+                    $($name_lo: self.$name_lo.min(restrictions.$name_lo),)+
+                    $($name_hi: self.$name_hi.max(restrictions.$name_hi),)+
+                }
+            );
+        }
+
+        combine_limits! {
+            keep lowest: {
+                max_texture_dimension_1d,
+                max_texture_dimension_2d,
+                max_texture_dimension_3d,
+                max_texture_array_layers,
+                max_bindings_per_bind_group,
+                max_bind_groups,
+                max_dynamic_uniform_buffers_per_pipeline_layout,
+                max_dynamic_storage_buffers_per_pipeline_layout,
+                max_sampled_textures_per_shader_stage,
+                max_samplers_per_shader_stage,
+                max_storage_buffers_per_shader_stage,
+                max_storage_textures_per_shader_stage,
+                max_uniform_buffers_per_shader_stage,
+                max_uniform_buffer_binding_size,
+                max_storage_buffer_binding_size,
+                max_vertex_buffers,
+                max_vertex_attributes,
+                max_vertex_buffer_array_stride,
+                max_push_constant_size,
+                max_inter_stage_shader_components,
+                max_compute_workgroup_storage_size,
+                max_compute_invocations_per_workgroup,
+                max_compute_workgroup_size_x,
+                max_compute_workgroup_size_y,
+                max_compute_workgroup_size_z,
+                max_compute_workgroups_per_dimension,
+                max_buffer_size
+            }
+            keep highest: {
+                min_uniform_buffer_offset_alignment,
+                min_storage_buffer_offset_alignment
+            }
+        }
+    }
 }
 
 /// Represents the sets of additional limits on an adapter,
