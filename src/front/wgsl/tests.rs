@@ -534,6 +534,7 @@ fn parse_repeated_attributes() {
         ("size(16)", template_struct),
         ("vertex", template_stage),
         ("early_depth_test(less_equal)", template_resource),
+        ("workgroup_size(1)", template_stage),
     ] {
         let shader = template.replace("__REPLACE__", &format!("@{attribute} @{attribute}"));
         let name_length = attribute.rfind('(').unwrap_or(attribute.len()) as u32;
@@ -547,4 +548,19 @@ fn parse_repeated_attributes() {
             Error::RepeatedAttribute(span) if span == expected_span
         ));
     }
+}
+
+#[test]
+fn parse_missing_workgroup_size() {
+    use crate::{
+        front::wgsl::{error::Error, Frontend},
+        Span,
+    };
+
+    let shader = "@compute fn vs() -> vec4<f32> { return vec4<f32>(0.0); }";
+    let result = Frontend::new().inner(shader);
+    assert!(matches!(
+        result.unwrap_err(),
+        Error::MissingWorkgroupSize(span) if span == Span::new(1, 8)
+    ));
 }

@@ -967,7 +967,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 name: f.name.name.to_string(),
                 stage: entry.stage,
                 early_depth_test: entry.early_depth_test,
-                workgroup_size: entry.workgroup_size,
+                workgroup_size: entry.workgroup_size.unwrap_or([0, 0, 0]),
                 function,
             });
             Ok(LoweredGlobalDecl::EntryPoint)

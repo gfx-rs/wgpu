@@ -2,7 +2,7 @@ use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::SymbolTable;
-use crate::{Arena, FastHashSet, Handle, Span};
+use crate::{Arena, FastHashSet, Handle, ShaderStage, Span};
 
 pub mod ast;
 pub mod conv;
@@ -2158,7 +2158,8 @@ impl Parser {
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
-        let mut workgroup_size = [0u32; 3];
+        let mut compute_span = Span::new(0, 0);
+        let mut workgroup_size = ParsedAttribute::default();
         let mut early_depth_test = ParsedAttribute::default();
         let (mut bind_index, mut bind_group) =
             (ParsedAttribute::default(), ParsedAttribute::default());
@@ -2184,11 +2185,12 @@ impl Parser {
                 }
                 ("compute", name_span) => {
                     stage.set(crate::ShaderStage::Compute, name_span)?;
+                    compute_span = name_span;
                 }
-                ("workgroup_size", _) => {
+                ("workgroup_size", name_span) => {
                     lexer.expect(Token::Paren('('))?;
-                    workgroup_size = [1u32; 3];
-                    for (i, size) in workgroup_size.iter_mut().enumerate() {
+                    let mut new_workgroup_size = [1u32; 3];
+                    for (i, size) in new_workgroup_size.iter_mut().enumerate() {
                         *size = Self::generic_non_negative_int_literal(lexer)?;
                         match lexer.next() {
                             (Token::Paren(')'), _) => break,
@@ -2201,6 +2203,7 @@ impl Parser {
                             }
                         }
                     }
+                    workgroup_size.set(new_workgroup_size, name_span)?;
                 }
                 ("early_depth_test", name_span) => {
                     let conservative = if lexer.skip(Token::Paren('(')) {
@@ -2281,11 +2284,18 @@ impl Parser {
             (Token::Word("fn"), _) => {
                 let function = self.function_decl(lexer, out, &mut dependencies)?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
-                    entry_point: stage.value.map(|stage| ast::EntryPoint {
-                        stage,
-                        early_depth_test: early_depth_test.value,
-                        workgroup_size,
-                    }),
+                    entry_point: if let Some(stage) = stage.value {
+                        if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
+                            return Err(Error::MissingWorkgroupSize(compute_span));
+                        }
+                        Some(ast::EntryPoint {
+                            stage,
+                            early_depth_test: early_depth_test.value,
+                            workgroup_size: workgroup_size.value,
+                        })
+                    } else {
+                        None
+                    },
                     ..function
                 }))
             }

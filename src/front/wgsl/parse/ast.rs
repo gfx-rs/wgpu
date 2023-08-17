@@ -103,7 +103,7 @@ pub struct FunctionResult<'a> {
 pub struct EntryPoint {
     pub stage: crate::ShaderStage,
     pub early_depth_test: Option<crate::EarlyDepthTest>,
-    pub workgroup_size: [u32; 3],
+    pub workgroup_size: Option<[u32; 3]>,
 }
 
 #[cfg(doc)]
