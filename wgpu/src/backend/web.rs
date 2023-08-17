@@ -2604,15 +2604,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn compute_pass_set_push_constants(
@@ -2729,15 +2733,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        encoder_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            encoder_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            encoder_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -2944,15 +2952,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_pass_set_index_buffer(
