@@ -1,5 +1,4 @@
 use crate::auxil::{self, dxgi::result::HResult as _};
-use crate::CommandEncoder as _;
 
 use super::conv;
 use std::{mem, ops::Range, ptr};
