@@ -433,6 +433,24 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
 
         assert_eq!(found_expressions, 1);
     }
+
+    let module = parse_str(
+        "@fragment
+        fn main(mat: mat3x3<f32>) {
+            let vec = vec3<f32>(1.0, 1.0, 1.0);
+            let result = mat / vec;
+        }",
+    )
+    .unwrap();
+    let expressions = &&module.entry_points[0].function.expressions;
+    let found_splat = expressions.iter().any(|(_, e)| {
+        if let crate::Expression::Binary { left, .. } = *e {
+            matches!(&expressions[left], &crate::Expression::Splat { .. })
+        } else {
+            false
+        }
+    });
+    assert!(!found_splat, "'mat / vec' should not be splatted");
 }
 
 #[test]

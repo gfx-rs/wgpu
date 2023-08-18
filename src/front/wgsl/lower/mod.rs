@@ -525,13 +525,8 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         ) {
             self.grow_types(*left)?.grow_types(*right)?;
 
-            let left_size = match *self.resolved_inner(*left) {
-                crate::TypeInner::Vector { size, .. } => Some(size),
-                _ => None,
-            };
-
-            match (left_size, self.resolved_inner(*right)) {
-                (Some(size), &crate::TypeInner::Scalar { .. }) => {
+            match (self.resolved_inner(*left), self.resolved_inner(*right)) {
+                (&crate::TypeInner::Vector { size, .. }, &crate::TypeInner::Scalar { .. }) => {
                     *right = self.append_expression(
                         crate::Expression::Splat {
                             size,
@@ -540,7 +535,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                         self.get_expression_span(*right),
                     );
                 }
-                (None, &crate::TypeInner::Vector { size, .. }) => {
+                (&crate::TypeInner::Scalar { .. }, &crate::TypeInner::Vector { size, .. }) => {
                     *left = self.append_expression(
                         crate::Expression::Splat { size, value: *left },
                         self.get_expression_span(*left),
