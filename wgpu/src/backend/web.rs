@@ -1816,6 +1816,10 @@ impl crate::context::Context for Context {
         // Device is dropped automatically
     }
 
+    fn queue_drop(&self, _queue: &Self::QueueId, _queue_data: &Self::QueueData) {
+        // Queue is dropped automatically
+    }
+
     fn device_poll(
         &self,
         _device: &Self::DeviceId,

@@ -5,12 +5,12 @@ use crate::{
     device::{life::WaitIdleError, map_buffer, queue, Device, DeviceError, HostMap},
     global::Global,
     hal_api::HalApi,
-    id::{self, AdapterId, DeviceId, SurfaceId},
+    id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     instance::{self, Adapter, Surface},
     pipeline, present,
-    resource::{self, Buffer, BufferAccessResult, BufferMapState, Resource},
+    resource::{self, Buffer, BufferAccessResult, BufferMapState},
     resource::{BufferAccessError, BufferMapOperation},
     validation::check_buffer_usage,
     FastHashMap, Label, LabelHelpers as _,
@@ -1409,12 +1409,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid,
             };
+            let queue = match hub.queues.get(device.queue_id.read().unwrap()) {
+                Ok(queue) => queue,
+                Err(_) => break DeviceError::InvalidQueueId,
+            };
             let encoder = match device
                 .command_allocator
                 .lock()
                 .as_mut()
                 .unwrap()
-                .acquire_encoder(device.raw(), device.queue.as_ref().unwrap())
+                .acquire_encoder(device.raw(), queue.raw.as_ref().unwrap())
             {
                 Ok(raw) => raw,
                 Err(_) => break DeviceError::OutOfMemory,
@@ -2181,12 +2185,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("poll_device");
 
         let hub = A::hub(self);
-        let mut devices_to_drop = vec![];
         let mut all_queue_empty = true;
         {
             let device_guard = hub.devices.read();
 
-            for (id, device) in device_guard.iter(A::VARIANT) {
+            for (_id, device) in device_guard.iter(A::VARIANT) {
                 let maintain = if force_wait {
                     wgt::Maintain::Wait
                 } else {
@@ -2197,17 +2200,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (cbs, queue_empty) = device.maintain(hub, fence, maintain)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
-                // If the device's own `RefCount` is the only one left, and
-                // its submission queue is empty, then it can be freed.
-                if queue_empty && device.is_unique() {
-                    devices_to_drop.push(id);
-                }
                 closures.extend(cbs);
             }
-        }
-
-        for device_id in devices_to_drop {
-            self.exit_device::<A>(device_id);
         }
 
         Ok(all_queue_empty)
@@ -2275,40 +2269,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
         log::debug!("Device {:?} is asked to be dropped", device_id);
+
+        let hub = A::hub(self);
+        if let Some(device) = hub.devices.unregister(device_id) {
+            // The things `Device::prepare_to_die` takes care are mostly
+            // unnecessary here. We know our queue is empty, so we don't
+            // need to wait for submissions or triage them. We know we were
+            // just polled, so `life_tracker.free_resources` is empty.
+            debug_assert!(device.lock_life().queue_empty());
+            {
+                let mut pending_writes = device.pending_writes.lock();
+                let pending_writes = pending_writes.as_mut().unwrap();
+                pending_writes.deactivate();
+            }
+
+            drop(device);
+        }
     }
 
-    /// Exit the unreferenced, inactive device `device_id`.
-    fn exit_device<A: HalApi>(&self, device_id: DeviceId) {
+    pub fn queue_drop<A: HalApi>(&self, queue_id: QueueId) {
+        profiling::scope!("Queue::drop");
+        log::debug!("Queue {:?} is asked to be dropped", queue_id);
+
         let hub = A::hub(self);
-        let mut free_adapter_id = None;
-        {
-            let device = hub.devices.unregister(device_id);
-            if let Some(device) = device {
-                // The things `Device::prepare_to_die` takes care are mostly
-                // unnecessary here. We know our queue is empty, so we don't
-                // need to wait for submissions or triage them. We know we were
-                // just polled, so `life_tracker.free_resources` is empty.
-                debug_assert!(device.lock_life().queue_empty());
-                {
-                    let mut pending_writes = device.pending_writes.lock();
-                    let pending_writes = pending_writes.as_mut().unwrap();
-                    pending_writes.deactivate();
-                }
-
-                // Adapter is only referenced by the device and itself.
-                // This isn't a robust way to destroy them, we should find a better one.
-                // Check the refcount here should 2 -> registry and device
-                if device.adapter.ref_count() == 2 {
-                    free_adapter_id = Some(device.adapter.info.id().0);
-                }
-
-                drop(device);
-            }
-        }
-
-        // Free the adapter now that we've dropped the `Device`.
-        if let Some(free_adapter_id) = free_adapter_id {
-            let _ = hub.adapters.unregister(free_adapter_id);
+        if let Some(queue) = hub.queues.unregister(queue_id) {
+            drop(queue);
         }
     }
 

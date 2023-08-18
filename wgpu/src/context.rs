@@ -269,6 +269,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData);
     fn device_drop(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+    fn queue_drop(&self, queue: &Self::QueueId, queue_data: &Self::QueueData);
     fn device_poll(
         &self,
         device: &Self::DeviceId,
@@ -1363,6 +1364,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (ObjectId, Box<crate::Data>);
     fn device_drop(&self, device: &ObjectId, device_data: &crate::Data);
+    fn queue_drop(&self, queue: &ObjectId, queue_data: &crate::Data);
     fn device_poll(&self, device: &ObjectId, device_data: &crate::Data, maintain: Maintain)
         -> bool;
     fn device_on_uncaptured_error(
@@ -2422,6 +2424,12 @@ where
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_drop(self, &device, device_data)
+    }
+
+    fn queue_drop(&self, queue: &ObjectId, queue_data: &crate::Data) {
+        let queue = <T::QueueId>::from(*queue);
+        let queue_data = downcast_ref(queue_data);
+        Context::queue_drop(self, &queue, queue_data)
     }
 
     fn device_poll(

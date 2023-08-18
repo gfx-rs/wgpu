@@ -10,7 +10,7 @@ use crate::{
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
-    id,
+    id::{self, QueueId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, BufferInitTracker, TextureInitRange},
     resource::{
@@ -30,6 +30,31 @@ use std::{
 use thiserror::Error;
 
 use super::Device;
+
+pub struct Queue<A: HalApi> {
+    pub device: Option<Arc<Device<A>>>,
+    pub raw: Option<A::Queue>,
+    pub info: ResourceInfo<QueueId>,
+}
+
+impl<A: HalApi> Resource<QueueId> for Queue<A> {
+    const TYPE: &'static str = "Queue";
+
+    fn as_info(&self) -> &ResourceInfo<QueueId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<QueueId> {
+        &mut self.info
+    }
+}
+
+impl<A: HalApi> Drop for Queue<A> {
+    fn drop(&mut self) {
+        let queue = self.raw.take().unwrap();
+        self.device.as_ref().unwrap().release_queue(queue);
+    }
+}
 
 /// Number of command buffers that we generate from the same pool
 /// for the write_xxx commands, before the pool is recycled.
@@ -115,7 +140,7 @@ impl SubmittedWorkDoneClosure {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct WrappedSubmissionIndex {
-    pub queue_id: id::QueueId,
+    pub queue_id: QueueId,
     pub index: SubmissionIndex,
 }
 
@@ -365,7 +390,7 @@ pub enum QueueSubmitError {
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn queue_write_buffer<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
@@ -374,10 +399,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let device = hub
-            .devices
+        let queue = hub
+            .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidQueueId)?;
+
+        let device = queue.device.as_ref().unwrap();
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -400,7 +427,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(&device, data_size)?;
+        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(device, data_size)?;
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
@@ -409,38 +436,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
             staging_buffer.flush(device.raw())
         } {
-            pending_writes.consume(&device, Arc::new(staging_buffer));
+            pending_writes.consume(device, Arc::new(staging_buffer));
             return Err(flush_error.into());
         }
 
         let result = self.queue_write_staging_buffer_impl(
-            &device,
+            device,
             pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
         );
 
-        pending_writes.consume(&device, Arc::new(staging_buffer));
+        pending_writes.consume(device, Arc::new(staging_buffer));
         result
     }
 
     pub fn queue_create_staging_buffer<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         buffer_size: wgt::BufferSize,
         id_in: Input<G, id::StagingBufferId>,
     ) -> Result<(id::StagingBufferId, *mut u8), QueueWriteError> {
         profiling::scope!("Queue::create_staging_buffer");
         let hub = A::hub(self);
 
-        let device = hub
-            .devices
+        let queue = hub
+            .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidQueueId)?;
+
+        let device = queue.device.as_ref().unwrap();
 
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&device, buffer_size.get())?;
+            prepare_staging_buffer(device, buffer_size.get())?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let (id, _) = fid.assign(staging_buffer);
@@ -451,7 +480,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_write_staging_buffer<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
         staging_buffer_id: id::StagingBufferId,
@@ -459,10 +488,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Queue::write_staging_buffer");
         let hub = A::hub(self);
 
-        let device = hub
-            .devices
+        let queue = hub
+            .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidQueueId)?;
+
+        let device = queue.device.as_ref().unwrap();
 
         let staging_buffer = hub.staging_buffers.unregister(staging_buffer_id);
         if staging_buffer.is_none() {
@@ -479,25 +510,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         if let Err(flush_error) = unsafe { staging_buffer.flush(device.raw()) } {
-            pending_writes.consume(&device, staging_buffer);
+            pending_writes.consume(device, staging_buffer);
             return Err(flush_error.into());
         }
 
         let result = self.queue_write_staging_buffer_impl(
-            &device,
+            device,
             pending_writes,
             &staging_buffer,
             buffer_id,
             buffer_offset,
         );
 
-        pending_writes.consume(&device, staging_buffer);
+        pending_writes.consume(device, staging_buffer);
         result
     }
 
     pub fn queue_validate_write_buffer<A: HalApi>(
         &self,
-        _queue_id: id::QueueId,
+        _queue_id: QueueId,
         buffer_id: id::BufferId,
         buffer_offset: u64,
         buffer_size: u64,
@@ -611,7 +642,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_write_texture<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         destination: &ImageCopyTexture,
         data: &[u8],
         data_layout: &wgt::ImageDataLayout,
@@ -621,10 +652,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let device = hub
-            .devices
+        let queue = hub
+            .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidQueueId)?;
+
+        let device = queue.device.as_ref().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
@@ -784,7 +817,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(&device, stage_size)?;
+        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(device, stage_size)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
@@ -820,7 +853,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if let Err(e) = unsafe { staging_buffer.flush(device.raw()) } {
-            pending_writes.consume(&device, Arc::new(staging_buffer));
+            pending_writes.consume(device, Arc::new(staging_buffer));
             return Err(e.into());
         }
 
@@ -864,7 +897,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        pending_writes.consume(&device, Arc::new(staging_buffer));
+        pending_writes.consume(device, Arc::new(staging_buffer));
         pending_writes
             .dst_textures
             .insert(destination.texture, dst.clone());
@@ -875,7 +908,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
     pub fn queue_copy_external_image_to_texture<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         source: &wgt::ImageCopyExternalImage,
         destination: crate::command::ImageCopyTextureTagged,
         size: wgt::Extent3d,
@@ -884,10 +917,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let device = hub
-            .devices
+        let queue = hub
+            .queues
             .get(queue_id)
-            .map_err(|_| DeviceError::Invalid)?;
+            .map_err(|_| DeviceError::InvalidQueueId)?;
+
+        let device = queue.device.as_ref().unwrap();
 
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
             log::trace!("Ignoring write_texture of size 0");
@@ -1078,7 +1113,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_submit<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
         profiling::scope!("Queue::submit");
@@ -1086,10 +1121,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (submit_index, callbacks) = {
             let hub = A::hub(self);
 
-            let device = hub
-                .devices
+            let queue = hub
+                .queues
                 .get(queue_id)
-                .map_err(|_| DeviceError::Invalid)?;
+                .map_err(|_| DeviceError::InvalidQueueId)?;
+
+            let device = queue.device.as_ref().unwrap();
 
             let mut fence = device.fence.write();
             let fence = fence.as_mut().unwrap();
@@ -1324,7 +1361,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .initialize_buffer_memory(&mut *trackers, &*buffer_guard)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
                         baked
-                            .initialize_texture_memory(&mut *trackers, &*texture_guard, &device)
+                            .initialize_texture_memory(&mut *trackers, &*texture_guard, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
@@ -1433,8 +1470,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 )
                 .collect::<Vec<_>>();
             unsafe {
-                device
-                    .queue
+                queue
+                    .raw
                     .as_ref()
                     .unwrap()
                     .submit(&refs, Some((fence, submit_index)))
@@ -1445,7 +1482,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(pending_execution) = pending_writes.post_submit(
                 device.command_allocator.lock().as_mut().unwrap(),
                 device.raw(),
-                device.queue.as_ref().unwrap(),
+                queue.raw.as_ref().unwrap(),
             ) {
                 active_executions.push(pending_execution);
             }
@@ -1486,24 +1523,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_get_timestamp_period<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
     ) -> Result<f32, InvalidQueue> {
         let hub = A::hub(self);
-        match hub.devices.get(queue_id) {
-            Ok(device) => Ok(unsafe { device.queue.as_ref().unwrap().get_timestamp_period() }),
+        match hub.queues.get(queue_id) {
+            Ok(queue) => Ok(unsafe { queue.raw.as_ref().unwrap().get_timestamp_period() }),
             Err(_) => Err(InvalidQueue),
         }
     }
 
     pub fn queue_on_submitted_work_done<A: HalApi>(
         &self,
-        queue_id: id::QueueId,
+        queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
         //TODO: flush pending writes
         let hub = A::hub(self);
-        match hub.devices.get(queue_id) {
-            Ok(device) => device.lock_life().add_work_done_closure(closure),
+        match hub.queues.get(queue_id) {
+            Ok(queue) => queue
+                .device
+                .as_ref()
+                .unwrap()
+                .lock_life()
+                .add_work_done_closure(closure),
             Err(_) => return Err(InvalidQueue),
         }
         Ok(())

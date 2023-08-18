@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
-    device::{resource::Device, DeviceDescriptor},
+    device::{queue::Queue, resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
-    id::{AdapterId, DeviceId, SurfaceId},
+    id::{AdapterId, DeviceId, QueueId, SurfaceId},
     identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
     resource::{Resource, ResourceInfo},
@@ -14,7 +14,7 @@ use crate::{
 use parking_lot::Mutex;
 use wgt::{Backend, Backends, PowerPreference};
 
-use hal::{Adapter as _, Instance as _};
+use hal::{Adapter as _, Instance as _, OpenDevice};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
@@ -293,29 +293,37 @@ impl<A: HalApi> Adapter<A> {
         }
     }
 
-    fn create_device_from_hal(
+    fn create_device_and_queue_from_hal(
         self: &Arc<Self>,
-        open: hal::OpenDevice<A>,
+        hal_device: OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<Device<A>, RequestDeviceError> {
+    ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         let caps = &self.raw.capabilities;
-        Device::new(
-            open,
+        if let Ok(device) = Device::new(
+            hal_device.device,
+            &hal_device.queue,
             self,
             caps.alignments.clone(),
             caps.downlevel.clone(),
             desc,
             trace_path,
-        )
-        .or(Err(RequestDeviceError::OutOfMemory))
+        ) {
+            let queue = Queue {
+                device: None,
+                raw: Some(hal_device.queue),
+                info: ResourceInfo::new("<Queue>"),
+            };
+            return Ok((device, queue));
+        }
+        Err(RequestDeviceError::OutOfMemory)
     }
 
-    fn create_device(
+    fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> Result<Device<A>, RequestDeviceError> {
+    ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -364,7 +372,7 @@ impl<A: HalApi> Adapter<A> {
             },
         )?;
 
-        self.create_device_from_hal(open, desc, trace_path)
+        self.create_device_and_queue_from_hal(open, desc, trace_path)
     }
 }
 
@@ -1067,29 +1075,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-        id_in: Input<G, DeviceId>,
-    ) -> (DeviceId, Option<RequestDeviceError>) {
+        device_id_in: Input<G, DeviceId>,
+        queue_id_in: Input<G, QueueId>,
+    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
         profiling::scope!("Adapter::request_device");
 
         let hub = A::hub(self);
-        let fid = hub.devices.prepare(id_in);
+        let device_fid = hub.devices.prepare(device_id_in);
+        let queue_fid = hub.queues.prepare(queue_id_in);
 
         let error = loop {
             let adapter = match hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device = match adapter.create_device(desc, trace_path) {
-                Ok(device) => device,
+            let (device, mut queue) = match adapter.create_device_and_queue(desc, trace_path) {
+                Ok((device, queue)) => (device, queue),
                 Err(e) => break e,
             };
-            let (id, _) = fid.assign(device);
-            log::info!("Created Device {:?}", id);
-            return (id.0, None);
+            let (device_id, _) = device_fid.assign(device);
+            log::info!("Created Device {:?}", device_id);
+
+            let device = hub.devices.get(device_id.0).unwrap();
+            queue.device = Some(device.clone());
+
+            let (queue_id, _) = queue_fid.assign(queue);
+            log::info!("Created Queue {:?}", queue_id);
+
+            device.queue_id.write().replace(queue_id.0);
+
+            return (device_id.0, queue_id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        let device_id = device_fid.assign_error(desc.label.borrow_or_default());
+        let queue_id = queue_fid.assign_error(desc.label.borrow_or_default());
+        (device_id, queue_id, Some(error))
     }
 
     /// # Safety
@@ -1099,32 +1119,45 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub unsafe fn create_device_from_hal<A: HalApi>(
         &self,
         adapter_id: AdapterId,
-        hal_device: hal::OpenDevice<A>,
+        hal_device: OpenDevice<A>,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-        id_in: Input<G, DeviceId>,
-    ) -> (DeviceId, Option<RequestDeviceError>) {
-        profiling::scope!("Adapter::create_device_from_hal");
+        device_id_in: Input<G, DeviceId>,
+        queue_id_in: Input<G, QueueId>,
+    ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
+        profiling::scope!("Global::create_device_from_hal");
 
         let hub = A::hub(self);
-        let fid = hub.devices.prepare(id_in);
+        let devices_fid = hub.devices.prepare(device_id_in);
+        let queues_fid = hub.queues.prepare(queue_id_in);
 
         let error = loop {
             let adapter = match hub.adapters.get(adapter_id) {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device = match adapter.create_device_from_hal(hal_device, desc, trace_path) {
-                Ok(device) => device,
-                Err(e) => break e,
-            };
-            let (id, _) = fid.assign(device);
-            log::info!("Created Device {:?}", id);
-            return (id.0, None);
+            let (device, mut queue) =
+                match adapter.create_device_and_queue_from_hal(hal_device, desc, trace_path) {
+                    Ok(device) => device,
+                    Err(e) => break e,
+                };
+            let (device_id, _) = devices_fid.assign(device);
+            log::info!("Created Device {:?}", device_id);
+
+            let device = hub.devices.get(device_id.0).unwrap();
+            queue.device = Some(device.clone());
+
+            let (queue_id, _) = queues_fid.assign(queue);
+            log::info!("Created Queue {:?}", queue_id);
+
+            device.queue_id.write().replace(queue_id.0);
+
+            return (device_id.0, queue_id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        let device_id = devices_fid.assign_error(desc.label.borrow_or_default());
+        let queue_id = queues_fid.assign_error(desc.label.borrow_or_default());
+        (device_id, queue_id, Some(error))
     }
 }
 

@@ -649,10 +649,11 @@ pub async fn op_webgpu_request_device(
         limits: required_limits.unwrap_or_default(),
     };
 
-    let (device, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
+    let (device, _queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
       adapter,
       &descriptor,
       std::env::var("DENO_WEBGPU_TRACE").ok().as_ref().map(std::path::Path::new),
+      (),
       ()
     ));
     if let Some(err) = maybe_err {

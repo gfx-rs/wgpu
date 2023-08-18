@@ -21,7 +21,7 @@ pub(crate) enum Element<T> {
     Error(Epoch, String),
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct StorageReport {
     pub num_occupied: usize,
     pub num_vacant: usize,
@@ -179,10 +179,9 @@ where
         }
     }
 
-    pub(crate) fn insert(&mut self, id: I, mut value: T) {
-        let (index, epoch, _) = id.unzip();
-        value.as_info_mut().set_id(id);
-        self.insert_impl(index as usize, Element::Occupied(Arc::new(value), epoch))
+    pub(crate) fn insert(&mut self, id: I, value: Arc<T>) {
+        let (index, epoch, _backend) = id.unzip();
+        self.insert_impl(index as usize, Element::Occupied(value, epoch))
     }
 
     pub(crate) fn insert_error(&mut self, id: I, label: &str) {

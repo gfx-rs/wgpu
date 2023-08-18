@@ -280,6 +280,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = hub.devices.get(present.device_id.0).unwrap();
+        let queue_id = device.queue_id.read().unwrap();
+        let queue = hub.queues.get(queue_id).unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
@@ -332,11 +334,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 Err(hal::SurfaceError::Outdated)
                             } else {
                                 unsafe {
-                                    device
-                                        .queue
-                                        .as_ref()
-                                        .unwrap()
-                                        .present(&suf.unwrap().raw, raw)
+                                    queue.raw.as_ref().unwrap().present(&suf.unwrap().raw, raw)
                                 }
                             }
                         }

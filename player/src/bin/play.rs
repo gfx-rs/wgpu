@@ -81,10 +81,11 @@ fn main() {
             let info = gfx_select!(adapter => global.adapter_get_info(adapter)).unwrap();
             log::info!("Picked '{}'", info.name);
             let id = wgc::id::TypedId::zip(1, 0, backend);
-            let (_, error) = gfx_select!(adapter => global.adapter_request_device(
+            let (_, _, error) = gfx_select!(adapter => global.adapter_request_device(
                 adapter,
                 &desc,
                 None,
+                id,
                 id
             ));
             if let Some(e) = error {

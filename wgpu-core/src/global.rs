@@ -10,7 +10,7 @@ use crate::{
     storage::{Element, StorageReport},
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
     pub surfaces: StorageReport,
     #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]

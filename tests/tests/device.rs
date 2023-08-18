@@ -36,3 +36,35 @@ fn device_mismatch() {
         ctx.device.poll(wgpu::Maintain::Poll);
     });
 }
+
+#[test]
+fn device_lifetime_check() {
+    use pollster::FutureExt as _;
+
+    env_logger::init();
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+        dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+        gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+    });
+
+    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
+        .block_on()
+        .expect("failed to create adapter");
+
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor::default(), None)
+        .block_on()
+        .expect("failed to create device");
+
+    instance.poll_all(false);
+
+    let pre_report = instance.generate_report();
+
+    drop(queue);
+    drop(device);
+
+    let post_report = instance.generate_report();
+
+    assert_ne!(pre_report, post_report, "Queue and Device has not been dropped as expected");
+}

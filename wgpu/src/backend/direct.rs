@@ -104,12 +104,13 @@ impl Context {
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
-        let (device_id, error) = unsafe {
+        let (device_id, queue_id, error) = unsafe {
             global.create_device_from_hal(
                 *adapter,
                 hal_device,
                 &desc.map_label(|l| l.map(Borrowed)),
                 trace_dir,
+                (),
                 (),
             )
         };
@@ -123,7 +124,7 @@ impl Context {
             features: desc.features,
         };
         let queue = Queue {
-            id: device_id,
+            id: queue_id,
             error_sink,
         };
         Ok((device, queue))
@@ -621,10 +622,11 @@ impl crate::Context for Context {
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
         let global = &self.0;
-        let (device_id, error) = wgc::gfx_select!(*adapter => global.adapter_request_device(
+        let (device_id, queue_id, error) = wgc::gfx_select!(*adapter => global.adapter_request_device(
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
             trace_dir,
+            (),
             ()
         ));
         if let Some(err) = error {
@@ -638,7 +640,7 @@ impl crate::Context for Context {
             features: desc.features,
         };
         let queue = Queue {
-            id: device_id,
+            id: queue_id,
             error_sink,
         };
         ready(Ok((device_id, device, device_id, queue)))
@@ -1446,6 +1448,11 @@ impl crate::Context for Context {
         }
 
         wgc::gfx_select!(device => global.device_drop(*device));
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(unused))]
+    fn queue_drop(&self, queue: &Self::QueueId, _device_data: &Self::QueueData) {
+        let global = &self.0;
+        wgc::gfx_select!(queue => global.queue_drop(*queue));
     }
     fn device_poll(
         &self,

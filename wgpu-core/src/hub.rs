@@ -152,7 +152,7 @@ flagged as errors as well.
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::{CommandBuffer, RenderBundle},
-    device::Device,
+    device::{queue::Queue, Device},
     hal_api::HalApi,
     id,
     identity::GlobalIdentityHandlerFactory,
@@ -165,10 +165,11 @@ use crate::{
 
 use std::fmt::Debug;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct HubReport {
     pub adapters: StorageReport,
     pub devices: StorageReport,
+    pub queues: StorageReport,
     pub pipeline_layouts: StorageReport,
     pub shader_modules: StorageReport,
     pub bind_group_layouts: StorageReport,
@@ -218,6 +219,7 @@ impl HubReport {
 pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<id::AdapterId, Adapter<A>, F>,
     pub devices: Registry<id::DeviceId, Device<A>, F>,
+    pub queues: Registry<id::QueueId, Queue<A>, F>,
     pub pipeline_layouts: Registry<id::PipelineLayoutId, PipelineLayout<A>, F>,
     pub shader_modules: Registry<id::ShaderModuleId, ShaderModule<A>, F>,
     pub bind_group_layouts: Registry<id::BindGroupLayoutId, BindGroupLayout<A>, F>,
@@ -239,6 +241,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         Self {
             adapters: Registry::new(A::VARIANT, factory),
             devices: Registry::new(A::VARIANT, factory),
+            queues: Registry::new(A::VARIANT, factory),
             pipeline_layouts: Registry::new(A::VARIANT, factory),
             shader_modules: Registry::new(A::VARIANT, factory),
             bind_group_layouts: Registry::new(A::VARIANT, factory),
@@ -308,6 +311,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
             }
         }
 
+        self.queues.write().map.clear();
         devices.map.clear();
 
         if with_adapters {
@@ -332,6 +336,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         HubReport {
             adapters: self.adapters.generate_report(),
             devices: self.devices.generate_report(),
+            queues: self.queues.generate_report(),
             pipeline_layouts: self.pipeline_layouts.generate_report(),
             shader_modules: self.shader_modules.generate_report(),
             bind_group_layouts: self.bind_group_layouts.generate_report(),

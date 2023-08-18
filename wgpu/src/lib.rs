@@ -915,6 +915,14 @@ pub struct Queue {
 ))]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
 
+impl Drop for Queue {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.queue_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
 /// Resource that can be bound to a pipeline.
 ///
 /// Corresponds to [WebGPU `GPUBindingResource`](

@@ -10,7 +10,7 @@ use crate::{
     },
     hal_api::HalApi,
     hub::Hub,
-    id::{self, DeviceId},
+    id::{self, DeviceId, QueueId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
@@ -48,7 +48,8 @@ use std::{
 
 use super::{
     life::{self, SuspectedResources},
-    queue, DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, EP_FAILURE,
+    queue::{self},
+    DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, EP_FAILURE,
     IMPLICIT_FAILURE, ZERO_BUFFER_SIZE,
 };
 
@@ -80,12 +81,13 @@ use super::{
 pub struct Device<A: HalApi> {
     raw: Option<A::Device>,
     pub(crate) adapter: Arc<Adapter<A>>,
-    pub(crate) queue: Option<A::Queue>,
+    pub(crate) queue_id: RwLock<Option<QueueId>>,
+    queue_to_drop: RwLock<Option<A::Queue>>,
     pub(crate) zero_buffer: Option<A::Buffer>,
-    //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) info: ResourceInfo<DeviceId>,
 
     pub(crate) command_allocator: Mutex<Option<CommandAllocator<A>>>,
+    //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
     pub(crate) fence: RwLock<Option<A::Fence>>,
 
@@ -129,7 +131,8 @@ impl<A: HalApi> Drop for Device<A> {
         unsafe {
             raw.destroy_buffer(self.zero_buffer.take().unwrap());
             raw.destroy_fence(self.fence.write().take().unwrap());
-            raw.exit(self.queue.take().unwrap());
+            let queue = self.queue_to_drop.write().take().unwrap();
+            raw.exit(queue);
         }
     }
 }
@@ -168,7 +171,8 @@ impl<A: HalApi> Device<A> {
 
 impl<A: HalApi> Device<A> {
     pub(crate) fn new(
-        open: hal::OpenDevice<A>,
+        raw_device: A::Device,
+        raw_queue: &A::Queue,
         adapter: &Arc<Adapter<A>>,
         alignments: hal::Alignments,
         downlevel: wgt::DownlevelCapabilities,
@@ -180,19 +184,19 @@ impl<A: HalApi> Device<A> {
             log::error!("Feature 'trace' is not enabled");
         }
         let fence =
-            unsafe { open.device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
+            unsafe { raw_device.create_fence() }.map_err(|_| CreateDeviceError::OutOfMemory)?;
 
         let mut com_alloc = CommandAllocator {
             free_encoders: Vec::new(),
         };
         let pending_encoder = com_alloc
-            .acquire_encoder(&open.device, &open.queue)
+            .acquire_encoder(&raw_device, raw_queue)
             .map_err(|_| CreateDeviceError::OutOfMemory)?;
         let mut pending_writes = queue::PendingWrites::<A>::new(pending_encoder);
 
         // Create zeroed buffer used for texture clears.
         let zero_buffer = unsafe {
-            open.device
+            raw_device
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("(wgpu internal) zero init buffer"),
                     size: ZERO_BUFFER_SIZE,
@@ -221,9 +225,10 @@ impl<A: HalApi> Device<A> {
         }
 
         Ok(Self {
-            raw: Some(open.device),
+            raw: Some(raw_device),
             adapter: adapter.clone(),
-            queue: Some(open.queue),
+            queue_id: RwLock::new(None),
+            queue_to_drop: RwLock::new(None),
             zero_buffer: Some(zero_buffer),
             info: ResourceInfo::new("<device>"),
             command_allocator: Mutex::new(Some(com_alloc)),
@@ -252,6 +257,10 @@ impl<A: HalApi> Device<A> {
             downlevel,
             pending_writes: Mutex::new(Some(pending_writes)),
         })
+    }
+
+    pub(crate) fn release_queue(&self, queue: A::Queue) {
+        self.queue_to_drop.write().replace(queue);
     }
 
     pub(crate) fn lock_life<'a>(&'a self) -> MutexGuard<'a, LifetimeTracker<A>> {
