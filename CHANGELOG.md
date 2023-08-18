@@ -75,6 +75,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 - Derive storage bindings via `naga::StorageAccess` instead of `naga::GlobalUse`. By @teoxoy in [#3985](https://github.com/gfx-rs/wgpu/pull/3985).
 - `Queue::on_submitted_work_done` callbacks will now always be called after all previous `BufferSlice::map_async` callbacks, even when there are no active submissions. By @cwfitzgerald in [#4036](https://github.com/gfx-rs/wgpu/pull/4036).
+- Fix `clear` texture views being leaked when `wgpu::SurfaceTexture` is dropped before it is presented. By @rajveermalviya in [#4057](https://github.com/gfx-rs/wgpu/pull/4057).
 
 #### Vulkan
 - Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
@@ -99,7 +100,7 @@ This release was fairly minor as breaking changes go.
 
 #### `wgpu` types now `!Send` `!Sync` on wasm
 
-Up until this point, wgpu has made the assumption that threads do not exist on wasm. With the rise of libraries like [`wasm_thread`](https://crates.io/crates/wasm_thread) making it easier and easier to do wasm multithreading this assumption is no longer sound. As all wgpu objects contain references into the JS heap, they cannot leave the thread they started on. 
+Up until this point, wgpu has made the assumption that threads do not exist on wasm. With the rise of libraries like [`wasm_thread`](https://crates.io/crates/wasm_thread) making it easier and easier to do wasm multithreading this assumption is no longer sound. As all wgpu objects contain references into the JS heap, they cannot leave the thread they started on.
 
 As we understand that this change might be very inconvenient for users who don't care about wasm threading, there is a crate feature which re-enables the old behavior: `fragile-send-sync-non-atomic-wasm`. So long as you don't compile your code with `-Ctarget-feature=+atomics`, `Send` and `Sync` will be implemented again on wgpu types on wasm. As the name implies, especially for libraries, this is very fragile, as you don't know if a user will want to compile with atomics (and therefore threads) or not.
 
