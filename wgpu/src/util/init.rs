@@ -30,6 +30,7 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
         {
             Ok("low") => PowerPreference::LowPower,
             Ok("high") => PowerPreference::HighPerformance,
+            Ok("none") => PowerPreference::None,
             _ => return None,
         },
     )
