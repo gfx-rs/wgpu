@@ -105,7 +105,7 @@ use crate::{
 };
 use arrayvec::ArrayVec;
 
-use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range};
+use std::{borrow::Cow, mem, num::NonZeroU32, ops::Range, sync::Arc};
 use thiserror::Error;
 
 use hal::CommandEncoder as _;
@@ -256,7 +256,7 @@ impl RenderBundleEncoder {
     pub(crate) fn finish<A: HalApi, G: GlobalIdentityHandlerFactory>(
         self,
         desc: &RenderBundleDescriptor,
-        device: &Device<A>,
+        device: &Arc<Device<A>>,
         hub: &Hub<A, G>,
     ) -> Result<RenderBundle<A>, RenderBundleError> {
         let pipeline_layout_guard = hub.pipeline_layouts.read();
@@ -660,7 +660,7 @@ impl RenderBundleEncoder {
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
-            device_id: id::Valid(self.parent_id),
+            device: device.clone(),
             used: state.trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
@@ -739,7 +739,7 @@ pub struct RenderBundle<A: HalApi> {
     base: BasePass<RenderCommand>,
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
-    pub(crate) device_id: id::Valid<id::DeviceId>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) used: RenderBundleScope<A>,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,

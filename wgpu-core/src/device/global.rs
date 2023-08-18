@@ -1551,9 +1551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         };
 
-        hub.devices
-            .get(bundle.device_id.0)
-            .unwrap()
+        bundle.device
             .lock_life()
             .suspected_resources
             .render_bundles
