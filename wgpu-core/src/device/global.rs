@@ -1551,7 +1551,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         };
 
-        bundle.device
+        bundle
+            .device
             .lock_life()
             .suspected_resources
             .render_bundles
