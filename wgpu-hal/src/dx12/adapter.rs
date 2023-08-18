@@ -243,7 +243,6 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
             | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
@@ -258,6 +257,10 @@ impl super::Adapter {
         // Alternatively, we could allocate a buffer for the query set,
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
+
+        if max_feature_level as u32 >= d3d12::FeatureLevel::L11_1 as u32 {
+            features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+        }
 
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
