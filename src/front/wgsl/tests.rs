@@ -388,6 +388,54 @@ fn parse_expressions() {
 }
 
 #[test]
+fn binary_expression_mixed_scalar_and_vector_operands() {
+    for (operand, expect_splat) in [
+        ('<', false),
+        ('>', false),
+        ('&', false),
+        ('|', false),
+        ('+', true),
+        ('-', true),
+        ('*', false),
+        ('/', true),
+        ('%', true),
+    ] {
+        let module = parse_str(&format!(
+            "
+            const some_vec = vec3<f32>(1.0, 1.0, 1.0);
+            @fragment
+            fn main() -> @location(0) vec4<f32> {{
+                if (all(1.0 {operand} some_vec)) {{
+                    return vec4(0.0);
+                }}
+                return vec4(1.0);
+            }}
+            "
+        ))
+        .unwrap();
+
+        let expressions = &&module.entry_points[0].function.expressions;
+
+        let found_expressions = expressions
+            .iter()
+            .filter(|&(_, e)| {
+                if let crate::Expression::Binary { left, .. } = *e {
+                    matches!(
+                        (expect_splat, &expressions[left]),
+                        (false, &crate::Expression::Literal(crate::Literal::F32(..)))
+                            | (true, &crate::Expression::Splat { .. })
+                    )
+                } else {
+                    false
+                }
+            })
+            .count();
+
+        assert_eq!(found_expressions, 1);
+    }
+}
+
+#[test]
 fn parse_pointers() {
     parse_str(
         "fn foo() {

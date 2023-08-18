@@ -504,13 +504,25 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     }
 
     /// Insert splats, if needed by the non-'*' operations.
+    ///
+    /// See the "Binary arithmetic expressions with mixed scalar and vector operands"
+    /// table in the WebGPU Shading Language specification for relevant operators.
+    ///
+    /// Multiply is not handled here as backends are expected to handle vec*scalar
+    /// operations, so inserting splats into the IR increases size needlessly.
     fn binary_op_splat(
         &mut self,
         op: crate::BinaryOperator,
         left: &mut Handle<crate::Expression>,
         right: &mut Handle<crate::Expression>,
     ) -> Result<(), Error<'source>> {
-        if op != crate::BinaryOperator::Multiply {
+        if matches!(
+            op,
+            crate::BinaryOperator::Add
+                | crate::BinaryOperator::Subtract
+                | crate::BinaryOperator::Divide
+                | crate::BinaryOperator::Modulo
+        ) {
             self.grow_types(*left)?.grow_types(*right)?;
 
             let left_size = match *self.resolved_inner(*left) {
