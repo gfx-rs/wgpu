@@ -35,9 +35,9 @@ The following environment variables can be used to configure how the framework e
 
 - `WGPU_POWER_PREF`
 
-  Options: `low`, `high`
+  Options: `low`, `high`, `none`
 
-  If unset a low power adapter is preferred.
+  If unset power usage is not considered when choosing an adapter.
 
 - `WGPU_ADAPTER_NAME`
 
