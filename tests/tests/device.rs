@@ -59,12 +59,27 @@ fn device_lifetime_check() {
 
     instance.poll_all(false);
 
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     let pre_report = instance.generate_report();
 
     drop(queue);
     drop(device);
 
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     let post_report = instance.generate_report();
-
+    
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
     assert_ne!(pre_report, post_report, "Queue and Device has not been dropped as expected");
 }
