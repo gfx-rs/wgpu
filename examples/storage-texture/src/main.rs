@@ -15,10 +15,9 @@
 //! repeated-compute for code that is more thoroughly commented.
 
 #[cfg(not(target_arch = "wasm32"))]
-use wgpu_example::framework::output_image_native;
-
+use wgpu_example::utils::output_image_native;
 #[cfg(target_arch = "wasm32")]
-use wgpu_example::framework::output_image_wasm;
+use wgpu_example::utils::output_image_wasm;
 
 const TEXTURE_DIMS: (usize, usize) = (512, 512);
 
