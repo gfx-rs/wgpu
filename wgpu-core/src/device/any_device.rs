@@ -10,8 +10,8 @@ use std::sync::Arc;
 ///
 /// Any `AnyDevice` is just like an `Arc<Device<A>>`, except that the
 /// `A` type parameter is erased. To access the `Device`, you must
-/// downcast to a particular backend with the [`downcast_ref`] or
-/// [`downcast_clone`] methods.
+/// downcast to a particular backend with the \[`downcast_ref`\] or
+/// \[`downcast_clone`\] methods.
 pub struct AnyDevice(Arc<dyn Any + 'static>);
 
 impl AnyDevice {
