@@ -291,21 +291,13 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
         for element in surface_guard.map.iter() {
             if let Element::Occupied(ref surface, _epoch) = *element {
-                if surface
-                    .presentation
-                    .lock()
-                    .as_ref()
-                    .map_or(wgt::Backend::Empty, |p| p.backend())
-                    != A::VARIANT
-                {
-                    continue;
-                }
-                if let Some(present) = surface.presentation.lock().take() {
-                    let device = &devices[present.device_id];
-                    let suf = A::get_surface(surface);
-                    unsafe {
-                        suf.unwrap().raw.unconfigure(device.raw());
-                        //TODO: we could destroy the surface here
+                if let Some(ref mut present) = *surface.presentation.lock() {
+                    if let Some(device) = present.device.downcast_ref::<A>() {
+                        let suf = A::get_surface(surface);
+                        unsafe {
+                            suf.unwrap().raw.unconfigure(device.raw());
+                            //TODO: we could destroy the surface here
+                        }
                     }
                 }
             }
@@ -320,12 +312,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         }
     }
 
-    pub(crate) fn surface_unconfigure(
-        &self,
-        device_id: id::Valid<id::DeviceId>,
-        surface: &HalSurface<A>,
-    ) {
-        let device = self.devices.get(device_id.0).unwrap();
+    pub(crate) fn surface_unconfigure(&self, device: &Device<A>, surface: &HalSurface<A>) {
         unsafe {
             use hal::Surface;
             surface.raw.unconfigure(device.raw());

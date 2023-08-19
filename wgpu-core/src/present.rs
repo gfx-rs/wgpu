@@ -21,10 +21,11 @@ use std::{
 use crate::device::trace::Action;
 use crate::{
     conv,
+    device::any_device::AnyDevice,
     device::{DeviceError, MissingDownlevelFlags},
     global::Global,
     hal_api::HalApi,
-    id::{DeviceId, SurfaceId, TextureId, Valid},
+    id::{SurfaceId, TextureId, Valid},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     resource::{self, ResourceInfo},
@@ -41,17 +42,11 @@ pub const DESIRED_NUM_FRAMES: u32 = 3;
 
 #[derive(Debug)]
 pub(crate) struct Presentation {
-    pub(crate) device_id: Valid<DeviceId>,
+    pub(crate) device: AnyDevice,
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     #[allow(unused)]
     pub(crate) num_frames: u32,
     pub(crate) acquired_texture: Option<Valid<TextureId>>,
-}
-
-impl Presentation {
-    pub(crate) fn backend(&self) -> wgt::Backend {
-        crate::id::TypedId::unzip(self.device_id.0).2
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -129,12 +124,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(surface_id)
             .map_err(|_| SurfaceError::Invalid)?;
 
-        let (device, config) = match surface.presentation.lock().as_ref() {
-            Some(present) => {
-                let device = hub.devices.get(present.device_id.0).unwrap();
-                (device, present.config.clone())
+        let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
+            match present.device.downcast_clone::<A>() {
+                Some(device) => (device, present.config.clone()),
+                None => return Err(SurfaceError::NotConfigured),
             }
-            None => return Err(SurfaceError::NotConfigured),
+        } else {
+            return Err(SurfaceError::NotConfigured);
         };
 
         #[cfg(feature = "trace")]
@@ -279,7 +275,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = hub.devices.get(present.device_id.0).unwrap();
+        let device = present.device.downcast_ref::<A>().unwrap();
         let queue_id = device.queue_id.read().unwrap();
         let queue = hub.queues.get(queue_id).unwrap();
 
@@ -384,7 +380,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => return Err(SurfaceError::NotConfigured),
         };
 
-        let device = hub.devices.get(present.device_id.0).unwrap();
+        let device = present.device.downcast_ref::<A>().unwrap();
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
