@@ -48,6 +48,7 @@
     clippy::pattern_type_mismatch,
 )]
 
+pub mod any_surface;
 pub mod binding_model;
 pub mod command;
 mod conv;
@@ -232,7 +233,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 ///
 /// ```ignore
 /// impl<...> Global<...> {
-///    pub fn device_create_buffer<A: hal::Api>(&self, ...) -> ...
+///    pub fn device_create_buffer<A: HalApi>(&self, ...) -> ...
 ///    { ... }
 /// }
 /// ```

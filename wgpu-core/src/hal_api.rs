@@ -48,7 +48,7 @@ impl HalApi for hal::api::Vulkan {
         &global.hubs.vulkan
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.vulkan.as_ref()
+        surface.raw.downcast_ref()
     }
 }
 
@@ -69,7 +69,7 @@ impl HalApi for hal::api::Metal {
         &global.hubs.metal
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.metal.as_ref()
+        surface.raw.downcast_ref()
     }
 }
 
@@ -90,7 +90,7 @@ impl HalApi for hal::api::Dx12 {
         &global.hubs.dx12
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.dx12.as_ref()
+        surface.raw.downcast_ref()
     }
 }
 
@@ -111,7 +111,7 @@ impl HalApi for hal::api::Dx11 {
         &global.hubs.dx11
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.dx11.as_ref()
+        surface.raw.downcast_ref()
     }
 }
 
@@ -133,6 +133,6 @@ impl HalApi for hal::api::Gles {
         &global.hubs.gl
     }
     fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.gl.as_ref()
+        surface.raw.downcast_ref()
     }
 }
