@@ -18,6 +18,7 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{iter, num::NonZeroU32, ptr};
 
+pub mod any_device;
 pub mod global;
 mod life;
 pub mod queue;

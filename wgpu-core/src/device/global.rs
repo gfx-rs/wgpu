@@ -2109,7 +2109,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             let mut presentation = surface.presentation.lock();
             *presentation = Some(present::Presentation {
-                device_id: id::Valid(device_id),
+                device: super::any_device::AnyDevice::new(device.clone()),
                 config: config.clone(),
                 num_frames,
                 acquired_texture: None,

@@ -1437,7 +1437,6 @@ impl crate::Context for Context {
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        
         #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         {
             let global = &self.0;
@@ -1447,7 +1446,6 @@ impl crate::Context for Context {
             }
             wgc::gfx_select!(device => global.device_drop(*device));
         }
-
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn queue_drop(&self, queue: &Self::QueueId, _device_data: &Self::QueueData) {
