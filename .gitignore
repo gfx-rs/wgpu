@@ -5,6 +5,7 @@ Cargo.lock
 .fuse_hidden*
 .idea
 .vscode
+*.swp
 /*.dot
 /*.metal
 /*.metallib
