@@ -1,9 +1,11 @@
 const ARR_SIZE: usize = 128;
 
-async fn run() {
-    let mut local_patient_workgroup_results = [0_u32; ARR_SIZE];
-    let mut local_hasty_workgroup_results = local_patient_workgroup_results;
+struct ExecuteResults {
+    patient_workgroup_results: Vec<u32>,
+    hasty_workgroup_results: Vec<u32>,
+}
 
+async fn run() {
     let instance = wgpu::Instance::default();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -21,23 +23,25 @@ async fn run() {
         .await
         .unwrap();
 
-    execute(
+    let ExecuteResults {
+        patient_workgroup_results,
+        hasty_workgroup_results
+    } = execute(
         &device,
         &queue,
-        &mut local_patient_workgroup_results[..],
-        &mut local_hasty_workgroup_results[..],
+        ARR_SIZE
     )
     .await;
 
     // Print data
-    log::info!("Patient results: {local_patient_workgroup_results:?}");
-    if !local_patient_workgroup_results.iter().any(|e| *e != 16) {
+    log::info!("Patient results: {:?}", patient_workgroup_results);
+    if !patient_workgroup_results.iter().any(|e| *e != 16) {
         log::info!("patient_main was patient.");
     } else {
         log::error!("patient_main was not patient!");
     }
-    log::info!("Hasty results: {local_hasty_workgroup_results:?}");
-    if local_hasty_workgroup_results.iter().any(|e| *e != 16) {
+    log::info!("Hasty results: {:?}", hasty_workgroup_results);
+    if hasty_workgroup_results.iter().any(|e| *e != 16) {
         log::info!("hasty_main was not patient.");
     } else {
         log::info!("hasty_main got lucky.");
@@ -47,9 +51,11 @@ async fn run() {
 async fn execute(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    local_patient_workgroup_results: &mut [u32],
-    local_hasty_workgroup_results: &mut [u32],
-) {
+    result_vec_size: usize,
+) -> ExecuteResults {
+    let mut local_patient_workgroup_results = vec![0u32; result_vec_size];
+    let mut local_hasty_workgroup_results = local_patient_workgroup_results.clone();
+
     let shaders_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shaders.wgsl"))),
@@ -57,13 +63,13 @@ async fn execute(
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(local_patient_workgroup_results) as u64,
+        size: std::mem::size_of_val(local_patient_workgroup_results.as_slice()) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: std::mem::size_of_val(local_patient_workgroup_results) as u64,
+        size: std::mem::size_of_val(local_patient_workgroup_results.as_slice()) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -122,7 +128,7 @@ async fn execute(
     queue.submit(Some(command_encoder.finish()));
 
     get_data(
-        local_patient_workgroup_results,
+        local_patient_workgroup_results.as_mut_slice(),
         &storage_buffer,
         &output_staging_buffer,
         device,
@@ -142,13 +148,18 @@ async fn execute(
     queue.submit(Some(command_encoder.finish()));
 
     get_data(
-        local_hasty_workgroup_results,
+        local_hasty_workgroup_results.as_mut_slice(),
         &storage_buffer,
         &output_staging_buffer,
         device,
         queue,
     )
     .await;
+
+    ExecuteResults {
+        patient_workgroup_results: local_patient_workgroup_results,
+        hasty_workgroup_results: local_hasty_workgroup_results,
+    }
 }
 
 async fn get_data<T: bytemuck::Pod>(
