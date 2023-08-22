@@ -25,6 +25,7 @@ impl AdapterContext {
 
 #[derive(Debug)]
 pub struct Instance {
+    /// Set when a canvas is provided, and used to implement [`Instance::enumerate_adapters()`].
     webgl2_context: Mutex<Option<web_sys::WebGl2RenderingContext>>,
 }
 
@@ -84,6 +85,8 @@ impl Instance {
             .dyn_into()
             .expect("canvas context is not a WebGl2RenderingContext");
 
+        // It is not inconsistent to overwrite an existing context, because the only thing that
+        // `self.webgl2_context` is used for is producing the response to `enumerate_adapters()`.
         *self.webgl2_context.lock() = Some(webgl2_context.clone());
 
         Ok(Surface {

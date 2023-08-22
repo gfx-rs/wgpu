@@ -76,6 +76,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 - Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 - Add validation in accordance with WebGPU `setViewport` valid usage for `x`, `y` and `this.[[attachment_size]]`. By @James2022-rgb in [#4058](https://github.com/gfx-rs/wgpu/pull/4058)
 - `wgpu::CreateSurfaceError` now gives details of the failure, but no longer implements `PartialEq`. By @kpreid in [#4066](https://github.com/gfx-rs/wgpu/pull/4066)
+- Make `WGPU_POWER_PREF=none` a valid value. By @fornwall in [4076](https://github.com/gfx-rs/wgpu/pull/4076)
 
 #### Vulkan
 
@@ -99,6 +100,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 #### DX12
 
 - DX12 doesn't support `Features::POLYGON_MODE_POINT``. By @teoxoy in [#4032](https://github.com/gfx-rs/wgpu/pull/4032).
+- Set `Features::VERTEX_WRITABLE_STORAGE` based on the right feature level. By @teoxoy in [#4033](https://github.com/gfx-rs/wgpu/pull/4033).
 
 ### Documentation
 
@@ -194,6 +196,7 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 #### DX12
 
 - Disable suballocation on Intel Iris(R) Xe. By @xiaopengli89 in [#3668](https://github.com/gfx-rs/wgpu/pull/3668)
+- Change the `max_buffer_size` limit from `u64::MAX` to `i32::MAX`. By @nical in [#4020](https://github.com/gfx-rs/wgpu/pull/4020)
 
 #### WebGPU
 
