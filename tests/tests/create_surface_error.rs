@@ -14,6 +14,7 @@ fn canvas_get_context_returned_null() {
     // Using a context id that is not "webgl2" or "webgpu" will render the canvas unusable by wgpu.
     canvas_g.canvas.get_context("2d").unwrap();
 
+    #[allow(clippy::redundant_clone)] // false positive — can't and shouldn't move out.
     let error = instance
         .create_surface_from_canvas(canvas_g.canvas.clone())
         .unwrap_err();
