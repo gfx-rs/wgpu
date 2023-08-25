@@ -321,7 +321,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             _ => {}
         }
     }
-    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {}
+    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {
+        // TODO: If MTLCounterSamplingPoint::AtDrawBoundary/AtBlitBoundary/AtDispatchBoundary is supported,
+        //       we don't need to insert a new encoder, but can instead use respective current one.
+        //let encoder = self.enter_any().unwrap_or_else(|| self.enter_blit());
+
+        // TODO: Otherwise, we need to create a new blit command encoder with a descriptor that inserts the timestamps.
+        // Note that as of writing creating a new encoder is not exposed by the metal crate.
+        // https://developer.apple.com/documentation/metal/mtlcommandbuffer/3564431-makeblitcommandencoder
+
+        // TODO: Enable respective test in `examples/timestamp-queries/src/tests.rs`.
+    }
+
     unsafe fn reset_queries(&mut self, set: &super::QuerySet, range: Range<u32>) {
         let encoder = self.enter_blit();
         let raw_range = metal::NSRange {
@@ -339,14 +350,27 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         _: wgt::BufferSize, // Metal doesn't support queries that are bigger than a single element are not supported
     ) {
         let encoder = self.enter_blit();
-        let size = (range.end - range.start) as u64 * crate::QUERY_SIZE;
-        encoder.copy_from_buffer(
-            &set.raw_buffer,
-            range.start as u64 * crate::QUERY_SIZE,
-            &buffer.raw,
-            offset,
-            size,
-        );
+        match set.ty {
+            wgt::QueryType::Occlusion => {
+                let size = (range.end - range.start) as u64 * crate::QUERY_SIZE;
+                encoder.copy_from_buffer(
+                    &set.raw_buffer,
+                    range.start as u64 * crate::QUERY_SIZE,
+                    &buffer.raw,
+                    offset,
+                    size,
+                );
+            }
+            wgt::QueryType::Timestamp => {
+                encoder.resolve_counters(
+                    set.counter_sample_buffer.as_ref().unwrap(),
+                    metal::NSRange::new(range.start as u64, range.end as u64),
+                    &buffer.raw,
+                    offset,
+                );
+            }
+            wgt::QueryType::PipelineStatistics(_) => todo!(),
+        }
     }
 
     // render
@@ -361,7 +385,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPassDescriptor::new();
-            //TODO: set visibility results buffer
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
@@ -428,6 +451,29 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     at_descriptor.set_load_action(load_action);
                     at_descriptor.set_store_action(store_action);
                 }
+            }
+
+            if let Some(ref timestamp_writes) = desc.timestamp_writes {
+                let sba_descriptor = descriptor.sample_buffer_attachments().object_at(0).unwrap();
+                sba_descriptor.set_sample_buffer(
+                    timestamp_writes
+                        .query_set
+                        .counter_sample_buffer
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                if let Some(start_index) = timestamp_writes.beginning_of_pass_write_index {
+                    sba_descriptor.set_start_of_vertex_sample_index(start_index as _);
+                }
+                if let Some(end_index) = timestamp_writes.end_of_pass_write_index {
+                    sba_descriptor.set_end_of_fragment_sample_index(end_index as _);
+                }
+            }
+
+            if let Some(occlusion_query_set) = desc.occlusion_query_set {
+                descriptor
+                    .set_visibility_result_buffer(Some(occlusion_query_set.raw_buffer.as_ref()))
             }
 
             let raw = self.raw_cmd_buf.as_ref().unwrap();
@@ -910,18 +956,44 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
         self.begin_pass();
 
-        let raw = self.raw_cmd_buf.as_ref().unwrap();
         debug_assert!(self.state.blit.is_none());
         debug_assert!(self.state.compute.is_none());
         debug_assert!(self.state.render.is_none());
+
+        let raw = self.raw_cmd_buf.as_ref().unwrap();
+
         objc::rc::autoreleasepool(|| {
-            let encoder = raw.new_compute_command_encoder();
+            let descriptor = metal::ComputePassDescriptor::new();
+
+            if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
+                let sba_descriptor = descriptor
+                    .sample_buffer_attachments()
+                    .object_at(0 as _)
+                    .unwrap();
+                sba_descriptor.set_sample_buffer(
+                    timestamp_writes
+                        .query_set
+                        .counter_sample_buffer
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                if let Some(start_index) = timestamp_writes.beginning_of_pass_write_index {
+                    sba_descriptor.set_start_of_encoder_sample_index(start_index as _);
+                }
+                if let Some(end_index) = timestamp_writes.end_of_pass_write_index {
+                    sba_descriptor.set_end_of_encoder_sample_index(end_index as _);
+                }
+            }
+
+            let encoder = raw.compute_command_encoder_with_descriptor(descriptor);
             if let Some(label) = desc.label {
                 encoder.set_label(label);
             }
+
             self.state.compute = Some(encoder.to_owned());
         });
     }

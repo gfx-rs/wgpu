@@ -576,6 +576,7 @@ impl super::Adapter {
             },
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
+            max_non_sampler_bindings: std::u32::MAX,
         };
 
         let mut workarounds = super::Workarounds::empty();
@@ -606,7 +607,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[allow(clippy::drop_ref)]
+        #[cfg_attr(target_arch = "wasm32", allow(clippy::drop_ref))]
         drop(gl);
 
         Some(crate::ExposedAdapter {

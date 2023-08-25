@@ -1,5 +1,4 @@
 use crate::{binding_model::BindEntryMap, FastHashMap, FastHashSet};
-use naga::valid::GlobalUse;
 use std::{collections::hash_map::Entry, fmt};
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -112,7 +111,7 @@ struct SpecializationConstant {
 struct EntryPoint {
     inputs: Vec<Varying>,
     outputs: Vec<Varying>,
-    resources: Vec<(naga::Handle<Resource>, GlobalUse)>,
+    resources: Vec<naga::Handle<Resource>>,
     #[allow(unused)]
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
@@ -121,7 +120,6 @@ struct EntryPoint {
 
 #[derive(Debug)]
 pub struct Interface {
-    features: wgt::Features,
     limits: wgt::Limits,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
@@ -174,11 +172,6 @@ pub enum BindingError {
     Missing,
     #[error("Visibility flags don't include the shader stage")]
     Invisible,
-    #[error("The shader requires the load/store access flags {required:?} but only {allowed:?} is allowed")]
-    WrongUsage {
-        required: GlobalUse,
-        allowed: GlobalUse,
-    },
     #[error("Type on the shader side does not match the pipeline binding")]
     WrongType,
     #[error("Storage class {binding:?} doesn't match the shader {shader:?}")]
@@ -206,9 +199,9 @@ pub enum BindingError {
     #[error("Texture format {0:?} is not supported for storage use")]
     BadStorageFormat(wgt::TextureFormat),
     #[error(
-        "Storage texture usage {0:?} doesn't have a matching supported `StorageTextureAccess`"
+        "Storage texture with access {0:?} doesn't have a matching supported `StorageTextureAccess`"
     )]
-    UnsupportedTextureStorageAccess(GlobalUse),
+    UnsupportedTextureStorageAccess(naga::StorageAccess),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -379,43 +372,32 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
 }
 
 impl Resource {
-    fn check_binding_use(
-        &self,
-        entry: &BindGroupLayoutEntry,
-        shader_usage: GlobalUse,
-    ) -> Result<(), BindingError> {
-        let allowed_usage = match self.ty {
+    fn check_binding_use(&self, entry: &BindGroupLayoutEntry) -> Result<(), BindingError> {
+        match self.ty {
             ResourceType::Buffer { size } => {
-                let (allowed_usage, min_size) = match entry.ty {
+                let min_size = match entry.ty {
                     BindingType::Buffer {
                         ty,
                         has_dynamic_offset: _,
                         min_binding_size,
                     } => {
-                        let (class, global_use) = match ty {
-                            wgt::BufferBindingType::Uniform => {
-                                (naga::AddressSpace::Uniform, GlobalUse::READ)
-                            }
+                        let class = match ty {
+                            wgt::BufferBindingType::Uniform => naga::AddressSpace::Uniform,
                             wgt::BufferBindingType::Storage { read_only } => {
-                                let mut global_use = GlobalUse::READ | GlobalUse::QUERY;
-                                global_use.set(GlobalUse::WRITE, !read_only);
                                 let mut naga_access = naga::StorageAccess::LOAD;
                                 naga_access.set(naga::StorageAccess::STORE, !read_only);
-                                (
-                                    naga::AddressSpace::Storage {
-                                        access: naga_access,
-                                    },
-                                    global_use,
-                                )
+                                naga::AddressSpace::Storage {
+                                    access: naga_access,
+                                }
                             }
                         };
-                        if !address_space_matches(self.class, class) {
+                        if self.class != class {
                             return Err(BindingError::WrongAddressSpace {
                                 binding: class,
                                 shader: self.class,
                             });
                         }
-                        (global_use, min_binding_size)
+                        min_binding_size
                     }
                     _ => return Err(BindingError::WrongType),
                 };
@@ -425,13 +407,10 @@ impl Resource {
                     }
                     _ => (),
                 }
-                allowed_usage
             }
             ResourceType::Sampler { comparison } => match entry.ty {
                 BindingType::Sampler(ty) => {
-                    if (ty == wgt::SamplerBindingType::Comparison) == comparison {
-                        GlobalUse::READ
-                    } else {
+                    if (ty == wgt::SamplerBindingType::Comparison) != comparison {
                         return Err(BindingError::WrongSamplerComparison);
                     }
                 }
@@ -480,29 +459,26 @@ impl Resource {
                         }
                     }
                 }
-                let (expected_class, usage) = match entry.ty {
+                let expected_class = match entry.ty {
                     BindingType::Texture {
                         sample_type,
                         view_dimension: _,
                         multisampled: multi,
-                    } => {
-                        let class = match sample_type {
-                            wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
-                                kind: naga::ScalarKind::Float,
-                                multi,
-                            },
-                            wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
-                                kind: naga::ScalarKind::Sint,
-                                multi,
-                            },
-                            wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
-                                kind: naga::ScalarKind::Uint,
-                                multi,
-                            },
-                            wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
-                        };
-                        (class, GlobalUse::READ | GlobalUse::QUERY)
-                    }
+                    } => match sample_type {
+                        wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
+                            kind: naga::ScalarKind::Float,
+                            multi,
+                        },
+                        wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
+                            kind: naga::ScalarKind::Sint,
+                            multi,
+                        },
+                        wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
+                            kind: naga::ScalarKind::Uint,
+                            multi,
+                        },
+                        wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
+                    },
                     BindingType::StorageTexture {
                         access,
                         format,
@@ -510,26 +486,15 @@ impl Resource {
                     } => {
                         let naga_format = map_storage_format_to_naga(format)
                             .ok_or(BindingError::BadStorageFormat(format))?;
-                        let (naga_access, usage) = match access {
-                            wgt::StorageTextureAccess::ReadOnly => (
-                                naga::StorageAccess::LOAD,
-                                GlobalUse::READ | GlobalUse::QUERY,
-                            ),
-                            wgt::StorageTextureAccess::WriteOnly => (
-                                naga::StorageAccess::STORE,
-                                GlobalUse::WRITE | GlobalUse::QUERY,
-                            ),
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                (naga::StorageAccess::all(), GlobalUse::all())
-                            }
+                        let naga_access = match access {
+                            wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
+                            wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
+                            wgt::StorageTextureAccess::ReadWrite => naga::StorageAccess::all(),
                         };
-                        (
-                            naga::ImageClass::Storage {
-                                format: naga_format,
-                                access: naga_access,
-                            },
-                            usage,
-                        )
+                        naga::ImageClass::Storage {
+                            format: naga_format,
+                            access: naga_access,
+                        }
                     }
                     _ => return Err(BindingError::WrongType),
                 };
@@ -539,31 +504,19 @@ impl Resource {
                         shader: class,
                     });
                 }
-                usage
             }
         };
 
-        if allowed_usage.contains(shader_usage) {
-            Ok(())
-        } else {
-            Err(BindingError::WrongUsage {
-                required: shader_usage,
-                allowed: allowed_usage,
-            })
-        }
+        Ok(())
     }
 
-    fn derive_binding_type(
-        &self,
-        shader_usage: GlobalUse,
-        features: wgt::Features,
-    ) -> Result<BindingType, BindingError> {
+    fn derive_binding_type(&self) -> Result<BindingType, BindingError> {
         Ok(match self.ty {
             ResourceType::Buffer { size } => BindingType::Buffer {
                 ty: match self.class {
                     naga::AddressSpace::Uniform => wgt::BufferBindingType::Uniform,
-                    naga::AddressSpace::Storage { .. } => wgt::BufferBindingType::Storage {
-                        read_only: !shader_usage.contains(GlobalUse::WRITE),
+                    naga::AddressSpace::Storage { access } => wgt::BufferBindingType::Storage {
+                        read_only: access == naga::StorageAccess::LOAD,
                     },
                     _ => return Err(BindingError::WrongType),
                 },
@@ -606,19 +559,15 @@ impl Resource {
                         view_dimension,
                         multisampled: multi,
                     },
-                    naga::ImageClass::Storage { format, .. } => BindingType::StorageTexture {
-                        access: if !shader_usage.contains(GlobalUse::READ) {
-                            wgt::StorageTextureAccess::WriteOnly
-                        } else if !features
-                            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
-                        {
-                            return Err(BindingError::UnsupportedTextureStorageAccess(
-                                shader_usage,
-                            ));
-                        } else if shader_usage.contains(GlobalUse::WRITE) {
-                            wgt::StorageTextureAccess::ReadWrite
-                        } else {
-                            wgt::StorageTextureAccess::ReadOnly
+                    naga::ImageClass::Storage { format, access } => BindingType::StorageTexture {
+                        access: {
+                            const LOAD_STORE: naga::StorageAccess = naga::StorageAccess::all();
+                            match access {
+                                naga::StorageAccess::LOAD => wgt::StorageTextureAccess::ReadOnly,
+                                naga::StorageAccess::STORE => wgt::StorageTextureAccess::WriteOnly,
+                                LOAD_STORE => wgt::StorageTextureAccess::ReadWrite,
+                                _ => unreachable!(),
+                            }
                         },
                         view_dimension,
                         format: {
@@ -880,12 +829,7 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(
-        module: &naga::Module,
-        info: &naga::valid::ModuleInfo,
-        features: wgt::Features,
-        limits: wgt::Limits,
-    ) -> Self {
+    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -949,11 +893,8 @@ impl Interface {
 
             for (var_handle, var) in module.global_variables.iter() {
                 let usage = info[var_handle];
-                if usage.is_empty() {
-                    continue;
-                }
-                if var.binding.is_some() {
-                    ep.resources.push((resource_mapping[&var_handle], usage));
+                if !usage.is_empty() && var.binding.is_some() {
+                    ep.resources.push(resource_mapping[&var_handle]);
                 }
             }
 
@@ -968,7 +909,6 @@ impl Interface {
         }
 
         Self {
-            features,
             limits,
             resources,
             entry_points,
@@ -1000,7 +940,7 @@ impl Interface {
             .ok_or(StageError::MissingEntryPoint(pair.1))?;
 
         // check resources visibility
-        for &(handle, usage) in entry_point.resources.iter() {
+        for &handle in entry_point.resources.iter() {
             let res = &self.resources[handle];
             let result = match given_layouts {
                 Some(layouts) => {
@@ -1026,13 +966,13 @@ impl Interface {
                                 Err(BindingError::Invisible)
                             }
                         })
-                        .and_then(|entry| res.check_binding_use(entry, usage))
+                        .and_then(|entry| res.check_binding_use(entry))
                 }
                 None => derived_layouts
                     .get_mut(res.bind.group as usize)
                     .ok_or(BindingError::Missing)
                     .and_then(|set| {
-                        let ty = res.derive_binding_type(usage, self.features)?;
+                        let ty = res.derive_binding_type()?;
                         match set.entry(res.bind.binding) {
                             Entry::Occupied(e) if e.get().ty != ty => {
                                 return Err(BindingError::InconsistentlyDerivedType)
@@ -1235,74 +1175,5 @@ impl Interface {
             })
             .collect();
         Ok(outputs)
-    }
-}
-
-fn address_space_matches(shader: naga::AddressSpace, binding: naga::AddressSpace) -> bool {
-    match (shader, binding) {
-        (
-            naga::AddressSpace::Storage {
-                access: access_shader,
-            },
-            naga::AddressSpace::Storage {
-                access: access_pipeline,
-            },
-        ) => {
-            // Allow read- and write-only usages to match read-write layouts:
-            (access_shader & access_pipeline) == access_shader
-        }
-        (a, b) => a == b,
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::address_space_matches;
-
-    #[test]
-    fn address_space_matches_correctly() {
-        assert!(address_space_matches(
-            naga::AddressSpace::Uniform,
-            naga::AddressSpace::Uniform
-        ));
-
-        assert!(!address_space_matches(
-            naga::AddressSpace::Uniform,
-            naga::AddressSpace::Storage {
-                access: naga::StorageAccess::LOAD
-            }
-        ));
-
-        let test_cases = [
-            (naga::StorageAccess::LOAD, naga::StorageAccess::LOAD, true),
-            (naga::StorageAccess::STORE, naga::StorageAccess::LOAD, false),
-            (naga::StorageAccess::LOAD, naga::StorageAccess::STORE, false),
-            (naga::StorageAccess::STORE, naga::StorageAccess::STORE, true),
-            (
-                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
-                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
-                true,
-            ),
-            (
-                naga::StorageAccess::STORE,
-                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
-                true,
-            ),
-            (
-                naga::StorageAccess::LOAD,
-                naga::StorageAccess::LOAD | naga::StorageAccess::STORE,
-                true,
-            ),
-        ];
-
-        for (shader, binding, expect_match) in test_cases {
-            assert_eq!(
-                expect_match,
-                address_space_matches(
-                    naga::AddressSpace::Storage { access: shader },
-                    naga::AddressSpace::Storage { access: binding }
-                )
-            );
-        }
     }
 }

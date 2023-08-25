@@ -112,6 +112,7 @@ pub struct CommandBuffer<A: HalApi> {
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
+    pub(crate) pending_query_resets: QueryResetMap<A>,
     limits: wgt::Limits,
     support_clear_texture: bool,
     #[cfg(feature = "trace")]
@@ -140,6 +141,7 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: Tracker::new(),
             buffer_memory_init_actions: Default::default(),
             texture_memory_actions: Default::default(),
+            pending_query_resets: QueryResetMap::new(),
             limits,
             support_clear_texture: features.contains(wgt::Features::CLEAR_TEXTURE),
             #[cfg(feature = "trace")]
@@ -592,6 +594,10 @@ pub enum PassErrorScope {
     QueryReset,
     #[error("In a write_timestamp command")]
     WriteTimestamp,
+    #[error("In a begin_occlusion_query command")]
+    BeginOcclusionQuery,
+    #[error("In a end_occlusion_query command")]
+    EndOcclusionQuery,
     #[error("In a begin_pipeline_statistics_query command")]
     BeginPipelineStatisticsQuery,
     #[error("In a end_pipeline_statistics_query command")]

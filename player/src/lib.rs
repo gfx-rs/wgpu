@@ -36,7 +36,11 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<
         IdentityPassThrough(PhantomData)
     }
 }
-impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
+impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {
+    fn ids_are_generated_in_wgpu() -> bool {
+        false
+    }
+}
 
 pub trait GlobalPlay {
     fn encode_commands<A: wgc::hal_api::HalApi>(
@@ -121,20 +125,31 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 trace::Command::InsertDebugMarker(marker) => self
                     .command_encoder_insert_debug_marker::<A>(encoder, &marker)
                     .unwrap(),
-                trace::Command::RunComputePass { base } => {
-                    self.command_encoder_run_compute_pass_impl::<A>(encoder, base.as_ref())
-                        .unwrap();
+                trace::Command::RunComputePass {
+                    base,
+                    timestamp_writes,
+                } => {
+                    self.command_encoder_run_compute_pass_impl::<A>(
+                        encoder,
+                        base.as_ref(),
+                        timestamp_writes.as_ref(),
+                    )
+                    .unwrap();
                 }
                 trace::Command::RunRenderPass {
                     base,
                     target_colors,
                     target_depth_stencil,
+                    timestamp_writes,
+                    occlusion_query_set_id,
                 } => {
                     self.command_encoder_run_render_pass_impl::<A>(
                         encoder,
                         base.as_ref(),
                         &target_colors,
                         target_depth_stencil.as_ref(),
+                        timestamp_writes.as_ref(),
+                        occlusion_query_set_id,
                     )
                     .unwrap();
                 }

@@ -96,6 +96,7 @@ impl<A: hal::Api> Example<A> {
             },
             // Can't rely on having DXC available, so use FXC instead
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+            gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {
@@ -681,6 +682,8 @@ impl<A: hal::Api> Example<A> {
             })],
             depth_stencil_attachment: None,
             multiview: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         };
         unsafe {
             ctx.encoder.begin_render_pass(&pass_desc);

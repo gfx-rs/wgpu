@@ -823,6 +823,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
             max_buffer_size,
+            max_non_sampler_bindings: std::u32::MAX,
         }
     }
 
@@ -1312,12 +1313,6 @@ impl super::Adapter {
             None
         };
 
-        let image_checks = if self.private_caps.robust_image_access {
-            naga::proc::BoundsCheckPolicy::Unchecked
-        } else {
-            naga::proc::BoundsCheckPolicy::Restrict
-        };
-
         let naga_options = {
             use naga::back::spv;
 
@@ -1379,8 +1374,12 @@ impl super::Adapter {
                     } else {
                         naga::proc::BoundsCheckPolicy::Restrict
                     },
-                    image_load: image_checks,
-                    image_store: image_checks,
+                    image_load: if self.private_caps.robust_image_access {
+                        naga::proc::BoundsCheckPolicy::Unchecked
+                    } else {
+                        naga::proc::BoundsCheckPolicy::Restrict
+                    },
+                    image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                     // TODO: support bounds checks on binding arrays
                     binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                 },
