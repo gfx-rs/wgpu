@@ -770,14 +770,24 @@ impl<A: HalApi> LifetimeTracker<A> {
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
-                if guard[id].multi_ref_count.dec_and_check_empty() {
-                    log::debug!("Bind group layout {:?} will be destroyed", id);
-                    #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
-                    }
-                    if let Some(lay) = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard) {
-                        self.free_resources.bind_group_layouts.push(lay.raw);
+                let mut bgl_to_check = Some(id);
+                while let Some(id) = bgl_to_check.take() {
+                    let bgl = &guard[id];
+                    if bgl.multi_ref_count.dec_and_check_empty() {
+                        // If This layout points to a compatible one, go over the latter
+                        // to decrement the ref count and potentially destroy it.
+                        bgl_to_check = bgl.compatible_layout;
+
+                        log::debug!("Bind group layout {:?} will be destroyed", id);
+                        #[cfg(feature = "trace")]
+                        if let Some(t) = trace {
+                            t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
+                        }
+                        if let Some(lay) =
+                            hub.bind_group_layouts.unregister_locked(id.0, &mut *guard)
+                        {
+                            self.free_resources.bind_group_layouts.push(lay.raw);
+                        }
                     }
                 }
             }

@@ -36,7 +36,11 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<
         IdentityPassThrough(PhantomData)
     }
 }
-impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
+impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {
+    fn ids_are_generated_in_wgpu() -> bool {
+        false
+    }
+}
 
 pub trait GlobalPlay {
     fn encode_commands<A: wgc::hal_api::HalApi>(

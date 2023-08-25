@@ -243,6 +243,7 @@ impl<A: HalApi> Access<PipelineLayout<A>> for RenderBundle<A> {}
 impl<A: HalApi> Access<BindGroupLayout<A>> for Root {}
 impl<A: HalApi> Access<BindGroupLayout<A>> for Device<A> {}
 impl<A: HalApi> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
+impl<A: HalApi> Access<BindGroupLayout<A>> for QuerySet<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for Root {}
 impl<A: HalApi> Access<BindGroup<A>> for Device<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for BindGroupLayout<A> {}
