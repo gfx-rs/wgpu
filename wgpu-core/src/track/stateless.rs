@@ -188,8 +188,9 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
                     return true;
                 } else {
                     log::info!(
-                        "{:?} is still referenced from {}",
-                        self.metadata.get_resource_unchecked(index).label(),
+                        "{} {:?} is still referenced from {}",
+                        T::TYPE,
+                        id,
                         existing_ref_count
                     );
                 }

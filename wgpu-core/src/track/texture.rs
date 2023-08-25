@@ -23,7 +23,7 @@ use super::{range::RangedStates, PendingTransition};
 use crate::{
     hal_api::HalApi,
     id::{TextureId, TypedId, Valid},
-    resource::{Resource, Texture},
+    resource::Texture,
     storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
@@ -722,11 +722,8 @@ impl<A: HalApi> TextureTracker<A> {
                     return true;
                 } else {
                     log::info!(
-                        "{:?} is still referenced from {}",
-                        self.metadata
-                            .get_resource_unchecked(index)
-                            .as_info()
-                            .label(),
+                        "Texture {:?} is still referenced from {}",
+                        id,
                         existing_ref_count
                     );
                 }
