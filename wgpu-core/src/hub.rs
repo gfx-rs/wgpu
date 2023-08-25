@@ -291,7 +291,7 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
 
         for element in surface_guard.map.iter() {
             if let Element::Occupied(ref surface, _epoch) = *element {
-                if let Some(ref mut present) = *surface.presentation.lock() {
+                if let Some(ref mut present) = surface.presentation.lock().take() {
                     if let Some(device) = present.device.downcast_ref::<A>() {
                         let suf = A::get_surface(surface);
                         unsafe {
