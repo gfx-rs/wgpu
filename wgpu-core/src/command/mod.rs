@@ -52,7 +52,7 @@ pub(crate) enum CommandEncoderStatus {
     Error,
 }
 
-pub(crate) struct CommandEncoder<A: hal::Api> {
+pub(crate) struct CommandEncoder<A: HalApi> {
     raw: A::CommandEncoder,
     list: Vec<A::CommandBuffer>,
     is_open: bool,
@@ -60,7 +60,7 @@ pub(crate) struct CommandEncoder<A: hal::Api> {
 }
 
 //TODO: handle errors better
-impl<A: hal::Api> CommandEncoder<A> {
+impl<A: HalApi> CommandEncoder<A> {
     /// Closes the live encoder
     fn close_and_swap(&mut self) {
         if self.is_open {
