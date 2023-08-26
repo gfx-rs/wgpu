@@ -4,6 +4,12 @@ use wgpu_test::{initialize_test, TestParameters};
 
 use wasm_bindgen_test::*;
 
+struct LayoutDesc {
+    bytes_per_row: u32,
+    rows_per_image: u32,
+    total_size_in_bytes: u32,
+}
+
 fn total_bytes_in_copy(
     texture_format: wgpu::TextureFormat,
     bytes_per_row: u32,
@@ -31,15 +37,18 @@ fn total_bytes_in_copy(
 
 fn test(
     format: wgpu::TextureFormat,
-    bytes_per_row: u32,
-    rows_per_image: u32,
-    total_size_in_bytes: u32,
+    layout_desc: LayoutDesc,
     mip_level: u32,
     mips_count: u32,
     tex_size: wgpu::Extent3d,
     write_size: wgpu::Extent3d,
     copy_size: wgpu::Extent3d,
 ) {
+    let LayoutDesc {
+        bytes_per_row,
+        total_size_in_bytes,
+        rows_per_image,
+    } = layout_desc;
     let parameters = TestParameters::default();
     initialize_test(parameters, |ctx| {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -140,9 +149,11 @@ fn write_texture_subset_2d() {
 
     test(
         format,
-        bytes_per_row,
-        rows_per_image,
-        total_bytes_in_copy,
+        LayoutDesc {
+            bytes_per_row,
+            rows_per_image,
+            total_size_in_bytes: total_bytes_in_copy,
+        },
         0,
         mips_count,
         tex_size,
@@ -178,9 +189,11 @@ fn write_texture_subset_2d_mips() {
 
         test(
             format,
-            bytes_per_row,
-            rows_per_image,
-            total_bytes_in_copy,
+            LayoutDesc {
+                bytes_per_row,
+                rows_per_image,
+                total_size_in_bytes: total_bytes_in_copy,
+            },
             mip_level,
             mips_count,
             tex_size,
@@ -213,9 +226,11 @@ fn write_texture_subset_3d() {
 
     test(
         format,
-        bytes_per_row,
-        rows_per_image,
-        total_bytes_in_copy,
+        LayoutDesc {
+            bytes_per_row,
+            rows_per_image,
+            total_size_in_bytes: total_bytes_in_copy,
+        },
         0,
         mips_count,
         tex_size,
