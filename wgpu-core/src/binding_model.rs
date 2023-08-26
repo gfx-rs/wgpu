@@ -439,6 +439,8 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
+pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
+
 /// Bind group layout.
 ///
 /// The lifetime of BGLs is a bit special. They are only referenced on CPU
@@ -452,6 +454,14 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) raw: Option<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) entries: BindEntryMap,
+    // When a layout created and there already exists a compatible layout the new layout
+    // keeps a reference to the older compatible one. In some places we substitute the
+    // bind group layout id with its compatible sibling.
+    // Since this substitution can come at a cost, it is skipped when wgpu-core generates
+    // its own resource IDs.
+    pub(crate) compatible_layout: Option<Valid<BindGroupLayoutId>>,
+    #[allow(unused)]
+    pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayoutId>,
     #[cfg(debug_assertions)]
@@ -493,6 +503,30 @@ impl<A: HalApi> BindGroupLayout<A> {
     pub(crate) fn raw(&self) -> &A::BindGroupLayout {
         self.raw.as_ref().unwrap()
     }
+}
+
+// If a bindgroup needs to be substitued with its compatible equivalent, return the latter.
+pub(crate) fn try_get_bind_group_layout<A: HalApi>(
+    layouts: &BindGroupLayouts<A>,
+    id: BindGroupLayoutId,
+) -> Option<&BindGroupLayout<A>> {
+    let layout = layouts.get(id).ok()?;
+    if let Some(compat) = layout.compatible_layout {
+        return Some(&layouts[compat]);
+    }
+
+    Some(layout)
+}
+
+pub(crate) fn get_bind_group_layout<A: HalApi>(
+    layouts: &BindGroupLayouts<A>,
+    id: Valid<BindGroupLayoutId>,
+) -> (Valid<BindGroupLayoutId>, &BindGroupLayout<A>) {
+    let layout = &layouts[id];
+    layout
+        .compatible_layout
+        .map(|compat| (compat, &layouts[compat]))
+        .unwrap_or((id, layout))
 }
 
 #[derive(Clone, Debug, Error)]

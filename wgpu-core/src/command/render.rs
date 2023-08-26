@@ -1,5 +1,5 @@
 use crate::{
-    binding_model::BindError,
+    binding_model::{BindError, BindGroupLayouts},
     command::{
         self,
         bind::Binder,
@@ -423,7 +423,11 @@ struct State {
 }
 
 impl State {
-    fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
+    fn is_ready<A: hal::Api>(
+        &self,
+        indexed: bool,
+        bind_group_layouts: &BindGroupLayouts<A>,
+    ) -> Result<(), DrawError> {
         // Determine how many vertex buffers have already been bound
         let vertex_buffer_count = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
         // Compare with the needed quantity
@@ -433,7 +437,7 @@ impl State {
             });
         }
 
-        let bind_mask = self.binder.invalid_mask();
+        let bind_mask = self.binder.invalid_mask(bind_group_layouts);
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
@@ -1817,7 +1821,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect: false,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
+                        state
+                            .is_ready::<A>(indexed, &bind_group_layout_guard)
+                            .map_pass_err(scope)?;
 
                         let last_vertex = first_vertex + vertex_count;
                         let vertex_limit = state.vertex.vertex_limit;
@@ -1857,7 +1863,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect: false,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
+                        state
+                            .is_ready::<A>(indexed, &*bind_group_layout_guard)
+                            .map_pass_err(scope)?;
 
                         //TODO: validate that base_vertex + max_index() is
                         // within the provided range
@@ -1902,7 +1910,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect: true,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
+                        state
+                            .is_ready::<A>(indexed, &*bind_group_layout_guard)
+                            .map_pass_err(scope)?;
 
                         let stride = match indexed {
                             false => mem::size_of::<wgt::DrawIndirectArgs>(),
@@ -1974,7 +1984,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             indirect: true,
                             pipeline: state.pipeline,
                         };
-                        state.is_ready(indexed).map_pass_err(scope)?;
+                        state
+                            .is_ready::<A>(indexed, &*bind_group_layout_guard)
+                            .map_pass_err(scope)?;
 
                         let stride = match indexed {
                             false => mem::size_of::<wgt::DrawIndirectArgs>(),

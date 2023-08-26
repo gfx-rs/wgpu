@@ -1065,26 +1065,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            // If there is an equivalent BGL, just bump the refcount and return it.
-            // This is only applicable for identity filters that are generating new IDs,
-            // so their inputs are `PhantomData` of size 0.
-            if mem::size_of::<Input<G, id::BindGroupLayoutId>>() == 0 {
+            let mut compatible_layout = None;
+            {
                 let bgl_guard = hub.bind_group_layouts.read();
                 if let Some(id) =
                     Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
                 {
-                    return (id, None);
+                    // If there is an equivalent BGL, just bump the refcount and return it.
+                    // This is only applicable if ids are generated in wgpu. In practice:
+                    //  - wgpu users take this branch and return the existing
+                    //    id without using the indirection layer in BindGroupLayout.
+                    //  - Other users like gecko or the replay tool use don't take
+                    //    the branch and instead rely on the indirection to use the
+                    //    proper bind group layout id.
+                    if G::ids_are_generated_in_wgpu() {
+                        return (id, None);
+                    }
+
+                    compatible_layout = Some(id::Valid(id));
                 }
             }
 
-            let layout =
+            let mut layout =
                 match device.create_bind_group_layout(desc.label.borrow_option(), entry_map) {
                     Ok(layout) => layout,
                     Err(e) => break e,
                 };
+            layout.compatible_layout = compatible_layout;
 
             let (id, _) = fid.assign(layout);
             log::info!("Created BindGroupLayout {:?}", id);
+          
             return (id.0, None);
         };
 
@@ -1220,14 +1231,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {
+            let mut bind_group_layout = match hub.bind_group_layouts.get(desc.layout) {              
                 Ok(layout) => layout,
-                Err(_) => break binding_model::CreateBindGroupError::InvalidLayout,
+                Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
-            let bind_group = match device.create_bind_group(&bind_group_layout, desc, hub) {
+
+            let mut layout_id = id::Valid(desc.layout);
+            if let Some(id) = bind_group_layout.compatible_layout {
+                layout_id = id;
+                bind_group_layout = &bind_group_layout_guard[id];
+            }
+
+            let bind_group = match device.create_bind_group(
+                device_id,
+                bind_group_layout,
+                layout_id,
+                desc,
+                hub,
+                &mut token,
+            ) {
                 Ok(bind_group) => bind_group,
                 Err(e) => break e,
             };
+          
             let (id, resource) = fid.assign(bind_group);
             log::info!("Created BindGroup {:?}", id,);
 

@@ -1,6 +1,7 @@
 use crate::{
     binding_model::{
-        BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
+        BindError, BindGroup, BindGroupLayouts, LateMinBufferBindingSizeMismatch,
+        PushConstantUploadError,
     },
     command::{
         bind::Binder,
@@ -282,8 +283,8 @@ struct State<A: HalApi> {
 }
 
 impl<A: HalApi> State<A> {
-    fn is_ready(&self) -> Result<(), DispatchError> {
-        let bind_mask = self.binder.invalid_mask();
+    fn is_ready(&self, bind_group_layouts: &BindGroupLayouts<A>) -> Result<(), DispatchError> {
+        let bind_mask = self.binder.invalid_mask(bind_group_layouts);
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DispatchError::IncompatibleBindGroup {
@@ -398,6 +399,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let pipeline_layout_guard = hub.pipeline_layouts.read();
         let bind_group_guard = hub.bind_groups.read();
+        let bind_group_layout_guard = hub.bind_group_layouts.read();
         let pipeline_guard = hub.compute_pipelines.read();
         let query_set_guard = hub.query_sets.read();
         let buffer_guard = hub.buffers.read();
@@ -655,7 +657,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         indirect: false,
                         pipeline: state.pipeline,
                     };
-                    state.is_ready().map_pass_err(scope)?;
+                    state
+                        .is_ready(&*bind_group_layout_guard)
+                        .map_pass_err(scope)?;
+                  
                     state
                         .flush_states(
                             raw,
@@ -692,7 +697,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         pipeline: state.pipeline,
                     };
 
-                    state.is_ready().map_pass_err(scope)?;
+                    state
+                        .is_ready(&*bind_group_layout_guard)
+                        .map_pass_err(scope)?;
 
                     device
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)

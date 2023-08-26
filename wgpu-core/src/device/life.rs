@@ -869,26 +869,35 @@ impl<A: HalApi> LifetimeTracker<A> {
         F: FnMut(&id::BindGroupLayoutId),
     {
         let mut bind_group_layouts_locked = hub.bind_group_layouts.write();
-        self.suspected_resources.bind_group_layouts.retain(
+        
+       self.suspected_resources.bind_group_layouts.retain(
             |bind_group_layout_id, bind_group_layout| {
+                let mut result = true;
                 let id = bind_group_layout.as_info().id();
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
-                if bind_group_layouts_locked.is_unique(id.0).unwrap() {
-                    log::debug!("BindGroupLayout {:?} will be removed from registry", id);
-                    f(bind_group_layout_id);
+                let mut bgl_to_check = Some(id);
+                while let Some(id) = bgl_to_check.take() {
+                  if bind_group_layouts_locked.is_unique(id.0).unwrap() {
+                      result = false;
+                      // If This layout points to a compatible one, go over the latter
+                      // to decrement the ref count and potentially destroy it.
+                      bgl_to_check = bgl.compatible_layout;
 
-                    if let Some(lay) = hub
-                        .bind_group_layouts
-                        .unregister_locked(id.0, &mut *bind_group_layouts_locked)
-                    {
-                        self.free_resources.bind_group_layouts.push(lay);
+                      log::debug!("BindGroupLayout {:?} will be removed from registry", id);
+                      f(bind_group_layout_id);
+
+                      if let Some(lay) = hub
+                          .bind_group_layouts
+                          .unregister_locked(id.0, &mut *bind_group_layouts_locked)
+                      {
+                          self.free_resources.bind_group_layouts.push(lay);
+                      }
                     }
-                    return false;
                 }
-                true
+                result
             },
         );
         self

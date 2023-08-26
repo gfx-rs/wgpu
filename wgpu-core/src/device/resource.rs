@@ -1,7 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model, command, conv,
+    binding_model::{self, get_bind_group_layout, try_get_bind_group_layout}, command, conv,
     device::life::{LifetimeTracker, WaitIdleError},
     device::queue::PendingWrites,
     device::{
@@ -1375,7 +1375,7 @@ impl<A: HalApi> Device<A> {
     ) -> Option<id::BindGroupLayoutId> {
         guard
             .iter(self_id.backend())
-            .find(|&(_, bgl)| bgl.device.info.id().0 == self_id && bgl.entries == *entry_map)
+            .find(|&(_, bgl)| bgl.device.info.id().0 == self_id && bgl.compatible_layout.is_none() && bgl.entries == *entry_map)
             .map(|(id, _)| id)
     }
 
@@ -1625,6 +1625,7 @@ impl<A: HalApi> Device<A> {
             info: ResourceInfo::new(label.unwrap_or("<BindGroupLayoyt>")),
             #[cfg(debug_assertions)]
             label: label.unwrap_or("").to_string(),
+            compatible_layout: None,
         })
     }
 
@@ -1796,6 +1797,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_bind_group<G: GlobalIdentityHandlerFactory>(
         self: &Arc<Self>,
         layout: &binding_model::BindGroupLayout<A>,
+        layout_id: id::Valid<id::BindGroupLayoutId>,
         desc: &binding_model::BindGroupDescriptor,
         hub: &Hub<A, G>,
     ) -> Result<binding_model::BindGroup<A>, binding_model::CreateBindGroupError> {
@@ -2029,7 +2031,7 @@ impl<A: HalApi> Device<A> {
         Ok(binding_model::BindGroup {
             raw: Some(raw),
             device: self.clone(),
-            layout_id: id::Valid(desc.layout),
+            layout_id,
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             used,
             used_buffer_ranges,
@@ -2277,7 +2279,7 @@ impl<A: HalApi> Device<A> {
         let bgl_vec = desc
             .bind_group_layouts
             .iter()
-            .map(|&id| bgl_guard.get(id).unwrap().raw())
+            .map(|&id| &try_get_bind_group_layout(bgl_guard, id).unwrap().raw())
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
@@ -2301,7 +2303,12 @@ impl<A: HalApi> Device<A> {
             bind_group_layout_ids: desc
                 .bind_group_layouts
                 .iter()
-                .map(|&id| id::Valid(id))
+                .map(|&id| {
+                    // manually add a dependency to BGL
+                    let (id, layout) = get_bind_group_layout(bgl_guard, id::Valid(id));
+                    layout.multi_ref_count.inc();
+                    id
+                })
                 .collect(),
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
         })
