@@ -74,9 +74,9 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
     type SurfaceId: ContextId + WasmNotSend + WasmNotSync;
     type SurfaceData: ContextData;
 
-    type BlasId: ContextId + Send + Sync;
+    type BlasId: ContextId + WasmNotSend + WasmNotSync;
     type BlasData: ContextData;
-    type TlasId: ContextId + Send + Sync;
+    type TlasId: ContextId + WasmNotSend + WasmNotSync;
     type TlasData: ContextData;
 
     type SurfaceOutputDetail: WasmNotSend + WasmNotSync + 'static;
