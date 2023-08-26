@@ -7,11 +7,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
-    hal_api::HalApi,
-    id::TypedId,
-    resource::Resource,
-    storage::Storage,
-    track::ResourceMetadata,
+    hal_api::HalApi, id::TypedId, resource::Resource, storage::Storage, track::ResourceMetadata,
 };
 
 /// Stores all the resources that a bind group stores.
@@ -32,8 +28,7 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
     pub(crate) fn optimize(&mut self) {
-        self.resources
-            .sort_unstable_by_key(|&(id, _)| id.unzip().0);
+        self.resources.sort_unstable_by_key(|&(id, _)| id.unzip().0);
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.

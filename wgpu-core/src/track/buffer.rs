@@ -312,12 +312,7 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(
-        &mut self,
-        id: BufferId,
-        resource: Arc<Buffer<A>>,
-        state: BufferUses,
-    ) {
+    pub fn insert_single(&mut self, id: BufferId, resource: Arc<Buffer<A>>, state: BufferUses) {
         let index = id.unzip().0 as usize;
 
         self.allow_index(index);

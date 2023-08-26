@@ -1260,10 +1260,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             for texture_view in cmd_buf_trackers.views.used_resources() {
                                 texture_view.info.use_at(submit_index);
                                 if texture_view.is_unique() {
-                                    device.temp_suspected.lock().texture_views.insert(
-                                        texture_view.as_info().id(),
-                                        texture_view.clone(),
-                                    );
+                                    device
+                                        .temp_suspected
+                                        .lock()
+                                        .texture_views
+                                        .insert(texture_view.as_info().id(), texture_view.clone());
                                 }
                             }
                             {

@@ -61,10 +61,7 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     pub fn assign(self, mut value: T) -> (I, Arc<T>) {
         value.as_info_mut().set_id(self.id);
         self.data.write().insert(self.id, Arc::new(value));
-        (
-            self.id,
-            self.data.read().get(self.id).unwrap().clone(),
-        )
+        (self.id, self.data.read().get(self.id).unwrap().clone())
     }
 
     pub fn assign_error(self, label: &str) -> I {

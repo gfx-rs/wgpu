@@ -361,9 +361,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     pub fn post_submit(&mut self) {
         for v in self.future_suspected_buffers.drain(..).take(1) {
-            self.suspected_resources
-                .buffers
-                .insert(v.as_info().id(), v);
+            self.suspected_resources.buffers.insert(v.as_info().id(), v);
         }
         for v in self.future_suspected_textures.drain(..).take(1) {
             self.suspected_resources
@@ -490,7 +488,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("Bundle {:?} is removed from registry", id);
                     f(bundle_id);
 
-                    if let Some(res) = hub.render_bundles.unregister(id) {
+                    if let Ok(res) = hub.render_bundles.get(id) {
                         for v in res.used.buffers.used_resources() {
                             self.suspected_resources
                                 .buffers
@@ -545,7 +543,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("BindGroup {:?} is removed from registry", id);
                     f(bind_group_id);
 
-                    if let Some(res) = hub.bind_groups.unregister(id) {
+                    if let Ok(res) = hub.bind_groups.get(id) {
                         for v in res.used.buffers.used_resources() {
                             self.suspected_resources
                                 .buffers
@@ -607,7 +605,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("TextureView {:?} is removed from registry", id);
                     f(view_id);
 
-                    if let Some(res) = hub.texture_views.unregister(id) {
+                    if let Ok(res) = hub.texture_views.get(id) {
                         if let Some(parent_texture) = res.parent.as_ref() {
                             self.suspected_resources
                                 .textures
@@ -649,7 +647,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("Texture {:?} is removed from registry", id);
                     f(texture_id);
 
-                    if let Some(res) = hub.textures.unregister(id) {
+                    if let Ok(res) = hub.textures.get(id) {
                         let submit_index = res.info.submission_index();
                         let non_referenced_resources = self
                             .active
@@ -695,7 +693,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("Sampler {:?} is removed from registry", id);
                     f(sampler_id);
 
-                    if let Some(res) = hub.samplers.unregister(id) {
+                    if let Ok(res) = hub.samplers.get(id) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -732,7 +730,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("Buffer {:?} is removed from registry", id);
                     f(buffer_id);
 
-                    if let Some(res) = hub.buffers.unregister(id) {
+                    if let Ok(res) = hub.buffers.get(id) {
                         let submit_index = res.info.submission_index();
                         if let resource::BufferMapState::Init {
                             ref stage_buffer, ..
@@ -774,7 +772,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("ComputePipeline {:?} is removed from registry", id);
                     f(compute_pipeline_id);
 
-                    if let Some(res) = hub.compute_pipelines.unregister(id) {
+                    if let Ok(res) = hub.compute_pipelines.get(id) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -812,7 +810,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("RenderPipeline {:?} is removed from registry", id);
                     f(render_pipeline_id);
 
-                    if let Some(res) = hub.render_pipelines.unregister(id) {
+                    if let Ok(res) = hub.render_pipelines.get(id) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -921,7 +919,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     log::info!("QuerySet {:?} is removed from registry", id);
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id)));
-                    if let Some(res) = hub.query_sets.unregister(id) {
+                    if let Ok(res) = hub.query_sets.get(id) {
                         let submit_index = res.info.submission_index();
                         self.active
                             .iter_mut()
@@ -1099,7 +1097,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             if is_removed {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
                 log::info!("Buffer {:?} is removed from registry", buffer_id);
-                if let Some(buf) = hub.buffers.unregister(buffer_id) {
+                if let Ok(buf) = hub.buffers.get(buffer_id) {
                     self.free_resources.buffers.push(buf);
                 }
             } else {

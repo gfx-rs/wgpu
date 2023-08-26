@@ -666,10 +666,7 @@ impl RenderBundleEncoder {
         })
     }
 
-    fn check_valid_to_use(
-        &self,
-        device_id: id::DeviceId,
-    ) -> Result<(), RenderBundleErrorInner> {
+    fn check_valid_to_use(&self, device_id: id::DeviceId) -> Result<(), RenderBundleErrorInner> {
         if device_id != self.parent_id {
             return Err(RenderBundleErrorInner::NotValidToUse);
         }
