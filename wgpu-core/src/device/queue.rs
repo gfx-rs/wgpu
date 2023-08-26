@@ -475,7 +475,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (id, _) = fid.assign(staging_buffer);
         log::info!("Created StagingBuffer {:?}", id);
 
-        Ok((id.0, staging_buffer_ptr))
+        Ok((id, staging_buffer_ptr))
     }
 
     pub fn queue_write_staging_buffer<A: HalApi>(
@@ -777,7 +777,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let texture_guard = hub.textures.read();
                     crate::command::clear_texture(
                         &*texture_guard,
-                        id::Valid(destination.texture),
+                        destination.texture,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
                             layer_range,
@@ -1200,7 +1200,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let raw_buf = match buffer.raw {
                                     Some(ref raw) => raw,
                                     None => {
-                                        return Err(QueueSubmitError::DestroyedBuffer(id.0));
+                                        return Err(QueueSubmitError::DestroyedBuffer(id));
                                     }
                                 };
                                 buffer.info.use_at(submit_index);
@@ -1215,11 +1215,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .temp_suspected
                                         .lock()
                                         .buffers
-                                        .insert(id.0, buffer.clone());
+                                        .insert(id, buffer.clone());
                                 } else {
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
-                                        _ => return Err(QueueSubmitError::BufferStillMapped(id.0)),
+                                        _ => return Err(QueueSubmitError::BufferStillMapped(id)),
                                     }
                                 }
                             }
@@ -1227,7 +1227,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let id = texture.info.id();
                                 let should_extend = match *texture.inner.as_ref().unwrap() {
                                     TextureInner::Native { raw: None } => {
-                                        return Err(QueueSubmitError::DestroyedTexture(id.0));
+                                        return Err(QueueSubmitError::DestroyedTexture(id));
                                     }
                                     TextureInner::Native { raw: Some(_) } => false,
                                     TextureInner::Surface { ref has_work, .. } => {
@@ -1241,7 +1241,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .temp_suspected
                                         .lock()
                                         .textures
-                                        .insert(id.0, texture.clone());
+                                        .insert(id, texture.clone());
                                 }
                                 if should_extend {
                                     unsafe {
@@ -1261,7 +1261,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 texture_view.info.use_at(submit_index);
                                 if texture_view.is_unique() {
                                     device.temp_suspected.lock().texture_views.insert(
-                                        texture_view.as_info().id().0,
+                                        texture_view.as_info().id(),
                                         texture_view.clone(),
                                     );
                                 }
@@ -1286,7 +1286,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             .temp_suspected
                                             .lock()
                                             .bind_groups
-                                            .insert(bg.as_info().id().0, bg.clone());
+                                            .insert(bg.as_info().id(), bg.clone());
                                     }
                                 }
                             }
@@ -1297,7 +1297,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
                                     device.temp_suspected.lock().compute_pipelines.insert(
-                                        compute_pipeline.as_info().id().0,
+                                        compute_pipeline.as_info().id(),
                                         compute_pipeline.clone(),
                                     );
                                 }
@@ -1308,7 +1308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
                                     device.temp_suspected.lock().render_pipelines.insert(
-                                        render_pipeline.as_info().id().0,
+                                        render_pipeline.as_info().id(),
                                         render_pipeline.clone(),
                                     );
                                 }
@@ -1320,7 +1320,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .temp_suspected
                                         .lock()
                                         .query_sets
-                                        .insert(query_set.as_info().id().0, query_set.clone());
+                                        .insert(query_set.as_info().id(), query_set.clone());
                                 }
                             }
                             for bundle in cmd_buf_trackers.bundles.used_resources() {
@@ -1340,7 +1340,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .temp_suspected
                                         .lock()
                                         .render_bundles
-                                        .insert(bundle.as_info().id().0, bundle.clone());
+                                        .insert(bundle.as_info().id(), bundle.clone());
                                 }
                             }
                         }
@@ -1431,7 +1431,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 used_surface_textures
                                     .merge_single(
                                         &*texture_guard,
-                                        id::Valid(id),
+                                        id,
                                         None,
                                         hal::TextureUses::PRESENT,
                                     )

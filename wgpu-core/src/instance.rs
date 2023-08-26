@@ -506,7 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id.0
+        id
     }
 
     /// # Safety
@@ -537,7 +537,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id.0
+        id
     }
 
     #[cfg(all(
@@ -568,7 +568,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        Ok(id.0)
+        Ok(id)
     }
 
     #[cfg(all(
@@ -599,7 +599,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        Ok(id.0)
+        Ok(id)
     }
 
     #[cfg(all(feature = "dx12", windows))]
@@ -627,7 +627,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id.0
+        id
     }
 
     #[cfg(all(feature = "dx12", windows))]
@@ -655,7 +655,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (id, _) = self.surfaces.prepare(id_in).assign(surface);
-        id.0
+        id
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {
@@ -719,7 +719,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
             let (id, _) = hub.adapters.prepare(id_backend.clone()).assign(adapter);
-            list.push(id.0);
+            list.push(id);
         }
     }
 
@@ -770,7 +770,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .adapters
                     .prepare(new_id.unwrap())
                     .assign(adapter);
-                Some(id.0)
+                Some(id)
             }
         }
     }
@@ -964,15 +964,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = match A::VARIANT {
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)).0 .0,
+            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)) .0,
             #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
             Backend::Metal => fid.assign(Adapter::new(hal_adapter)).0 .0,
             #[cfg(all(feature = "dx12", windows))]
-            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)).0 .0,
+            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)) .0,
             #[cfg(all(feature = "dx11", windows))]
-            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter)).0 .0,
+            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter)) .0,
             #[cfg(feature = "gles")]
-            Backend::Gl => fid.assign(Adapter::new(hal_adapter)).0 .0,
+            Backend::Gl => fid.assign(Adapter::new(hal_adapter)) .0,
             _ => unreachable!(),
         };
         log::info!("Created Adapter {:?}", id);
@@ -1095,15 +1095,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (device_id, _) = device_fid.assign(device);
             log::info!("Created Device {:?}", device_id);
 
-            let device = hub.devices.get(device_id.0).unwrap();
+            let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
             let (queue_id, _) = queue_fid.assign(queue);
             log::info!("Created Queue {:?}", queue_id);
 
-            device.queue_id.write().replace(queue_id.0);
+            device.queue_id.write().replace(queue_id);
 
-            return (device_id.0, queue_id.0, None);
+            return (device_id, queue_id, None);
         };
 
         let device_id = device_fid.assign_error(desc.label.borrow_or_default());
@@ -1143,15 +1143,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (device_id, _) = devices_fid.assign(device);
             log::info!("Created Device {:?}", device_id);
 
-            let device = hub.devices.get(device_id.0).unwrap();
+            let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
             let (queue_id, _) = queues_fid.assign(queue);
             log::info!("Created Queue {:?}", queue_id);
 
-            device.queue_id.write().replace(queue_id.0);
+            device.queue_id.write().replace(queue_id);
 
-            return (device_id.0, queue_id.0, None);
+            return (device_id, queue_id, None);
         };
 
         let device_id = devices_fid.assign_error(desc.label.borrow_or_default());

@@ -58,7 +58,7 @@ impl<A: HalApi> Drop for ShaderModule<A> {
         if let Some(raw) = self.raw.take() {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *self.device.trace.lock() {
-                trace.add(trace::Action::DestroyShaderModule(self.info.id().0));
+                trace.add(trace::Action::DestroyShaderModule(self.info.id()));
             }
             unsafe {
                 use hal::Device;

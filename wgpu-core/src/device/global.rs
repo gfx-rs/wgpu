@@ -249,7 +249,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .buffers
                 .insert_single(id, resource, buffer_use);
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -608,7 +608,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 array_layer_count: Some(1),
                             },
                         };
-                        let view = device.create_texture_view(&resource, id.0, &desc).unwrap();
+                        let view = device.create_texture_view(&resource, id, &desc).unwrap();
                         clear_views.push(Arc::new(view));
                     }
                 }
@@ -620,12 +620,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             device.trackers.lock().textures.insert_single(
-                id.0,
+                id,
                 resource,
                 hal::TextureUses::UNINITIALIZED,
             );
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -690,12 +690,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             log::info!("Created Texture {:?} with {:?}", id, desc);
 
             device.trackers.lock().textures.insert_single(
-                id.0,
+                id,
                 resource,
                 hal::TextureUses::UNINITIALIZED,
             );
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -744,7 +744,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .buffers
                 .insert_single(id, buffer, hal::BufferUses::empty());
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -904,7 +904,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, resource) = fid.assign(view);
             log::info!("Created TextureView {:?}", id);
             device.trackers.lock().views.insert_single(id, resource);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -989,7 +989,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             log::info!("Created Sampler {:?}", id);
             device.trackers.lock().samplers.insert_single(id, resource);
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1096,7 +1096,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, _) = fid.assign(layout);
             log::info!("Created BindGroupLayout {:?}", id);
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1170,7 +1170,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (id, _) = fid.assign(layout);
             log::info!("Created PipelineLayout {:?}", id);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1254,7 +1254,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .bind_groups
                 .insert_single(id, resource);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1341,7 +1341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let (id, _) = fid.assign(shader);
             log::info!("Created ShaderModule {:?} with {:?}", id, desc);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1392,7 +1392,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let (id, _) = fid.assign(shader);
             log::info!("Created ShaderModule {:?} with {:?}", id, desc);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1451,7 +1451,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (id, _) = fid.assign(command_buffer);
             log::info!("Created CommandBuffer {:?} with {:?}", id, desc);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1541,7 +1541,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, resource) = fid.assign(render_bundle);
             log::info!("Created RenderBundle {:?}", id);
             device.trackers.lock().bundles.insert_single(id, resource);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1614,7 +1614,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .query_sets
                 .insert_single(id, resource);
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error("");
@@ -1697,7 +1697,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .render_pipelines
                 .insert_single(id, resource);
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1727,7 +1727,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
 
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = hub
@@ -1760,7 +1760,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
         };
-        let layout_id = layout.as_info().id().0;
+        let layout_id = layout.as_info().id();
         let device = &pipeline.device;
         let mut life_lock = device.lock_life();
         life_lock
@@ -1818,7 +1818,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .lock()
                 .compute_pipelines
                 .insert_single(id, resource);
-            return (id.0, None);
+            return (id, None);
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
@@ -1851,7 +1851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
 
-            return (layout.as_info().id().0, None);
+            return (layout.as_info().id(), None);
         };
 
         let id = hub
@@ -1890,7 +1890,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .suspected_resources
             .compute_pipelines
             .insert(compute_pipeline_id, pipeline.clone());
-        let layout_id = layout.as_info().id().0;
+        let layout_id = layout.as_info().id();
         life_lock
             .suspected_resources
             .pipeline_layouts

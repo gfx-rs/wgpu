@@ -54,14 +54,14 @@ where
     _phantom: PhantomData<I>,
 }
 
-impl<T, I> ops::Index<id::Valid<I>> for Storage<T, I>
+impl<T, I> ops::Index<I> for Storage<T, I>
 where
     T: Resource<I>,
     I: id::TypedId,
 {
     type Output = Arc<T>;
-    fn index(&self, id: id::Valid<I>) -> &Arc<T> {
-        self.get(id.0).unwrap()
+    fn index(&self, id: I) -> &Arc<T> {
+        self.get(id).unwrap()
     }
 }
 impl<T, I> Storage<T, I>

@@ -4,7 +4,7 @@ use crate::{
     hal_api::HalApi,
     id::{
         BindGroupId, BindGroupLayoutId, BufferId, PipelineLayoutId, SamplerId, TextureId,
-        TextureViewId, Valid,
+        TextureViewId, 
     },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo},
@@ -519,8 +519,8 @@ pub(crate) fn try_get_bind_group_layout<A: HalApi>(
 
 pub(crate) fn get_bind_group_layout<A: HalApi>(
     layouts: &BindGroupLayouts<A>,
-    id: Valid<BindGroupLayoutId>,
-) -> (Valid<BindGroupLayoutId>, &Arc<BindGroupLayout<A>>) {
+    id: BindGroupLayoutId,
+) -> (BindGroupLayoutId, &Arc<BindGroupLayout<A>>) {
     let layout = &layouts[id];
     layout
         .compatible_layout

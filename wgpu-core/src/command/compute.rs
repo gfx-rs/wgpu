@@ -308,7 +308,7 @@ impl<A: HalApi> State<A> {
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-        indirect_buffer: Option<id::Valid<id::BufferId>>,
+        indirect_buffer: Option<id::BufferId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             unsafe {
@@ -531,7 +531,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let pipeline_layout = pipeline_layout.as_ref().unwrap().clone();
                     let entries = state.binder.assign_group(
                         index as usize,
-                        id::Valid(bind_group_id),
+                        bind_group_id,
                         bind_group,
                         &temp_offsets,
                     );
@@ -744,7 +744,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
-                            Some(id::Valid(buffer_id)),
+                            Some(buffer_id),
                         )
                         .map_pass_err(scope)?;
                     unsafe {

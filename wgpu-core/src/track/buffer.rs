@@ -10,7 +10,7 @@ use std::{borrow::Cow, marker::PhantomData, sync::Arc, vec::Drain};
 use super::PendingTransition;
 use crate::{
     hal_api::HalApi,
-    id::{BufferId, TypedId, Valid},
+    id::{BufferId, TypedId},
     resource::Buffer,
     storage::Storage,
     track::{
@@ -43,7 +43,7 @@ impl ResourceUses for BufferUses {
 /// Stores all the buffers that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
-    buffers: Vec<(Valid<BufferId>, Arc<Buffer<A>>, BufferUses)>,
+    buffers: Vec<(BufferId, Arc<Buffer<A>>, BufferUses)>,
 
     _phantom: PhantomData<A>,
 }
@@ -62,11 +62,11 @@ impl<A: HalApi> BufferBindGroupState<A> {
     /// accesses will be in a constant assending order.
     pub(crate) fn optimize(&mut self) {
         self.buffers
-            .sort_unstable_by_key(|&(id, _, _)| id.0.unzip().0);
+            .sort_unstable_by_key(|&(id, _, _)| id.unzip().0);
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
-    pub fn used_ids(&self) -> impl Iterator<Item = Valid<BufferId>> + '_ {
+    pub fn used_ids(&self) -> impl Iterator<Item = BufferId> + '_ {
         self.buffers.iter().map(|&(id, _, _)| id)
     }
 
@@ -84,7 +84,7 @@ impl<A: HalApi> BufferBindGroupState<A> {
     ) -> Option<&'a Buffer<A>> {
         let buffer = storage.get(id).ok()?;
 
-        self.buffers.push((Valid(id), buffer.clone(), state));
+        self.buffers.push((id, buffer.clone(), state));
 
         Some(buffer)
     }
@@ -150,7 +150,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
         for &(id, ref resource, state) in &bind_group.buffers {
-            let index = id.0.unzip().0 as usize;
+            let index = id.unzip().0 as usize;
 
             unsafe {
                 insert_or_merge(
@@ -314,11 +314,11 @@ impl<A: HalApi> BufferTracker<A> {
     /// the vectors will be extended. A call to set_size is not needed.
     pub fn insert_single(
         &mut self,
-        id: Valid<BufferId>,
+        id: BufferId,
         resource: Arc<Buffer<A>>,
         state: BufferUses,
     ) {
-        let index = id.0.unzip().0 as usize;
+        let index = id.unzip().0 as usize;
 
         self.allow_index(index);
 
@@ -481,7 +481,7 @@ impl<A: HalApi> BufferTracker<A> {
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut BufferUsageScope<A>,
-        id_source: impl IntoIterator<Item = Valid<BufferId>>,
+        id_source: impl IntoIterator<Item = BufferId>,
     ) {
         let incoming_size = scope.state.len();
         if incoming_size > self.start.len() {
@@ -489,7 +489,7 @@ impl<A: HalApi> BufferTracker<A> {
         }
 
         for id in id_source {
-            let (index32, _, _) = id.0.unzip();
+            let (index32, _, _) = id.unzip();
             let index = index32 as usize;
 
             scope.tracker_assert_in_bounds(index);
@@ -539,8 +539,8 @@ impl<A: HalApi> BufferTracker<A> {
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
     /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    pub fn remove_abandoned(&mut self, id: Valid<BufferId>) -> bool {
-        let index = id.0.unzip().0 as usize;
+    pub fn remove_abandoned(&mut self, id: BufferId) -> bool {
+        let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
             return false;

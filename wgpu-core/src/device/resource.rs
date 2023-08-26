@@ -365,56 +365,56 @@ impl<A: HalApi> Device<A> {
                 if resource.is_unique() {
                     temp_suspected
                         .buffers
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.textures.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .textures
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.views.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .texture_views
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.bind_groups.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .bind_groups
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.samplers.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .samplers
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.compute_pipelines.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .compute_pipelines
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.render_pipelines.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .render_pipelines
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
             for resource in trackers.query_sets.used_resources() {
                 if resource.is_unique() {
                     temp_suspected
                         .query_sets
-                        .insert(resource.as_info().id().0, resource.clone());
+                        .insert(resource.as_info().id(), resource.clone());
                 }
             }
         }
@@ -1042,7 +1042,7 @@ impl<A: HalApi> Device<A> {
         Ok(TextureView {
             raw: Some(raw),
             parent: None,
-            parent_id: id::Valid(texture_id),
+            parent_id: texture_id,
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
                 format: resolved_format,
@@ -1380,7 +1380,7 @@ impl<A: HalApi> Device<A> {
         guard
             .iter(self_id.backend())
             .find(|&(_, bgl)| {
-                bgl.device.info.id().0 == self_id
+                bgl.device.info.id() == self_id
                     && bgl.compatible_layout.is_none()
                     && bgl.entries == *entry_map
             })
@@ -1781,17 +1781,17 @@ impl<A: HalApi> Device<A> {
             .textures
             .add_single(
                 texture_guard,
-                view.parent_id.0,
+                view.parent_id,
                 Some(view.selector.clone()),
                 internal_use,
             )
             .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
-                view.parent_id.0,
+                view.parent_id,
             ))?;
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
-            id: view.parent_id.0,
+            id: view.parent_id,
             range: TextureInitRange {
                 mip_range: view.desc.range.mip_range(texture.desc.mip_level_count),
                 layer_range: view
@@ -2314,7 +2314,7 @@ impl<A: HalApi> Device<A> {
                 .bind_group_layouts
                 .iter()
                 .map(|&id| {
-                    let (_, layout) = get_bind_group_layout(bgl_guard, id::Valid(id));
+                    let (_, layout) = get_bind_group_layout(bgl_guard, id);
                     layout.clone()
                 })
                 .collect(),
@@ -2349,7 +2349,7 @@ impl<A: HalApi> Device<A> {
         }
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
-            match Device::deduplicate_bind_group_layout(self.info.id().0, &map, bgl_guard) {
+            match Device::deduplicate_bind_group_layout(self.info.id(), &map, bgl_guard) {
                 Some((dedup_id, _)) => {
                     *bgl_id = dedup_id;
                 }

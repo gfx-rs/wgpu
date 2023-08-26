@@ -22,7 +22,7 @@
 use super::{range::RangedStates, PendingTransition};
 use crate::{
     hal_api::HalApi,
-    id::{TextureId, TypedId, Valid},
+    id::{TextureId, TypedId},
     resource::Texture,
     storage::Storage,
     track::{
@@ -150,7 +150,7 @@ impl ComplexTextureState {
 
 #[derive(Debug)]
 struct TextureBindGroupStateData<A: HalApi> {
-    id: Valid<TextureId>,
+    id: TextureId,
     selector: Option<TextureSelector>,
     texture: Arc<Texture<A>>,
     usage: TextureUses,
@@ -173,7 +173,7 @@ impl<A: HalApi> TextureBindGroupState<A> {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
     pub(crate) fn optimize(&mut self) {
-        self.textures.sort_unstable_by_key(|v| v.id.0.unzip().0);
+        self.textures.sort_unstable_by_key(|v| v.id.unzip().0);
     }
 
     /// Returns a list of all textures tracked. May contain duplicates.
@@ -192,7 +192,7 @@ impl<A: HalApi> TextureBindGroupState<A> {
         let resource = storage.get(id).ok()?;
 
         self.textures.push(TextureBindGroupStateData {
-            id: Valid(id),
+            id,
             selector,
             texture: resource.clone(),
             usage: state,
@@ -352,12 +352,12 @@ impl<A: HalApi> TextureUsageScope<A> {
     pub unsafe fn merge_single(
         &mut self,
         storage: &Storage<Texture<A>, TextureId>,
-        id: Valid<TextureId>,
+        id: TextureId,
         selector: Option<TextureSelector>,
         new_state: TextureUses,
     ) -> Result<(), UsageConflict> {
-        let index = id.0.unzip().0 as usize;
-        let resource = storage.get(id.0).unwrap();
+        let index = id.unzip().0 as usize;
+        let resource = storage.get(id).unwrap();
 
         self.tracker_assert_in_bounds(index);
 
@@ -641,7 +641,7 @@ impl<A: HalApi> TextureTracker<A> {
         }
 
         for t in bind_group_state.textures.iter() {
-            let index = t.id.0.unzip().0 as usize;
+            let index = t.id.unzip().0 as usize;
             scope.tracker_assert_in_bounds(index);
 
             if unsafe { !scope.metadata.contains_unchecked(index) } {
@@ -674,8 +674,8 @@ impl<A: HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    pub fn remove(&mut self, id: Valid<TextureId>) -> bool {
-        let index = id.0.unzip().0 as usize;
+    pub fn remove(&mut self, id: TextureId) -> bool {
+        let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
             return false;
@@ -702,8 +702,8 @@ impl<A: HalApi> TextureTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    pub fn remove_abandoned(&mut self, id: Valid<TextureId>) -> bool {
-        let index = id.0.unzip().0 as usize;
+    pub fn remove_abandoned(&mut self, id: TextureId) -> bool {
+        let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
             return false;

@@ -4,7 +4,7 @@ use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
-    id::{BindGroupId, Valid},
+    id::BindGroupId,
     pipeline::LateSizedBufferGroup,
 };
 
@@ -137,7 +137,7 @@ struct LateBufferBinding {
 
 #[derive(Debug, Default)]
 pub(super) struct EntryPayload {
-    pub(super) group_id: Option<Valid<BindGroupId>>,
+    pub(super) group_id: Option<BindGroupId>,
     pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
     late_buffer_bindings: Vec<LateBufferBinding>,
     /// Since `LateBufferBinding` may contain information about the bindings
@@ -221,12 +221,12 @@ impl<A: HalApi> Binder<A> {
     pub(super) fn assign_group<'a>(
         &'a mut self,
         index: usize,
-        bind_group_id: Valid<BindGroupId>,
+        bind_group_id: BindGroupId,
         bind_group: &BindGroup<A>,
         offsets: &[wgt::DynamicOffset],
     ) -> &'a [EntryPayload] {
         log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        debug_assert_eq!(A::VARIANT, bind_group_id.0.backend());
+        debug_assert_eq!(A::VARIANT, bind_group_id.backend());
 
         let payload = &mut self.payloads[index];
         payload.group_id = Some(bind_group_id);
@@ -257,7 +257,7 @@ impl<A: HalApi> Binder<A> {
         &self.payloads[bind_range]
     }
 
-    pub(super) fn list_active(&self) -> impl Iterator<Item = Valid<BindGroupId>> + '_ {
+    pub(super) fn list_active(&self) -> impl Iterator<Item = BindGroupId> + '_ {
         let payloads = &self.payloads;
         self.manager
             .list_active()

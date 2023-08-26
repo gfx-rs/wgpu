@@ -668,9 +668,9 @@ impl RenderBundleEncoder {
 
     fn check_valid_to_use(
         &self,
-        device_id: id::Valid<id::DeviceId>,
+        device_id: id::DeviceId,
     ) -> Result<(), RenderBundleErrorInner> {
-        if device_id.0 != self.parent_id {
+        if device_id != self.parent_id {
             return Err(RenderBundleErrorInner::NotValidToUse);
         }
 
@@ -1220,7 +1220,7 @@ impl<A: HalApi> State<A> {
 
     /// Return the id of the current pipeline, if any.
     fn pipeline_id(&self) -> Option<id::RenderPipelineId> {
-        self.pipeline.as_ref().map(|p| p.pipeline.as_info().id().0)
+        self.pipeline.as_ref().map(|p| p.pipeline.as_info().id())
     }
 
     /// Return the current pipeline state. Return an error if none is set.
@@ -1378,7 +1378,7 @@ impl<A: HalApi> State<A> {
                         let offsets = &contents.dynamic_offsets;
                         return Some(RenderCommand::SetBindGroup {
                             index: i.try_into().unwrap(),
-                            bind_group_id: contents.bind_group.as_info().id().0,
+                            bind_group_id: contents.bind_group.as_info().id(),
                             num_dynamic_offsets: (offsets.end - offsets.start) as u8,
                         });
                     }

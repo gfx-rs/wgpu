@@ -316,7 +316,7 @@ impl OptionalState {
 
 #[derive(Debug, Default)]
 struct IndexState {
-    bound_buffer_view: Option<(id::Valid<id::BufferId>, Range<BufferAddress>)>,
+    bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
     format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
     limit: u32,
@@ -684,7 +684,7 @@ where
 }
 
 struct RenderAttachment<'a> {
-    texture_id: &'a id::Valid<id::TextureId>,
+    texture_id: &'a id::TextureId,
     selector: &'a TextureSelector,
     usage: hal::TextureUses,
 }
@@ -728,7 +728,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    id: view.parent_id.0,
+                    id: view.parent_id,
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -748,7 +748,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // discard right away be alright since the texture can't be used
             // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent_id.0,
+                texture: view.parent_id,
                 mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
@@ -920,7 +920,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     pending_discard_init_fixups.extend(
                         texture_memory_actions.register_init_action(
                             &TextureInitTrackerAction {
-                                id: view.parent_id.0,
+                                id: view.parent_id,
                                 range: TextureInitRange::from(view.selector.clone()),
                                 kind: MemoryInitKind::NeedsInitializedMemory,
                             },
@@ -956,7 +956,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent_id.0,
+                        texture: view.parent_id,
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
@@ -1206,7 +1206,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for ra in self.render_attachments {
-            if !texture_guard.contains(ra.texture_id.0) {
+            if !texture_guard.contains(*ra.texture_id) {
                 return Err(RenderPassErrorInner::SurfaceTextureDropped);
             }
             let texture = &texture_guard[*ra.texture_id];
@@ -1461,7 +1461,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let pipeline_layout = state.binder.pipeline_layout.clone();
                         let entries = state.binder.assign_group(
                             index as usize,
-                            id::Valid(bind_group_id),
+                            bind_group_id,
                             bind_group,
                             &temp_offsets,
                         );
@@ -1620,7 +1620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Some(s) => offset + s.get(),
                             None => buffer.size,
                         };
-                        state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
+                        state.index.bound_buffer_view = Some((buffer_id, offset..end));
 
                         state.index.format = Some(index_format);
                         state.index.update_limit();
@@ -2304,7 +2304,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .reset_queries(
                     transit,
                     &query_set_guard,
-                    cmd_buf.device.info.id().0.backend(),
+                    cmd_buf.device.info.id().backend(),
                 )
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
