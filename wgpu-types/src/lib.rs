@@ -5861,6 +5861,12 @@ pub enum BindingType {
 
     /// A ray-tracing acceleration structure binding.
     ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var as: acceleration_structure;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
