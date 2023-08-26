@@ -567,11 +567,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                                 .insert(v.as_info().id().0, v.clone());
                         }
 
-                        let bind_group_layout =
-                            hub.bind_group_layouts.get(res.layout_id.0).unwrap();
                         self.suspected_resources
                             .bind_group_layouts
-                            .insert(res.layout_id.0, bind_group_layout);
+                            .insert(res.layout.as_info().id().0, res.layout.clone());
 
                         let submit_index = res.info.submission_index();
                         self.active
@@ -848,11 +846,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .pipeline_layouts
                         .unregister_locked(id.0, &mut *pipeline_layouts_locked)
                     {
-                        for bgl_id in &lay.bind_group_layout_ids {
-                            let bgl = hub.bind_group_layouts.get(bgl_id.0).unwrap();
+                        for bgl in &lay.bind_group_layouts {
                             self.suspected_resources
                                 .bind_group_layouts
-                                .insert(bgl_id.0, bgl);
+                                .insert(bgl.as_info().id().0, bgl.clone());
                         }
                         self.free_resources.pipeline_layouts.push(lay);
                     }
@@ -869,35 +866,36 @@ impl<A: HalApi> LifetimeTracker<A> {
         F: FnMut(&id::BindGroupLayoutId),
     {
         let mut bind_group_layouts_locked = hub.bind_group_layouts.write();
-        
-       self.suspected_resources.bind_group_layouts.retain(
+
+        self.suspected_resources.bind_group_layouts.retain(
             |bind_group_layout_id, bind_group_layout| {
-                let mut result = true;
-                let id = bind_group_layout.as_info().id();
+                let id = bind_group_layout.info.id();
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
-                let mut bgl_to_check = Some(id);
-                while let Some(id) = bgl_to_check.take() {
-                  if bind_group_layouts_locked.is_unique(id.0).unwrap() {
-                      result = false;
-                      // If This layout points to a compatible one, go over the latter
-                      // to decrement the ref count and potentially destroy it.
-                      bgl_to_check = bgl.compatible_layout;
 
-                      log::debug!("BindGroupLayout {:?} will be removed from registry", id);
-                      f(bind_group_layout_id);
+                //Note: this has to happen after all the suspected pipelines are destroyed
+                if bind_group_layouts_locked.is_unique(id.0).unwrap() {
+                    // If This layout points to a compatible one, go over the latter
+                    // to decrement the ref count and potentially destroy it.
+                    //bgl_to_check = bind_group_layout.compatible_layout;
 
-                      if let Some(lay) = hub
-                          .bind_group_layouts
-                          .unregister_locked(id.0, &mut *bind_group_layouts_locked)
-                      {
-                          self.free_resources.bind_group_layouts.push(lay);
-                      }
+                    log::debug!(
+                        "BindGroupLayout {:?} will be removed from registry",
+                        bind_group_layout_id
+                    );
+                    f(bind_group_layout_id);
+
+                    if let Some(lay) = hub
+                        .bind_group_layouts
+                        .unregister_locked(*bind_group_layout_id, &mut *bind_group_layouts_locked)
+                    {
+                        self.free_resources.bind_group_layouts.push(lay);
                     }
+                    return false;
                 }
-                result
+                true
             },
         );
         self

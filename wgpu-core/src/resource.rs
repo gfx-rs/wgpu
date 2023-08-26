@@ -127,6 +127,9 @@ pub trait Resource<Id: TypedId> {
     fn is_unique(self: &Arc<Self>) -> bool {
         self.ref_count() == 1
     }
+    fn is_equal(&self, other: &Self) -> bool {
+        self.as_info().id().0.unzip() == other.as_info().id().0.unzip()
+    }
 }
 
 /// The status code provided to the buffer mapping callback.

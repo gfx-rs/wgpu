@@ -459,7 +459,7 @@ pub struct BindGroupLayout<A: HalApi> {
     // bind group layout id with its compatible sibling.
     // Since this substitution can come at a cost, it is skipped when wgpu-core generates
     // its own resource IDs.
-    pub(crate) compatible_layout: Option<Valid<BindGroupLayoutId>>,
+    pub(crate) compatible_layout: Option<Arc<BindGroupLayout<A>>>,
     #[allow(unused)]
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
@@ -509,23 +509,23 @@ impl<A: HalApi> BindGroupLayout<A> {
 pub(crate) fn try_get_bind_group_layout<A: HalApi>(
     layouts: &BindGroupLayouts<A>,
     id: BindGroupLayoutId,
-) -> Option<&BindGroupLayout<A>> {
+) -> Option<&Arc<BindGroupLayout<A>>> {
     let layout = layouts.get(id).ok()?;
-    if let Some(compat) = layout.compatible_layout {
-        return Some(&layouts[compat]);
+    if let Some(compat) = layout.compatible_layout.as_ref() {
+        return Some(compat);
     }
-
     Some(layout)
 }
 
 pub(crate) fn get_bind_group_layout<A: HalApi>(
     layouts: &BindGroupLayouts<A>,
     id: Valid<BindGroupLayoutId>,
-) -> (Valid<BindGroupLayoutId>, &BindGroupLayout<A>) {
+) -> (Valid<BindGroupLayoutId>, &Arc<BindGroupLayout<A>>) {
     let layout = &layouts[id];
     layout
         .compatible_layout
-        .map(|compat| (compat, &layouts[compat]))
+        .as_ref()
+        .map(|compat| (compat.as_info().id(), compat))
         .unwrap_or((id, layout))
 }
 
@@ -630,7 +630,7 @@ pub struct PipelineLayout<A: HalApi> {
     pub(crate) raw: Option<A::PipelineLayout>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<PipelineLayoutId>,
-    pub(crate) bind_group_layout_ids: ArrayVec<Valid<BindGroupLayoutId>, { hal::MAX_BIND_GROUPS }>,
+    pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout<A>>, { hal::MAX_BIND_GROUPS }>,
     pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
 }
 
@@ -844,7 +844,7 @@ pub(crate) fn buffer_binding_type_alignment(
 pub struct BindGroup<A: HalApi> {
     pub(crate) raw: Option<A::BindGroup>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) layout_id: Valid<BindGroupLayoutId>,
+    pub(crate) layout: Arc<BindGroupLayout<A>>,
     pub(crate) info: ResourceInfo<BindGroupId>,
     pub(crate) used: BindGroupStates<A>,
     pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,

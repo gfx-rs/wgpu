@@ -663,12 +663,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
             global: &Global<G>,
-            surface: &HalSurface<A>,
+            surface: &Option<HalSurface<A>>,
             present: &Presentation,
         ) {
-            let hub = HalApi::hub(global);
-            if let Some(device) = present.device.downcast_ref::<A>() {
-                hub.surface_unconfigure(device, surface);
+            if let Some(surface) = surface.as_ref() {
+                let hub = HalApi::hub(global);
+                if let Some(device) = present.device.downcast_ref::<A>() {
+                    hub.surface_unconfigure(device, surface);
+                }
             }
         }
 
@@ -676,15 +678,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Ok(surface) = Arc::try_unwrap(surface.unwrap()) {
             if let Some(present) = surface.presentation.lock().take() {
                 #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-                unconfigure(self, surface.vulkan.as_ref().unwrap(), &present);
+                unconfigure(self, &surface.vulkan, &present);
                 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-                unconfigure(self, surface.metal.as_ref().unwrap(), &present);
+                unconfigure(self, &surface.metal, &present);
                 #[cfg(all(feature = "dx12", windows))]
-                unconfigure(self, surface.dx12.as_ref().unwrap(), &present);
+                unconfigure(self, &surface.dx12, &present);
                 #[cfg(all(feature = "dx11", windows))]
-                unconfigure(self, surface.dx11.as_ref().unwrap(), &present);
+                unconfigure(self, &surface.dx11, &present);
                 #[cfg(feature = "gles")]
-                unconfigure(self, surface.gl.as_ref().unwrap(), &present);
+                unconfigure(self, &surface.gl, &present);
             }
 
             self.instance.destroy_surface(surface);

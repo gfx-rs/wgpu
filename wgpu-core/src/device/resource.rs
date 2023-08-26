@@ -1,7 +1,11 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{self, get_bind_group_layout, try_get_bind_group_layout}, command, conv,
+    binding_model::{
+        self, get_bind_group_layout, try_get_bind_group_layout, BindGroupLayout,
+        BindGroupLayoutEntryError,
+    },
+    command, conv,
     device::life::{LifetimeTracker, WaitIdleError},
     device::queue::PendingWrites,
     device::{
@@ -1368,44 +1372,46 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn deduplicate_bind_group_layout(
+    pub(crate) fn deduplicate_bind_group_layout<'a>(
         self_id: DeviceId,
-        entry_map: &binding_model::BindEntryMap,
-        guard: &Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
-    ) -> Option<id::BindGroupLayoutId> {
+        entry_map: &'a binding_model::BindEntryMap,
+        guard: &'a Storage<BindGroupLayout<A>, id::BindGroupLayoutId>,
+    ) -> Option<(id::BindGroupLayoutId, &'a Arc<BindGroupLayout<A>>)> {
         guard
             .iter(self_id.backend())
-            .find(|&(_, bgl)| bgl.device.info.id().0 == self_id && bgl.compatible_layout.is_none() && bgl.entries == *entry_map)
-            .map(|(id, _)| id)
+            .find(|&(_, bgl)| {
+                bgl.device.info.id().0 == self_id
+                    && bgl.compatible_layout.is_none()
+                    && bgl.entries == *entry_map
+            })
+            .map(|(id, resource)| (id, resource))
     }
 
     pub(crate) fn get_introspection_bind_group_layouts<'a>(
-        pipeline_layout: &binding_model::PipelineLayout<A>,
-        bgl_guard: &'a Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
+        pipeline_layout: &'a binding_model::PipelineLayout<A>,
     ) -> ArrayVec<&'a binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }> {
         pipeline_layout
-            .bind_group_layout_ids
+            .bind_group_layouts
             .iter()
-            .map(|&id| &bgl_guard[id].entries)
+            .map(|layout| &layout.entries)
             .collect()
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.
     //TODO: should this be combined with `get_introspection_bind_group_layouts` in some way?
-    pub(crate) fn make_late_sized_buffer_groups<'a>(
+    pub(crate) fn make_late_sized_buffer_groups(
         shader_binding_sizes: &FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         layout: &binding_model::PipelineLayout<A>,
-        bgl_guard: &'a Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
     ) -> ArrayVec<pipeline::LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }> {
         // Given the shader-required binding sizes and the pipeline layout,
         // return the filtered list of them in the layout order,
         // removing those with given `min_binding_size`.
         layout
-            .bind_group_layout_ids
+            .bind_group_layouts
             .iter()
             .enumerate()
-            .map(|(group_index, &bgl_id)| pipeline::LateSizedBufferGroup {
-                shader_sizes: bgl_guard[bgl_id]
+            .map(|(group_index, bgl)| pipeline::LateSizedBufferGroup {
+                shader_sizes: bgl
                     .entries
                     .values()
                     .filter_map(|entry| match entry.ty {
@@ -1432,7 +1438,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         label: Option<&str>,
         entry_map: binding_model::BindEntryMap,
-    ) -> Result<binding_model::BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
+    ) -> Result<BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
             Yes,
@@ -1485,7 +1491,8 @@ impl<A: HalApi> Device<A> {
                 } => {
                     return Err(binding_model::CreateBindGroupLayoutError::Entry {
                         binding: entry.binding,
-                        error: binding_model::BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
+                        error:
+                            BindGroupLayoutEntryError::SampleTypeFloatFilterableBindingMultisampled,
                     });
                 }
                 Bt::Texture { .. } => (
@@ -1501,7 +1508,7 @@ impl<A: HalApi> Device<A> {
                         wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
                             return Err(binding_model::CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
-                                error: binding_model::BindGroupLayoutEntryError::StorageTextureCube,
+                                error: BindGroupLayoutEntryError::StorageTextureCube,
                             })
                         }
                         _ => (),
@@ -1515,7 +1522,7 @@ impl<A: HalApi> Device<A> {
                         {
                             return Err(binding_model::CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
-                                error: binding_model::BindGroupLayoutEntryError::StorageTextureReadWrite,
+                                error: BindGroupLayoutEntryError::StorageTextureReadWrite,
                             });
                         }
                         _ => (),
@@ -1545,7 +1552,7 @@ impl<A: HalApi> Device<A> {
             // Validate the count parameter
             if entry.count.is_some() {
                 required_features |= array_feature
-                    .ok_or(binding_model::BindGroupLayoutEntryError::ArrayUnsupported)
+                    .ok_or(BindGroupLayoutEntryError::ArrayUnsupported)
                     .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
                         binding: entry.binding,
                         error,
@@ -1577,13 +1584,13 @@ impl<A: HalApi> Device<A> {
             }
 
             self.require_features(required_features)
-                .map_err(binding_model::BindGroupLayoutEntryError::MissingFeatures)
+                .map_err(BindGroupLayoutEntryError::MissingFeatures)
                 .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,
                 })?;
             self.require_downlevel_flags(required_downlevel_flags)
-                .map_err(binding_model::BindGroupLayoutEntryError::MissingDownlevelFlags)
+                .map_err(BindGroupLayoutEntryError::MissingDownlevelFlags)
                 .map_err(|error| binding_model::CreateBindGroupLayoutError::Entry {
                     binding: entry.binding,
                     error,
@@ -1617,9 +1624,13 @@ impl<A: HalApi> Device<A> {
             .validate(&self.limits)
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
-        Ok(binding_model::BindGroupLayout {
+        Ok(BindGroupLayout {
             raw: Some(raw),
             device: self.clone(),
+            dynamic_count: entry_map
+                .values()
+                .filter(|b| b.ty.has_dynamic_offset())
+                .count(),
             count_validator,
             entries: entry_map,
             info: ResourceInfo::new(label.unwrap_or("<BindGroupLayoyt>")),
@@ -1796,8 +1807,7 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_bind_group<G: GlobalIdentityHandlerFactory>(
         self: &Arc<Self>,
-        layout: &binding_model::BindGroupLayout<A>,
-        layout_id: id::Valid<id::BindGroupLayoutId>,
+        layout: &Arc<BindGroupLayout<A>>,
         desc: &binding_model::BindGroupDescriptor,
         hub: &Hub<A, G>,
     ) -> Result<binding_model::BindGroup<A>, binding_model::CreateBindGroupError> {
@@ -2031,7 +2041,7 @@ impl<A: HalApi> Device<A> {
         Ok(binding_model::BindGroup {
             raw: Some(raw),
             device: self.clone(),
-            layout_id,
+            layout: layout.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             used,
             used_buffer_ranges,
@@ -2212,7 +2222,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::PipelineLayoutDescriptor,
-        bgl_guard: &Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
+        bgl_guard: &Storage<BindGroupLayout<A>, id::BindGroupLayoutId>,
     ) -> Result<binding_model::PipelineLayout<A>, binding_model::CreatePipelineLayoutError> {
         use crate::binding_model::CreatePipelineLayoutError as Error;
 
@@ -2279,7 +2289,7 @@ impl<A: HalApi> Device<A> {
         let bgl_vec = desc
             .bind_group_layouts
             .iter()
-            .map(|&id| &try_get_bind_group_layout(bgl_guard, id).unwrap().raw())
+            .map(|&id| try_get_bind_group_layout(bgl_guard, id).unwrap().raw())
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
@@ -2300,14 +2310,12 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
-            bind_group_layout_ids: desc
+            bind_group_layouts: desc
                 .bind_group_layouts
                 .iter()
                 .map(|&id| {
-                    // manually add a dependency to BGL
-                    let (id, layout) = get_bind_group_layout(bgl_guard, id::Valid(id));
-                    layout.multi_ref_count.inc();
-                    id
+                    let (_, layout) = get_bind_group_layout(bgl_guard, id::Valid(id));
+                    layout.clone()
                 })
                 .collect(),
             push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
@@ -2320,7 +2328,7 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         implicit_context: Option<ImplicitPipelineContext>,
         mut derived_group_layouts: ArrayVec<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>,
-        bgl_guard: &mut Storage<binding_model::BindGroupLayout<A>, id::BindGroupLayoutId>,
+        bgl_guard: &mut Storage<BindGroupLayout<A>, id::BindGroupLayoutId>,
         pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<A>, id::PipelineLayoutId>,
     ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
@@ -2342,7 +2350,7 @@ impl<A: HalApi> Device<A> {
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
             match Device::deduplicate_bind_group_layout(self.info.id().0, &map, bgl_guard) {
-                Some(dedup_id) => {
+                Some((dedup_id, _)) => {
                     *bgl_id = dedup_id;
                 }
                 None => {
@@ -2402,7 +2410,6 @@ impl<A: HalApi> Device<A> {
                         .get(pipeline_layout_id)
                         .as_ref()
                         .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
-                    &*bgl_guard,
                 )),
                 None => {
                     for _ in 0..self.limits.max_bind_groups {
@@ -2438,7 +2445,7 @@ impl<A: HalApi> Device<A> {
             .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout, &*bgl_guard);
+            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout);
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
             label: desc.label.borrow_option(),
@@ -2469,7 +2476,7 @@ impl<A: HalApi> Device<A> {
 
         let pipeline = pipeline::ComputePipeline {
             raw: Some(raw),
-            layout_id: id::Valid(pipeline_layout_id),
+            layout: layout.clone(),
             device: self.clone(),
             late_sized_buffer_groups,
             info: ResourceInfo::new(desc.label.borrow_or_default()),
@@ -2762,7 +2769,6 @@ impl<A: HalApi> Device<A> {
                         .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
                     Some(Device::get_introspection_bind_group_layouts(
                         pipeline_layout,
-                        &*bgl_guard,
                     ))
                 }
                 None => None,
@@ -2810,7 +2816,6 @@ impl<A: HalApi> Device<A> {
                             .get(pipeline_layout_id)
                             .as_ref()
                             .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?,
-                        &*bgl_guard,
                     )),
                     None => None,
                 };
@@ -2914,7 +2919,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout, &*bgl_guard);
+            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout);
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),
@@ -2984,7 +2989,7 @@ impl<A: HalApi> Device<A> {
 
         let pipeline = pipeline::RenderPipeline {
             raw: Some(raw),
-            layout_id: id::Valid(pipeline_layout_id),
+            layout: layout.clone(),
             device: self.clone(),
             pass_context,
             flags,
