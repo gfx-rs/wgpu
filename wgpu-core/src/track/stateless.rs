@@ -8,7 +8,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
     hal_api::HalApi,
-    id::{TypedId, Valid},
+    id::TypedId,
     resource::Resource,
     storage::Storage,
     track::ResourceMetadata,
@@ -17,7 +17,7 @@ use crate::{
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct StatelessBindGroupSate<Id: TypedId, T: Resource<Id>> {
-    resources: Vec<(Valid<Id>, Arc<T>)>,
+    resources: Vec<(Id, Arc<T>)>,
 }
 
 impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
@@ -33,11 +33,11 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     /// accesses will be in a constant assending order.
     pub(crate) fn optimize(&mut self) {
         self.resources
-            .sort_unstable_by_key(|&(id, _)| id.0.unzip().0);
+            .sort_unstable_by_key(|&(id, _)| id.unzip().0);
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn used(&self) -> impl Iterator<Item = Valid<Id>> + '_ {
+    pub fn used(&self) -> impl Iterator<Item = Id> + '_ {
         self.resources.iter().map(|&(id, _)| id)
     }
 
@@ -52,7 +52,7 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
-        self.resources.push((Valid(id), resource.clone()));
+        self.resources.push((id, resource.clone()));
 
         Some(resource)
     }
@@ -105,8 +105,8 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn insert_single(&mut self, id: Valid<Id>, resource: Arc<T>) {
-        let (index32, _epoch, _) = id.0.unzip();
+    pub fn insert_single(&mut self, id: Id, resource: Arc<T>) {
+        let (index32, _epoch, _) = id.unzip();
         let index = index32 as usize;
 
         self.allow_index(index);
@@ -122,7 +122,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a Arc<T>> {
         let resource = storage.get(id).ok()?;
 
         let (index32, _epoch, _) = id.unzip();
@@ -170,8 +170,8 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    pub fn remove_abandoned(&mut self, id: Valid<Id>) -> bool {
-        let index = id.0.unzip().0 as usize;
+    pub fn remove_abandoned(&mut self, id: Id) -> bool {
+        let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
             return false;
@@ -188,8 +188,9 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
                     return true;
                 } else {
                     log::info!(
-                        "{:?} is still referenced from {}",
-                        self.metadata.get_resource_unchecked(index).label(),
+                        "{} {:?} is still referenced from {}",
+                        T::TYPE,
+                        id,
                         existing_ref_count
                     );
                 }

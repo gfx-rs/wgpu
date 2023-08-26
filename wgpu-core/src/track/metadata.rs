@@ -199,7 +199,7 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadataProvider<'_, A, I, T
     /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
     #[inline(always)]
     pub(super) unsafe fn get_epoch(self, index: usize) -> Epoch {
-        unsafe { self.get_own(index).as_info().id().0.unzip().1 }
+        unsafe { self.get_own(index).as_info().id().unzip().1 }
     }
 }
 

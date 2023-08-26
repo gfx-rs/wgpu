@@ -82,7 +82,7 @@ obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
-png = "0.17.9"
+png = "0.17.10"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"

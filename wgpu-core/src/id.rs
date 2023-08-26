@@ -101,8 +101,13 @@ impl<T> Id<T> {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn dummy(index: u32) -> Valid<Self> {
-        Valid(Id::zip(index, 1, Backend::Empty))
+    pub(crate) fn dummy(index: u32) -> Self {
+        Id::zip(index, 1, Backend::Empty)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn is_valid(&self) -> bool {
+        self.backend() != Backend::Empty
     }
 
     pub fn backend(self) -> Backend {
@@ -158,20 +163,12 @@ impl<T> Ord for Id<T> {
     }
 }
 
-/// An internal ID that has been checked to point to
-/// a valid object in the storages.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub(crate) struct Valid<I>(pub I);
-
 /// Trait carrying methods for direct `Id` access.
 ///
 /// Most `wgpu-core` clients should not use this trait. Unusual clients that
 /// need to construct `Id` values directly, or access their components, like the
 /// WGPU recording player, may use this trait to do so.
-pub trait TypedId: Copy {
+pub trait TypedId: Copy + std::fmt::Debug {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
     fn into_raw(self) -> NonZeroId;

@@ -111,13 +111,13 @@ impl CommandBufferTextureMemoryActions {
     // implicit init, not requiring any immediate resource init.
     pub(crate) fn register_implicit_init<A: HalApi>(
         &mut self,
-        id: id::Valid<TextureId>,
+        id: TextureId,
         range: TextureInitRange,
         texture_guard: &Storage<Texture<A>, TextureId>,
     ) {
         let must_be_empty = self.register_init_action(
             &TextureInitTrackerAction {
-                id: id.0,
+                id,
                 range,
                 kind: MemoryInitKind::ImplicitlyInitialized,
             },
@@ -144,7 +144,7 @@ pub(crate) fn fixup_discarded_surfaces<
     for init in inits {
         clear_texture(
             texture_guard,
-            id::Valid(init.texture),
+            init.texture,
             TextureInitRange {
                 mip_range: init.mip_level..(init.mip_level + 1),
                 layer_range: init.layer..(init.layer + 1),
@@ -308,7 +308,7 @@ impl<A: HalApi> BakedCommands<A> {
             for range in ranges.drain(..) {
                 clear_texture(
                     texture_guard,
-                    id::Valid(texture_use.id),
+                    texture_use.id,
                     range,
                     &mut self.encoder,
                     &mut device_tracker.textures,

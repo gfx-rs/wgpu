@@ -4,7 +4,7 @@ use crate::{
     hal_api::HalApi,
     id::{
         AdapterId, BufferId, DeviceId, QuerySetId, SamplerId, StagingBufferId, SurfaceId,
-        TextureId, TextureViewId, TypedId, Valid,
+        TextureId, TextureViewId, TypedId,
     },
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -49,7 +49,7 @@ use std::{
 /// [`Buffer`]: crate::resource::Buffer
 #[derive(Debug)]
 pub struct ResourceInfo<Id: TypedId> {
-    id: Option<Valid<Id>>,
+    id: Option<Id>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -91,12 +91,12 @@ impl<Id: TypedId> ResourceInfo<Id> {
         label
     }
 
-    pub(crate) fn id(&self) -> Valid<Id> {
+    pub(crate) fn id(&self) -> Id {
         self.id.unwrap()
     }
 
     pub(crate) fn set_id(&mut self, id: Id) {
-        self.id = Some(Valid(id));
+        self.id = Some(id);
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -126,6 +126,9 @@ pub trait Resource<Id: TypedId> {
     }
     fn is_unique(self: &Arc<Self>) -> bool {
         self.ref_count() == 1
+    }
+    fn is_equal(&self, other: &Self) -> bool {
+        self.as_info().id().unzip() == other.as_info().id().unzip()
     }
 }
 
@@ -514,7 +517,7 @@ pub(crate) enum TextureInner<A: HalApi> {
     },
     Surface {
         raw: A::SurfaceTexture,
-        parent_id: Valid<SurfaceId>,
+        parent_id: SurfaceId,
         has_work: AtomicBool,
     },
 }
@@ -854,7 +857,7 @@ pub struct TextureView<A: HalApi> {
     pub(crate) parent: Option<Arc<Texture<A>>>,
     // The parent's refcount is held alive, but the parent may still be deleted
     // if it's a surface texture. TODO: make this cleaner.
-    pub(crate) parent_id: Valid<TextureId>,
+    pub(crate) parent_id: TextureId,
     pub(crate) device: Arc<Device<A>>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,

@@ -1,11 +1,11 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
-    id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId, Valid},
+    id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
     resource::{Resource, ResourceInfo},
     validation, Label,
 };
@@ -58,7 +58,7 @@ impl<A: HalApi> Drop for ShaderModule<A> {
         if let Some(raw) = self.raw.take() {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *self.device.trace.lock() {
-                trace.add(trace::Action::DestroyShaderModule(self.info.id().0));
+                trace.add(trace::Action::DestroyShaderModule(self.info.id()));
             }
             unsafe {
                 use hal::Device;
@@ -244,7 +244,7 @@ pub enum CreateComputePipelineError {
 #[derive(Debug)]
 pub struct ComputePipeline<A: HalApi> {
     pub(crate) raw: Option<A::ComputePipeline>,
-    pub(crate) layout_id: Valid<PipelineLayoutId>,
+    pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) info: ResourceInfo<ComputePipelineId>,
@@ -471,8 +471,8 @@ impl Default for VertexStep {
 #[derive(Debug)]
 pub struct RenderPipeline<A: HalApi> {
     pub(crate) raw: Option<A::RenderPipeline>,
-    pub(crate) layout_id: Valid<PipelineLayoutId>,
     pub(crate) device: Arc<Device<A>>,
+    pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,

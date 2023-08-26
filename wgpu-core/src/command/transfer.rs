@@ -7,7 +7,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    id::{BufferId, CommandEncoderId, TextureId, Valid},
+    id::{BufferId, CommandEncoderId, TextureId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
@@ -466,7 +466,7 @@ fn handle_texture_init<A: HalApi>(
         for init in immediate_inits {
             clear_texture(
                 texture_guard,
-                Valid(init.texture),
+                init.texture,
                 TextureInitRange {
                     mip_range: init.mip_level..(init.mip_level + 1),
                     layer_range: init.layer..(init.layer + 1),

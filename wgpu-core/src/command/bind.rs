@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
-    id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
+    id::BindGroupId,
     pipeline::LateSizedBufferGroup,
-    storage::Storage,
 };
 
 use arrayvec::ArrayVec;
@@ -12,65 +13,91 @@ use arrayvec::ArrayVec;
 type BindGroupMask = u8;
 
 mod compat {
-    use std::ops::Range;
+    use arrayvec::ArrayVec;
 
-    #[derive(Debug)]
-    struct Entry<T> {
-        assigned: Option<T>,
-        expected: Option<T>,
+    use crate::{binding_model::BindGroupLayout, hal_api::HalApi, resource::Resource};
+    use std::{ops::Range, sync::Arc};
+
+    #[derive(Debug, Clone)]
+    struct Entry<A: HalApi> {
+        assigned: Option<Arc<BindGroupLayout<A>>>,
+        expected: Option<Arc<BindGroupLayout<A>>>,
     }
-    impl<T> Default for Entry<T> {
-        fn default() -> Self {
+
+    impl<A: HalApi> Entry<A> {
+        fn empty() -> Self {
             Self {
                 assigned: None,
                 expected: None,
             }
         }
-    }
-    impl<T: Copy + PartialEq> Entry<T> {
         fn is_active(&self) -> bool {
             self.assigned.is_some() && self.expected.is_some()
         }
 
         fn is_valid(&self) -> bool {
-            self.expected.is_none() || self.expected == self.assigned
+            if let Some(expected_bgl) = self.expected.as_ref() {
+                if let Some(assigned_bgl) = self.assigned.as_ref() {
+                    if expected_bgl.is_equal(assigned_bgl) {
+                        return true;
+                    }
+                    if let Some(compatible_bgl) = assigned_bgl.compatible_layout.as_ref() {
+                        return compatible_bgl.is_equal(expected_bgl);
+                    }
+                }
+                return false;
+            }
+            true
+        }
+
+        fn is_incompatible(&self) -> bool {
+            if let Some(expected_bgl) = self.expected.as_ref() {
+                if let Some(assigned_bgl) = self.assigned.as_ref() {
+                    return !assigned_bgl.is_equal(expected_bgl);
+                }
+            }
+            true
         }
     }
 
-    #[derive(Debug)]
-    pub struct Manager<T> {
-        entries: [Entry<T>; hal::MAX_BIND_GROUPS],
+    #[derive(Debug, Default)]
+    pub(crate) struct BoundBindGroupLayouts<A: HalApi> {
+        entries: ArrayVec<Entry<A>, { hal::MAX_BIND_GROUPS }>,
     }
 
-    impl<T: Copy + PartialEq> Manager<T> {
+    impl<A: HalApi> BoundBindGroupLayouts<A> {
         pub fn new() -> Self {
             Self {
-                entries: Default::default(),
+                entries: (0..hal::MAX_BIND_GROUPS).map(|_| Entry::empty()).collect(),
             }
         }
-
         fn make_range(&self, start_index: usize) -> Range<usize> {
             // find first incompatible entry
             let end = self
                 .entries
                 .iter()
-                .position(|e| e.expected.is_none() || e.assigned != e.expected)
+                .position(|e| e.is_incompatible())
                 .unwrap_or(self.entries.len());
             start_index..end.max(start_index)
         }
 
-        pub fn update_expectations(&mut self, expectations: &[T]) -> Range<usize> {
+        pub fn update_expectations(
+            &mut self,
+            expectations: &[Arc<BindGroupLayout<A>>],
+        ) -> Range<usize> {
             let start_index = self
                 .entries
                 .iter()
                 .zip(expectations)
-                .position(|(e, &expect)| e.expected != Some(expect))
+                .position(|(e, expect)| {
+                    e.expected.is_none() || !e.expected.as_ref().unwrap().is_equal(expect)
+                })
                 .unwrap_or(expectations.len());
-            for (e, &expect) in self.entries[start_index..]
+            for (e, expect) in self.entries[start_index..]
                 .iter_mut()
                 .zip(expectations[start_index..].iter())
             {
-                e.expected = Some(expect);
+                e.expected = Some(expect.clone());
             }
             for e in self.entries[expectations.len()..].iter_mut() {
                 e.expected = None;
@@ -78,7 +105,7 @@ mod compat {
             self.make_range(start_index)
         }
 
-        pub fn assign(&mut self, index: usize, value: T) -> Range<usize> {
+        pub fn assign(&mut self, index: usize, value: Arc<BindGroupLayout<A>>) -> Range<usize> {
             self.entries[index].assigned = Some(value);
             self.make_range(index)
         }
@@ -100,36 +127,6 @@ mod compat {
             })
         }
     }
-
-    #[test]
-    fn test_compatibility() {
-        let mut man = Manager::<i32>::new();
-        man.entries[0] = Entry {
-            expected: Some(3),
-            assigned: Some(2),
-        };
-        man.entries[1] = Entry {
-            expected: Some(1),
-            assigned: Some(1),
-        };
-        man.entries[2] = Entry {
-            expected: Some(4),
-            assigned: Some(5),
-        };
-        // check that we rebind [1] after [0] became compatible
-        assert_eq!(man.assign(0, 3), 0..2);
-        // check that nothing is rebound
-        assert_eq!(man.update_expectations(&[3, 2]), 1..1);
-        // check that [1] and [2] are rebound on expectations change
-        assert_eq!(man.update_expectations(&[3, 1, 5]), 1..3);
-        // reset the first two bindings
-        assert_eq!(man.update_expectations(&[4, 6, 5]), 0..0);
-        // check that nothing is rebound, even if there is a match,
-        // since earlier binding is incompatible.
-        assert_eq!(man.assign(1, 6), 1..1);
-        // finally, bind everything
-        assert_eq!(man.assign(0, 4), 0..3);
-    }
 }
 
 #[derive(Debug)]
@@ -140,7 +137,7 @@ struct LateBufferBinding {
 
 #[derive(Debug, Default)]
 pub(super) struct EntryPayload {
-    pub(super) group_id: Option<Valid<BindGroupId>>,
+    pub(super) group_id: Option<BindGroupId>,
     pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
     late_buffer_bindings: Vec<LateBufferBinding>,
     /// Since `LateBufferBinding` may contain information about the bindings
@@ -157,40 +154,37 @@ impl EntryPayload {
     }
 }
 
-#[derive(Debug)]
-pub(super) struct Binder {
-    pub(super) pipeline_layout_id: Option<Valid<PipelineLayoutId>>, //TODO: strongly `Stored`
-    manager: compat::Manager<Valid<BindGroupLayoutId>>,
+#[derive(Debug, Default)]
+pub(super) struct Binder<A: HalApi> {
+    pub(super) pipeline_layout: Option<Arc<PipelineLayout<A>>>,
+    manager: compat::BoundBindGroupLayouts<A>,
     payloads: [EntryPayload; hal::MAX_BIND_GROUPS],
 }
 
-impl Binder {
+impl<A: HalApi> Binder<A> {
     pub(super) fn new() -> Self {
         Self {
-            pipeline_layout_id: None,
-            manager: compat::Manager::new(),
+            pipeline_layout: None,
+            manager: compat::BoundBindGroupLayouts::new(),
             payloads: Default::default(),
         }
     }
-
     pub(super) fn reset(&mut self) {
-        self.pipeline_layout_id = None;
-        self.manager = compat::Manager::new();
+        self.pipeline_layout = None;
+        self.manager = compat::BoundBindGroupLayouts::new();
         for payload in self.payloads.iter_mut() {
             payload.reset();
         }
     }
 
-    pub(super) fn change_pipeline_layout<'a, A: HalApi>(
+    pub(super) fn change_pipeline_layout<'a>(
         &'a mut self,
-        guard: &Storage<PipelineLayout<A>, PipelineLayoutId>,
-        new_id: Valid<PipelineLayoutId>,
+        new: &Arc<PipelineLayout<A>>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
     ) -> (usize, &'a [EntryPayload]) {
-        let old_id_opt = self.pipeline_layout_id.replace(new_id);
-        let new = &guard[new_id];
+        let old_id_opt = self.pipeline_layout.replace(new.clone());
 
-        let mut bind_range = self.manager.update_expectations(&new.bind_group_layout_ids);
+        let mut bind_range = self.manager.update_expectations(&new.bind_group_layouts);
 
         // Update the buffer binding sizes that are required by shaders.
         for (payload, late_group) in self.payloads.iter_mut().zip(late_sized_buffer_groups) {
@@ -214,8 +208,7 @@ impl Binder {
             }
         }
 
-        if let Some(old_id) = old_id_opt {
-            let old = &guard[old_id];
+        if let Some(old) = old_id_opt {
             // root constants are the base compatibility property
             if old.push_constant_ranges != new.push_constant_ranges {
                 bind_range.start = 0;
@@ -225,15 +218,15 @@ impl Binder {
         (bind_range.start, &self.payloads[bind_range])
     }
 
-    pub(super) fn assign_group<'a, A: HalApi>(
+    pub(super) fn assign_group<'a>(
         &'a mut self,
         index: usize,
-        bind_group_id: Valid<BindGroupId>,
+        bind_group_id: BindGroupId,
         bind_group: &BindGroup<A>,
         offsets: &[wgt::DynamicOffset],
     ) -> &'a [EntryPayload] {
         log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        debug_assert_eq!(A::VARIANT, bind_group_id.0.backend());
+        debug_assert_eq!(A::VARIANT, bind_group_id.backend());
 
         let payload = &mut self.payloads[index];
         payload.group_id = Some(bind_group_id);
@@ -260,11 +253,11 @@ impl Binder {
             }
         }
 
-        let bind_range = self.manager.assign(index, bind_group.layout_id);
+        let bind_range = self.manager.assign(index, bind_group.layout.clone());
         &self.payloads[bind_range]
     }
 
-    pub(super) fn list_active(&self) -> impl Iterator<Item = Valid<BindGroupId>> + '_ {
+    pub(super) fn list_active(&self) -> impl Iterator<Item = BindGroupId> + '_ {
         let payloads = &self.payloads;
         self.manager
             .list_active()

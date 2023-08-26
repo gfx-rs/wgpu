@@ -237,6 +237,7 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             // D3D11_BUFFER_DESC represents the buffer size as a 32 bit int.
             max_buffer_size: u32::MAX as u64,
+            max_non_sampler_bindings: u32::MAX,
         };
 
         //

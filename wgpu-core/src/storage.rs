@@ -54,14 +54,14 @@ where
     _phantom: PhantomData<I>,
 }
 
-impl<T, I> ops::Index<id::Valid<I>> for Storage<T, I>
+impl<T, I> ops::Index<I> for Storage<T, I>
 where
     T: Resource<I>,
     I: id::TypedId,
 {
     type Output = Arc<T>;
-    fn index(&self, id: id::Valid<I>) -> &Arc<T> {
-        self.get(id.0).unwrap()
+    fn index(&self, id: I) -> &Arc<T> {
+        self.get(id).unwrap()
     }
 }
 impl<T, I> Storage<T, I>
@@ -111,8 +111,8 @@ where
         };
         assert_eq!(
             epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
+            "{}[{:?}] is no longer alive",
+            self.kind, id
         );
         result
     }
@@ -123,14 +123,14 @@ where
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v.is_unique()), epoch),
-            Some(&Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
             Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
         };
         assert_eq!(
             epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
+            "{}[{:?}] is no longer alive",
+            self.kind, id
         );
         result
     }
@@ -141,14 +141,14 @@ where
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
-            Some(&Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
             Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
         };
         assert_eq!(
             epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
+            "{}[{:?}] is no longer alive",
+            self.kind, id
         );
         result
     }

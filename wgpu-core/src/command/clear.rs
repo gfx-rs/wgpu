@@ -7,7 +7,7 @@ use crate::{
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
-    id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
+    id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{Texture, TextureClearMode},
@@ -224,7 +224,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let texture_guard = hub.textures.read();
         clear_texture(
             &*texture_guard,
-            Valid(dst),
+            dst,
             TextureInitRange {
                 mip_range: subresource_mip_range,
                 layer_range: subresource_layer_range,
@@ -239,7 +239,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub(crate) fn clear_texture<A: HalApi>(
     storage: &Storage<Texture<A>, TextureId>,
-    dst_texture_id: Valid<TextureId>,
+    dst_texture_id: TextureId,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
     texture_tracker: &mut TextureTracker<A>,
@@ -253,7 +253,7 @@ pub(crate) fn clear_texture<A: HalApi>(
         .as_ref()
         .unwrap()
         .as_raw()
-        .ok_or(ClearError::InvalidTexture(dst_texture_id.0))?;
+        .ok_or(ClearError::InvalidTexture(dst_texture_id))?;
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {
@@ -265,7 +265,7 @@ pub(crate) fn clear_texture<A: HalApi>(
             hal::TextureUses::COLOR_TARGET
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.0));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
         }
     };
 
@@ -288,7 +288,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     // clear_texture api in order to remove this check and call the cheaper
     // change_replace_tracked whenever possible.
     let dst_barrier = texture_tracker
-        .set_single(dst_texture, dst_texture_id.0, selector, clear_usage)
+        .set_single(dst_texture, dst_texture_id, selector, clear_usage)
         .unwrap()
         .map(|pending| pending.into_hal(dst_texture));
     unsafe {
@@ -312,7 +312,7 @@ pub(crate) fn clear_texture<A: HalApi>(
             clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id.0));
+            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
         }
     }
     Ok(())

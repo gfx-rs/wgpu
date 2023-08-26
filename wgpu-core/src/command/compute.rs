@@ -1,3 +1,4 @@
+use crate::resource::Resource;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
@@ -275,7 +276,7 @@ where
 }
 
 struct State<A: HalApi> {
-    binder: Binder,
+    binder: Binder<A>,
     pipeline: Option<id::ComputePipelineId>,
     scope: UsageScope<A>,
     debug_scope_depth: u32,
@@ -307,7 +308,7 @@ impl<A: HalApi> State<A> {
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
         buffer_guard: &Storage<Buffer<A>, id::BufferId>,
         texture_guard: &Storage<Texture<A>, id::TextureId>,
-        indirect_buffer: Option<id::Valid<id::BufferId>>,
+        indirect_buffer: Option<id::BufferId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
             unsafe {
@@ -396,7 +397,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let raw = encoder.open();
         let device = &cmd_buf.device;
 
-        let pipeline_layout_guard = hub.pipeline_layouts.read();
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.compute_pipelines.read();
         let query_set_guard = hub.query_sets.read();
@@ -527,16 +527,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                     }
 
-                    let pipeline_layout_id = state.binder.pipeline_layout_id;
+                    let pipeline_layout = &state.binder.pipeline_layout;
+                    let pipeline_layout = pipeline_layout.as_ref().unwrap().clone();
                     let entries = state.binder.assign_group(
                         index as usize,
-                        id::Valid(bind_group_id),
+                        bind_group_id,
                         bind_group,
                         &temp_offsets,
                     );
                     if !entries.is_empty() {
-                        let pipeline_layout =
-                            pipeline_layout_guard[pipeline_layout_id.unwrap()].raw();
+                        let pipeline_layout = pipeline_layout.raw();
                         for (i, e) in entries.iter().enumerate() {
                             let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                             unsafe {
@@ -566,12 +566,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     // Rebind resources
-                    if state.binder.pipeline_layout_id != Some(pipeline.layout_id) {
-                        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-
+                    if state.binder.pipeline_layout.is_none()
+                        || !state
+                            .binder
+                            .pipeline_layout
+                            .as_ref()
+                            .unwrap()
+                            .is_equal(&pipeline.layout)
+                    {
                         let (start_index, entries) = state.binder.change_pipeline_layout(
-                            &*pipeline_layout_guard,
-                            pipeline.layout_id,
+                            &pipeline.layout,
                             &pipeline.late_sized_buffer_groups,
                         );
                         if !entries.is_empty() {
@@ -579,7 +583,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                                 unsafe {
                                     raw.set_bind_group(
-                                        pipeline_layout.raw(),
+                                        pipeline.layout.raw(),
                                         start_index as u32 + i as u32,
                                         raw_bg,
                                         &e.dynamic_offsets,
@@ -590,7 +594,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         // Clear push constant ranges
                         let non_overlapping = super::bind::compute_nonoverlapping_ranges(
-                            &pipeline_layout.push_constant_ranges,
+                            &pipeline.layout.push_constant_ranges,
                         );
                         for range in non_overlapping {
                             let offset = range.range.start;
@@ -600,7 +604,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 size_bytes,
                                 |clear_offset, clear_data| unsafe {
                                     raw.set_push_constants(
-                                        pipeline_layout.raw(),
+                                        pipeline.layout.raw(),
                                         wgt::ShaderStages::COMPUTE,
                                         clear_offset,
                                         clear_data,
@@ -623,15 +627,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let data_slice =
                         &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
-                    let pipeline_layout_id = state
+                    let pipeline_layout = state
                         .binder
-                        .pipeline_layout_id
+                        .pipeline_layout
+                        .as_ref()
                         //TODO: don't error here, lazily update the push constants
                         .ok_or(ComputePassErrorInner::Dispatch(
                             DispatchError::MissingPipeline,
                         ))
                         .map_pass_err(scope)?;
-                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(
@@ -656,6 +660,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         pipeline: state.pipeline,
                     };
                     state.is_ready().map_pass_err(scope)?;
+
                     state
                         .flush_states(
                             raw,
@@ -739,7 +744,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*bind_group_guard,
                             &*buffer_guard,
                             &*texture_guard,
-                            Some(id::Valid(buffer_id)),
+                            Some(buffer_id),
                         )
                         .map_pass_err(scope)?;
                     unsafe {

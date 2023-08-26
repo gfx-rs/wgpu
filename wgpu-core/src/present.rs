@@ -25,7 +25,7 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags},
     global::Global,
     hal_api::HalApi,
-    id::{SurfaceId, TextureId, Valid},
+    id::{SurfaceId, TextureId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     resource::{self, ResourceInfo},
@@ -46,7 +46,7 @@ pub(crate) struct Presentation {
     pub(crate) config: wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     #[allow(unused)]
     pub(crate) num_frames: u32,
-    pub(crate) acquired_texture: Option<Valid<TextureId>>,
+    pub(crate) acquired_texture: Option<TextureId>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -193,7 +193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let texture = resource::Texture {
                     inner: Some(resource::TextureInner::Surface {
                         raw: ast.texture,
-                        parent_id: Valid(surface_id),
+                        parent_id: surface_id,
                         has_work: AtomicBool::new(false),
                     }),
                     device: device.clone(),
@@ -218,7 +218,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // register it in the device tracker as uninitialized
                     let mut trackers = device.trackers.lock();
                     trackers.textures.insert_single(
-                        id.0,
+                        id,
                         resource,
                         hal::TextureUses::UNINITIALIZED,
                     );
@@ -234,7 +234,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } else {
                     Status::Good
                 };
-                (Some(id.0), status)
+                (Some(id), status)
             }
             Ok(None) => (None, Status::Timeout),
             Err(err) => (
@@ -298,7 +298,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             device.trackers.lock().textures.remove(texture_id);
 
-            let texture = hub.textures.unregister(texture_id.0);
+            let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
                     let mut clear_mode = texture.clear_mode.write();
@@ -321,7 +321,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             parent_id,
                             has_work,
                         } => {
-                            if surface_id != parent_id.0 {
+                            if surface_id != parent_id {
                                 log::error!("Presented frame is from a different surface");
                                 Err(hal::SurfaceError::Lost)
                             } else if !has_work.load(Ordering::Relaxed) {
@@ -397,7 +397,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // and now we are moving it away.
             device.trackers.lock().textures.remove(texture_id);
 
-            let texture = hub.textures.unregister(texture_id.0);
+            let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
                     let suf = A::get_surface(&surface);
@@ -407,7 +407,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             parent_id,
                             has_work: _,
                         } => {
-                            if surface_id == parent_id.0 {
+                            if surface_id == parent_id {
                                 unsafe { suf.unwrap().raw.discard_texture(raw) };
                             } else {
                                 log::warn!("Surface texture is outdated");

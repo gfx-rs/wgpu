@@ -1,3 +1,4 @@
+use crate::resource::Resource;
 use crate::{
     binding_model::BindError,
     command::{
@@ -315,7 +316,7 @@ impl OptionalState {
 
 #[derive(Debug, Default)]
 struct IndexState {
-    bound_buffer_view: Option<(id::Valid<id::BufferId>, Range<BufferAddress>)>,
+    bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
     format: Option<IndexFormat>,
     pipeline_format: Option<IndexFormat>,
     limit: u32,
@@ -411,9 +412,9 @@ impl VertexState {
 }
 
 #[derive(Debug)]
-struct State {
+struct State<A: HalApi> {
     pipeline_flags: PipelineFlags,
-    binder: Binder,
+    binder: Binder<A>,
     blend_constant: OptionalState,
     stencil_reference: u32,
     pipeline: Option<id::RenderPipelineId>,
@@ -422,7 +423,7 @@ struct State {
     debug_scope_depth: u32,
 }
 
-impl State {
+impl<A: HalApi> State<A> {
     fn is_ready(&self, indexed: bool) -> Result<(), DrawError> {
         // Determine how many vertex buffers have already been bound
         let vertex_buffer_count = self.vertex.inputs.iter().take_while(|v| v.bound).count() as u32;
@@ -683,7 +684,7 @@ where
 }
 
 struct RenderAttachment<'a> {
-    texture_id: &'a id::Valid<id::TextureId>,
+    texture_id: &'a id::TextureId,
     selector: &'a TextureSelector,
     usage: hal::TextureUses,
 }
@@ -727,7 +728,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    id: view.parent_id.0,
+                    id: view.parent_id,
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -747,7 +748,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // discard right away be alright since the texture can't be used
             // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent_id.0,
+                texture: view.parent_id,
                 mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
@@ -919,7 +920,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     pending_discard_init_fixups.extend(
                         texture_memory_actions.register_init_action(
                             &TextureInitTrackerAction {
-                                id: view.parent_id.0,
+                                id: view.parent_id,
                                 range: TextureInitRange::from(view.selector.clone()),
                                 kind: MemoryInitKind::NeedsInitializedMemory,
                             },
@@ -955,7 +956,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent_id.0,
+                        texture: view.parent_id,
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
@@ -1205,7 +1206,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         }
 
         for ra in self.render_attachments {
-            if !texture_guard.contains(ra.texture_id.0) {
+            if !texture_guard.contains(*ra.texture_id) {
                 return Err(RenderPassErrorInner::SurfaceTextureDropped);
             }
             let texture = &texture_guard[*ra.texture_id];
@@ -1340,7 +1341,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder.open_pass(base.label);
 
             let bundle_guard = hub.render_bundles.read();
-            let pipeline_layout_guard = hub.pipeline_layouts.read();
             let bind_group_guard = hub.bind_groups.read();
             let render_pipeline_guard = hub.render_pipelines.read();
             let query_set_guard = hub.query_sets.read();
@@ -1458,16 +1458,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                         }
 
-                        let pipeline_layout_id = state.binder.pipeline_layout_id;
+                        let pipeline_layout = state.binder.pipeline_layout.clone();
                         let entries = state.binder.assign_group(
                             index as usize,
-                            id::Valid(bind_group_id),
+                            bind_group_id,
                             bind_group,
                             &temp_offsets,
                         );
                         if !entries.is_empty() {
-                            let pipeline_layout =
-                                pipeline_layout_guard[pipeline_layout_id.unwrap()].raw();
+                            let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {
                                 let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                                 unsafe {
@@ -1525,12 +1524,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         // Rebind resource
-                        if state.binder.pipeline_layout_id != Some(pipeline.layout_id) {
-                            let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-
+                        if state.binder.pipeline_layout.is_none()
+                            || !state
+                                .binder
+                                .pipeline_layout
+                                .as_ref()
+                                .unwrap()
+                                .is_equal(&pipeline.layout)
+                        {
                             let (start_index, entries) = state.binder.change_pipeline_layout(
-                                &*pipeline_layout_guard,
-                                pipeline.layout_id,
+                                &pipeline.layout,
                                 &pipeline.late_sized_buffer_groups,
                             );
                             if !entries.is_empty() {
@@ -1539,7 +1542,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                                     unsafe {
                                         raw.set_bind_group(
-                                            pipeline_layout.raw(),
+                                            pipeline.layout.raw(),
                                             start_index as u32 + i as u32,
                                             raw_bg,
                                             &e.dynamic_offsets,
@@ -1550,7 +1553,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                             // Clear push constant ranges
                             let non_overlapping = super::bind::compute_nonoverlapping_ranges(
-                                &pipeline_layout.push_constant_ranges,
+                                &pipeline.layout.push_constant_ranges,
                             );
                             for range in non_overlapping {
                                 let offset = range.range.start;
@@ -1560,7 +1563,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     size_bytes,
                                     |clear_offset, clear_data| unsafe {
                                         raw.set_push_constants(
-                                            pipeline_layout.raw(),
+                                            pipeline.layout.raw(),
                                             range.stages,
                                             clear_offset,
                                             clear_data,
@@ -1617,7 +1620,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Some(s) => offset + s.get(),
                             None => buffer.size,
                         };
-                        state.index.bound_buffer_view = Some((id::Valid(buffer_id), offset..end));
+                        state.index.bound_buffer_view = Some((buffer_id, offset..end));
 
                         state.index.format = Some(index_format);
                         state.index.update_limit();
@@ -1766,12 +1769,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let data_slice =
                             &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
-                        let pipeline_layout_id = state
+                        let pipeline_layout = state
                             .binder
-                            .pipeline_layout_id
+                            .pipeline_layout
+                            .as_ref()
                             .ok_or(DrawError::MissingPipeline)
                             .map_pass_err(scope)?;
-                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                         pipeline_layout
                             .validate_push_constant_ranges(stages, offset, end_offset_bytes)
@@ -2237,7 +2240,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         unsafe {
                             bundle.execute(
                                 raw,
-                                &*pipeline_layout_guard,
                                 &*bind_group_guard,
                                 &*render_pipeline_guard,
                                 &*buffer_guard,
@@ -2302,7 +2304,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .reset_queries(
                     transit,
                     &query_set_guard,
-                    cmd_buf.device.info.id().0.backend(),
+                    cmd_buf.device.info.id().backend(),
                 )
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
