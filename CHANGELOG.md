@@ -98,7 +98,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 - DX12 doesn't support `Features::POLYGON_MODE_POINT``. By @teoxoy in [#4032](https://github.com/gfx-rs/wgpu/pull/4032).
 - Set `Features::VERTEX_WRITABLE_STORAGE` based on the right feature level. By @teoxoy in [#4033](https://github.com/gfx-rs/wgpu/pull/4033).
-
+- Fix Queue::write_texture failing on the DX12 backend and added a new test to test writing/copying from different mipmap levels. By @39ali in [#3992](https://github.com/gfx-rs/wgpu/pull/3992)
 ### Documentation
 
 - Add an overview of `RenderPass` and how render state works. By @kpreid in [#4055](https://github.com/gfx-rs/wgpu/pull/4055)
