@@ -1,0 +1,23 @@
+[package]
+name = "ray-scene"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "todo"
+publish = false
+
+[[bin]]
+name = "ray-scene"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck.workspace = true
+glam.workspace = true
+obj.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true

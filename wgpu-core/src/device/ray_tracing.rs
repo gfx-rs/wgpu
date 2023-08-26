@@ -2,10 +2,15 @@
 use crate::device::trace;
 use crate::{
     device::{queue::TempResource, Device, DeviceError},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{self, BlasId, TlasId},
+    identity::{GlobalIdentityHandlerFactory, Input},
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
-    resource, LabelHelpers, LifeGuard, Stored,
+    resource,
+    storage::InvalidId,
+    LabelHelpers, LifeGuard, Stored,
 };
 
 use hal::{AccelerationStructureTriangleIndices, Device as _};
@@ -293,7 +298,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let last_submit_index = blas.life_guard.life_count();
                     (last_submit_index, blas.device_id.value, ref_count)
                 }
-                Err(crate::hub::InvalidId) => {
+                Err(InvalidId) => {
                     hub.blas_s.unregister_locked(blas_id, &mut *blas_guard);
                     return;
                 }
@@ -378,7 +383,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let last_submit_index = tlas.life_guard.life_count();
                     (last_submit_index, tlas.device_id.value, ref_count)
                 }
-                Err(crate::hub::InvalidId) => {
+                Err(InvalidId) => {
                     hub.tlas_s.unregister_locked(tlas_id, &mut *tlas_guard);
                     return;
                 }

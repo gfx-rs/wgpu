@@ -21,6 +21,7 @@ use std::{iter, num::NonZeroU32, ptr};
 pub mod global;
 mod life;
 pub mod queue;
+pub mod ray_tracing;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;

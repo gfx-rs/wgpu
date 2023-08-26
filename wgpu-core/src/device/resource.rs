@@ -316,7 +316,9 @@ impl<A: HalApi> Device<A> {
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (sampler_guard, _) = hub.samplers.read(&mut token);
+            let (sampler_guard, mut token) = hub.samplers.read(&mut token);
+            let (blas_guard, mut token) = hub.blas_s.read(&mut token);
+            let (tlas_guard, _) = hub.tlas_s.read(&mut token);
 
             for id in trackers.buffers.used() {
                 if buffer_guard[id].life_guard.ref_count.is_none() {
@@ -356,6 +358,16 @@ impl<A: HalApi> Device<A> {
             for id in trackers.query_sets.used() {
                 if query_set_guard[id].life_guard.ref_count.is_none() {
                     self.temp_suspected.query_sets.push(id);
+                }
+            }
+            for id in trackers.blas_s.used() {
+                if blas_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.blas_s.push(id);
+                }
+            }
+            for id in trackers.tlas_s.used() {
+                if tlas_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.tlas_s.push(id);
                 }
             }
         }
@@ -1278,6 +1290,10 @@ impl<A: HalApi> Device<A> {
                 .flags
                 .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
         );
+        caps.set(
+            Caps::RAY_QUERY,
+            self.features.contains(wgt::Features::RAY_QUERY),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
@@ -1542,7 +1558,7 @@ impl<A: HalApi> Device<A> {
                         },
                     )
                 }
-                Bt::AccelerationStructure => todo!(),
+                Bt::AccelerationStructure => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -2045,7 +2061,7 @@ impl<A: HalApi> Device<A> {
             buffers: &hal_buffers,
             samplers: &hal_samplers,
             textures: &hal_textures,
-            acceleration_structures: &[],
+            acceleration_structures: &hal_tlas_s,
         };
         let raw = unsafe {
             self.raw

@@ -7,9 +7,6 @@ use wgpu::util::DeviceExt;
 use rt::traits::*;
 use wgpu::ray_tracing as rt;
 
-#[path = "../framework.rs"]
-mod framework;
-
 // from cube
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -113,7 +110,7 @@ struct Example {
     start_inst: Instant,
 }
 
-impl framework::Example for Example {
+impl wgpu_example::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::RAY_QUERY | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
     }
@@ -303,7 +300,7 @@ impl framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &framework::Spawner,
+        spawner: &wgpu_example::framework::Spawner,
     ) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -366,6 +363,8 @@ impl framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_pipeline(&self.pipeline);
@@ -383,24 +382,23 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("ray-cube");
+    wgpu_example::framework::run::<Example>("ray-cube");
 }
 
 #[test]
 fn ray_cube_fragment() {
-    framework::test::<Example>(framework::FrameworkRefTest {
+    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/ray-cube-fragment/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: framework::test_common::TestParameters {
-            required_features: <Example as framework::Example>::required_features(),
+        base_test_parameters: wgpu_test::TestParameters {
+            required_features: <Example as wgpu_example::framework::Example>::required_features(),
             required_downlevel_properties:
-                <Example as framework::Example>::required_downlevel_capabilities(),
-            required_limits: <Example as framework::Example>::required_limits(),
+                <Example as wgpu_example::framework::Example>::required_downlevel_capabilities(),
+            required_limits: <Example as wgpu_example::framework::Example>::required_limits(),
             failures: Vec::new(),
         },
-        tolerance: 1,
-        max_outliers: 1225, // Bounded by swiftshader
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }
