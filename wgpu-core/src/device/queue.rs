@@ -1050,7 +1050,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let mut trackers = device.trackers.lock();
                     crate::command::clear_texture(
                         &*texture_guard,
-                        id::Valid(destination.texture),
+                        destination.texture,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
                             layer_range,
