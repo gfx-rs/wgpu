@@ -467,51 +467,62 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Instance::create_surface");
 
         fn init<A: HalApi>(
+            any_surface: &mut Option<AnySurface>,
             inst: &Option<A::Instance>,
             display_handle: raw_window_handle::RawDisplayHandle,
             window_handle: raw_window_handle::RawWindowHandle,
-        ) -> Option<HalSurface<A>> {
-            inst.as_ref().and_then(|inst| unsafe {
-                match inst.create_surface(display_handle, window_handle) {
-                    Ok(raw) => Some(HalSurface { raw: Arc::new(raw) }),
-                    Err(e) => {
-                        log::warn!("Error: {:?}", e);
-                        None
+        ) {
+            if any_surface.is_none() {
+                if let Some(surface) = inst.as_ref().and_then(|inst| unsafe {
+                    match inst.create_surface(display_handle, window_handle) {
+                        Ok(raw) => Some(HalSurface::<A> { raw: Arc::new(raw) }),
+                        Err(e) => {
+                            log::warn!("Error: {:?}", e);
+                            None
+                        }
                     }
+                }) {
+                    *any_surface = Some(AnySurface::new(surface));
                 }
-            })
+            }
         }
 
         let mut hal_surface = None;
         #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-        if let Some(raw) =
-            init::<hal::api::Vulkan>(&self.instance.vulkan, display_handle, window_handle)
-        {
-            hal_surface = Some(AnySurface::new(raw));
-        }
+        init::<hal::api::Vulkan>(
+            &mut hal_surface,
+            &self.instance.vulkan,
+            display_handle,
+            window_handle,
+        );
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-        if let Some(raw) =
-            init::<hal::api::Metal>(&self.instance.metal, display_handle, window_handle)
-        {
-            hal_surface = Some(AnySurface::new(raw));
-        }
+        init::<hal::api::Metal>(
+            &mut hal_surface,
+            &self.instance.metal,
+            display_handle,
+            window_handle,
+        );
         #[cfg(all(feature = "dx12", windows))]
-        if let Some(raw) =
-            init::<hal::api::Dx12>(&self.instance.dx12, display_handle, window_handle)
-        {
-            hal_surface = Some(AnySurface::new(raw));
-        }
+        init::<hal::api::Dx12>(
+            &mut hal_surface,
+            &self.instance.dx12,
+            display_handle,
+            window_handle,
+        );
         #[cfg(all(feature = "dx11", windows))]
-        if let Some(raw) =
-            init::<hal::api::Dx11>(&self.instance.dx11, display_handle, window_handle)
-        {
-            hal_surface = Some(AnySurface::new(raw));
-        }
+        init::<hal::api::Dx11>(
+            &mut hal_surface,
+            &self.instance.dx11,
+            display_handle,
+            window_handle,
+        );
         #[cfg(feature = "gles")]
-        if let Some(raw) = init::<hal::api::Gles>(&self.instance.gl, display_handle, window_handle)
-        {
-            hal_surface = Some(AnySurface::new(raw));
-        }
+        init::<hal::api::Gles>(
+            &mut hal_surface,
+            &self.instance.gl,
+            display_handle,
+            window_handle,
+        );
 
         let surface = Surface {
             presentation: Mutex::new(None),
