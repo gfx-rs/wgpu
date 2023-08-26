@@ -321,7 +321,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let last_submission = {
-            match hub.buffers.get(buffer_id) {
+            let buffer_guard = hub.buffers.write();
+            match buffer_guard.get(buffer_id) {
                 Ok(buffer) => buffer.info.submission_index(),
                 Err(_) => return Ok(()),
             }
@@ -506,10 +507,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (last_submit_index, buffer) = {
             let mut buffer_guard = hub.buffers.write();
-            match hub.buffers.get(buffer_id) {
+            match buffer_guard.get(buffer_id) {
                 Ok(buffer) => {
                     let last_submit_index = buffer.info.submission_index();
-                    (last_submit_index, buffer)
+                    (last_submit_index, buffer.clone())
                 }
                 Err(_) => {
                     hub.buffers.unregister_locked(buffer_id, &mut *buffer_guard);
