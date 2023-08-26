@@ -1,8 +1,11 @@
 use crate::{
     command::CommandBuffer,
     device::queue::TempResource,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Storage, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{BlasId, CommandEncoderId, TlasId},
+    identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     ray_tracing::{
         tlas_instance_into_bytes, BlasAction, BlasBuildEntry, BlasGeometries,
@@ -10,6 +13,7 @@ use crate::{
         ValidateBlasActionsError, ValidateTlasActionsError,
     },
     resource::{Blas, Tlas},
+    storage::Storage,
     FastHashSet,
 };
 

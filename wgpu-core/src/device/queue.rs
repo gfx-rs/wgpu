@@ -8,8 +8,11 @@ use crate::{
     conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id,
+    identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{BufferAccessError, BufferMapState, StagingBuffer, TextureInner},
     track, FastHashSet, SubmissionIndex,
@@ -34,6 +37,13 @@ pub struct SubmittedWorkDoneClosureC {
     pub user_data: *mut u8,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for SubmittedWorkDoneClosureC {}
 
 pub struct SubmittedWorkDoneClosure {
@@ -42,17 +52,30 @@ pub struct SubmittedWorkDoneClosure {
     inner: SubmittedWorkDoneClosureInner,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
+
 enum SubmittedWorkDoneClosureInner {
-    Rust {
-        callback: Box<dyn FnOnce() + Send + 'static>,
-    },
-    C {
-        inner: SubmittedWorkDoneClosureC,
-    },
+    Rust { callback: SubmittedWorkDoneCallback },
+    C { inner: SubmittedWorkDoneClosureC },
 }
 
 impl SubmittedWorkDoneClosure {
-    pub fn from_rust(callback: Box<dyn FnOnce() + Send + 'static>) -> Self {
+    pub fn from_rust(callback: SubmittedWorkDoneCallback) -> Self {
         Self {
             inner: SubmittedWorkDoneClosureInner::Rust { callback },
         }
@@ -485,7 +508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     fn queue_validate_write_buffer_impl<A: HalApi>(
         &self,
-        buffer: &super::resource::Buffer<A>,
+        buffer: &crate::resource::Buffer<A>,
         buffer_id: id::BufferId,
         buffer_offset: u64,
         buffer_size: u64,
@@ -1436,17 +1459,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
         //TODO: flush pending writes
-        let closure_opt = {
-            let hub = A::hub(self);
-            let mut token = Token::root();
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            match device_guard.get(queue_id) {
-                Ok(device) => device.lock_life(&mut token).add_work_done_closure(closure),
-                Err(_) => return Err(InvalidQueue),
-            }
-        };
-        if let Some(closure) = closure_opt {
-            closure.call();
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        match device_guard.get(queue_id) {
+            Ok(device) => device.lock_life(&mut token).add_work_done_closure(closure),
+            Err(_) => return Err(InvalidQueue),
         }
         Ok(())
     }

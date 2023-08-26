@@ -119,6 +119,7 @@ fn main() {
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 fn main() {}
 
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {
     use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
 
@@ -174,6 +175,8 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         })],
         depth_stencil_attachment: None,
         multiview: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
     };
     unsafe {
         encoder.begin_encoding(None).unwrap();

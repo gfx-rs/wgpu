@@ -48,25 +48,39 @@ pub use wgt::{
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin2d,
-    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace,
-    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
-    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
-    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
+    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits,
+    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
+    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
+    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
     StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
-    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
+    WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
+    VERTEX_STRIDE_ALIGNMENT,
 };
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+#[doc(hidden)]
+pub use ::hal;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+#[doc(hidden)]
+pub use ::wgc as core;
 
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use wgt::{ExternalImageSource, ImageCopyExternalImage};
-#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-static_assertions::assert_impl_all!(ExternalImageSource: Send, Sync);
 
 /// Filter for error scopes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
@@ -79,7 +93,22 @@ pub enum ErrorFilter {
 static_assertions::assert_impl_all!(ErrorFilter: Send, Sync);
 
 type C = dyn DynContext;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 type Data = dyn Any + Send + Sync;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+type Data = dyn Any;
 
 /// Context for all other wgpu objects. Instance of wgpu.
 ///
@@ -93,6 +122,13 @@ type Data = dyn Any + Send + Sync;
 pub struct Instance {
     context: Arc<C>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Instance: Send, Sync);
 
 /// Handle to a physical graphics and/or compute device.
@@ -109,6 +145,13 @@ pub struct Adapter {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Adapter: Send, Sync);
 
 impl Drop for Adapter {
@@ -133,6 +176,13 @@ pub struct Device {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Device: Send, Sync);
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
@@ -143,6 +193,13 @@ static_assertions::assert_impl_all!(Device: Send, Sync);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex(ObjectId, Arc<crate::Data>);
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
 /// The main purpose of this struct is to resolve mapped ranges (convert sizes
@@ -219,6 +276,13 @@ pub struct Buffer {
     usage: BufferUsages,
     // Todo: missing map_state https://www.w3.org/TR/webgpu/#dom-gpubuffer-mapstate
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Buffer: Send, Sync);
 
 /// Slice into a [`Buffer`].
@@ -235,6 +299,13 @@ pub struct BufferSlice<'a> {
     offset: BufferAddress,
     size: Option<BufferSize>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
 
 /// Handle to a texture on the GPU.
@@ -250,6 +321,13 @@ pub struct Texture {
     owned: bool,
     descriptor: TextureDescriptor<'static>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
 
 /// Handle to a texture view.
@@ -264,6 +342,13 @@ pub struct TextureView {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
 
 /// Handle to a sampler.
@@ -281,6 +366,13 @@ pub struct Sampler {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Sampler: Send, Sync);
 
 impl Drop for Sampler {
@@ -321,6 +413,13 @@ pub struct Surface {
     // been created is is additionally wrapped in an option.
     config: Mutex<Option<SurfaceConfiguration>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
 impl Drop for Surface {
@@ -348,6 +447,13 @@ pub struct BindGroupLayout {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
 impl Drop for BindGroupLayout {
@@ -373,6 +479,13 @@ pub struct BindGroup {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 impl Drop for BindGroup {
@@ -397,6 +510,13 @@ pub struct ShaderModule {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 
 impl Drop for ShaderModule {
@@ -489,6 +609,13 @@ pub struct PipelineLayout {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
 impl Drop for PipelineLayout {
@@ -512,6 +639,13 @@ pub struct RenderPipeline {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl Drop for RenderPipeline {
@@ -546,6 +680,13 @@ pub struct ComputePipeline {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePipeline: Send, Sync);
 
 impl Drop for ComputePipeline {
@@ -583,13 +724,21 @@ pub struct CommandBuffer {
     id: Option<ObjectId>,
     data: Option<Box<Data>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
         if !thread::panicking() {
-            if let Some(ref id) = self.id {
-                self.context.command_buffer_drop(id, &self.data.take());
+            if let Some(id) = self.id.take() {
+                self.context
+                    .command_buffer_drop(&id, self.data.take().unwrap().as_ref());
             }
         }
     }
@@ -610,6 +759,13 @@ pub struct CommandEncoder {
     id: Option<ObjectId>,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 
 impl Drop for CommandEncoder {
@@ -622,9 +778,21 @@ impl Drop for CommandEncoder {
     }
 }
 
-/// In-progress recording of a render pass.
+/// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
 ///
-/// It can be created with [`CommandEncoder::begin_render_pass`].
+/// It can be created with [`CommandEncoder::begin_render_pass()`], whose [`RenderPassDescriptor`]
+/// specifies the attachments (textures) that will be rendered to.
+///
+/// Most of the methods on `RenderPass` serve one of two purposes, identifiable by their names:
+///
+/// * `draw_*()`: Drawing (that is, encoding a render command, which, when executed by the GPU, will
+///   rasterize something and execute shaders).
+/// * `set_*()`: Setting part of the [render state](https://gpuweb.github.io/gpuweb/#renderstate)
+///   for future drawing commands.
+///
+/// A render pass may contain any number of drawing commands, and before/between each command the
+/// render state may be updated however you wish; each drawing command will be executed using the
+/// render state that has been set when the `draw_*()` function is called.
 ///
 /// Corresponds to [WebGPU `GPURenderPassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
@@ -686,6 +854,13 @@ pub struct RenderBundle {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
 impl Drop for RenderBundle {
@@ -702,11 +877,26 @@ impl Drop for RenderBundle {
 /// It can be created with [`Device::create_query_set`].
 ///
 /// Corresponds to [WebGPU `GPUQuerySet`](https://gpuweb.github.io/gpuweb/#queryset).
+#[derive(Debug)]
 pub struct QuerySet {
     context: Arc<C>,
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 impl Drop for QuerySet {
@@ -730,6 +920,13 @@ pub struct Queue {
     id: ObjectId,
     data: Box<Data>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 /// Resource that can be bound to a pipeline.
@@ -777,6 +974,13 @@ pub enum BindingResource<'a> {
     /// Todo
     AccelerationStructure(&'a crate::ray_tracing::Tlas),
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 
 /// Describes the segment of a buffer to bind.
@@ -787,15 +991,34 @@ static_assertions::assert_impl_all!(BindingResource: Send, Sync);
 pub struct BufferBinding<'a> {
     /// The buffer to bind.
     pub buffer: &'a Buffer,
-    /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
-    /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
+
+    /// Base offset of the buffer, in bytes.
     ///
-    /// The offset has to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
-    /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    /// If the [`has_dynamic_offset`] field of this buffer's layout entry is
+    /// `true`, the offset here will be added to the dynamic offset passed to
+    /// [`RenderPass::set_bind_group`] or [`ComputePass::set_bind_group`].
+    ///
+    /// If the buffer was created with [`BufferUsages::UNIFORM`], then this
+    /// offset must be a multiple of
+    /// [`Limits::min_uniform_buffer_offset_alignment`].
+    ///
+    /// If the buffer was created with [`BufferUsages::STORAGE`], then this
+    /// offset must be a multiple of
+    /// [`Limits::min_storage_buffer_offset_alignment`].
+    ///
+    /// [`has_dynamic_offset`]: BindingType::Buffer::has_dynamic_offset
     pub offset: BufferAddress,
-    /// Size of the binding, or `None` for using the rest of the buffer.
+
+    /// Size of the binding in bytes, or `None` for using the rest of the buffer.
     pub size: Option<BufferSize>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
@@ -842,6 +1065,31 @@ impl<V: Default> Default for Operations<V> {
     }
 }
 
+/// Describes the timestamp writes of a render pass.
+///
+/// For use with [`RenderPassDescriptor`].
+/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
+///
+/// Corresponds to [WebGPU `GPURenderPassTimestampWrite`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrites).
+#[derive(Clone, Debug)]
+pub struct RenderPassTimestampWrites<'a> {
+    /// The query set to write to.
+    pub query_set: &'a QuerySet,
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
+    pub end_of_pass_write_index: Option<u32>,
+}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
+
 /// Describes a color attachment to a [`RenderPass`].
 ///
 /// For use with [`RenderPassDescriptor`].
@@ -857,6 +1105,13 @@ pub struct RenderPassColorAttachment<'tex> {
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassColorAttachment: Send, Sync);
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
@@ -874,6 +1129,13 @@ pub struct RenderPassDepthStencilAttachment<'tex> {
     /// What operations will be performed on the stencil part of the attachment.
     pub stencil_ops: Option<Operations<u32>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment: Send, Sync);
 
 // The underlying types are also exported so that documentation shows up for them
@@ -888,6 +1150,13 @@ pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
 pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
 /// Describes a [`Device`].
 ///
@@ -940,6 +1209,13 @@ static_assertions::assert_impl_all!(QuerySetDescriptor: Send, Sync);
 pub use wgt::Maintain as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Maintain: Send, Sync);
 
 /// Describes a [`TextureView`].
@@ -995,6 +1271,13 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
     pub push_constant_ranges: &'a [PushConstantRange],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(PipelineLayoutDescriptor: Send, Sync);
 
 /// Describes a [`Sampler`].
@@ -1064,6 +1347,13 @@ pub struct BindGroupEntry<'a> {
     /// Resource to attach to the binding
     pub resource: BindingResource<'a>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroupEntry: Send, Sync);
 
 /// Describes a group of bindings and the resources to be bound.
@@ -1081,6 +1371,13 @@ pub struct BindGroupDescriptor<'a> {
     /// The resources to bind to this bind group.
     pub entries: &'a [BindGroupEntry<'a>],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(BindGroupDescriptor: Send, Sync);
 
 /// Describes the attachments of a render pass.
@@ -1100,7 +1397,20 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
     pub color_attachments: &'desc [Option<RenderPassColorAttachment<'tex>>],
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    /// Defines which timestamp values will be written for this pass, and where to write them to.
+    ///
+    /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
+    /// Defines where the occlusion query results will be stored for this pass.
+    pub occlusion_query_set: Option<&'tex QuerySet>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
@@ -1108,7 +1418,7 @@ static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
 /// For use in [`VertexState`].
 ///
 /// Corresponds to [WebGPU `GPUVertexBufferLayout`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpassdescriptor).
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexbufferlayout).
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer.
@@ -1136,6 +1446,13 @@ pub struct VertexState<'a> {
     /// The format of any vertex buffers used with this pipeline.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(VertexState: Send, Sync);
 
 /// Describes the fragment processing in a render pipeline.
@@ -1154,6 +1471,13 @@ pub struct FragmentState<'a> {
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(FragmentState: Send, Sync);
 
 /// Describes a render (graphics) pipeline.
@@ -1182,7 +1506,39 @@ pub struct RenderPipelineDescriptor<'a> {
     /// layers the attachments will have.
     pub multiview: Option<NonZeroU32>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
+
+/// Describes the timestamp writes of a compute pass.
+///
+/// For use with [`ComputePassDescriptor`].
+/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
+///
+/// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrites).
+#[derive(Clone, Debug)]
+pub struct ComputePassTimestampWrites<'a> {
+    /// The query set to write to.
+    pub query_set: &'a QuerySet,
+    /// The index of the query set at which a start timestamp of this pass is written, if any.
+    pub beginning_of_pass_write_index: Option<u32>,
+    /// The index of the query set at which an end timestamp of this pass is written, if any.
+    pub end_of_pass_write_index: Option<u32>,
+}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
 
 /// Describes the attachments of a compute pass.
 ///
@@ -1190,11 +1546,22 @@ static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUComputePassDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepassdescriptor).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
+    /// Defines which timestamp values will be written for this pass, and where to write them to.
+    ///
+    /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
 
 /// Describes a compute pipeline.
@@ -1215,6 +1582,13 @@ pub struct ComputePipelineDescriptor<'a> {
     /// and no return value in the shader.
     pub entry_point: &'a str,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
@@ -1223,6 +1597,13 @@ pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// Corresponds to [WebGPU `GPUImageCopyBuffer`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopybuffer).
 pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ImageCopyBuffer: Send, Sync);
 
 pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
@@ -1231,6 +1612,13 @@ pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// Corresponds to [WebGPU `GPUImageCopyTexture`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexture).
 pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
 pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
@@ -1240,6 +1628,13 @@ pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
 /// Corresponds to [WebGPU `GPUImageCopyTextureTagged`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopytexturetagged).
 pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
 
 /// Describes a [`BindGroupLayout`].
@@ -1296,8 +1691,15 @@ pub struct SurfaceTexture {
     /// but should be recreated for maximum performance.
     pub suboptimal: bool,
     presented: bool,
-    detail: Box<dyn Any + Send + Sync>,
+    detail: Box<dyn AnyWasmNotSendSync>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(SurfaceTexture: Send, Sync);
 
 /// Result of an unsuccessful call to [`Surface::get_current_texture`].
@@ -1363,7 +1765,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn from_hal<A: wgc::hub::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             context: Arc::new(unsafe {
                 crate::backend::Context::from_hal_instance::<A>(hal_instance)
@@ -1386,7 +1788,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         unsafe {
             self.context
                 .as_any()
@@ -1428,7 +1830,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn enumerate_adapters(&self, backends: Backends) -> impl Iterator<Item = Adapter> {
+    pub fn enumerate_adapters(&self, backends: Backends) -> impl ExactSizeIterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .as_any()
@@ -1451,7 +1853,7 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions,
-    ) -> impl Future<Output = Option<Adapter>> + Send {
+    ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
         async move {
@@ -1471,7 +1873,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_adapter_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {
@@ -1701,7 +2103,7 @@ impl Instance {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub fn generate_report(&self) -> wgc::hub::GlobalReport {
+    pub fn generate_report(&self) -> wgc::global::GlobalReport {
         self.context
             .as_any()
             .downcast_ref::<crate::backend::Context>()
@@ -1731,7 +2133,7 @@ impl Adapter {
         &self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
+    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let device = DynContext::adapter_request_device(
             &*self.context,
@@ -1776,7 +2178,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_device_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
@@ -1830,7 +2232,7 @@ impl Adapter {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
         &self,
         hal_adapter_callback: F,
     ) -> R {
@@ -2179,7 +2581,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn create_texture_from_hal<A: wgc::hub::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor,
@@ -2205,6 +2607,50 @@ impl Device {
                 view_formats: &[],
                 ..desc.clone()
             },
+        }
+    }
+
+    /// Creates a [`Buffer`] from a wgpu-hal Buffer.
+    ///
+    /// # Safety
+    ///
+    /// - `hal_buffer` must be created from this device internal handle
+    /// - `hal_buffer` must be created respecting `desc`
+    /// - `hal_buffer` must be initialized
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_buffer: A::Buffer,
+        desc: &BufferDescriptor,
+    ) -> Buffer {
+        let mut map_context = MapContext::new(desc.size);
+        if desc.mapped_at_creation {
+            map_context.initial_range = 0..desc.size;
+        }
+
+        let (id, buffer) = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_buffer_from_hal::<A>(
+                    hal_buffer,
+                    self.data.as_ref().downcast_ref().unwrap(),
+                    desc,
+                )
+        };
+
+        Buffer {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(id),
+            data: Box::new(buffer),
+            map_context: Mutex::new(map_context),
+            size: desc.size,
+            usage: desc.usage,
         }
     }
 
@@ -2245,7 +2691,7 @@ impl Device {
     }
 
     /// Pop an error scope.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + Send {
+    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.context
             .device_pop_error_scope(&self.id, self.data.as_ref())
     }
@@ -2284,7 +2730,7 @@ impl Device {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         hal_device_callback: F,
     ) -> R {
@@ -2377,33 +2823,6 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     .map(|size| BufferSize::new(size).expect("Buffer slices can not be empty"));
 
     (offset, size)
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::BufferSize;
-
-    #[test]
-    fn range_to_offset_size_works() {
-        assert_eq!(crate::range_to_offset_size(0..2), (0, BufferSize::new(2)));
-        assert_eq!(crate::range_to_offset_size(2..5), (2, BufferSize::new(3)));
-        assert_eq!(crate::range_to_offset_size(..), (0, None));
-        assert_eq!(crate::range_to_offset_size(21..), (21, None));
-        assert_eq!(crate::range_to_offset_size(0..), (0, None));
-        assert_eq!(crate::range_to_offset_size(..21), (0, BufferSize::new(21)));
-    }
-
-    #[test]
-    #[should_panic]
-    fn range_to_offset_size_panics_for_empty_range() {
-        crate::range_to_offset_size(123..123);
-    }
-
-    #[test]
-    #[should_panic]
-    fn range_to_offset_size_panics_for_unbounded_empty_range() {
-        crate::range_to_offset_size(..0);
-    }
 }
 
 /// Read only view into a mapped buffer.
@@ -2550,7 +2969,7 @@ impl<'a> BufferSlice<'a> {
     pub fn map_async(
         &self,
         mode: MapMode,
-        callback: impl FnOnce(Result<(), BufferAsyncError>) + Send + 'static,
+        callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
         assert_eq!(
@@ -2586,6 +3005,26 @@ impl<'a> BufferSlice<'a> {
             self.offset..end,
         );
         BufferView { slice: *self, data }
+    }
+
+    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    ///
+    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
+    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
+    /// ArrayBuffer that we mapped the data into in js.
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        DynContext::buffer_get_mapped_range_as_array_buffer(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.buffer.data.as_ref(),
+            self.offset..end,
+        )
     }
 
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
@@ -2626,7 +3065,7 @@ impl Texture {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal<A: wgc::hub::HalApi, F: FnOnce(Option<&A::Texture>)>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>)>(
         &self,
         hal_texture_callback: F,
     ) {
@@ -3005,11 +3444,14 @@ impl CommandEncoder {
 
 impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
-    /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
+    /// in the active pipeline when any `draw_*()` method is called must match the layout of
+    /// this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    ///
+    /// Subsequent draw calls’ shader executions will be able to access data in these bind groups.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -3043,6 +3485,8 @@ impl<'a> RenderPass<'a> {
     /// Sets the blend color as used by some of the blending modes.
     ///
     /// Subsequent blending tests will test against this value.
+    /// If this method has not been called, the blend constant defaults to [`Color::TRANSPARENT`]
+    /// (all components zero).
     pub fn set_blend_constant(&mut self, color: Color) {
         DynContext::render_pass_set_blend_constant(
             &*self.parent.context,
@@ -3092,9 +3536,15 @@ impl<'a> RenderPass<'a> {
         )
     }
 
-    /// Sets the scissor region.
+    /// Sets the scissor rectangle used during the rasterization stage.
+    /// After transformation into [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
-    /// Subsequent draw calls will discard any fragments that fall outside this region.
+    /// Subsequent draw calls will discard any fragments which fall outside the scissor rectangle.
+    /// If this method has not been called, the scissor rectangle defaults to the entire bounds of
+    /// the render targets.
+    ///
+    /// The function of the scissor rectangle resembles [`set_viewport()`](Self::set_viewport),
+    /// but it does not affect the coordinate system, only which fragments are discarded.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
@@ -3107,9 +3557,12 @@ impl<'a> RenderPass<'a> {
         );
     }
 
-    /// Sets the viewport region.
+    /// Sets the viewport used during the rasterization stage to linearly map
+    /// from [normalized device coordinates](https://www.w3.org/TR/webgpu/#ndc) to [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
-    /// Subsequent draw calls will draw any fragments in this region.
+    /// Subsequent draw calls will only draw within this region.
+    /// If this method has not been called, the viewport defaults to the entire bounds of the render
+    /// targets.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
         DynContext::render_pass_set_viewport(
             &*self.parent.context,
@@ -3127,6 +3580,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the stencil reference.
     ///
     /// Subsequent stencil tests will test against this value.
+    /// If this method has not been called, the stencil reference value defaults to `0`.
     pub fn set_stencil_reference(&mut self, reference: u32) {
         DynContext::render_pass_set_stencil_reference(
             &*self.parent.context,
@@ -3138,7 +3592,25 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s).
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
+    /// Does not use an Index Buffer. If you need this see [`RenderPass::draw_indexed`]
+    ///
+    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
+    ///
+    /// vertices: The range of vertices to draw.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for vertex_id in vertex_range {
+    ///         let vertex = vertex[vertex_id];
+    ///         vertex_shader(vertex, vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.parent.context,
@@ -3180,8 +3652,28 @@ impl<'a> RenderPass<'a> {
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
-    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderPass::set_index_buffer`]
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
+    ///
+    /// indices: The range of indices to draw.
+    /// base_vertex: value added to each index value before indexing into the vertex buffers.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for index_index in index_range {
+    ///         let vertex_id = index_buffer[index_index];
+    ///         let adjusted_vertex_id = vertex_id + base_vertex;
+    ///         let vertex = vertex[adjusted_vertex_id];
+    ///         vertex_shader(vertex, adjusted_vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.parent.context,
@@ -3198,6 +3690,9 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
@@ -3216,6 +3711,9 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3233,6 +3731,9 @@ impl<'a> RenderPass<'a> {
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.
+    ///
+    /// Commands in the bundle do not inherit this render pass's current render state, and after the
+    /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
     pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle> + 'a>(
         &mut self,
         render_bundles: I,
@@ -3258,8 +3759,10 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3284,8 +3787,10 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3315,7 +3820,6 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
     ///
     /// The structure expected in `count_buffer` is the following:
@@ -3326,6 +3830,9 @@ impl<'a> RenderPass<'a> {
     ///     count: u32, // Number of draw calls to issue.
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect_count(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3370,6 +3877,9 @@ impl<'a> RenderPass<'a> {
     ///     count: u32, // Number of draw calls to issue.
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect_count(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3465,6 +3975,29 @@ impl<'a> RenderPass<'a> {
             query_set.data.as_ref(),
             query_index,
         )
+    }
+}
+
+impl<'a> RenderPass<'a> {
+    /// Start a occlusion query on this render pass. It can be ended with
+    /// `end_occlusion_query`. Occlusion queries may not be nested.
+    pub fn begin_occlusion_query(&mut self, query_index: u32) {
+        DynContext::render_pass_begin_occlusion_query(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            query_index,
+        );
+    }
+
+    /// End the occlusion query on this render pass. It can be started with
+    /// `begin_occlusion_query`. Occlusion queries may not be nested.
+    pub fn end_occlusion_query(&mut self) {
+        DynContext::render_pass_end_occlusion_query(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+        );
     }
 }
 
@@ -3775,6 +4308,21 @@ impl<'a> RenderBundleEncoder<'a> {
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// Does not use an Index Buffer. If you need this see [`RenderBundleEncoder::draw_indexed`]
+    ///
+    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
+    ///
+    /// vertices: The range of vertices to draw.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for vertex_id in vertex_range {
+    ///         let vertex = vertex[vertex_id];
+    ///         vertex_shader(vertex, vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw(
             &*self.parent.context,
@@ -3785,10 +4333,27 @@ impl<'a> RenderBundleEncoder<'a> {
         )
     }
 
-    /// Draws indexed primitives using the active index buffer and the active vertex buffers.
+    /// Draws indexed primitives using the active index buffer and the active vertex buffer(s).
     ///
-    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`].
+    /// The active vertex buffer(s) can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    ///
+    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
+    ///
+    /// indices: The range of indices to draw.
+    /// base_vertex: value added to each index value before indexing into the vertex buffers.
+    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// E.g.of how its used internally
+    /// ```rust ignore
+    /// for instance_id in instance_range {
+    ///     for index_index in index_range {
+    ///         let vertex_id = index_buffer[index_index];
+    ///         let adjusted_vertex_id = vertex_id + base_vertex;
+    ///         let vertex = vertex[adjusted_vertex_id];
+    ///         vertex_shader(vertex, adjusted_vertex_id, instance_id);
+    ///     }
+    /// }
+    /// ```
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_bundle_encoder_draw_indexed(
             &*self.parent.context,
@@ -3892,6 +4457,13 @@ pub struct QueueWriteBufferView<'a> {
     offset: BufferAddress,
     inner: Box<dyn context::QueueWriteBuffer>,
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
 impl Deref for QueueWriteBufferView<'_> {
@@ -4065,13 +4637,16 @@ impl Queue {
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.
     ///
     /// Returns zero if timestamp queries are unsupported.
+    ///
+    /// Timestamp values are represented in nanosecond values on WebGPU, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
+    /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required.
     pub fn get_timestamp_period(&self) -> f32 {
         DynContext::queue_get_timestamp_period(&*self.context, &self.id, self.data.as_ref())
     }
 
     /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks attached to the same submission have also
-    /// been called.
+    /// being called implies that all mapped buffer callbacks which were registered before this call will
+    /// have been called.
     ///
     /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
     /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
@@ -4243,7 +4818,11 @@ impl Surface {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal_mut<A: wgc::hub::HalApi, F: FnOnce(Option<&mut A::Surface>) -> R, R>(
+    pub unsafe fn as_hal_mut<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&mut A::Surface>) -> R,
+        R,
+    >(
         &mut self,
         hal_surface_callback: F,
     ) -> R {
@@ -4264,7 +4843,16 @@ impl Surface {
 #[cfg(feature = "expose-ids")]
 #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
-pub struct Id<T>(core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+pub struct Id<T>(::core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+
+// SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
+// returned for different types , so `Id` can safely implement Send and Sync.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Send for Id<T> {}
+
+// SAFETY: See the implementation for `Send`.
+#[cfg(feature = "expose-ids")]
+unsafe impl<T> Sync for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
 impl<T> Clone for Id<T> {
@@ -4518,16 +5106,55 @@ pub enum Error {
     /// Out of memory error
     OutOfMemory {
         /// Lower level source of the error.
+        #[cfg(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        ))]
         source: Box<dyn error::Error + Send + 'static>,
+        /// Lower level source of the error.
+        #[cfg(not(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        )))]
+        source: Box<dyn error::Error + 'static>,
     },
     /// Validation error, signifying a bug in code or data
     Validation {
         /// Lower level source of the error.
+        #[cfg(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        ))]
         source: Box<dyn error::Error + Send + 'static>,
+        /// Lower level source of the error.
+        #[cfg(not(any(
+            not(target_arch = "wasm32"),
+            all(
+                feature = "fragile-send-sync-non-atomic-wasm",
+                not(target_feature = "atomics")
+            )
+        )))]
+        source: Box<dyn error::Error + 'static>,
         /// Description of the validation error.
         description: String,
     },
 }
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(Error: Send);
 
 impl error::Error for Error {
@@ -4545,5 +5172,64 @@ impl Display for Error {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),
         }
+    }
+}
+
+use send_sync::*;
+
+mod send_sync {
+    use std::any::Any;
+    use std::fmt;
+
+    use wgt::{WasmNotSend, WasmNotSync};
+
+    pub trait AnyWasmNotSendSync: Any + WasmNotSend + WasmNotSync {
+        fn upcast_any_ref(&self) -> &dyn Any;
+    }
+    impl<T: Any + WasmNotSend + WasmNotSync> AnyWasmNotSendSync for T {
+        #[inline]
+        fn upcast_any_ref(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    impl dyn AnyWasmNotSendSync + 'static {
+        #[inline]
+        pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
+            self.upcast_any_ref().downcast_ref::<T>()
+        }
+    }
+
+    impl fmt::Debug for dyn AnyWasmNotSendSync {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("Any").finish_non_exhaustive()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::BufferSize;
+
+    #[test]
+    fn range_to_offset_size_works() {
+        assert_eq!(crate::range_to_offset_size(0..2), (0, BufferSize::new(2)));
+        assert_eq!(crate::range_to_offset_size(2..5), (2, BufferSize::new(3)));
+        assert_eq!(crate::range_to_offset_size(..), (0, None));
+        assert_eq!(crate::range_to_offset_size(21..), (21, None));
+        assert_eq!(crate::range_to_offset_size(0..), (0, None));
+        assert_eq!(crate::range_to_offset_size(..21), (0, BufferSize::new(21)));
+    }
+
+    #[test]
+    #[should_panic]
+    fn range_to_offset_size_panics_for_empty_range() {
+        crate::range_to_offset_size(123..123);
+    }
+
+    #[test]
+    #[should_panic]
+    fn range_to_offset_size_panics_for_unbounded_empty_range() {
+        crate::range_to_offset_size(..0);
     }
 }

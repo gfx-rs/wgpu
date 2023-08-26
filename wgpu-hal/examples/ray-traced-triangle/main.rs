@@ -225,6 +225,7 @@ impl<A: hal::Api> Example<A> {
                 hal::InstanceFlags::empty()
             },
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+            gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let mut surface = unsafe {
@@ -905,8 +906,10 @@ impl<A: hal::Api> Example<A> {
                 .unwrap()
         };
         unsafe {
-            ctx.encoder
-                .begin_compute_pass(&hal::ComputePassDescriptor { label: None });
+            ctx.encoder.begin_compute_pass(&hal::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
             ctx.encoder.set_compute_pipeline(&self.pipeline);
             ctx.encoder
                 .set_bind_group(&self.pipeline_layout, 0, &self.bind_group, &[]);
@@ -1041,26 +1044,28 @@ impl<A: hal::Api> Example<A> {
     }
 }
 
-#[cfg(all(feature = "metal"))]
-type Api = hal::api::Metal;
-#[cfg(all(feature = "vulkan", not(feature = "metal")))]
-type Api = hal::api::Vulkan;
-#[cfg(all(feature = "gles", not(feature = "metal"), not(feature = "vulkan")))]
-type Api = hal::api::Gles;
-#[cfg(all(
-    feature = "dx12",
-    not(feature = "metal"),
-    not(feature = "vulkan"),
-    not(feature = "gles")
-))]
-type Api = hal::api::Dx12;
-#[cfg(not(any(
-    feature = "metal",
-    feature = "vulkan",
-    feature = "gles",
-    feature = "dx12"
-)))]
-type Api = hal::api::Empty;
+cfg_if::cfg_if! {
+    // Apple + Metal
+    if #[cfg(all(any(target_os = "macos", target_os = "ios"), feature = "metal"))] {
+        type Api = hal::api::Metal;
+    }
+    // Wasm + Vulkan
+    else if #[cfg(all(not(target_arch = "wasm32"), feature = "vulkan"))] {
+        type Api = hal::api::Vulkan;
+    }
+    // Windows + DX12
+    else if #[cfg(all(windows, feature = "dx12"))] {
+        type Api = hal::api::Dx12;
+    }
+    // Anything + GLES
+    else if #[cfg(feature = "gles")] {
+        type Api = hal::api::Gles;
+    }
+    // Fallback
+    else {
+        type Api = hal::api::Empty;
+    }
+}
 
 fn main() {
     env_logger::init();

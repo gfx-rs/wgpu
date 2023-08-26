@@ -1,7 +1,10 @@
 use crate::{
     device::{Device, DeviceDescriptor},
-    hub::{Global, GlobalIdentityHandlerFactory, HalApi, Input, Token},
+    global::Global,
+    hal_api::HalApi,
+    hub::Token,
     id::{AdapterId, DeviceId, SurfaceId, Valid},
+    identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
     LabelHelpers, LifeGuard, Stored, DOWNLEVEL_WARNING_MESSAGE,
 };
@@ -79,6 +82,7 @@ impl Instance {
                     name: "wgpu",
                     flags,
                     dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
+                    gles_minor_version: instance_desc.gles_minor_version,
                 };
                 unsafe { hal::Instance::init(&hal_desc).ok() }
             } else {
@@ -140,7 +144,7 @@ pub struct Surface {
     pub gl: Option<HalSurface<hal::api::Gles>>,
 }
 
-impl crate::hub::Resource for Surface {
+impl crate::resource::Resource for Surface {
     const TYPE: &'static str = "Surface";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -349,6 +353,7 @@ impl<A: HalApi> Adapter<A> {
             |err| match err {
                 hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
                 hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+                hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
             },
         )?;
 
@@ -356,7 +361,7 @@ impl<A: HalApi> Adapter<A> {
     }
 }
 
-impl<A: hal::Api> crate::hub::Resource for Adapter<A> {
+impl<A: hal::Api> crate::resource::Resource for Adapter<A> {
     const TYPE: &'static str = "Adapter";
 
     fn life_guard(&self) -> &LifeGuard {
@@ -517,7 +522,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(target_os = "emscripten"),
+        feature = "gles"
+    ))]
     pub fn create_surface_webgl_canvas(
         &self,
         canvas: web_sys::HtmlCanvasElement,
@@ -544,7 +553,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id.0)
     }
 
-    #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(target_os = "emscripten"),
+        feature = "gles"
+    ))]
     pub fn create_surface_webgl_offscreen_canvas(
         &self,
         canvas: web_sys::OffscreenCanvas,
@@ -885,6 +898,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // hardware GPU (integrated or discrete).
             PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
+            PowerPreference::None => {
+                let option_min = |a: Option<usize>, b: Option<usize>| {
+                    if let (Some(a), Some(b)) = (a, b) {
+                        Some(a.min(b))
+                    } else {
+                        a.or(b)
+                    }
+                };
+                // Pick the lowest id of these types
+                option_min(option_min(discrete, integrated), other)
+            }
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);

@@ -65,7 +65,15 @@ impl<T> From<Identified<T>> for ObjectId {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Send for Sendable<T> {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
@@ -73,11 +81,27 @@ pub(crate) struct Identified<T>(
     #[cfg(feature = "expose-ids")] std::num::NonZeroU64,
     PhantomData<T>,
 );
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Send for Identified<T> {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<T> Sync for Identified<T> {}
 
 pub(crate) struct Context(web_sys::Gpu);
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for Context {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for Context {}
 
 impl fmt::Debug for Context {
@@ -134,6 +158,10 @@ impl<F, M> MakeSendFuture<F, M> {
     }
 }
 
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
 
 fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTextureFormat {
@@ -963,10 +991,15 @@ impl crate::context::Context for Context {
         //assert!(backends.contains(wgt::Backends::BROWSER_WEBGPU));
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
-            wgt::PowerPreference::LowPower => web_sys::GpuPowerPreference::LowPower,
-            wgt::PowerPreference::HighPerformance => web_sys::GpuPowerPreference::HighPerformance,
+            wgt::PowerPreference::None => None,
+            wgt::PowerPreference::LowPower => Some(web_sys::GpuPowerPreference::LowPower),
+            wgt::PowerPreference::HighPerformance => {
+                Some(web_sys::GpuPowerPreference::HighPerformance)
+            }
         };
-        mapped_options.power_preference(mapped_power_preference);
+        if let Some(mapped_pref) = mapped_power_preference {
+            mapped_options.power_preference(mapped_pref);
+        }
         let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
 
         MakeSendFuture::new(
@@ -1118,16 +1151,27 @@ impl crate::context::Context for Context {
         _adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
     ) -> wgt::SurfaceCapabilities {
+        let mut formats = vec![
+            wgt::TextureFormat::Rgba8Unorm,
+            wgt::TextureFormat::Bgra8Unorm,
+            wgt::TextureFormat::Rgba16Float,
+        ];
+        let mut mapped_formats = formats.iter().map(|format| map_texture_format(*format));
+        // Preferred canvas format will only be either "rgba8unorm" or "bgra8unorm".
+        // https://www.w3.org/TR/webgpu/#dom-gpu-getpreferredcanvasformat
+        let preferred_format = self.0.get_preferred_canvas_format();
+        if let Some(index) = mapped_formats.position(|format| format == preferred_format) {
+            formats.swap(0, index);
+        }
+
         wgt::SurfaceCapabilities {
             // https://gpuweb.github.io/gpuweb/#supported-context-formats
-            formats: vec![
-                wgt::TextureFormat::Bgra8Unorm,
-                wgt::TextureFormat::Rgba8Unorm,
-                wgt::TextureFormat::Rgba16Float,
-            ],
+            formats,
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
             alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
+            usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
     }
 
@@ -1838,7 +1882,7 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         mode: crate::MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let map_promise = buffer_data.0.map_async_with_f64_and_f64(
             map_map_mode(mode),
@@ -1855,16 +1899,26 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
-        let array_buffer = buffer_data.0.get_mapped_range_with_f64_and_f64(
-            sub_range.start as f64,
-            (sub_range.end - sub_range.start) as f64,
-        );
+        let array_buffer =
+            self.buffer_get_mapped_range_as_array_buffer(_buffer, buffer_data, sub_range);
         let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
         let temporary_mapping = actual_mapping.to_vec();
         Box::new(BufferMappedRange {
             actual_mapping,
             temporary_mapping,
         })
+    }
+
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        _buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
@@ -2524,14 +2578,15 @@ impl crate::context::Context for Context {
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
     ) -> f32 {
-        1.0 //TODO
+        // Timestamp values are always in nanoseconds, see https://gpuweb.github.io/gpuweb/#timestamp
+        1.0
     }
 
     fn queue_on_submitted_work_done(
         &self,
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        _callback: Box<dyn FnOnce() + Send + 'static>,
+        _callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         unimplemented!()
     }
@@ -2558,15 +2613,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn compute_pass_set_push_constants(
@@ -2683,15 +2742,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        encoder_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            encoder_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            encoder_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -2898,15 +2961,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_pass_set_index_buffer(
@@ -3180,6 +3247,23 @@ impl crate::context::Context for Context {
         _query_index: u32,
     ) {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+    }
+
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+        _query_index: u32,
+    ) {
+        // Not available in gecko yet
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+    ) {
+        // Not available in gecko yet
     }
 
     fn render_pass_begin_pipeline_statistics_query(

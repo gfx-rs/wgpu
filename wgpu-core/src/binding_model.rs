@@ -1,11 +1,12 @@
 use crate::{
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
     error::{ErrorFormatter, PrettyError},
-    hub::{HalApi, Resource},
+    hal_api::HalApi,
     id::{
         BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, TlasId, Valid,
     },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
+    resource::Resource,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label, LifeGuard, MultiRefCount, Stored,
@@ -443,6 +444,8 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
+pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
+
 /// Bind group layout.
 ///
 /// The lifetime of BGLs is a bit special. They are only referenced on CPU
@@ -457,6 +460,12 @@ pub struct BindGroupLayout<A: hal::Api> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
+    // When a layout created and there already exists a compatible layout the new layout
+    // keeps a reference to the older compatible one. In some places we substitute the
+    // bind group layout id with its compatible sibling.
+    // Since this substitution can come at a cost, it is skipped when wgpu-core generates
+    // its own resource IDs.
+    pub(crate) compatible_layout: Option<Valid<BindGroupLayoutId>>,
     #[allow(unused)]
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
@@ -477,6 +486,30 @@ impl<A: hal::Api> Resource for BindGroupLayout<A> {
         #[cfg(not(debug_assertions))]
         return "";
     }
+}
+
+// If a bindgroup needs to be substitued with its compatible equivalent, return the latter.
+pub(crate) fn try_get_bind_group_layout<A: HalApi>(
+    layouts: &BindGroupLayouts<A>,
+    id: BindGroupLayoutId,
+) -> Option<&BindGroupLayout<A>> {
+    let layout = layouts.get(id).ok()?;
+    if let Some(compat) = layout.compatible_layout {
+        return Some(&layouts[compat]);
+    }
+
+    Some(layout)
+}
+
+pub(crate) fn get_bind_group_layout<A: HalApi>(
+    layouts: &BindGroupLayouts<A>,
+    id: Valid<BindGroupLayoutId>,
+) -> (Valid<BindGroupLayoutId>, &BindGroupLayout<A>) {
+    let layout = &layouts[id];
+    layout
+        .compatible_layout
+        .map(|compat| (compat, &layouts[compat]))
+        .unwrap_or((id, layout))
 }
 
 #[derive(Clone, Debug, Error)]
@@ -706,7 +739,7 @@ pub enum BindError {
         s1 = if *.actual >= 2 { "s" } else { "" },
     )]
     MismatchedDynamicOffsetCount {
-        group: u8,
+        group: u32,
         actual: usize,
         expected: usize,
     },
@@ -715,7 +748,7 @@ pub enum BindError {
     )]
     UnalignedDynamicBinding {
         idx: usize,
-        group: u8,
+        group: u32,
         binding: u32,
         offset: u32,
         alignment: u32,
@@ -727,7 +760,7 @@ pub enum BindError {
     )]
     DynamicBindingOutOfBounds {
         idx: usize,
-        group: u8,
+        group: u32,
         binding: u32,
         offset: u32,
         buffer_size: wgt::BufferAddress,
@@ -789,7 +822,7 @@ pub struct BindGroup<A: HalApi> {
 impl<A: HalApi> BindGroup<A> {
     pub(crate) fn validate_dynamic_bindings(
         &self,
-        bind_group_index: u8,
+        bind_group_index: u32,
         offsets: &[wgt::DynamicOffset],
         limits: &wgt::Limits,
     ) -> Result<(), BindError> {

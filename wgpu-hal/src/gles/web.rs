@@ -25,6 +25,7 @@ impl AdapterContext {
 
 #[derive(Debug)]
 pub struct Instance {
+    /// Set when a canvas is provided, and used to implement [`Instance::enumerate_adapters()`].
     webgl2_context: Mutex<Option<web_sys::WebGl2RenderingContext>>,
 }
 
@@ -82,6 +83,8 @@ impl Instance {
             .dyn_into()
             .expect("canvas context is not a WebGl2RenderingContext");
 
+        // It is not inconsistent to overwrite an existing context, because the only thing that
+        // `self.webgl2_context` is used for is producing the response to `enumerate_adapters()`.
         *self.webgl2_context.lock() = Some(webgl2_context.clone());
 
         Ok(Surface {
@@ -106,8 +109,15 @@ impl Instance {
     }
 }
 
-// SAFE: WASM doesn't have threads
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for Instance {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
@@ -171,15 +181,22 @@ pub struct Surface {
     srgb_present_program: Option<glow::Program>,
 }
 
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for Surface {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for Surface {}
+
 #[derive(Clone, Debug)]
 enum Canvas {
     Canvas(web_sys::HtmlCanvasElement),
     Offscreen(web_sys::OffscreenCanvas),
 }
-
-// SAFE: Because web doesn't have threads ( yet )
-unsafe impl Sync for Surface {}
-unsafe impl Send for Surface {}
 
 #[derive(Clone, Debug)]
 pub struct Swapchain {

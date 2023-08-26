@@ -21,9 +21,6 @@ impl Drop for super::Adapter {
                 self.report_live_objects();
             }
         }
-        unsafe {
-            self.raw.destroy();
-        }
     }
 }
 
@@ -39,7 +36,6 @@ impl super::Adapter {
                     d3d12sdklayers::D3D12_RLDO_SUMMARY | d3d12sdklayers::D3D12_RLDO_IGNORE_INTERNAL,
                 )
             };
-            unsafe { debug_device.destroy() };
         }
     }
 
@@ -57,7 +53,7 @@ impl super::Adapter {
         // Create the device so that we can get the capabilities.
         let device = {
             profiling::scope!("ID3D12Device::create_device");
-            match library.create_device(*adapter, d3d12::FeatureLevel::L11_0) {
+            match library.create_device(&adapter, d3d12::FeatureLevel::L11_0) {
                 Ok(pair) => match pair.into_result() {
                     Ok(device) => device,
                     Err(err) => {
@@ -73,6 +69,29 @@ impl super::Adapter {
         };
 
         profiling::scope!("feature queries");
+
+        // Detect the highest supported feature level.
+        let d3d_feature_level = [
+            d3d12::FeatureLevel::L12_1,
+            d3d12::FeatureLevel::L12_0,
+            d3d12::FeatureLevel::L11_1,
+            d3d12::FeatureLevel::L11_0,
+        ];
+        let mut device_levels: d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS =
+            unsafe { mem::zeroed() };
+        device_levels.NumFeatureLevels = d3d_feature_level.len() as u32;
+        device_levels.pFeatureLevelsRequested = d3d_feature_level.as_ptr().cast();
+        unsafe {
+            device.CheckFeatureSupport(
+                d3d12_ty::D3D12_FEATURE_FEATURE_LEVELS,
+                &mut device_levels as *mut _ as *mut _,
+                mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FEATURE_LEVELS>() as _,
+            )
+        };
+        // This cast should never fail because we only requested feature levels that are already in the enum.
+        let max_feature_level =
+            d3d12::FeatureLevel::try_from(device_levels.MaxSupportedFeatureLevel)
+                .expect("Unexpected feature level");
 
         // We have found a possible adapter.
         // Acquire the device information.
@@ -115,8 +134,8 @@ impl super::Adapter {
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
             name: device_name,
-            vendor: desc.VendorId as usize,
-            device: desc.DeviceId as usize,
+            vendor: desc.VendorId,
+            device: desc.DeviceId,
             device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
                 workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu
@@ -177,16 +196,25 @@ impl super::Adapter {
             },
             heap_create_not_zeroed: false, //TODO: winapi support for Options7
             casting_fully_typed_format_supported,
+            // See https://github.com/gfx-rs/wgpu/issues/3552
+            suballocation_supported: !info.name.contains("Iris(R) Xe"),
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
         let tier3_practical_descriptor_limit = 1 << 20;
 
-        let (full_heap_count, _uav_count) = match options.ResourceBindingTier {
-            d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => (
-                d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
-                8, // conservative, is 64 on feature level 11.1
-            ),
+        let (full_heap_count, uav_count) = match options.ResourceBindingTier {
+            d3d12_ty::D3D12_RESOURCE_BINDING_TIER_1 => {
+                let uav_count = match max_feature_level {
+                    d3d12::FeatureLevel::L11_0 => 8,
+                    _ => 64,
+                };
+
+                (
+                    d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
+                    uav_count,
+                )
+            }
             d3d12_ty::D3D12_RESOURCE_BINDING_TIER_2 => (
                 d3d12_ty::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
                 64,
@@ -214,8 +242,6 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
             | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::POLYGON_MODE_POINT
-            | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
@@ -230,6 +256,10 @@ impl super::Adapter {
         // Alternatively, we could allocate a buffer for the query set,
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
+
+        if max_feature_level as u32 >= d3d12::FeatureLevel::L11_1 as u32 {
+            features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+        }
 
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
@@ -284,9 +314,10 @@ impl super::Adapter {
                         _ => d3d12_ty::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
                     },
                     // these both account towards `uav_count`, but we can't express the limit as as sum
-                    max_storage_buffers_per_shader_stage: base.max_storage_buffers_per_shader_stage,
-                    max_storage_textures_per_shader_stage: base
-                        .max_storage_textures_per_shader_stage,
+                    // of the two, so we divide it by 4 to account for the worst case scenario
+                    // (2 shader stages, with both using 16 storage textures and 16 storage buffers)
+                    max_storage_buffers_per_shader_stage: uav_count / 4,
+                    max_storage_textures_per_shader_stage: uav_count / 4,
                     max_uniform_buffers_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         d3d12_ty::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
@@ -326,7 +357,11 @@ impl super::Adapter {
                     max_compute_workgroup_size_z: d3d12_ty::D3D12_CS_THREAD_GROUP_MAX_Z,
                     max_compute_workgroups_per_dimension:
                         d3d12_ty::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    max_buffer_size: u64::MAX,
+                    // Dx12 does not expose a maximum buffer size in the API.
+                    // This limit is chosen to avoid potential issues with drivers should they internally
+                    // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
+                    max_buffer_size: i32::MAX as u64,
+                    max_non_sampler_bindings: 1_000_000,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -348,7 +383,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
         _features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
@@ -363,8 +398,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
         };
 
         let device = super::Device::new(
-            self.device,
-            queue,
+            self.device.clone(),
+            queue.clone(),
+            limits,
             self.private_caps,
             &self.library,
             self.dx12_shader_compiler.clone(),

@@ -11,7 +11,7 @@ use std::{num::NonZeroU64, slice};
 use crate::{
     command::CommandEncoderError,
     device::DeviceError,
-    hub::HalApi,
+    hal_api::HalApi,
     id::{BlasId, BufferId, TlasId},
     resource::CreateBufferError,
 };
