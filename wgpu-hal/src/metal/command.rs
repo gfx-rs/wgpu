@@ -1054,10 +1054,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
     }
 
-    unsafe fn build_acceleration_structure(
+    unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
-        _desc: &crate::BuildAccelerationStructureDescriptor<super::Api>,
-    ) {
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
         unimplemented!()
     }
 
