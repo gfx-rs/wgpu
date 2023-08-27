@@ -590,11 +590,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .gl
                     .as_ref()
                     .map(|inst| {
+                        let raw_surface = inst.create_surface_from_canvas(canvas)?;
                         Ok(HalSurface {
-                            raw: Arc::new(inst.create_surface_from_canvas(canvas)?),
+                            raw: Arc::new(raw_surface),
                         })
                     })
-                    .transpose()?;
+                    .transpose()?
+                    .unwrap();
                 AnySurface::new(hal_surface)
             },
         };
@@ -624,11 +626,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .gl
                     .as_ref()
                     .map(|inst| {
+                        let raw_surface = inst.create_surface_from_offscreen_canvas(canvas)?;
                         Ok(HalSurface {
-                            raw: Arc::new(inst.create_surface_from_offscreen_canvas(canvas)?),
+                            raw: Arc::new(raw_surface),
                         })
                     })
-                    .transpose()?;
+                    .transpose()?
+                    .unwrap();
                 AnySurface::new(hal_surface)
             },
         };
