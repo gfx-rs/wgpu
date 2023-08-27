@@ -1009,19 +1009,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = A::hub(self).adapters.prepare(input);
 
-        let (id, _) = match A::VARIANT {
-            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-            Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
-            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-            Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
-            #[cfg(all(feature = "dx12", windows))]
-            Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
-            #[cfg(all(feature = "dx11", windows))]
-            Backend::Dx11 => fid.assign(Adapter::new(hal_adapter)),
-            #[cfg(feature = "gles")]
-            Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
-            _ => unreachable!(),
-        };
+        let (id, _adapter): (crate::id::Id<Adapter<hal::empty::Api>>, Arc<Adapter<A>>) =
+            match A::VARIANT {
+                #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+                Backend::Vulkan => fid.assign(Adapter::new(hal_adapter)),
+                #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+                Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
+                #[cfg(all(feature = "dx12", windows))]
+                Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
+                #[cfg(all(feature = "dx11", windows))]
+                Backend::Dx11 => fid.assign(Adapter::new(hal_adapter)),
+                #[cfg(feature = "gles")]
+                Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
+                _ => unreachable!(),
+            };
         log::info!("Created Adapter {:?}", id);
         id
     }
