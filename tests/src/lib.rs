@@ -53,11 +53,54 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
     }
 }
 
-pub struct FailureCase {
-    backends: Option<wgpu::Backends>,
-    vendor: Option<u32>,
-    adapter: Option<String>,
-    skip: bool,
+/// Conditions under which a test should fail.
+///
+/// If any of these fields are `None`, then the field does not
+/// restrict matches. For example:
+///
+/// ```
+/// # use wgpu_test::FailureCase;
+/// FailureCase {
+///     backends: Some(wgpu::Backends::DX11 | wgpu::Backends::DX12),
+///     vendor: None,
+///     adapter: Some("RTX"),
+///     skip: false,
+/// }
+/// # ;
+/// ```
+///
+/// This applies to all cards with `"RTX'` in their name on either
+/// Direct3D backend, no matter the vendor ID.
+pub struct FailureCase<S> {
+    /// Backends expected to fail, or `None` for any backend.
+    ///
+    /// If this is `None`, or if the test is using one of the backends
+    /// in `backends`, then this `FailureCase` applies.
+    pub backends: Option<wgpu::Backends>,
+
+    /// Vendor expected to fail, or `None` for any vendor.
+    ///
+    /// If `Some`, this must match [`AdapterInfo::device`], which is
+    /// usually the PCI device id. Otherwise, this `FailureCase`
+    /// applies regardless of vendor.
+    ///
+    /// [`AdapterInfo::device`]: wgt::AdapterInfo::device
+    pub vendor: Option<u32>,
+
+    /// Name of adaper expected to fail, or `None` for any adapter name.
+    ///
+    /// If this is `Some(s)` and `s` is a substring of
+    /// [`AdapterInfo::name`], then this `FailureCase` applies. If
+    /// this is `None`, the adapter name isn't considered.
+    ///
+    /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
+    pub adapter: Option<S>,
+
+    /// If `true`, skip the test altogether.
+    ///
+    /// If `false`, the test is run, and an unexpected pass is
+    /// reported if it doesn't fail.
+    pub skip: bool,
 }
 
 // This information determines if a test should run.
@@ -66,7 +109,7 @@ pub struct TestParameters {
     pub required_downlevel_properties: DownlevelCapabilities,
     pub required_limits: Limits,
     // Backends where test should fail.
-    pub failures: Vec<FailureCase>,
+    pub failures: Vec<FailureCase<String>>,
 }
 
 impl Default for TestParameters {
@@ -164,25 +207,19 @@ impl TestParameters {
         self
     }
 
-    /// Determines if a test should fail under a particular set of conditions. If any of these are None, that means that it will match anything in that field.
+    /// Mark a test as failing under the conditions given by `case`.
     ///
-    /// ex.
-    /// `specific_failure(Some(wgpu::Backends::DX11 | wgpu::Backends::DX12), None, Some("RTX"), false)`
-    /// means that this test will fail on all cards with RTX in their name on either D3D backend, no matter the vendor ID.
-    ///
-    /// If segfault is set to true, the test won't be run at all due to avoid segfaults.
-    pub fn specific_failure(
-        mut self,
-        backends: Option<Backends>,
-        vendor: Option<u32>,
-        device: Option<&'static str>,
-        skip: bool,
-    ) -> Self {
+    /// See the documentation for [`FailureCase`] for details.
+    pub fn specific_failure(mut self, case: FailureCase<&str>) -> Self {
         self.failures.push(FailureCase {
-            backends,
-            vendor,
-            adapter: device.as_ref().map(AsRef::as_ref).map(str::to_lowercase),
-            skip,
+            backends: case.backends,
+            vendor: case.vendor,
+            adapter: case
+                .adapter
+                .as_ref()
+                .map(AsRef::as_ref)
+                .map(str::to_lowercase),
+            skip: case.skip,
         });
         self
     }
