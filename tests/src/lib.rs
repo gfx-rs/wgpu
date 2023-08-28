@@ -198,6 +198,17 @@ impl TestParameters {
             self
         }
     }
+
+    /// Mark the test as always failing on `adapter`, and needing to be skipped.
+    pub fn adapter_failure_skip(mut self, adapter: &str) -> Self {
+        self.failures.push(FailureCase {
+            backends: None,
+            vendor: None,
+            adapter: Some(adapter.to_lowercase()),
+            skip: true,
+        });
+        self
+    }
 }
 
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {
