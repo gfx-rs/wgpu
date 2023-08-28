@@ -4334,9 +4334,9 @@ pub enum VertexFormat {
     Snorm16x2 = 14,
     /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 15,
-    /// Two half-precision floats (no Rust equiv). `vec2<f16>` in shaders.
+    /// Two half-precision floats (no Rust equiv). `vec2<f32>` in shaders.
     Float16x2 = 16,
-    /// Four half-precision floats (no Rust equiv). `vec4<f16>` in shaders.
+    /// Four half-precision floats (no Rust equiv). `vec4<f32>` in shaders.
     Float16x4 = 17,
     /// One single-precision float (f32). `f32` in shaders.
     Float32 = 18,
@@ -4362,13 +4362,13 @@ pub enum VertexFormat {
     Sint32x3 = 28,
     /// Four signed ints (i32). `vec4<i32>` in shaders.
     Sint32x4 = 29,
-    /// One double-precision float (f64). `f64` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// One double-precision float (f64). `f32` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64 = 30,
-    /// Two double-precision floats (f64). `vec2<f64>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Two double-precision floats (f64). `vec2<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x2 = 31,
-    /// Three double-precision floats (f64). `vec3<f64>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Three double-precision floats (f64). `vec3<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x3 = 32,
-    /// Four double-precision floats (f64). `vec4<f64>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Four double-precision floats (f64). `vec4<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x4 = 33,
 }
 
