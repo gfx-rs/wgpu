@@ -209,6 +209,24 @@ impl TestParameters {
         });
         self
     }
+
+    /// Mark the test as always failing on the given `adapter` and `backends`.
+    ///
+    /// If `skip` is true, skip the test altogether on such devices.
+    pub fn backend_adapter_failure(
+        mut self,
+        backends: wgpu::Backends,
+        adapter: &str,
+        skip: bool,
+    ) -> Self {
+        self.failures.push(FailureCase {
+            backends: Some(backends),
+            vendor: None,
+            adapter: Some(adapter.to_lowercase()),
+            skip,
+        });
+        self
+    }
 }
 
 pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(TestingContext)) {

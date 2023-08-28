@@ -80,14 +80,9 @@ fn test_multithreaded_compute() {
             .features(wgpu::Features::TIMESTAMP_QUERY)
             .adapter_failure_skip("V3D")
             // https://github.com/gfx-rs/wgpu/issues/3944
-            .specific_failure(
-                Some(wgpu::Backends::VULKAN),
-                None,
-                Some("swiftshader"),
-                true,
-            )
+            .backend_adapter_failure(wgpu::Backends::VULKAN, "swiftshader", true)
             // https://github.com/gfx-rs/wgpu/issues/3250
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
+            .backend_adapter_failure(wgpu::Backends::GL, "llvmpipe", true),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 

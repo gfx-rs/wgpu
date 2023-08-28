@@ -385,7 +385,7 @@ fn clear_texture_bc() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .backend_adapter_failure(wgpu::Backends::GL, "ANGLE", false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
             .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
@@ -402,7 +402,7 @@ fn clear_texture_astc() {
                 max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
                 ..wgpu::Limits::downlevel_defaults()
             })
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .backend_adapter_failure(wgpu::Backends::GL, "ANGLE", false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
             .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
@@ -415,7 +415,7 @@ fn clear_texture_etc2() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .backend_adapter_failure(wgpu::Backends::GL, "ANGLE", false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
             .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);

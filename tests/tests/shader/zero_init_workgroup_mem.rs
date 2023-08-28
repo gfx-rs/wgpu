@@ -24,7 +24,7 @@ fn zero_init_workgroup_mem() {
                 Some("Microsoft Basic Render Driver"),
                 true,
             )
-            .specific_failure(Some(Backends::VULKAN), None, Some("swiftshader"), true),
+            .backend_adapter_failure(Backends::VULKAN, "swiftshader", true),
         zero_init_workgroup_mem_impl,
     );
 }
