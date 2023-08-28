@@ -115,7 +115,7 @@ impl TestParameters {
         self
     }
 
-    /// Mark the test as always failing, equivalent to specific_failure(None, None, None)
+    /// Mark the test as always failing, but not to be skipped.
     pub fn failure(mut self) -> Self {
         self.failures.push(FailureCase {
             backends: None,
@@ -126,7 +126,7 @@ impl TestParameters {
         self
     }
 
-    /// Mark the test as always failing and needing to be skipped, equivalent to specific_failure(None, None, None)
+    /// Mark the test as always failing, and needing to be skipped.
     pub fn skip(mut self) -> Self {
         self.failures.push(FailureCase {
             backends: None,
@@ -137,7 +137,7 @@ impl TestParameters {
         self
     }
 
-    /// Mark the test as always failing on a specific backend, equivalent to specific_failure(backend, None, None)
+    /// Mark the test as always failing on `backends`, but not to be skipped.
     pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
         self.failures.push(FailureCase {
             backends: Some(backends),
@@ -148,8 +148,10 @@ impl TestParameters {
         self
     }
 
-    /// Mark the test as always failing on WebGL. Because limited ability of wasm to recover from errors, we need to wholesale
-    /// skip the test if it's not supported.
+    /// Mark the test as always failing on WebGL, and needing to be skipped.
+    ///
+    /// Because limited ability of wasm to recover from errors, we
+    /// need to wholesale skip the test if it's not supported.
     pub fn webgl2_failure(mut self) -> Self {
         let _ = &mut self;
         #[cfg(target_arch = "wasm32")]
