@@ -23,6 +23,7 @@ fn zero_init_workgroup_mem() {
                 vendor: Some(5140),
                 adapter: Some("Microsoft Basic Render Driver"),
                 skip: true,
+                ..FailureCase::default()
             })
             .backend_adapter_failure(Backends::VULKAN, "swiftshader", true),
         zero_init_workgroup_mem_impl,

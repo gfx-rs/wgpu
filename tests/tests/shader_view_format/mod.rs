@@ -10,9 +10,8 @@ fn reinterpret_srgb_ness() {
         .limits(Limits::downlevel_defaults())
         .specific_failure(FailureCase {
             backends: Some(wgpu::Backends::GL),
-            vendor: None,
-            adapter: None,
             skip: true,
+            ..FailureCase::default()
         });
     initialize_test(parameters, |ctx| {
         let unorm_data: [[u8; 4]; 4] = [

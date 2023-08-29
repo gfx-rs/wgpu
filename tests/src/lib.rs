@@ -71,6 +71,10 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 ///
 /// This applies to all cards with `"RTX'` in their name on either
 /// Direct3D backend, no matter the vendor ID.
+///
+/// The default value of `FailureCase` applies to any test case (that
+/// is, there are no criteria to constrain the match), and the test is
+/// not skipped.
 pub struct FailureCase<S> {
     /// Backends expected to fail, or `None` for any backend.
     ///
@@ -101,6 +105,17 @@ pub struct FailureCase<S> {
     /// If `false`, the test is run, and an unexpected pass is
     /// reported if it doesn't fail.
     pub skip: bool,
+}
+
+impl<S> Default for FailureCase<S> {
+    fn default() -> Self {
+        Self {
+            backends: None,
+            vendor: None,
+            adapter: None,
+            skip: false,
+        }
+    }
 }
 
 // This information determines if a test should run.
@@ -160,22 +175,15 @@ impl TestParameters {
 
     /// Mark the test as always failing, but not to be skipped.
     pub fn failure(mut self) -> Self {
-        self.failures.push(FailureCase {
-            backends: None,
-            vendor: None,
-            adapter: None,
-            skip: false,
-        });
+        self.failures.push(FailureCase::default());
         self
     }
 
     /// Mark the test as always failing, and needing to be skipped.
     pub fn skip(mut self) -> Self {
         self.failures.push(FailureCase {
-            backends: None,
-            vendor: None,
-            adapter: None,
             skip: true,
+            ..FailureCase::default()
         });
         self
     }
@@ -184,9 +192,7 @@ impl TestParameters {
     pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
         self.failures.push(FailureCase {
             backends: Some(backends),
-            vendor: None,
-            adapter: None,
-            skip: false,
+            ..FailureCase::default()
         });
         self
     }
@@ -200,9 +206,8 @@ impl TestParameters {
         #[cfg(target_arch = "wasm32")]
         self.failures.push(FailureCase {
             backends: Some(wgpu::Backends::GL),
-            vendor: None,
-            adapter: None,
             skip: true,
+            ..FailureCase::default()
         });
         self
     }
@@ -228,7 +233,7 @@ impl TestParameters {
     pub fn molten_vk_failure(self) -> Self {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
-            self.specific_failure(Some(wgpu::Backends::VULKAN), None, None, false)
+            self.backend_failure(wgpu::Backends::VULKAN)
         }
         #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         {
@@ -239,10 +244,9 @@ impl TestParameters {
     /// Mark the test as always failing on `adapter`, and needing to be skipped.
     pub fn adapter_failure_skip(mut self, adapter: &str) -> Self {
         self.failures.push(FailureCase {
-            backends: None,
-            vendor: None,
             adapter: Some(adapter.to_lowercase()),
             skip: true,
+            ..FailureCase::default()
         });
         self
     }
@@ -258,9 +262,9 @@ impl TestParameters {
     ) -> Self {
         self.failures.push(FailureCase {
             backends: Some(backends),
-            vendor: None,
             adapter: Some(adapter.to_lowercase()),
             skip,
+            ..FailureCase::default()
         });
         self
     }

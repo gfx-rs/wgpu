@@ -332,8 +332,7 @@ fn msaa_line() {
             .specific_failure(FailureCase {
                 backends: Some(wgpu::Backends::DX12),
                 vendor: Some(0x1002),
-                adapter: None,
-                skip: false,
+                ..FailureCase::default()
             }),
         // There's a lot of natural variance so we check the weighted median too to differentiate
         // real failures from variance.
