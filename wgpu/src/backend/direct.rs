@@ -622,8 +622,7 @@ impl crate::Context for Context {
             ()
         ));
         if let Some(err) = error {
-            log::error!("Error in Adapter::request_device: {}", err);
-            return ready(Err(crate::RequestDeviceError));
+            return ready(Err(err.into()));
         }
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
