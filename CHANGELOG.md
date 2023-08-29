@@ -80,6 +80,9 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
 
 
+### Documentation
+- Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4305](https://github.com/gfx-rs/wgpu/pull/4035)
+
 ### Bug Fixes
 
 #### General
