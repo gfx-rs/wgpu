@@ -5,6 +5,10 @@ precision highp int;
 
 layout(location = 0) out vec4 _fs2p_location0;
 
+bool test_any_and_all_for_bool() {
+    return true;
+}
+
 void main() {
     vec4 foo = gl_FragCoord;
     vec4 x = vec4(0.0);
@@ -28,10 +32,11 @@ void main() {
     y = _e11;
     vec4 _e12 = fwidth(foo);
     z = _e12;
-    vec4 _e13 = x;
-    vec4 _e14 = y;
-    vec4 _e16 = z;
-    _fs2p_location0 = ((_e13 + _e14) * _e16);
+    bool _e13 = test_any_and_all_for_bool();
+    vec4 _e14 = x;
+    vec4 _e15 = y;
+    vec4 _e17 = z;
+    _fs2p_location0 = ((_e14 + _e15) * _e17);
     return;
 }
 

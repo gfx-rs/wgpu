@@ -2,6 +2,11 @@ struct FragmentInput_derivatives {
     float4 foo_1 : SV_Position;
 };
 
+bool test_any_and_all_for_bool()
+{
+    return true;
+}
+
 float4 derivatives(FragmentInput_derivatives fragmentinput_derivatives) : SV_Target0
 {
     float4 foo = fragmentinput_derivatives.foo_1;
@@ -27,8 +32,9 @@ float4 derivatives(FragmentInput_derivatives fragmentinput_derivatives) : SV_Tar
     y = _expr11;
     float4 _expr12 = fwidth(foo);
     z = _expr12;
-    float4 _expr13 = x;
-    float4 _expr14 = y;
-    float4 _expr16 = z;
-    return ((_expr13 + _expr14) * _expr16);
+    const bool _e13 = test_any_and_all_for_bool();
+    float4 _expr14 = x;
+    float4 _expr15 = y;
+    float4 _expr17 = z;
+    return ((_expr14 + _expr15) * _expr17);
 }

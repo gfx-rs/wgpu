@@ -5,6 +5,11 @@
 using metal::uint;
 
 
+bool test_any_and_all_for_bool(
+) {
+    return true;
+}
+
 struct derivativesInput {
 };
 struct derivativesOutput {
@@ -34,8 +39,9 @@ fragment derivativesOutput derivatives(
     y = _e11;
     metal::float4 _e12 = metal::fwidth(foo);
     z = _e12;
-    metal::float4 _e13 = x;
-    metal::float4 _e14 = y;
-    metal::float4 _e16 = z;
-    return derivativesOutput { (_e13 + _e14) * _e16 };
+    bool _e13 = test_any_and_all_for_bool();
+    metal::float4 _e14 = x;
+    metal::float4 _e15 = y;
+    metal::float4 _e17 = z;
+    return derivativesOutput { (_e14 + _e15) * _e17 };
 }

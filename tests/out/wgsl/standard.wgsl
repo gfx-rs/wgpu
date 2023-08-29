@@ -1,3 +1,7 @@
+fn test_any_and_all_for_bool() -> bool {
+    return true;
+}
+
 @fragment 
 fn derivatives(@builtin(position) foo: vec4<f32>) -> @location(0) vec4<f32> {
     var x: vec4<f32>;
@@ -22,8 +26,9 @@ fn derivatives(@builtin(position) foo: vec4<f32>) -> @location(0) vec4<f32> {
     y = _e11;
     let _e12 = fwidth(foo);
     z = _e12;
-    let _e13 = x;
-    let _e14 = y;
-    let _e16 = z;
-    return ((_e13 + _e14) * _e16);
+    let _e13 = test_any_and_all_for_bool();
+    let _e14 = x;
+    let _e15 = y;
+    let _e17 = z;
+    return ((_e14 + _e15) * _e17);
 }

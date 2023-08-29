@@ -1696,7 +1696,26 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let argument = self.expression(args.next()?, ctx.reborrow())?;
                     args.finish()?;
 
-                    crate::Expression::Relational { fun, argument }
+                    // Check for no-op all(bool) and any(bool):
+                    let argument_unmodified = matches!(
+                        fun,
+                        crate::RelationalFunction::All | crate::RelationalFunction::Any
+                    ) && {
+                        ctx.grow_types(argument)?;
+                        matches!(
+                            ctx.resolved_inner(argument),
+                            &crate::TypeInner::Scalar {
+                                kind: crate::ScalarKind::Bool,
+                                ..
+                            }
+                        )
+                    };
+
+                    if argument_unmodified {
+                        return Ok(Some(argument));
+                    } else {
+                        crate::Expression::Relational { fun, argument }
+                    }
                 } else if let Some((axis, ctrl)) = conv::map_derivative(function.name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
                     let expr = self.expression(args.next()?, ctx.reborrow())?;

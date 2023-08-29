@@ -1,5 +1,11 @@
 // Standard functions.
 
+fn test_any_and_all_for_bool() -> bool {
+    let a = any(true);
+    return all(a);
+}
+
+
 @fragment
 fn derivatives(@builtin(position) foo: vec4<f32>) -> @location(0) vec4<f32> {
     var x = dpdxCoarse(foo);
@@ -13,6 +19,8 @@ fn derivatives(@builtin(position) foo: vec4<f32>) -> @location(0) vec4<f32> {
     x = dpdx(foo);
     y = dpdy(foo);
     z = fwidth(foo);
+
+    let a = test_any_and_all_for_bool();
 
     return (x + y) * z;
 }
