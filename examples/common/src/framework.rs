@@ -625,7 +625,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
             wgpu_test::image::compare_image_output(
                 env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
-                ctx.adapter_info.backend,
+                &ctx.adapter_info,
                 params.width,
                 params.height,
                 &bytes,
