@@ -64,13 +64,14 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 ///     backends: Some(wgpu::Backends::DX11 | wgpu::Backends::DX12),
 ///     vendor: None,
 ///     adapter: Some("RTX"),
+///     driver: None,
 ///     skip: false,
 /// }
 /// # ;
 /// ```
 ///
 /// This applies to all cards with `"RTX'` in their name on either
-/// Direct3D backend, no matter the vendor ID.
+/// Direct3D backend, no matter the vendor ID or driver name.
 ///
 /// The default value of `FailureCase` applies to any test case (that
 /// is, there are no criteria to constrain the match), and the test is
@@ -100,6 +101,15 @@ pub struct FailureCase<S> {
     /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
     pub adapter: Option<S>,
 
+    /// Name of driver expected to fail, or `None` for any driver name.
+    ///
+    /// If this is `Some(s)` and `s` is a substring of
+    /// [`AdapterInfo::driver`], then this `FailureCase` applies. If
+    /// this is `None`, the driver name isn't considered.
+    ///
+    /// [`AdapterInfo::driver`]: wgt::AdapterInfo::driver
+    pub driver: Option<S>,
+
     /// If `true`, skip the test altogether.
     ///
     /// If `false`, the test is run, and an unexpected pass is
@@ -113,6 +123,7 @@ impl<S> Default for FailureCase<S> {
             backends: None,
             vendor: None,
             adapter: None,
+            driver: None,
             skip: false,
         }
     }
@@ -144,7 +155,8 @@ bitflags::bitflags! {
         const BACKEND = 1 << 0;
         const VENDOR = 1 << 1;
         const ADAPTER = 1 << 2;
-        const ALWAYS = 1 << 3;
+        const DRIVER = 1 << 3;
+        const ALWAYS = 1 << 4;
     }
 }
 
@@ -224,6 +236,11 @@ impl TestParameters {
                 .as_ref()
                 .map(AsRef::as_ref)
                 .map(str::to_lowercase),
+            driver: case
+                .driver
+                .as_ref()
+                .map(AsRef::as_ref)
+                .map(str::to_lowercase),
             skip: case.skip,
         });
         self
@@ -231,14 +248,11 @@ impl TestParameters {
 
     /// Mark the test as failing on vulkan on mac only
     pub fn molten_vk_failure(self) -> Self {
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            self.backend_failure(wgpu::Backends::VULKAN)
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-        {
-            self
-        }
+        self.specific_failure(FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            driver: Some("MoltenVK"),
+            ..FailureCase::default()
+        })
     }
 
     /// Mark the test as always failing on `adapter`, and needing to be skipped.
@@ -283,6 +297,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
+    let adapter_lowercase_driver = adapter_info.driver.to_lowercase();
     let adapter_features = adapter.features();
     let adapter_limits = adapter.limits();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -335,8 +350,10 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     };
 
     let expected_failure_reason = parameters.failures.iter().find_map(|failure| {
-        let always =
-            failure.backends.is_none() && failure.vendor.is_none() && failure.adapter.is_none();
+        let always = failure.backends.is_none()
+            && failure.vendor.is_none()
+            && failure.adapter.is_none()
+            && failure.driver.is_none();
 
         let expect_failure_backend = failure
             .backends
@@ -346,10 +363,15 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
             .adapter
             .as_deref()
             .map(|f| adapter_lowercase_name.contains(f));
+        let expect_failure_driver = failure
+            .driver
+            .as_deref()
+            .map(|f| adapter_lowercase_driver.contains(f));
 
         if expect_failure_backend.unwrap_or(true)
             && expect_failure_vendor.unwrap_or(true)
             && expect_failure_adapter.unwrap_or(true)
+            && expect_failure_driver.unwrap_or(true)
         {
             if always {
                 Some((FailureReasons::ALWAYS, failure.skip))
@@ -366,6 +388,10 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
                 reason.set(
                     FailureReasons::ADAPTER,
                     expect_failure_adapter.unwrap_or(false),
+                );
+                reason.set(
+                    FailureReasons::DRIVER,
+                    expect_failure_driver.unwrap_or(false),
                 );
                 Some((reason, failure.skip))
             }
