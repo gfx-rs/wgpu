@@ -255,7 +255,14 @@ fn run(args: Args) -> anyhow::Result<()> {
                                     bin,
                                     file,
                                     config_item,
-                                    &["-Wno-parentheses-equality", "-Zi", "-Qembed_debug", "-Od"],
+                                    &[
+                                        "-Wno-parentheses-equality",
+                                        "-Zi",
+                                        "-Qembed_debug",
+                                        "-Od",
+                                        "-HV",
+                                        "2018",
+                                    ],
                                 )
                             })
                         }
