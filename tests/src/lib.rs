@@ -247,10 +247,11 @@ impl TestParameters {
     }
 
     /// Mark the test as failing on vulkan on mac only
-    pub fn molten_vk_failure(self) -> Self {
+    pub fn molten_vk_failure(self, skip: bool) -> Self {
         self.specific_failure(FailureCase {
             backends: Some(wgpu::Backends::VULKAN),
             driver: Some("MoltenVK"),
+            skip,
             ..FailureCase::default()
         })
     }

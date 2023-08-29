@@ -82,7 +82,8 @@ fn test_multithreaded_compute() {
             // https://github.com/gfx-rs/wgpu/issues/3944
             .backend_adapter_failure(wgpu::Backends::VULKAN, "swiftshader", true)
             // https://github.com/gfx-rs/wgpu/issues/3250
-            .backend_adapter_failure(wgpu::Backends::GL, "llvmpipe", true),
+            .backend_adapter_failure(wgpu::Backends::GL, "llvmpipe", true)
+            .molten_vk_failure(true),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 
