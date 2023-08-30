@@ -82,7 +82,10 @@ pub type EntryPointResourceMap = std::collections::BTreeMap<String, EntryPointRe
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
     Attribute(u32),
-    Color(u32),
+    Color {
+        location: u32,
+        second_blend_source: bool,
+    },
     User {
         prefix: &'static str,
         index: u32,
@@ -245,9 +248,20 @@ impl Options {
                 location,
                 interpolation,
                 sampling,
+                second_blend_source,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
-                LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(location)),
+                LocationMode::FragmentOutput => {
+                    if second_blend_source && self.lang_version < (1, 2) {
+                        return Err(Error::UnsupportedAttribute(
+                            "second_blend_source".to_string(),
+                        ));
+                    }
+                    Ok(ResolvedBinding::Color {
+                        location,
+                        second_blend_source,
+                    })
+                }
                 LocationMode::VertexOutput | LocationMode::FragmentInput => {
                     Ok(ResolvedBinding::User {
                         prefix: if self.spirv_cross_compatibility {
@@ -404,7 +418,16 @@ impl ResolvedBinding {
                 write!(out, "{name}")?;
             }
             Self::Attribute(index) => write!(out, "attribute({index})")?,
-            Self::Color(index) => write!(out, "color({index})")?,
+            Self::Color {
+                location,
+                second_blend_source,
+            } => {
+                if second_blend_source {
+                    write!(out, "color({location}) index(1)")?
+                } else {
+                    write!(out, "color({location})")?
+                }
+            }
             Self::User {
                 prefix,
                 index,

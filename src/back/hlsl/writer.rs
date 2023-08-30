@@ -416,7 +416,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
             }
-            crate::Binding::Location { location, .. } => {
+            crate::Binding::Location {
+                second_blend_source: true,
+                ..
+            } => {
+                write!(self.out, " : SV_Target1")?;
+            }
+            crate::Binding::Location {
+                location,
+                second_blend_source: false,
+                ..
+            } => {
                 if stage == Some((crate::ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{location}")?;
                 } else {

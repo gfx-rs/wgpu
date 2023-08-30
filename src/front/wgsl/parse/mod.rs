@@ -143,6 +143,7 @@ impl<T> ParsedAttribute<T> {
 #[derive(Default)]
 struct BindingParser {
     location: ParsedAttribute<u32>,
+    second_blend_source: ParsedAttribute<bool>,
     built_in: ParsedAttribute<crate::BuiltIn>,
     interpolation: ParsedAttribute<crate::Interpolation>,
     sampling: ParsedAttribute<crate::Sampling>,
@@ -182,6 +183,9 @@ impl BindingParser {
                 }
                 lexer.expect(Token::Paren(')'))?;
             }
+            "second_blend_source" => {
+                self.second_blend_source.set(true, name_span)?;
+            }
             "invariant" => {
                 self.invariant.set(true, name_span)?;
             }
@@ -208,6 +212,7 @@ impl BindingParser {
                     location,
                     interpolation,
                     sampling,
+                    second_blend_source: self.second_blend_source.value.unwrap_or(false),
                 }))
             }
             (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant) => {

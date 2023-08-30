@@ -512,6 +512,10 @@ fn convert_wgsl() {
             "fragment-output",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        (
+            "dualsource",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
         ("functions-webgl", Targets::GLSL),
         (
             "interpolate",

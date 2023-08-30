@@ -1434,6 +1434,7 @@ impl Writer {
                 location,
                 interpolation,
                 sampling,
+                second_blend_source,
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
@@ -1472,6 +1473,9 @@ impl Writer {
                             self.decorate(id, Decoration::Sample, &[]);
                         }
                     }
+                }
+                if second_blend_source {
+                    self.decorate(id, Decoration::Index, &[1]);
                 }
             }
             crate::Binding::BuiltIn(built_in) => {

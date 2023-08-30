@@ -1294,6 +1294,7 @@ impl Frontend {
                         location,
                         interpolation,
                         sampling: None,
+                        second_blend_source: false,
                     };
                     location += 1;
 
@@ -1336,6 +1337,7 @@ impl Frontend {
                                 location,
                                 interpolation,
                                 sampling: None,
+                                second_blend_source: false,
                             };
                             location += 1;
                             binding

@@ -922,6 +922,8 @@ pub enum Binding {
     /// [`Fragment`]: crate::ShaderStage::Fragment
     Location {
         location: u32,
+        /// Indicates the 2nd input to the blender when dual-source blending.
+        second_blend_source: bool,
         interpolation: Option<Interpolation>,
         sampling: Option<Sampling>,
     },

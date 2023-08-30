@@ -333,6 +333,12 @@ struct VaryingName<'a> {
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self.binding {
+            crate::Binding::Location {
+                second_blend_source: true,
+                ..
+            } => {
+                write!(f, "_fs2p_location1",)
+            }
             crate::Binding::Location { location, .. } => {
                 let prefix = match (self.stage, self.output) {
                     (ShaderStage::Compute, _) => unreachable!(),
@@ -1235,12 +1241,13 @@ impl<'a, W: Write> Writer<'a, W> {
             Some(binding) => binding,
         };
 
-        let (location, interpolation, sampling) = match *binding {
+        let (location, interpolation, sampling, second_blend_source) = match *binding {
             crate::Binding::Location {
                 location,
                 interpolation,
                 sampling,
-            } => (location, interpolation, sampling),
+                second_blend_source,
+            } => (location, interpolation, sampling, second_blend_source),
             crate::Binding::BuiltIn(built_in) => {
                 if let crate::BuiltIn::Position { invariant: true } = built_in {
                     match (self.options.version, self.entry_point.stage) {
@@ -1281,7 +1288,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Write the I/O locations, if allowed
         if self.options.version.supports_explicit_locations() || !emit_interpolation_and_auxiliary {
-            write!(self.out, "layout(location = {location}) ")?;
+            if second_blend_source {
+                write!(self.out, "layout(location = {location}, index = 1) ")?;
+            } else {
+                write!(self.out, "layout(location = {location}) ")?;
+            }
         }
 
         // Write the interpolation qualifier.
@@ -1318,6 +1329,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 location,
                 interpolation: None,
                 sampling: None,
+                second_blend_source,
             },
             stage: self.entry_point.stage,
             output,

@@ -273,6 +273,7 @@
                 ),
             ],
             sampling: [],
+            dual_source_blending: false,
         ),
     ],
     entry_points: [
@@ -426,6 +427,7 @@
                 ),
             ],
             sampling: [],
+            dual_source_blending: false,
         ),
     ],
     const_expression_types: [],

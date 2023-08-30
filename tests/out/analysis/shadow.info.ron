@@ -766,6 +766,7 @@
                 ),
             ],
             sampling: [],
+            dual_source_blending: false,
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2091,6 +2092,7 @@
                 ),
             ],
             sampling: [],
+            dual_source_blending: false,
         ),
     ],
     entry_points: [
@@ -2183,6 +2185,7 @@
                 ),
             ],
             sampling: [],
+            dual_source_blending: false,
         ),
     ],
     const_expression_types: [
