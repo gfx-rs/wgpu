@@ -1015,7 +1015,6 @@ impl crate::context::Context for Context {
         }
 
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
-        log::info!("descriptor given: {:#?}", desc.limits);
 
         // TODO: Migrate to a web_sys api.
         // See https://github.com/rustwasm/wasm-bindgen/issues/3587
@@ -1071,7 +1070,12 @@ impl crate::context::Context for Context {
             object
         };
 
-        js_sys::Reflect::set(&mapped_desc, &JsValue::from("requiredLimits"), &limits_object).expect("Setting Object properties should never fail.");
+        js_sys::Reflect::set(
+            &mapped_desc,
+            &JsValue::from("requiredLimits"),
+            &limits_object,
+        )
+        .expect("Setting Object properties should never fail.");
 
         let required_features = FEATURES_MAPPING
             .iter()
@@ -1158,12 +1162,11 @@ impl crate::context::Context for Context {
             max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
             max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
             max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
-            ..wgt::Limits::default()
-            // The following are not part of WebGPU
             /*
               max_push_constant_size: limits.max_push_constant_size(),
               max_non_sampler_bindings: limits.max_non_sampler_bindings(),
             */
+            ..wgt::Limits::default() // The following are not part of WebGPU
         }
     }
 
@@ -1361,12 +1364,11 @@ impl crate::context::Context for Context {
             max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
             max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
             max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
-            ..wgt::Limits::default()
-            // The following are not part of WebGPU
             /*
               max_push_constant_size: limits.max_push_constant_size(),
               max_non_sampler_bindings: limits.max_non_sampler_bindings(),
             */
+            ..wgt::Limits::default() // The following are not part of WebGPU
         }
     }
 
