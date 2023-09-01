@@ -28,4 +28,6 @@ fn main() {
     let clz_b = countLeadingZeros(1u);
     let clz_c = countLeadingZeros(vec2<i32>(-1));
     let clz_d = countLeadingZeros(vec2<u32>(1u));
+    let lde_a = ldexp(1.0, 2);
+    let lde_b = ldexp(vec2<f32>(1.0, 2.0), vec2<i32>(3, 4));
 }

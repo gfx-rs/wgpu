@@ -38,4 +38,6 @@ fragment void main_(
     uint clz_b = metal::clz(1u);
     metal::int2 clz_c = metal::clz(metal::int2(-1));
     metal::uint2 clz_d = metal::clz(metal::uint2(1u));
+    float lde_a = metal::ldexp(1.0, 2);
+    metal::float2 lde_b = metal::ldexp(metal::float2(1.0, 2.0), metal::int2(3, 4));
 }

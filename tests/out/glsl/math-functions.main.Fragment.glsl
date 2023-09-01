@@ -34,5 +34,7 @@ void main() {
     ivec2 _e58 = ivec2(-1);
     ivec2 clz_c = mix(ivec2(31) - findMSB(_e58), ivec2(0), lessThan(_e58, ivec2(0)));
     uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
+    float lde_a = ldexp(1.0, 2);
+    vec2 lde_b = ldexp(vec2(1.0, 2.0), ivec2(3, 4));
 }
 

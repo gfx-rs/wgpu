@@ -1014,7 +1014,7 @@ impl super::Validator {
                             ));
                         }
                     }
-                    Mf::Modf | Mf::Frexp | Mf::Ldexp => {
+                    Mf::Modf | Mf::Frexp => {
                         let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
                             (Some(ty1), None, None) => ty1,
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
@@ -1039,6 +1039,41 @@ impl super::Validator {
                                 width,
                                 space: _,
                             } => size == size0 && width == width0,
+                            _ => false,
+                        };
+                        if !good {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                1,
+                                arg1.unwrap(),
+                            ));
+                        }
+                    }
+                    Mf::Ldexp => {
+                        let arg1_ty = match (arg1_ty, arg2_ty, arg3_ty) {
+                            (Some(ty1), None, None) => ty1,
+                            _ => return Err(ExpressionError::WrongArgumentCount(fun)),
+                        };
+                        let size0 = match *arg_ty {
+                            Ti::Scalar {
+                                kind: Sk::Float, ..
+                            } => None,
+                            Ti::Vector {
+                                kind: Sk::Float,
+                                size,
+                                ..
+                            } => Some(size),
+                            _ => {
+                                return Err(ExpressionError::InvalidArgumentType(fun, 0, arg));
+                            }
+                        };
+                        let good = match *arg1_ty {
+                            Ti::Scalar { kind: Sk::Sint, .. } if size0.is_none() => true,
+                            Ti::Vector {
+                                size,
+                                kind: Sk::Sint,
+                                ..
+                            } if Some(size) == size0 => true,
                             _ => false,
                         };
                         if !good {

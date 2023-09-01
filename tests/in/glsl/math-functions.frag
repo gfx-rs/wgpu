@@ -50,7 +50,7 @@ void main() {
     // TODO: support out params in wgsl output
     // vec4 modfOut = modf(a, b);
     // vec4 frexpOut = frexp(a, b);
-    // float ldexpOut = ldexp(a.x, i);
+    float ldexpOut = ldexp(a.x, i);
     vec4 rad = radians(a);
     float deg = degrees(a.x);
     float smoothStepScalar = smoothstep(0.0, 1.0, 0.5);

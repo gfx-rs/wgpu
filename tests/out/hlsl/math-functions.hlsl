@@ -29,4 +29,6 @@ void main()
     int2 _expr58 = (-1).xx;
     int2 clz_c = (_expr58 < (0).xx ? (0).xx : (31).xx - asint(firstbithigh(_expr58)));
     uint2 clz_d = ((31u).xx - firstbithigh((1u).xx));
+    float lde_a = ldexp(1.0, 2);
+    float2 lde_b = ldexp(float2(1.0, 2.0), int2(3, 4));
 }
