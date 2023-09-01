@@ -725,6 +725,58 @@ fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
     }
 }
 
+fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
+    let object = js_sys::Object::new();
+
+    macro_rules! set_properties {
+        (($from:expr) => ($on:expr) : $(($js_ident:ident, $rs_ident:ident)),* $(,)?) => {
+            $(
+                ::js_sys::Reflect::set(
+                    &$on,
+                    &::wasm_bindgen::JsValue::from(stringify!($js_ident)),
+                    // TODO: Numbers may be bigger than u32!
+                    &::wasm_bindgen::JsValue::from($from.$rs_ident as f64)
+                )
+                    .expect("Setting Object properties should never fail.");
+            )*
+        }
+    }
+
+    set_properties![
+        (limits) => (object):
+        (maxTextureDimension1D, max_texture_dimension_1d),
+        (maxTextureDimension2D, max_texture_dimension_2d),
+        (maxTextureDimension3D, max_texture_dimension_3d),
+        (maxTextureArrayLayers, max_texture_array_layers),
+        (maxBindGroups, max_bind_groups),
+        (maxBindingsPerBindGroup, max_bindings_per_bind_group),
+        (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
+        (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
+        (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
+        (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
+        (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
+        (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
+        (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
+        (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
+        (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
+        (minUniformBufferOffsetAlignment, min_uniform_buffer_offset_alignment),
+        (minStorageBufferOffsetAlignment, min_storage_buffer_offset_alignment),
+        (maxVertexBuffers, max_vertex_buffers),
+        (maxBufferSize, max_buffer_size),
+        (maxVertexAttributes, max_vertex_attributes),
+        (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
+        (maxInterStageShaderComponents, max_inter_stage_shader_components),
+        (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
+        (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
+        (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
+        (maxComputeWorkgroupSizeY, max_compute_workgroup_size_y),
+        (maxComputeWorkgroupSizeZ, max_compute_workgroup_size_z),
+        (maxComputeWorkgroupsPerDimension, max_compute_workgroups_per_dimension),
+    ];
+
+    object
+}
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(
@@ -1056,57 +1108,7 @@ impl crate::context::Context for Context {
 
         // TODO: Migrate to a web_sys api.
         // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = {
-            let object = js_sys::Object::new();
-
-            macro_rules! set_properties {
-                (($from:expr) => ($on:expr) : $(($js_ident:ident, $rs_ident:ident)),* $(,)?) => {
-                    $(
-                        ::js_sys::Reflect::set(
-                            &$on,
-                            &::wasm_bindgen::JsValue::from(stringify!($js_ident)),
-                            // TODO: Numbers may be bigger than u32!
-                            &::wasm_bindgen::JsValue::from($from.$rs_ident as f64)
-                        )
-                            .expect("Setting Object properties should never fail.");
-                    )*
-                }
-            }
-
-            set_properties![
-                (desc.limits) => (object):
-                (maxTextureDimension1D, max_texture_dimension_1d),
-                (maxTextureDimension2D, max_texture_dimension_2d),
-                (maxTextureDimension3D, max_texture_dimension_3d),
-                (maxTextureArrayLayers, max_texture_array_layers),
-                (maxBindGroups, max_bind_groups),
-                (maxBindingsPerBindGroup, max_bindings_per_bind_group),
-                (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
-                (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
-                (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
-                (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
-                (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
-                (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
-                (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
-                (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
-                (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
-                (minUniformBufferOffsetAlignment, min_uniform_buffer_offset_alignment),
-                (minStorageBufferOffsetAlignment, min_storage_buffer_offset_alignment),
-                (maxVertexBuffers, max_vertex_buffers),
-                (maxBufferSize, max_buffer_size),
-                (maxVertexAttributes, max_vertex_attributes),
-                (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
-                (maxInterStageShaderComponents, max_inter_stage_shader_components),
-                (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
-                (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
-                (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
-                (maxComputeWorkgroupSizeY, max_compute_workgroup_size_y),
-                (maxComputeWorkgroupSizeZ, max_compute_workgroup_size_z),
-                (maxComputeWorkgroupsPerDimension, max_compute_workgroups_per_dimension),
-            ];
-
-            object
-        };
+        let limits_object = map_js_sys_limits(&desc.limits);
 
         js_sys::Reflect::set(
             &mapped_desc,
