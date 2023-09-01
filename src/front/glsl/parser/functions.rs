@@ -195,6 +195,11 @@ impl<'source> ParsingContext<'source> {
 
                             match ctx.module.const_expressions[const_expr] {
                                 Expression::Literal(Literal::I32(value)) => match uint {
+                                    // This unchecked cast isn't good, but since
+                                    // we only reach this code when the selector
+                                    // is unsigned but the case label is signed,
+                                    // verification will reject the module
+                                    // anyway (which also matches GLSL's rules).
                                     true => crate::SwitchValue::U32(value as u32),
                                     false => crate::SwitchValue::I32(value),
                                 },
