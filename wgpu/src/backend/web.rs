@@ -734,7 +734,10 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
                 ::js_sys::Reflect::set(
                     &$on,
                     &::wasm_bindgen::JsValue::from(stringify!($js_ident)),
-                    // TODO: Numbers may be bigger than u32!
+                    // Numbers may be u64, however using `from` on a u64 yields
+                    // errors on the wasm side, since it uses an unsupported api.
+                    // Wasm sends us things that need to fit into u64s by sending
+                    // us f64s instead. So we just send them f64s back.
                     &::wasm_bindgen::JsValue::from($from.$rs_ident as f64)
                 )
                     .expect("Setting Object properties should never fail.");
