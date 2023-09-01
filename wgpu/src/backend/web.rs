@@ -687,6 +687,44 @@ fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::F
     features
 }
 
+fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
+    wgt::Limits {
+        max_texture_dimension_1d: limits.max_texture_dimension_1d(),
+        max_texture_dimension_2d: limits.max_texture_dimension_2d(),
+        max_texture_dimension_3d: limits.max_texture_dimension_3d(),
+        max_texture_array_layers: limits.max_texture_array_layers(),
+        max_bind_groups: limits.max_bind_groups(),
+        max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
+        max_dynamic_uniform_buffers_per_pipeline_layout: limits
+            .max_dynamic_uniform_buffers_per_pipeline_layout(),
+        max_dynamic_storage_buffers_per_pipeline_layout: limits
+            .max_dynamic_storage_buffers_per_pipeline_layout(),
+        max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
+        max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
+        max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+        max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+        max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
+        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
+        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
+        max_vertex_buffers: limits.max_vertex_buffers(),
+        max_buffer_size: limits.max_buffer_size() as u64,
+        max_vertex_attributes: limits.max_vertex_attributes(),
+        max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
+        min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
+        min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
+        max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+        max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
+        max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
+        max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
+        max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
+        max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
+        max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
+        // The following are not part of WebGPU
+        max_push_constant_size: wgt::Limits::default().max_push_constant_size,
+        max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
+    }
+}
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(
@@ -1028,7 +1066,7 @@ impl crate::context::Context for Context {
                             &$on,
                             &::wasm_bindgen::JsValue::from(stringify!($js_ident)),
                             // TODO: Numbers may be bigger than u32!
-                            &::wasm_bindgen::JsValue::from($from.$rs_ident as u32)
+                            &::wasm_bindgen::JsValue::from($from.$rs_ident as f64)
                         )
                             .expect("Setting Object properties should never fail.");
                     )*
@@ -1130,44 +1168,7 @@ impl crate::context::Context for Context {
         _adapter: &Self::AdapterId,
         adapter_data: &Self::AdapterData,
     ) -> wgt::Limits {
-        let limits = adapter_data.0.limits();
-        wgt::Limits {
-            max_texture_dimension_1d: limits.max_texture_dimension_1d(),
-            max_texture_dimension_2d: limits.max_texture_dimension_2d(),
-            max_texture_dimension_3d: limits.max_texture_dimension_3d(),
-            max_texture_array_layers: limits.max_texture_array_layers(),
-            max_bind_groups: limits.max_bind_groups(),
-            max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
-            max_dynamic_uniform_buffers_per_pipeline_layout: limits
-                .max_dynamic_uniform_buffers_per_pipeline_layout(),
-            max_dynamic_storage_buffers_per_pipeline_layout: limits
-                .max_dynamic_storage_buffers_per_pipeline_layout(),
-            max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
-            max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
-            max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
-            max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
-            max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
-            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
-            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
-            max_vertex_buffers: limits.max_vertex_buffers(),
-            max_buffer_size: limits.max_buffer_size() as u64,
-            max_vertex_attributes: limits.max_vertex_attributes(),
-            max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
-            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
-            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
-            max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
-            max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
-            max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
-            max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
-            max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
-            max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
-            max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
-            /*
-              max_push_constant_size: limits.max_push_constant_size(),
-              max_non_sampler_bindings: limits.max_non_sampler_bindings(),
-            */
-            ..wgt::Limits::default() // The following are not part of WebGPU
-        }
+        map_wgt_limits(adapter_data.0.limits())
     }
 
     fn adapter_downlevel_capabilities(
@@ -1332,44 +1333,7 @@ impl crate::context::Context for Context {
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
     ) -> wgt::Limits {
-        let limits = device_data.0.limits();
-        wgt::Limits {
-            max_texture_dimension_1d: limits.max_texture_dimension_1d(),
-            max_texture_dimension_2d: limits.max_texture_dimension_2d(),
-            max_texture_dimension_3d: limits.max_texture_dimension_3d(),
-            max_texture_array_layers: limits.max_texture_array_layers(),
-            max_bind_groups: limits.max_bind_groups(),
-            max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
-            max_dynamic_uniform_buffers_per_pipeline_layout: limits
-                .max_dynamic_uniform_buffers_per_pipeline_layout(),
-            max_dynamic_storage_buffers_per_pipeline_layout: limits
-                .max_dynamic_storage_buffers_per_pipeline_layout(),
-            max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
-            max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
-            max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
-            max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
-            max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
-            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
-            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
-            max_vertex_buffers: limits.max_vertex_buffers(),
-            max_buffer_size: limits.max_buffer_size() as u64,
-            max_vertex_attributes: limits.max_vertex_attributes(),
-            max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
-            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
-            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
-            max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
-            max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
-            max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
-            max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
-            max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
-            max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
-            max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
-            /*
-              max_push_constant_size: limits.max_push_constant_size(),
-              max_non_sampler_bindings: limits.max_non_sampler_bindings(),
-            */
-            ..wgt::Limits::default() // The following are not part of WebGPU
-        }
+        map_wgt_limits(device_data.0.limits())
     }
 
     fn device_downlevel_properties(
