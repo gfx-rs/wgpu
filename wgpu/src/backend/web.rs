@@ -920,13 +920,22 @@ impl Context {
                 // “not supported” could include “insufficient GPU resources” or “the GPU process
                 // previously crashed”. So, we must return it as an `Err` since it could occur
                 // for circumstances outside the application author's control.
-                return Err(crate::CreateSurfaceError {});
+                return Err(crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(
+                        String::from(
+                            "canvas.getContext() returned null; webgpu not available or canvas already in use"
+                        )
+                    )
+                });
             }
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
-                // A thrown exception indicates misuse of the canvas state. Ideally we wouldn't
-                // panic in this case ... TODO
-                panic!("canvas.getContext() threw {js_error:?}")
+                // A thrown exception indicates misuse of the canvas state.
+                return Err(crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "canvas.getContext() threw exception {js_error:?}",
+                    )),
+                });
             }
         };
 
