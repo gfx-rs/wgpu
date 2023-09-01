@@ -152,12 +152,11 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 }
 
 impl super::Swapchain {
+    /// # Safety
+    ///
+    /// - The device must have been made idle before calling this function.
     unsafe fn release_resources(self, device: &ash::Device) -> Self {
         profiling::scope!("Swapchain::release_resources");
-        {
-            profiling::scope!("vkDeviceWaitIdle");
-            let _ = unsafe { device.device_wait_idle() };
-        };
         unsafe { device.destroy_fence(self.fence, None) };
         self
     }
@@ -794,6 +793,7 @@ impl crate::Surface<super::Api> for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
+        // Safety: `configure`'s contract guarantees there is no resources derived from the swapchain in use.
         let old = self
             .swapchain
             .take()
@@ -807,6 +807,7 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         if let Some(sc) = self.swapchain.take() {
+            // Safety: `unconfigure`'s contract guarantees there is no resources derived from the swapchain in use.
             let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
             unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }
