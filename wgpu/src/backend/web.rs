@@ -1014,8 +1014,64 @@ impl crate::context::Context for Context {
             //Error: Tracing isn't supported on the Web target
         }
 
-        // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
+        log::info!("descriptor given: {:#?}", desc.limits);
+
+        // TODO: Migrate to a web_sys api.
+        // See https://github.com/rustwasm/wasm-bindgen/issues/3587
+        let limits_object = {
+            let object = js_sys::Object::new();
+
+            macro_rules! set_properties {
+                (($from:expr) => ($on:expr) : $(($js_ident:ident, $rs_ident:ident)),* $(,)?) => {
+                    $(
+                        ::js_sys::Reflect::set(
+                            &$on,
+                            &::wasm_bindgen::JsValue::from(stringify!($js_ident)),
+                            // TODO: Numbers may be bigger than u32!
+                            &::wasm_bindgen::JsValue::from($from.$rs_ident as u32)
+                        )
+                            .expect("Setting Object properties should never fail.");
+                    )*
+                }
+            }
+
+            set_properties![
+                (desc.limits) => (object):
+                (maxTextureDimension1D, max_texture_dimension_1d),
+                (maxTextureDimension2D, max_texture_dimension_2d),
+                (maxTextureDimension3D, max_texture_dimension_3d),
+                (maxTextureArrayLayers, max_texture_array_layers),
+                (maxBindGroups, max_bind_groups),
+                (maxBindingsPerBindGroup, max_bindings_per_bind_group),
+                (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
+                (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
+                (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
+                (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
+                (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
+                (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
+                (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
+                (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
+                (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
+                (minUniformBufferOffsetAlignment, min_uniform_buffer_offset_alignment),
+                (minStorageBufferOffsetAlignment, min_storage_buffer_offset_alignment),
+                (maxVertexBuffers, max_vertex_buffers),
+                (maxBufferSize, max_buffer_size),
+                (maxVertexAttributes, max_vertex_attributes),
+                (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
+                (maxInterStageShaderComponents, max_inter_stage_shader_components),
+                (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
+                (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
+                (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
+                (maxComputeWorkgroupSizeY, max_compute_workgroup_size_y),
+                (maxComputeWorkgroupSizeZ, max_compute_workgroup_size_z),
+                (maxComputeWorkgroupsPerDimension, max_compute_workgroups_per_dimension),
+            ];
+
+            object
+        };
+
+        js_sys::Reflect::set(&mapped_desc, &JsValue::from("requiredLimits"), &limits_object).expect("Setting Object properties should never fail.");
 
         let required_features = FEATURES_MAPPING
             .iter()
@@ -1090,9 +1146,24 @@ impl crate::context::Context for Context {
             max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
             max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
             max_vertex_buffers: limits.max_vertex_buffers(),
+            max_buffer_size: limits.max_buffer_size() as u64,
             max_vertex_attributes: limits.max_vertex_attributes(),
             max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
+            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
+            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
+            max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+            max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
+            max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
+            max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
+            max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
+            max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
+            max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
             ..wgt::Limits::default()
+            // The following are not part of WebGPU
+            /*
+              max_push_constant_size: limits.max_push_constant_size(),
+              max_non_sampler_bindings: limits.max_non_sampler_bindings(),
+            */
         }
     }
 
@@ -1256,10 +1327,47 @@ impl crate::context::Context for Context {
     fn device_limits(
         &self,
         _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
+        device_data: &Self::DeviceData,
     ) -> wgt::Limits {
-        // TODO
-        wgt::Limits::default()
+        let limits = device_data.0.limits();
+        wgt::Limits {
+            max_texture_dimension_1d: limits.max_texture_dimension_1d(),
+            max_texture_dimension_2d: limits.max_texture_dimension_2d(),
+            max_texture_dimension_3d: limits.max_texture_dimension_3d(),
+            max_texture_array_layers: limits.max_texture_array_layers(),
+            max_bind_groups: limits.max_bind_groups(),
+            max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
+            max_dynamic_uniform_buffers_per_pipeline_layout: limits
+                .max_dynamic_uniform_buffers_per_pipeline_layout(),
+            max_dynamic_storage_buffers_per_pipeline_layout: limits
+                .max_dynamic_storage_buffers_per_pipeline_layout(),
+            max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
+            max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
+            max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+            max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+            max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
+            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
+            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
+            max_vertex_buffers: limits.max_vertex_buffers(),
+            max_buffer_size: limits.max_buffer_size() as u64,
+            max_vertex_attributes: limits.max_vertex_attributes(),
+            max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
+            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
+            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
+            max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+            max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
+            max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
+            max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
+            max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
+            max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
+            max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
+            ..wgt::Limits::default()
+            // The following are not part of WebGPU
+            /*
+              max_push_constant_size: limits.max_push_constant_size(),
+              max_non_sampler_bindings: limits.max_non_sampler_bindings(),
+            */
+        }
     }
 
     fn device_downlevel_properties(
