@@ -194,8 +194,10 @@ impl super::Instance {
         let instance_extensions = entry
             .enumerate_instance_extension_properties(None)
             .map_err(|e| {
-                log::info!("enumerate_instance_extension_properties: {:?}", e);
-                crate::InstanceError
+                crate::InstanceError::with_source(
+                    String::from("enumerate_instance_extension_properties() failed"),
+                    e,
+                )
             })?;
 
         // Check our extensions against the available extensions
@@ -366,8 +368,9 @@ impl super::Instance {
         window: vk::Window,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XlibSurface::name()) {
-            log::warn!("Vulkan driver does not support VK_KHR_xlib_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_xlib_surface",
+            )));
         }
 
         let surface = {
@@ -391,8 +394,9 @@ impl super::Instance {
         window: vk::xcb_window_t,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XcbSurface::name()) {
-            log::warn!("Vulkan driver does not support VK_KHR_xcb_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_xcb_surface",
+            )));
         }
 
         let surface = {
@@ -420,8 +424,9 @@ impl super::Instance {
             .extensions
             .contains(&khr::WaylandSurface::name())
         {
-            log::debug!("Vulkan driver does not support VK_KHR_wayland_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_wayland_surface",
+            )));
         }
 
         let surface = {
@@ -447,8 +452,9 @@ impl super::Instance {
             .extensions
             .contains(&khr::AndroidSurface::name())
         {
-            log::warn!("Vulkan driver does not support VK_KHR_android_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_android_surface",
+            )));
         }
 
         let surface = {
@@ -470,8 +476,9 @@ impl super::Instance {
         hwnd: *mut c_void,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::Win32Surface::name()) {
-            log::debug!("Vulkan driver does not support VK_KHR_win32_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_win32_surface",
+            )));
         }
 
         let surface = {
@@ -496,8 +503,9 @@ impl super::Instance {
         view: *mut c_void,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::MetalSurface::name()) {
-            log::warn!("Vulkan driver does not support VK_EXT_metal_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_EXT_metal_surface",
+            )));
         }
 
         let layer = unsafe {
@@ -546,20 +554,18 @@ impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         use crate::auxil::cstr_from_bytes_until_nul;
 
-        let entry = match unsafe { ash::Entry::load() } {
-            Ok(entry) => entry,
-            Err(err) => {
-                log::info!("Missing Vulkan entry points: {:?}", err);
-                return Err(crate::InstanceError);
-            }
-        };
+        let entry = unsafe { ash::Entry::load() }.map_err(|err| {
+            crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)
+        })?;
         let driver_api_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
             Ok(Some(version)) => version,
             Ok(None) => vk::API_VERSION_1_0,
             Err(err) => {
-                log::warn!("try_enumerate_instance_version: {:?}", err);
-                return Err(crate::InstanceError);
+                return Err(crate::InstanceError::with_source(
+                    String::from("try_enumerate_instance_version() failed"),
+                    err,
+                ));
             }
         };
 
@@ -590,7 +596,10 @@ impl crate::Instance<super::Api> for super::Instance {
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
-            crate::InstanceError
+            crate::InstanceError::with_source(
+                String::from("enumerate_instance_layer_properties() failed"),
+                e,
+            )
         })?;
 
         fn find_layer<'layers>(
@@ -682,8 +691,10 @@ impl crate::Instance<super::Api> for super::Instance {
                 .enabled_extension_names(&str_pointers[layers.len()..]);
 
             unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
-                log::warn!("create_instance: {:?}", e);
-                crate::InstanceError
+                crate::InstanceError::with_source(
+                    String::from("Entry::create_instance() failed"),
+                    e,
+                )
             })?
         };
 
@@ -739,7 +750,9 @@ impl crate::Instance<super::Api> for super::Instance {
             {
                 self.create_surface_from_view(handle.ui_view)
             }
-            (_, _) => Err(crate::InstanceError),
+            (_, _) => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Vulkan-compatible handle"
+            ))),
         }
     }
 

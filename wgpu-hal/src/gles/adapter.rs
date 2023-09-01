@@ -43,8 +43,9 @@ impl super::Adapter {
                     src = &src[pos + es_sig.len()..];
                 }
                 None => {
-                    log::warn!("ES not found in '{}'", src);
-                    return Err(crate::InstanceError);
+                    return Err(crate::InstanceError::new(format!(
+                        "OpenGL version {src:?} does not contain 'ES'"
+                    )));
                 }
             }
         };
@@ -86,10 +87,9 @@ impl super::Adapter {
                 },
                 minor,
             )),
-            _ => {
-                log::warn!("Unable to extract the version from '{}'", version);
-                Err(crate::InstanceError)
-            }
+            _ => Err(crate::InstanceError::new(format!(
+                "unable to extract OpenGL version from {version:?}"
+            ))),
         }
     }
 
@@ -975,27 +975,30 @@ mod tests {
 
     #[test]
     fn test_version_parse() {
-        let error = Err(crate::InstanceError);
-        assert_eq!(Adapter::parse_version("1"), error);
-        assert_eq!(Adapter::parse_version("1."), error);
-        assert_eq!(Adapter::parse_version("1 h3l1o. W0rld"), error);
-        assert_eq!(Adapter::parse_version("1. h3l1o. W0rld"), error);
-        assert_eq!(Adapter::parse_version("1.2.3"), error);
-        assert_eq!(Adapter::parse_version("OpenGL ES 3.1"), Ok((3, 1)));
+        Adapter::parse_version("1").unwrap_err();
+        Adapter::parse_version("1.").unwrap_err();
+        Adapter::parse_version("1 h3l1o. W0rld").unwrap_err();
+        Adapter::parse_version("1. h3l1o. W0rld").unwrap_err();
+        Adapter::parse_version("1.2.3").unwrap_err();
+
+        assert_eq!(Adapter::parse_version("OpenGL ES 3.1").unwrap(), (3, 1));
         assert_eq!(
-            Adapter::parse_version("OpenGL ES 2.0 Google Nexus"),
-            Ok((2, 0))
+            Adapter::parse_version("OpenGL ES 2.0 Google Nexus").unwrap(),
+            (2, 0)
         );
-        assert_eq!(Adapter::parse_version("GLSL ES 1.1"), Ok((1, 1)));
-        assert_eq!(Adapter::parse_version("OpenGL ES GLSL ES 3.20"), Ok((3, 2)));
+        assert_eq!(Adapter::parse_version("GLSL ES 1.1").unwrap(), (1, 1));
+        assert_eq!(
+            Adapter::parse_version("OpenGL ES GLSL ES 3.20").unwrap(),
+            (3, 2)
+        );
         assert_eq!(
             // WebGL 2.0 should parse as OpenGL ES 3.0
-            Adapter::parse_version("WebGL 2.0 (OpenGL ES 3.0 Chromium)"),
-            Ok((3, 0))
+            Adapter::parse_version("WebGL 2.0 (OpenGL ES 3.0 Chromium)").unwrap(),
+            (3, 0)
         );
         assert_eq!(
-            Adapter::parse_version("WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"),
-            Ok((3, 0))
+            Adapter::parse_version("WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)").unwrap(),
+            (3, 0)
         );
     }
 }

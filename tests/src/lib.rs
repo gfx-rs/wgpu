@@ -312,7 +312,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
             let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
         } else {
-            let canary_set = _surface_guard.check_for_unreported_errors();
+            let canary_set = _surface_guard.unwrap().check_for_unreported_errors();
         }
     );
 
@@ -345,24 +345,18 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 }
 
-fn initialize_adapter() -> (Adapter, SurfaceGuard) {
-    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
-    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
-    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-    let instance = Instance::new(wgpu::InstanceDescriptor {
-        backends,
-        dx12_shader_compiler,
-        gles_minor_version,
-    });
-    let surface_guard;
+fn initialize_adapter() -> (Adapter, Option<SurfaceGuard>) {
+    let instance = initialize_instance();
+    let surface_guard: Option<SurfaceGuard>;
     let compatible_surface;
 
+    // Create a canvas iff we need a WebGL2RenderingContext to have a working device.
     #[cfg(not(all(
         target_arch = "wasm32",
         any(target_os = "emscripten", feature = "webgl")
     )))]
     {
-        surface_guard = SurfaceGuard {};
+        surface_guard = None;
         compatible_surface = None;
     }
     #[cfg(all(
@@ -398,7 +392,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
                 .expect("could not create surface from canvas")
         };
 
-        surface_guard = SurfaceGuard { canvas };
+        surface_guard = Some(SurfaceGuard { canvas });
 
         compatible_surface = Some(surface);
     }
@@ -413,12 +407,21 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     (adapter, surface_guard)
 }
 
-struct SurfaceGuard {
-    #[cfg(all(
-        target_arch = "wasm32",
-        any(target_os = "emscripten", feature = "webgl")
-    ))]
-    canvas: web_sys::HtmlCanvasElement,
+pub fn initialize_instance() -> Instance {
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
+    Instance::new(wgpu::InstanceDescriptor {
+        backends,
+        dx12_shader_compiler,
+        gles_minor_version,
+    })
+}
+
+// Public because it is used by tests of interacting with canvas
+pub struct SurfaceGuard {
+    #[cfg(target_arch = "wasm32")]
+    pub canvas: web_sys::HtmlCanvasElement,
 }
 
 impl SurfaceGuard {
@@ -452,11 +455,8 @@ impl Drop for SurfaceGuard {
     }
 }
 
-#[cfg(all(
-    target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
-))]
-fn create_html_canvas() -> web_sys::HtmlCanvasElement {
+#[cfg(target_arch = "wasm32")]
+pub fn create_html_canvas() -> web_sys::HtmlCanvasElement {
     use wasm_bindgen::JsCast;
 
     web_sys::window()
