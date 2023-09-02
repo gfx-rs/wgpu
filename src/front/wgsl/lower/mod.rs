@@ -1745,6 +1745,25 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     args.finish()?;
 
+                    if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
+                        ctx.grow_types(arg)?;
+                        if let Some((size, width)) = match *ctx.resolved_inner(arg) {
+                            crate::TypeInner::Scalar { width, .. } => Some((None, width)),
+                            crate::TypeInner::Vector { size, width, .. } => {
+                                Some((Some(size), width))
+                            }
+                            _ => None,
+                        } {
+                            ctx.module.generate_predeclared_type(
+                                if fun == crate::MathFunction::Modf {
+                                    crate::PredeclaredType::ModfResult { size, width }
+                                } else {
+                                    crate::PredeclaredType::FrexpResult { size, width }
+                                },
+                            );
+                        }
+                    }
+
                     crate::Expression::Math {
                         fun,
                         arg,
@@ -1880,10 +1899,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let expression = match *ctx.resolved_inner(value) {
                                 crate::TypeInner::Scalar { kind, width } => {
                                     crate::Expression::AtomicResult {
-                                        //TODO: cache this to avoid generating duplicate types
-                                        ty: ctx
-                                            .module
-                                            .generate_atomic_compare_exchange_result(kind, width),
+                                        ty: ctx.module.generate_predeclared_type(
+                                            crate::PredeclaredType::AtomicCompareExchangeWeakResult {
+                                                kind,
+                                                width,
+                                            },
+                                        ),
                                         comparison: true,
                                     }
                                 }

@@ -17,6 +17,9 @@ const SPECIAL_BASE_VERTEX: &str = "base_vertex";
 const SPECIAL_BASE_INSTANCE: &str = "base_instance";
 const SPECIAL_OTHER: &str = "other";
 
+pub(crate) const MODF_FUNCTION: &str = "naga_modf";
+pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+
 struct EpStructMember {
     name: String,
     ty: Handle<crate::Type>,
@@ -243,6 +246,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out)?;
             }
         }
+
+        self.write_special_functions(module)?;
 
         self.write_wrapped_compose_functions(module, &module.const_expressions)?;
 
@@ -2675,8 +2680,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Round => Function::Regular("round"),
                     Mf::Fract => Function::Regular("frac"),
                     Mf::Trunc => Function::Regular("trunc"),
-                    Mf::Modf => Function::Regular("modf"),
-                    Mf::Frexp => Function::Regular("frexp"),
+                    Mf::Modf => Function::Regular(MODF_FUNCTION),
+                    Mf::Frexp => Function::Regular(FREXP_FUNCTION),
                     Mf::Ldexp => Function::Regular("ldexp"),
                     // exponent
                     Mf::Exp => Function::Regular("exp"),

@@ -5,55 +5,6 @@ Type generators.
 use crate::{arena::Handle, span::Span};
 
 impl crate::Module {
-    pub fn generate_atomic_compare_exchange_result(
-        &mut self,
-        kind: crate::ScalarKind,
-        width: crate::Bytes,
-    ) -> Handle<crate::Type> {
-        let bool_ty = self.types.insert(
-            crate::Type {
-                name: None,
-                inner: crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Bool,
-                    width: crate::BOOL_WIDTH,
-                },
-            },
-            Span::UNDEFINED,
-        );
-        let scalar_ty = self.types.insert(
-            crate::Type {
-                name: None,
-                inner: crate::TypeInner::Scalar { kind, width },
-            },
-            Span::UNDEFINED,
-        );
-
-        self.types.insert(
-            crate::Type {
-                name: Some(format!(
-                    "__atomic_compare_exchange_result<{kind:?},{width}>"
-                )),
-                inner: crate::TypeInner::Struct {
-                    members: vec![
-                        crate::StructMember {
-                            name: Some("old_value".to_string()),
-                            ty: scalar_ty,
-                            binding: None,
-                            offset: 0,
-                        },
-                        crate::StructMember {
-                            name: Some("exchanged".to_string()),
-                            ty: bool_ty,
-                            binding: None,
-                            offset: 4,
-                        },
-                    ],
-                    span: 8,
-                },
-            },
-            Span::UNDEFINED,
-        )
-    }
     /// Populate this module's [`SpecialTypes::ray_desc`] type.
     ///
     /// [`SpecialTypes::ray_desc`] is the type of the [`descriptor`] operand of
@@ -309,6 +260,205 @@ impl crate::Module {
         );
 
         self.special_types.ray_intersection = Some(handle);
+        handle
+    }
+
+    /// Populate this module's [`SpecialTypes::predeclared_types`] type and return the handle.
+    ///
+    /// [`SpecialTypes::predeclared_types`]: crate::SpecialTypes::predeclared_types
+    pub fn generate_predeclared_type(
+        &mut self,
+        special_type: crate::PredeclaredType,
+    ) -> Handle<crate::Type> {
+        use std::fmt::Write;
+
+        if let Some(value) = self.special_types.predeclared_types.get(&special_type) {
+            return *value;
+        }
+
+        let ty = match special_type {
+            crate::PredeclaredType::AtomicCompareExchangeWeakResult { kind, width } => {
+                let bool_ty = self.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Bool,
+                            width: crate::BOOL_WIDTH,
+                        },
+                    },
+                    Span::UNDEFINED,
+                );
+                let scalar_ty = self.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar { kind, width },
+                    },
+                    Span::UNDEFINED,
+                );
+
+                crate::Type {
+                    name: Some(format!(
+                        "__atomic_compare_exchange_result<{kind:?},{width}>"
+                    )),
+                    inner: crate::TypeInner::Struct {
+                        members: vec![
+                            crate::StructMember {
+                                name: Some("old_value".to_string()),
+                                ty: scalar_ty,
+                                binding: None,
+                                offset: 0,
+                            },
+                            crate::StructMember {
+                                name: Some("exchanged".to_string()),
+                                ty: bool_ty,
+                                binding: None,
+                                offset: 4,
+                            },
+                        ],
+                        span: 8,
+                    },
+                }
+            }
+            crate::PredeclaredType::ModfResult { size, width } => {
+                let float_ty = self.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width,
+                        },
+                    },
+                    Span::UNDEFINED,
+                );
+
+                let (member_ty, second_offset) = if let Some(size) = size {
+                    let vec_ty = self.types.insert(
+                        crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Vector {
+                                size,
+                                kind: crate::ScalarKind::Float,
+                                width,
+                            },
+                        },
+                        Span::UNDEFINED,
+                    );
+                    (vec_ty, size as u32 * width as u32)
+                } else {
+                    (float_ty, width as u32)
+                };
+
+                let mut type_name = "__modf_result_".to_string();
+                if let Some(size) = size {
+                    let _ = write!(type_name, "vec{}_", size as u8);
+                }
+                let _ = write!(type_name, "f{}", width * 8);
+
+                crate::Type {
+                    name: Some(type_name),
+                    inner: crate::TypeInner::Struct {
+                        members: vec![
+                            crate::StructMember {
+                                name: Some("fract".to_string()),
+                                ty: member_ty,
+                                binding: None,
+                                offset: 0,
+                            },
+                            crate::StructMember {
+                                name: Some("whole".to_string()),
+                                ty: member_ty,
+                                binding: None,
+                                offset: second_offset,
+                            },
+                        ],
+                        span: second_offset * 2,
+                    },
+                }
+            }
+            crate::PredeclaredType::FrexpResult { size, width } => {
+                let float_ty = self.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width,
+                        },
+                    },
+                    Span::UNDEFINED,
+                );
+
+                let int_ty = self.types.insert(
+                    crate::Type {
+                        name: None,
+                        inner: crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Sint,
+                            width,
+                        },
+                    },
+                    Span::UNDEFINED,
+                );
+
+                let (fract_member_ty, exp_member_ty, second_offset) = if let Some(size) = size {
+                    let vec_float_ty = self.types.insert(
+                        crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Vector {
+                                size,
+                                kind: crate::ScalarKind::Float,
+                                width,
+                            },
+                        },
+                        Span::UNDEFINED,
+                    );
+                    let vec_int_ty = self.types.insert(
+                        crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Vector {
+                                size,
+                                kind: crate::ScalarKind::Sint,
+                                width,
+                            },
+                        },
+                        Span::UNDEFINED,
+                    );
+                    (vec_float_ty, vec_int_ty, size as u32 * width as u32)
+                } else {
+                    (float_ty, int_ty, width as u32)
+                };
+
+                let mut type_name = "__frexp_result_".to_string();
+                if let Some(size) = size {
+                    let _ = write!(type_name, "vec{}_", size as u8);
+                }
+                let _ = write!(type_name, "f{}", width * 8);
+
+                crate::Type {
+                    name: Some(type_name),
+                    inner: crate::TypeInner::Struct {
+                        members: vec![
+                            crate::StructMember {
+                                name: Some("fract".to_string()),
+                                ty: fract_member_ty,
+                                binding: None,
+                                offset: 0,
+                            },
+                            crate::StructMember {
+                                name: Some("exp".to_string()),
+                                ty: exp_member_ty,
+                                binding: None,
+                                offset: second_offset,
+                            },
+                        ],
+                        span: second_offset * 2,
+                    },
+                }
+            }
+        };
+
+        let handle = self.types.insert(ty, Span::UNDEFINED);
+        self.special_types
+            .predeclared_types
+            .insert(special_type, handle);
         handle
     }
 }

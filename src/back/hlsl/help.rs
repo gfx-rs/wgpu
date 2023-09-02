@@ -781,6 +781,59 @@ impl<'a, W: Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    /// Write functions to create special types.
+    pub(super) fn write_special_functions(&mut self, module: &crate::Module) -> BackendResult {
+        for (type_key, struct_ty) in module.special_types.predeclared_types.iter() {
+            match type_key {
+                &crate::PredeclaredType::ModfResult { size, width }
+                | &crate::PredeclaredType::FrexpResult { size, width } => {
+                    let arg_type_name_owner;
+                    let arg_type_name = if let Some(size) = size {
+                        arg_type_name_owner = format!(
+                            "{}{}",
+                            if width == 8 { "double" } else { "float" },
+                            size as u8
+                        );
+                        &arg_type_name_owner
+                    } else if width == 8 {
+                        "double"
+                    } else {
+                        "float"
+                    };
+
+                    let (defined_func_name, called_func_name, second_field_name, sign_multiplier) =
+                        if matches!(type_key, &crate::PredeclaredType::ModfResult { .. }) {
+                            (super::writer::MODF_FUNCTION, "modf", "whole", "")
+                        } else {
+                            (
+                                super::writer::FREXP_FUNCTION,
+                                "frexp",
+                                "exp_",
+                                "sign(arg) * ",
+                            )
+                        };
+
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
+
+                    writeln!(
+                        self.out,
+                        "{struct_name} {defined_func_name}({arg_type_name} arg) {{
+    {arg_type_name} other;
+    {struct_name} result;
+    result.fract = {sign_multiplier}{called_func_name}(arg, other);
+    result.{second_field_name} = other;
+    return result;
+}}"
+                    )?;
+                    writeln!(self.out)?;
+                }
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
+            }
+        }
+
+        Ok(())
+    }
+
     /// Helper function that writes compose wrapped functions
     pub(super) fn write_wrapped_compose_functions(
         &mut self,

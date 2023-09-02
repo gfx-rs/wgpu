@@ -456,10 +456,11 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
 #[test]
 fn parse_pointers() {
     parse_str(
-        "fn foo() {
+        "fn foo(a: ptr<private, f32>) -> f32 { return *a; }
+    fn bar() {
         var x: f32 = 1.0;
         let px = &x;
-        let py = frexp(0.5, px);
+        let py = foo(px);
     }",
     )
     .unwrap();

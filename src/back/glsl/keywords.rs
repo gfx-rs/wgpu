@@ -477,4 +477,7 @@ pub const RESERVED_KEYWORDS: &[&str] = &[
     // entry point name (should not be shadowed)
     //
     "main",
+    // Naga utilities:
+    super::MODF_FUNCTION,
+    super::FREXP_FUNCTION,
 ];

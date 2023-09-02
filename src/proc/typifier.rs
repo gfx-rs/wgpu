@@ -706,8 +706,6 @@ impl<'a> ResolveContext<'a> {
                     Mf::Round |
                     Mf::Fract |
                     Mf::Trunc |
-                    Mf::Modf |
-                    Mf::Frexp |
                     Mf::Ldexp |
                     // exponent
                     Mf::Exp |
@@ -715,6 +713,31 @@ impl<'a> ResolveContext<'a> {
                     Mf::Log |
                     Mf::Log2 |
                     Mf::Pow => res_arg.clone(),
+                    Mf::Modf | Mf::Frexp => {
+                        let (size, width) = match res_arg.inner_with(types) {
+                            &Ti::Scalar {
+                                kind: crate::ScalarKind::Float,
+                               width,
+                            } => (None, width),
+                            &Ti::Vector {
+                                kind: crate::ScalarKind::Float,
+                                size,
+                                width,
+                            } => (Some(size), width),
+                            ref other =>
+                                return Err(ResolveError::IncompatibleOperands(format!("{fun:?}({other:?}, _)")))
+                        };
+                        let result = self
+                        .special_types
+                        .predeclared_types
+                        .get(&if fun == Mf::Modf {
+                            crate::PredeclaredType::ModfResult { size, width }
+                    } else {
+                            crate::PredeclaredType::FrexpResult { size, width }
+                    })
+                        .ok_or(ResolveError::MissingSpecialType)?;
+                        TypeResolution::Handle(*result)
+                    },
                     // geometry
                     Mf::Dot => match *res_arg.inner_with(types) {
                         Ti::Vector {

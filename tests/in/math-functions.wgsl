@@ -31,4 +31,14 @@ fn main() {
     let clz_d = countLeadingZeros(vec2(1u));
     let lde_a = ldexp(1.0, 2);
     let lde_b = ldexp(vec2(1.0, 2.0), vec2(3, 4));
+    let modf_a = modf(1.5);
+    let modf_b = modf(1.5).fract;
+    let modf_c = modf(1.5).whole;
+    let modf_d = modf(vec2(1.5, 1.5));
+    let modf_e = modf(vec4(1.5, 1.5, 1.5, 1.5)).whole.x;
+    let modf_f: f32 = modf(vec2(1.5, 1.5)).fract.y;
+    let frexp_a = frexp(1.5);
+    let frexp_b = frexp(1.5).fract;
+    let frexp_c: i32 = frexp(1.5).exp;
+    let frexp_d: i32 = frexp(vec4(1.5, 1.5, 1.5, 1.5)).exp.x;
 }

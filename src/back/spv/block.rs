@@ -787,8 +787,8 @@ impl<'w> BlockContext<'w> {
                     Mf::Floor => MathOp::Ext(spirv::GLOp::Floor),
                     Mf::Fract => MathOp::Ext(spirv::GLOp::Fract),
                     Mf::Trunc => MathOp::Ext(spirv::GLOp::Trunc),
-                    Mf::Modf => MathOp::Ext(spirv::GLOp::Modf),
-                    Mf::Frexp => MathOp::Ext(spirv::GLOp::Frexp),
+                    Mf::Modf => MathOp::Ext(spirv::GLOp::ModfStruct),
+                    Mf::Frexp => MathOp::Ext(spirv::GLOp::FrexpStruct),
                     Mf::Ldexp => MathOp::Ext(spirv::GLOp::Ldexp),
                     // geometry
                     Mf::Dot => match *self.fun_info[arg].ty.inner_with(&self.ir_module.types) {

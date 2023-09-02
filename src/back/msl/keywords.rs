@@ -214,4 +214,6 @@ pub const RESERVED: &[&str] = &[
     // Naga utilities
     "DefaultConstructible",
     "clamped_lod_e",
+    super::writer::FREXP_FUNCTION,
+    super::writer::MODF_FUNCTION,
 ];

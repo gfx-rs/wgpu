@@ -375,8 +375,8 @@ impl super::MathFunction {
             Self::Round => 1,
             Self::Fract => 1,
             Self::Trunc => 1,
-            Self::Modf => 2,
-            Self::Frexp => 2,
+            Self::Modf => 1,
+            Self::Frexp => 1,
             Self::Ldexp => 2,
             // exponent
             Self::Exp => 1,
