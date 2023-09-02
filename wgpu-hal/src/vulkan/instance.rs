@@ -786,13 +786,22 @@ impl crate::Instance<super::Api> for super::Instance {
                 if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
                     && exposed.info.vendor == db::intel::VENDOR
                 {
-                    // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
-                    log::warn!(
-                        "Disabling presentation on '{}' (id {:?}) because of NV Optimus (on Linux)",
-                        exposed.info.name,
-                        exposed.adapter.raw
-                    );
-                    exposed.adapter.private_caps.can_present = false;
+                    // Check if mesa driver and version less than 21.2
+                    if let Some(version) = exposed.info.driver_info.split_once("Mesa ").map(|s| {
+                        s.1.rsplit_once('.')
+                            .map(|v| v.0.parse::<f32>().unwrap_or_default())
+                            .unwrap_or_default()
+                    }) {
+                        if version < 21.2 {
+                            // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
+                            log::warn!(
+                                "Disabling presentation on '{}' (id {:?}) due to NV Optimus and Intel Mesa < v21.2",
+                                exposed.info.name,
+                                exposed.adapter.raw
+                            );
+                            exposed.adapter.private_caps.can_present = false;
+                        }
+                    }
                 }
             }
         }
