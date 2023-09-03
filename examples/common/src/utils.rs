@@ -3,6 +3,15 @@ use std::io::Write;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+pub fn add_web_nothing_to_see_msg() {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.body())
+        .expect("Could not get document / body.")
+        .set_inner_html("<p>Nothing to see here! Open the console!</p>");
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), path: String) {
     let mut png_data = Vec::<u8>::with_capacity(image_data.len());

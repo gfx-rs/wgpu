@@ -18,6 +18,7 @@ getrandom = { version = "0.2.10", features = ["js"] }
 log.workspace = true
 pollster.workspace = true
 wgpu.workspace = true
+wgpu-example.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true

@@ -3180,6 +3180,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgpu-example",
  "wgpu-test",
 ]
 
@@ -3224,6 +3225,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
+ "wgpu-example",
 ]
 
 [[package]]
@@ -3303,6 +3305,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgpu-example",
  "wgpu-test",
 ]
 

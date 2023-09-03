@@ -190,11 +190,7 @@ fn main() {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init_with_level(log::Level::Info).expect("could not initialize logger");
 
-        web_sys::window()
-            .and_then(|window| window.document())
-            .and_then(|document| document.body())
-            .expect("Could not get document / body.")
-            .set_inner_html("<p>Nothing to see here! Open the console!</p>");
+        wgpu_example::utils::add_web_nothing_to_see_msg();
 
         wasm_bindgen_futures::spawn_local(run());
     }
