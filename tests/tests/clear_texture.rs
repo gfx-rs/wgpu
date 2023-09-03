@@ -1,5 +1,7 @@
 use wasm_bindgen_test::*;
-use wgpu_test::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
+use wgpu_test::{
+    image::ReadbackBuffers, initialize_test, FailureCase, TestParameters, TestingContext,
+};
 
 static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
@@ -328,7 +330,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
 fn clear_texture_uncompressed_gles_compat() {
     initialize_test(
         TestParameters::default()
-            .webgl2_failure()
+            .skip(FailureCase::webgl2())
             .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
@@ -341,8 +343,8 @@ fn clear_texture_uncompressed_gles_compat() {
 fn clear_texture_uncompressed() {
     initialize_test(
         TestParameters::default()
-            .webgl2_failure()
-            .backend_failure(wgpu::Backends::GL)
+            .skip(FailureCase::webgl2())
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL))
             .features(wgpu::Features::CLEAR_TEXTURE),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED);
@@ -355,7 +357,7 @@ fn clear_texture_uncompressed() {
 fn clear_texture_depth() {
     initialize_test(
         TestParameters::default()
-            .webgl2_failure()
+            .skip(FailureCase::webgl2())
             .downlevel_flags(
                 wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                     | wgpu::DownlevelFlags::COMPUTE_SHADERS,
@@ -385,8 +387,10 @@ fn clear_texture_bc() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
-            .backend_adapter_failure(wgpu::Backends::GL, "ANGLE", false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
+            // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
+            // compressed texture copy to buffer not yet implemented
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
         },
@@ -402,8 +406,10 @@ fn clear_texture_astc() {
                 max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
                 ..wgpu::Limits::downlevel_defaults()
             })
-            .backend_adapter_failure(wgpu::Backends::GL, "ANGLE", false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
+            // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
+            // compressed texture copy to buffer not yet implemented
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
         },
@@ -415,8 +421,10 @@ fn clear_texture_etc2() {
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
-            .backend_adapter_failure(wgpu::Backends::GL, "ANGLE", false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
+            // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
+            // compressed texture copy to buffer not yet implemented
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
         |ctx| {
             clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);
         },

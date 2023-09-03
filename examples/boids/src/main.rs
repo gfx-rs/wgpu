@@ -345,7 +345,7 @@ fn boids() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
-            .molten_vk_failure(false),
+            .expect_fail(wgpu_test::FailureCase::molten_vk()),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     });
 }

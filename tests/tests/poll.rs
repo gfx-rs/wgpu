@@ -7,7 +7,7 @@ use wgpu::{
 };
 
 use wasm_bindgen_test::*;
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{initialize_test, FailureCase, TestParameters, TestingContext};
 
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
@@ -56,60 +56,75 @@ fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
 #[test]
 #[wasm_bindgen_test]
 fn wait() {
-    initialize_test(TestParameters::default().skip(), |ctx| {
-        let cmd_buf = generate_dummy_work(&ctx);
+    initialize_test(
+        TestParameters::default().skip(FailureCase::always()),
+        |ctx| {
+            let cmd_buf = generate_dummy_work(&ctx);
 
-        ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::Wait);
-    })
+            ctx.queue.submit(Some(cmd_buf));
+            ctx.device.poll(Maintain::Wait);
+        },
+    )
 }
 
 #[test]
 #[wasm_bindgen_test]
 fn double_wait() {
-    initialize_test(TestParameters::default().skip(), |ctx| {
-        let cmd_buf = generate_dummy_work(&ctx);
+    initialize_test(
+        TestParameters::default().skip(FailureCase::always()),
+        |ctx| {
+            let cmd_buf = generate_dummy_work(&ctx);
 
-        ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::Wait);
-        ctx.device.poll(Maintain::Wait);
-    })
+            ctx.queue.submit(Some(cmd_buf));
+            ctx.device.poll(Maintain::Wait);
+            ctx.device.poll(Maintain::Wait);
+        },
+    )
 }
 
 #[test]
 #[wasm_bindgen_test]
 fn wait_on_submission() {
-    initialize_test(TestParameters::default().skip(), |ctx| {
-        let cmd_buf = generate_dummy_work(&ctx);
+    initialize_test(
+        TestParameters::default().skip(FailureCase::always()),
+        |ctx| {
+            let cmd_buf = generate_dummy_work(&ctx);
 
-        let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
-    })
+            let index = ctx.queue.submit(Some(cmd_buf));
+            ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
+        },
+    )
 }
 
 #[test]
 #[wasm_bindgen_test]
 fn double_wait_on_submission() {
-    initialize_test(TestParameters::default().skip(), |ctx| {
-        let cmd_buf = generate_dummy_work(&ctx);
+    initialize_test(
+        TestParameters::default().skip(FailureCase::always()),
+        |ctx| {
+            let cmd_buf = generate_dummy_work(&ctx);
 
-        let index = ctx.queue.submit(Some(cmd_buf));
-        ctx.device
-            .poll(Maintain::WaitForSubmissionIndex(index.clone()));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
-    })
+            let index = ctx.queue.submit(Some(cmd_buf));
+            ctx.device
+                .poll(Maintain::WaitForSubmissionIndex(index.clone()));
+            ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
+        },
+    )
 }
 
 #[test]
 #[wasm_bindgen_test]
 fn wait_out_of_order() {
-    initialize_test(TestParameters::default().skip(), |ctx| {
-        let cmd_buf1 = generate_dummy_work(&ctx);
-        let cmd_buf2 = generate_dummy_work(&ctx);
+    initialize_test(
+        TestParameters::default().skip(FailureCase::always()),
+        |ctx| {
+            let cmd_buf1 = generate_dummy_work(&ctx);
+            let cmd_buf2 = generate_dummy_work(&ctx);
 
-        let index1 = ctx.queue.submit(Some(cmd_buf1));
-        let index2 = ctx.queue.submit(Some(cmd_buf2));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index2));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index1));
-    })
+            let index1 = ctx.queue.submit(Some(cmd_buf1));
+            let index2 = ctx.queue.submit(Some(cmd_buf2));
+            ctx.device.poll(Maintain::WaitForSubmissionIndex(index2));
+            ctx.device.poll(Maintain::WaitForSubmissionIndex(index1));
+        },
+    )
 }

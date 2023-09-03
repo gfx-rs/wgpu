@@ -18,14 +18,16 @@ fn zero_init_workgroup_mem() {
             .limits(Limits::downlevel_defaults())
             // remove both of these once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
             // https://github.com/gfx-rs/wgpu/issues/3160
-            .specific_failure(FailureCase {
+            .skip(FailureCase {
                 backends: Some(Backends::DX12),
                 vendor: Some(5140),
                 adapter: Some("Microsoft Basic Render Driver"),
-                skip: true,
                 ..FailureCase::default()
             })
-            .backend_adapter_failure(Backends::VULKAN, "swiftshader", true),
+            .skip(FailureCase::backend_adapter(
+                Backends::VULKAN,
+                "swiftshader",
+            )),
         zero_init_workgroup_mem_impl,
     );
 }

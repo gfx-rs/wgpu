@@ -329,7 +329,7 @@ fn msaa_line() {
         optional_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
         base_test_parameters: wgpu_test::TestParameters::default()
             // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
-            .specific_failure(FailureCase {
+            .expect_fail(FailureCase {
                 backends: Some(wgpu::Backends::DX12),
                 vendor: Some(0x1002),
                 ..FailureCase::default()

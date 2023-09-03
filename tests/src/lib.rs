@@ -53,10 +53,15 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
     }
 }
 
-/// Conditions under which a test should fail.
+/// Conditions under which a test should fail or be skipped.
 ///
-/// If any of these fields are `None`, then the field does not
-/// restrict matches. For example:
+/// By passing a `FailureCase` to [`TestParameters::expect_fail`], you can
+/// mark a test as expected to fail under the indicated conditions. By
+/// passing it to [`TestParameters::skip`], you can request that the
+/// test be skipped altogether.
+///
+/// If a field is `None`, then that field does not restrict matches. For
+/// example:
 ///
 /// ```
 /// # use wgpu_test::FailureCase;
@@ -65,7 +70,6 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 ///     vendor: None,
 ///     adapter: Some("RTX"),
 ///     driver: None,
-///     skip: false,
 /// }
 /// # ;
 /// ```
@@ -73,9 +77,15 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 /// This applies to all cards with `"RTX'` in their name on either
 /// Direct3D backend, no matter the vendor ID or driver name.
 ///
-/// The default value of `FailureCase` applies to any test case (that
-/// is, there are no criteria to constrain the match), and the test is
-/// not skipped.
+/// The strings given here need only appear as a substring in the
+/// corresponding [`AdapterInfo`] fields. The comparison is
+/// case-insensitive.
+///
+/// The default value of `FailureCase` applies to any test case. That
+/// is, there are no criteria to constrain the match.
+///
+/// [`AdapterInfo`]: wgt::AdapterInfo
+#[derive(Default)]
 pub struct FailureCase {
     /// Backends expected to fail, or `None` for any backend.
     ///
@@ -109,22 +119,127 @@ pub struct FailureCase {
     ///
     /// [`AdapterInfo::driver`]: wgt::AdapterInfo::driver
     pub driver: Option<&'static str>,
-
-    /// If `true`, skip the test altogether.
-    ///
-    /// If `false`, the test is run, and an unexpected pass is
-    /// reported if it doesn't fail.
-    pub skip: bool,
 }
 
-impl Default for FailureCase {
-    fn default() -> Self {
-        Self {
-            backends: None,
-            vendor: None,
-            adapter: None,
-            driver: None,
-            skip: false,
+impl FailureCase {
+    /// This case applies to all tests.
+    pub fn always() -> Self {
+        FailureCase::default()
+    }
+
+    /// This case applies to no tests.
+    pub fn never() -> Self {
+        FailureCase {
+            backends: Some(wgpu::Backends::empty()),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Tests running on any of the given backends.
+    pub fn backend(backends: wgpu::Backends) -> Self {
+        FailureCase {
+            backends: Some(backends),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Tests running on `adapter`.
+    ///
+    /// For this case to apply, the `adapter` string must appear as a substring
+    /// of the adapter's [`AdapterInfo::name`]. The comparison is
+    /// case-insensitive.
+    ///
+    /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
+    pub fn adapter(adapter: &'static str) -> Self {
+        FailureCase {
+            adapter: Some(adapter),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Tests running on `backend` and `adapter`.
+    ///
+    /// For this case to apply, the test must be using an adapter for one of the
+    /// given `backend` bits, and `adapter` string must appear as a substring of
+    /// the adapter's [`AdapterInfo::name`]. The string comparison is
+    /// case-insensitive.
+    ///
+    /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
+    pub fn backend_adapter(backends: wgpu::Backends, adapter: &'static str) -> Self {
+        FailureCase {
+            backends: Some(backends),
+            adapter: Some(adapter),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Tests running under WebGL.
+    ///
+    /// Because of wasm's limited ability to recover from errors, we
+    /// usually need to skip the test altogether if it's not
+    /// supported, so this should be usually used with
+    /// [`TestParameters::skip`].
+    pub fn webgl2() -> Self {
+        #[cfg(target_arch = "wasm32")]
+        let case = FailureCase::backend(wgpu::Backends::GL);
+        #[cfg(not(target_arch = "wasm32"))]
+        let case = FailureCase::never();
+        case
+    }
+
+    /// Tests running on the MoltenVK Vulkan driver on macOS.
+    pub fn molten_vk() -> Self {
+        FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            driver: Some("MoltenVK"),
+            ..FailureCase::default()
+        }
+    }
+
+    /// Test whether `self` applies to `info`.
+    ///
+    /// If it does, return a `FailureReasons` whose set bits indicate
+    /// why. If it doesn't, return `None`.
+    ///
+    /// The caller is responsible for converting the string-valued
+    /// fields of `info` to lower case, to ensure case-insensitive
+    /// matching.
+    fn applies_to(&self, info: &wgt::AdapterInfo) -> Option<FailureReasons> {
+        let mut reasons = FailureReasons::empty();
+
+        if let Some(backends) = self.backends {
+            if !backends.contains(wgpu::Backends::from(info.backend)) {
+                return None;
+            }
+            reasons.set(FailureReasons::BACKEND, true);
+        }
+        if let Some(vendor) = self.vendor {
+            if vendor != info.vendor {
+                return None;
+            }
+            reasons.set(FailureReasons::VENDOR, true);
+        }
+        if let Some(adapter) = self.adapter {
+            let adapter = adapter.to_lowercase();
+            if !info.name.contains(&adapter) {
+                return None;
+            }
+            reasons.set(FailureReasons::ADAPTER, true);
+        }
+        if let Some(driver) = self.driver {
+            let driver = driver.to_lowercase();
+            if !info.driver.contains(&driver) {
+                return None;
+            }
+            reasons.set(FailureReasons::DRIVER, true);
+        }
+
+        // If we got this far but no specific reasons were triggered, then this
+        // must be a wildcard.
+        if reasons.is_empty() {
+            Some(FailureReasons::ALWAYS)
+        } else {
+            Some(reasons)
         }
     }
 }
@@ -134,7 +249,11 @@ pub struct TestParameters {
     pub required_features: Features,
     pub required_downlevel_properties: DownlevelCapabilities,
     pub required_limits: Limits,
-    // Backends where test should fail.
+
+    /// Conditions under which this test should be skipped.
+    pub skips: Vec<FailureCase>,
+
+    /// Conditions under which this test should be run, but is expected to fail.
     pub failures: Vec<FailureCase>,
 }
 
@@ -144,6 +263,7 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_properties: lowest_downlevel_properties(),
             required_limits: Limits::downlevel_webgl2_defaults(),
+            skips: Vec::new(),
             failures: Vec::new(),
         }
     }
@@ -186,87 +306,14 @@ impl TestParameters {
     }
 
     /// Mark the test as always failing, but not to be skipped.
-    pub fn failure(mut self) -> Self {
-        self.failures.push(FailureCase::default());
+    pub fn expect_fail(mut self, when: FailureCase) -> Self {
+        self.failures.push(when);
         self
     }
 
     /// Mark the test as always failing, and needing to be skipped.
-    pub fn skip(mut self) -> Self {
-        self.failures.push(FailureCase {
-            skip: true,
-            ..FailureCase::default()
-        });
-        self
-    }
-
-    /// Mark the test as always failing on `backends`, but not to be skipped.
-    pub fn backend_failure(mut self, backends: wgpu::Backends) -> Self {
-        self.failures.push(FailureCase {
-            backends: Some(backends),
-            ..FailureCase::default()
-        });
-        self
-    }
-
-    /// Mark the test as always failing on WebGL, and needing to be skipped.
-    ///
-    /// Because limited ability of wasm to recover from errors, we
-    /// need to wholesale skip the test if it's not supported.
-    pub fn webgl2_failure(mut self) -> Self {
-        let _ = &mut self;
-        #[cfg(target_arch = "wasm32")]
-        self.failures.push(FailureCase {
-            backends: Some(wgpu::Backends::GL),
-            skip: true,
-            ..FailureCase::default()
-        });
-        self
-    }
-
-    /// Mark a test as failing under the conditions given by `case`.
-    ///
-    /// See the documentation for [`FailureCase`] for details.
-    pub fn specific_failure(mut self, case: FailureCase) -> Self {
-        self.failures.push(case);
-        self
-    }
-
-    /// Mark the test as failing on vulkan on mac only
-    pub fn molten_vk_failure(self, skip: bool) -> Self {
-        self.specific_failure(FailureCase {
-            backends: Some(wgpu::Backends::VULKAN),
-            driver: Some("MoltenVK"),
-            skip,
-            ..FailureCase::default()
-        })
-    }
-
-    /// Mark the test as always failing on `adapter`, and needing to be skipped.
-    pub fn adapter_failure_skip(mut self, adapter: &'static str) -> Self {
-        self.failures.push(FailureCase {
-            adapter: Some(adapter),
-            skip: true,
-            ..FailureCase::default()
-        });
-        self
-    }
-
-    /// Mark the test as always failing on the given `adapter` and `backends`.
-    ///
-    /// If `skip` is true, skip the test altogether on such devices.
-    pub fn backend_adapter_failure(
-        mut self,
-        backends: wgpu::Backends,
-        adapter: &'static str,
-        skip: bool,
-    ) -> Self {
-        self.failures.push(FailureCase {
-            backends: Some(backends),
-            adapter: Some(adapter),
-            skip,
-            ..FailureCase::default()
-        });
+    pub fn skip(mut self, when: FailureCase) -> Self {
+        self.skips.push(when);
         self
     }
 }
@@ -283,8 +330,15 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     let (adapter, _surface_guard) = initialize_adapter();
 
     let adapter_info = adapter.get_info();
-    let adapter_lowercase_name = adapter_info.name.to_lowercase();
-    let adapter_lowercase_driver = adapter_info.driver.to_lowercase();
+
+    // Produce a lower-case version of the adapter info, for comparison against
+    // `parameters.skips` and `parameters.failures`.
+    let adapter_lowercase_info = wgt::AdapterInfo {
+        name: adapter_info.name.to_lowercase(),
+        driver: adapter_info.driver.to_lowercase(),
+        ..adapter_info.clone()
+    };
+
     let adapter_features = adapter.features();
     let adapter_limits = adapter.limits();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -328,7 +382,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let context = TestingContext {
         adapter,
-        adapter_info: adapter_info.clone(),
+        adapter_info,
         adapter_downlevel_capabilities,
         device,
         device_features: parameters.required_features,
@@ -336,61 +390,26 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         queue,
     };
 
-    let expected_failure_reason = parameters.failures.iter().find_map(|failure| {
-        let always = failure.backends.is_none()
-            && failure.vendor.is_none()
-            && failure.adapter.is_none()
-            && failure.driver.is_none();
-
-        let expect_failure_backend = failure
-            .backends
-            .map(|f| f.contains(wgpu::Backends::from(adapter_info.backend)));
-        let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor);
-        let expect_failure_adapter = failure
-            .adapter
-            .map(|f| adapter_lowercase_name.contains(&f.to_lowercase()));
-        let expect_failure_driver = failure
-            .driver
-            .map(|f| adapter_lowercase_driver.contains(&f.to_lowercase()));
-
-        if expect_failure_backend.unwrap_or(true)
-            && expect_failure_vendor.unwrap_or(true)
-            && expect_failure_adapter.unwrap_or(true)
-            && expect_failure_driver.unwrap_or(true)
-        {
-            if always {
-                Some((FailureReasons::ALWAYS, failure.skip))
-            } else {
-                let mut reason = FailureReasons::empty();
-                reason.set(
-                    FailureReasons::BACKEND,
-                    expect_failure_backend.unwrap_or(false),
-                );
-                reason.set(
-                    FailureReasons::VENDOR,
-                    expect_failure_vendor.unwrap_or(false),
-                );
-                reason.set(
-                    FailureReasons::ADAPTER,
-                    expect_failure_adapter.unwrap_or(false),
-                );
-                reason.set(
-                    FailureReasons::DRIVER,
-                    expect_failure_driver.unwrap_or(false),
-                );
-                Some((reason, failure.skip))
-            }
-        } else {
-            None
-        }
-    });
-
-    if let Some((reason, true)) = expected_failure_reason {
-        log::info!("EXPECTED TEST FAILURE SKIPPED: {:?}", reason);
+    // Check if we should skip the test altogether.
+    if let Some(skip_reason) = parameters
+        .skips
+        .iter()
+        .find_map(|case| case.applies_to(&adapter_lowercase_info))
+    {
+        log::info!("EXPECTED TEST FAILURE SKIPPED: {:?}", skip_reason);
         return;
     }
 
+    // Determine if we expect this test to fail, and if so, why.
+    let expected_failure_reason = parameters
+        .failures
+        .iter()
+        .find_map(|case| case.applies_to(&adapter_lowercase_info));
+
+    // Run the test, and catch panics (possibly due to failed assertions).
     let panicked = catch_unwind(AssertUnwindSafe(|| test_function(context))).is_err();
+
+    // Check whether any validation errors were reported during the test run.
     cfg_if::cfg_if!(
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
             let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
@@ -399,32 +418,34 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         }
     );
 
-    let failed = panicked || canary_set;
-
+    // Summarize reasons for actual failure, if any.
     let failure_cause = match (panicked, canary_set) {
-        (true, true) => "PANIC AND VALIDATION ERROR",
-        (true, false) => "PANIC",
-        (false, true) => "VALIDATION ERROR",
-        (false, false) => "",
+        (true, true) => Some("PANIC AND VALIDATION ERROR"),
+        (true, false) => Some("PANIC"),
+        (false, true) => Some("VALIDATION ERROR"),
+        (false, false) => None,
     };
 
-    let expect_failure = expected_failure_reason.is_some();
-
-    if failed == expect_failure {
-        // We got the conditions we expected
-        if let Some((expected_reason, _)) = expected_failure_reason {
-            // Print out reason for the failure
+    // Compare actual results against expectations.
+    match (failure_cause, expected_failure_reason) {
+        // The test passed, as expected.
+        (None, None) => {}
+        // The test failed unexpectedly.
+        (Some(cause), None) => {
+            panic!("UNEXPECTED TEST FAILURE DUE TO {cause}")
+        }
+        // The test passed unexpectedly.
+        (None, Some(reason)) => {
+            panic!("UNEXPECTED TEST PASS: {reason:?}");
+        }
+        // The test failed, as expected.
+        (Some(cause), Some(reason_expected)) => {
             log::info!(
-                "GOT EXPECTED TEST FAILURE DUE TO {}: {:?}",
-                failure_cause,
-                expected_reason
+                "EXPECTED FAILURE DUE TO {} (expected because of {:?})",
+                cause,
+                reason_expected
             );
         }
-    } else if let Some((reason, _)) = expected_failure_reason {
-        // We expected to fail, but things passed
-        panic!("UNEXPECTED TEST PASS: {reason:?}");
-    } else {
-        panic!("UNEXPECTED TEST FAILURE DUE TO {failure_cause}")
     }
 }
 

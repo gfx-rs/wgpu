@@ -8,9 +8,8 @@ fn reinterpret_srgb_ness() {
     let parameters = TestParameters::default()
         .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
         .limits(Limits::downlevel_defaults())
-        .specific_failure(FailureCase {
+        .skip(FailureCase {
             backends: Some(wgpu::Backends::GL),
-            skip: true,
             ..FailureCase::default()
         });
     initialize_test(parameters, |ctx| {
