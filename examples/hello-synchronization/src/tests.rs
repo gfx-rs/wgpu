@@ -17,11 +17,7 @@ fn hello_synchronization_test_results() {
             let ExecuteResults {
                 patient_workgroup_results,
                 hasty_workgroup_results: _,
-            } = execute(
-                &ctx.device,
-                &ctx.queue,
-                ARR_SIZE
-            ).block_on();
+            } = execute(&ctx.device, &ctx.queue, ARR_SIZE).block_on();
             assert_eq!(patient_workgroup_results, [16_u32; ARR_SIZE]);
         },
     );

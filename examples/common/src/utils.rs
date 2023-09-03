@@ -34,10 +34,10 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
 }
 
 /// Effectively a version of [`output_image_native`] but meant for web browser contexts.
-/// 
+///
 /// This is achieved via in `img` element on the page. If the target image element does
 /// not exist, this function creates one. If it does, the image data is overridden.
-/// 
+///
 /// This function makes use of a hidden staging canvas which the data is copied to in
 /// order to create a data URL.
 #[cfg(target_arch = "wasm32")]

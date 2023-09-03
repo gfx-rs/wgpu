@@ -25,13 +25,8 @@ async fn run() {
 
     let ExecuteResults {
         patient_workgroup_results,
-        hasty_workgroup_results
-    } = execute(
-        &device,
-        &queue,
-        ARR_SIZE
-    )
-    .await;
+        hasty_workgroup_results,
+    } = execute(&device, &queue, ARR_SIZE).await;
 
     // Print data
     log::info!("Patient results: {:?}", patient_workgroup_results);
