@@ -28,9 +28,9 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
     png_writer.finish().unwrap();
     log::info!("PNG file encoded in memory.");
 
-    let mut file = std::fs::File::create(path).unwrap();
+    let mut file = std::fs::File::create(&path).unwrap();
     file.write_all(&png_data[..]).unwrap();
-    log::info!("PNG file written to disc at {}.", path);
+    log::info!("PNG file written to disc as \"{}\".", path);
 }
 
 /// Effectively a version of [`output_image_native`] but meant for web browser contexts.
