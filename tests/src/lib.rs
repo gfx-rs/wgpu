@@ -76,7 +76,7 @@ fn lowest_downlevel_properties() -> DownlevelCapabilities {
 /// The default value of `FailureCase` applies to any test case (that
 /// is, there are no criteria to constrain the match), and the test is
 /// not skipped.
-pub struct FailureCase<S> {
+pub struct FailureCase {
     /// Backends expected to fail, or `None` for any backend.
     ///
     /// If this is `None`, or if the test is using one of the backends
@@ -99,7 +99,7 @@ pub struct FailureCase<S> {
     /// this is `None`, the adapter name isn't considered.
     ///
     /// [`AdapterInfo::name`]: wgt::AdapterInfo::name
-    pub adapter: Option<S>,
+    pub adapter: Option<&'static str>,
 
     /// Name of driver expected to fail, or `None` for any driver name.
     ///
@@ -108,7 +108,7 @@ pub struct FailureCase<S> {
     /// this is `None`, the driver name isn't considered.
     ///
     /// [`AdapterInfo::driver`]: wgt::AdapterInfo::driver
-    pub driver: Option<S>,
+    pub driver: Option<&'static str>,
 
     /// If `true`, skip the test altogether.
     ///
@@ -117,7 +117,7 @@ pub struct FailureCase<S> {
     pub skip: bool,
 }
 
-impl<S> Default for FailureCase<S> {
+impl Default for FailureCase {
     fn default() -> Self {
         Self {
             backends: None,
@@ -135,7 +135,7 @@ pub struct TestParameters {
     pub required_downlevel_properties: DownlevelCapabilities,
     pub required_limits: Limits,
     // Backends where test should fail.
-    pub failures: Vec<FailureCase<String>>,
+    pub failures: Vec<FailureCase>,
 }
 
 impl Default for TestParameters {
@@ -227,22 +227,8 @@ impl TestParameters {
     /// Mark a test as failing under the conditions given by `case`.
     ///
     /// See the documentation for [`FailureCase`] for details.
-    pub fn specific_failure(mut self, case: FailureCase<&str>) -> Self {
-        self.failures.push(FailureCase {
-            backends: case.backends,
-            vendor: case.vendor,
-            adapter: case
-                .adapter
-                .as_ref()
-                .map(AsRef::as_ref)
-                .map(str::to_lowercase),
-            driver: case
-                .driver
-                .as_ref()
-                .map(AsRef::as_ref)
-                .map(str::to_lowercase),
-            skip: case.skip,
-        });
+    pub fn specific_failure(mut self, case: FailureCase) -> Self {
+        self.failures.push(case);
         self
     }
 
@@ -257,9 +243,9 @@ impl TestParameters {
     }
 
     /// Mark the test as always failing on `adapter`, and needing to be skipped.
-    pub fn adapter_failure_skip(mut self, adapter: &str) -> Self {
+    pub fn adapter_failure_skip(mut self, adapter: &'static str) -> Self {
         self.failures.push(FailureCase {
-            adapter: Some(adapter.to_lowercase()),
+            adapter: Some(adapter),
             skip: true,
             ..FailureCase::default()
         });
@@ -272,12 +258,12 @@ impl TestParameters {
     pub fn backend_adapter_failure(
         mut self,
         backends: wgpu::Backends,
-        adapter: &str,
+        adapter: &'static str,
         skip: bool,
     ) -> Self {
         self.failures.push(FailureCase {
             backends: Some(backends),
-            adapter: Some(adapter.to_lowercase()),
+            adapter: Some(adapter),
             skip,
             ..FailureCase::default()
         });
@@ -362,12 +348,10 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         let expect_failure_vendor = failure.vendor.map(|v| v == adapter_info.vendor);
         let expect_failure_adapter = failure
             .adapter
-            .as_deref()
-            .map(|f| adapter_lowercase_name.contains(f));
+            .map(|f| adapter_lowercase_name.contains(&f.to_lowercase()));
         let expect_failure_driver = failure
             .driver
-            .as_deref()
-            .map(|f| adapter_lowercase_driver.contains(f));
+            .map(|f| adapter_lowercase_driver.contains(&f.to_lowercase()));
 
         if expect_failure_backend.unwrap_or(true)
             && expect_failure_vendor.unwrap_or(true)
