@@ -26,10 +26,11 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
     let mut png_writer = encoder.write_header().unwrap();
     png_writer.write_image_data(&image_data[..]).unwrap();
     png_writer.finish().unwrap();
-    log::info!("Png file encoded in memory.");
+    log::info!("PNG file encoded in memory.");
 
     let mut file = std::fs::File::create(path).unwrap();
     file.write_all(&png_data[..]).unwrap();
+    log::info!("PNG file written to disc at {}.", path);
 }
 
 /// Effectively a version of [`output_image_native`] but meant for web browser contexts.
@@ -59,6 +60,7 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
             }
         }
     } else {
+        log::info!("Output image staging canvas element not found; creating.");
         create_staging_canvas(&document)
     };
     // Having the size attributes the right size is so important, we should always do it
@@ -83,7 +85,6 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
     )
     .unwrap();
     context.put_image_data(&image_data, 0.0, 0.0).unwrap();
-    log::info!("Put image data in canvas.");
 
     // Get the img element that will act as our target for rendering from the canvas.
     let image_element = if let Some(found_image_element) =
@@ -102,14 +103,17 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
             }
         }
     } else {
+        log::info!("Output image element not found; creating.");
         create_output_image_element(&document)
     };
     // The canvas is currently the image we ultimately want. We can create a data url from it now.
     let data_url = canvas.to_data_url().unwrap();
     image_element.set_src(&data_url);
+    log::info!("Copied image from staging canvas to image element.");
     body.append_child(&image_element).unwrap();
 
     if document.get_element_by_id("image-for-you-text").is_none() {
+        log::info!("\"Image for you\" text not found; creating.");
         let p = document
             .create_element("p")
             .expect("Failed to create p element for \"image for you text\".");
