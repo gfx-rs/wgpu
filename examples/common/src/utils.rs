@@ -110,7 +110,6 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
     let data_url = canvas.to_data_url().unwrap();
     image_element.set_src(&data_url);
     log::info!("Copied image from staging canvas to image element.");
-    body.append_child(&image_element).unwrap();
 
     if document.get_element_by_id("image-for-you-text").is_none() {
         log::info!("\"Image for you\" text not found; creating.");
