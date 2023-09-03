@@ -13,6 +13,7 @@ pub fn add_web_nothing_to_see_msg() {
         .set_inner_html("<h1>Nothing to see here! Open the console!</h1>");
 }
 
+/// Outputs a vector of RGBA bytes as a png image with the given dimensions on the given path.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), path: String) {
     let mut png_data = Vec::<u8>::with_capacity(image_data.len());
@@ -31,6 +32,13 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
     file.write_all(&png_data[..]).unwrap();
 }
 
+/// Effectively a version of [`output_image_native`] but meant for web browser contexts.
+/// 
+/// This is achieved via in `img` element on the page. If the target image element does
+/// not exist, this function creates one. If it does, the image data is overridden.
+/// 
+/// This function makes use of a hidden staging canvas which the data is copied to in
+/// order to create a data URL.
 #[cfg(target_arch = "wasm32")]
 pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
     let document = web_sys::window().unwrap().document().unwrap();
