@@ -99,7 +99,7 @@ Bottom level categories:
 - Added example uniform-values. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 - Added example hello-workgroups. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 - Added example hello-synchronization. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
-- Moved `output_image_native` and `output_image_wasm` functions into wgpu-example both to reduce redundancy in the other examples of this PR and for posterity. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
+- Created `wgpu-example::utils` module to contain misc functions and such that are common code but aren't part of the example framework. Add to it the functions `output_image_wasm` and `output_image_native`, both for outputting `Vec<u8>` RGBA images either to the disc or the web page. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 
 #### General
 
