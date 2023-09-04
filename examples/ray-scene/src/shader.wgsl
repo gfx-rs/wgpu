@@ -159,10 +159,10 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
 
-    let vertex = vertices[0];
-    let index = indices[0];
-    let geometry = geometries[0];
-    let instance = instances[0];
+    // let vertex = vertices[0];
+    // let index = indices[0];
+    // let geometry = geometries[0];
+    // let instance = instances[0];
 
     return color; // vec4<f32>(vertex.tex_coords, 1.0, 1.0);
 }

@@ -94,7 +94,7 @@ struct Material {
 }
 
 fn load_model(scene: &mut RawSceneComponents, path: &str) {
-    let path = env!("CARGO_MANIFEST_DIR").to_string() + "/" + path;
+    let path = env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + path;
     let mut object = obj::Obj::load(path).unwrap();
     object.load_mtls().unwrap();
 
@@ -138,20 +138,18 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
 
             let mut material: Material = Default::default();
 
-            if let Some(mat) = group.material {
-                if let obj::ObjMaterial::Mtl(mat) = mat {
-                    if let Some(kd) = mat.kd {
-                        material.albedo = kd;
-                    }
-                    if let Some(ns) = mat.ns {
-                        material.roughness_exponent = ns;
-                    }
-                    if let Some(ka) = mat.ka {
-                        material.metalness = ka[0];
-                    }
-                    if let Some(ks) = mat.ks {
-                        material.specularity = ks[0];
-                    }
+            if let Some(obj::ObjMaterial::Mtl(mat)) = group.material {
+                if let Some(kd) = mat.kd {
+                    material.albedo = kd;
+                }
+                if let Some(ns) = mat.ns {
+                    material.roughness_exponent = ns;
+                }
+                if let Some(ka) = mat.ka {
+                    material.metalness = ka[0];
+                }
+                if let Some(ks) = mat.ks {
+                    material.specularity = ks[0];
                 }
             }
 
