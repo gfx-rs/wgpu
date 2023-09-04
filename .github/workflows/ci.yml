@@ -284,6 +284,7 @@ jobs:
           done
 
       - uses: actions/upload-artifact@v3
+        if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images
           path: |

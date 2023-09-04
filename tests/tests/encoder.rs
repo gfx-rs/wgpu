@@ -1,6 +1,6 @@
 use wasm_bindgen_test::*;
 use wgpu::RenderPassDescriptor;
-use wgpu_test::{fail, initialize_test, TestParameters};
+use wgpu_test::{fail, initialize_test, FailureCase, TestParameters};
 
 #[test]
 #[wasm_bindgen_test]
@@ -22,7 +22,8 @@ fn drop_encoder_after_error() {
     // #543: COMMAND_ALLOCATOR_CANNOT_RESET]
     //
     // For now, we mark the test as failing on DX12.
-    let parameters = TestParameters::default().backend_failure(wgpu::Backends::DX12);
+    let parameters =
+        TestParameters::default().expect_fail(FailureCase::backend(wgpu::Backends::DX12));
     initialize_test(parameters, |ctx| {
         let mut encoder = ctx
             .device
