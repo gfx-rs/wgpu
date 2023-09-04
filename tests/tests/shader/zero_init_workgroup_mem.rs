@@ -8,7 +8,7 @@ use wgpu::{
     ShaderStages,
 };
 
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{initialize_test, FailureCase, TestParameters, TestingContext};
 
 #[test]
 fn zero_init_workgroup_mem() {
@@ -18,13 +18,16 @@ fn zero_init_workgroup_mem() {
             .limits(Limits::downlevel_defaults())
             // remove both of these once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
             // https://github.com/gfx-rs/wgpu/issues/3160
-            .specific_failure(
-                Some(Backends::DX12),
-                Some(5140),
-                Some("Microsoft Basic Render Driver"),
-                true,
-            )
-            .specific_failure(Some(Backends::VULKAN), None, Some("swiftshader"), true),
+            .skip(FailureCase {
+                backends: Some(Backends::DX12),
+                vendor: Some(5140),
+                adapter: Some("Microsoft Basic Render Driver"),
+                ..FailureCase::default()
+            })
+            .skip(FailureCase::backend_adapter(
+                Backends::VULKAN,
+                "swiftshader",
+            )),
         zero_init_workgroup_mem_impl,
     );
 }

@@ -300,15 +300,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
             if let Some(texture) = texture {
-                if let resource::TextureClearMode::RenderPass { clear_views, .. } =
-                    texture.clear_mode
-                {
-                    for clear_view in clear_views {
-                        unsafe {
-                            hal::Device::destroy_texture_view(&device.raw, clear_view);
-                        }
-                    }
-                }
+                texture.clear_mode.destroy_clear_views(&device.raw);
 
                 let suf = A::get_surface_mut(surface);
                 match texture.inner {
@@ -386,10 +378,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
+            log::debug!(
+                "Removing swapchain texture {:?} from the device tracker",
+                texture_id.value
+            );
             device.trackers.lock().textures.remove(texture_id.value);
 
             let (texture, _) = hub.textures.unregister(texture_id.value.0, &mut token);
             if let Some(texture) = texture {
+                texture.clear_mode.destroy_clear_views(&device.raw);
+
                 let suf = A::get_surface_mut(surface);
                 match texture.inner {
                     resource::TextureInner::Surface {

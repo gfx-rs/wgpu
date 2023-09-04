@@ -857,9 +857,15 @@ fn shadow() {
         base_test_parameters: wgpu_test::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS)
             // rpi4 on VK doesn't work: https://gitlab.freedesktop.org/mesa/mesa/-/issues/3916
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("V3D"), false)
+            .expect_fail(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "V3D",
+            ))
             // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("llvmpipe"), true),
+            .skip(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "llvmpipe",
+            )),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }
