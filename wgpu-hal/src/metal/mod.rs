@@ -100,7 +100,9 @@ impl crate::Instance<Api> for Instance {
             raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
                 Surface::from_view(handle.ns_view, Some(&self.managed_metal_layer_delegate))
             }),
-            _ => Err(crate::InstanceError),
+            _ => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Metal-compatible handle"
+            ))),
         }
     }
 

@@ -70,9 +70,12 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 ### Changes
 
+#### General
+
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
 - Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 - Add validation in accordance with WebGPU `setViewport` valid usage for `x`, `y` and `this.[[attachment_size]]`. By @James2022-rgb in [#4058](https://github.com/gfx-rs/wgpu/pull/4058)
+- `wgpu::CreateSurfaceError` now gives details of the failure, but no longer implements `PartialEq`. By @kpreid in [#4066](https://github.com/gfx-rs/wgpu/pull/4066)
 - Make `WGPU_POWER_PREF=none` a valid value. By @fornwall in [4076](https://github.com/gfx-rs/wgpu/pull/4076)
 
 #### Vulkan
@@ -89,6 +92,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 - Derive storage bindings via `naga::StorageAccess` instead of `naga::GlobalUse`. By @teoxoy in [#3985](https://github.com/gfx-rs/wgpu/pull/3985).
 - `Queue::on_submitted_work_done` callbacks will now always be called after all previous `BufferSlice::map_async` callbacks, even when there are no active submissions. By @cwfitzgerald in [#4036](https://github.com/gfx-rs/wgpu/pull/4036).
+- Fix `clear` texture views being leaked when `wgpu::SurfaceTexture` is dropped before it is presented. By @rajveermalviya in [#4057](https://github.com/gfx-rs/wgpu/pull/4057).
 
 #### Vulkan
 - Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
@@ -105,6 +109,12 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 #### Metal
 
 - Ensure that MTLCommandEncoder calls endEncoding before it is deallocated. By @bradwerth in [#4023](https://github.com/gfx-rs/wgpu/pull/4023)
+
+#### WebGPU
+
+- Ensure that limit requests and reporting is done correctly. By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)
+
+#### Testing
 
 - Skip `test_multithreaded_compute` on MoltenVK. By @jimblandy in [#4096](https://github.com/gfx-rs/wgpu/pull/4096).
 
