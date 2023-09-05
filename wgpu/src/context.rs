@@ -307,6 +307,16 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         buffer_data: &Self::BufferData,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+        sub_range: Range<BufferAddress>,
+    ) -> js_sys::ArrayBuffer;
     fn buffer_unmap(&self, buffer: &Self::BufferId, buffer_data: &Self::BufferData);
     fn texture_create_view(
         &self,
@@ -1375,6 +1385,16 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         buffer_data: &crate::Data,
         sub_range: Range<BufferAddress>,
     ) -> Box<dyn BufferMappedRange>;
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        buffer: &ObjectId,
+        buffer_data: &crate::Data,
+        sub_range: Range<BufferAddress>,
+    ) -> js_sys::ArrayBuffer;
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data);
     fn texture_create_view(
         &self,
@@ -2451,6 +2471,21 @@ where
         let buffer = <T::BufferId>::from(*buffer);
         let buffer_data = downcast_ref(buffer_data);
         Context::buffer_get_mapped_range(self, &buffer, buffer_data, sub_range)
+    }
+
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        buffer: &ObjectId,
+        buffer_data: &crate::Data,
+        sub_range: Range<BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        let buffer = <T::BufferId>::from(*buffer);
+        let buffer_data = downcast_ref(buffer_data);
+        Context::buffer_get_mapped_range_as_array_buffer(self, &buffer, buffer_data, sub_range)
     }
 
     fn buffer_unmap(&self, buffer: &ObjectId, buffer_data: &crate::Data) {

@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+## v0.17.1
+
+### Added/New Features
+
+- Add `get_mapped_range_as_array_buffer` for faster buffer read-backs in wasm builds. By @ryankaplan in [#4042] (https://github.com/gfx-rs/wgpu/pull/4042).
+
 ## v0.17.0 (2023-07-20)
 
 This is the first release that featured `wgpu-info` as a binary crate for getting information about what devices wgpu sees in your system. It can dump the information in both human readable format and json.
