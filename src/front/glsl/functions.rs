@@ -1191,119 +1191,6 @@ impl Frontend {
         });
     }
 
-    /// Helper function for building the input/output interface of the entry point
-    ///
-    /// Calls `f` with the data of the entry point argument, flattening composite types
-    /// recursively
-    ///
-    /// The passed arguments to the callback are:
-    /// - The ctx
-    /// - The name
-    /// - The pointer expression to the global storage
-    /// - The handle to the type of the entry point argument
-    /// - The binding of the entry point argument
-    fn arg_type_walker(
-        ctx: &mut Context,
-        name: Option<String>,
-        binding: crate::Binding,
-        pointer: Handle<Expression>,
-        ty: Handle<Type>,
-        f: &mut impl FnMut(
-            &mut Context,
-            Option<String>,
-            Handle<Expression>,
-            Handle<Type>,
-            crate::Binding,
-        ),
-    ) -> Result<()> {
-        match ctx.module.types[ty].inner {
-            // TODO: Better error reporting
-            // right now we just don't walk the array if the size isn't known at
-            // compile time and let validation catch it
-            TypeInner::Array {
-                base,
-                size: crate::ArraySize::Constant(size),
-                ..
-            } => {
-                let mut location = match binding {
-                    crate::Binding::Location { location, .. } => location,
-                    crate::Binding::BuiltIn(_) => return Ok(()),
-                };
-
-                let interpolation =
-                    ctx.module.types[base]
-                        .inner
-                        .scalar_kind()
-                        .map(|kind| match kind {
-                            ScalarKind::Float => crate::Interpolation::Perspective,
-                            _ => crate::Interpolation::Flat,
-                        });
-
-                for index in 0..size.get() {
-                    let member_pointer = ctx.add_expression(
-                        Expression::AccessIndex {
-                            base: pointer,
-                            index,
-                        },
-                        crate::Span::default(),
-                    )?;
-
-                    let binding = crate::Binding::Location {
-                        location,
-                        interpolation,
-                        sampling: None,
-                        second_blend_source: false,
-                    };
-                    location += 1;
-
-                    Self::arg_type_walker(ctx, name.clone(), binding, member_pointer, base, f)?
-                }
-            }
-            TypeInner::Struct { ref members, .. } => {
-                let mut location = match binding {
-                    crate::Binding::Location { location, .. } => location,
-                    crate::Binding::BuiltIn(_) => return Ok(()),
-                };
-
-                for (i, member) in members.clone().into_iter().enumerate() {
-                    let member_pointer = ctx.add_expression(
-                        Expression::AccessIndex {
-                            base: pointer,
-                            index: i as u32,
-                        },
-                        crate::Span::default(),
-                    )?;
-
-                    let binding = match member.binding {
-                        Some(binding) => binding,
-                        None => {
-                            let interpolation = ctx.module.types[member.ty]
-                                .inner
-                                .scalar_kind()
-                                .map(|kind| match kind {
-                                    ScalarKind::Float => crate::Interpolation::Perspective,
-                                    _ => crate::Interpolation::Flat,
-                                });
-                            let binding = crate::Binding::Location {
-                                location,
-                                interpolation,
-                                sampling: None,
-                                second_blend_source: false,
-                            };
-                            location += 1;
-                            binding
-                        }
-                    };
-
-                    Self::arg_type_walker(ctx, member.name, binding, member_pointer, member.ty, f)?
-                }
-            }
-            _ => f(ctx, name, pointer, ty, binding),
-        }
-
-        Ok(())
-    }
-
     /// Create a Naga [`EntryPoint`] that calls the GLSL `main` function.
     ///
     /// We compile the GLSL `main` function as an ordinary Naga [`Function`].
@@ -1363,8 +1250,7 @@ impl Frontend {
 
             let ty = ctx.module.global_variables[arg.handle].ty;
 
-            Self::arg_type_walker(
-                &mut ctx,
+            ctx.arg_type_walker(
                 arg.name.clone(),
                 arg.binding.clone(),
                 pointer,
@@ -1413,8 +1299,7 @@ impl Frontend {
 
             let ty = ctx.module.global_variables[arg.handle].ty;
 
-            Self::arg_type_walker(
-                &mut ctx,
+            ctx.arg_type_walker(
                 arg.name.clone(),
                 arg.binding.clone(),
                 pointer,
@@ -1486,6 +1371,121 @@ impl Frontend {
                 ..Default::default()
             },
         });
+
+        Ok(())
+    }
+}
+
+impl Context<'_> {
+    /// Helper function for building the input/output interface of the entry point
+    ///
+    /// Calls `f` with the data of the entry point argument, flattening composite types
+    /// recursively
+    ///
+    /// The passed arguments to the callback are:
+    /// - The ctx
+    /// - The name
+    /// - The pointer expression to the global storage
+    /// - The handle to the type of the entry point argument
+    /// - The binding of the entry point argument
+    fn arg_type_walker(
+        &mut self,
+        name: Option<String>,
+        binding: crate::Binding,
+        pointer: Handle<Expression>,
+        ty: Handle<Type>,
+        f: &mut impl FnMut(
+            &mut Context,
+            Option<String>,
+            Handle<Expression>,
+            Handle<Type>,
+            crate::Binding,
+        ),
+    ) -> Result<()> {
+        match self.module.types[ty].inner {
+            // TODO: Better error reporting
+            // right now we just don't walk the array if the size isn't known at
+            // compile time and let validation catch it
+            TypeInner::Array {
+                base,
+                size: crate::ArraySize::Constant(size),
+                ..
+            } => {
+                let mut location = match binding {
+                    crate::Binding::Location { location, .. } => location,
+                    crate::Binding::BuiltIn(_) => return Ok(()),
+                };
+
+                let interpolation =
+                    self.module.types[base]
+                        .inner
+                        .scalar_kind()
+                        .map(|kind| match kind {
+                            ScalarKind::Float => crate::Interpolation::Perspective,
+                            _ => crate::Interpolation::Flat,
+                        });
+
+                for index in 0..size.get() {
+                    let member_pointer = self.add_expression(
+                        Expression::AccessIndex {
+                            base: pointer,
+                            index,
+                        },
+                        crate::Span::default(),
+                    )?;
+
+                    let binding = crate::Binding::Location {
+                        location,
+                        interpolation,
+                        sampling: None,
+                        second_blend_source: false,
+                    };
+                    location += 1;
+
+                    self.arg_type_walker(name.clone(), binding, member_pointer, base, f)?
+                }
+            }
+            TypeInner::Struct { ref members, .. } => {
+                let mut location = match binding {
+                    crate::Binding::Location { location, .. } => location,
+                    crate::Binding::BuiltIn(_) => return Ok(()),
+                };
+
+                for (i, member) in members.clone().into_iter().enumerate() {
+                    let member_pointer = self.add_expression(
+                        Expression::AccessIndex {
+                            base: pointer,
+                            index: i as u32,
+                        },
+                        crate::Span::default(),
+                    )?;
+
+                    let binding = match member.binding {
+                        Some(binding) => binding,
+                        None => {
+                            let interpolation = self.module.types[member.ty]
+                                .inner
+                                .scalar_kind()
+                                .map(|kind| match kind {
+                                    ScalarKind::Float => crate::Interpolation::Perspective,
+                                    _ => crate::Interpolation::Flat,
+                                });
+                            let binding = crate::Binding::Location {
+                                location,
+                                interpolation,
+                                sampling: None,
+                                second_blend_source: false,
+                            };
+                            location += 1;
+                            binding
+                        }
+                    };
+
+                    self.arg_type_walker(member.name, binding, member_pointer, member.ty, f)?
+                }
+            }
+            _ => f(self, name, pointer, ty, binding),
+        }
 
         Ok(())
     }
