@@ -186,7 +186,20 @@ impl super::Instance {
         &self.shared
     }
 
-    pub fn required_extensions(
+    /// Return the instance extension names wgpu would like to enable.
+    ///
+    /// Return a vector of the names of instance extensions actually available
+    /// on `entry` that wgpu would like to enable.
+    ///
+    /// The `driver_api_version` argument should be the instance's Vulkan API
+    /// version, as obtained from `vkEnumerateInstanceVersion`. This is the same
+    /// space of values as the `VK_API_VERSION` constants.
+    ///
+    /// Note that wgpu can function without many of these extensions (for
+    /// example, `VK_KHR_wayland_surface` is certainly not going to be available
+    /// everywhere), but if one of these extensions is available at all, wgpu
+    /// assumes that it has been enabled.
+    pub fn desired_extensions(
         entry: &ash::Entry,
         _driver_api_version: u32,
         flags: crate::InstanceFlags,
@@ -265,7 +278,7 @@ impl super::Instance {
     ///
     /// - `raw_instance` must be created from `entry`
     /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
-    /// - `extensions` must be a superset of `required_extensions()` and must be created from the
+    /// - `extensions` must be a superset of `desired_extensions()` and must be created from the
     ///   same entry, driver_api_version and flags.
     /// - `android_sdk_version` is ignored and can be `0` for all platforms besides Android
     ///
@@ -592,7 +605,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 },
             );
 
-        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
+        let extensions = Self::desired_extensions(&entry, driver_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);

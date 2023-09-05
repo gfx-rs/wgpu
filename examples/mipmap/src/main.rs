@@ -521,7 +521,7 @@ fn mipmap() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: wgpu_test::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }
@@ -535,7 +535,7 @@ fn mipmap_query() {
         height: 768,
         optional_features: QUERY_FEATURES,
         base_test_parameters: wgpu_test::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }
