@@ -893,7 +893,7 @@ impl super::Validator {
                 let arg3_ty = arg3.map(resolve);
                 match fun {
                     Mf::Abs => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         let good = match *arg_ty {
@@ -979,7 +979,7 @@ impl super::Validator {
                     | Mf::Sign
                     | Mf::Sqrt
                     | Mf::InverseSqrt => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1015,7 +1015,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Modf | Mf::Frexp => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         if !matches!(
@@ -1147,7 +1147,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Normalize => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1227,7 +1227,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Inverse | Mf::Determinant => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         let good = match *arg_ty {
@@ -1239,7 +1239,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Transpose => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1253,7 +1253,7 @@ impl super::Validator {
                     | Mf::ReverseBits
                     | Mf::FindLsb
                     | Mf::FindMsb => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1350,7 +1350,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Pack2x16unorm | Mf::Pack2x16snorm | Mf::Pack2x16float => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1363,7 +1363,7 @@ impl super::Validator {
                         }
                     }
                     Mf::Pack4x8snorm | Mf::Pack4x8unorm => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
@@ -1380,7 +1380,7 @@ impl super::Validator {
                     | Mf::Unpack2x16unorm
                     | Mf::Unpack4x8snorm
                     | Mf::Unpack4x8unorm => {
-                        if arg1_ty.is_some() | arg2_ty.is_some() | arg3_ty.is_some() {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
                             return Err(ExpressionError::WrongArgumentCount(fun));
                         }
                         match *arg_ty {
