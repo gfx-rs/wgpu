@@ -793,7 +793,7 @@ impl crate::Surface<super::Api> for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        // Safety: `configure`'s contract guarantees there is no resources derived from the swapchain in use.
+        // Safety: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
         let old = self
             .swapchain
             .take()
@@ -807,7 +807,7 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         if let Some(sc) = self.swapchain.take() {
-            // Safety: `unconfigure`'s contract guarantees there is no resources derived from the swapchain in use.
+            // Safety: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
             let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
             unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }

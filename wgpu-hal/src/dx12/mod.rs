@@ -613,7 +613,7 @@ impl crate::Surface<Api> for Surface {
         let mut flags = dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         // We always set ALLOW_TEARING on the swapchain no matter
         // what kind of swapchain we want because ResizeBuffers
-        // cannot change if ALLOW_TEARING is applied to the swapchain.
+        // cannot change the swapchain's ALLOW_TEARING flag.
         //
         // This does not change the behavior of the swapchain, just
         // allow present calls to use tearing.
