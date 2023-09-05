@@ -15,7 +15,7 @@ use std::borrow::Borrow;
 use crate::device::trace::Action;
 use crate::{
     conv,
-    device::{DeviceError, MissingDownlevelFlags},
+    device::{DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_api::HalApi,
     hub::Token,
@@ -96,6 +96,18 @@ pub enum ConfigureSurfaceError {
     },
     #[error("Requested usage is not supported")]
     UnsupportedUsage,
+    #[error("Gpu got stuck :(")]
+    StuckGpu,
+}
+
+impl From<WaitIdleError> for ConfigureSurfaceError {
+    fn from(e: WaitIdleError) -> Self {
+        match e {
+            WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
+            WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
+            WaitIdleError::StuckGpu => ConfigureSurfaceError::StuckGpu,
+        }
+    }
 }
 
 #[repr(C)]
