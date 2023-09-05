@@ -122,6 +122,7 @@ struct EntryPoint {
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
+    backend: wgt::Backend,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -831,7 +832,12 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
+    pub fn new(
+        module: &naga::Module,
+        info: &naga::valid::ModuleInfo,
+        limits: wgt::Limits,
+        backend: wgt::Backend,
+    ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -912,6 +918,7 @@ impl Interface {
 
         Self {
             limits,
+            backend,
             resources,
             entry_points,
         }
@@ -1121,7 +1128,11 @@ impl Interface {
         }
 
         // Check all vertex outputs and make sure the fragment shader consumes them.
-        if shader_stage == naga::ShaderStage::Fragment {
+        // This is only needed for HLSL shaders (DX11 and DX12) due to a naga HLSL issue:
+        // https://github.com/gfx-rs/naga/issues/1945
+        if shader_stage == naga::ShaderStage::Fragment
+            && matches!(self.backend, wgt::Backend::Dx11 | wgt::Backend::Dx12)
+        {
             for &index in inputs.keys() {
                 // This is a linear scan, but the count should be low enough
                 // that this should be fine.
