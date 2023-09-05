@@ -227,12 +227,28 @@ pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
 }
 
 pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
+    /// Configures the surface to use the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All surfaces created using other devices must have been unconfigured before this call.
     unsafe fn configure(
         &mut self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
+    /// Unconfigures the surface on the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - The surface must have been configured on the given device.
     unsafe fn unconfigure(&mut self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
