@@ -80,6 +80,8 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 #### Vulkan
 
+- Rename `wgpu_hal::vulkan::Instance::required_extensions` to `desired_extensions`. By @jimblandy in [#4115](https://github.com/gfx-rs/wgpu/pull/4115)
+
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
 
 
