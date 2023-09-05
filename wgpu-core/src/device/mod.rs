@@ -1,6 +1,5 @@
 use crate::{
     binding_model,
-    device::life::WaitIdleError,
     hal_api::HalApi,
     hub::Hub,
     id,
@@ -24,7 +23,7 @@ pub mod queue;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
-pub use resource::Device;
+pub use {life::WaitIdleError, resource::Device};
 
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This

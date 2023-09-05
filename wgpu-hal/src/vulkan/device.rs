@@ -1143,7 +1143,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if desc.anisotropy_clamp != 1 {
-            // We only enable anisotropy if it is supported, and wgpu-hal interface guarentees
+            // We only enable anisotropy if it is supported, and wgpu-hal interface guarantees
             // the clamp is in the range [1, 16] which is always supported if anisotropy is.
             vk_info = vk_info
                 .anisotropy_enable(true)
