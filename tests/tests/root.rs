@@ -20,6 +20,7 @@ mod occlusion_query;
 mod partially_bounded_arrays;
 mod poll;
 mod queue_transfer;
+mod ray_tracing;
 mod resource_descriptor_accessor;
 mod resource_error;
 mod scissor_tests;

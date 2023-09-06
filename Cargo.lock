@@ -3503,6 +3503,7 @@ dependencies = [
  "cfg-if",
  "console_log",
  "env_logger",
+ "glam 0.24.1",
  "image",
  "js-sys",
  "log",
