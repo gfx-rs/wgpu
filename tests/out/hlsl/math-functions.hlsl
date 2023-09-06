@@ -72,6 +72,10 @@ void main()
     float4 d = radians(v);
     float4 e = saturate(v);
     float4 g = refract(v, v, 1.0);
+    int sign_a = sign(-1);
+    int4 sign_b = sign((-1).xxxx);
+    float sign_c = sign(-1.0);
+    float4 sign_d = sign((-1.0).xxxx);
     int const_dot = dot((int2)0, (int2)0);
     uint first_leading_bit_abs = firstbithigh(abs(0u));
     int flb_a = asint(firstbithigh(-1));
@@ -91,8 +95,8 @@ void main()
     int2 ctz_h = asint(min((32u).xx, firstbitlow((1).xx)));
     int clz_a = (-1 < 0 ? 0 : 31 - asint(firstbithigh(-1)));
     uint clz_b = (31u - firstbithigh(1u));
-    int2 _expr58 = (-1).xx;
-    int2 clz_c = (_expr58 < (0).xx ? (0).xx : (31).xx - asint(firstbithigh(_expr58)));
+    int2 _expr68 = (-1).xx;
+    int2 clz_c = (_expr68 < (0).xx ? (0).xx : (31).xx - asint(firstbithigh(_expr68)));
     uint2 clz_d = ((31u).xx - firstbithigh((1u).xx));
     float lde_a = ldexp(1.0, 2);
     float2 lde_b = ldexp(float2(1.0, 2.0), int2(3, 4));

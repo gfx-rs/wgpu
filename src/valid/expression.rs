@@ -976,7 +976,6 @@ impl super::Validator {
                     | Mf::Log
                     | Mf::Log2
                     | Mf::Length
-                    | Mf::Sign
                     | Mf::Sqrt
                     | Mf::InverseSqrt => {
                         if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
@@ -988,6 +987,22 @@ impl super::Validator {
                             }
                             | Ti::Vector {
                                 kind: Sk::Float, ..
+                            } => {}
+                            _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
+                        }
+                    }
+                    Mf::Sign => {
+                        if arg1_ty.is_some() || arg2_ty.is_some() || arg3_ty.is_some() {
+                            return Err(ExpressionError::WrongArgumentCount(fun));
+                        }
+                        match *arg_ty {
+                            Ti::Scalar {
+                                kind: Sk::Float | Sk::Sint,
+                                ..
+                            }
+                            | Ti::Vector {
+                                kind: Sk::Float | Sk::Sint,
+                                ..
                             } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         }

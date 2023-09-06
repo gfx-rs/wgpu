@@ -8,6 +8,10 @@ fn main() {
     let d = radians(v);
     let e = saturate(v);
     let g = refract(v, v, f);
+    let sign_a = sign(-1);
+    let sign_b = sign(vec4(-1));
+    let sign_c = sign(-1.0);
+    let sign_d = sign(vec4(-1.0));
     let const_dot = dot(vec2<i32>(), vec2<i32>());
     let first_leading_bit_abs = firstLeadingBit(abs(0u));
     let flb_a = firstLeadingBit(-1);
