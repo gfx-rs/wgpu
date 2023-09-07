@@ -1,31 +1,31 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 43
+; Bound: 41
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %19 "main" %27
-OpExecutionMode %19 LocalSize 1 1 1
+OpEntryPoint GLCompute %17 "main" %25
+OpExecutionMode %17 LocalSize 1 1 1
 OpMemberName %10 0 "arr"
 OpMemberName %10 1 "atom"
 OpMemberName %10 2 "atom_arr"
 OpName %10 "WStruct"
-OpName %13 "w_mem"
-OpName %15 "output"
-OpName %19 "main"
+OpName %11 "w_mem"
+OpName %13 "output"
+OpName %17 "main"
 OpDecorate %4 ArrayStride 4
 OpDecorate %7 ArrayStride 4
 OpDecorate %9 ArrayStride 32
 OpMemberDecorate %10 0 Offset 0
 OpMemberDecorate %10 1 Offset 2048
 OpMemberDecorate %10 2 Offset 2052
-OpDecorate %15 DescriptorSet 0
-OpDecorate %15 Binding 0
-OpDecorate %16 Block
-OpMemberDecorate %16 0 Offset 0
-OpDecorate %27 BuiltIn LocalInvocationId
+OpDecorate %13 DescriptorSet 0
+OpDecorate %13 Binding 0
+OpDecorate %14 Block
+OpMemberDecorate %14 0 Offset 0
+OpDecorate %25 BuiltIn LocalInvocationId
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %5 = OpConstant  %3  512
@@ -35,45 +35,43 @@ OpDecorate %27 BuiltIn LocalInvocationId
 %7 = OpTypeArray %6 %8
 %9 = OpTypeArray %7 %8
 %10 = OpTypeStruct %4 %6 %9
-%11 = OpConstant  %6  512
-%12 = OpConstant  %6  8
-%14 = OpTypePointer Workgroup %10
-%13 = OpVariable  %14  Workgroup
-%16 = OpTypeStruct %4
-%17 = OpTypePointer StorageBuffer %16
-%15 = OpVariable  %17  StorageBuffer
-%20 = OpTypeFunction %2
-%21 = OpTypePointer StorageBuffer %4
-%22 = OpConstant  %3  0
-%25 = OpConstantNull  %10
-%26 = OpTypeVector %3 3
-%28 = OpTypePointer Input %26
-%27 = OpVariable  %28  Input
-%30 = OpConstantNull  %26
-%32 = OpTypeBool
-%31 = OpTypeVector %32 3
-%37 = OpConstant  %3  2
-%38 = OpConstant  %3  264
-%40 = OpTypePointer Workgroup %4
-%19 = OpFunction  %2  None %20
-%18 = OpLabel
-%23 = OpAccessChain  %21  %15 %22
-OpBranch %24
-%24 = OpLabel
-%29 = OpLoad  %26  %27
-%33 = OpIEqual  %31  %29 %30
-%34 = OpAll  %32  %33
-OpSelectionMerge %35 None
-OpBranchConditional %34 %36 %35
-%36 = OpLabel
-OpStore %13 %25
-OpBranch %35
-%35 = OpLabel
-OpControlBarrier %37 %37 %38
-OpBranch %39
-%39 = OpLabel
-%41 = OpAccessChain  %40  %13 %22
-%42 = OpLoad  %4  %41
-OpStore %23 %42
+%12 = OpTypePointer Workgroup %10
+%11 = OpVariable  %12  Workgroup
+%14 = OpTypeStruct %4
+%15 = OpTypePointer StorageBuffer %14
+%13 = OpVariable  %15  StorageBuffer
+%18 = OpTypeFunction %2
+%19 = OpTypePointer StorageBuffer %4
+%20 = OpConstant  %3  0
+%23 = OpConstantNull  %10
+%24 = OpTypeVector %3 3
+%26 = OpTypePointer Input %24
+%25 = OpVariable  %26  Input
+%28 = OpConstantNull  %24
+%30 = OpTypeBool
+%29 = OpTypeVector %30 3
+%35 = OpConstant  %3  2
+%36 = OpConstant  %3  264
+%38 = OpTypePointer Workgroup %4
+%17 = OpFunction  %2  None %18
+%16 = OpLabel
+%21 = OpAccessChain  %19  %13 %20
+OpBranch %22
+%22 = OpLabel
+%27 = OpLoad  %24  %25
+%31 = OpIEqual  %29  %27 %28
+%32 = OpAll  %30  %31
+OpSelectionMerge %33 None
+OpBranchConditional %32 %34 %33
+%34 = OpLabel
+OpStore %11 %23
+OpBranch %33
+%33 = OpLabel
+OpControlBarrier %35 %35 %36
+OpBranch %37
+%37 = OpLabel
+%39 = OpAccessChain  %38  %11 %20
+%40 = OpLoad  %4  %39
+OpStore %21 %40
 OpReturn
 OpFunctionEnd

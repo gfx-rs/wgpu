@@ -89,7 +89,12 @@ struct Parameters {
 }
 
 #[allow(unused_variables)]
-fn check_targets(module: &naga::Module, name: &str, targets: Targets, source_code: Option<&str>) {
+fn check_targets(
+    module: &mut naga::Module,
+    name: &str,
+    targets: Targets,
+    source_code: Option<&str>,
+) {
     let root = env!("CARGO_MANIFEST_DIR");
     let filepath = format!("{root}/{BASE_DIR_IN}/{name}.param.ron");
     let params = match fs::read_to_string(&filepath) {
@@ -119,6 +124,26 @@ fn check_targets(module: &naga::Module, name: &str, targets: Targets, source_cod
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
         .expect(&format!("Naga module validation failed on test '{name}'"));
+
+    #[cfg(feature = "compact")]
+    let info = {
+        naga::compact::compact(module);
+
+        #[cfg(feature = "serialize")]
+        {
+            if targets.contains(Targets::IR) {
+                let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
+                let string = ron::ser::to_string_pretty(module, config).unwrap();
+                fs::write(dest.join(format!("ir/{name}.compact.ron")), string).unwrap();
+            }
+        }
+
+        naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+            .validate(module)
+            .expect(&format!(
+                "Post-compaction module validation failed on test '{name}'"
+            ))
+    };
 
     #[cfg(feature = "serialize")]
     {
@@ -284,6 +309,7 @@ fn write_output_spv_inner(
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
+    println!("Writing SPIR-V {}", path);
     let spv = spv::write_vec(module, info, options, pipeline_options).unwrap();
     let dis = rspirv::dr::load_words(spv)
         .expect("Produced invalid SPIR-V")
@@ -624,7 +650,7 @@ fn convert_wgsl() {
         let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
             .expect("Couldn't find wgsl file");
         match naga::front::wgsl::parse_str(&file) {
-            Ok(module) => check_targets(&module, name, targets, None),
+            Ok(mut module) => check_targets(&mut module, name, targets, None),
             Err(e) => panic!("{}", e.emit_to_string(&file)),
         }
     }
@@ -641,7 +667,7 @@ fn convert_wgsl() {
             let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/{name}.wgsl"))
                 .expect("Couldn't find wgsl file");
             match naga::front::wgsl::parse_str(&file) {
-                Ok(module) => check_targets(&module, name, targets, Some(&file)),
+                Ok(mut module) => check_targets(&mut module, name, targets, Some(&file)),
                 Err(e) => panic!("{}", e.emit_to_string(&file)),
             }
         }
@@ -655,7 +681,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     let root = env!("CARGO_MANIFEST_DIR");
 
     println!("Processing '{name}'");
-    let module = naga::front::spv::parse_u8_slice(
+    let mut module = naga::front::spv::parse_u8_slice(
         &fs::read(format!("{root}/{BASE_DIR_IN}/spv/{name}.spv")).expect("Couldn't find spv file"),
         &naga::front::spv::Options {
             adjust_coordinate_space,
@@ -664,7 +690,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         },
     )
     .unwrap();
-    check_targets(&module, name, targets, None);
+    check_targets(&mut module, name, targets, None);
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::default(),
@@ -709,7 +735,7 @@ fn convert_glsl_variations_check() {
     let file = fs::read_to_string(format!("{root}/{BASE_DIR_IN}/variations.glsl"))
         .expect("Couldn't find glsl file");
     let mut parser = naga::front::glsl::Frontend::default();
-    let module = parser
+    let mut module = parser
         .parse(
             &naga::front::glsl::Options {
                 stage: naga::ShaderStage::Fragment,
@@ -718,7 +744,7 @@ fn convert_glsl_variations_check() {
             &file,
         )
         .unwrap();
-    check_targets(&module, "variations-glsl", Targets::GLSL, None);
+    check_targets(&mut module, "variations-glsl", Targets::GLSL, None);
 }
 
 #[cfg(feature = "glsl-in")]

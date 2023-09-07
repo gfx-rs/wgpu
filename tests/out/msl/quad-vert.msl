@@ -4,16 +4,16 @@
 
 using metal::uint;
 
-struct type_5 {
+struct type_3 {
     float inner[1];
 };
 struct gl_PerVertex {
     metal::float4 gl_Position;
     float gl_PointSize;
-    type_5 gl_ClipDistance;
-    type_5 gl_CullDistance;
+    type_3 gl_ClipDistance;
+    type_3 gl_CullDistance;
 };
-struct type_9 {
+struct type_4 {
     metal::float2 member;
     metal::float4 gl_Position;
 };
@@ -24,10 +24,10 @@ void main_1(
     thread gl_PerVertex& perVertexStruct,
     thread metal::float2& a_pos_1
 ) {
-    metal::float2 _e8 = a_uv_1;
-    v_uv = _e8;
-    metal::float2 _e9 = a_pos_1;
-    perVertexStruct.gl_Position = metal::float4(_e9.x, _e9.y, 0.0, 1.0);
+    metal::float2 _e6 = a_uv_1;
+    v_uv = _e6;
+    metal::float2 _e7 = a_pos_1;
+    perVertexStruct.gl_Position = metal::float4(_e7.x, _e7.y, 0.0, 1.0);
     return;
 }
 
@@ -44,7 +44,7 @@ vertex main_Output main_(
 ) {
     metal::float2 v_uv = {};
     metal::float2 a_uv_1 = {};
-    gl_PerVertex perVertexStruct = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_5 {}, type_5 {}};
+    gl_PerVertex perVertexStruct = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}};
     metal::float2 a_pos_1 = {};
     const auto a_uv = varyings.a_uv;
     const auto a_pos = varyings.a_pos;
@@ -53,6 +53,6 @@ vertex main_Output main_(
     main_1(v_uv, a_uv_1, perVertexStruct, a_pos_1);
     metal::float2 _e7 = v_uv;
     metal::float4 _e8 = perVertexStruct.gl_Position;
-    const auto _tmp = type_9 {_e7, _e8};
+    const auto _tmp = type_4 {_e7, _e8};
     return main_Output { _tmp.member, _tmp.gl_Position };
 }

@@ -1,0 +1,334 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar(
+                kind: Uint,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 1,
+                size: Dynamic,
+                stride: 4,
+            ),
+        ),
+        (
+            name: Some("PrimeIndices"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("data"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                kind: Uint,
+                width: 4,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    global_variables: [
+        (
+            name: Some("v_indices"),
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 3,
+            init: None,
+        ),
+    ],
+    const_expressions: [],
+    functions: [
+        (
+            name: Some("collatz_iterations"),
+            arguments: [
+                (
+                    name: Some("n_base"),
+                    ty: 1,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 1,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("n"),
+                    ty: 1,
+                    init: None,
+                ),
+                (
+                    name: Some("i"),
+                    ty: 1,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                FunctionArgument(0),
+                LocalVariable(1),
+                Literal(U32(0)),
+                LocalVariable(2),
+                Load(
+                    pointer: 2,
+                ),
+                Literal(U32(1)),
+                Binary(
+                    op: Greater,
+                    left: 5,
+                    right: 6,
+                ),
+                Load(
+                    pointer: 2,
+                ),
+                Literal(U32(2)),
+                Binary(
+                    op: Modulo,
+                    left: 8,
+                    right: 9,
+                ),
+                Literal(U32(0)),
+                Binary(
+                    op: Equal,
+                    left: 10,
+                    right: 11,
+                ),
+                Load(
+                    pointer: 2,
+                ),
+                Literal(U32(2)),
+                Binary(
+                    op: Divide,
+                    left: 13,
+                    right: 14,
+                ),
+                Literal(U32(3)),
+                Load(
+                    pointer: 2,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 16,
+                    right: 17,
+                ),
+                Literal(U32(1)),
+                Binary(
+                    op: Add,
+                    left: 18,
+                    right: 19,
+                ),
+                Load(
+                    pointer: 4,
+                ),
+                Literal(U32(1)),
+                Binary(
+                    op: Add,
+                    left: 21,
+                    right: 22,
+                ),
+                Load(
+                    pointer: 4,
+                ),
+            ],
+            named_expressions: {
+                1: "n_base",
+            },
+            body: [
+                Store(
+                    pointer: 2,
+                    value: 1,
+                ),
+                Store(
+                    pointer: 4,
+                    value: 3,
+                ),
+                Loop(
+                    body: [
+                        Emit((
+                            start: 4,
+                            end: 5,
+                        )),
+                        Emit((
+                            start: 6,
+                            end: 7,
+                        )),
+                        If(
+                            condition: 7,
+                            accept: [],
+                            reject: [
+                                Break,
+                            ],
+                        ),
+                        Block([
+                            Emit((
+                                start: 7,
+                                end: 8,
+                            )),
+                            Emit((
+                                start: 9,
+                                end: 10,
+                            )),
+                            Emit((
+                                start: 11,
+                                end: 12,
+                            )),
+                            If(
+                                condition: 12,
+                                accept: [
+                                    Emit((
+                                        start: 12,
+                                        end: 13,
+                                    )),
+                                    Emit((
+                                        start: 14,
+                                        end: 15,
+                                    )),
+                                    Store(
+                                        pointer: 2,
+                                        value: 15,
+                                    ),
+                                ],
+                                reject: [
+                                    Emit((
+                                        start: 16,
+                                        end: 18,
+                                    )),
+                                    Emit((
+                                        start: 19,
+                                        end: 20,
+                                    )),
+                                    Store(
+                                        pointer: 2,
+                                        value: 20,
+                                    ),
+                                ],
+                            ),
+                            Emit((
+                                start: 20,
+                                end: 21,
+                            )),
+                            Emit((
+                                start: 22,
+                                end: 23,
+                            )),
+                            Store(
+                                pointer: 4,
+                                value: 23,
+                            ),
+                        ]),
+                    ],
+                    continuing: [],
+                    break_if: None,
+                ),
+                Emit((
+                    start: 23,
+                    end: 24,
+                )),
+                Return(
+                    value: Some(24),
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            function: (
+                name: Some("main"),
+                arguments: [
+                    (
+                        name: Some("global_id"),
+                        ty: 4,
+                        binding: Some(BuiltIn(GlobalInvocationId)),
+                    ),
+                ],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    GlobalVariable(1),
+                    AccessIndex(
+                        base: 2,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 3,
+                        index: 4,
+                    ),
+                    GlobalVariable(1),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    Access(
+                        base: 7,
+                        index: 8,
+                    ),
+                    Load(
+                        pointer: 9,
+                    ),
+                    CallResult(1),
+                ],
+                named_expressions: {
+                    1: "global_id",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 5,
+                    )),
+                    Emit((
+                        start: 6,
+                        end: 10,
+                    )),
+                    Call(
+                        function: 1,
+                        arguments: [
+                            10,
+                        ],
+                        result: Some(11),
+                    ),
+                    Store(
+                        pointer: 5,
+                        value: 11,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+            ),
+        ),
+    ],
+)

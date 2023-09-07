@@ -79,6 +79,20 @@ struct Args {
     #[argh(switch, short = 'g')]
     generate_debug_symbols: bool,
 
+    /// compact the module's IR and revalidate.
+    ///
+    /// Output files will reflect the compacted IR. If you want to see the IR as
+    /// it was before compaction, use the `--before-compaction` option.
+    #[argh(switch)]
+    compact: bool,
+
+    /// write the module's IR before compaction to the given file.
+    ///
+    /// This implies `--compact`. Like any other output file, the filename
+    /// extension determines the form in which the module is written.
+    #[argh(option)]
+    before_compaction: Option<String>,
+
     /// show version
     #[argh(switch)]
     version: bool,
@@ -288,7 +302,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         !params.keep_coordinate_space,
     );
 
-    let (module, input_text) = match Path::new(&input_path)
+    let (mut module, input_text) = match Path::new(&input_path)
         .extension()
         .ok_or(CliError("Input filename has no extension"))?
         .to_str()
@@ -391,12 +405,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 caps & !missing
             });
 
-    // validate the IR
+    // Validate the IR before compaction.
     let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
         .validate(&module)
     {
         Ok(info) => Some(info),
         Err(error) => {
+            // Validation failure is not fatal. Just report the error.
             if let Some(input) = &input_text {
                 let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
                 emit_annotated_error(&error, filename.unwrap_or("input"), input);
@@ -406,6 +421,45 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // Compact the module, if requested.
+    let info = if args.compact || args.before_compaction.is_some() {
+        // Compact only if validation succeeded. Otherwise, compaction may panic.
+        if info.is_some() {
+            // Write out the module state before compaction, if requested.
+            if let Some(ref before_compaction) = args.before_compaction {
+                write_output(&module, &info, &params, before_compaction)?;
+            }
+
+            naga::compact::compact(&mut module);
+
+            // Re-validate the IR after compaction.
+            match naga::valid::Validator::new(params.validation_flags, validation_caps)
+                .validate(&module)
+            {
+                Ok(info) => Some(info),
+                Err(error) => {
+                    // Validation failure is not fatal. Just report the error.
+                    eprintln!("Error validating compacted module:");
+                    if let Some(input) = &input_text {
+                        let filename = input_path.file_name().and_then(std::ffi::OsStr::to_str);
+                        emit_annotated_error(&error, filename.unwrap_or("input"), input);
+                    }
+                    print_err(&error);
+                    None
+                }
+            }
+        } else {
+            eprintln!("Skipping compaction due to validation failure.");
+            None
+        }
+    } else {
+        info
+    };
+
+    // If no output was requested, then report validation results and stop here.
+    //
+    // If the user asked for output, don't stop: some output formats (".txt",
+    // ".dot", ".bin") can be generated even without a `ModuleInfo`.
     if output_paths.is_empty() {
         if info.is_some() {
             println!("Validation successful");

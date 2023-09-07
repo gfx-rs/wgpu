@@ -39,31 +39,31 @@ OpDecorate %17 ArrayStride 4
 %26 = OpConstantComposite  %9  %21 %22
 %27 = OpConstantComposite  %9  %23 %25
 %28 = OpConstantComposite  %8  %26 %27
-%29 = OpConstant  %5  1
-%30 = OpConstantComposite  %10  %28
-%31 = OpConstantNull  %13
-%32 = OpConstantNull  %5
-%33 = OpConstantNull  %12
-%34 = OpConstantNull  %4
-%35 = OpConstantNull  %14
-%36 = OpConstantNull  %8
-%37 = OpConstant  %5  3
-%38 = OpConstantNull  %15
-%39 = OpConstantNull  %6
-%40 = OpConstant  %5  0
-%41 = OpConstant  %5  2
-%42 = OpConstantComposite  %17  %40 %29 %41 %37
+%29 = OpConstantComposite  %10  %28
+%30 = OpConstantNull  %13
+%31 = OpConstantNull  %5
+%32 = OpConstantNull  %12
+%33 = OpConstantNull  %4
+%34 = OpConstantNull  %14
+%35 = OpConstantNull  %8
+%36 = OpConstantNull  %15
+%37 = OpConstantNull  %6
+%38 = OpConstant  %5  0
+%39 = OpConstant  %5  1
+%40 = OpConstant  %5  2
+%41 = OpConstant  %5  3
+%42 = OpConstantComposite  %17  %38 %39 %40 %41
 %44 = OpTypePointer Function %6
 %47 = OpTypeFunction %2
 %48 = OpConstant  %12  0
 %49 = OpConstantNull  %20
 %46 = OpFunction  %2  None %47
 %45 = OpLabel
-%43 = OpVariable  %44  Function %39
+%43 = OpVariable  %44  Function %37
 OpBranch %50
 %50 = OpLabel
 %51 = OpCompositeConstruct  %3  %22 %22 %22 %22
-%52 = OpCompositeConstruct  %6  %51 %29
+%52 = OpCompositeConstruct  %6  %51 %39
 OpStore %43 %52
 %53 = OpCompositeConstruct  %9  %22 %21
 %54 = OpCompositeConstruct  %9  %21 %22
@@ -77,7 +77,7 @@ OpStore %43 %52
 %62 = OpCompositeConstruct  %9  %21 %21
 %63 = OpCompositeConstruct  %9  %21 %21
 %64 = OpCompositeConstruct  %8  %62 %63
-%65 = OpCompositeConstruct  %17  %40 %29 %41 %37
+%65 = OpCompositeConstruct  %17  %38 %39 %40 %41
 %71 = OpCopyObject  %20  %49
 %73 = OpCopyObject  %20  %49
 OpReturn

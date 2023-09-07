@@ -279,6 +279,8 @@ An override expression can be evaluated at pipeline creation time.
 mod arena;
 pub mod back;
 mod block;
+#[cfg(feature = "compact")]
+pub mod compact;
 pub mod front;
 pub mod keywords;
 pub mod proc;

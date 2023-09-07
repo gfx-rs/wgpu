@@ -9,69 +9,69 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 OpMemoryModel Logical GLSL450
 OpMemberName %7 0 "arr"
 OpName %7 "DynamicArray"
-OpName %10 "dynamic_array"
-OpName %11 "v"
-OpName %15 "f"
-OpName %23 "i"
-OpName %24 "v"
-OpName %25 "index_unsized"
+OpName %8 "dynamic_array"
+OpName %10 "v"
+OpName %14 "f"
+OpName %22 "i"
+OpName %23 "v"
+OpName %24 "index_unsized"
 OpName %34 "i"
 OpName %35 "v"
 OpName %36 "index_dynamic_array"
 OpDecorate %6 ArrayStride 4
 OpMemberDecorate %7 0 Offset 0
 OpDecorate %7 Block
-OpDecorate %10 DescriptorSet 0
-OpDecorate %10 Binding 0
+OpDecorate %8 DescriptorSet 0
+OpDecorate %8 Binding 0
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 1
 %3 = OpTypeVector %4 2
 %5 = OpTypeInt 32 0
 %6 = OpTypeRuntimeArray %5
 %7 = OpTypeStruct %6
-%8 = OpTypePointer StorageBuffer %7
-%9 = OpTypePointer StorageBuffer %6
-%10 = OpVariable  %8  StorageBuffer
-%12 = OpTypePointer Function %3
-%13 = OpConstantNull  %3
-%16 = OpTypeFunction %2
-%17 = OpConstant  %4  10
-%19 = OpTypePointer Function %4
-%20 = OpConstant  %5  0
-%26 = OpTypeFunction %2 %4 %5
+%9 = OpTypePointer StorageBuffer %7
+%8 = OpVariable  %9  StorageBuffer
+%11 = OpTypePointer Function %3
+%12 = OpConstantNull  %3
+%15 = OpTypeFunction %2
+%16 = OpConstant  %4  10
+%18 = OpTypePointer Function %4
+%19 = OpConstant  %5  0
+%25 = OpTypeFunction %2 %4 %5
+%27 = OpTypePointer StorageBuffer %6
 %28 = OpTypePointer StorageBuffer %5
-%15 = OpFunction  %2  None %16
-%14 = OpLabel
-%11 = OpVariable  %12  Function %13
-OpBranch %18
-%18 = OpLabel
-%21 = OpAccessChain  %19  %11 %20
-OpStore %21 %17
+%14 = OpFunction  %2  None %15
+%13 = OpLabel
+%10 = OpVariable  %11  Function %12
+OpBranch %17
+%17 = OpLabel
+%20 = OpAccessChain  %18  %10 %19
+OpStore %20 %16
 OpReturn
 OpFunctionEnd
-%25 = OpFunction  %2  None %26
-%23 = OpFunctionParameter  %4
-%24 = OpFunctionParameter  %5
-%22 = OpLabel
-OpBranch %27
-%27 = OpLabel
-%29 = OpAccessChain  %28  %10 %20 %23
+%24 = OpFunction  %2  None %25
+%22 = OpFunctionParameter  %4
+%23 = OpFunctionParameter  %5
+%21 = OpLabel
+OpBranch %26
+%26 = OpLabel
+%29 = OpAccessChain  %28  %8 %19 %22
 %30 = OpLoad  %5  %29
-%31 = OpIAdd  %5  %30 %24
-%32 = OpAccessChain  %28  %10 %20 %23
+%31 = OpIAdd  %5  %30 %23
+%32 = OpAccessChain  %28  %8 %19 %22
 OpStore %32 %31
 OpReturn
 OpFunctionEnd
-%36 = OpFunction  %2  None %26
+%36 = OpFunction  %2  None %25
 %34 = OpFunctionParameter  %4
 %35 = OpFunctionParameter  %5
 %33 = OpLabel
 OpBranch %37
 %37 = OpLabel
-%38 = OpAccessChain  %28  %10 %20 %34
+%38 = OpAccessChain  %28  %8 %19 %34
 %39 = OpLoad  %5  %38
 %40 = OpIAdd  %5  %39 %35
-%41 = OpAccessChain  %28  %10 %20 %34
+%41 = OpAccessChain  %28  %8 %19 %34
 OpStore %41 %40
 OpReturn
 OpFunctionEnd

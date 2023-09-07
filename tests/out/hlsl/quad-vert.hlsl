@@ -6,7 +6,7 @@ struct gl_PerVertex {
     int _end_pad_0;
 };
 
-struct type_9 {
+struct type_4 {
     float2 member : LOC0;
     float4 gl_Position : SV_Position;
 };
@@ -32,15 +32,15 @@ struct VertexOutput_main {
 
 void main_1()
 {
-    float2 _expr8 = a_uv_1;
-    v_uv = _expr8;
-    float2 _expr9 = a_pos_1;
-    perVertexStruct.gl_Position = float4(_expr9.x, _expr9.y, 0.0, 1.0);
+    float2 _expr6 = a_uv_1;
+    v_uv = _expr6;
+    float2 _expr7 = a_pos_1;
+    perVertexStruct.gl_Position = float4(_expr7.x, _expr7.y, 0.0, 1.0);
     return;
 }
 
-type_9 Constructtype_9(float2 arg0, float4 arg1) {
-    type_9 ret = (type_9)0;
+type_4 Constructtype_4(float2 arg0, float4 arg1) {
+    type_4 ret = (type_4)0;
     ret.member = arg0;
     ret.gl_Position = arg1;
     return ret;
@@ -53,7 +53,7 @@ VertexOutput_main main(float2 a_uv : LOC1, float2 a_pos : LOC0)
     main_1();
     float2 _expr7 = v_uv;
     float4 _expr8 = perVertexStruct.gl_Position;
-    const type_9 type_9_ = Constructtype_9(_expr7, _expr8);
-    const VertexOutput_main type_9_1 = { type_9_.member, type_9_.gl_Position };
-    return type_9_1;
+    const type_4 type_4_ = Constructtype_4(_expr7, _expr8);
+    const VertexOutput_main type_4_1 = { type_4_.member, type_4_.gl_Position };
+    return type_4_1;
 }

@@ -38,6 +38,7 @@ wgsl-out = []
 hlsl-out = []
 span = ["codespan-reporting", "termcolor"]
 validate = []
+compact = []
 
 [[bench]]
 name = "criterion"

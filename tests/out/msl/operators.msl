@@ -237,10 +237,10 @@ void assignment(
     int _e36 = a_1;
     a_1 = _e36 - 1;
     vec0_ = metal::int3 {};
-    int _e43 = vec0_.y;
-    vec0_.y = _e43 + 1;
-    int _e48 = vec0_.y;
-    vec0_.y = _e48 - 1;
+    int _e42 = vec0_.y;
+    vec0_.y = _e42 + 1;
+    int _e46 = vec0_.y;
+    vec0_.y = _e46 - 1;
     return;
 }
 

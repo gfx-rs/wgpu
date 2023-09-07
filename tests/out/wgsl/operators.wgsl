@@ -223,10 +223,10 @@ fn assignment() {
     let _e36 = a_1;
     a_1 = (_e36 - 1);
     vec0_ = vec3<i32>();
-    let _e43 = vec0_.y;
-    vec0_.y = (_e43 + 1);
-    let _e48 = vec0_.y;
-    vec0_.y = (_e48 - 1);
+    let _e42 = vec0_.y;
+    vec0_.y = (_e42 + 1);
+    let _e46 = vec0_.y;
+    vec0_.y = (_e46 - 1);
     return;
 }
 

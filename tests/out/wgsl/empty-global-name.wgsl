@@ -6,8 +6,8 @@ struct type_1 {
 var<storage, read_write> unnamed: type_1;
 
 fn function() {
-    let _e4 = unnamed.member;
-    unnamed.member = (_e4 + 1);
+    let _e3 = unnamed.member;
+    unnamed.member = (_e3 + 1);
     return;
 }
 

@@ -232,10 +232,10 @@ void assignment()
     int _expr36 = a_1;
     a_1 = (_expr36 - 1);
     vec0_ = (int3)0;
-    int _expr43 = vec0_.y;
-    vec0_.y = (_expr43 + 1);
-    int _expr48 = vec0_.y;
-    vec0_.y = (_expr48 - 1);
+    int _expr42 = vec0_.y;
+    vec0_.y = (_expr42 + 1);
+    int _expr46 = vec0_.y;
+    vec0_.y = (_expr46 - 1);
     return;
 }
 
