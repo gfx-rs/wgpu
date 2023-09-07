@@ -1,5 +1,6 @@
-// Normally, we would use one, say, vec2<array<i32>> and select via
-// a[lid.x][wid.x].
+// This is useful because we can't use, say, vec2<array<i32>> because
+// of array<T> being unsized. Normally we would interweave them or use
+// and array of structus but this is just for the sake of demonstration.
 
 @group(0)
 @binding(0)
