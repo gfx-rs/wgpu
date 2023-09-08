@@ -342,13 +342,13 @@ pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
-    fn prepare<A: HalApi>(self, hub: &Hub<A, G>) -> ImplicitPipelineContext {
+    fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
+            root_id: hub.pipeline_layouts.prepare::<G>(self.root_id).into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(id_in.clone()).into_id())
+                .map(|id_in| hub.bind_group_layouts.prepare::<G>(*id_in).into_id())
                 .collect(),
         }
     }

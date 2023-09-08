@@ -43,6 +43,7 @@ use serde::Deserialize;
 #[cfg(any(feature = "serial-pass", feature = "trace"))]
 use serde::Serialize;
 
+use std::sync::Arc;
 use std::{borrow::Cow, fmt, iter, marker::PhantomData, mem, num::NonZeroU32, ops::Range, str};
 
 use super::{
@@ -683,16 +684,16 @@ where
     }
 }
 
-struct RenderAttachment<'a> {
-    texture_id: &'a id::TextureId,
+struct RenderAttachment<'a, A: HalApi> {
+    texture: Arc<Texture<A>>,
     selector: &'a TextureSelector,
     usage: hal::TextureUses,
 }
 
 impl<A: HalApi> TextureView<A> {
-    fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment {
+    fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment<A> {
         RenderAttachment {
-            texture_id: &self.parent_id,
+            texture: self.parent.as_ref().unwrap().clone(),
             selector: &self.selector,
             usage,
         }
@@ -706,13 +707,13 @@ struct RenderPassInfo<'a, A: HalApi> {
     context: RenderPassContext,
     usage_scope: UsageScope<A>,
     /// All render attachments, including depth/stencil
-    render_attachments: AttachmentDataVec<RenderAttachment<'a>>,
+    render_attachments: AttachmentDataVec<RenderAttachment<'a, A>>,
     is_depth_read_only: bool,
     is_stencil_read_only: bool,
     extent: wgt::Extent3d,
     _phantom: PhantomData<A>,
 
-    pending_discard_init_fixups: SurfacesInDiscardState,
+    pending_discard_init_fixups: SurfacesInDiscardState<A>,
     divergent_discarded_depth_stencil_aspect: Option<(wgt::TextureAspect, &'a TextureView<A>)>,
     multiview: Option<NonZeroU32>,
 }
@@ -720,27 +721,24 @@ struct RenderPassInfo<'a, A: HalApi> {
 impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn add_pass_texture_init_actions<V>(
         channel: &PassChannel<V>,
-        texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         view: &TextureView<A>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
-        pending_discard_init_fixups: &mut SurfacesInDiscardState,
+        pending_discard_init_fixups: &mut SurfacesInDiscardState<A>,
     ) {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    id: view.parent_id,
+                    texture: view.parent.as_ref().unwrap().clone(),
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
                 },
-                texture_guard,
             ));
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
-                view.parent_id,
+                view.parent.as_ref().unwrap(),
                 TextureInitRange::from(view.selector.clone()),
-                texture_guard,
             );
         }
         if channel.store_op == StoreOp::Discard {
@@ -748,7 +746,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // discard right away be alright since the texture can't be used
             // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent_id,
+                texture: view.parent.as_ref().unwrap().clone(),
                 mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
@@ -764,7 +762,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         occlusion_query_set: Option<id::QuerySetId>,
         encoder: &mut CommandEncoder<A>,
         trackers: &mut Tracker<A>,
-        texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+        texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
         pending_query_resets: &mut QueryResetMap<A>,
         view_guard: &'a Storage<TextureView<A>, id::TextureViewId>,
         buffer_guard: &'a Storage<Buffer<A>, id::BufferId>,
@@ -779,7 +777,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         let mut is_depth_read_only = false;
         let mut is_stencil_read_only = false;
 
-        let mut render_attachments = AttachmentDataVec::<RenderAttachment>::new();
+        let mut render_attachments = AttachmentDataVec::<RenderAttachment<A>>::new();
         let mut discarded_surfaces = AttachmentDataVec::new();
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
         let mut divergent_discarded_depth_stencil_aspect = None;
@@ -881,7 +879,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     &at.depth,
                     texture_memory_actions,
                     view,
-                    texture_guard,
                     &mut pending_discard_init_fixups,
                 );
             } else if !ds_aspects.contains(hal::FormatAspects::DEPTH) {
@@ -889,7 +886,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     &at.stencil,
                     texture_memory_actions,
                     view,
-                    texture_guard,
                     &mut pending_discard_init_fixups,
                 );
             } else {
@@ -918,14 +914,11 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                     at.depth.load_op == LoadOp::Load || at.stencil.load_op == LoadOp::Load;
                 if need_init_beforehand {
                     pending_discard_init_fixups.extend(
-                        texture_memory_actions.register_init_action(
-                            &TextureInitTrackerAction {
-                                id: view.parent_id,
-                                range: TextureInitRange::from(view.selector.clone()),
-                                kind: MemoryInitKind::NeedsInitializedMemory,
-                            },
-                            texture_guard,
-                        ),
+                        texture_memory_actions.register_init_action(&TextureInitTrackerAction {
+                            texture: view.parent.as_ref().unwrap().clone(),
+                            range: TextureInitRange::from(view.selector.clone()),
+                            kind: MemoryInitKind::NeedsInitializedMemory,
+                        }),
                     );
                 }
 
@@ -940,9 +933,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
                         texture_memory_actions.register_implicit_init(
-                            view.parent_id,
+                            view.parent.as_ref().unwrap(),
                             TextureInitRange::from(view.selector.clone()),
-                            texture_guard,
                         );
                     }
                     divergent_discarded_depth_stencil_aspect = Some((
@@ -956,7 +948,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent_id,
+                        texture: view.parent.as_ref().unwrap().clone(),
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
@@ -1023,7 +1015,6 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 &at.channel,
                 texture_memory_actions,
                 color_view,
-                texture_guard,
                 &mut pending_discard_init_fixups,
             );
             render_attachments
@@ -1083,9 +1074,8 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
 
                 texture_memory_actions.register_implicit_init(
-                    resolve_view.parent_id,
+                    resolve_view.parent.as_ref().unwrap(),
                     TextureInitRange::from(resolve_view.selector.clone()),
-                    texture_guard,
                 );
                 render_attachments
                     .push(resolve_view.to_render_attachment(hal::TextureUses::COLOR_TARGET));
@@ -1198,30 +1188,21 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
     fn finish(
         mut self,
         raw: &mut A::CommandEncoder,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) -> Result<(UsageScope<A>, SurfacesInDiscardState), RenderPassErrorInner> {
+    ) -> Result<(UsageScope<A>, SurfacesInDiscardState<A>), RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::finish");
         unsafe {
             raw.end_render_pass();
         }
 
         for ra in self.render_attachments {
-            if !texture_guard.contains(*ra.texture_id) {
-                return Err(RenderPassErrorInner::SurfaceTextureDropped);
-            }
-            let texture = &texture_guard[*ra.texture_id];
+            let texture = &ra.texture;
             check_texture_usage(texture.desc.usage, TextureUsages::RENDER_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             unsafe {
                 self.usage_scope
                     .textures
-                    .merge_single(
-                        texture_guard,
-                        *ra.texture_id,
-                        Some(ra.selector.clone()),
-                        ra.usage,
-                    )
+                    .merge_single(texture, Some(ra.selector.clone()), ra.usage)
                     .map_err(UsageConflict::from)?
             };
         }
@@ -1436,7 +1417,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // merge the resource tracker in
                         unsafe {
                             info.usage_scope
-                                .merge_bind_group(&*texture_guard, &bind_group.used)
+                                .merge_bind_group(&bind_group.used)
                                 .map_pass_err(scope)?;
                         }
                         //Note: stateless trackers are not merged: the lifetime reference
@@ -1444,18 +1425,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         buffer_memory_init_actions.extend(
                             bind_group.used_buffer_ranges.iter().filter_map(|action| {
-                                match buffer_guard.get(action.id) {
-                                    Ok(buffer) => {
-                                        buffer.initialization_status.read().check_action(action)
-                                    }
-                                    Err(_) => None,
-                                }
+                                action
+                                    .buffer
+                                    .initialization_status
+                                    .read()
+                                    .check_action(action)
                             }),
                         );
                         for action in bind_group.used_texture_ranges.iter() {
-                            info.pending_discard_init_fixups.extend(
-                                texture_memory_actions.register_init_action(action, &texture_guard),
-                            );
+                            info.pending_discard_init_fixups
+                                .extend(texture_memory_actions.register_init_action(action));
                         }
 
                         let pipeline_layout = state.binder.pipeline_layout.clone();
@@ -1603,7 +1582,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size,
                     } => {
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                        let buffer: &Buffer<A> = info
+                        let buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
@@ -1627,7 +1606,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         buffer_memory_init_actions.extend(
                             buffer.initialization_status.read().create_action(
-                                buffer_id,
+                                buffer,
                                 offset..end,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1649,7 +1628,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size,
                     } => {
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                        let buffer: &Buffer<A> = info
+                        let buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
@@ -1678,7 +1657,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         buffer_memory_init_actions.extend(
                             buffer.initialization_status.read().create_action(
-                                buffer_id,
+                                buffer,
                                 offset..(offset + vertex_state.total_size),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1921,7 +1900,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer: &Buffer<A> = info
+                        let indirect_buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -1949,7 +1928,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         buffer_memory_init_actions.extend(
                             indirect_buffer.initialization_status.read().create_action(
-                                buffer_id,
+                                indirect_buffer,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -1991,7 +1970,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                             .map_pass_err(scope)?;
 
-                        let indirect_buffer: &Buffer<A> = info
+                        let indirect_buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -2004,7 +1983,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::DestroyedBuffer(buffer_id))
                             .map_pass_err(scope)?;
 
-                        let count_buffer: &Buffer<A> = info
+                        let count_buffer = info
                             .usage_scope
                             .buffers
                             .merge_single(
@@ -2033,7 +2012,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         buffer_memory_init_actions.extend(
                             indirect_buffer.initialization_status.read().create_action(
-                                buffer_id,
+                                indirect_buffer,
                                 offset..end_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2051,7 +2030,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         buffer_memory_init_actions.extend(
                             count_buffer.initialization_status.read().create_action(
-                                count_buffer_id,
+                                count_buffer,
                                 count_buffer_offset..end_count_offset,
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -2224,40 +2203,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bundle
                                 .buffer_memory_init_actions
                                 .iter()
-                                .filter_map(|action| match buffer_guard.get(action.id) {
-                                    Ok(buffer) => {
-                                        buffer.initialization_status.read().check_action(action)
-                                    }
-                                    Err(_) => None,
+                                .filter_map(|action| {
+                                    action
+                                        .buffer
+                                        .initialization_status
+                                        .read()
+                                        .check_action(action)
                                 }),
                         );
                         for action in bundle.texture_memory_init_actions.iter() {
-                            info.pending_discard_init_fixups.extend(
-                                texture_memory_actions.register_init_action(action, &texture_guard),
-                            );
+                            info.pending_discard_init_fixups
+                                .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        unsafe {
-                            bundle.execute(
-                                raw,
-                                &*bind_group_guard,
-                                &*render_pipeline_guard,
-                                &*buffer_guard,
-                            )
-                        }
-                        .map_err(|e| match e {
-                            ExecutionError::DestroyedBuffer(id) => {
-                                RenderCommandError::DestroyedBuffer(id)
-                            }
-                            ExecutionError::Unimplemented(what) => {
-                                RenderCommandError::Unimplemented(what)
-                            }
-                        })
-                        .map_pass_err(scope)?;
+                        unsafe { bundle.execute(raw) }
+                            .map_err(|e| match e {
+                                ExecutionError::DestroyedBuffer(id) => {
+                                    RenderCommandError::DestroyedBuffer(id)
+                                }
+                                ExecutionError::Unimplemented(what) => {
+                                    RenderCommandError::Unimplemented(what)
+                                }
+                            })
+                            .map_pass_err(scope)?;
 
                         unsafe {
                             info.usage_scope
-                                .merge_render_bundle(&*texture_guard, &bundle.used)
+                                .merge_render_bundle(&bundle.used)
                                 .map_pass_err(scope)?;
                             tracker
                                 .add_from_render_bundle(&bundle.used)
@@ -2270,15 +2242,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Merging renderpass into cmd_buf {:?}", encoder_id);
             let (trackers, pending_discard_init_fixups) =
-                info.finish(raw, &*texture_guard).map_pass_err(init_scope)?;
+                info.finish(raw).map_pass_err(init_scope)?;
 
             encoder.close();
             (trackers, pending_discard_init_fixups)
         };
 
         let query_set_guard = hub.query_sets.read();
-        let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
 
         let cmd_buf = hub.command_buffers.get(encoder_id).unwrap();
         let mut cmd_buf_data = cmd_buf.data.lock();
@@ -2294,7 +2264,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
                 transit,
-                &texture_guard,
                 &mut tracker.textures,
                 &cmd_buf.device,
             );
@@ -2309,13 +2278,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(RenderCommandError::InvalidQuerySet)
                 .map_pass_err(PassErrorScope::QueryReset)?;
 
-            super::CommandBuffer::insert_barriers_from_scope(
-                transit,
-                tracker,
-                &scope,
-                &*buffer_guard,
-                &*texture_guard,
-            );
+            super::CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope);
         }
 
         *status = CommandEncoderStatus::Recording;

@@ -158,31 +158,31 @@ use crate::{
     identity::GlobalIdentityHandlerFactory,
     instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
-    registry::Registry,
+    registry::{Registry, RegistryReport},
     resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
-    storage::{Element, Storage, StorageReport},
+    storage::{Element, Storage},
 };
 
 use std::fmt::Debug;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HubReport {
-    pub adapters: StorageReport,
-    pub devices: StorageReport,
-    pub queues: StorageReport,
-    pub pipeline_layouts: StorageReport,
-    pub shader_modules: StorageReport,
-    pub bind_group_layouts: StorageReport,
-    pub bind_groups: StorageReport,
-    pub command_buffers: StorageReport,
-    pub render_bundles: StorageReport,
-    pub render_pipelines: StorageReport,
-    pub compute_pipelines: StorageReport,
-    pub query_sets: StorageReport,
-    pub buffers: StorageReport,
-    pub textures: StorageReport,
-    pub texture_views: StorageReport,
-    pub samplers: StorageReport,
+    pub adapters: RegistryReport,
+    pub devices: RegistryReport,
+    pub queues: RegistryReport,
+    pub pipeline_layouts: RegistryReport,
+    pub shader_modules: RegistryReport,
+    pub bind_group_layouts: RegistryReport,
+    pub bind_groups: RegistryReport,
+    pub command_buffers: RegistryReport,
+    pub render_bundles: RegistryReport,
+    pub render_pipelines: RegistryReport,
+    pub compute_pipelines: RegistryReport,
+    pub query_sets: RegistryReport,
+    pub buffers: RegistryReport,
+    pub textures: RegistryReport,
+    pub texture_views: RegistryReport,
+    pub samplers: RegistryReport,
 }
 
 impl HubReport {
@@ -216,28 +216,28 @@ impl HubReport {
 ///
 ///
 /// [`A::hub(global)`]: HalApi::hub
-pub struct Hub<A: HalApi, F: GlobalIdentityHandlerFactory> {
-    pub adapters: Registry<id::AdapterId, Adapter<A>, F>,
-    pub devices: Registry<id::DeviceId, Device<A>, F>,
-    pub queues: Registry<id::QueueId, Queue<A>, F>,
-    pub pipeline_layouts: Registry<id::PipelineLayoutId, PipelineLayout<A>, F>,
-    pub shader_modules: Registry<id::ShaderModuleId, ShaderModule<A>, F>,
-    pub bind_group_layouts: Registry<id::BindGroupLayoutId, BindGroupLayout<A>, F>,
-    pub bind_groups: Registry<id::BindGroupId, BindGroup<A>, F>,
-    pub command_buffers: Registry<id::CommandBufferId, CommandBuffer<A>, F>,
-    pub render_bundles: Registry<id::RenderBundleId, RenderBundle<A>, F>,
-    pub render_pipelines: Registry<id::RenderPipelineId, RenderPipeline<A>, F>,
-    pub compute_pipelines: Registry<id::ComputePipelineId, ComputePipeline<A>, F>,
-    pub query_sets: Registry<id::QuerySetId, QuerySet<A>, F>,
-    pub buffers: Registry<id::BufferId, Buffer<A>, F>,
-    pub staging_buffers: Registry<id::StagingBufferId, StagingBuffer<A>, F>,
-    pub textures: Registry<id::TextureId, Texture<A>, F>,
-    pub texture_views: Registry<id::TextureViewId, TextureView<A>, F>,
-    pub samplers: Registry<id::SamplerId, Sampler<A>, F>,
+pub struct Hub<A: HalApi> {
+    pub adapters: Registry<id::AdapterId, Adapter<A>>,
+    pub devices: Registry<id::DeviceId, Device<A>>,
+    pub queues: Registry<id::QueueId, Queue<A>>,
+    pub pipeline_layouts: Registry<id::PipelineLayoutId, PipelineLayout<A>>,
+    pub shader_modules: Registry<id::ShaderModuleId, ShaderModule<A>>,
+    pub bind_group_layouts: Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
+    pub bind_groups: Registry<id::BindGroupId, BindGroup<A>>,
+    pub command_buffers: Registry<id::CommandBufferId, CommandBuffer<A>>,
+    pub render_bundles: Registry<id::RenderBundleId, RenderBundle<A>>,
+    pub render_pipelines: Registry<id::RenderPipelineId, RenderPipeline<A>>,
+    pub compute_pipelines: Registry<id::ComputePipelineId, ComputePipeline<A>>,
+    pub query_sets: Registry<id::QuerySetId, QuerySet<A>>,
+    pub buffers: Registry<id::BufferId, Buffer<A>>,
+    pub staging_buffers: Registry<id::StagingBufferId, StagingBuffer<A>>,
+    pub textures: Registry<id::TextureId, Texture<A>>,
+    pub texture_views: Registry<id::TextureViewId, TextureView<A>>,
+    pub samplers: Registry<id::SamplerId, Sampler<A>>,
 }
 
-impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
-    fn new(factory: &F) -> Self {
+impl<A: HalApi> Hub<A> {
+    fn new<F: GlobalIdentityHandlerFactory>(factory: &F) -> Self {
         Self {
             adapters: Registry::new(A::VARIANT, factory),
             devices: Registry::new(A::VARIANT, factory),
@@ -341,17 +341,17 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
     }
 }
 
-pub struct Hubs<F: GlobalIdentityHandlerFactory> {
+pub struct Hubs {
     #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-    pub(crate) vulkan: Hub<hal::api::Vulkan, F>,
+    pub(crate) vulkan: Hub<hal::api::Vulkan>,
     #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-    pub(crate) metal: Hub<hal::api::Metal, F>,
+    pub(crate) metal: Hub<hal::api::Metal>,
     #[cfg(all(feature = "dx12", windows))]
-    pub(crate) dx12: Hub<hal::api::Dx12, F>,
+    pub(crate) dx12: Hub<hal::api::Dx12>,
     #[cfg(all(feature = "dx11", windows))]
-    pub(crate) dx11: Hub<hal::api::Dx11, F>,
+    pub(crate) dx11: Hub<hal::api::Dx11>,
     #[cfg(feature = "gles")]
-    pub(crate) gl: Hub<hal::api::Gles, F>,
+    pub(crate) gl: Hub<hal::api::Gles>,
     #[cfg(all(
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
         not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
@@ -359,11 +359,11 @@ pub struct Hubs<F: GlobalIdentityHandlerFactory> {
         not(all(feature = "dx11", windows)),
         not(feature = "gles"),
     ))]
-    pub(crate) empty: Hub<hal::api::Empty, F>,
+    pub(crate) empty: Hub<hal::api::Empty>,
 }
 
-impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
-    pub(crate) fn new(factory: &F) -> Self {
+impl Hubs {
+    pub(crate) fn new<F: GlobalIdentityHandlerFactory>(factory: &F) -> Self {
         Self {
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: Hub::new(factory),

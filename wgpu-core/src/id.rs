@@ -1,5 +1,10 @@
 use crate::{Epoch, Index};
-use std::{cmp::Ordering, fmt, marker::PhantomData};
+use std::{
+    any::Any,
+    cmp::Ordering,
+    fmt::{self, Debug},
+    marker::PhantomData,
+};
 use wgt::Backend;
 
 #[cfg(feature = "id32")]
@@ -66,7 +71,7 @@ type Dummy = hal::api::Empty;
     all(feature = "serde", not(feature = "replay")),
     derive(serde::Deserialize)
 )]
-pub struct Id<T>(NonZeroId, PhantomData<T>);
+pub struct Id<T: 'static>(NonZeroId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
 #[allow(dead_code)]
@@ -77,7 +82,7 @@ enum SerialId {
     Id(Index, Epoch, Backend),
 }
 #[cfg(feature = "trace")]
-impl<T> From<Id<T>> for SerialId {
+impl<T: 'static> From<Id<T>> for SerialId {
     fn from(id: Id<T>) -> Self {
         let (index, epoch, backend) = id.unzip();
         Self::Id(index, epoch, backend)
@@ -131,7 +136,7 @@ impl<T> Clone for Id<T> {
     }
 }
 
-impl<T> fmt::Debug for Id<T> {
+impl<T> Debug for Id<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         self.unzip().fmt(formatter)
     }
@@ -168,14 +173,14 @@ impl<T> Ord for Id<T> {
 /// Most `wgpu-core` clients should not use this trait. Unusual clients that
 /// need to construct `Id` values directly, or access their components, like the
 /// WGPU recording player, may use this trait to do so.
-pub trait TypedId: Copy + std::fmt::Debug {
+pub trait TypedId: Copy + Debug + Any {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
     fn into_raw(self) -> NonZeroId;
 }
 
 #[allow(trivial_numeric_casts)]
-impl<T> TypedId for Id<T> {
+impl<T: 'static> TypedId for Id<T> {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
         assert_eq!(0, epoch >> EPOCH_BITS);
         assert_eq!(0, (index as IdType) >> INDEX_BITS);

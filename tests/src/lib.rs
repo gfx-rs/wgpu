@@ -39,6 +39,7 @@ async fn initialize_device(
 }
 
 pub struct TestingContext {
+    pub instance: Instance,
     pub adapter: Adapter,
     pub adapter_info: wgt::AdapterInfo,
     pub adapter_downlevel_capabilities: wgt::DownlevelCapabilities,
@@ -210,7 +211,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (adapter, _surface_guard) = initialize_adapter();
+    let (instance, adapter, _surface_guard) = initialize_adapter();
 
     let adapter_info = adapter.get_info();
     let adapter_lowercase_name = adapter_info.name.to_lowercase();
@@ -256,6 +257,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     ));
 
     let context = TestingContext {
+        instance,
         adapter,
         adapter_info: adapter_info.clone(),
         adapter_downlevel_capabilities,
@@ -375,7 +377,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 }
 
-fn initialize_adapter() -> (Adapter, SurfaceGuard) {
+fn initialize_adapter() -> (Instance, Adapter, SurfaceGuard) {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
@@ -440,7 +442,7 @@ fn initialize_adapter() -> (Adapter, SurfaceGuard) {
     ))
     .expect("could not find suitable adapter on the system");
 
-    (adapter, surface_guard)
+    (instance, adapter, surface_guard)
 }
 
 struct SurfaceGuard {

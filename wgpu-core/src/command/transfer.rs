@@ -440,14 +440,15 @@ fn handle_texture_init<A: HalApi>(
     init_kind: MemoryInitKind,
     encoder: &mut CommandEncoder<A>,
     trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
     device: &Device<A>,
     copy_texture: &ImageCopyTexture,
     copy_size: &Extent3d,
     texture_guard: &Storage<Texture<A>, TextureId>,
 ) {
+    let texture = texture_guard.get(copy_texture.texture).unwrap();
     let init_action = TextureInitTrackerAction {
-        id: copy_texture.texture,
+        texture: texture.clone(),
         range: TextureInitRange {
             mip_range: copy_texture.mip_level..copy_texture.mip_level + 1,
             layer_range: copy_texture.origin.z
@@ -457,16 +458,14 @@ fn handle_texture_init<A: HalApi>(
     };
 
     // Register the init action.
-    let immediate_inits =
-        texture_memory_actions.register_init_action(&{ init_action }, texture_guard);
+    let immediate_inits = texture_memory_actions.register_init_action(&{ init_action });
 
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
         let cmd_buf_raw = encoder.open();
         for init in immediate_inits {
             clear_texture(
-                texture_guard,
-                init.texture,
+                &init.texture,
                 TextureInitRange {
                     mip_range: init.mip_level..(init.mip_level + 1),
                     layer_range: init.layer..(init.layer + 1),
@@ -488,7 +487,7 @@ fn handle_texture_init<A: HalApi>(
 fn handle_src_texture_init<A: HalApi>(
     encoder: &mut CommandEncoder<A>,
     trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
     device: &Device<A>,
     source: &ImageCopyTexture,
     copy_size: &Extent3d,
@@ -518,7 +517,7 @@ fn handle_src_texture_init<A: HalApi>(
 fn handle_dst_texture_init<A: HalApi>(
     encoder: &mut CommandEncoder<A>,
     trackers: &mut Tracker<A>,
-    texture_memory_actions: &mut CommandBufferTextureMemoryActions,
+    texture_memory_actions: &mut CommandBufferTextureMemoryActions<A>,
     device: &Device<A>,
     destination: &ImageCopyTexture,
     copy_size: &Extent3d,
@@ -591,10 +590,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (src_buffer, src_pending) = {
             let buffer_guard = hub.buffers.read();
+            let src_buffer = buffer_guard
+                .get(source)
+                .map_err(|_| TransferError::InvalidBuffer(source))?;
             cmd_buf_data
                 .trackers
                 .buffers
-                .set_single(&*buffer_guard, source, hal::BufferUses::COPY_SRC)
+                .set_single(src_buffer, hal::BufferUses::COPY_SRC)
                 .ok_or(TransferError::InvalidBuffer(source))?
         };
         let src_raw = src_buffer
@@ -609,10 +611,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
+            let dst_buffer = buffer_guard
+                .get(destination)
+                .map_err(|_| TransferError::InvalidBuffer(destination))?;
             cmd_buf_data
                 .trackers
                 .buffers
-                .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
                 .ok_or(TransferError::InvalidBuffer(destination))?
         };
         let dst_raw = dst_buffer
@@ -683,14 +688,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Make sure source is initialized memory and mark dest as initialized.
         cmd_buf_data.buffer_memory_init_actions.extend(
             dst_buffer.initialization_status.read().create_action(
-                destination,
+                &dst_buffer,
                 destination_offset..(destination_offset + size),
                 MemoryInitKind::ImplicitlyInitialized,
             ),
         );
         cmd_buf_data.buffer_memory_init_actions.extend(
             src_buffer.initialization_status.read().create_action(
-                source,
+                &src_buffer,
                 source_offset..(source_offset + size),
                 MemoryInitKind::NeedsInitializedMemory,
             ),
@@ -775,9 +780,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (src_buffer, src_pending) = {
             let buffer_guard = hub.buffers.read();
+            let src_buffer = buffer_guard
+                .get(source.buffer)
+                .map_err(|_| TransferError::InvalidBuffer(source.buffer))?;
             tracker
                 .buffers
-                .set_single(&*buffer_guard, source.buffer, hal::BufferUses::COPY_SRC)
+                .set_single(src_buffer, hal::BufferUses::COPY_SRC)
                 .ok_or(TransferError::InvalidBuffer(source.buffer))?
         };
         let src_raw = src_buffer
@@ -791,12 +799,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let dst_pending = tracker
             .textures
-            .set_single(
-                dst_texture,
-                destination.texture,
-                dst_range,
-                hal::TextureUses::COPY_DST,
-            )
+            .set_single(dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner
@@ -840,7 +843,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         buffer_memory_init_actions.extend(src_buffer.initialization_status.read().create_action(
-            source.buffer,
+            &src_buffer,
             source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
             MemoryInitKind::NeedsInitializedMemory,
         ));
@@ -927,12 +930,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let src_pending = tracker
             .textures
-            .set_single(
-                src_texture,
-                source.texture,
-                src_range,
-                hal::TextureUses::COPY_SRC,
-            )
+            .set_single(src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
@@ -960,13 +958,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
+            let dst_buffer = buffer_guard
+                .get(destination.buffer)
+                .map_err(|_| TransferError::InvalidBuffer(destination.buffer))?;
             tracker
                 .buffers
-                .set_single(
-                    &*buffer_guard,
-                    destination.buffer,
-                    hal::BufferUses::COPY_DST,
-                )
+                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
                 .ok_or(TransferError::InvalidBuffer(destination.buffer))?
         };
         let dst_raw = dst_buffer
@@ -1009,7 +1006,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         buffer_memory_init_actions.extend(dst_buffer.initialization_status.read().create_action(
-            destination.buffer,
+            &dst_buffer,
             destination.layout.offset..(destination.layout.offset + required_buffer_bytes_in_copy),
             MemoryInitKind::ImplicitlyInitialized,
         ));
@@ -1140,12 +1137,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_pending = cmd_buf_data
             .trackers
             .textures
-            .set_single(
-                src_texture,
-                source.texture,
-                src_range,
-                hal::TextureUses::COPY_SRC,
-            )
+            .set_single(src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
         let src_raw = src_texture
             .inner
@@ -1166,12 +1158,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_pending = cmd_buf_data
             .trackers
             .textures
-            .set_single(
-                dst_texture,
-                destination.texture,
-                dst_range,
-                hal::TextureUses::COPY_DST,
-            )
+            .set_single(dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
         let dst_raw = dst_texture
             .inner

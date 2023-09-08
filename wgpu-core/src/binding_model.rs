@@ -847,8 +847,8 @@ pub struct BindGroup<A: HalApi> {
     pub(crate) layout: Arc<BindGroupLayout<A>>,
     pub(crate) info: ResourceInfo<BindGroupId>,
     pub(crate) used: BindGroupStates<A>,
-    pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction>,
-    pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction>,
+    pub(crate) used_buffer_ranges: Vec<BufferInitTrackerAction<A>>,
+    pub(crate) used_texture_ranges: Vec<TextureInitTrackerAction<A>>,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
     /// Actual binding sizes for buffers that don't have `min_binding_size`
     /// specified in BGL. Listed in the order of iteration of `BGL.entries`.

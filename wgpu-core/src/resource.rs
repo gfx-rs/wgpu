@@ -1,18 +1,25 @@
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
-    device::{Device, DeviceError, HostMap, MissingDownlevelFlags, MissingFeatures},
+    device::{
+        queue, BufferMapPendingClosure, Device, DeviceError, HostMap, MissingDownlevelFlags,
+        MissingFeatures,
+    },
     global::Global,
     hal_api::HalApi,
     id::{
         AdapterId, BufferId, DeviceId, QuerySetId, SamplerId, StagingBufferId, SurfaceId,
         TextureId, TextureViewId, TypedId,
     },
-    identity::GlobalIdentityHandlerFactory,
+    identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
+    resource,
     track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
 };
 
+use hal::CommandEncoder;
 use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -20,6 +27,7 @@ use thiserror::Error;
 use std::{
     borrow::Borrow,
     fmt::Debug,
+    iter, mem,
     ops::Range,
     ptr::NonNull,
     sync::{
@@ -50,6 +58,7 @@ use std::{
 #[derive(Debug)]
 pub struct ResourceInfo<Id: TypedId> {
     id: Option<Id>,
+    identity: Option<Arc<IdentityManager<Id>>>,
     /// The index of the last queue submission in which the resource
     /// was used.
     ///
@@ -64,11 +73,22 @@ pub struct ResourceInfo<Id: TypedId> {
     pub(crate) label: String,
 }
 
+impl<Id: TypedId> Drop for ResourceInfo<Id> {
+    fn drop(&mut self) {
+        if let Some(identity) = self.identity.as_ref() {
+            let id = self.id.as_ref().unwrap();
+            identity.free(*id);
+            log::info!("Freeing {:?}", self.label());
+        }
+    }
+}
+
 impl<Id: TypedId> ResourceInfo<Id> {
     #[allow(unused_variables)]
     pub(crate) fn new(label: &str) -> Self {
         Self {
             id: None,
+            identity: None,
             submission_index: AtomicUsize::new(0),
             #[cfg(debug_assertions)]
             label: label.to_string(),
@@ -95,8 +115,9 @@ impl<Id: TypedId> ResourceInfo<Id> {
         self.id.unwrap()
     }
 
-    pub(crate) fn set_id(&mut self, id: Id) {
+    pub(crate) fn set_id(&mut self, id: Id, identity: &Option<Arc<IdentityManager<Id>>>) {
         self.id = Some(id);
+        self.identity = identity.clone();
     }
 
     /// Record that this resource will be used by the queue submission with the
@@ -418,6 +439,157 @@ impl<A: HalApi> Drop for Buffer<A> {
 impl<A: HalApi> Buffer<A> {
     pub(crate) fn raw(&self) -> &A::Buffer {
         self.raw.as_ref().unwrap()
+    }
+
+    pub(crate) fn buffer_unmap_inner(
+        self: &Arc<Self>,
+    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+        use hal::Device;
+
+        let device = &self.device;
+        let buffer_id = self.info.id();
+        log::debug!("Buffer {:?} map state -> Idle", buffer_id);
+        match mem::replace(&mut *self.map_state.lock(), resource::BufferMapState::Idle) {
+            resource::BufferMapState::Init {
+                ptr,
+                stage_buffer,
+                needs_flush,
+            } => {
+                #[cfg(feature = "trace")]
+                if let Some(ref mut trace) = *device.trace.lock() {
+                    let data = trace.make_binary("bin", unsafe {
+                        std::slice::from_raw_parts(ptr.as_ptr(), self.size as usize)
+                    });
+                    trace.add(trace::Action::WriteBuffer {
+                        id: buffer_id,
+                        data,
+                        range: 0..self.size,
+                        queued: true,
+                    });
+                }
+                let _ = ptr;
+                if needs_flush {
+                    unsafe {
+                        device
+                            .raw()
+                            .flush_mapped_ranges(stage_buffer.raw(), iter::once(0..self.size));
+                    }
+                }
+
+                let raw_buf = self.raw.as_ref().ok_or(BufferAccessError::Destroyed)?;
+
+                self.info
+                    .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
+                let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size,
+                });
+                let transition_src = hal::BufferBarrier {
+                    buffer: stage_buffer.raw(),
+                    usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
+                };
+                let transition_dst = hal::BufferBarrier {
+                    buffer: raw_buf,
+                    usage: hal::BufferUses::empty()..hal::BufferUses::COPY_DST,
+                };
+                let mut pending_writes = device.pending_writes.lock();
+                let pending_writes = pending_writes.as_mut().unwrap();
+                let encoder = pending_writes.activate();
+                unsafe {
+                    encoder.transition_buffers(
+                        iter::once(transition_src).chain(iter::once(transition_dst)),
+                    );
+                    if self.size > 0 {
+                        encoder.copy_buffer_to_buffer(
+                            stage_buffer.raw(),
+                            raw_buf,
+                            region.into_iter(),
+                        );
+                    }
+                }
+                pending_writes.consume_temp(queue::TempResource::Buffer(stage_buffer));
+                pending_writes.dst_buffers.insert(buffer_id, self.clone());
+            }
+            resource::BufferMapState::Idle => {
+                return Err(BufferAccessError::NotMapped);
+            }
+            resource::BufferMapState::Waiting(pending) => {
+                return Ok(Some((pending.op, Err(BufferAccessError::MapAborted))));
+            }
+            resource::BufferMapState::Active { ptr, range, host } => {
+                if host == HostMap::Write {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *device.trace.lock() {
+                        let size = range.end - range.start;
+                        let data = trace.make_binary("bin", unsafe {
+                            std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
+                        });
+                        trace.add(trace::Action::WriteBuffer {
+                            id: buffer_id,
+                            data,
+                            range: range.clone(),
+                            queued: false,
+                        });
+                    }
+                    let _ = (ptr, range);
+                }
+                unsafe {
+                    device
+                        .raw()
+                        .unmap_buffer(self.raw())
+                        .map_err(DeviceError::from)?
+                };
+            }
+        }
+        Ok(None)
+    }
+
+    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+        let map_closure;
+        // Restrict the locks to this scope.
+        {
+            let device = &self.device;
+            let buffer_id = self.info.id();
+
+            map_closure = match &*self.map_state.lock() {
+                &BufferMapState::Waiting(..) // To get the proper callback behavior.
+                | &BufferMapState::Init { .. }
+                | &BufferMapState::Active { .. }
+                => {
+                    self.buffer_unmap_inner()
+                        .unwrap_or(None)
+                }
+                _ => None,
+            };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::FreeBuffer(buffer_id));
+            }
+            if self.raw.is_none() {
+                return Err(resource::DestroyError::AlreadyDestroyed);
+            }
+
+            let temp = queue::TempResource::Buffer(self.clone());
+            let mut pending_writes = device.pending_writes.lock();
+            let pending_writes = pending_writes.as_mut().unwrap();
+            if pending_writes.dst_buffers.contains_key(&buffer_id) {
+                pending_writes.temp_resources.push(temp);
+            } else {
+                let last_submit_index = self.info.submission_index();
+                device
+                    .lock_life()
+                    .schedule_resource_destruction(temp, last_submit_index);
+            }
+        }
+
+        // Note: outside the scope where locks are held when calling the callback
+        if let Some((operation, status)) = map_closure {
+            operation.callback.call(status);
+        }
+
+        Ok(())
     }
 }
 
@@ -855,9 +1027,6 @@ pub struct TextureView<A: HalApi> {
     pub(crate) raw: Option<A::TextureView>,
     // if it's a surface texture - it's none
     pub(crate) parent: Option<Arc<Texture<A>>>,
-    // The parent's refcount is held alive, but the parent may still be deleted
-    // if it's a surface texture. TODO: make this cleaner.
-    pub(crate) parent_id: TextureId,
     pub(crate) device: Arc<Device<A>>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,

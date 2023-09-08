@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, mem, ops, sync::Arc};
+use std::{marker::PhantomData, ops, sync::Arc};
 
 use wgt::Backend;
 
@@ -19,20 +19,6 @@ pub(crate) enum Element<T> {
     ///
     /// The given `String` is the resource's descriptor label.
     Error(Epoch, String),
-}
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct StorageReport {
-    pub num_occupied: usize,
-    pub num_vacant: usize,
-    pub num_error: usize,
-    pub element_size: usize,
-}
-
-impl StorageReport {
-    pub fn is_empty(&self) -> bool {
-        self.num_occupied + self.num_vacant + self.num_error == 0
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +69,7 @@ where
     T: Resource<I>,
     I: id::TypedId,
 {
+    #[allow(dead_code)]
     pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
@@ -117,24 +104,6 @@ where
         result
     }
 
-    /// Get refcount of an item with specified ID
-    /// And return true if it's 1 or false otherwise
-    pub(crate) fn is_unique(&self, id: I) -> Result<bool, InvalidId> {
-        let (index, epoch, _) = id.unzip();
-        let (result, storage_epoch) = match self.map.get(index as usize) {
-            Some(&Element::Occupied(ref v, epoch)) => (Ok(v.is_unique()), epoch),
-            Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
-            None => return Err(InvalidId),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{:?}] is no longer alive",
-            self.kind, id
-        );
-        result
-    }
-
     /// Get a reference to an item behind a potentially invalid ID.
     /// Panics if there is an epoch mismatch, or the entry is empty.
     pub(crate) fn get(&self, id: I) -> Result<&Arc<T>, InvalidId> {
@@ -151,14 +120,6 @@ where
             self.kind, id
         );
         result
-    }
-
-    pub(crate) unsafe fn get_unchecked(&self, id: u32) -> &Arc<T> {
-        match self.map[id as usize] {
-            Element::Occupied(ref v, _) => v,
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
-            Element::Error(_, _) => panic!(""),
-        }
     }
 
     pub(crate) fn label_for_invalid_id(&self, id: I) -> &str {
@@ -180,22 +141,25 @@ where
     }
 
     pub(crate) fn insert(&mut self, id: I, value: Arc<T>) {
+        log::info!("User is inserting {}{:?}", T::TYPE, id);
         let (index, epoch, _backend) = id.unzip();
         self.insert_impl(index as usize, Element::Occupied(value, epoch))
     }
 
     pub(crate) fn insert_error(&mut self, id: I, label: &str) {
+        log::info!("User is insering as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
-    pub(crate) fn force_replace(&mut self, id: I, mut value: T) {
+    pub(crate) fn force_replace(&mut self, id: I, value: T) {
+        log::info!("User is replacing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
-        value.as_info_mut().set_id(id);
         self.map[index as usize] = Element::Occupied(Arc::new(value), epoch);
     }
 
     pub(crate) fn remove(&mut self, id: I) -> Option<Arc<T>> {
+        log::info!("User is removing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
@@ -204,21 +168,6 @@ where
             }
             Element::Error(..) => None,
             Element::Vacant => panic!("Cannot remove a vacant resource"),
-        }
-    }
-
-    // Prevents panic on out of range access, allows Vacant elements.
-    pub(crate) fn _try_remove(&mut self, id: I) -> Option<Arc<T>> {
-        let (index, epoch, _) = id.unzip();
-        if index as usize >= self.map.len() {
-            None
-        } else if let Element::Occupied(value, storage_epoch) =
-            std::mem::replace(&mut self.map[index as usize], Element::Vacant)
-        {
-            assert_eq!(epoch, storage_epoch);
-            Some(value)
-        } else {
-            None
         }
     }
 
@@ -240,20 +189,5 @@ where
 
     pub(crate) fn len(&self) -> usize {
         self.map.len()
-    }
-
-    pub(crate) fn generate_report(&self) -> StorageReport {
-        let mut report = StorageReport {
-            element_size: mem::size_of::<T>(),
-            ..Default::default()
-        };
-        for element in self.map.iter() {
-            match *element {
-                Element::Occupied(..) => report.num_occupied += 1,
-                Element::Vacant => report.num_vacant += 1,
-                Element::Error(..) => report.num_error += 1,
-            }
-        }
-        report
     }
 }

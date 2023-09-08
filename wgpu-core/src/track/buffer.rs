@@ -5,20 +5,20 @@
  * one subresource, they have no selector.
 !*/
 
-use std::{borrow::Cow, marker::PhantomData, sync::Arc, vec::Drain};
+use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
 use super::PendingTransition;
 use crate::{
     hal_api::HalApi,
     id::{BufferId, TypedId},
-    resource::Buffer,
+    resource::{Buffer, Resource},
     storage::Storage,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
     },
 };
-use hal::BufferUses;
+use hal::{BufferBarrier, BufferUses};
 use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {
@@ -43,7 +43,7 @@ impl ResourceUses for BufferUses {
 /// Stores all the buffers that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
-    buffers: Vec<(BufferId, Arc<Buffer<A>>, BufferUses)>,
+    buffers: Vec<(Arc<Buffer<A>>, BufferUses)>,
 
     _phantom: PhantomData<A>,
 }
@@ -60,19 +60,22 @@ impl<A: HalApi> BufferBindGroupState<A> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
+    #[allow(clippy::pattern_type_mismatch)]
     pub(crate) fn optimize(&mut self) {
         self.buffers
-            .sort_unstable_by_key(|&(id, _, _)| id.unzip().0);
+            .sort_unstable_by_key(|(b, _)| b.as_info().id().unzip().0);
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
+    #[allow(clippy::pattern_type_mismatch)]
     pub fn used_ids(&self) -> impl Iterator<Item = BufferId> + '_ {
-        self.buffers.iter().map(|&(id, _, _)| id)
+        self.buffers.iter().map(|(ref b, _)| b.as_info().id())
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
+    #[allow(clippy::pattern_type_mismatch)]
     pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer<A>>> + '_ {
-        self.buffers.iter().map(|&(_id, ref buffer, _u)| buffer)
+        self.buffers.iter().map(|(ref buffer, _u)| buffer)
     }
 
     /// Adds the given resource with the given state.
@@ -81,10 +84,10 @@ impl<A: HalApi> BufferBindGroupState<A> {
         storage: &'a Storage<Buffer<A>, BufferId>,
         id: BufferId,
         state: BufferUses,
-    ) -> Option<&'a Buffer<A>> {
+    ) -> Option<&'a Arc<Buffer<A>>> {
         let buffer = storage.get(id).ok()?;
 
-        self.buffers.push((id, buffer.clone(), state));
+        self.buffers.push((buffer.clone(), state));
 
         Some(buffer)
     }
@@ -133,6 +136,20 @@ impl<A: HalApi> BufferUsageScope<A> {
         self.metadata.owned_resources()
     }
 
+    pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
+        let index = id.unzip().0 as usize;
+        if index > self.metadata.size() {
+            return None;
+        }
+        self.tracker_assert_in_bounds(index);
+        unsafe {
+            if self.metadata.contains_unchecked(index) {
+                return Some(self.metadata.get_resource_unchecked(index));
+            }
+        }
+        None
+    }
+
     /// Merge the list of buffer states in the given bind group into this usage scope.
     ///
     /// If any of the resulting states is invalid, stops the merge and returns a usage
@@ -149,8 +166,8 @@ impl<A: HalApi> BufferUsageScope<A> {
         &mut self,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for &(id, ref resource, state) in &bind_group.buffers {
-            let index = id.unzip().0 as usize;
+        for &(ref resource, state) in &bind_group.buffers {
+            let index = resource.as_info().id().unzip().0 as usize;
 
             unsafe {
                 insert_or_merge(
@@ -219,7 +236,7 @@ impl<A: HalApi> BufferUsageScope<A> {
         storage: &'a Storage<Buffer<A>, BufferId>,
         id: BufferId,
         new_state: BufferUses,
-    ) -> Result<&'a Buffer<A>, UsageConflict> {
+    ) -> Result<&'a Arc<Buffer<A>>, UsageConflict> {
         let buffer = storage
             .get(id)
             .map_err(|_| UsageConflict::BufferInvalid { id })?;
@@ -302,8 +319,12 @@ impl<A: HalApi> BufferTracker<A> {
     }
 
     /// Drains all currently pending transitions.
-    pub fn drain(&mut self) -> Drain<'_, PendingTransition<BufferUses>> {
-        self.temp.drain(..)
+    pub fn drain_transitions(&mut self) -> impl Iterator<Item = BufferBarrier<A>> {
+        let buffer_barriers = self.temp.drain(..).map(|pending| {
+            let buf = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
+            pending.into_hal(buf)
+        });
+        buffer_barriers
     }
 
     /// Inserts a single buffer and its state into the resource tracker.
@@ -347,15 +368,8 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
-    pub fn set_single<'a>(
-        &mut self,
-        storage: &'a Storage<Buffer<A>, BufferId>,
-        id: BufferId,
-        state: BufferUses,
-    ) -> SetSingleResult<A> {
-        let buffer = storage.get(id).ok()?;
-
-        let index = id.unzip().0 as usize;
+    pub fn set_single(&mut self, buffer: &Arc<Buffer<A>>, state: BufferUses) -> SetSingleResult<A> {
+        let index: usize = buffer.as_info().id().unzip().0 as usize;
 
         self.allow_index(index);
 
@@ -385,7 +399,7 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If a transition is needed to get the buffers into the needed state,
     /// those transitions are stored within the tracker. A subsequent
-    /// call to [`Self::drain`] is needed to get those transitions.
+    /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
@@ -423,7 +437,7 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If a transition is needed to get the buffers into the needed state,
     /// those transitions are stored within the tracker. A subsequent
-    /// call to [`Self::drain`] is needed to get those transitions.
+    /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
     /// If the ID is higher than the length of internal vectors,
     /// the vectors will be extended. A call to set_size is not needed.
@@ -461,7 +475,7 @@ impl<A: HalApi> BufferTracker<A> {
     ///
     /// If a transition is needed to get the buffers into the needed state,
     /// those transitions are stored within the tracker. A subsequent
-    /// call to [`Self::drain`] is needed to get those transitions.
+    /// call to [`Self::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
     /// barriers after a call to dispatch without needing to iterate
@@ -513,6 +527,21 @@ impl<A: HalApi> BufferTracker<A> {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
+        let index = id.unzip().0 as usize;
+        if index > self.metadata.size() {
+            return None;
+        }
+        self.tracker_assert_in_bounds(index);
+        unsafe {
+            if self.metadata.contains_unchecked(index) {
+                return Some(self.metadata.get_resource_unchecked(index));
+            }
+        }
+        None
+    }
+
     /// Removes the buffer `id` from this tracker if it is otherwise unused.
     ///
     /// A buffer is 'otherwise unused' when the only references to it are:
@@ -534,7 +563,7 @@ impl<A: HalApi> BufferTracker<A> {
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
     /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    pub fn remove_abandoned(&mut self, id: BufferId) -> bool {
+    pub fn remove_abandoned(&mut self, id: BufferId, is_in_registry: bool) -> bool {
         let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
@@ -546,7 +575,10 @@ impl<A: HalApi> BufferTracker<A> {
         unsafe {
             if self.metadata.contains_unchecked(index) {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                if existing_ref_count <= 3 {
+                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
+                //so not appearing in Registry
+                let min_ref_count = if is_in_registry { 3 } else { 2 };
+                if existing_ref_count <= min_ref_count {
                     self.metadata.remove(index);
                     return true;
                 } else {

@@ -93,12 +93,9 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{self, RenderBundleId},
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags, RenderPipeline},
-    resource,
     resource::{Resource, ResourceInfo},
-    storage::Storage,
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers,
@@ -253,11 +250,11 @@ impl RenderBundleEncoder {
     /// and accumulate buffer and texture initialization actions.
     ///
     /// [`ExecuteBundle`]: RenderCommand::ExecuteBundle
-    pub(crate) fn finish<A: HalApi, G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn finish<A: HalApi>(
         self,
         desc: &RenderBundleDescriptor,
         device: &Arc<Device<A>>,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
     ) -> Result<RenderBundle<A>, RenderBundleError> {
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.render_pipelines.read();
@@ -351,7 +348,7 @@ impl RenderBundleEncoder {
                     unsafe {
                         state
                             .trackers
-                            .merge_bind_group(&*texture_guard, &bind_group.used)
+                            .merge_bind_group(&bind_group.used)
                             .map_pass_err(scope)?
                     };
                     //Note: stateless trackers are not merged: the lifetime reference
@@ -402,7 +399,7 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer(buffer_id);
-                    let buffer: &resource::Buffer<A> = state
+                    let buffer = state
                         .trackers
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
@@ -417,7 +414,7 @@ impl RenderBundleEncoder {
                         None => buffer.size,
                     };
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
-                        buffer_id,
+                        buffer,
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
@@ -430,7 +427,7 @@ impl RenderBundleEncoder {
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer(buffer_id);
-                    let buffer: &resource::Buffer<A> = state
+                    let buffer = state
                         .trackers
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
@@ -445,7 +442,7 @@ impl RenderBundleEncoder {
                         None => buffer.size,
                     };
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
-                        buffer_id,
+                        buffer,
                         offset..end,
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
@@ -565,7 +562,7 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
 
-                    let buffer: &resource::Buffer<A> = state
+                    let buffer = state
                         .trackers
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -576,7 +573,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
-                        buffer_id,
+                        buffer,
                         offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
@@ -603,7 +600,7 @@ impl RenderBundleEncoder {
                     let pipeline = state.pipeline(scope)?;
                     let used_bind_groups = pipeline.used_bind_groups;
 
-                    let buffer: &resource::Buffer<A> = state
+                    let buffer = state
                         .trackers
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -614,7 +611,7 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(buffer.initialization_status.read().create_action(
-                        buffer_id,
+                        buffer,
                         offset..(offset + mem::size_of::<wgt::DrawIndirectArgs>() as u64),
                         MemoryInitKind::NeedsInitializedMemory,
                     ));
@@ -735,8 +732,8 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) is_stencil_read_only: bool,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) used: RenderBundleScope<A>,
-    pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
-    pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
+    pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
+    pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction<A>>,
     pub(super) context: RenderPassContext,
     pub(crate) info: ResourceInfo<RenderBundleId>,
 }
@@ -768,13 +765,8 @@ impl<A: HalApi> RenderBundle<A> {
     /// Note that the function isn't expected to fail, generally.
     /// All the validation has already been done by this point.
     /// The only failure condition is if some of the used buffers are destroyed.
-    pub(super) unsafe fn execute(
-        &self,
-        raw: &mut A::CommandEncoder,
-        bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
-        pipeline_guard: &Storage<RenderPipeline<A>, id::RenderPipelineId>,
-        buffer_guard: &Storage<crate::resource::Buffer<A>, id::BufferId>,
-    ) -> Result<(), ExecutionError> {
+    pub(super) unsafe fn execute(&self, raw: &mut A::CommandEncoder) -> Result<(), ExecutionError> {
+        let trackers = &self.used;
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout = None::<Arc<PipelineLayout<A>>>;
         if let Some(ref label) = self.base.label {
@@ -788,7 +780,7 @@ impl<A: HalApi> RenderBundle<A> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let bind_group = bind_group_guard.get(bind_group_id).unwrap();
+                    let bind_group = trackers.bind_groups.get(bind_group_id).unwrap();
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
@@ -800,7 +792,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = pipeline_guard.get(pipeline_id).unwrap();
+                    let pipeline = trackers.render_pipelines.get(pipeline_id).unwrap();
                     unsafe { raw.set_render_pipeline(pipeline.raw()) };
 
                     pipeline_layout = Some(pipeline.layout.clone());
@@ -811,12 +803,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer_guard
-                        .get(buffer_id)
-                        .unwrap()
-                        .raw
-                        .as_ref()
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
+                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -830,12 +817,7 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = buffer_guard
-                        .get(buffer_id)
-                        .unwrap()
-                        .raw
-                        .as_ref()
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
+                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -913,12 +895,7 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = buffer_guard
-                        .get(buffer_id)
-                        .unwrap()
-                        .raw
-                        .as_ref()
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
+                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
                     unsafe { raw.draw_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -927,12 +904,7 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = buffer_guard
-                        .get(buffer_id)
-                        .unwrap()
-                        .raw
-                        .as_ref()
-                        .ok_or(ExecutionError::DestroyedBuffer(buffer_id))?;
+                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
                     unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect { .. }

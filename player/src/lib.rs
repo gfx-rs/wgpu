@@ -8,39 +8,23 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
-use wgc::device::trace;
+use wgc::{device::trace, identity::IdentityManager};
 
-use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
-
-#[derive(Debug)]
-pub struct IdentityPassThrough<I>(PhantomData<I>);
-
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandler<I>
-    for IdentityPassThrough<I>
-{
-    type Input = I;
-    fn process(&self, id: I, backend: wgt::Backend) -> I {
-        let (index, epoch, _backend) = id.unzip();
-        I::zip(index, epoch, backend)
-    }
-    fn free(&self, _id: I) {}
-}
+use std::{borrow::Cow, fs, path::Path, sync::Arc};
 
 pub struct IdentityPassThroughFactory;
 
-impl<I: Clone + Debug + wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I>
-    for IdentityPassThroughFactory
-{
-    type Filter = IdentityPassThrough<I>;
-    fn spawn(&self) -> Self::Filter {
-        IdentityPassThrough(PhantomData)
+impl<I: wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I> for IdentityPassThroughFactory {
+    type Input = I;
+    fn spawn(&self) -> Option<Arc<IdentityManager<I>>> {
+        None
+    }
+
+    fn input_to_id(id_in: Self::Input) -> I {
+        id_in
     }
 }
-impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {
-    fn ids_are_generated_in_wgpu() -> bool {
-        false
-    }
-}
+impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
 pub trait GlobalPlay {
     fn encode_commands<A: wgc::hal_api::HalApi>(
@@ -53,7 +37,7 @@ pub trait GlobalPlay {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
     );
 }
 
@@ -168,7 +152,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
         device: wgc::id::DeviceId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager,
+        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::CommandBufferId>,
     ) {
         use wgc::device::trace::Action;
         log::debug!("action {:?}", action);
@@ -390,7 +374,7 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    comb_manager.alloc(device.backend()),
+                    comb_manager.process(device.backend()),
                 );
                 if let Some(e) = error {
                     panic!("{:?}", e);

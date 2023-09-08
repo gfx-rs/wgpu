@@ -32,15 +32,8 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn used(&self) -> impl Iterator<Item = Id> + '_ {
-        self.resources.iter().map(|&(id, _)| id)
-    }
-
-    /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
-        self.resources
-            .iter()
-            .map(|&(_, ref resource)| resource.clone())
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<T>> + '_ {
+        self.resources.iter().map(|&(_, ref resource)| resource)
     }
 
     /// Adds the given resource.
@@ -158,6 +151,20 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
         }
     }
 
+    pub fn get(&self, id: Id) -> Option<&Arc<T>> {
+        let index = id.unzip().0 as usize;
+        if index > self.metadata.size() {
+            return None;
+        }
+        self.tracker_assert_in_bounds(index);
+        unsafe {
+            if self.metadata.contains_unchecked(index) {
+                return Some(self.metadata.get_resource_unchecked(index));
+            }
+        }
+        None
+    }
+
     /// Removes the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
@@ -165,7 +172,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    pub fn remove_abandoned(&mut self, id: Id) -> bool {
+    pub fn remove_abandoned(&mut self, id: Id, is_in_registry: bool) -> bool {
         let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
@@ -177,8 +184,10 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
         unsafe {
             if self.metadata.contains_unchecked(index) {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //3 ref count: Registry, Device Tracker and suspected resource itself
-                if existing_ref_count <= 3 {
+                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
+                //so not appearing in Registry
+                let min_ref_count = if is_in_registry { 3 } else { 2 };
+                if existing_ref_count <= min_ref_count {
                     self.metadata.remove(index);
                     return true;
                 } else {

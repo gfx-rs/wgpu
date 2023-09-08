@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::{
     hal_api::HalApi,
@@ -6,13 +6,13 @@ use crate::{
     id::SurfaceId,
     identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
-    registry::Registry,
-    storage::{Element, StorageReport},
+    registry::{Registry, RegistryReport},
+    storage::Element,
 };
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
-    pub surfaces: StorageReport,
+    pub surfaces: RegistryReport,
     #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
     pub vulkan: Option<HubReport>,
     #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
@@ -25,10 +25,40 @@ pub struct GlobalReport {
     pub gl: Option<HubReport>,
 }
 
+impl GlobalReport {
+    pub fn surfaces(&self) -> &RegistryReport {
+        &self.surfaces
+    }
+    pub fn hub_report(&self) -> &HubReport {
+        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        if self.vulkan.is_some() {
+            return self.vulkan.as_ref().unwrap();
+        }
+        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+        if self.metal.is_some() {
+            return self.metal.as_ref().unwrap();
+        }
+        #[cfg(all(feature = "dx12", windows))]
+        if self.dx12.is_some() {
+            return self.dx12.as_ref().unwrap();
+        }
+        #[cfg(all(feature = "dx11", windows))]
+        if self.dx11.is_some() {
+            return self.dx11.as_ref().unwrap();
+        }
+        #[cfg(feature = "gles")]
+        if self.gl.is_some() {
+            return self.gl.as_ref().unwrap();
+        }
+        unreachable!();
+    }
+}
+
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: Registry<SurfaceId, Surface, G>,
-    pub(crate) hubs: Hubs<G>,
+    pub surfaces: Registry<SurfaceId, Surface>,
+    pub(crate) hubs: Hubs,
+    _phantom: PhantomData<G>,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -38,6 +68,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             instance: Instance::new(name, instance_desc),
             surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
@@ -54,6 +85,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             instance: A::create_instance_from_hal(name, hal_instance),
             surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
@@ -73,6 +105,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             instance,
             surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 

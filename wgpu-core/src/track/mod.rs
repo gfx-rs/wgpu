@@ -401,14 +401,10 @@ impl<A: HalApi> RenderBundleScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        textures: &Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
         unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
-        unsafe {
-            self.textures
-                .merge_bind_group(textures, &bind_group.textures)?
-        };
+        unsafe { self.textures.merge_bind_group(&bind_group.textures)? };
 
         Ok(())
     }
@@ -450,13 +446,11 @@ impl<A: HalApi> UsageScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_bind_group(
         &mut self,
-        textures: &Storage<resource::Texture<A>, id::TextureId>,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
         unsafe {
             self.buffers.merge_bind_group(&bind_group.buffers)?;
-            self.textures
-                .merge_bind_group(textures, &bind_group.textures)?;
+            self.textures.merge_bind_group(&bind_group.textures)?;
         }
 
         Ok(())
@@ -473,12 +467,10 @@ impl<A: HalApi> UsageScope<A> {
     /// length of the storage given at the call to `new`.
     pub unsafe fn merge_render_bundle(
         &mut self,
-        textures: &Storage<resource::Texture<A>, id::TextureId>,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
         self.buffers.merge_usage_scope(&render_bundle.buffers)?;
-        self.textures
-            .merge_usage_scope(textures, &render_bundle.textures)?;
+        self.textures.merge_usage_scope(&render_bundle.textures)?;
 
         Ok(())
     }
@@ -578,7 +570,6 @@ impl<A: HalApi> Tracker<A> {
     /// value given to `set_size`
     pub unsafe fn set_and_remove_from_usage_scope_sparse(
         &mut self,
-        textures: &Storage<resource::Texture<A>, id::TextureId>,
         scope: &mut UsageScope<A>,
         bind_group: &BindGroupStates<A>,
     ) {
@@ -589,11 +580,8 @@ impl<A: HalApi> Tracker<A> {
             )
         };
         unsafe {
-            self.textures.set_and_remove_from_usage_scope_sparse(
-                textures,
-                &mut scope.textures,
-                &bind_group.textures,
-            )
+            self.textures
+                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.textures)
         };
     }
 

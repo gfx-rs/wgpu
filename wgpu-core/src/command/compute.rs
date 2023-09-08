@@ -18,7 +18,7 @@ use crate::{
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
-    resource::{self, Buffer, Texture},
+    resource::{self},
     storage::Storage,
     track::{Tracker, UsageConflict, UsageScope},
     validation::{check_buffer_usage, MissingBufferUsageError},
@@ -306,15 +306,10 @@ impl<A: HalApi> State<A> {
         raw_encoder: &mut A::CommandEncoder,
         base_trackers: &mut Tracker<A>,
         bind_group_guard: &Storage<BindGroup<A>, id::BindGroupId>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
         indirect_buffer: Option<id::BufferId>,
     ) -> Result<(), UsageConflict> {
         for id in self.binder.list_active() {
-            unsafe {
-                self.scope
-                    .merge_bind_group(texture_guard, &bind_group_guard[id].used)?
-            };
+            unsafe { self.scope.merge_bind_group(&bind_group_guard[id].used)? };
             // Note: stateless trackers are not merged: the lifetime reference
             // is held to the bind group itself.
         }
@@ -322,7 +317,6 @@ impl<A: HalApi> State<A> {
         for id in self.binder.list_active() {
             unsafe {
                 base_trackers.set_and_remove_from_usage_scope_sparse(
-                    texture_guard,
                     &mut self.scope,
                     &bind_group_guard[id].used,
                 )
@@ -338,7 +332,7 @@ impl<A: HalApi> State<A> {
 
         log::trace!("Encoding dispatch barriers");
 
-        CommandBuffer::drain_barriers(raw_encoder, base_trackers, buffer_guard, texture_guard);
+        CommandBuffer::drain_barriers(raw_encoder, base_trackers);
         Ok(())
     }
 }
@@ -511,20 +505,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_pass_err(scope)?;
 
                     buffer_memory_init_actions.extend(
-                        bind_group.used_buffer_ranges.iter().filter_map(
-                            |action| match buffer_guard.get(action.id) {
-                                Ok(buffer) => {
-                                    buffer.initialization_status.read().check_action(action)
-                                }
-                                Err(_) => None,
-                            },
-                        ),
+                        bind_group.used_buffer_ranges.iter().filter_map(|action| {
+                            action
+                                .buffer
+                                .initialization_status
+                                .read()
+                                .check_action(action)
+                        }),
                     );
 
                     for action in bind_group.used_texture_ranges.iter() {
-                        pending_discard_init_fixups.extend(
-                            texture_memory_actions.register_init_action(action, &texture_guard),
-                        );
+                        pending_discard_init_fixups
+                            .extend(texture_memory_actions.register_init_action(action));
                     }
 
                     let pipeline_layout = &state.binder.pipeline_layout;
@@ -662,14 +654,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.is_ready().map_pass_err(scope)?;
 
                     state
-                        .flush_states(
-                            raw,
-                            &mut intermediate_trackers,
-                            &*bind_group_guard,
-                            &*buffer_guard,
-                            &*texture_guard,
-                            None,
-                        )
+                        .flush_states(raw, &mut intermediate_trackers, &*bind_group_guard, None)
                         .map_pass_err(scope)?;
 
                     let groups_size_limit = cmd_buf.limits.max_compute_workgroups_per_dimension;
@@ -703,7 +688,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)
                         .map_pass_err(scope)?;
 
-                    let indirect_buffer: &Buffer<A> = state
+                    let indirect_buffer = state
                         .scope
                         .buffers
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
@@ -731,7 +716,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     buffer_memory_init_actions.extend(
                         indirect_buffer.initialization_status.read().create_action(
-                            buffer_id,
+                            indirect_buffer,
                             offset..(offset + stride),
                             MemoryInitKind::NeedsInitializedMemory,
                         ),
@@ -742,8 +727,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             raw,
                             &mut intermediate_trackers,
                             &*bind_group_guard,
-                            &*buffer_guard,
-                            &*texture_guard,
                             Some(buffer_id),
                         )
                         .map_pass_err(scope)?;
@@ -849,17 +832,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fixup_discarded_surfaces(
             pending_discard_init_fixups.into_iter(),
             transit,
-            &texture_guard,
             &mut tracker.textures,
             device,
         );
-        CommandBuffer::insert_barriers_from_tracker(
-            transit,
-            tracker,
-            &intermediate_trackers,
-            &*buffer_guard,
-            &*texture_guard,
-        );
+        CommandBuffer::insert_barriers_from_tracker(transit, tracker, &intermediate_trackers);
         // Close the command buffer, and swap it with the previous.
         encoder.close_and_swap();
 

@@ -117,7 +117,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
 
-        let fid = hub.textures.prepare(texture_id_in);
+        let fid = hub.textures.prepare::<G>(texture_id_in);
 
         let surface = self
             .surfaces

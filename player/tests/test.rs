@@ -100,7 +100,7 @@ impl Test<'_> {
             panic!("{:?}", e);
         }
 
-        let mut command_buffer_id_manager = wgc::identity::IdentityManager::default();
+        let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
         println!("\t\t\tRunning...");
         for action in self.actions {
             wgc::gfx_select!(device_id => global.process(device_id, action, dir, &mut command_buffer_id_manager));

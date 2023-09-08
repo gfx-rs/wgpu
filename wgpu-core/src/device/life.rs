@@ -10,7 +10,6 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{self},
-    identity::GlobalIdentityHandlerFactory,
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{self, Buffer, QuerySet, Resource, Sampler, Texture, TextureView},
     track::Tracker,
@@ -466,54 +465,52 @@ impl<A: HalApi> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
-    fn triage_suspected_render_bundles<G, F>(
+    fn triage_suspected_render_bundles<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::RenderBundleId),
     {
         self.suspected_resources
             .render_bundles
-            .retain(|bundle_id, bundle| {
-                let id = bundle.info.id();
+            .retain(|&bundle_id, bundle| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.bundles.remove_abandoned(id)
+                    trackers
+                        .bundles
+                        .remove_abandoned(bundle_id, hub.render_bundles.contains(bundle_id))
                 };
                 if is_removed {
-                    log::info!("Bundle {:?} is removed from registry", id);
-                    f(bundle_id);
+                    log::info!("Bundle {:?} is not tracked anymore", bundle_id);
+                    f(&bundle_id);
 
-                    if let Ok(res) = hub.render_bundles.get(id) {
-                        for v in res.used.buffers.used_resources() {
-                            self.suspected_resources
-                                .buffers
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.textures.used_resources() {
-                            self.suspected_resources
-                                .textures
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.bind_groups.used_resources() {
-                            self.suspected_resources
-                                .bind_groups
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.render_pipelines.used_resources() {
-                            self.suspected_resources
-                                .render_pipelines
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.query_sets.used_resources() {
-                            self.suspected_resources
-                                .query_sets
-                                .insert(v.as_info().id(), v.clone());
-                        }
+                    for v in bundle.used.buffers.used_resources() {
+                        self.suspected_resources
+                            .buffers
+                            .insert(v.as_info().id(), v.clone());
+                    }
+                    for v in bundle.used.textures.used_resources() {
+                        self.suspected_resources
+                            .textures
+                            .insert(v.as_info().id(), v.clone());
+                    }
+                    for v in bundle.used.bind_groups.used_resources() {
+                        self.suspected_resources
+                            .bind_groups
+                            .insert(v.as_info().id(), v.clone());
+                    }
+                    for v in bundle.used.render_pipelines.used_resources() {
+                        self.suspected_resources
+                            .render_pipelines
+                            .insert(v.as_info().id(), v.clone());
+                    }
+                    for v in bundle.used.query_sets.used_resources() {
+                        self.suspected_resources
+                            .query_sets
+                            .insert(v.as_info().id(), v.clone());
                     }
                 }
                 !is_removed
@@ -521,266 +518,258 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_bind_groups<G, F>(
+    fn triage_suspected_bind_groups<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::BindGroupId),
     {
         self.suspected_resources
             .bind_groups
-            .retain(|bind_group_id, bind_group| {
-                let id = bind_group.info.id();
+            .retain(|&bind_group_id, bind_group| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.bind_groups.remove_abandoned(id)
+                    trackers
+                        .bind_groups
+                        .remove_abandoned(bind_group_id, hub.bind_groups.contains(bind_group_id))
                 };
                 if is_removed {
-                    log::info!("BindGroup {:?} is removed from registry", id);
-                    f(bind_group_id);
+                    log::info!("BindGroup {:?} is not tracked anymore", bind_group_id);
+                    f(&bind_group_id);
 
-                    if let Ok(res) = hub.bind_groups.get(id) {
-                        for v in res.used.buffers.used_resources() {
-                            self.suspected_resources
-                                .buffers
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.textures.used_resources() {
-                            self.suspected_resources
-                                .textures
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.views.used_resources() {
-                            self.suspected_resources
-                                .texture_views
-                                .insert(v.as_info().id(), v.clone());
-                        }
-                        for v in res.used.samplers.used_resources() {
-                            self.suspected_resources
-                                .samplers
-                                .insert(v.as_info().id(), v.clone());
-                        }
-
+                    for v in bind_group.used.buffers.used_resources() {
                         self.suspected_resources
-                            .bind_group_layouts
-                            .insert(res.layout.as_info().id(), res.layout.clone());
-
-                        let submit_index = res.info.submission_index();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .bind_groups
-                            .push(res);
+                            .buffers
+                            .insert(v.as_info().id(), v.clone());
                     }
+                    for v in bind_group.used.textures.used_resources() {
+                        self.suspected_resources
+                            .textures
+                            .insert(v.as_info().id(), v.clone());
+                    }
+                    for v in bind_group.used.views.used_resources() {
+                        self.suspected_resources
+                            .texture_views
+                            .insert(v.as_info().id(), v.clone());
+                    }
+                    for v in bind_group.used.samplers.used_resources() {
+                        self.suspected_resources
+                            .samplers
+                            .insert(v.as_info().id(), v.clone());
+                    }
+
+                    self.suspected_resources
+                        .bind_group_layouts
+                        .insert(bind_group.layout.as_info().id(), bind_group.layout.clone());
+
+                    let submit_index = bind_group.info.submission_index();
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .bind_groups
+                        .push(bind_group.clone());
                 }
                 !is_removed
             });
         self
     }
 
-    fn triage_suspected_texture_views<G, F>(
+    fn triage_suspected_texture_views<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::TextureViewId),
     {
         self.suspected_resources
             .texture_views
-            .retain(|view_id, view| {
-                let id = view.info.id();
+            .retain(|&view_id, view| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.views.remove_abandoned(id)
+                    trackers
+                        .views
+                        .remove_abandoned(view_id, hub.texture_views.contains(view_id))
                 };
                 if is_removed {
-                    log::info!("TextureView {:?} is removed from registry", id);
-                    f(view_id);
+                    log::info!("TextureView {:?} is not tracked anymore", view_id);
+                    f(&view_id);
 
-                    if let Ok(res) = hub.texture_views.get(id) {
-                        if let Some(parent_texture) = res.parent.as_ref() {
-                            self.suspected_resources
-                                .textures
-                                .insert(parent_texture.as_info().id(), parent_texture.clone());
-                        }
-                        let submit_index = res.info.submission_index();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .texture_views
-                            .push(res);
+                    if let Some(parent_texture) = view.parent.as_ref() {
+                        self.suspected_resources
+                            .textures
+                            .insert(parent_texture.as_info().id(), parent_texture.clone());
                     }
+                    let submit_index = view.info.submission_index();
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .texture_views
+                        .push(view.clone());
                 }
                 !is_removed
             });
         self
     }
 
-    fn triage_suspected_textures<G, F>(
+    fn triage_suspected_textures<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::TextureId),
     {
         self.suspected_resources
             .textures
-            .retain(|texture_id, texture| {
-                let id = texture.info.id();
+            .retain(|&texture_id, texture| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.textures.remove_abandoned(id)
+                    trackers
+                        .textures
+                        .remove_abandoned(texture_id, hub.textures.contains(texture_id))
                 };
                 if is_removed {
-                    log::info!("Texture {:?} is removed from registry", id);
-                    f(texture_id);
+                    log::info!("Texture {:?} is not tracked anymore", texture_id);
+                    f(&texture_id);
 
-                    if let Ok(res) = hub.textures.get(id) {
-                        let submit_index = res.info.submission_index();
-                        let non_referenced_resources = self
-                            .active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources);
+                    let submit_index = texture.info.submission_index();
+                    let non_referenced_resources = self
+                        .active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources);
 
-                        if let &resource::TextureClearMode::RenderPass {
-                            ref clear_views, ..
-                        } = &*res.clear_mode.read()
-                        {
-                            non_referenced_resources
-                                .texture_views
-                                .extend(clear_views.iter().cloned());
-                        }
-                        non_referenced_resources.textures.push(res);
+                    if let &resource::TextureClearMode::RenderPass {
+                        ref clear_views, ..
+                    } = &*texture.clear_mode.read()
+                    {
+                        non_referenced_resources
+                            .texture_views
+                            .extend(clear_views.iter().cloned());
                     }
+                    non_referenced_resources.textures.push(texture.clone());
                 }
                 !is_removed
             });
         self
     }
 
-    fn triage_suspected_samplers<G, F>(
+    fn triage_suspected_samplers<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::SamplerId),
     {
         self.suspected_resources
             .samplers
-            .retain(|sampler_id, sampler| {
-                let id = sampler.info.id();
+            .retain(|&sampler_id, sampler| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.samplers.remove_abandoned(id)
+                    trackers
+                        .samplers
+                        .remove_abandoned(sampler_id, hub.samplers.contains(sampler_id))
                 };
                 if is_removed {
-                    log::info!("Sampler {:?} is removed from registry", id);
-                    f(sampler_id);
+                    log::info!("Sampler {:?} is not tracked anymore", sampler_id);
+                    f(&sampler_id);
 
-                    if let Ok(res) = hub.samplers.get(id) {
-                        let submit_index = res.info.submission_index();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .samplers
-                            .push(res);
-                    }
+                    let submit_index = sampler.info.submission_index();
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .samplers
+                        .push(sampler.clone());
                 }
                 !is_removed
             });
         self
     }
 
-    fn triage_suspected_buffers<G, F>(
+    fn triage_suspected_buffers<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::BufferId),
     {
         self.suspected_resources
             .buffers
-            .retain(|buffer_id, buffer| {
-                let id = buffer.info.id();
+            .retain(|&buffer_id, buffer| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.buffers.remove_abandoned(id)
+                    trackers
+                        .buffers
+                        .remove_abandoned(buffer_id, hub.buffers.contains(buffer_id))
                 };
                 if is_removed {
-                    log::info!("Buffer {:?} is removed from registry", id);
-                    f(buffer_id);
+                    log::info!("Buffer {:?} is not tracked anymore", buffer_id);
+                    f(&buffer_id);
 
-                    if let Ok(res) = hub.buffers.get(id) {
-                        let submit_index = res.info.submission_index();
-                        if let resource::BufferMapState::Init {
-                            ref stage_buffer, ..
-                        } = *res.map_state.lock()
-                        {
-                            self.free_resources.buffers.push(stage_buffer.clone());
-                        }
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .buffers
-                            .push(res);
+                    let submit_index = buffer.info.submission_index();
+                    if let resource::BufferMapState::Init {
+                        ref stage_buffer, ..
+                    } = *buffer.map_state.lock()
+                    {
+                        self.free_resources.buffers.push(stage_buffer.clone());
                     }
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .buffers
+                        .push(buffer.clone());
                 }
                 !is_removed
             });
         self
     }
 
-    fn triage_suspected_compute_pipelines<G, F>(
+    fn triage_suspected_compute_pipelines<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::ComputePipelineId),
     {
         self.suspected_resources.compute_pipelines.retain(
-            |compute_pipeline_id, compute_pipeline| {
-                let id = compute_pipeline.info.id();
+            |&compute_pipeline_id, compute_pipeline| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.compute_pipelines.remove_abandoned(id)
+                    trackers.compute_pipelines.remove_abandoned(
+                        compute_pipeline_id,
+                        hub.compute_pipelines.contains(compute_pipeline_id),
+                    )
                 };
                 if is_removed {
-                    log::info!("ComputePipeline {:?} is removed from registry", id);
-                    f(compute_pipeline_id);
+                    log::info!(
+                        "ComputePipeline {:?} is not tracked anymore",
+                        compute_pipeline_id
+                    );
+                    f(&compute_pipeline_id);
 
-                    if let Ok(res) = hub.compute_pipelines.get(id) {
-                        let submit_index = res.info.submission_index();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .compute_pipes
-                            .push(res);
-                    }
+                    let submit_index = compute_pipeline.info.submission_index();
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .compute_pipes
+                        .push(compute_pipeline.clone());
                 }
                 !is_removed
             },
@@ -788,69 +777,65 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_render_pipelines<G, F>(
+    fn triage_suspected_render_pipelines<F>(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
     ) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::RenderPipelineId),
     {
         self.suspected_resources
             .render_pipelines
-            .retain(|render_pipeline_id, render_pipeline| {
-                let id = render_pipeline.info.id();
+            .retain(|&render_pipeline_id, render_pipeline| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.render_pipelines.remove_abandoned(id)
+                    trackers.render_pipelines.remove_abandoned(
+                        render_pipeline_id,
+                        hub.render_pipelines.contains(render_pipeline_id),
+                    )
                 };
                 if is_removed {
-                    log::info!("RenderPipeline {:?} is removed from registry", id);
-                    f(render_pipeline_id);
+                    log::info!(
+                        "RenderPipeline {:?} is not tracked anymore",
+                        render_pipeline_id
+                    );
+                    f(&render_pipeline_id);
 
-                    if let Ok(res) = hub.render_pipelines.get(id) {
-                        let submit_index = res.info.submission_index();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .render_pipes
-                            .push(res);
-                    }
+                    let submit_index = render_pipeline.info.submission_index();
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .render_pipes
+                        .push(render_pipeline.clone());
                 }
                 !is_removed
             });
         self
     }
 
-    fn triage_suspected_pipeline_layouts<G, F>(&mut self, hub: &Hub<A, G>, mut f: F) -> &mut Self
+    fn triage_suspected_pipeline_layouts<F>(&mut self, mut f: F) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::PipelineLayoutId),
     {
-        let mut pipeline_layouts_locked = hub.pipeline_layouts.write();
         self.suspected_resources
             .pipeline_layouts
             .retain(|pipeline_layout_id, pipeline_layout| {
-                let id = pipeline_layout.info.id();
                 //Note: this has to happen after all the suspected pipelines are destroyed
-                if pipeline_layouts_locked.is_unique(id).unwrap() {
-                    log::debug!("PipelineLayout {:?} will be removed from registry", id);
+                if pipeline_layout.is_unique() {
                     f(pipeline_layout_id);
 
-                    if let Some(lay) = hub
-                        .pipeline_layouts
-                        .unregister_locked(id, &mut *pipeline_layouts_locked)
-                    {
-                        for bgl in &lay.bind_group_layouts {
-                            self.suspected_resources
-                                .bind_group_layouts
-                                .insert(bgl.as_info().id(), bgl.clone());
-                        }
-                        self.free_resources.pipeline_layouts.push(lay);
+                    for bgl in &pipeline_layout.bind_group_layouts {
+                        self.suspected_resources
+                            .bind_group_layouts
+                            .insert(bgl.as_info().id(), bgl.clone());
                     }
+                    self.free_resources
+                        .pipeline_layouts
+                        .push(pipeline_layout.clone());
+
                     return false;
                 }
                 true
@@ -858,23 +843,19 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_bind_group_layouts<G, F>(&mut self, hub: &Hub<A, G>, mut f: F) -> &mut Self
+    fn triage_suspected_bind_group_layouts<F>(&mut self, mut f: F) -> &mut Self
     where
-        G: GlobalIdentityHandlerFactory,
         F: FnMut(&id::BindGroupLayoutId),
     {
-        let mut bind_group_layouts_locked = hub.bind_group_layouts.write();
-
         self.suspected_resources.bind_group_layouts.retain(
             |bind_group_layout_id, bind_group_layout| {
-                let id = bind_group_layout.info.id();
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
 
                 //Note: this has to happen after all the suspected pipelines are destroyed
-                if bind_group_layouts_locked.is_unique(id).unwrap() {
+                if bind_group_layout.is_unique() {
                     // If This layout points to a compatible one, go over the latter
                     // to decrement the ref count and potentially destroy it.
                     //bgl_to_check = bind_group_layout.compatible_layout;
@@ -885,12 +866,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     );
                     f(bind_group_layout_id);
 
-                    if let Some(lay) = hub
+                    self.free_resources
                         .bind_group_layouts
-                        .unregister_locked(*bind_group_layout_id, &mut *bind_group_layouts_locked)
-                    {
-                        self.free_resources.bind_group_layouts.push(lay);
-                    }
+                        .push(bind_group_layout.clone());
+
                     return false;
                 }
                 true
@@ -899,35 +878,32 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_query_sets<G>(
+    fn triage_suspected_query_sets(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
-    ) -> &mut Self
-    where
-        G: GlobalIdentityHandlerFactory,
-    {
+    ) -> &mut Self {
         self.suspected_resources
             .query_sets
-            .retain(|_query_set_id, query_set| {
-                let id = query_set.info.id();
+            .retain(|&query_set_id, query_set| {
                 let is_removed = {
                     let mut trackers = trackers.lock();
-                    trackers.query_sets.remove_abandoned(id)
+                    trackers
+                        .query_sets
+                        .remove_abandoned(query_set_id, hub.query_sets.contains(query_set_id))
                 };
                 if is_removed {
-                    log::info!("QuerySet {:?} is removed from registry", id);
+                    log::info!("QuerySet {:?} is not tracked anymore", query_set_id);
                     // #[cfg(feature = "trace")]
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id)));
-                    if let Ok(res) = hub.query_sets.get(id) {
-                        let submit_index = res.info.submission_index();
-                        self.active
-                            .iter_mut()
-                            .find(|a| a.index == submit_index)
-                            .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                            .query_sets
-                            .push(res);
-                    }
+
+                    let submit_index = query_set.info.submission_index();
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .query_sets
+                        .push(query_set.clone());
                 }
                 !is_removed
             });
@@ -973,9 +949,9 @@ impl<A: HalApi> LifetimeTracker<A> {
     /// [`self.active`]: LifetimeTracker::active
     /// [`triage_submissions`]: LifetimeTracker::triage_submissions
     /// [`self.free_resources`]: LifetimeTracker::free_resources
-    pub(crate) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn triage_suspected(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] mut trace: Option<&mut trace::Trace>,
     ) {
@@ -1029,13 +1005,13 @@ impl<A: HalApi> LifetimeTracker<A> {
                 t.add(trace::Action::DestroyRenderPipeline(*_id));
             }
         });
-        self.triage_suspected_pipeline_layouts(hub, |_id| {
+        self.triage_suspected_pipeline_layouts(|_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
                 t.add(trace::Action::DestroyPipelineLayout(*_id));
             }
         });
-        self.triage_suspected_bind_group_layouts(hub, |_id| {
+        self.triage_suspected_bind_group_layouts(|_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
                 t.add(trace::Action::DestroyBindGroupLayout(*_id));
@@ -1076,9 +1052,9 @@ impl<A: HalApi> LifetimeTracker<A> {
     ///
     /// See the documentation for [`LifetimeTracker`] for details.
     #[must_use]
-    pub(crate) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn handle_mapping(
         &mut self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         raw: &A::Device,
         trackers: &Mutex<Tracker<A>>,
     ) -> Vec<super::BufferMapPendingClosure> {
@@ -1092,14 +1068,14 @@ impl<A: HalApi> LifetimeTracker<A> {
             let buffer_id = buffer.info.id();
             let is_removed = {
                 let mut trackers = trackers.lock();
-                trackers.buffers.remove_abandoned(buffer_id)
+                trackers
+                    .buffers
+                    .remove_abandoned(buffer_id, hub.buffers.contains(buffer_id))
             };
             if is_removed {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
-                log::info!("Buffer {:?} is removed from registry", buffer_id);
-                if let Ok(buf) = hub.buffers.get(buffer_id) {
-                    self.free_resources.buffers.push(buf);
-                }
+                log::info!("Buffer {:?} is not tracked anymore", buffer_id);
+                self.free_resources.buffers.push(buffer.clone());
             } else {
                 let mapping = match std::mem::replace(
                     &mut *buffer.map_state.lock(),

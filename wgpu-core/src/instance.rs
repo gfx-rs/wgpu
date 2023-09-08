@@ -428,10 +428,10 @@ pub enum AdapterInputs<'a, I> {
     Mask(Backends, fn(Backend) -> I),
 }
 
-impl<I: Clone> AdapterInputs<'_, I> {
+impl<I: Copy> AdapterInputs<'_, I> {
     fn find(&self, b: Backend) -> Option<I> {
         match *self {
-            Self::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).cloned(),
+            Self::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).copied(),
             Self::Mask(bits, ref fun) => {
                 if bits.contains(b.into()) {
                     Some(fun(b))
@@ -530,7 +530,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw: hal_surface.unwrap(),
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         id
     }
 
@@ -565,7 +565,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         id
     }
 
@@ -601,7 +601,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         Ok(id)
     }
 
@@ -637,7 +637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         Ok(id)
     }
 
@@ -668,7 +668,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         id
     }
 
@@ -701,7 +701,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        let (id, _) = self.surfaces.prepare(id_in).assign(surface);
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
         id
     }
 
@@ -765,7 +765,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         for raw in hal_adapters {
             let adapter = Adapter::new(raw);
             log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
-            let (id, _) = hub.adapters.prepare(id_backend.clone()).assign(adapter);
+            let (id, _) = hub.adapters.prepare::<G>(id_backend).assign(adapter);
             list.push(id);
         }
     }
@@ -815,7 +815,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 log::info!("Adapter {:?} {:?}", A::VARIANT, adapter.raw.info);
                 let (id, _) = HalApi::hub(self)
                     .adapters
-                    .prepare(new_id.unwrap())
+                    .prepare::<G>(new_id.unwrap())
                     .assign(adapter);
                 Some(id)
             }
@@ -829,7 +829,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("Instance::pick_adapter");
 
-        fn gather<A: HalApi, I: Clone>(
+        fn gather<A: HalApi, I: Copy>(
             _: A,
             instance: Option<&A::Instance>,
             inputs: &AdapterInputs<I>,
@@ -1007,7 +1007,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> AdapterId {
         profiling::scope!("Instance::create_adapter_from_hal");
 
-        let fid = A::hub(self).adapters.prepare(input);
+        let fid = A::hub(self).adapters.prepare::<G>(input);
 
         let (id, _adapter): (crate::id::Id<Adapter<hal::empty::Api>>, Arc<Adapter<A>>) =
             match A::VARIANT {
@@ -1128,8 +1128,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Adapter::request_device");
 
         let hub = A::hub(self);
-        let device_fid = hub.devices.prepare(device_id_in);
-        let queue_fid = hub.queues.prepare(queue_id_in);
+        let device_fid = hub.devices.prepare::<G>(device_id_in);
+        let queue_fid = hub.queues.prepare::<G>(queue_id_in);
 
         let error = loop {
             let adapter = match hub.adapters.get(adapter_id) {
@@ -1175,8 +1175,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::create_device_from_hal");
 
         let hub = A::hub(self);
-        let devices_fid = hub.devices.prepare(device_id_in);
-        let queues_fid = hub.queues.prepare(queue_id_in);
+        let devices_fid = hub.devices.prepare::<G>(device_id_in);
+        let queues_fid = hub.queues.prepare::<G>(queue_id_in);
 
         let error = loop {
             let adapter = match hub.adapters.get(adapter_id) {

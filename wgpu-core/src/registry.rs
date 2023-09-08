@@ -5,10 +5,26 @@ use wgt::Backend;
 
 use crate::{
     id,
-    identity::{IdentityHandler, IdentityHandlerFactory},
+    identity::{IdentityHandlerFactory, IdentityManager},
     resource::Resource,
-    storage::{InvalidId, Storage, StorageReport},
+    storage::{Element, InvalidId, Storage},
 };
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct RegistryReport {
+    pub num_allocated: usize,
+    pub num_kept_from_user: usize,
+    pub num_released_from_user: usize,
+    pub num_error: usize,
+    pub element_size: usize,
+}
+
+impl RegistryReport {
+    pub fn is_empty(&self) -> bool {
+        self.num_allocated + self.num_kept_from_user + self.num_released_from_user + self.num_error
+            == 0
+    }
+}
 
 /// Registry is the primary holder of each resource type
 /// Every resource is now arcanized so the last arc released
@@ -22,14 +38,14 @@ use crate::{
 /// any other dependent resource
 ///
 #[derive(Debug)]
-pub struct Registry<I: id::TypedId, T: Resource<I>, F: IdentityHandlerFactory<I>> {
-    identity: F::Filter,
+pub struct Registry<I: id::TypedId, T: Resource<I>> {
+    identity: Option<Arc<IdentityManager<I>>>,
     storage: RwLock<Storage<T, I>>,
     backend: Backend,
 }
 
-impl<I: id::TypedId, T: Resource<I>, F: IdentityHandlerFactory<I>> Registry<I, T, F> {
-    pub(crate) fn new(backend: Backend, factory: &F) -> Self {
+impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
+    pub(crate) fn new<F: IdentityHandlerFactory<I>>(backend: Backend, factory: &F) -> Self {
         Self {
             identity: factory.spawn(),
             storage: RwLock::new(Storage::new()),
@@ -37,7 +53,7 @@ impl<I: id::TypedId, T: Resource<I>, F: IdentityHandlerFactory<I>> Registry<I, T
         }
     }
 
-    pub(crate) fn without_backend(factory: &F) -> Self {
+    pub(crate) fn without_backend<F: IdentityHandlerFactory<I>>(factory: &F) -> Self {
         Self::new(Backend::Empty, factory)
     }
 }
@@ -45,6 +61,7 @@ impl<I: id::TypedId, T: Resource<I>, F: IdentityHandlerFactory<I>> Registry<I, T
 #[must_use]
 pub(crate) struct FutureId<'a, I: id::TypedId, T: Resource<I>> {
     id: I,
+    identity: Option<Arc<IdentityManager<I>>>,
     data: &'a RwLock<Storage<T, I>>,
 }
 
@@ -59,9 +76,16 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     }
 
     pub fn assign(self, mut value: T) -> (I, Arc<T>) {
-        value.as_info_mut().set_id(self.id);
+        value.as_info_mut().set_id(self.id, &self.identity);
         self.data.write().insert(self.id, Arc::new(value));
         (self.id, self.data.read().get(self.id).unwrap().clone())
+    }
+
+    pub fn assign_existing(self, value: &Arc<T>) -> I {
+        #[cfg(debug_assertions)]
+        debug_assert!(!self.data.read().contains(self.id));
+        self.data.write().insert(self.id, value.clone());
+        self.id
     }
 
     pub fn assign_error(self, label: &str) -> I {
@@ -70,15 +94,22 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     }
 }
 
-impl<I: id::TypedId + Copy, T: Resource<I>, F: IdentityHandlerFactory<I>> Registry<I, T, F> {
-    pub(crate) fn prepare(
-        &self,
-        id_in: <F::Filter as IdentityHandler<I>>::Input,
-    ) -> FutureId<I, T> {
+impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
+    pub(crate) fn prepare<F>(&self, id_in: F::Input) -> FutureId<I, T>
+    where
+        F: IdentityHandlerFactory<I>,
+    {
         FutureId {
-            id: self.identity.process(id_in, self.backend),
+            id: match self.identity.as_ref() {
+                Some(identity) => identity.process(self.backend),
+                _ => F::input_to_id(id_in),
+            },
+            identity: self.identity.clone(),
             data: &self.storage,
         }
+    }
+    pub(crate) fn contains(&self, id: I) -> bool {
+        self.read().contains(id)
     }
     pub(crate) fn try_get(&self, id: I) -> Result<Option<Arc<T>>, InvalidId> {
         self.read().try_get(id).map(|o| o.cloned())
@@ -93,16 +124,15 @@ impl<I: id::TypedId + Copy, T: Resource<I>, F: IdentityHandlerFactory<I>> Regist
         self.storage.write()
     }
     pub fn unregister_locked(&self, id: I, storage: &mut Storage<T, I>) -> Option<Arc<T>> {
-        let value = storage.remove(id);
-        //Note: careful about the order here!
-        self.identity.free(id);
-        //Returning None is legal if it's an error ID
-        value
+        storage.remove(id)
+    }
+    pub fn force_replace(&self, id: I, mut value: T) {
+        let mut storage = self.storage.write();
+        value.as_info_mut().set_id(id, &self.identity);
+        storage.force_replace(id, value)
     }
     pub(crate) fn unregister(&self, id: I) -> Option<Arc<T>> {
         let value = self.storage.write().remove(id);
-        //Note: careful about the order here!
-        self.identity.free(id);
         //Returning None is legal if it's an error ID
         value
     }
@@ -128,7 +158,22 @@ impl<I: id::TypedId + Copy, T: Resource<I>, F: IdentityHandlerFactory<I>> Regist
         }
     }
 
-    pub(crate) fn generate_report(&self) -> StorageReport {
-        self.storage.read().generate_report()
+    pub(crate) fn generate_report(&self) -> RegistryReport {
+        let storage = self.storage.read();
+        let mut report = RegistryReport {
+            element_size: std::mem::size_of::<T>(),
+            ..Default::default()
+        };
+        if let Some(identity) = self.identity.as_ref() {
+            report.num_allocated = identity.values.lock().count();
+        }
+        for element in storage.map.iter() {
+            match *element {
+                Element::Occupied(..) => report.num_kept_from_user += 1,
+                Element::Vacant => report.num_released_from_user += 1,
+                Element::Error(..) => report.num_error += 1,
+            }
+        }
+        report
     }
 }

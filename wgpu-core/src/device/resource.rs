@@ -15,16 +15,16 @@ use crate::{
     hal_api::HalApi,
     hub::Hub,
     id::{self, DeviceId, QueueId},
-    identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTracker, TextureInitTrackerAction,
     },
     instance::Adapter,
     pipeline,
+    registry::Registry,
     resource::ResourceInfo,
     resource::{
-        self, Buffer, QuerySet, Resource, Sampler, Texture, TextureInner, TextureView,
+        self, Buffer, QuerySet, Resource, Sampler, Texture, TextureView,
         TextureViewNotRenderableReason,
     },
     storage::Storage,
@@ -284,9 +284,9 @@ impl<A: HalApi> Device<A> {
     ///   submissions still in flight. (We have to take the locks needed to
     ///   produce this information for other reasons, so we might as well just
     ///   return it to our callers.)
-    pub(crate) fn maintain<'this, G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn maintain<'this>(
         &'this self,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
         fence: &A::Fence,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
@@ -764,31 +764,34 @@ impl<A: HalApi> Device<A> {
         Ok(texture)
     }
 
-    pub(crate) fn create_texture_inner_view(
+    pub(crate) fn create_texture_view(
         self: &Arc<Self>,
-        texture: &A::Texture,
-        texture_id: id::TextureId,
-        texture_desc: &wgt::TextureDescriptor<(), Vec<TextureFormat>>,
-        texture_usage: &hal::TextureUses,
-        texture_format: &wgt::TextureFormatFeatures,
+        texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
+        let texture_raw = texture
+            .inner
+            .as_ref()
+            .unwrap()
+            .as_raw()
+            .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
         // resolve TextureViewDescriptor defaults
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-resolving-gputextureviewdescriptor-defaults
 
         let resolved_format = desc.format.unwrap_or_else(|| {
-            texture_desc
+            texture
+                .desc
                 .format
                 .aspect_specific_format(desc.range.aspect)
-                .unwrap_or(texture_desc.format)
+                .unwrap_or(texture.desc.format)
         });
 
         let resolved_dimension = desc
             .dimension
-            .unwrap_or_else(|| match texture_desc.dimension {
+            .unwrap_or_else(|| match texture.desc.dimension {
                 wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
                 wgt::TextureDimension::D2 => {
-                    if texture_desc.array_layer_count() == 1 {
+                    if texture.desc.array_layer_count() == 1 {
                         wgt::TextureViewDimension::D2
                     } else {
                         wgt::TextureViewDimension::D2Array
@@ -798,7 +801,8 @@ impl<A: HalApi> Device<A> {
             });
 
         let resolved_mip_level_count = desc.range.mip_level_count.unwrap_or_else(|| {
-            texture_desc
+            texture
+                .desc
                 .mip_level_count
                 .saturating_sub(desc.range.base_mip_level)
         });
@@ -812,7 +816,8 @@ impl<A: HalApi> Device<A> {
                     | wgt::TextureViewDimension::D3 => 1,
                     wgt::TextureViewDimension::Cube => 6,
                     wgt::TextureViewDimension::D2Array | wgt::TextureViewDimension::CubeArray => {
-                        texture_desc
+                        texture
+                            .desc
                             .array_layer_count()
                             .saturating_sub(desc.range.base_array_layer)
                     }
@@ -820,32 +825,33 @@ impl<A: HalApi> Device<A> {
 
         // validate TextureViewDescriptor
 
-        let aspects = hal::FormatAspects::new(texture_desc.format, desc.range.aspect);
+        let aspects = hal::FormatAspects::new(texture.desc.format, desc.range.aspect);
         if aspects.is_empty() {
             return Err(resource::CreateTextureViewError::InvalidAspect {
-                texture_format: texture_desc.format,
+                texture_format: texture.desc.format,
                 requested_aspect: desc.range.aspect,
             });
         }
 
         let format_is_good = if desc.range.aspect == wgt::TextureAspect::All {
-            resolved_format == texture_desc.format
-                || texture_desc.view_formats.contains(&resolved_format)
+            resolved_format == texture.desc.format
+                || texture.desc.view_formats.contains(&resolved_format)
         } else {
             Some(resolved_format)
-                == texture_desc
+                == texture
+                    .desc
                     .format
                     .aspect_specific_format(desc.range.aspect)
         };
         if !format_is_good {
             return Err(resource::CreateTextureViewError::FormatReinterpretation {
-                texture: texture_desc.format,
+                texture: texture.desc.format,
                 view: resolved_format,
             });
         }
 
         // check if multisampled texture is seen as anything but 2D
-        if texture_desc.sample_count > 1 && resolved_dimension != wgt::TextureViewDimension::D2 {
+        if texture.desc.sample_count > 1 && resolved_dimension != wgt::TextureViewDimension::D2 {
             return Err(
                 resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
                     resolved_dimension,
@@ -854,11 +860,11 @@ impl<A: HalApi> Device<A> {
         }
 
         // check if the dimension is compatible with the texture
-        if texture_desc.dimension != resolved_dimension.compatible_texture_dimension() {
+        if texture.desc.dimension != resolved_dimension.compatible_texture_dimension() {
             return Err(
                 resource::CreateTextureViewError::InvalidTextureViewDimension {
                     view: resolved_dimension,
-                    texture: texture_desc.dimension,
+                    texture: texture.desc.dimension,
                 },
             );
         }
@@ -895,7 +901,7 @@ impl<A: HalApi> Device<A> {
 
         match resolved_dimension {
             TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
-                if texture_desc.size.width != texture_desc.size.height {
+                if texture.desc.size.width != texture.desc.size.height {
                     return Err(resource::CreateTextureViewError::InvalidCubeTextureViewSize);
                 }
             }
@@ -911,7 +917,7 @@ impl<A: HalApi> Device<A> {
             .base_mip_level
             .saturating_add(resolved_mip_level_count);
 
-        let level_end = texture_desc.mip_level_count;
+        let level_end = texture.desc.mip_level_count;
         if mip_level_end > level_end {
             return Err(resource::CreateTextureViewError::TooManyMipLevels {
                 requested: mip_level_end,
@@ -928,7 +934,7 @@ impl<A: HalApi> Device<A> {
             .base_array_layer
             .saturating_add(resolved_array_layer_count);
 
-        let layer_end = texture_desc.array_layer_count();
+        let layer_end = texture.desc.array_layer_count();
         if array_layer_end > layer_end {
             return Err(resource::CreateTextureViewError::TooManyArrayLayers {
                 requested: array_layer_end,
@@ -938,11 +944,12 @@ impl<A: HalApi> Device<A> {
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
         let render_extent = 'b: loop {
-            if !texture_desc
+            if !texture
+                .desc
                 .usage
                 .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
             {
-                break 'b Err(TextureViewNotRenderableReason::Usage(texture_desc.usage));
+                break 'b Err(TextureViewNotRenderableReason::Usage(texture.desc.usage));
             }
 
             if !(resolved_dimension == TextureViewDimension::D2
@@ -968,11 +975,13 @@ impl<A: HalApi> Device<A> {
                 ));
             }
 
-            if aspects != hal::FormatAspects::from(texture_desc.format) {
+            if aspects != hal::FormatAspects::from(texture.desc.format) {
                 break 'b Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
-            break 'b Ok(texture_desc.compute_render_extent(desc.range.base_mip_level));
+            break 'b Ok(texture
+                .desc
+                .compute_render_extent(desc.range.base_mip_level));
         };
 
         // filter the usages based on the other criteria
@@ -994,18 +1003,18 @@ impl<A: HalApi> Device<A> {
             } else {
                 hal::TextureUses::RESOURCE
             };
-            *texture_usage & mask_copy & mask_dimension & mask_mip_level
+            texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
         log::debug!(
             "Create view for texture {:?} filters usages to {:?}",
-            texture_id,
+            texture.as_info().id(),
             usage
         );
 
         // use the combined depth-stencil format for the view
-        let format = if resolved_format.is_depth_stencil_component(texture_desc.format) {
-            texture_desc.format
+        let format = if resolved_format.is_depth_stencil_component(texture.desc.format) {
+            texture.desc.format
         } else {
             resolved_format
         };
@@ -1030,7 +1039,7 @@ impl<A: HalApi> Device<A> {
             self.raw
                 .as_ref()
                 .unwrap()
-                .create_texture_view(texture, &hal_desc)
+                .create_texture_view(texture_raw, &hal_desc)
                 .map_err(|_| resource::CreateTextureViewError::OutOfMemory)?
         };
 
@@ -1041,49 +1050,19 @@ impl<A: HalApi> Device<A> {
 
         Ok(TextureView {
             raw: Some(raw),
-            parent: None,
-            parent_id: texture_id,
+            parent: Some(texture.clone()),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
                 format: resolved_format,
                 dimension: resolved_dimension,
                 range: resolved_range,
             },
-            format_features: *texture_format,
+            format_features: texture.format_features,
             render_extent,
-            samples: texture_desc.sample_count,
+            samples: texture.desc.sample_count,
             selector,
             info: ResourceInfo::new(desc.label.borrow_or_default()),
         })
-    }
-
-    pub(crate) fn create_texture_view(
-        self: &Arc<Self>,
-        texture: &Arc<Texture<A>>,
-        texture_id: id::TextureId,
-        desc: &resource::TextureViewDescriptor,
-    ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
-        let texture_raw = texture
-            .inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
-            .ok_or(resource::CreateTextureViewError::InvalidTexture)?;
-
-        let mut result = self.create_texture_inner_view(
-            texture_raw,
-            texture_id,
-            &texture.desc,
-            &texture.hal_usage,
-            &texture.format_features,
-            desc,
-        );
-        if let TextureInner::Native { .. } = *texture.inner.as_ref().unwrap() {
-            if let Ok(ref mut texture_view) = result {
-                texture_view.parent = Some(texture.clone());
-            }
-        }
-        result
     }
 
     pub(crate) fn create_sampler(
@@ -1644,7 +1623,7 @@ impl<A: HalApi> Device<A> {
         bb: &binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
-        used_buffer_ranges: &mut Vec<BufferInitTrackerAction>,
+        used_buffer_ranges: &mut Vec<BufferInitTrackerAction<A>>,
         dynamic_binding_info: &mut Vec<binding_model::BindGroupDynamicBindingData>,
         late_buffer_binding_sizes: &mut FastHashMap<u32, wgt::BufferSize>,
         used: &mut BindGroupStates<A>,
@@ -1755,7 +1734,7 @@ impl<A: HalApi> Device<A> {
 
         assert_eq!(bb.offset % wgt::COPY_BUFFER_ALIGNMENT, 0);
         used_buffer_ranges.extend(buffer.initialization_status.read().create_action(
-            bb.buffer_id,
+            buffer,
             bb.offset..bb.offset + bind_size,
             MemoryInitKind::NeedsInitializedMemory,
         ));
@@ -1769,29 +1748,28 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_texture_binding(
         view: &TextureView<A>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
         internal_use: hal::TextureUses,
         pub_usage: wgt::TextureUsages,
         used: &mut BindGroupStates<A>,
-        used_texture_ranges: &mut Vec<TextureInitTrackerAction>,
+        used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
     ) -> Result<(), binding_model::CreateBindGroupError> {
+        let texture_id = view.parent.as_ref().unwrap().as_info().id();
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         let texture = used
             .textures
             .add_single(
-                texture_guard,
-                view.parent_id,
+                view.parent.as_ref().unwrap(),
                 Some(view.selector.clone()),
                 internal_use,
             )
             .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
-                view.parent_id,
+                texture_id,
             ))?;
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
-            id: view.parent_id,
+            texture: texture.clone(),
             range: TextureInitRange {
                 mip_range: view.desc.range.mip_range(texture.desc.mip_level_count),
                 layer_range: view
@@ -1805,11 +1783,11 @@ impl<A: HalApi> Device<A> {
         Ok(())
     }
 
-    pub(crate) fn create_bind_group<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn create_bind_group(
         self: &Arc<Self>,
         layout: &Arc<BindGroupLayout<A>>,
         desc: &binding_model::BindGroupDescriptor,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
     ) -> Result<binding_model::BindGroup<A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::{BindingResource as Br, CreateBindGroupError as Error};
         {
@@ -1833,7 +1811,6 @@ impl<A: HalApi> Device<A> {
         let mut used = BindGroupStates::new();
 
         let buffer_guard = hub.buffers.read();
-        let texture_guard = hub.textures.read();
         let texture_view_guard = hub.texture_views.read();
         let sampler_guard = hub.samplers.read();
 
@@ -1963,7 +1940,6 @@ impl<A: HalApi> Device<A> {
                     )?;
                     Self::create_texture_binding(
                         view,
-                        &texture_guard,
                         internal_use,
                         pub_usage,
                         &mut used,
@@ -1991,7 +1967,6 @@ impl<A: HalApi> Device<A> {
                                                          "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;
                         Self::create_texture_binding(
                             view,
-                            &texture_guard,
                             internal_use,
                             pub_usage,
                             &mut used,
@@ -2328,8 +2303,8 @@ impl<A: HalApi> Device<A> {
         self: &Arc<Self>,
         implicit_context: Option<ImplicitPipelineContext>,
         mut derived_group_layouts: ArrayVec<binding_model::BindEntryMap, { hal::MAX_BIND_GROUPS }>,
-        bgl_guard: &mut Storage<BindGroupLayout<A>, id::BindGroupLayoutId>,
-        pipeline_layout_guard: &mut Storage<binding_model::PipelineLayout<A>, id::PipelineLayoutId>,
+        bgl_registry: &Registry<id::BindGroupLayoutId, BindGroupLayout<A>>,
+        pipeline_layout_registry: &Registry<id::PipelineLayoutId, binding_model::PipelineLayout<A>>,
     ) -> Result<id::PipelineLayoutId, pipeline::ImplicitLayoutError> {
         while derived_group_layouts
             .last()
@@ -2349,15 +2324,20 @@ impl<A: HalApi> Device<A> {
         }
 
         for (bgl_id, map) in ids.group_ids.iter_mut().zip(derived_group_layouts) {
-            match Device::deduplicate_bind_group_layout(self.info.id(), &map, bgl_guard) {
+            let bgl = match Device::deduplicate_bind_group_layout(
+                self.info.id(),
+                &map,
+                &bgl_registry.read(),
+            ) {
                 Some((dedup_id, _)) => {
                     *bgl_id = dedup_id;
+                    None
                 }
-                None => {
-                    let bgl = self.create_bind_group_layout(None, map)?;
-                    bgl_guard.force_replace(*bgl_id, bgl);
-                }
+                None => Some(self.create_bind_group_layout(None, map)?),
             };
+            if let Some(bgl) = bgl {
+                bgl_registry.force_replace(*bgl_id, bgl);
+            }
         }
 
         let layout_desc = binding_model::PipelineLayoutDescriptor {
@@ -2365,25 +2345,23 @@ impl<A: HalApi> Device<A> {
             bind_group_layouts: Cow::Borrowed(&ids.group_ids[..group_count]),
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
-        let layout = self.create_pipeline_layout(&layout_desc, bgl_guard)?;
-        pipeline_layout_guard.force_replace(ids.root_id, layout);
+        let layout = self.create_pipeline_layout(&layout_desc, &bgl_registry.read())?;
+        pipeline_layout_registry.force_replace(ids.root_id, layout);
         Ok(ids.root_id)
     }
 
-    pub(crate) fn create_compute_pipeline<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: &pipeline::ComputePipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
     ) -> Result<pipeline::ComputePipeline<A>, pipeline::CreateComputePipelineError> {
-        //TODO: only lock mutable if the layout is derived
-        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-        let mut bgl_guard = hub.bind_group_layouts.write();
-
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
+            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            let mut bgl_guard = hub.bind_group_layouts.write();
             for &bgl_id in ids.group_ids.iter() {
                 bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
             }
@@ -2404,11 +2382,11 @@ impl<A: HalApi> Device<A> {
 
         {
             let flag = wgt::ShaderStages::COMPUTE;
+            let pipeline_layout_guard = hub.pipeline_layouts.read();
             let provided_layouts = match desc.layout {
                 Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                     pipeline_layout_guard
                         .get(pipeline_layout_id)
-                        .as_ref()
                         .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?,
                 )),
                 None => {
@@ -2436,10 +2414,11 @@ impl<A: HalApi> Device<A> {
             None => self.derive_pipeline_layout(
                 implicit_context,
                 derived_group_layouts,
-                &mut *bgl_guard,
-                &mut *pipeline_layout_guard,
+                &hub.bind_group_layouts,
+                &hub.pipeline_layouts,
             )?,
         };
+        let pipeline_layout_guard = hub.pipeline_layouts.read();
         let layout = pipeline_layout_guard
             .get(pipeline_layout_id)
             .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
@@ -2484,22 +2463,21 @@ impl<A: HalApi> Device<A> {
         Ok(pipeline)
     }
 
-    pub(crate) fn create_render_pipeline<G: GlobalIdentityHandlerFactory>(
+    pub(crate) fn create_render_pipeline(
         self: &Arc<Self>,
         adapter: &Adapter<A>,
         desc: &pipeline::RenderPipelineDescriptor,
         implicit_context: Option<ImplicitPipelineContext>,
-        hub: &Hub<A, G>,
+        hub: &Hub<A>,
     ) -> Result<pipeline::RenderPipeline<A>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
-
-        //TODO: only lock mutable if the layout is derived
-        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-        let mut bgl_guard = hub.bind_group_layouts.write();
 
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
+            //TODO: only lock mutable if the layout is derived
+            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+            let mut bgl_guard = hub.bind_group_layouts.write();
             pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
             for &bgl_id in ids.group_ids.iter() {
                 bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
@@ -2762,6 +2740,7 @@ impl<A: HalApi> Device<A> {
                 }
             })?;
 
+            let pipeline_layout_guard = hub.pipeline_layouts.read();
             let provided_layouts = match desc.layout {
                 Some(pipeline_layout_id) => {
                     let pipeline_layout = pipeline_layout_guard
@@ -2810,6 +2789,7 @@ impl<A: HalApi> Device<A> {
                             error: validation::StageError::InvalidModule,
                         })?;
 
+                let pipeline_layout_guard = hub.pipeline_layouts.read();
                 let provided_layouts = match desc.layout {
                     Some(pipeline_layout_id) => Some(Device::get_introspection_bind_group_layouts(
                         pipeline_layout_guard
@@ -2889,13 +2869,17 @@ impl<A: HalApi> Device<A> {
             None => self.derive_pipeline_layout(
                 implicit_context,
                 derived_group_layouts,
-                &mut *bgl_guard,
-                &mut *pipeline_layout_guard,
+                &hub.bind_group_layouts,
+                &hub.pipeline_layouts,
             )?,
         };
-        let layout = pipeline_layout_guard
-            .get(pipeline_layout_id)
-            .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+        let layout = {
+            let pipeline_layout_guard = hub.pipeline_layouts.read();
+            pipeline_layout_guard
+                .get(pipeline_layout_id)
+                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?
+                .clone()
+        };
 
         // Multiview is only supported if the feature is enabled
         if desc.multiview.is_some() {
@@ -2919,7 +2903,7 @@ impl<A: HalApi> Device<A> {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout);
+            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &layout);
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: desc.label.borrow_option(),

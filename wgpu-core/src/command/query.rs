@@ -422,9 +422,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
+            let dst_buffer = buffer_guard
+                .get(destination)
+                .map_err(|_| QueryError::InvalidBuffer(destination))?;
             tracker
                 .buffers
-                .set_single(&*buffer_guard, destination, hal::BufferUses::COPY_DST)
+                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
                 .ok_or(QueryError::InvalidBuffer(destination))?
         };
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer));
@@ -468,7 +471,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
         buffer_memory_init_actions.extend(dst_buffer.initialization_status.read().create_action(
-            destination,
+            &dst_buffer,
             buffer_start_offset..buffer_end_offset,
             MemoryInitKind::ImplicitlyInitialized,
         ));

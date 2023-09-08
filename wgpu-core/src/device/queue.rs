@@ -471,7 +471,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (staging_buffer, staging_buffer_ptr) =
             prepare_staging_buffer(device, buffer_size.get())?;
 
-        let fid = hub.staging_buffers.prepare(id_in);
+        let fid = hub.staging_buffers.prepare::<G>(id_in);
         let (id, _) = fid.assign(staging_buffer);
         log::info!("Created StagingBuffer {:?}", id);
 
@@ -589,10 +589,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst, transition) = {
             let buffer_guard = hub.buffers.read();
+            let dst = buffer_guard
+                .get(buffer_id)
+                .map_err(|_| TransferError::InvalidBuffer(buffer_id))?;
             let mut trackers = device.trackers.lock();
             trackers
                 .buffers
-                .set_single(&buffer_guard, buffer_id, hal::BufferUses::COPY_DST)
+                .set_single(dst, hal::BufferUses::COPY_DST)
                 .ok_or(TransferError::InvalidBuffer(buffer_id))?
         };
         let dst_raw = dst
@@ -774,10 +777,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .collect::<Vec<std::ops::Range<u32>>>()
                 {
                     let mut trackers = device.trackers.lock();
-                    let texture_guard = hub.textures.read();
                     crate::command::clear_texture(
-                        &*texture_guard,
-                        destination.texture,
+                        &dst,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
                             layer_range,
@@ -883,12 +884,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut trackers = device.trackers.lock();
             let transition = trackers
                 .textures
-                .set_single(
-                    &dst,
-                    destination.texture,
-                    selector,
-                    hal::TextureUses::COPY_DST,
-                )
+                .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
             unsafe {
                 encoder.transition_textures(transition.map(|pending| pending.into_hal(&dst)));
@@ -1245,14 +1241,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                                 if should_extend {
                                     unsafe {
-                                        let texture_guard = hub.textures.read();
                                         used_surface_textures
-                                            .merge_single(
-                                                &*texture_guard,
-                                                id,
-                                                None,
-                                                hal::TextureUses::PRESENT,
-                                            )
+                                            .merge_single(texture, None, hal::TextureUses::PRESENT)
                                             .unwrap();
                                     };
                                 }
@@ -1268,19 +1258,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                             {
-                                let texture_view_guard = hub.texture_views.read();
-                                let sampler_guard = hub.samplers.read();
-
                                 for bg in cmd_buf_trackers.bind_groups.used_resources() {
                                     bg.info.use_at(submit_index);
                                     // We need to update the submission indices for the contained
                                     // state-less (!) resources as well, so that they don't get
                                     // deleted too early if the parent bind group goes out of scope.
-                                    for sub_id in bg.used.views.used() {
-                                        texture_view_guard[sub_id].info.use_at(submit_index);
+                                    for view in bg.used.views.used_resources() {
+                                        view.info.use_at(submit_index);
                                     }
-                                    for sub_id in bg.used.samplers.used() {
-                                        sampler_guard[sub_id].info.use_at(submit_index);
+                                    for sampler in bg.used.samplers.used_resources() {
+                                        sampler.info.use_at(submit_index);
                                     }
                                     if bg.is_unique() {
                                         device
@@ -1354,15 +1341,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
-                        let buffer_guard = hub.buffers.read();
-                        let texture_guard = hub.textures.read();
+
                         //Note: locking the trackers has to be done after the storages
                         let mut trackers = device.trackers.lock();
                         baked
-                            .initialize_buffer_memory(&mut *trackers, &*buffer_guard)
+                            .initialize_buffer_memory(&mut *trackers)
                             .map_err(|err| QueueSubmitError::DestroyedBuffer(err.0))?;
                         baked
-                            .initialize_texture_memory(&mut *trackers, &*texture_guard, device)
+                            .initialize_texture_memory(&mut *trackers, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
@@ -1370,8 +1356,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &mut baked.encoder,
                             &mut *trackers,
                             &baked.trackers,
-                            &*buffer_guard,
-                            &*texture_guard,
                         );
 
                         let transit = unsafe { baked.encoder.end_encoding().unwrap() };
@@ -1389,11 +1373,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             };
                             trackers
                                 .textures
-                                .set_from_usage_scope(&*texture_guard, &used_surface_textures);
-                            let texture_barriers = trackers.textures.drain().map(|pending| {
-                                let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-                                pending.into_hal(tex)
-                            });
+                                .set_from_usage_scope(&used_surface_textures);
+                            let texture_barriers = trackers.textures.drain_transitions();
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
@@ -1430,12 +1411,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             has_work.store(true, Ordering::Relaxed);
                             unsafe {
                                 used_surface_textures
-                                    .merge_single(
-                                        &*texture_guard,
-                                        id,
-                                        None,
-                                        hal::TextureUses::PRESENT,
-                                    )
+                                    .merge_single(texture, None, hal::TextureUses::PRESENT)
                                     .unwrap()
                             };
                         }
@@ -1447,11 +1423,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     trackers
                         .textures
-                        .set_from_usage_scope(&*texture_guard, &used_surface_textures);
-                    let texture_barriers = trackers.textures.drain().map(|pending| {
-                        let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-                        pending.into_hal(tex)
-                    });
+                        .set_from_usage_scope(&used_surface_textures);
+                    let texture_barriers = trackers.textures.drain_transitions();
 
                     unsafe {
                         pending_writes

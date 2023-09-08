@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
@@ -10,8 +10,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, DeviceId, TextureId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange},
-    resource::{Texture, TextureClearMode},
-    storage::Storage,
+    resource::{Resource, Texture, TextureClearMode},
     track::{TextureSelector, TextureTracker},
 };
 
@@ -94,10 +93,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
+            let dst_buffer = buffer_guard
+                .get(dst)
+                .map_err(|_| ClearError::InvalidBuffer(dst))?;
             cmd_buf_data
                 .trackers
                 .buffers
-                .set_single(&*buffer_guard, dst, hal::BufferUses::COPY_DST)
+                .set_single(dst_buffer, hal::BufferUses::COPY_DST)
                 .ok_or(ClearError::InvalidBuffer(dst))?
         };
         let dst_raw = dst_buffer
@@ -138,7 +140,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Mark dest as initialized.
         cmd_buf_data.buffer_memory_init_actions.extend(
             dst_buffer.initialization_status.read().create_action(
-                dst,
+                &dst_buffer,
                 offset..end,
                 MemoryInitKind::ImplicitlyInitialized,
             ),
@@ -221,10 +223,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &cmd_buf.device;
         let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker();
-        let texture_guard = hub.textures.read();
+
         clear_texture(
-            &*texture_guard,
-            dst,
+            &dst_texture,
             TextureInitRange {
                 mip_range: subresource_mip_range,
                 layer_range: subresource_layer_range,
@@ -238,22 +239,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub(crate) fn clear_texture<A: HalApi>(
-    storage: &Storage<Texture<A>, TextureId>,
-    dst_texture_id: TextureId,
+    dst_texture: &Arc<Texture<A>>,
     range: TextureInitRange,
     encoder: &mut A::CommandEncoder,
     texture_tracker: &mut TextureTracker<A>,
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {
-    let dst_texture = &storage[dst_texture_id];
-
     let dst_raw = dst_texture
         .inner
         .as_ref()
         .unwrap()
         .as_raw()
-        .ok_or(ClearError::InvalidTexture(dst_texture_id))?;
+        .ok_or_else(|| ClearError::InvalidTexture(dst_texture.as_info().id()))?;
 
     // Issue the right barrier.
     let clear_usage = match *dst_texture.clear_mode.read() {
@@ -265,7 +263,9 @@ pub(crate) fn clear_texture<A: HalApi>(
             hal::TextureUses::COLOR_TARGET
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
+            return Err(ClearError::NoValidTextureClearMode(
+                dst_texture.as_info().id(),
+            ));
         }
     };
 
@@ -288,7 +288,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     // clear_texture api in order to remove this check and call the cheaper
     // change_replace_tracked whenever possible.
     let dst_barrier = texture_tracker
-        .set_single(dst_texture, dst_texture_id, selector, clear_usage)
+        .set_single(dst_texture, selector, clear_usage)
         .unwrap()
         .map(|pending| pending.into_hal(dst_texture));
     unsafe {
@@ -312,7 +312,9 @@ pub(crate) fn clear_texture<A: HalApi>(
             clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
-            return Err(ClearError::NoValidTextureClearMode(dst_texture_id));
+            return Err(ClearError::NoValidTextureClearMode(
+                dst_texture.as_info().id(),
+            ));
         }
     }
     Ok(())

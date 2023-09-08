@@ -26,15 +26,7 @@ use crate::id::CommandBufferId;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo};
 use crate::track::{Tracker, UsageScope};
-use crate::{
-    global::Global,
-    hal_api::HalApi,
-    id,
-    identity::GlobalIdentityHandlerFactory,
-    resource::{Buffer, Texture},
-    storage::Storage,
-    Label,
-};
+use crate::{global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory, Label};
 
 use hal::CommandEncoder as _;
 use parking_lot::Mutex;
@@ -104,8 +96,8 @@ pub struct BakedCommands<A: HalApi> {
     pub(crate) encoder: A::CommandEncoder,
     pub(crate) list: Vec<A::CommandBuffer>,
     pub(crate) trackers: Tracker<A>,
-    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
-    texture_memory_actions: CommandBufferTextureMemoryActions,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
+    texture_memory_actions: CommandBufferTextureMemoryActions<A>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
@@ -115,8 +107,8 @@ pub struct CommandBufferMutable<A: HalApi> {
     encoder: CommandEncoder<A>,
     status: CommandEncoderStatus,
     pub(crate) trackers: Tracker<A>,
-    buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
-    texture_memory_actions: CommandBufferTextureMemoryActions,
+    buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
+    texture_memory_actions: CommandBufferTextureMemoryActions<A>,
     pub(crate) pending_query_resets: QueryResetMap<A>,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
@@ -199,50 +191,33 @@ impl<A: HalApi> CommandBuffer<A> {
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &Tracker<A>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         profiling::scope!("insert_barriers");
 
         base.buffers.set_from_tracker(&head.buffers);
-        base.textures
-            .set_from_tracker(texture_guard, &head.textures);
+        base.textures.set_from_tracker(&head.textures);
 
-        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+        Self::drain_barriers(raw, base);
     }
 
     pub(crate) fn insert_barriers_from_scope(
         raw: &mut A::CommandEncoder,
         base: &mut Tracker<A>,
         head: &UsageScope<A>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
     ) {
         profiling::scope!("insert_barriers");
 
         base.buffers.set_from_usage_scope(&head.buffers);
-        base.textures
-            .set_from_usage_scope(texture_guard, &head.textures);
+        base.textures.set_from_usage_scope(&head.textures);
 
-        Self::drain_barriers(raw, base, buffer_guard, texture_guard);
+        Self::drain_barriers(raw, base);
     }
 
-    pub(crate) fn drain_barriers(
-        raw: &mut A::CommandEncoder,
-        base: &mut Tracker<A>,
-        buffer_guard: &Storage<Buffer<A>, id::BufferId>,
-        texture_guard: &Storage<Texture<A>, id::TextureId>,
-    ) {
+    pub(crate) fn drain_barriers(raw: &mut A::CommandEncoder, base: &mut Tracker<A>) {
         profiling::scope!("drain_barriers");
 
-        let buffer_barriers = base.buffers.drain().map(|pending| {
-            let buf = unsafe { buffer_guard.get_unchecked(pending.id) };
-            pending.into_hal(buf)
-        });
-        let texture_barriers = base.textures.drain().map(|pending| {
-            let tex = unsafe { texture_guard.get_unchecked(pending.id) };
-            pending.into_hal(tex)
-        });
+        let buffer_barriers = base.buffers.drain_transitions();
+        let texture_barriers = base.textures.drain_transitions();
 
         unsafe {
             raw.transition_buffers(buffer_barriers);
@@ -252,13 +227,10 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> CommandBuffer<A> {
-    fn get_encoder<G>(
-        hub: &Hub<A, G>,
+    fn get_encoder(
+        hub: &Hub<A>,
         id: id::CommandEncoderId,
-    ) -> Result<Arc<Self>, CommandEncoderError>
-    where
-        G: GlobalIdentityHandlerFactory,
-    {
+    ) -> Result<Arc<Self>, CommandEncoderError> {
         let storage = hub.command_buffers.read();
         match storage.get(id) {
             Ok(cmd_buf) => match cmd_buf.data.lock().as_ref().unwrap().status {

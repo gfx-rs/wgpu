@@ -49,7 +49,7 @@ fn main() {
         IdentityPassThroughFactory,
         wgt::InstanceDescriptor::default(),
     );
-    let mut command_buffer_id_manager = wgc::identity::IdentityManager::default();
+    let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
 
     #[cfg(feature = "winit")]
     let surface = global.instance_create_surface(
