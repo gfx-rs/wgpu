@@ -944,7 +944,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_width = source.source.width();
         let src_height = source.source.height();
 
-        let texture_guard = hub.textures.read();
         let dst = hub.textures.get(destination.texture).unwrap();
 
         if !conv::is_valid_external_image_copy_dst_texture_format(dst.desc.format) {
@@ -1045,8 +1044,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 {
                     let mut trackers = device.trackers.lock();
                     crate::command::clear_texture(
-                        &*texture_guard,
-                        destination.texture,
+                        &dst,
                         TextureInitRange {
                             mip_range: destination.mip_level..(destination.mip_level + 1),
                             layer_range,
@@ -1090,7 +1088,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .textures
                 .set_single(
                     &dst,
-                    destination.texture,
                     selector,
                     hal::TextureUses::COPY_DST,
                 )
