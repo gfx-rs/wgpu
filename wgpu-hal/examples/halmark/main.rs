@@ -113,7 +113,7 @@ impl<A: hal::Api> Example<A> {
             let exposed = adapters.swap_remove(0);
             (exposed.adapter, exposed.capabilities)
         };
-      
+
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
             .ok_or("failed to get surface capabilities")?;
         log::info!("Surface caps: {:#?}", surface_caps);

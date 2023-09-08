@@ -570,7 +570,7 @@ impl crate::Instance<super::Api> for super::Instance {
         let entry = unsafe { ash::Entry::load() }.map_err(|err| {
             crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)
         })?;
-      
+
         let driver_api_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
             Ok(Some(version)) => version,
@@ -830,7 +830,6 @@ impl crate::Surface<super::Api> for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-
         // Safety: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
         let mut swap_chain = self.swapchain.write();
         let old = swap_chain

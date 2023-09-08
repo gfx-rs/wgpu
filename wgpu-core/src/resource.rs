@@ -720,13 +720,12 @@ pub enum TextureClearMode<A: HalApi> {
     None,
 }
 
-impl<A: hal::Api> TextureClearMode<A> {
-    pub(crate) fn destroy_clear_views(self, device: &A::Device) {
-        if let TextureClearMode::RenderPass { clear_views, .. } = self {
-            for clear_view in clear_views {
-                unsafe {
-                    hal::Device::destroy_texture_view(device, clear_view);
-                }
+impl<A: HalApi> TextureClearMode<A> {
+    pub(crate) fn destroy_clear_views(&mut self, device: &A::Device) {
+        if let TextureClearMode::Surface { ref mut clear_view } = *self {
+            unsafe {
+                let view = clear_view.take().unwrap();
+                hal::Device::destroy_texture_view(device, view);
             }
         }
     }

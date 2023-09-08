@@ -1936,12 +1936,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             // Wait for all work to finish before configuring the surface.
-            if let Err(e) = device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+            let fence = device.fence.read();
+            let fence = fence.as_ref().unwrap();
+            if let Err(e) = device.maintain(hub, fence, wgt::Maintain::Wait) {
                 break e.into();
             }
 
             // All textures must be destroyed before the surface can be re-configured.
-            if let Some(present) = surface.presentation.take() {
+            if let Some(present) = surface.presentation.lock().take() {
                 if present.acquired_texture.is_some() {
                     break E::PreviousOutputExists;
                 }

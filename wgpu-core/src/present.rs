@@ -311,7 +311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
-                    texture.clear_mode.destroy_clear_views(device.raw());
+                    texture.clear_mode.write().destroy_clear_views(device.raw());
 
                     let suf = A::get_surface(&surface);
                     match texture.inner.take().unwrap() {
@@ -396,15 +396,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // and now we are moving it away.
             log::debug!(
                 "Removing swapchain texture {:?} from the device tracker",
-                texture_id.value
+                texture_id
             );
             device.trackers.lock().textures.remove(texture_id);
 
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
-                    texture.clear_mode.destroy_clear_views(device.raw());
-                  
+                    texture.clear_mode.write().destroy_clear_views(device.raw());
+
                     let suf = A::get_surface(&surface);
                     match texture.inner.take().unwrap() {
                         resource::TextureInner::Surface {

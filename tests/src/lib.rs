@@ -405,7 +405,6 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
         return;
     }
 
-
     // Determine if we expect this test to fail, and if so, why.
     let expected_failure_reason = parameters
         .failures
@@ -482,7 +481,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 }
 
-fn initialize_adapter() -> (Adapter, Option<SurfaceGuard>) {
+fn initialize_adapter() -> (Instance, Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     let surface_guard: Option<SurfaceGuard>;
     let compatible_surface;
