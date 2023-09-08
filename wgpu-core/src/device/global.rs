@@ -1935,6 +1935,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 break error;
             }
 
+            // Wait for all work to finish before configuring the surface.
+            if let Err(e) = device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+                break e.into();
+            }
+
+            // All textures must be destroyed before the surface can be re-configured.
+            if let Some(present) = surface.presentation.take() {
+                if present.acquired_texture.is_some() {
+                    break E::PreviousOutputExists;
+                }
+            }
+
+            // TODO: Texture views may still be alive that point to the texture.
+            // this will allow the user to render to the surface texture, long after
+            // it has been removed.
+            //
+            // https://github.com/gfx-rs/wgpu/issues/4105
+
             match unsafe {
                 A::get_surface(surface)
                     .unwrap()
@@ -1954,11 +1972,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            if let Some(present) = surface.presentation.lock().take() {
-                if present.acquired_texture.is_some() {
-                    break E::PreviousOutputExists;
-                }
-            }
             let mut presentation = surface.presentation.lock();
             *presentation = Some(present::Presentation {
                 device: super::any_device::AnyDevice::new(device.clone()),

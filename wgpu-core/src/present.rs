@@ -22,7 +22,7 @@ use crate::device::trace::Action;
 use crate::{
     conv,
     device::any_device::AnyDevice,
-    device::{DeviceError, MissingDownlevelFlags},
+    device::{DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_api::HalApi,
     id::{SurfaceId, TextureId},
@@ -98,6 +98,18 @@ pub enum ConfigureSurfaceError {
     },
     #[error("Requested usage is not supported")]
     UnsupportedUsage,
+    #[error("Gpu got stuck :(")]
+    StuckGpu,
+}
+
+impl From<WaitIdleError> for ConfigureSurfaceError {
+    fn from(e: WaitIdleError) -> Self {
+        match e {
+            WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
+            WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
+            WaitIdleError::StuckGpu => ConfigureSurfaceError::StuckGpu,
+        }
+    }
 }
 
 #[repr(C)]
@@ -299,18 +311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
-                    let mut clear_mode = texture.clear_mode.write();
-                    let clear_mode = &mut *clear_mode;
-                    if let resource::TextureClearMode::Surface {
-                        ref mut clear_view, ..
-                    } = *clear_mode
-                    {
-                        let view = clear_view.take().unwrap();
-                        unsafe {
-                            use hal::Device;
-                            device.raw().destroy_texture_view(view);
-                        }
-                    }
+                    texture.clear_mode.destroy_clear_views(device.raw());
 
                     let suf = A::get_surface(&surface);
                     match texture.inner.take().unwrap() {
@@ -393,11 +394,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // The texture ID got added to the device tracker by `submit()`,
             // and now we are moving it away.
+            log::debug!(
+                "Removing swapchain texture {:?} from the device tracker",
+                texture_id.value
+            );
             device.trackers.lock().textures.remove(texture_id);
 
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
                 if let Ok(mut texture) = Arc::try_unwrap(texture) {
+                    texture.clear_mode.destroy_clear_views(device.raw());
+                  
                     let suf = A::get_surface(&surface);
                     match texture.inner.take().unwrap() {
                         resource::TextureInner::Surface {

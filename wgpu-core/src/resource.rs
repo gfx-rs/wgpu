@@ -720,6 +720,18 @@ pub enum TextureClearMode<A: HalApi> {
     None,
 }
 
+impl<A: hal::Api> TextureClearMode<A> {
+    pub(crate) fn destroy_clear_views(self, device: &A::Device) {
+        if let TextureClearMode::RenderPass { clear_views, .. } = self {
+            for clear_view in clear_views {
+                unsafe {
+                    hal::Device::destroy_texture_view(device, clear_view);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Texture<A: HalApi> {
     pub(crate) inner: Option<TextureInner<A>>,

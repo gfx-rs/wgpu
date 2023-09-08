@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use wasm_bindgen_test::*;
 use wgpu::util::DeviceExt;
 
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{initialize_test, FailureCase, TestParameters, TestingContext};
 
 fn pulling_common(
     ctx: TestingContext,
@@ -150,7 +150,7 @@ fn draw_vertex_offset() {
     initialize_test(
         TestParameters::default()
             .test_features_limits()
-            .backend_failure(wgpu::Backends::DX11),
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
         |ctx| {
             pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
                 cmb.draw(0..3, 0..1);
@@ -176,7 +176,7 @@ fn draw_instanced_offset() {
     initialize_test(
         TestParameters::default()
             .test_features_limits()
-            .backend_failure(wgpu::Backends::DX11),
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
         |ctx| {
             pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
                 cmb.draw(0..3, 0..1);

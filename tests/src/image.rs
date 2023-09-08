@@ -150,7 +150,7 @@ impl ComparisonType {
 
 pub fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
-    backend: Backend,
+    adapter_info: &wgt::AdapterInfo,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],
@@ -205,17 +205,18 @@ pub fn compare_image_output(
         }
 
         let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
+        let renderer = format!(
+            "{}-{}-{}",
+            adapter_info.backend.to_str(),
+            sanitize_for_path(&adapter_info.name),
+            sanitize_for_path(&adapter_info.driver)
+        );
         // Determine the paths to write out the various intermediate files
         let actual_path = Path::new(&path).with_file_name(
-            OsString::from_str(&format!("{}-{}-actual.png", file_stem, backend.to_str(),)).unwrap(),
+            OsString::from_str(&format!("{}-{}-actual.png", file_stem, renderer)).unwrap(),
         );
         let difference_path = Path::new(&path).with_file_name(
-            OsString::from_str(&format!(
-                "{}-{}-difference.png",
-                file_stem,
-                backend.to_str(),
-            ))
-            .unwrap(),
+            OsString::from_str(&format!("{}-{}-difference.png", file_stem, renderer,)).unwrap(),
         );
 
         // Convert the error values to a false color reprensentation
@@ -246,8 +247,14 @@ pub fn compare_image_output(
 
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = (path, backend, width, height, test_with_alpha, checks);
+        let _ = (path, adapter_info, width, height, test_with_alpha, checks);
     }
+}
+
+fn sanitize_for_path(s: &str) -> String {
+    s.chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect()
 }
 
 fn copy_via_compute(

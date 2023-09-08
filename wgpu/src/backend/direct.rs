@@ -245,10 +245,7 @@ impl Context {
         &self,
         canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -260,10 +257,7 @@ impl Context {
         &self,
         canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_offscreen_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),

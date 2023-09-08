@@ -181,7 +181,10 @@ impl super::Device {
         })
     }
 
-    pub(super) unsafe fn wait_idle(&self) -> Result<(), crate::DeviceError> {
+    // Blocks until the dedicated present queue is finished with all of its work.
+    //
+    // Once this method completes, the surface is able to be resized or deleted.
+    pub(super) unsafe fn wait_for_present_queue_idle(&self) -> Result<(), crate::DeviceError> {
         let cur_value = self.idler.fence.get_value();
         if cur_value == !0 {
             return Err(crate::DeviceError::Lost);

@@ -15,8 +15,7 @@ mod macros;
 use std::{
     any::Any,
     borrow::Cow,
-    error,
-    fmt::{Debug, Display},
+    error, fmt,
     future::Future,
     marker::PhantomData,
     num::NonZeroU32,
@@ -1708,8 +1707,8 @@ pub enum SurfaceError {
 }
 static_assertions::assert_impl_all!(SurfaceError: Send, Sync);
 
-impl Display for SurfaceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SurfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
             Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
             Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
@@ -2752,8 +2751,8 @@ impl Drop for Device {
 pub struct RequestDeviceError;
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
-impl Display for RequestDeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for RequestDeviceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Requesting a device failed")
     }
 }
@@ -2761,28 +2760,76 @@ impl Display for RequestDeviceError {
 impl error::Error for RequestDeviceError {}
 
 /// [`Instance::create_surface()`] or a related function failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct CreateSurfaceError {
-    // TODO: Report diagnostic clues
+    inner: CreateSurfaceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum CreateSurfaceErrorKind {
+    /// Error from [`wgpu_hal`].
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    // must match dependency cfg
+    Hal(hal::InstanceError),
+
+    /// Error from WebGPU surface creation.
+    #[allow(dead_code)] // may be unused depending on target and features
+    Web(String),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
-impl Display for CreateSurfaceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Creating a surface failed")
+impl fmt::Display for CreateSurfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                target_os = "emscripten",
+                feature = "webgl"
+            ))]
+            CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
+            CreateSurfaceErrorKind::Web(e) => e.fmt(f),
+        }
     }
 }
 
-impl error::Error for CreateSurfaceError {}
+impl error::Error for CreateSurfaceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                target_os = "emscripten",
+                feature = "webgl"
+            ))]
+            CreateSurfaceErrorKind::Hal(e) => e.source(),
+            CreateSurfaceErrorKind::Web(_) => None,
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    target_os = "emscripten",
+    feature = "webgl"
+))]
+impl From<hal::InstanceError> for CreateSurfaceError {
+    fn from(e: hal::InstanceError) -> Self {
+        Self {
+            inner: CreateSurfaceErrorKind::Hal(e),
+        }
+    }
+}
 
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
 static_assertions::assert_impl_all!(BufferAsyncError: Send, Sync);
 
-impl Display for BufferAsyncError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for BufferAsyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Error occurred when trying to async map a buffer")
     }
 }
@@ -4850,8 +4897,8 @@ impl<T> Clone for Id<T> {
 impl<T> Copy for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
-impl<T> Debug for Id<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<T> fmt::Debug for Id<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0).finish()
     }
 }
@@ -5135,8 +5182,8 @@ impl error::Error for Error {
     }
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),

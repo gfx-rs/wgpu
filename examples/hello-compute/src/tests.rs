@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{initialize_test, FailureCase, TestParameters};
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
@@ -13,7 +13,7 @@ fn test_compute_1() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::TIMESTAMP_QUERY)
-            .specific_failure(None, None, Some("V3D"), true),
+            .skip(FailureCase::adapter("V3D")),
         |ctx| {
             let input = &[1, 2, 3, 4];
 
@@ -35,7 +35,7 @@ fn test_compute_2() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::TIMESTAMP_QUERY)
-            .specific_failure(None, None, Some("V3D"), true),
+            .skip(FailureCase::adapter("V3D")),
         |ctx| {
             let input = &[5, 23, 10, 9];
 
@@ -57,7 +57,7 @@ fn test_compute_overflow() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::TIMESTAMP_QUERY)
-            .specific_failure(None, None, Some("V3D"), true),
+            .skip(FailureCase::adapter("V3D")),
         |ctx| {
             let input = &[77031, 837799, 8400511, 63728127];
             pollster::block_on(assert_execute_gpu(
@@ -78,16 +78,15 @@ fn test_multithreaded_compute() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::TIMESTAMP_QUERY)
-            .specific_failure(None, None, Some("V3D"), true)
+            .skip(FailureCase::adapter("V3D"))
             // https://github.com/gfx-rs/wgpu/issues/3944
-            .specific_failure(
-                Some(wgpu::Backends::VULKAN),
-                None,
-                Some("swiftshader"),
-                true,
-            )
+            .skip(FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "swiftshader",
+            ))
             // https://github.com/gfx-rs/wgpu/issues/3250
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe"))
+            .skip(FailureCase::molten_vk()),
         |ctx| {
             use std::{sync::mpsc, thread, time::Duration};
 
