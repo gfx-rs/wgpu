@@ -1,9 +1,4 @@
-use std::num::NonZeroU64;
 
-use wasm_bindgen_test::*;
-use wgpu::util::DeviceExt;
-
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
 
 #[cfg(any(
     not(target_arch = "wasm32"),
@@ -11,10 +6,14 @@ use wgpu_test::{initialize_test, TestParameters, TestingContext};
     feature = "webgl"
 ))]
 fn draw_test_with_reports(
-    ctx: TestingContext,
+    ctx: wgpu_test::TestingContext,
     expected: &[u32],
     function: impl FnOnce(&mut wgpu::RenderPass<'_>),
 ) {
+    use std::num::NonZeroU64;
+
+    use wgpu::util::DeviceExt;
+
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
     assert_eq!(report.adapters.num_allocated, 1);
@@ -234,13 +233,14 @@ fn draw_test_with_reports(
 }
 
 #[test]
-#[wasm_bindgen_test]
 #[cfg(any(
     not(target_arch = "wasm32"),
     target_os = "emscripten",
     feature = "webgl"
 ))]
 fn simple_draw_leaks() {
+    use wgpu_test::{initialize_test, TestParameters};
+
     initialize_test(TestParameters::default().test_features_limits(), |ctx| {
         draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..6, 0..1);
