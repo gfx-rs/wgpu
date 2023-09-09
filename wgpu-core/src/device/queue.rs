@@ -1086,11 +1086,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut trackers = device.trackers.lock();
             let transitions = trackers
                 .textures
-                .set_single(
-                    &dst,
-                    selector,
-                    hal::TextureUses::COPY_DST,
-                )
+                .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
             encoder.transition_textures(transitions.map(|pending| pending.into_hal(&dst)));
             encoder.copy_external_image_to_texture(
