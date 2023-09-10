@@ -86,6 +86,7 @@ fn draw_test_with_reports(
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
+    assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.pipeline_layouts.num_allocated, 1);
     assert_eq!(report.render_pipelines.num_allocated, 0);
     assert_eq!(report.compute_pipelines.num_allocated, 0);
@@ -120,9 +121,17 @@ fn draw_test_with_reports(
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.bind_groups.num_allocated, 1);
     assert_eq!(report.bind_group_layouts.num_allocated, 1);
+    assert_eq!(report.shader_modules.num_allocated, 1);
     assert_eq!(report.pipeline_layouts.num_allocated, 1);
     assert_eq!(report.render_pipelines.num_allocated, 1);
     assert_eq!(report.compute_pipelines.num_allocated, 0);
+
+    drop(shader);
+
+    let global_report = ctx.instance.generate_report();
+    let report = global_report.hub_report();
+    assert_eq!(report.shader_modules.num_allocated, 1);
+    assert_eq!(report.shader_modules.num_kept_from_user, 0);
 
     let texture = ctx.device.create_texture_with_data(
         &ctx.queue,
@@ -156,6 +165,7 @@ fn draw_test_with_reports(
     let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.texture_views.num_allocated, 1);
+    assert_eq!(report.texture_views.num_kept_from_user, 1);
     assert_eq!(report.textures.num_allocated, 1);
     assert_eq!(report.textures.num_kept_from_user, 0);
 
@@ -201,12 +211,22 @@ fn draw_test_with_reports(
     drop(rpass);
     drop(pipeline);
     drop(texture_view);
+    drop(ppl);
+    drop(bgl);
+    drop(bg);
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
     assert_eq!(report.command_buffers.num_allocated, 1);
+    assert_eq!(report.command_buffers.num_kept_from_user, 1);
     assert_eq!(report.render_pipelines.num_allocated, 1);
     assert_eq!(report.render_pipelines.num_kept_from_user, 0);
+    assert_eq!(report.pipeline_layouts.num_allocated, 1);
+    assert_eq!(report.pipeline_layouts.num_kept_from_user, 0);
+    assert_eq!(report.bind_group_layouts.num_allocated, 1);
+    assert_eq!(report.bind_group_layouts.num_kept_from_user, 0);
+    assert_eq!(report.bind_groups.num_allocated, 1);
+    assert_eq!(report.bind_groups.num_kept_from_user, 0);
     assert_eq!(report.texture_views.num_allocated, 1);
     assert_eq!(report.texture_views.num_kept_from_user, 0);
     assert_eq!(report.textures.num_allocated, 1);
@@ -222,12 +242,23 @@ fn draw_test_with_reports(
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
+
     assert_eq!(report.render_pipelines.num_allocated, 0);
-    assert_eq!(report.buffers.num_allocated, 1);
-    assert_eq!(report.bind_groups.num_allocated, 1);
-    assert_eq!(report.bind_group_layouts.num_allocated, 1);
-    assert_eq!(report.pipeline_layouts.num_allocated, 1);
+    assert_eq!(report.bind_groups.num_allocated, 0);
+    assert_eq!(report.bind_group_layouts.num_allocated, 0);
+    assert_eq!(report.pipeline_layouts.num_allocated, 0);
     assert_eq!(report.texture_views.num_allocated, 0);
+    assert_eq!(report.textures.num_allocated, 1);
+    assert_eq!(report.buffers.num_allocated, 1);
+
+    drop(ctx.queue);
+    drop(ctx.device);
+
+    let global_report = ctx.instance.generate_report();
+    let report = global_report.hub_report();
+
+    assert_eq!(report.devices.num_kept_from_user, 0);
+    assert_eq!(report.queues.num_kept_from_user, 0);
 }
 
 #[test]

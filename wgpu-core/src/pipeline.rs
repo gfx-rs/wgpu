@@ -246,6 +246,7 @@ pub struct ComputePipeline<A: HalApi> {
     pub(crate) raw: Option<A::ComputePipeline>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
     pub(crate) device: Arc<Device<A>>,
+    pub(crate) _shader_module: Arc<ShaderModule<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
     pub(crate) info: ResourceInfo<ComputePipelineId>,
 }
@@ -473,6 +474,7 @@ pub struct RenderPipeline<A: HalApi> {
     pub(crate) raw: Option<A::RenderPipeline>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) layout: Arc<PipelineLayout<A>>,
+    pub(crate) _shader_modules: Vec<Arc<ShaderModule<A>>>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,

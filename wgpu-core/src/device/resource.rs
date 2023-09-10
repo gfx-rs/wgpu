@@ -2457,6 +2457,7 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             layout: layout.clone(),
             device: self.clone(),
+            _shader_module: shader_module,
             late_sized_buffer_groups,
             info: ResourceInfo::new(desc.label.borrow_or_default()),
         };
@@ -2471,6 +2472,8 @@ impl<A: HalApi> Device<A> {
         hub: &Hub<A>,
     ) -> Result<pipeline::RenderPipeline<A>, pipeline::CreateRenderPipelineError> {
         use wgt::TextureFormatFeatureFlags as Tfff;
+
+        let mut shader_modules = Vec::new();
 
         // This has to be done first, or otherwise the IDs may be pointing to entries
         // that are not even in the storage.
@@ -2739,6 +2742,7 @@ impl<A: HalApi> Device<A> {
                     error: validation::StageError::InvalidModule,
                 }
             })?;
+            shader_modules.push(shader_module.clone());
 
             let pipeline_layout_guard = hub.pipeline_layouts.read();
             let provided_layouts = match desc.layout {
@@ -2788,6 +2792,7 @@ impl<A: HalApi> Device<A> {
                             stage: flag,
                             error: validation::StageError::InvalidModule,
                         })?;
+                shader_modules.push(shader_module.clone());
 
                 let pipeline_layout_guard = hub.pipeline_layouts.read();
                 let provided_layouts = match desc.layout {
@@ -2976,6 +2981,7 @@ impl<A: HalApi> Device<A> {
             layout: layout.clone(),
             device: self.clone(),
             pass_context,
+            _shader_modules: shader_modules,
             flags,
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,

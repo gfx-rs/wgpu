@@ -523,10 +523,11 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
-    ) -> &mut Self
+    ) -> Vec<u64>
     where
         F: FnMut(&id::BindGroupId),
     {
+        let mut submit_indices = Vec::new();
         self.suspected_resources
             .bind_groups
             .retain(|&bind_group_id, bind_group| {
@@ -566,6 +567,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .insert(bind_group.layout.as_info().id(), bind_group.layout.clone());
 
                     let submit_index = bind_group.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
@@ -575,7 +579,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
                 !is_removed
             });
-        self
+        submit_indices
     }
 
     fn triage_suspected_texture_views<F>(
@@ -583,10 +587,11 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
-    ) -> &mut Self
+    ) -> Vec<u64>
     where
         F: FnMut(&id::TextureViewId),
     {
+        let mut submit_indices = Vec::new();
         self.suspected_resources
             .texture_views
             .retain(|&view_id, view| {
@@ -606,6 +611,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                             .insert(parent_texture.as_info().id(), parent_texture.clone());
                     }
                     let submit_index = view.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
@@ -615,7 +623,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
                 !is_removed
             });
-        self
+        submit_indices
     }
 
     fn triage_suspected_textures<F>(
@@ -667,10 +675,11 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
-    ) -> &mut Self
+    ) -> Vec<u64>
     where
         F: FnMut(&id::SamplerId),
     {
+        let mut submit_indices = Vec::new();
         self.suspected_resources
             .samplers
             .retain(|&sampler_id, sampler| {
@@ -685,6 +694,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     f(&sampler_id);
 
                     let submit_index = sampler.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
@@ -694,7 +706,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
                 !is_removed
             });
-        self
+        submit_indices
     }
 
     fn triage_suspected_buffers<F>(
@@ -702,10 +714,11 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
-    ) -> &mut Self
+    ) -> Vec<u64>
     where
         F: FnMut(&id::BufferId),
     {
+        let mut submit_indices = Vec::new();
         self.suspected_resources
             .buffers
             .retain(|&buffer_id, buffer| {
@@ -720,6 +733,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     f(&buffer_id);
 
                     let submit_index = buffer.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     if let resource::BufferMapState::Init {
                         ref stage_buffer, ..
                     } = *buffer.map_state.lock()
@@ -735,7 +751,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
                 !is_removed
             });
-        self
+        submit_indices
     }
 
     fn triage_suspected_compute_pipelines<F>(
@@ -743,10 +759,11 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
-    ) -> &mut Self
+    ) -> Vec<u64>
     where
         F: FnMut(&id::ComputePipelineId),
     {
+        let mut submit_indices = Vec::new();
         self.suspected_resources.compute_pipelines.retain(
             |&compute_pipeline_id, compute_pipeline| {
                 let is_removed = {
@@ -763,7 +780,15 @@ impl<A: HalApi> LifetimeTracker<A> {
                     );
                     f(&compute_pipeline_id);
 
+                    self.suspected_resources.pipeline_layouts.insert(
+                        compute_pipeline.layout.as_info().id(),
+                        compute_pipeline.layout.clone(),
+                    );
+
                     let submit_index = compute_pipeline.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
@@ -774,7 +799,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 !is_removed
             },
         );
-        self
+        submit_indices
     }
 
     fn triage_suspected_render_pipelines<F>(
@@ -782,10 +807,11 @@ impl<A: HalApi> LifetimeTracker<A> {
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         mut f: F,
-    ) -> &mut Self
+    ) -> Vec<u64>
     where
         F: FnMut(&id::RenderPipelineId),
     {
+        let mut submit_indices = Vec::new();
         self.suspected_resources
             .render_pipelines
             .retain(|&render_pipeline_id, render_pipeline| {
@@ -803,7 +829,15 @@ impl<A: HalApi> LifetimeTracker<A> {
                     );
                     f(&render_pipeline_id);
 
+                    self.suspected_resources.pipeline_layouts.insert(
+                        render_pipeline.layout.as_info().id(),
+                        render_pipeline.layout.clone(),
+                    );
+
                     let submit_index = render_pipeline.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
@@ -813,10 +847,14 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
                 !is_removed
             });
-        self
+        submit_indices
     }
 
-    fn triage_suspected_pipeline_layouts<F>(&mut self, mut f: F) -> &mut Self
+    fn triage_suspected_pipeline_layouts<F>(
+        &mut self,
+        pipeline_submit_indices: &[u64],
+        mut f: F,
+    ) -> &mut Self
     where
         F: FnMut(&id::PipelineLayoutId),
     {
@@ -824,7 +862,33 @@ impl<A: HalApi> LifetimeTracker<A> {
             .pipeline_layouts
             .retain(|pipeline_layout_id, pipeline_layout| {
                 //Note: this has to happen after all the suspected pipelines are destroyed
-                if pipeline_layout.is_unique() {
+
+                let mut num_ref_in_nonreferenced_resources = 0;
+                pipeline_submit_indices.iter().for_each(|submit_index| {
+                    let resources = self
+                        .active
+                        .iter()
+                        .find(|a| a.index == *submit_index)
+                        .map_or(&self.free_resources, |a| &a.last_resources);
+
+                    resources.compute_pipes.iter().for_each(|p| {
+                        if p.layout.as_info().id() == *pipeline_layout_id {
+                            num_ref_in_nonreferenced_resources += 1;
+                        }
+                    });
+                    resources.render_pipes.iter().for_each(|p| {
+                        if p.layout.as_info().id() == *pipeline_layout_id {
+                            num_ref_in_nonreferenced_resources += 1;
+                        }
+                    });
+                });
+
+                if pipeline_layout.ref_count() == (1 + num_ref_in_nonreferenced_resources) {
+                    log::debug!(
+                        "PipelineLayout {:?} is not tracked anymore",
+                        pipeline_layout_id
+                    );
+
                     f(pipeline_layout_id);
 
                     for bgl in &pipeline_layout.bind_group_layouts {
@@ -837,13 +901,24 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .push(pipeline_layout.clone());
 
                     return false;
+                } else {
+                    log::info!(
+                        "PipelineLayout {:?} is still referenced from {}",
+                        pipeline_layout_id,
+                        pipeline_layout.ref_count()
+                    );
                 }
                 true
             });
         self
     }
 
-    fn triage_suspected_bind_group_layouts<F>(&mut self, mut f: F) -> &mut Self
+    fn triage_suspected_bind_group_layouts<F>(
+        &mut self,
+        bind_group_submit_indices: &[u64],
+        pipeline_submit_indices: &[u64],
+        mut f: F,
+    ) -> &mut Self
     where
         F: FnMut(&id::BindGroupLayoutId),
     {
@@ -853,15 +928,63 @@ impl<A: HalApi> LifetimeTracker<A> {
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
+                let mut num_ref_in_nonreferenced_resources = 0;
+                bind_group_submit_indices.iter().for_each(|submit_index| {
+                    let resources = self
+                        .active
+                        .iter()
+                        .find(|a| a.index == *submit_index)
+                        .map_or(&self.free_resources, |a| &a.last_resources);
+
+                    resources.bind_groups.iter().for_each(|b| {
+                        if b.layout.as_info().id() == *bind_group_layout_id {
+                            num_ref_in_nonreferenced_resources += 1;
+                        }
+                    });
+                    resources.bind_group_layouts.iter().for_each(|b| {
+                        if b.as_info().id() == *bind_group_layout_id {
+                            num_ref_in_nonreferenced_resources += 1;
+                        }
+                    });
+                });
+                pipeline_submit_indices.iter().for_each(|submit_index| {
+                    let resources = self
+                        .active
+                        .iter()
+                        .find(|a| a.index == *submit_index)
+                        .map_or(&self.free_resources, |a| &a.last_resources);
+
+                    resources.compute_pipes.iter().for_each(|p| {
+                        p.layout.bind_group_layouts.iter().for_each(|b| {
+                            if b.as_info().id() == *bind_group_layout_id {
+                                num_ref_in_nonreferenced_resources += 1;
+                            }
+                        });
+                    });
+                    resources.render_pipes.iter().for_each(|p| {
+                        p.layout.bind_group_layouts.iter().for_each(|b| {
+                            if b.as_info().id() == *bind_group_layout_id {
+                                num_ref_in_nonreferenced_resources += 1;
+                            }
+                        });
+                    });
+                    resources.pipeline_layouts.iter().for_each(|p| {
+                        p.bind_group_layouts.iter().for_each(|b| {
+                            if b.as_info().id() == *bind_group_layout_id {
+                                num_ref_in_nonreferenced_resources += 1;
+                            }
+                        });
+                    });
+                });
 
                 //Note: this has to happen after all the suspected pipelines are destroyed
-                if bind_group_layout.is_unique() {
+                if bind_group_layout.ref_count() == (1 + num_ref_in_nonreferenced_resources) {
                     // If This layout points to a compatible one, go over the latter
                     // to decrement the ref count and potentially destroy it.
                     //bgl_to_check = bind_group_layout.compatible_layout;
 
                     log::debug!(
-                        "BindGroupLayout {:?} will be removed from registry",
+                        "BindGroupLayout {:?} is not tracked anymore",
                         bind_group_layout_id
                     );
                     f(bind_group_layout_id);
@@ -871,6 +994,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .push(bind_group_layout.clone());
 
                     return false;
+                } else {
+                    log::info!(
+                        "BindGroupLayout {:?} is still referenced from {}",
+                        bind_group_layout_id,
+                        bind_group_layout.ref_count()
+                    );
                 }
                 true
             },
@@ -882,7 +1011,8 @@ impl<A: HalApi> LifetimeTracker<A> {
         &mut self,
         hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
-    ) -> &mut Self {
+    ) -> Vec<u64> {
+        let mut submit_indices = Vec::new();
         self.suspected_resources
             .query_sets
             .retain(|&query_set_id, query_set| {
@@ -898,6 +1028,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                     // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id)));
 
                     let submit_index = query_set.info.submission_index();
+                    if !submit_indices.contains(&submit_index) {
+                        submit_indices.push(submit_index);
+                    }
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
@@ -907,7 +1040,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                 }
                 !is_removed
             });
-        self
+        submit_indices
     }
 
     /// Identify resources to free, according to `trackers` and `self.suspected_resources`.
@@ -963,24 +1096,45 @@ impl<A: HalApi> LifetimeTracker<A> {
                 t.add(trace::Action::DestroyRenderBundle(*_id));
             }
         });
-        self.triage_suspected_bind_groups(hub, trackers, |_id| {
+        let compute_pipeline_indices =
+            self.triage_suspected_compute_pipelines(hub, trackers, |_id| {
+                #[cfg(feature = "trace")]
+                if let Some(ref mut t) = trace {
+                    t.add(trace::Action::DestroyComputePipeline(*_id));
+                }
+            });
+        let render_pipeline_indices =
+            self.triage_suspected_render_pipelines(hub, trackers, |_id| {
+                #[cfg(feature = "trace")]
+                if let Some(ref mut t) = trace {
+                    t.add(trace::Action::DestroyRenderPipeline(*_id));
+                }
+            });
+        let mut pipeline_submit_indices = Vec::new();
+        pipeline_submit_indices.extend(compute_pipeline_indices);
+        pipeline_submit_indices.extend(render_pipeline_indices);
+        let bind_group_submit_indices = self.triage_suspected_bind_groups(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
                 t.add(trace::Action::DestroyBindGroup(*_id));
             }
         });
-        self.triage_suspected_texture_views(hub, trackers, |_id| {
+        self.triage_suspected_pipeline_layouts(&pipeline_submit_indices, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyTextureView(*_id));
+                t.add(trace::Action::DestroyPipelineLayout(*_id));
             }
         });
-        self.triage_suspected_textures(hub, trackers, |_id| {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyTexture(*_id));
-            }
-        });
+        self.triage_suspected_bind_group_layouts(
+            &bind_group_submit_indices,
+            &pipeline_submit_indices,
+            |_id| {
+                #[cfg(feature = "trace")]
+                if let Some(ref mut t) = trace {
+                    t.add(trace::Action::DestroyBindGroupLayout(*_id));
+                }
+            },
+        );
         self.triage_suspected_samplers(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
@@ -993,28 +1147,16 @@ impl<A: HalApi> LifetimeTracker<A> {
                 t.add(trace::Action::DestroyBuffer(*_id));
             }
         });
-        self.triage_suspected_compute_pipelines(hub, trackers, |_id| {
+        self.triage_suspected_texture_views(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyComputePipeline(*_id));
+                t.add(trace::Action::DestroyTextureView(*_id));
             }
         });
-        self.triage_suspected_render_pipelines(hub, trackers, |_id| {
+        self.triage_suspected_textures(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyRenderPipeline(*_id));
-            }
-        });
-        self.triage_suspected_pipeline_layouts(|_id| {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyPipelineLayout(*_id));
-            }
-        });
-        self.triage_suspected_bind_group_layouts(|_id| {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyBindGroupLayout(*_id));
+                t.add(trace::Action::DestroyTexture(*_id));
             }
         });
         self.triage_suspected_query_sets(hub, trackers);
