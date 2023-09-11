@@ -614,6 +614,7 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
         }
 
+        #[cfg_attr(not(feature = "validate"), allow(unused_mut))]
         let mut info = self
             .validate_function(&ep.function, module, mod_info, true)
             .map_err(WithSpan::into_other)?;
