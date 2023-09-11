@@ -126,6 +126,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device, config) = match surface.presentation {
             Some(ref present) => {
                 let device = &device_guard[present.device_id.value];
+                if !device.is_valid() {
+                  return Err(DeviceError::Invalid.into());
+                }
                 (device, present.config.clone())
             }
             None => return Err(SurfaceError::NotConfigured),
@@ -278,6 +281,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &mut device_guard[present.device_id.value];
+        if !device.is_valid() {
+          return Err(DeviceError::Invalid.into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -372,6 +378,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &mut device_guard[present.device_id.value];
+        if !device.is_valid() {
+          return Err(DeviceError::Invalid.into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {

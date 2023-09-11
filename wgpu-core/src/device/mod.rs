@@ -293,11 +293,9 @@ pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("Parent device is invalid")]
+    #[error("Parent device is invalid or lost.")]
     Invalid,
-    #[error("Parent device is lost")]
-    Lost,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left.")]
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
@@ -306,7 +304,7 @@ pub enum DeviceError {
 impl From<hal::DeviceError> for DeviceError {
     fn from(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Lost,
+            hal::DeviceError::Lost => DeviceError::Invalid,
             hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
             hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
         }

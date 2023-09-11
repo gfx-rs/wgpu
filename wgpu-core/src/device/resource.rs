@@ -72,6 +72,8 @@ pub struct Device<A: HalApi> {
     pub(crate) active_submission_index: SubmissionIndex,
     pub(super) fence: A::Fence,
 
+    pub(super) valid: bool,
+
     /// All live resources allocated with this [`Device`].
     ///
     /// Has to be locked temporarily only (locked last)
@@ -189,6 +191,7 @@ impl<A: HalApi> Device<A> {
             command_allocator: Mutex::new(com_alloc),
             active_submission_index: 0,
             fence,
+            valid: true,
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
@@ -212,6 +215,10 @@ impl<A: HalApi> Device<A> {
             downlevel,
             pending_writes,
         })
+    }
+
+    pub fn is_valid(&self) -> bool {
+      self.valid
     }
 
     pub(super) fn lock_life<'this, 'token: 'this>(
