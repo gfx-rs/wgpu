@@ -653,6 +653,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
 
     let root = env!("CARGO_MANIFEST_DIR");
 
+    println!("Processing '{name}'");
     let module = naga::front::spv::parse_u8_slice(
         &fs::read(format!("{root}/{BASE_DIR_IN}/spv/{name}.spv")).expect("Couldn't find spv file"),
         &naga::front::spv::Options {
