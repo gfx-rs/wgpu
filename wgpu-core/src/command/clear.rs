@@ -219,6 +219,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+          return Err(ClearError::InvalidDevice(cmd_buf.device_id.value.0));
+        }
 
         clear_texture(
             &*texture_guard,

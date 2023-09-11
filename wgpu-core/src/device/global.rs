@@ -102,6 +102,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+          return Err(InvalidDevice);
+        }
 
         Ok(device.features)
     }
@@ -114,6 +117,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+          return Err(InvalidDevice);
+        }
 
         Ok(device.limits.clone())
     }
@@ -126,6 +132,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+          return Err(InvalidDevice);
+        }
 
         Ok(device.downlevel.clone())
     }
@@ -148,6 +157,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
 
             if desc.usage.is_empty() {
                 // Per spec, `usage` must not be zero.
@@ -586,6 +598,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -641,6 +656,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -717,6 +735,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
 
             // NB: Any change done through the raw buffer handle will not be
             // recorded in the replay
@@ -978,6 +999,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1056,6 +1081,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1170,6 +1199,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1249,6 +1282,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1351,6 +1388,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
@@ -1416,6 +1457,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
@@ -1486,6 +1531,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid,
             };
+            if !device.valid {
+              break DeviceError::Invalid;
+            }
+
             let dev_stored = Stored {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
@@ -1579,6 +1628,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break command::RenderBundleError::INVALID_DEVICE,
             };
+            if !device.valid {
+              break command::RenderBundleError::INVALID_DEVICE;
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateRenderBundle {
@@ -1661,6 +1714,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateQuerySet {
@@ -1750,6 +1807,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             let adapter = &adapter_guard[device.adapter_id.value];
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
@@ -1893,6 +1954,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateComputePipeline {
@@ -2141,6 +2206,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+              break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -2393,6 +2462,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         if let Ok(device) = device_guard.get(id) {
+            if !device.valid {
+              return;
+            }
             unsafe { device.raw.start_capture() };
         }
     }
@@ -2402,6 +2474,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         if let Ok(device) = device_guard.get(id) {
+            if !device.valid {
+              return;
+            }
             unsafe { device.raw.stop_capture() };
         }
     }
@@ -2421,6 +2496,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Ok(device) = device_guard.get_mut(device_id) {
             device.life_guard.ref_count.take().unwrap();
         }
+    }
+
+    pub fn device_lose<A: HalApi>(&self, device_id: DeviceId) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, _) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            // Mark the device explicitly as invalid. This is checked in various
+            // places to prevent new work from being submitted, allowing a later
+            // call to `poll_devices` to drop this device when the work queues
+            // are cleared.
+            device.valid = false;
+        }
+
+        // TODO(BJW): inform the GPUDevice that it is lost, and provide a reason.
     }
 
     /// Exit the unreferenced, inactive device `device_id`.
@@ -2507,6 +2598,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
+            let device = &device_guard[buffer.device_id.value];
+            if !device.valid {
+              return Err((op, BufferAccessError::Invalid));
+            }
+
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
                 return Err((op, e.into()));
             }
@@ -2547,8 +2643,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
-            let device = &device_guard[buffer.device_id.value];
-
             let ret = (buffer.device_id.value, buffer.life_guard.add_ref());
 
             let mut trackers = device.trackers.lock();
@@ -2561,7 +2655,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &device_guard[device_id];
-
         device
             .lock_life(&mut token)
             .map(id::Valid(buffer_id), ref_count);
