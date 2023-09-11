@@ -21,7 +21,6 @@ fn device_mismatch() {
             // error but currently crashes.
             let (device2, _) =
                 pollster::block_on(ctx.adapter.request_device(&Default::default(), None)).unwrap();
-
             {
                 let bind_group_layout =
                     device2.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -90,4 +89,11 @@ async fn request_device_error_message() {
         }
     }
     assert!(device_error.contains(expected), "{device_error}");
+}
+
+#[test]
+fn device_lose() {
+    initialize_test(TestParameters::default(), |_ctx| {
+        //ctx.device.device_lose
+    })
 }

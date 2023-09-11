@@ -292,7 +292,7 @@ pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("Parent device is invalid or lost.")]
+    #[error("Parent device is invalid.")]
     Invalid,
     #[error("Parent device is lost")]
     Lost,

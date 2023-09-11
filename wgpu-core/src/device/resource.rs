@@ -72,7 +72,18 @@ pub struct Device<A: HalApi> {
     pub(crate) active_submission_index: SubmissionIndex,
     pub(super) fence: A::Fence,
 
-    pub(super) valid: bool,
+    /// Is this device valid? Valid is closely associated with "lose the device",
+    /// which can be triggered by various methods, including at the end of device
+    /// destroy, and by any GPU errors that cause us to no longer trust the state
+    /// of the device. Ideally we would like to fold valid into the storage of
+    /// the device itself (for example as an Error enum), but unfortunately we
+    /// need to continue to be able to retrieve the device in poll_devices to
+    /// determine if it can be dropped. If our internal accesses of devices were
+    /// done through ref-counted references and external accesses checked for
+    /// Error enums, we wouldn't need this. For now, we need it. All the call
+    /// sites where we check it are areas that should be revisited if we start
+    /// using ref-counted references for internal access.
+    pub(crate) valid: bool,
 
     /// All live resources allocated with this [`Device`].
     ///
@@ -3160,6 +3171,14 @@ impl<A: HalApi> Device<A> {
             life_guard: LifeGuard::new(""),
             desc: desc.map_label(|_| ()),
         })
+    }
+
+    pub(crate) fn lose(&mut self) {
+        // Mark the device explicitly as invalid. This is checked in various
+        // places to prevent new work from being submitted, allowing a later
+        // call to `poll_devices` to drop this device when the work queues
+        // are cleared.
+        self.valid = false;
     }
 }
 

@@ -2516,14 +2516,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut device_guard, _) = hub.devices.write(&mut token);
         if let Ok(device) = device_guard.get_mut(device_id) {
-            // Mark the device explicitly as invalid. This is checked in various
-            // places to prevent new work from being submitted, allowing a later
-            // call to `poll_devices` to drop this device when the work queues
-            // are cleared.
-            device.valid = false;
+            device.lose();
         }
-
-        // TODO(BJW): inform the GPUDevice that it is lost, and provide a reason.
     }
 
     /// Exit the unreferenced, inactive device `device_id`.
