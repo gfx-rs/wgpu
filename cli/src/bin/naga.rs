@@ -160,7 +160,7 @@ struct Parameters<'a> {
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
     entry_point: Option<String>,
     keep_coordinate_space: bool,
-    spv_block_ctx_dump_prefix: Option<String>,
+    spv_in: naga::front::spv::Options,
     dot: naga::back::dot::Options,
     spv: naga::back::spv::Options<'a>,
     msl: naga::back::msl::Options,
@@ -264,7 +264,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(arg) => arg.0,
         None => params.bounds_check_policies.index,
     };
-    params.spv_block_ctx_dump_prefix = args.block_ctx_dir;
+
+    params.spv_in = naga::front::spv::Options {
+        adjust_coordinate_space: !args.keep_coordinate_space,
+        strict_capabilities: false,
+        block_ctx_dump_prefix: args.block_ctx_dir.map(std::path::PathBuf::from),
+    };
+
     params.entry_point = args.entry_point;
     if let Some(version) = args.profile {
         params.glsl.version = version.0;
@@ -283,16 +289,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or(CliError("Input filename not valid unicode"))?
     {
         "bin" => (bincode::deserialize(&input)?, None),
-        "spv" => {
-            let options = naga::front::spv::Options {
-                adjust_coordinate_space: !params.keep_coordinate_space,
-                strict_capabilities: false,
-                block_ctx_dump_prefix: params
-                    .spv_block_ctx_dump_prefix
-                    .map(std::path::PathBuf::from),
-            };
-            naga::front::spv::parse_u8_slice(&input, &options).map(|m| (m, None))?
-        }
+        "spv" => naga::front::spv::parse_u8_slice(&input, &params.spv_in).map(|m| (m, None))?,
         "wgsl" => {
             let input = String::from_utf8(input)?;
             let result = naga::front::wgsl::parse_str(&input);
