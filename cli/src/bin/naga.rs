@@ -416,155 +416,166 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for output_path in output_paths {
-        match Path::new(&output_path)
-            .extension()
-            .ok_or(CliError("Output filename has no extension"))?
-            .to_str()
-            .ok_or(CliError("Output filename not valid unicode"))?
-        {
-            "txt" => {
-                use std::io::Write;
+        write_output(&module, &info, &params, output_path)?;
+    }
 
-                let mut file = fs::File::create(output_path)?;
-                writeln!(file, "{module:#?}")?;
-                if let Some(ref info) = info {
-                    writeln!(file)?;
-                    writeln!(file, "{info:#?}")?;
+    Ok(())
+}
+
+fn write_output(
+    module: &naga::Module,
+    info: &Option<naga::valid::ModuleInfo>,
+    params: &Parameters,
+    output_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match Path::new(&output_path)
+        .extension()
+        .ok_or(CliError("Output filename has no extension"))?
+        .to_str()
+        .ok_or(CliError("Output filename not valid unicode"))?
+    {
+        "txt" => {
+            use std::io::Write;
+
+            let mut file = fs::File::create(output_path)?;
+            writeln!(file, "{module:#?}")?;
+            if let Some(ref info) = *info {
+                writeln!(file)?;
+                writeln!(file, "{info:#?}")?;
+            }
+        }
+        "bin" => {
+            let file = fs::File::create(output_path)?;
+            bincode::serialize_into(file, module)?;
+        }
+        "metal" => {
+            use naga::back::msl;
+
+            let mut options = params.msl.clone();
+            options.bounds_check_policies = params.bounds_check_policies;
+
+            let pipeline_options = msl::PipelineOptions::default();
+            let (msl, _) = msl::write_string(
+                module,
+                info.as_ref().ok_or(CliError(
+                    "Generating metal output requires validation to \
+                     succeed, and it failed in a previous step",
+                ))?,
+                &options,
+                &pipeline_options,
+            )
+            .unwrap_pretty();
+            fs::write(output_path, msl)?;
+        }
+        "spv" => {
+            use naga::back::spv;
+
+            let pipeline_options_owned;
+            let pipeline_options = match params.entry_point {
+                Some(ref name) => {
+                    let ep_index = module
+                        .entry_points
+                        .iter()
+                        .position(|ep| ep.name == *name)
+                        .expect("Unable to find the entry point");
+                    pipeline_options_owned = spv::PipelineOptions {
+                        entry_point: name.clone(),
+                        shader_stage: module.entry_points[ep_index].stage,
+                    };
+                    Some(&pipeline_options_owned)
                 }
-            }
-            "bin" => {
-                let file = fs::File::create(output_path)?;
-                bincode::serialize_into(file, &module)?;
-            }
-            "metal" => {
-                use naga::back::msl;
+                None => None,
+            };
 
-                let mut options = params.msl.clone();
-                options.bounds_check_policies = params.bounds_check_policies;
+            let spv = spv::write_vec(
+                module,
+                info.as_ref().ok_or(CliError(
+                    "Generating SPIR-V output requires validation to \
+                     succeed, and it failed in a previous step",
+                ))?,
+                &params.spv_out,
+                pipeline_options,
+            )
+            .unwrap_pretty();
+            let bytes = spv
+                .iter()
+                .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
+                    v.extend_from_slice(&w.to_le_bytes());
+                    v
+                });
 
-                let pipeline_options = msl::PipelineOptions::default();
-                let (msl, _) = msl::write_string(
-                    &module,
+            fs::write(output_path, bytes.as_slice())?;
+        }
+        stage @ ("vert" | "frag" | "comp") => {
+            use naga::back::glsl;
+
+            let pipeline_options = glsl::PipelineOptions {
+                entry_point: match params.entry_point {
+                    Some(ref name) => name.clone(),
+                    None => "main".to_string(),
+                },
+                shader_stage: match stage {
+                    "vert" => naga::ShaderStage::Vertex,
+                    "frag" => naga::ShaderStage::Fragment,
+                    "comp" => naga::ShaderStage::Compute,
+                    _ => unreachable!(),
+                },
+                multiview: None,
+            };
+
+            let mut buffer = String::new();
+            let mut writer = glsl::Writer::new(
+                &mut buffer,
+                module,
+                info.as_ref().ok_or(CliError(
+                    "Generating glsl output requires validation to \
+                     succeed, and it failed in a previous step",
+                ))?,
+                &params.glsl,
+                &pipeline_options,
+                params.bounds_check_policies,
+            )
+            .unwrap_pretty();
+            writer.write()?;
+            fs::write(output_path, buffer)?;
+        }
+        "dot" => {
+            use naga::back::dot;
+
+            let output = dot::write(module, info.as_ref(), params.dot.clone())?;
+            fs::write(output_path, output)?;
+        }
+        "hlsl" => {
+            use naga::back::hlsl;
+            let mut buffer = String::new();
+            let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
+            writer
+                .write(
+                    module,
                     info.as_ref().ok_or(CliError(
-                        "Generating metal output requires validation to \
-                        succeed, and it failed in a previous step",
+                        "Generating hlsl output requires validation to \
+                         succeed, and it failed in a previous step",
                     ))?,
-                    &options,
-                    &pipeline_options,
                 )
                 .unwrap_pretty();
-                fs::write(output_path, msl)?;
-            }
-            "spv" => {
-                use naga::back::spv;
+            fs::write(output_path, buffer)?;
+        }
+        "wgsl" => {
+            use naga::back::wgsl;
 
-                let pipeline_options_owned;
-                let pipeline_options = match params.entry_point {
-                    Some(ref name) => {
-                        let ep_index = module
-                            .entry_points
-                            .iter()
-                            .position(|ep| ep.name == *name)
-                            .expect("Unable to find the entry point");
-                        pipeline_options_owned = spv::PipelineOptions {
-                            entry_point: name.clone(),
-                            shader_stage: module.entry_points[ep_index].stage,
-                        };
-                        Some(&pipeline_options_owned)
-                    }
-                    None => None,
-                };
-
-                let spv = spv::write_vec(
-                    &module,
-                    info.as_ref().ok_or(CliError(
-                        "Generating SPIR-V output requires validation to \
-                        succeed, and it failed in a previous step",
-                    ))?,
-                    &params.spv_out,
-                    pipeline_options,
-                )
-                .unwrap_pretty();
-                let bytes = spv
-                    .iter()
-                    .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
-                        v.extend_from_slice(&w.to_le_bytes());
-                        v
-                    });
-
-                fs::write(output_path, bytes.as_slice())?;
-            }
-            stage @ ("vert" | "frag" | "comp") => {
-                use naga::back::glsl;
-
-                let pipeline_options = glsl::PipelineOptions {
-                    entry_point: match params.entry_point {
-                        Some(ref name) => name.clone(),
-                        None => "main".to_string(),
-                    },
-                    shader_stage: match stage {
-                        "vert" => naga::ShaderStage::Vertex,
-                        "frag" => naga::ShaderStage::Fragment,
-                        "comp" => naga::ShaderStage::Compute,
-                        _ => unreachable!(),
-                    },
-                    multiview: None,
-                };
-
-                let mut buffer = String::new();
-                let mut writer = glsl::Writer::new(
-                    &mut buffer,
-                    &module,
-                    info.as_ref().ok_or(CliError(
-                        "Generating glsl output requires validation to \
-                        succeed, and it failed in a previous step",
-                    ))?,
-                    &params.glsl,
-                    &pipeline_options,
-                    params.bounds_check_policies,
-                )
-                .unwrap_pretty();
-                writer.write()?;
-                fs::write(output_path, buffer)?;
-            }
-            "dot" => {
-                use naga::back::dot;
-
-                let output = dot::write(&module, info.as_ref(), params.dot.clone())?;
-                fs::write(output_path, output)?;
-            }
-            "hlsl" => {
-                use naga::back::hlsl;
-                let mut buffer = String::new();
-                let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
-                writer
-                    .write(
-                        &module,
-                        info.as_ref().ok_or(CliError(
-                            "Generating hlsl output requires validation to \
-                            succeed, and it failed in a previous step",
-                        ))?,
-                    )
-                    .unwrap_pretty();
-                fs::write(output_path, buffer)?;
-            }
-            "wgsl" => {
-                use naga::back::wgsl;
-
-                let wgsl = wgsl::write_string(
-                    &module,
-                    info.as_ref().ok_or(CliError(
-                        "Generating wgsl output requires validation to \
-                        succeed, and it failed in a previous step",
-                    ))?,
-                    wgsl::WriterFlags::empty(),
-                )
-                .unwrap_pretty();
-                fs::write(output_path, wgsl)?;
-            }
-            other => {
-                println!("Unknown output extension: {other}");
-            }
+            let wgsl = wgsl::write_string(
+                module,
+                info.as_ref().ok_or(CliError(
+                    "Generating wgsl output requires validation to \
+                     succeed, and it failed in a previous step",
+                ))?,
+                wgsl::WriterFlags::empty(),
+            )
+            .unwrap_pretty();
+            fs::write(output_path, wgsl)?;
+        }
+        other => {
+            println!("Unknown output extension: {other}");
         }
     }
 
