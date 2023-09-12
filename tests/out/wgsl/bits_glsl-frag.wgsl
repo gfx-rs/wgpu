@@ -11,15 +11,15 @@ fn main_1() {
     var f4_: vec4<f32>;
 
     i = 0;
-    i2_ = vec2<i32>(0);
-    i3_ = vec3<i32>(0);
-    i4_ = vec4<i32>(0);
+    i2_ = vec2(0);
+    i3_ = vec3(0);
+    i4_ = vec4(0);
     u = u32(0);
-    u2_ = vec2<u32>(u32(0));
-    u3_ = vec3<u32>(u32(0));
-    u4_ = vec4<u32>(u32(0));
-    f2_ = vec2<f32>(0.0);
-    f4_ = vec4<f32>(0.0);
+    u2_ = vec2(u32(0));
+    u3_ = vec3(u32(0));
+    u4_ = vec4(u32(0));
+    f2_ = vec2(0.0);
+    f4_ = vec4(0.0);
     let _e33 = f4_;
     u = pack4x8snorm(_e33);
     let _e36 = f4_;

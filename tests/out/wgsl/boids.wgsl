@@ -107,13 +107,13 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         let _e97 = cMass;
         let _e98 = cMassCount;
         let _e102 = vPos;
-        cMass = ((_e97 / vec2<f32>(f32(_e98))) - _e102);
+        cMass = ((_e97 / vec2(f32(_e98))) - _e102);
     }
     let _e104 = cVelCount;
     if (_e104 > 0) {
         let _e107 = cVel;
         let _e108 = cVelCount;
-        cVel = (_e107 / vec2<f32>(f32(_e108)));
+        cVel = (_e107 / vec2(f32(_e108)));
     }
     let _e112 = vVel;
     let _e113 = cMass;

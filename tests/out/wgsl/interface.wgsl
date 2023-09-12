@@ -22,7 +22,7 @@ var<workgroup> output: array<u32, 1>;
 @vertex 
 fn vertex(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32, @location(10) @interpolate(flat) color: u32) -> VertexOutput {
     let tmp: u32 = ((vertex_index + instance_index) + color);
-    return VertexOutput(vec4<f32>(1.0), f32(tmp));
+    return VertexOutput(vec4(1.0), f32(tmp));
 }
 
 @fragment 

@@ -33,7 +33,7 @@ fn Fma(d: ptr<function, Mat4x3_>, m: Mat4x3_, s: f32) {
 
 fn main_1() {
     let _e1 = o_color;
-    let _e4 = vec4<f32>(1.0);
+    let _e4 = vec4(1.0);
     o_color.x = _e4.x;
     o_color.y = _e4.y;
     o_color.z = _e4.z;

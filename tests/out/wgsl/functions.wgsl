@@ -6,13 +6,13 @@ fn test_fma() -> vec2<f32> {
 }
 
 fn test_integer_dot_product() -> i32 {
-    let a_2_ = vec2<i32>(1);
-    let b_2_ = vec2<i32>(1);
+    let a_2_ = vec2(1);
+    let b_2_ = vec2(1);
     let c_2_ = dot(a_2_, b_2_);
-    let a_3_ = vec3<u32>(1u);
-    let b_3_ = vec3<u32>(1u);
+    let a_3_ = vec3(1u);
+    let b_3_ = vec3(1u);
     let c_3_ = dot(a_3_, b_3_);
-    let c_4_ = dot(vec4<i32>(4), vec4<i32>(2));
+    let c_4_ = dot(vec4(4), vec4(2));
     return c_4_;
 }
 

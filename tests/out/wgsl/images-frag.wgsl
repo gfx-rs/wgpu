@@ -24,7 +24,7 @@ fn testImg1D(coord: i32) {
     let _e10 = textureDimensions(img1D);
     size = i32(_e10);
     let _e17 = coord_1;
-    textureStore(img1D, _e17, vec4<f32>(f32(2)));
+    textureStore(img1D, _e17, vec4(f32(2)));
     let _e22 = coord_1;
     let _e23 = textureLoad(img1D, _e22);
     c = _e23;
@@ -44,7 +44,7 @@ fn testImg1DArray(coord_2: vec2<i32>) {
     let _e20 = textureLoad(img1DArray, _e17.x, _e17.y);
     c_1 = _e20;
     let _e26 = coord_3;
-    textureStore(img1DArray, _e26.x, _e26.y, vec4<f32>(f32(2)));
+    textureStore(img1DArray, _e26.x, _e26.y, vec4(f32(2)));
     return;
 }
 
@@ -60,7 +60,7 @@ fn testImg2D(coord_4: vec2<i32>) {
     let _e16 = textureLoad(img2D, _e15);
     c_2 = _e16;
     let _e22 = coord_5;
-    textureStore(img2D, _e22, vec4<f32>(f32(2)));
+    textureStore(img2D, _e22, vec4(f32(2)));
     return;
 }
 
@@ -77,7 +77,7 @@ fn testImg2DArray(coord_6: vec3<i32>) {
     let _e22 = textureLoad(img2DArray, _e19.xy, _e19.z);
     c_3 = _e22;
     let _e28 = coord_7;
-    textureStore(img2DArray, _e28.xy, _e28.z, vec4<f32>(f32(2)));
+    textureStore(img2DArray, _e28.xy, _e28.z, vec4(f32(2)));
     return;
 }
 
@@ -93,7 +93,7 @@ fn testImg3D(coord_8: vec3<i32>) {
     let _e16 = textureLoad(img3D, _e15);
     c_4 = _e16;
     let _e22 = coord_9;
-    textureStore(img3D, _e22, vec4<f32>(f32(2)));
+    textureStore(img3D, _e22, vec4(f32(2)));
     return;
 }
 
@@ -119,7 +119,7 @@ fn testImgWriteOnly(coord_12: vec2<i32>) {
     let _e10 = textureDimensions(img2D);
     size_6 = vec2<f32>(vec2<i32>(_e10));
     let _e18 = coord_13;
-    textureStore(imgWriteOnly, _e18, vec4<f32>(f32(2)));
+    textureStore(imgWriteOnly, _e18, vec4(f32(2)));
     return;
 }
 

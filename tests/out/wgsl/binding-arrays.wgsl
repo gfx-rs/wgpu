@@ -35,11 +35,11 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     let uniform_index = uni.index;
     let non_uniform_index = fragment_in.index;
     u1_ = 0u;
-    u2_ = vec2<u32>(0u);
+    u2_ = vec2(0u);
     v1_ = 0.0;
-    v4_ = vec4<f32>(0.0);
-    let uv = vec2<f32>(0.0);
-    let pix = vec2<i32>(0);
+    v4_ = vec4(0.0);
+    let uv = vec2(0.0);
+    let pix = vec2(0);
     let _e22 = textureDimensions(texture_array_unbounded[0]);
     let _e23 = u2_;
     u2_ = (_e23 + _e22);
@@ -165,8 +165,8 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     textureStore(texture_array_storage[non_uniform_index], pix, _e313);
     let _e314 = u2_;
     let _e315 = u1_;
-    let v2_ = vec2<f32>((_e314 + vec2<u32>(_e315)));
+    let v2_ = vec2<f32>((_e314 + vec2(_e315)));
     let _e319 = v4_;
     let _e326 = v1_;
-    return ((_e319 + vec4<f32>(v2_.x, v2_.y, v2_.x, v2_.y)) + vec4<f32>(_e326));
+    return ((_e319 + vec4<f32>(v2_.x, v2_.y, v2_.x, v2_.y)) + vec4(_e326));
 }

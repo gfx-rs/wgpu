@@ -218,7 +218,7 @@ fn F_Schlick(f0_: vec3<f32>, f90_: f32, VoH: f32) -> vec3<f32> {
     let _e49 = VoH_1;
     let _e52 = VoH_1;
     let _e54 = pow5_((1.0 - _e52));
-    return (f0_ + ((vec3<f32>(_e45) - f0_) * _e54));
+    return (f0_ + ((vec3(_e45) - f0_) * _e54));
 }
 
 fn F_Schlick_1(f0_1: f32, f90_2: f32, VoH_2: f32) -> f32 {
@@ -247,7 +247,7 @@ fn fresnel(f0_3: vec3<f32>, LoH: f32) -> vec3<f32> {
     LoH_1 = LoH;
     let _e49 = f0_4;
     let _e62 = f0_4;
-    f90_4 = clamp(dot(_e62, vec3<f32>((50.0 * 0.33))), 0.0, 1.0);
+    f90_4 = clamp(dot(_e62, vec3((50.0 * 0.33))), 0.0, 1.0);
     let _e75 = f0_4;
     let _e76 = f90_4;
     let _e77 = LoH_1;
@@ -342,7 +342,7 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     let _e62 = perceptual_roughness_1;
     let _e64 = c0_;
     let _e66 = c1_;
-    r = ((vec4<f32>(_e62) * _e64) + _e66);
+    r = ((vec4(_e62) * _e64) + _e66);
     let _e69 = r;
     let _e71 = r;
     let _e76 = NoV_7;
@@ -356,11 +356,11 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     a004_ = ((min((_e83.x * _e85.x), exp2((-(9.28) * _e94))) * _e98.x) + _e101.y);
     let _e109 = a004_;
     let _e112 = r;
-    AB = ((vec2<f32>(-(1.04), 1.04) * vec2<f32>(_e109)) + _e112.zw);
+    AB = ((vec2<f32>(-(1.04), 1.04) * vec2(_e109)) + _e112.zw);
     let _e116 = f0_8;
     let _e117 = AB;
     let _e121 = AB;
-    return ((_e116 * vec3<f32>(_e117.x)) + vec3<f32>(_e121.y));
+    return ((_e116 * vec3(_e117.x)) + vec3(_e121.y));
 }
 
 fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
@@ -381,7 +381,7 @@ fn reinhard(color: vec3<f32>) -> vec3<f32> {
     color_1 = color;
     let _e42 = color_1;
     let _e45 = color_1;
-    return (_e42 / (vec3<f32>(1.0) + _e45));
+    return (_e42 / (vec3(1.0) + _e45));
 }
 
 fn reinhard_extended(color_2: vec3<f32>, max_white: f32) -> vec3<f32> {
@@ -395,10 +395,10 @@ fn reinhard_extended(color_2: vec3<f32>, max_white: f32) -> vec3<f32> {
     let _e47 = color_3;
     let _e48 = max_white_1;
     let _e49 = max_white_1;
-    numerator = (_e44 * (vec3<f32>(1.0) + (_e47 / vec3<f32>((_e48 * _e49)))));
+    numerator = (_e44 * (vec3(1.0) + (_e47 / vec3((_e48 * _e49)))));
     let _e56 = numerator;
     let _e59 = color_3;
-    return (_e56 / (vec3<f32>(1.0) + _e59));
+    return (_e56 / (vec3(1.0) + _e59));
 }
 
 fn luminance(v_1: vec3<f32>) -> f32 {
@@ -788,7 +788,7 @@ fn main_1() {
     let _e123 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e122);
     let _e131 = v_Uv_1;
     let _e132 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e131);
-    N_2 = (_e120 * normalize(((_e132.xyz * 2.0) - vec3<f32>(1.0))));
+    N_2 = (_e120 * normalize(((_e132.xyz * 2.0) - vec3(1.0))));
     let _e142 = v_Uv_1;
     let _e143 = textureSample(StandardMaterial_occlusion_texture, StandardMaterial_occlusion_texture_sampler, _e142);
     occlusion = _e143.x;
@@ -817,15 +817,15 @@ fn main_1() {
     let _e195 = metallic;
     let _e199 = output_color;
     let _e201 = metallic;
-    F0_4 = (vec3<f32>((((0.16 * _e190) * _e192) * (1.0 - _e195))) + (_e199.xyz * vec3<f32>(_e201)));
+    F0_4 = (vec3((((0.16 * _e190) * _e192) * (1.0 - _e195))) + (_e199.xyz * vec3(_e201)));
     let _e206 = output_color;
     let _e209 = metallic;
-    diffuseColor_4 = (_e206.xyz * vec3<f32>((1.0 - _e209)));
+    diffuseColor_4 = (_e206.xyz * vec3((1.0 - _e209)));
     let _e214 = V_3;
     let _e217 = V_3;
     let _e219 = N_2;
     R_4 = reflect(-(_e217), _e219);
-    light_accum = vec3<f32>(0.0);
+    light_accum = vec3(0.0);
     i = 0;
     loop {
         let _e227 = i;

@@ -52,7 +52,7 @@ fn main_1() {
     a_1 = _e41;
     let _e57 = array_toomanyd[0][0][0][0][0][0][0];
     b = _e57;
-    out_array[0] = vec4<f32>(2.0);
+    out_array[0] = vec4(2.0);
     return;
 }
 

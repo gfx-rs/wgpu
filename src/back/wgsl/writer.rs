@@ -1132,6 +1132,12 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ")")?
             }
+            Expression::Splat { size, value } => {
+                let size = back::vector_size_str(size);
+                write!(self.out, "vec{size}(")?;
+                write_expression(self, value)?;
+                write!(self.out, ")")?;
+            }
             _ => unreachable!(),
         }
 
@@ -1173,7 +1179,8 @@ impl<W: Write> Writer<W> {
             Expression::Literal(_)
             | Expression::Constant(_)
             | Expression::ZeroValue(_)
-            | Expression::Compose { .. } => {
+            | Expression::Compose { .. }
+            | Expression::Splat { .. } => {
                 self.write_possibly_const_expression(
                     module,
                     expr,
@@ -1448,23 +1455,6 @@ impl<W: Write> Writer<W> {
                 };
                 write!(self.out, "(")?;
                 self.write_expr(module, expr, func_ctx)?;
-                write!(self.out, ")")?;
-            }
-            Expression::Splat { size, value } => {
-                let inner = func_ctx.resolve_type(value, &module.types);
-                let (scalar_kind, scalar_width) = match *inner {
-                    crate::TypeInner::Scalar { kind, width } => (kind, width),
-                    _ => {
-                        return Err(Error::Unimplemented(format!(
-                            "write_expr expression::splat {inner:?}"
-                        )));
-                    }
-                };
-                let scalar = scalar_kind_str(scalar_kind, scalar_width);
-                let size = back::vector_size_str(size);
-
-                write!(self.out, "vec{size}<{scalar}>(")?;
-                self.write_expr(module, value, func_ctx)?;
                 write!(self.out, ")")?;
             }
             Expression::Load { pointer } => {

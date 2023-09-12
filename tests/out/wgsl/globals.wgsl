@@ -29,7 +29,7 @@ fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {
 fn test_msl_packed_vec3_() {
     var idx: i32;
 
-    alignment.v3_ = vec3<f32>(1.0);
+    alignment.v3_ = vec3(1.0);
     idx = 1;
     alignment.v3_.x = 1.0;
     alignment.v3_.x = 2.0;

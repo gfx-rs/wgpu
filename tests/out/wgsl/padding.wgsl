@@ -29,5 +29,5 @@ fn vertex() -> @builtin(position) vec4<f32> {
     let _e4 = input1_.b;
     let _e8 = input2_.b;
     let _e12 = input3_.b;
-    return (((vec4<f32>(1.0) * _e4) * _e8) * _e12);
+    return (((vec4(1.0) * _e4) * _e8) * _e12);
 }

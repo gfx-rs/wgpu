@@ -11,7 +11,7 @@ fn function() -> vec4<f32> {
     var sum: vec4<f32>;
     var i: i32;
 
-    sum = vec4<f32>(f32(0));
+    sum = vec4(f32(0));
     i = 0;
     loop {
         let _e9 = i;

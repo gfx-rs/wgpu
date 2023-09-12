@@ -55,13 +55,13 @@ fn test_matrix_within_struct_accesses() {
     let _e41 = idx;
     let _e43 = idx;
     let l6_ = baz.m[_e41][_e43];
-    t = Baz(mat3x2<f32>(vec2<f32>(1.0), vec2<f32>(2.0), vec2<f32>(3.0)));
+    t = Baz(mat3x2<f32>(vec2(1.0), vec2(2.0), vec2(3.0)));
     let _e56 = idx;
     idx = (_e56 + 1);
-    t.m = mat3x2<f32>(vec2<f32>(6.0), vec2<f32>(5.0), vec2<f32>(4.0));
-    t.m[0] = vec2<f32>(9.0);
+    t.m = mat3x2<f32>(vec2(6.0), vec2(5.0), vec2(4.0));
+    t.m[0] = vec2(9.0);
     let _e72 = idx;
-    t.m[_e72] = vec2<f32>(90.0);
+    t.m[_e72] = vec2(90.0);
     t.m[0][1] = 10.0;
     let _e85 = idx;
     t.m[0][_e85] = 20.0;
@@ -97,10 +97,10 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e67 = idx_1;
     idx_1 = (_e67 + 1);
     t_1.am = array<mat4x2<f32>, 2>();
-    t_1.am[0] = mat4x2<f32>(vec2<f32>(8.0), vec2<f32>(7.0), vec2<f32>(6.0), vec2<f32>(5.0));
-    t_1.am[0][0] = vec2<f32>(9.0);
+    t_1.am[0] = mat4x2<f32>(vec2(8.0), vec2(7.0), vec2(6.0), vec2(5.0));
+    t_1.am[0][0] = vec2(9.0);
     let _e93 = idx_1;
-    t_1.am[0][_e93] = vec2<f32>(90.0);
+    t_1.am[0][_e93] = vec2(90.0);
     t_1.am[0][0][1] = 10.0;
     let _e110 = idx_1;
     t_1.am[0][0][_e110] = 20.0;
@@ -127,7 +127,7 @@ fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
 }
 
 fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
-    (*foo_2) = array<vec4<f32>, 2>(vec4<f32>(1.0), vec4<f32>(2.0));
+    (*foo_2) = array<vec4<f32>, 2>(vec4(1.0), vec4(2.0));
     return;
 }
 
@@ -152,24 +152,24 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     c2_[(vi + 1u)] = 42;
     let value = c2_[vi];
     let _e48 = test_arr_as_arg(array<array<f32, 10>, 5>());
-    return vec4<f32>((_matrix * vec4<f32>(vec4<i32>(value))), 2.0);
+    return vec4<f32>((_matrix * vec4<f32>(vec4(value))), 2.0);
 }
 
 @fragment 
 fn foo_frag() -> @location(0) vec4<f32> {
     bar._matrix[1][2] = 1.0;
-    bar._matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
-    bar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
+    bar._matrix = mat4x3<f32>(vec3(0.0), vec3(1.0), vec3(2.0), vec3(3.0));
+    bar.arr = array<vec2<u32>, 2>(vec2(0u), vec2(1u));
     bar.data[1].value = 1;
     qux = vec2<i32>();
-    return vec4<f32>(0.0);
+    return vec4(0.0);
 }
 
 @compute @workgroup_size(1, 1, 1) 
 fn assign_through_ptr() {
     var arr: array<vec4<f32>, 2>;
 
-    arr = array<vec4<f32>, 2>(vec4<f32>(6.0), vec4<f32>(7.0));
+    arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
     assign_through_ptr_fn((&val));
     assign_array_through_ptr_fn((&arr));
     return;

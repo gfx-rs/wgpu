@@ -20,11 +20,11 @@ const cp3_: array<i32, 4> = array<i32, 4>(0, 1, 2, 3);
 fn main() {
     var foo: Foo;
 
-    foo = Foo(vec4<f32>(1.0), 1);
+    foo = Foo(vec4(1.0), 1);
     let m0_ = mat2x2<f32>(vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0));
     let m1_ = mat4x4<f32>(vec4<f32>(1.0, 0.0, 0.0, 0.0), vec4<f32>(0.0, 1.0, 0.0, 0.0), vec4<f32>(0.0, 0.0, 1.0, 0.0), vec4<f32>(0.0, 0.0, 0.0, 1.0));
-    let cit0_ = vec2<u32>(0u);
-    let cit1_ = mat2x2<f32>(vec2<f32>(0.0), vec2<f32>(0.0));
+    let cit0_ = vec2(0u);
+    let cit1_ = mat2x2<f32>(vec2(0.0), vec2(0.0));
     let cit2_ = array<i32, 4>(0, 1, 2, 3);
     let ic0_ = bool(bool());
     let ic1_ = i32(i32());
