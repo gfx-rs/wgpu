@@ -76,8 +76,8 @@ struct Args {
     stdin_file_path: Option<String>,
 
     /// generate debug symbols, only works for spv-out for now
-    #[argh(option, short = 'g')]
-    generate_debug_symbols: Option<bool>,
+    #[argh(switch, short = 'g')]
+    generate_debug_symbols: bool,
 
     /// show version
     #[argh(switch)]
@@ -448,19 +448,32 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 params.spv.bounds_check_policies = params.bounds_check_policies;
 
-                //Insert Debug infos
-                params.spv.debug_info = args.generate_debug_symbols.and_then(|debug| {
-                    params.spv.flags.set(spv::WriterFlags::DEBUG, debug);
+                // Include debugging information if requested.
+                params.spv.debug_info = if args.generate_debug_symbols {
+                    if let Some(ref input_text) = input_text {
+                        params.spv.flags.set(spv::WriterFlags::DEBUG, true);
 
-                    if debug {
                         Some(spv::DebugInfo {
-                            source_code: input_text.as_ref()?,
-                            file_name: input_path.file_name().and_then(std::ffi::OsStr::to_str)?,
+                            source_code: input_text,
+                            file_name: input_path
+                                .file_name()
+                                .and_then(std::ffi::OsStr::to_str)
+                                .ok_or(CliError(
+                                    "input path for couldn't be converted to string \
+                                     for `--generate-debug-symbols",
+                                ))?,
                         })
                     } else {
+                        eprintln!(
+                            "warning: `--generate-debug-symbols` was passed, \
+                             but input is not human-readable: {}",
+                            input_path.display()
+                        );
                         None
                     }
-                });
+                } else {
+                    None
+                };
 
                 params.spv.flags.set(
                     spv::WriterFlags::ADJUST_COORDINATE_SPACE,
