@@ -161,8 +161,8 @@ struct Parameters<'a> {
     entry_point: Option<String>,
     keep_coordinate_space: bool,
     spv_in: naga::front::spv::Options,
+    spv_out: naga::back::spv::Options<'a>,
     dot: naga::back::dot::Options,
-    spv: naga::back::spv::Options<'a>,
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
     hlsl: naga::back::hlsl::Options,
@@ -282,6 +282,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     params.dot.cfg_only = args.dot_cfg_only;
 
+    params.spv_out.bounds_check_policies = params.bounds_check_policies;
+    params.spv_out.flags.set(
+        naga::back::spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+        !params.keep_coordinate_space,
+    );
+
     let (module, input_text) = match Path::new(&input_path)
         .extension()
         .ok_or(CliError("Input filename has no extension"))?
@@ -344,6 +350,32 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => return Err(CliError("Unknown input file extension").into()),
     };
+
+    // Include debugging information if requested.
+    if args.generate_debug_symbols {
+        if let Some(ref input_text) = input_text {
+            params
+                .spv_out
+                .flags
+                .set(naga::back::spv::WriterFlags::DEBUG, true);
+            params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
+                source_code: input_text,
+                file_name: input_path
+                    .file_name()
+                    .and_then(std::ffi::OsStr::to_str)
+                    .ok_or(CliError(
+                        "input path for couldn't be converted to string \
+                         for `--generate-debug-symbols",
+                    ))?,
+            })
+        } else {
+            eprintln!(
+                "warning: `--generate-debug-symbols` was passed, \
+                       but input is not human-readable: {}",
+                input_path.display()
+            );
+        }
+    }
 
     // Decide which capabilities our output formats can support.
     let validation_caps =
@@ -443,47 +475,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     None => None,
                 };
 
-                params.spv.bounds_check_policies = params.bounds_check_policies;
-
-                // Include debugging information if requested.
-                params.spv.debug_info = if args.generate_debug_symbols {
-                    if let Some(ref input_text) = input_text {
-                        params.spv.flags.set(spv::WriterFlags::DEBUG, true);
-
-                        Some(spv::DebugInfo {
-                            source_code: input_text,
-                            file_name: input_path
-                                .file_name()
-                                .and_then(std::ffi::OsStr::to_str)
-                                .ok_or(CliError(
-                                    "input path for couldn't be converted to string \
-                                     for `--generate-debug-symbols",
-                                ))?,
-                        })
-                    } else {
-                        eprintln!(
-                            "warning: `--generate-debug-symbols` was passed, \
-                             but input is not human-readable: {}",
-                            input_path.display()
-                        );
-                        None
-                    }
-                } else {
-                    None
-                };
-
-                params.spv.flags.set(
-                    spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-                    !params.keep_coordinate_space,
-                );
-
                 let spv = spv::write_vec(
                     &module,
                     info.as_ref().ok_or(CliError(
                         "Generating SPIR-V output requires validation to \
                         succeed, and it failed in a previous step",
                     ))?,
-                    &params.spv,
+                    &params.spv_out,
                     pipeline_options,
                 )
                 .unwrap_pretty();
