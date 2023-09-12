@@ -161,6 +161,7 @@ struct Parameters<'a> {
     entry_point: Option<String>,
     keep_coordinate_space: bool,
     spv_block_ctx_dump_prefix: Option<String>,
+    dot: naga::back::dot::Options,
     spv: naga::back::spv::Options<'a>,
     msl: naga::back::msl::Options,
     glsl: naga::back::glsl::Options,
@@ -272,6 +273,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         params.hlsl.shader_model = model.0;
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
+
+    params.dot.cfg_only = args.dot_cfg_only;
 
     let (module, input_text) = match Path::new(&input_path)
         .extension()
@@ -519,13 +522,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "dot" => {
                 use naga::back::dot;
 
-                let output = dot::write(
-                    &module,
-                    info.as_ref(),
-                    naga::back::dot::Options {
-                        cfg_only: args.dot_cfg_only,
-                    },
-                )?;
+                let output = dot::write(&module, info.as_ref(), params.dot.clone())?;
                 fs::write(output_path, output)?;
             }
             "hlsl" => {

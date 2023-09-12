@@ -18,7 +18,7 @@ use std::{
 };
 
 /// Configuration options for the dot backend
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Options {
     /// Only emit function bodies
     pub cfg_only: bool,
