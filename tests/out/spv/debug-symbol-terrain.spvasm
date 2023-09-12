@@ -415,8 +415,10 @@ OpMemberDecorate %14 0 Offset 0
 OpMemberDecorate %14 1 Offset 16
 OpDecorate %15 ArrayStride 32
 OpMemberDecorate %16 0 Offset 0
+OpDecorate %16 Block
 OpDecorate %17 ArrayStride 4
 OpMemberDecorate %18 0 Offset 0
+OpDecorate %18 Block
 OpMemberDecorate %20 0 Offset 0
 OpMemberDecorate %20 1 Offset 8
 OpMemberDecorate %20 2 Offset 16
@@ -442,10 +444,8 @@ OpDecorate %30 Block
 OpMemberDecorate %30 0 Offset 0
 OpDecorate %32 DescriptorSet 0
 OpDecorate %32 Binding 1
-OpDecorate %16 Block
 OpDecorate %34 DescriptorSet 0
 OpDecorate %34 Binding 2
-OpDecorate %18 Block
 OpDecorate %36 DescriptorSet 0
 OpDecorate %36 Binding 0
 OpDecorate %37 Block

@@ -15,9 +15,9 @@ OpMemberDecorate %10 2 Offset 64
 OpMemberDecorate %10 2 ColMajor
 OpMemberDecorate %10 2 MatrixStride 16
 OpMemberDecorate %10 3 Offset 112
+OpDecorate %10 Block
 OpDecorate %13 DescriptorSet 0
 OpDecorate %13 Binding 0
-OpDecorate %10 Block
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %6 = OpTypeInt 32 0

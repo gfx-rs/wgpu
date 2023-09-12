@@ -606,6 +606,7 @@ fn convert_wgsl() {
             "workgroup-uniform-load",
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
+        ("runtime-array-in-unused-struct", Targets::SPIRV),
         ("sprite", Targets::SPIRV),
         ("force_point_size_vertex_shader_webgl", Targets::GLSL),
         ("invariant", Targets::GLSL),
