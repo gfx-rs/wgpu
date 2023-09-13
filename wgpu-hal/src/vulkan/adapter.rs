@@ -984,6 +984,10 @@ impl super::Instance {
                 super::Workarounds::EMPTY_RESOLVE_ATTACHMENT_LISTS,
                 phd_capabilities.properties.vendor_id == db::qualcomm::VENDOR,
             );
+            workarounds.set(
+                super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
+                phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
+            );
         };
 
         if phd_capabilities.effective_api_version == vk::API_VERSION_1_0
