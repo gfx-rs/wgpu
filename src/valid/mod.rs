@@ -400,7 +400,7 @@ impl Validator {
         #[cfg(feature = "validate")]
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, _) in module.const_expressions.iter() {
-                self.validate_const_expression(handle, module.to_ctx(), &mut mod_info)
+                self.validate_const_expression(handle, module.to_ctx(), &mod_info)
                     .map_err(|source| {
                         ValidationError::ConstExpression { handle, source }
                             .with_span_handle(handle, &module.const_expressions)

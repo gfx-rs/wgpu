@@ -157,7 +157,7 @@ impl super::Validator {
         &self,
         handle: Handle<crate::Expression>,
         gctx: crate::proc::GlobalCtx,
-        mod_info: &mut ModuleInfo,
+        mod_info: &ModuleInfo,
     ) -> Result<(), super::ConstExpressionError> {
         use crate::Expression as E;
 
