@@ -1636,7 +1636,6 @@ impl Writer {
                             space: global_variable.space,
                         }))
                 }
-            } else {
             }
         };
 
