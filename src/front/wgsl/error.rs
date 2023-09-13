@@ -17,7 +17,7 @@ pub struct ParseError {
 }
 
 impl ParseError {
-    pub fn labels(&self) -> impl Iterator<Item = (Span, &str)> + ExactSizeIterator + '_ {
+    pub fn labels(&self) -> impl ExactSizeIterator<Item = (Span, &str)> + '_ {
         self.labels
             .iter()
             .map(|&(span, ref msg)| (span, msg.as_ref()))
