@@ -789,7 +789,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         id: spirv::Word,
         lookup: &LookupExpression,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         body_idx: BodyIndex,
     ) -> Handle<crate::Expression> {
@@ -851,7 +851,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_unary_op(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -880,7 +880,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_binary_op(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -914,7 +914,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_unary_op_sign_adjusted(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -969,7 +969,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_binary_op_sign_adjusted(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -1047,7 +1047,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_int_comparison(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -1118,7 +1118,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_shift_op(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -1161,7 +1161,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_expr_derivative(
         &mut self,
         ctx: &mut BlockContext,
-        emitter: &mut super::Emitter,
+        emitter: &mut crate::proc::Emitter,
         block: &mut crate::Block,
         block_id: spirv::Word,
         body_idx: usize,
@@ -1292,7 +1292,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             })
         }
 
-        let mut emitter = super::Emitter::default();
+        let mut emitter = crate::proc::Emitter::default();
         emitter.start(ctx.expressions);
 
         // Find the `Body` to which this block contributes.
@@ -5282,7 +5282,7 @@ fn make_index_literal(
     ctx: &mut BlockContext,
     index: u32,
     block: &mut crate::Block,
-    emitter: &mut super::Emitter,
+    emitter: &mut crate::proc::Emitter,
     index_type: Handle<crate::Type>,
     index_type_id: spirv::Word,
     span: crate::Span,

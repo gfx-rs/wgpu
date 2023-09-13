@@ -3,6 +3,7 @@
 */
 
 mod constant_evaluator;
+mod emitter;
 pub mod index;
 mod layouter;
 mod namer;
@@ -10,6 +11,7 @@ mod terminator;
 mod typifier;
 
 pub use constant_evaluator::{ConstantEvaluator, ConstantEvaluatorError};
+pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};

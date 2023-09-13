@@ -4,9 +4,10 @@ use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
-use crate::front::{Emitter, Typifier};
+use crate::front::Typifier;
 use crate::proc::{
-    ensure_block_returns, Alignment, ConstantEvaluator, Layouter, ResolveContext, TypeResolution,
+    ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
+    TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 

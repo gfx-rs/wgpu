@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::{Error, Instruction, LookupExpression, LookupHelper as _};
-use crate::front::Emitter;
+use crate::proc::Emitter;
 
 pub type BlockId = u32;
 

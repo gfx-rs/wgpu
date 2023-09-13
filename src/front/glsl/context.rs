@@ -8,10 +8,9 @@ use super::{
     Frontend, Result,
 };
 use crate::{
-    front::{Emitter, Typifier},
-    AddressSpace, Arena, BinaryOperator, Block, Expression, FastHashMap, FunctionArgument, Handle,
-    Literal, LocalVariable, RelationalFunction, ScalarKind, Span, Statement, Type, TypeInner,
-    VectorSize,
+    front::Typifier, proc::Emitter, AddressSpace, Arena, BinaryOperator, Block, Expression,
+    FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction, ScalarKind,
+    Span, Statement, Type, TypeInner, VectorSize,
 };
 use std::ops::Index;
 
