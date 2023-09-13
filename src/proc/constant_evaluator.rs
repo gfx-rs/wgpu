@@ -5,15 +5,22 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct ConstantEvaluator<
-    'a,
-    F: FnMut(&mut Arena<Expression>, Expression, Span) -> Handle<Expression>,
-> {
+pub struct ConstantEvaluator<'a> {
     pub types: &'a mut UniqueArena<Type>,
     pub constants: &'a Arena<Constant>,
     pub expressions: &'a mut Arena<Expression>,
     pub const_expressions: Option<&'a Arena<Expression>>,
-    pub append: Option<F>,
+
+    /// When `expressions` refers to a function's local expression
+    /// arena, this is the emitter we should interrupt when inserting
+    /// new things into it.
+    pub emitter: Option<ConstantEvaluatorEmitter<'a>>,
+}
+
+#[derive(Debug)]
+pub struct ConstantEvaluatorEmitter<'a> {
+    pub emitter: &'a mut super::Emitter,
+    pub block: &'a mut crate::Block,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -99,9 +106,7 @@ impl Arena<Expression> {
     }
 }
 
-impl<'a, F: FnMut(&mut Arena<Expression>, Expression, Span) -> Handle<Expression>>
-    ConstantEvaluator<'a, F>
-{
+impl ConstantEvaluator<'_> {
     fn check_and_get(
         &mut self,
         expr: Handle<Expression>,
@@ -800,11 +805,20 @@ impl<'a, F: FnMut(&mut Arena<Expression>, Expression, Span) -> Handle<Expression
     }
 
     fn register_evaluated_expr(&mut self, expr: Expression, span: Span) -> Handle<Expression> {
-        if let Some(ref mut append) = self.append {
-            append(self.expressions, expr, span)
-        } else {
-            self.expressions.append(expr, span)
+        if let Some(ref mut emitter) = self.emitter {
+            let is_running = emitter.emitter.is_running();
+            let needs_pre_emit = expr.needs_pre_emit();
+            if is_running && needs_pre_emit {
+                emitter
+                    .block
+                    .extend(emitter.emitter.finish(self.expressions));
+                let h = self.expressions.append(expr, span);
+                emitter.emitter.start(self.expressions);
+                return h;
+            }
         }
+
+        self.expressions.append(expr, span)
     }
 }
 
@@ -973,15 +987,7 @@ mod tests {
             constants: &constants,
             expressions: &mut const_expressions,
             const_expressions: None,
-            append: None::<
-                Box<
-                    dyn FnMut(
-                        &mut Arena<Expression>,
-                        Expression,
-                        crate::Span,
-                    ) -> crate::Handle<Expression>,
-                >,
-            >,
+            emitter: None,
         };
 
         let res1 = solver
@@ -1068,15 +1074,7 @@ mod tests {
             constants: &constants,
             expressions: &mut const_expressions,
             const_expressions: None,
-            append: None::<
-                Box<
-                    dyn FnMut(
-                        &mut Arena<Expression>,
-                        Expression,
-                        crate::Span,
-                    ) -> crate::Handle<Expression>,
-                >,
-            >,
+            emitter: None,
         };
 
         let res = solver
@@ -1195,15 +1193,7 @@ mod tests {
             constants: &constants,
             expressions: &mut const_expressions,
             const_expressions: None,
-            append: None::<
-                Box<
-                    dyn FnMut(
-                        &mut Arena<Expression>,
-                        Expression,
-                        crate::Span,
-                    ) -> crate::Handle<Expression>,
-                >,
-            >,
+            emitter: None,
         };
 
         let root1 = Expression::AccessIndex { base, index: 1 };

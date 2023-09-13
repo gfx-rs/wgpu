@@ -6,8 +6,8 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::Typifier;
 use crate::proc::{
-    ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
-    TypeResolution,
+    ensure_block_returns, Alignment, ConstantEvaluator, ConstantEvaluatorEmitter, Emitter,
+    Layouter, ResolveContext, TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -338,20 +338,10 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     constants: &self.module.constants,
                     expressions: rctx.naga_expressions,
                     const_expressions: Some(&self.module.const_expressions),
-                    append: Some(
-                        |arena: &mut Arena<crate::Expression>, expr: crate::Expression, span| {
-                            let is_running = rctx.emitter.is_running();
-                            let needs_pre_emit = expr.needs_pre_emit();
-                            if is_running && needs_pre_emit {
-                                rctx.block.extend(rctx.emitter.finish(arena));
-                            }
-                            let h = arena.append(expr, span);
-                            if is_running && needs_pre_emit {
-                                rctx.emitter.start(arena);
-                            }
-                            h
-                        },
-                    ),
+                    emitter: Some(ConstantEvaluatorEmitter {
+                        emitter: rctx.emitter,
+                        block: rctx.block,
+                    }),
                 };
 
                 match eval.try_eval_and_append(&expr, span) {
@@ -365,15 +355,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     constants: &self.module.constants,
                     expressions: &mut self.module.const_expressions,
                     const_expressions: None,
-                    append: None::<
-                        Box<
-                            dyn FnMut(
-                                &mut Arena<crate::Expression>,
-                                crate::Expression,
-                                Span,
-                            ) -> Handle<crate::Expression>,
-                        >,
-                    >,
+                    emitter: None,
                 };
 
                 eval.try_eval_and_append(&expr, span)
