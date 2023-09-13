@@ -302,7 +302,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        ext @ ("vert" | "frag" | "comp") => {
+        ext @ ("vert" | "frag" | "comp" | "glsl") => {
             let input = String::from_utf8(input)?;
             let mut parser = naga::front::glsl::Frontend::default();
 
@@ -314,6 +314,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 "vert" => naga::ShaderStage::Vertex,
                                 "frag" => naga::ShaderStage::Fragment,
                                 "comp" => naga::ShaderStage::Compute,
+                                "glsl" => {
+                                    let internal_name = input_path.to_string_lossy();
+                                    match Path::new(&internal_name[..internal_name.len()-5])
+                                        .extension()
+                                        .ok_or(CliError("Input filename ending with .glsl has no internal extension"))?
+                                        .to_str()
+                                        .ok_or(CliError("Input filename not valid unicode"))?
+                                    {
+                                        "vert" => naga::ShaderStage::Vertex,
+                                        "frag" => naga::ShaderStage::Fragment,
+                                        "comp" => naga::ShaderStage::Compute,
+                                        _ => unreachable!(),
+                                    }
+                                },
                                 _ => unreachable!(),
                             },
                             defines: Default::default(),
