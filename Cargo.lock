@@ -3004,24 +3004,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-capture-example"
-version = "0.16.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "png",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "winit",
-]
-
-[[package]]
 name = "wgpu-conservative-raster-example"
 version = "0.16.0"
 dependencies = [
