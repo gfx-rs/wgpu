@@ -122,7 +122,7 @@ struct EntryPoint {
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
-    backend: wgt::Backend,
+    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -836,7 +836,7 @@ impl Interface {
         module: &naga::Module,
         info: &naga::valid::ModuleInfo,
         limits: wgt::Limits,
-        backend: wgt::Backend,
+        features: wgt::Features,
     ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
@@ -918,7 +918,7 @@ impl Interface {
 
         Self {
             limits,
-            backend,
+            features,
             resources,
             entry_points,
         }
@@ -1128,10 +1128,11 @@ impl Interface {
         }
 
         // Check all vertex outputs and make sure the fragment shader consumes them.
-        // This is only needed for HLSL shaders (DX11 and DX12) due to a naga HLSL issue:
-        // https://github.com/gfx-rs/naga/issues/1945
+        // This requirement is removed if the `SHADER_UNUSED_VERTEX_OUTPUT` feature is enabled.
         if shader_stage == naga::ShaderStage::Fragment
-            && matches!(self.backend, wgt::Backend::Dx11 | wgt::Backend::Dx12)
+            && !self
+                .features
+                .contains(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT)
         {
             for &index in inputs.keys() {
                 // This is a linear scan, but the count should be low enough
