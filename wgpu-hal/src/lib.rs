@@ -60,7 +60,7 @@ pub mod dx12;
 /// A dummy API implementation.
 pub mod empty;
 /// GLES API internals.
-#[cfg(all(feature = "gles"))]
+#[cfg(feature = "gles")]
 pub mod gles;
 /// Metal API internals.
 #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
@@ -90,7 +90,7 @@ use std::{
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::atomic::AtomicBool,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use bitflags::bitflags;
@@ -118,6 +118,8 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Device is lost")]
     Lost,
+    #[error("Creation of a resource failed for a reason other than running out of memory.")]
+    ResourceCreationFailed,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
@@ -150,9 +152,42 @@ pub enum SurfaceError {
     Other(&'static str),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
-#[error("Not supported")]
-pub struct InstanceError;
+/// Error occurring while trying to create an instance, or create a surface from an instance;
+/// typically relating to the state of the underlying graphics API or hardware.
+#[derive(Clone, Debug, Error)]
+#[error("{message}")]
+pub struct InstanceError {
+    /// These errors are very platform specific, so do not attempt to encode them as an enum.
+    ///
+    /// This message should describe the problem in sufficient detail to be useful for a
+    /// user-to-developer “why won't this work on my machine” bug report, and otherwise follow
+    /// <https://rust-lang.github.io/api-guidelines/interoperability.html#error-types-are-meaningful-and-well-behaved-c-good-err>.
+    message: String,
+
+    /// Underlying error value, if any is available.
+    #[source]
+    source: Option<Arc<dyn std::error::Error + Send + Sync + 'static>>,
+}
+
+impl InstanceError {
+    #[allow(dead_code)] // may be unused on some platforms
+    pub(crate) fn new(message: String) -> Self {
+        Self {
+            message,
+            source: None,
+        }
+    }
+    #[allow(dead_code)] // may be unused on some platforms
+    pub(crate) fn with_source(
+        message: String,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            message,
+            source: Some(Arc::new(source)),
+        }
+    }
+}
 
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
@@ -192,12 +227,28 @@ pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
 }
 
 pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
+    /// Configures the surface to use the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All surfaces created using other devices must have been unconfigured before this call.
     unsafe fn configure(
         &mut self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
+    /// Unconfigures the surface on the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - The surface must have been configured on the given device.
     unsafe fn unconfigure(&mut self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
@@ -463,7 +514,13 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
 
     // queries
 
+    /// # Safety:
+    ///
+    /// - If `set` is an occlusion query set, it must be the same one as used in the [`RenderPassDescriptor::occlusion_query_set`] parameter.
     unsafe fn begin_query(&mut self, set: &A::QuerySet, index: u32);
+    /// # Safety:
+    ///
+    /// - If `set` is an occlusion query set, it must be the same one as used in the [`RenderPassDescriptor::occlusion_query_set`] parameter.
     unsafe fn end_query(&mut self, set: &A::QuerySet, index: u32);
     unsafe fn write_timestamp(&mut self, set: &A::QuerySet, index: u32);
     unsafe fn reset_queries(&mut self, set: &A::QuerySet, range: Range<u32>);
@@ -542,7 +599,7 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
     // compute passes
 
     // Begins a compute pass, clears all active bindings.
-    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor);
+    unsafe fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<A>);
     unsafe fn end_compute_pass(&mut self);
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &A::ComputePipeline);
@@ -718,6 +775,8 @@ bitflags::bitflags! {
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
+        /// A buffer used to store query results.
+        const QUERY_RESOLVE = 1 << 10;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
@@ -777,6 +836,7 @@ pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: InstanceFlags,
     pub dx12_shader_compiler: wgt::Dx12Compiler,
+    pub gles_minor_version: wgt::Gles3MinorVersion,
 }
 
 #[derive(Clone, Debug)]
@@ -1262,6 +1322,24 @@ pub struct DepthStencilAttachment<'a, A: Api> {
     pub clear_value: (f32, u32),
 }
 
+#[derive(Debug)]
+pub struct RenderPassTimestampWrites<'a, A: Api> {
+    pub query_set: &'a A::QuerySet,
+    pub beginning_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for RenderPassTimestampWrites<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RenderPassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
@@ -1270,11 +1348,32 @@ pub struct RenderPassDescriptor<'a, A: Api> {
     pub color_attachments: &'a [Option<ColorAttachment<'a, A>>],
     pub depth_stencil_attachment: Option<DepthStencilAttachment<'a, A>>,
     pub multiview: Option<NonZeroU32>,
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'a, A>>,
+    pub occlusion_query_set: Option<&'a A::QuerySet>,
+}
+
+#[derive(Debug)]
+pub struct ComputePassTimestampWrites<'a, A: Api> {
+    pub query_set: &'a A::QuerySet,
+    pub beginning_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32>,
+}
+
+// Rust gets confused about the impl requirements for `A`
+impl<A: Api> Clone for ComputePassTimestampWrites<'_, A> {
+    fn clone(&self) -> Self {
+        Self {
+            query_set: self.query_set,
+            beginning_of_pass_write_index: self.beginning_of_pass_write_index,
+            end_of_pass_write_index: self.end_of_pass_write_index,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
-pub struct ComputePassDescriptor<'a> {
+pub struct ComputePassDescriptor<'a, A: Api> {
     pub label: Label<'a>,
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
 }
 
 /// Stores if any API validation error has occurred in this process

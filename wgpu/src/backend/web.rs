@@ -687,6 +687,99 @@ fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::F
     features
 }
 
+fn map_wgt_limits(limits: web_sys::GpuSupportedLimits) -> wgt::Limits {
+    wgt::Limits {
+        max_texture_dimension_1d: limits.max_texture_dimension_1d(),
+        max_texture_dimension_2d: limits.max_texture_dimension_2d(),
+        max_texture_dimension_3d: limits.max_texture_dimension_3d(),
+        max_texture_array_layers: limits.max_texture_array_layers(),
+        max_bind_groups: limits.max_bind_groups(),
+        max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
+        max_dynamic_uniform_buffers_per_pipeline_layout: limits
+            .max_dynamic_uniform_buffers_per_pipeline_layout(),
+        max_dynamic_storage_buffers_per_pipeline_layout: limits
+            .max_dynamic_storage_buffers_per_pipeline_layout(),
+        max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
+        max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
+        max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
+        max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
+        max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
+        max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
+        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
+        max_vertex_buffers: limits.max_vertex_buffers(),
+        max_buffer_size: limits.max_buffer_size() as u64,
+        max_vertex_attributes: limits.max_vertex_attributes(),
+        max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
+        min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
+        min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
+        max_inter_stage_shader_components: limits.max_inter_stage_shader_components(),
+        max_compute_workgroup_storage_size: limits.max_compute_workgroup_storage_size(),
+        max_compute_invocations_per_workgroup: limits.max_compute_invocations_per_workgroup(),
+        max_compute_workgroup_size_x: limits.max_compute_workgroup_size_x(),
+        max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
+        max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
+        max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
+        // The following are not part of WebGPU
+        max_push_constant_size: wgt::Limits::default().max_push_constant_size,
+        max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
+    }
+}
+
+fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
+    let object = js_sys::Object::new();
+
+    macro_rules! set_properties {
+        (($from:expr) => ($on:expr) : $(($js_ident:ident, $rs_ident:ident)),* $(,)?) => {
+            $(
+                ::js_sys::Reflect::set(
+                    &$on,
+                    &::wasm_bindgen::JsValue::from(stringify!($js_ident)),
+                    // Numbers may be u64, however using `from` on a u64 yields
+                    // errors on the wasm side, since it uses an unsupported api.
+                    // Wasm sends us things that need to fit into u64s by sending
+                    // us f64s instead. So we just send them f64s back.
+                    &::wasm_bindgen::JsValue::from($from.$rs_ident as f64)
+                )
+                    .expect("Setting Object properties should never fail.");
+            )*
+        }
+    }
+
+    set_properties![
+        (limits) => (object):
+        (maxTextureDimension1D, max_texture_dimension_1d),
+        (maxTextureDimension2D, max_texture_dimension_2d),
+        (maxTextureDimension3D, max_texture_dimension_3d),
+        (maxTextureArrayLayers, max_texture_array_layers),
+        (maxBindGroups, max_bind_groups),
+        (maxBindingsPerBindGroup, max_bindings_per_bind_group),
+        (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
+        (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
+        (maxSampledTexturesPerShaderStage, max_sampled_textures_per_shader_stage),
+        (maxSamplersPerShaderStage, max_samplers_per_shader_stage),
+        (maxStorageBuffersPerShaderStage, max_storage_buffers_per_shader_stage),
+        (maxStorageTexturesPerShaderStage, max_storage_textures_per_shader_stage),
+        (maxUniformBuffersPerShaderStage, max_uniform_buffers_per_shader_stage),
+        (maxUniformBufferBindingSize, max_uniform_buffer_binding_size),
+        (maxStorageBufferBindingSize, max_storage_buffer_binding_size),
+        (minUniformBufferOffsetAlignment, min_uniform_buffer_offset_alignment),
+        (minStorageBufferOffsetAlignment, min_storage_buffer_offset_alignment),
+        (maxVertexBuffers, max_vertex_buffers),
+        (maxBufferSize, max_buffer_size),
+        (maxVertexAttributes, max_vertex_attributes),
+        (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
+        (maxInterStageShaderComponents, max_inter_stage_shader_components),
+        (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
+        (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
+        (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
+        (maxComputeWorkgroupSizeY, max_compute_workgroup_size_y),
+        (maxComputeWorkgroupSizeZ, max_compute_workgroup_size_z),
+        (maxComputeWorkgroupsPerDimension, max_compute_workgroups_per_dimension),
+    ];
+
+    object
+}
+
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
 fn future_request_adapter(
@@ -827,13 +920,22 @@ impl Context {
                 // “not supported” could include “insufficient GPU resources” or “the GPU process
                 // previously crashed”. So, we must return it as an `Err` since it could occur
                 // for circumstances outside the application author's control.
-                return Err(crate::CreateSurfaceError {});
+                return Err(crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(
+                        String::from(
+                            "canvas.getContext() returned null; webgpu not available or canvas already in use"
+                        )
+                    )
+                });
             }
             Err(js_error) => {
                 // <https://html.spec.whatwg.org/multipage/canvas.html#dom-canvas-getcontext>
-                // A thrown exception indicates misuse of the canvas state. Ideally we wouldn't
-                // panic in this case ... TODO
-                panic!("canvas.getContext() threw {js_error:?}")
+                // A thrown exception indicates misuse of the canvas state.
+                return Err(crate::CreateSurfaceError {
+                    inner: crate::CreateSurfaceErrorKind::Web(format!(
+                        "canvas.getContext() threw exception {js_error:?}",
+                    )),
+                });
             }
         };
 
@@ -1014,8 +1116,18 @@ impl crate::context::Context for Context {
             //Error: Tracing isn't supported on the Web target
         }
 
-        // TODO: non-guaranteed limits
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
+
+        // TODO: Migrate to a web_sys api.
+        // See https://github.com/rustwasm/wasm-bindgen/issues/3587
+        let limits_object = map_js_sys_limits(&desc.limits);
+
+        js_sys::Reflect::set(
+            &mapped_desc,
+            &JsValue::from("requiredLimits"),
+            &limits_object,
+        )
+        .expect("Setting Object properties should never fail.");
 
         let required_features = FEATURES_MAPPING
             .iter()
@@ -1070,30 +1182,7 @@ impl crate::context::Context for Context {
         _adapter: &Self::AdapterId,
         adapter_data: &Self::AdapterData,
     ) -> wgt::Limits {
-        let limits = adapter_data.0.limits();
-        wgt::Limits {
-            max_texture_dimension_1d: limits.max_texture_dimension_1d(),
-            max_texture_dimension_2d: limits.max_texture_dimension_2d(),
-            max_texture_dimension_3d: limits.max_texture_dimension_3d(),
-            max_texture_array_layers: limits.max_texture_array_layers(),
-            max_bind_groups: limits.max_bind_groups(),
-            max_bindings_per_bind_group: limits.max_bindings_per_bind_group(),
-            max_dynamic_uniform_buffers_per_pipeline_layout: limits
-                .max_dynamic_uniform_buffers_per_pipeline_layout(),
-            max_dynamic_storage_buffers_per_pipeline_layout: limits
-                .max_dynamic_storage_buffers_per_pipeline_layout(),
-            max_sampled_textures_per_shader_stage: limits.max_sampled_textures_per_shader_stage(),
-            max_samplers_per_shader_stage: limits.max_samplers_per_shader_stage(),
-            max_storage_buffers_per_shader_stage: limits.max_storage_buffers_per_shader_stage(),
-            max_storage_textures_per_shader_stage: limits.max_storage_textures_per_shader_stage(),
-            max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
-            max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u32,
-            max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u32,
-            max_vertex_buffers: limits.max_vertex_buffers(),
-            max_vertex_attributes: limits.max_vertex_attributes(),
-            max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
-            ..wgt::Limits::default()
-        }
+        map_wgt_limits(adapter_data.0.limits())
     }
 
     fn adapter_downlevel_capabilities(
@@ -1256,10 +1345,9 @@ impl crate::context::Context for Context {
     fn device_limits(
         &self,
         _device: &Self::DeviceId,
-        _device_data: &Self::DeviceData,
+        device_data: &Self::DeviceData,
     ) -> wgt::Limits {
-        // TODO
-        wgt::Limits::default()
+        map_wgt_limits(device_data.0.limits())
     }
 
     fn device_downlevel_properties(
@@ -1890,16 +1978,26 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
-        let array_buffer = buffer_data.0.get_mapped_range_with_f64_and_f64(
-            sub_range.start as f64,
-            (sub_range.end - sub_range.start) as f64,
-        );
+        let array_buffer =
+            self.buffer_get_mapped_range_as_array_buffer(_buffer, buffer_data, sub_range);
         let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
         let temporary_mapping = actual_mapping.to_vec();
         Box::new(BufferMappedRange {
             actual_mapping,
             temporary_mapping,
         })
+    }
+
+    fn buffer_get_mapped_range_as_array_buffer(
+        &self,
+        _buffer: &Self::BufferId,
+        buffer_data: &Self::BufferData,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> js_sys::ArrayBuffer {
+        buffer_data.0.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
@@ -2559,7 +2657,8 @@ impl crate::context::Context for Context {
         _queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
     ) -> f32 {
-        1.0 //TODO
+        // Timestamp values are always in nanoseconds, see https://gpuweb.github.io/gpuweb/#timestamp
+        1.0
     }
 
     fn queue_on_submitted_work_done(
@@ -2593,15 +2692,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn compute_pass_set_push_constants(
@@ -2718,15 +2821,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        encoder_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            encoder_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            encoder_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_bundle_encoder_set_index_buffer(
@@ -2933,15 +3040,19 @@ impl crate::context::Context for Context {
         bind_group_data: &Self::BindGroupData,
         offsets: &[wgt::DynamicOffset],
     ) {
-        pass_data
-            .0
-            .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
-                index,
-                &bind_group_data.0,
-                offsets,
-                0f64,
-                offsets.len() as u32,
-            );
+        if offsets.is_empty() {
+            pass_data.0.set_bind_group(index, &bind_group_data.0);
+        } else {
+            pass_data
+                .0
+                .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
+                    index,
+                    &bind_group_data.0,
+                    offsets,
+                    0f64,
+                    offsets.len() as u32,
+                );
+        }
     }
 
     fn render_pass_set_index_buffer(
@@ -3215,6 +3326,23 @@ impl crate::context::Context for Context {
         _query_index: u32,
     ) {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a compute pass")
+    }
+
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+        _query_index: u32,
+    ) {
+        // Not available in gecko yet
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        _pass_data: &mut Self::RenderPassData,
+    ) {
+        // Not available in gecko yet
     }
 
     fn render_pass_begin_pipeline_statistics_query(

@@ -1,7 +1,0 @@
-[alias]
-xtask = "run --manifest-path xtask/Cargo.toml --"
-
-[build]
-rustflags = [
-"--cfg=web_sys_unstable_apis"
-]

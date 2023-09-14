@@ -244,10 +244,7 @@ impl Context {
         &self,
         canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -259,10 +256,7 @@ impl Context {
         &self,
         canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_offscreen_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -1849,12 +1843,21 @@ impl crate::Context for Context {
         _encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
+        let timestamp_writes =
+            desc.timestamp_writes
+                .as_ref()
+                .map(|tw| wgc::command::ComputePassTimestampWrites {
+                    query_set: tw.query_set.id.into(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                });
         (
             Unused,
             wgc::command::ComputePass::new(
                 *encoder,
                 &wgc::command::ComputePassDescriptor {
                     label: desc.label.map(Borrowed),
+                    timestamp_writes: timestamp_writes.as_ref(),
                 },
             ),
         )
@@ -1918,6 +1921,15 @@ impl crate::Context for Context {
             }
         });
 
+        let timestamp_writes =
+            desc.timestamp_writes
+                .as_ref()
+                .map(|tw| wgc::command::RenderPassTimestampWrites {
+                    query_set: tw.query_set.id.into(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                });
+
         (
             Unused,
             wgc::command::RenderPass::new(
@@ -1926,6 +1938,10 @@ impl crate::Context for Context {
                     label: desc.label.map(Borrowed),
                     color_attachments: Borrowed(&colors),
                     depth_stencil_attachment: depth_stencil.as_ref(),
+                    timestamp_writes: timestamp_writes.as_ref(),
+                    occlusion_query_set: desc
+                        .occlusion_query_set
+                        .map(|query_set| query_set.id.into()),
                 },
             ),
         )
@@ -2938,6 +2954,23 @@ impl crate::Context for Context {
         query_index: u32,
     ) {
         wgpu_render_pass_write_timestamp(pass_data, *query_set, query_index)
+    }
+
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        query_index: u32,
+    ) {
+        wgpu_render_pass_begin_occlusion_query(pass_data, query_index)
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        wgpu_render_pass_end_occlusion_query(pass_data)
     }
 
     fn render_pass_begin_pipeline_statistics_query(

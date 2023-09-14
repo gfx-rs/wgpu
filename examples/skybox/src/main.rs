@@ -439,6 +439,8 @@ impl wgpu_example::framework::Example for Skybox {
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_bind_group(0, &self.bind_group, &[]);
@@ -473,11 +475,8 @@ fn skybox() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("ANGLE"),
-            false,
+        base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
+            wgpu_test::FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"),
         ),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
     });

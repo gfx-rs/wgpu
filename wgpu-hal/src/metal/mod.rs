@@ -100,7 +100,9 @@ impl crate::Instance<Api> for Instance {
             raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
                 Surface::from_view(handle.ns_view, Some(&self.managed_metal_layer_delegate))
             }),
-            _ => Err(crate::InstanceError),
+            _ => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Metal-compatible handle"
+            ))),
         }
     }
 
@@ -237,6 +239,8 @@ struct PrivateCapabilities {
     supports_preserve_invariance: bool,
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
+    support_timestamp_query: bool,
+    support_timestamp_query_in_passes: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -285,18 +289,21 @@ pub struct Adapter {
 
 pub struct Queue {
     raw: Arc<Mutex<metal::CommandQueue>>,
+    timestamp_period: f32,
 }
 
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
 impl Queue {
-    pub unsafe fn queue_from_raw(raw: metal::CommandQueue) -> Self {
+    pub unsafe fn queue_from_raw(raw: metal::CommandQueue, timestamp_period: f32) -> Self {
         Self {
             raw: Arc::new(Mutex::new(raw)),
+            timestamp_period,
         }
     }
 }
+
 pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
@@ -406,8 +413,7 @@ impl crate::Queue<Api> for Queue {
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
-        // TODO: This is hard, see https://github.com/gpuweb/gpuweb/issues/1325
-        1.0
+        self.timestamp_period
     }
 }
 
@@ -701,6 +707,8 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct QuerySet {
     raw_buffer: metal::Buffer,
+    //Metal has a custom buffer for counters.
+    counter_sample_buffer: Option<metal::CounterSampleBuffer>,
     ty: wgt::QueryType,
 }
 

@@ -219,6 +219,9 @@ struct ActiveSubmission<A: hal::Api> {
     mapped: Vec<id::Valid<id::BufferId>>,
 
     encoders: Vec<EncoderInFlight<A>>,
+
+    /// List of queue "on_submitted_work_done" closures to be called once this
+    /// submission has completed.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
 }
 
@@ -304,6 +307,12 @@ pub(super) struct LifetimeTracker<A: hal::Api> {
     /// Buffers the user has asked us to map, and which are not used by any
     /// queue submission still in flight.
     ready_to_map: Vec<id::Valid<id::BufferId>>,
+
+    /// Queue "on_submitted_work_done" closures that were initiated for while there is no
+    /// currently pending submissions. These cannot be immeidately invoked as they
+    /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
+    /// here until the next time the device is maintained.
+    work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
 }
 
 impl<A: hal::Api> LifetimeTracker<A> {
@@ -316,6 +325,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             active: Vec::new(),
             free_resources: NonReferencedResources::new(),
             ready_to_map: Vec::new(),
+            work_done_closures: SmallVec::new(),
         }
     }
 
@@ -405,7 +415,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             .position(|a| a.index > last_done)
             .unwrap_or(self.active.len());
 
-        let mut work_done_closures = SmallVec::new();
+        let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
             log::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
@@ -445,18 +455,16 @@ impl<A: hal::Api> LifetimeTracker<A> {
         }
     }
 
-    pub fn add_work_done_closure(
-        &mut self,
-        closure: SubmittedWorkDoneClosure,
-    ) -> Option<SubmittedWorkDoneClosure> {
+    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);
-                None
             }
-            // Note: we can't immediately invoke the closure, since it assumes
-            // nothing is currently locked in the hubs.
-            None => Some(closure),
+            // We must defer the closure until all previously occuring map_async closures
+            // have fired. This is required by the spec.
+            None => {
+                self.work_done_closures.push(closure);
+            }
         }
     }
 }
@@ -762,14 +770,24 @@ impl<A: HalApi> LifetimeTracker<A> {
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
-                if guard[id].multi_ref_count.dec_and_check_empty() {
-                    log::debug!("Bind group layout {:?} will be destroyed", id);
-                    #[cfg(feature = "trace")]
-                    if let Some(t) = trace {
-                        t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
-                    }
-                    if let Some(lay) = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard) {
-                        self.free_resources.bind_group_layouts.push(lay.raw);
+                let mut bgl_to_check = Some(id);
+                while let Some(id) = bgl_to_check.take() {
+                    let bgl = &guard[id];
+                    if bgl.multi_ref_count.dec_and_check_empty() {
+                        // If This layout points to a compatible one, go over the latter
+                        // to decrement the ref count and potentially destroy it.
+                        bgl_to_check = bgl.compatible_layout;
+
+                        log::debug!("Bind group layout {:?} will be destroyed", id);
+                        #[cfg(feature = "trace")]
+                        if let Some(t) = trace {
+                            t.lock().add(trace::Action::DestroyBindGroupLayout(id.0));
+                        }
+                        if let Some(lay) =
+                            hub.bind_group_layouts.unregister_locked(id.0, &mut *guard)
+                        {
+                            self.free_resources.bind_group_layouts.push(lay.raw);
+                        }
                     }
                 }
             }

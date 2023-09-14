@@ -176,11 +176,14 @@ pub enum Command {
     InsertDebugMarker(String),
     RunComputePass {
         base: crate::command::BasePass<crate::command::ComputeCommand>,
+        timestamp_writes: Option<crate::command::ComputePassTimestampWrites>,
     },
     RunRenderPass {
         base: crate::command::BasePass<crate::command::RenderCommand>,
         target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
+        timestamp_writes: Option<crate::command::RenderPassTimestampWrites>,
+        occlusion_query_set_id: Option<id::QuerySetId>,
     },
 }
 

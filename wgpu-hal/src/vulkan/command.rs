@@ -45,6 +45,21 @@ impl super::DeviceShared {
     }
 }
 
+impl super::CommandEncoder {
+    fn write_pass_end_timestamp_if_requested(&mut self) {
+        if let Some((query_set, index)) = self.end_of_pass_timer_query.take() {
+            unsafe {
+                self.device.raw.cmd_write_timestamp(
+                    self.active,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    query_set,
+                    index,
+                );
+            }
+        }
+    }
+}
+
 impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         if self.free.is_empty() {
@@ -197,15 +212,44 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
-        unsafe {
-            self.device.raw.cmd_fill_buffer(
-                self.active,
-                buffer.raw,
-                range.start,
-                range.end - range.start,
-                0,
-            )
-        };
+        let range_size = range.end - range.start;
+        if self.device.workarounds.contains(
+            super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
+        ) && range_size >= 4096
+            && range.start % 16 != 0
+        {
+            let rounded_start = wgt::math::align_to(range.start, 16);
+            let prefix_size = rounded_start - range.start;
+
+            unsafe {
+                self.device.raw.cmd_fill_buffer(
+                    self.active,
+                    buffer.raw,
+                    range.start,
+                    prefix_size,
+                    0,
+                )
+            };
+
+            // This will never be zero, as rounding can only add up to 12 bytes, and the total size is 4096.
+            let suffix_size = range.end - rounded_start;
+
+            unsafe {
+                self.device.raw.cmd_fill_buffer(
+                    self.active,
+                    buffer.raw,
+                    rounded_start,
+                    suffix_size,
+                    0,
+                )
+            };
+        } else {
+            unsafe {
+                self.device
+                    .raw
+                    .cmd_fill_buffer(self.active, buffer.raw, range.start, range_size, 0)
+            };
+        }
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
@@ -489,6 +533,18 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             self.rpass_debug_marker_active = true;
         }
 
+        // Start timestamp if any (before all other commands but after debug marker)
+        if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
+            if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
+                unsafe {
+                    self.write_timestamp(timestamp_writes.query_set, index);
+                }
+            }
+            self.end_of_pass_timer_query = timestamp_writes
+                .end_of_pass_write_index
+                .map(|index| (timestamp_writes.query_set.raw, index));
+        }
+
         unsafe {
             self.device
                 .raw
@@ -508,10 +564,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn end_render_pass(&mut self) {
         unsafe {
             self.device.raw.cmd_end_render_pass(self.active);
-            if self.rpass_debug_marker_active {
+        }
+
+        // After all other commands but before debug marker, so this is still seen as part of this pass.
+        self.write_pass_end_timestamp_if_requested();
+
+        if self.rpass_debug_marker_active {
+            unsafe {
                 self.end_debug_marker();
-                self.rpass_debug_marker_active = false;
             }
+            self.rpass_debug_marker_active = false;
         }
     }
 
@@ -781,14 +843,27 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<'_, super::Api>) {
         self.bind_point = vk::PipelineBindPoint::COMPUTE;
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };
             self.rpass_debug_marker_active = true;
         }
+
+        if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
+            if let Some(index) = timestamp_writes.beginning_of_pass_write_index {
+                unsafe {
+                    self.write_timestamp(timestamp_writes.query_set, index);
+                }
+            }
+            self.end_of_pass_timer_query = timestamp_writes
+                .end_of_pass_write_index
+                .map(|index| (timestamp_writes.query_set.raw, index));
+        }
     }
     unsafe fn end_compute_pass(&mut self) {
+        self.write_pass_end_timestamp_if_requested();
+
         if self.rpass_debug_marker_active {
             unsafe { self.end_debug_marker() };
             self.rpass_debug_marker_active = false

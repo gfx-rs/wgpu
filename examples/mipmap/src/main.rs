@@ -167,6 +167,8 @@ impl Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base);
@@ -492,6 +494,8 @@ impl wgpu_example::framework::Example for Example {
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
@@ -517,7 +521,7 @@ fn mipmap() {
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: wgpu_test::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }
@@ -531,7 +535,7 @@ fn mipmap_query() {
         height: 768,
         optional_features: QUERY_FEATURES,
         base_test_parameters: wgpu_test::TestParameters::default()
-            .backend_failure(wgpu::Backends::GL),
+            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }

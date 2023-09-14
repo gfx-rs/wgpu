@@ -1078,19 +1078,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            // If there is an equivalent BGL, just bump the refcount and return it.
-            // This is only applicable for identity filters that are generating new IDs,
-            // so their inputs are `PhantomData` of size 0.
-            if mem::size_of::<Input<G, id::BindGroupLayoutId>>() == 0 {
+            let mut compatible_layout = None;
+            {
                 let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
                 if let Some(id) =
                     Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
                 {
-                    return (id, None);
+                    // If there is an equivalent BGL, just bump the refcount and return it.
+                    // This is only applicable if ids are generated in wgpu. In practice:
+                    //  - wgpu users take this branch and return the existing
+                    //    id without using the indirection layer in BindGroupLayout.
+                    //  - Other users like gecko or the replay tool use don't take
+                    //    the branch and instead rely on the indirection to use the
+                    //    proper bind group layout id.
+                    if G::ids_are_generated_in_wgpu() {
+                        return (id, None);
+                    }
+
+                    compatible_layout = Some(id::Valid(id));
                 }
             }
 
-            let layout = match device.create_bind_group_layout(
+            let mut layout = match device.create_bind_group_layout(
                 device_id,
                 desc.label.borrow_option(),
                 entry_map,
@@ -1099,7 +1108,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
 
+            layout.compatible_layout = compatible_layout;
+
             let id = fid.assign(layout, &mut token);
+
             return (id.0, None);
         };
 
@@ -1244,16 +1256,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
-            let bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
+            let mut bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
                 Ok(layout) => layout,
-                Err(_) => break binding_model::CreateBindGroupError::InvalidLayout,
+                Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
-            let bind_group =
-                match device.create_bind_group(device_id, bind_group_layout, desc, hub, &mut token)
-                {
-                    Ok(bind_group) => bind_group,
-                    Err(e) => break e,
-                };
+
+            let mut layout_id = id::Valid(desc.layout);
+            if let Some(id) = bind_group_layout.compatible_layout {
+                layout_id = id;
+                bind_group_layout = &bind_group_layout_guard[id];
+            }
+
+            let bind_group = match device.create_bind_group(
+                device_id,
+                bind_group_layout,
+                layout_id,
+                desc,
+                hub,
+                &mut token,
+            ) {
+                Ok(bind_group) => bind_group,
+                Err(e) => break e,
+            };
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
@@ -2110,7 +2134,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, _token) = hub.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let error = 'outer: loop {
             let device = match device_guard.get(device_id) {
@@ -2183,6 +2207,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 break error;
             }
 
+            // Wait for all work to finish before configuring the surface.
+            if let Err(e) = device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+                break e.into();
+            }
+
+            // All textures must be destroyed before the surface can be re-configured.
+            if let Some(present) = surface.presentation.take() {
+                if present.acquired_texture.is_some() {
+                    break E::PreviousOutputExists;
+                }
+            }
+
+            // TODO: Texture views may still be alive that point to the texture.
+            // this will allow the user to render to the surface texture, long after
+            // it has been removed.
+            //
+            // https://github.com/gfx-rs/wgpu/issues/4105
+
             match unsafe {
                 A::get_surface_mut(surface)
                     .unwrap()
@@ -2199,12 +2241,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             E::InvalidSurface
                         }
                     }
-                }
-            }
-
-            if let Some(present) = surface.presentation.take() {
-                if present.acquired_texture.is_some() {
-                    break E::PreviousOutputExists;
                 }
             }
 

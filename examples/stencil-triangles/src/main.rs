@@ -211,6 +211,8 @@ impl wgpu_example::framework::Example for Triangles {
                         store: true,
                     }),
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_stencil_reference(1);

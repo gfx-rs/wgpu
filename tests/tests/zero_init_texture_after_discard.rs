@@ -1,38 +1,46 @@
 use wasm_bindgen_test::*;
 use wgpu::*;
-use wgpu_test::{image::ReadbackBuffers, initialize_test, TestParameters, TestingContext};
+use wgpu_test::{
+    image::ReadbackBuffers, initialize_test, FailureCase, TestParameters, TestingContext,
+};
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
 #[test]
 #[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
-    initialize_test(TestParameters::default().webgl2_failure(), |mut ctx| {
-        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
-        case.create_command_encoder();
-        case.discard();
-        case.submit_command_encoder();
+    initialize_test(
+        TestParameters::default().skip(FailureCase::webgl2()),
+        |mut ctx| {
+            let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+            case.create_command_encoder();
+            case.discard();
+            case.submit_command_encoder();
 
-        case.create_command_encoder();
-        case.copy_texture_to_buffer();
-        case.submit_command_encoder();
+            case.create_command_encoder();
+            case.copy_texture_to_buffer();
+            case.submit_command_encoder();
 
-        case.assert_buffers_are_zero();
-    });
+            case.assert_buffers_are_zero();
+        },
+    );
 }
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in the same encoder to a buffer.
 #[test]
 #[wasm_bindgen_test]
 fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(TestParameters::default().webgl2_failure(), |mut ctx| {
-        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
-        case.create_command_encoder();
-        case.discard();
-        case.copy_texture_to_buffer();
-        case.submit_command_encoder();
+    initialize_test(
+        TestParameters::default().skip(FailureCase::webgl2()),
+        |mut ctx| {
+            let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+            case.create_command_encoder();
+            case.discard();
+            case.copy_texture_to_buffer();
+            case.submit_command_encoder();
 
-        case.assert_buffers_are_zero();
-    });
+            case.assert_buffers_are_zero();
+        },
+    );
 }
 
 #[test]
@@ -154,6 +162,8 @@ impl<'ctx> TestCase<'ctx> {
                         store: true,
                     }),
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             ctx.queue.submit([encoder.finish()]);
         } else {
@@ -237,6 +247,8 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
     }
 
@@ -260,6 +272,8 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
     }
 
@@ -283,6 +297,8 @@ impl<'ctx> TestCase<'ctx> {
                         }),
                     },
                 ),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
     }
 

@@ -253,9 +253,14 @@ bitflags::bitflags! {
         /// This is a web and native feature.
         const DEPTH_CLIP_CONTROL = 1 << 0;
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
-        /// all work before the query is finished. Call [`CommandEncoder::write_timestamp`],
-        /// [`RenderPassEncoder::write_timestamp`], or [`ComputePassEncoder::write_timestamp`] to
-        /// write out a timestamp.
+        /// all work before the query is finished.
+        ///
+        /// This feature allows the use of
+        /// - [`CommandEncoder::write_timestamp`]
+        /// - [`RenderPassDescriptor::timestamp_writes`]
+        /// - [`ComputePassDescriptor::timestamp_writes`]
+        /// to write out timestamps.
+        /// For timestamps within passes refer to [`Features::TIMESTAMP_QUERY_INSIDE_PASSES`]
         ///
         /// They must be resolved using [`CommandEncoder::resolve_query_sets`] into a buffer,
         /// then the result must be multiplied by the timestamp period [`Queue::get_timestamp_period`]
@@ -265,8 +270,7 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Vulkan
         /// - DX12
-        ///
-        /// This is currently unimplemented on Metal.
+        /// - Metal - TODO: Not yet supported on command encoder.
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
@@ -447,12 +451,17 @@ bitflags::bitflags! {
         ///
         /// Implies [`Features::TIMESTAMP_QUERY`] is supported.
         ///
+        /// Additionally allows for timestamp queries to be used inside render & compute passes using:
+        /// - [`RenderPassEncoder::write_timestamp`]
+        /// - [`ComputePassEncoder::write_timestamp`]
+        ///
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
         ///
         /// This is currently unimplemented on Metal.
         /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
+        /// (This is a common limitation of tile-based rasterization GPUs)
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 33;
@@ -670,7 +679,6 @@ bitflags::bitflags! {
         /// This allows only drawing the vertices of polygons/triangles instead of filled
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.
@@ -847,7 +855,7 @@ pub struct Limits {
     pub max_texture_array_layers: u32,
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
-    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000.
+    /// Maximum binding index allowed in `create_bind_group_layout`. Defaults to 1000. Higher is "better".
     pub max_bindings_per_bind_group: u32,
     /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
     pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
@@ -863,14 +871,15 @@ pub struct Limits {
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
-    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KB. Higher is "better".
+    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KiB. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
-    /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MB. Higher is "better".
+    /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MiB. Higher is "better".
     pub max_storage_buffer_binding_size: u32,
     /// Maximum length of `VertexState::buffers` when creating a `RenderPipeline`.
     /// Defaults to 8. Higher is "better".
     pub max_vertex_buffers: u32,
     /// A limit above which buffer allocations are guaranteed to fail.
+    /// Defaults to 256 MiB. Higher is "better".
     ///
     /// Buffer allocations below the maximum buffer size may not succeed depending on available memory,
     /// fragmentation and other factors.
@@ -892,24 +901,25 @@ pub struct Limits {
     pub min_storage_buffer_offset_alignment: u32,
     /// Maximum allowed number of components (scalars) of input or output locations for
     /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
+    /// Higher is "better".
     pub max_inter_stage_shader_components: u32,
     /// Maximum number of bytes used for workgroup memory in a compute entry point. Defaults to
-    /// 16352.
+    /// 16352. Higher is "better".
     pub max_compute_workgroup_storage_size: u32,
     /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
-    /// Defaults to 256.
+    /// Defaults to 256. Higher is "better".
     pub max_compute_invocations_per_workgroup: u32,
     /// The maximum value of the workgroup_size X dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256.
+    /// Defaults to 256. Higher is "better".
     pub max_compute_workgroup_size_x: u32,
     /// The maximum value of the workgroup_size Y dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256.
+    /// Defaults to 256. Higher is "better".
     pub max_compute_workgroup_size_y: u32,
     /// The maximum value of the workgroup_size Z dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 64.
+    /// Defaults to 64. Higher is "better".
     pub max_compute_workgroup_size_z: u32,
     /// The maximum value for each dimension of a `ComputePass::dispatch(x, y, z)` operation.
-    /// Defaults to 65535.
+    /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
     /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
@@ -921,6 +931,12 @@ pub struct Limits {
     /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
+
+    /// Maximum number of live non-sampler bindings.
+    ///
+    /// This limit only affects the d3d12 backend. Using a large number will allow the device
+    /// to create many bind groups at the cost of a large up-front allocation at device creation.
+    pub max_non_sampler_bindings: u32,
 }
 
 impl Default for Limits {
@@ -942,7 +958,7 @@ impl Default for Limits {
             max_uniform_buffer_binding_size: 64 << 10,
             max_storage_buffer_binding_size: 128 << 20,
             max_vertex_buffers: 8,
-            max_buffer_size: 1 << 28,
+            max_buffer_size: 256 << 20,
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
             min_uniform_buffer_offset_alignment: 256,
@@ -955,12 +971,50 @@ impl Default for Limits {
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
             max_push_constant_size: 0,
+            max_non_sampler_bindings: 1_000_000,
         }
     }
 }
 
 impl Limits {
     /// These default limits are guaranteed to be compatible with GLES-3.1, and D3D11
+    ///
+    /// Those limits are as follows (different from default are marked with *):
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::downlevel_defaults(), Limits {
+    ///     max_texture_dimension_1d: 2048, // *
+    ///     max_texture_dimension_2d: 2048, // *
+    ///     max_texture_dimension_3d: 256, // *
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 4, // *
+    ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_uniform_buffers_per_shader_stage: 12,
+    ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
+    ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
+    ///     max_vertex_buffers: 8,
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 2048,
+    ///     max_push_constant_size: 0,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_compute_workgroup_storage_size: 16352,
+    ///     max_compute_invocations_per_workgroup: 256,
+    ///     max_compute_workgroup_size_x: 256,
+    ///     max_compute_workgroup_size_y: 256,
+    ///     max_compute_workgroup_size_z: 64,
+    ///     max_compute_workgroups_per_dimension: 65535,
+    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_non_sampler_bindings: 1_000_000,
+    /// });
+    /// ```
     pub fn downlevel_defaults() -> Self {
         Self {
             max_texture_dimension_1d: 2048,
@@ -991,11 +1045,50 @@ impl Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 28,
+            max_buffer_size: 256 << 20,
+            max_non_sampler_bindings: 1_000_000,
         }
     }
 
     /// These default limits are guaranteed to be compatible with GLES-3.0, and D3D11, and WebGL2
+    ///
+    /// Those limits are as follows (different from `downlevel_defaults` are marked with +,
+    /// *'s from `downlevel_defaults` shown as well.):
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::downlevel_webgl2_defaults(), Limits {
+    ///     max_texture_dimension_1d: 2048, // *
+    ///     max_texture_dimension_2d: 2048, // *
+    ///     max_texture_dimension_3d: 256, // *
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 0, // +
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 0, // * +
+    ///     max_storage_textures_per_shader_stage: 0, // +
+    ///     max_uniform_buffers_per_shader_stage: 11, // +
+    ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
+    ///     max_storage_buffer_binding_size: 0, // * +
+    ///     max_vertex_buffers: 8,
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 255, // +
+    ///     max_push_constant_size: 0,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_compute_workgroup_storage_size: 0, // +
+    ///     max_compute_invocations_per_workgroup: 0, // +
+    ///     max_compute_workgroup_size_x: 0, // +
+    ///     max_compute_workgroup_size_y: 0, // +
+    ///     max_compute_workgroup_size_z: 0, // +
+    ///     max_compute_workgroups_per_dimension: 0, // +
+    ///     max_buffer_size: 256 << 20, // (256 MiB),
+    ///     max_non_sampler_bindings: 1_000_000,
+    /// });
+    /// ```
     pub fn downlevel_webgl2_defaults() -> Self {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
@@ -1110,6 +1203,7 @@ impl Limits {
         compare!(max_compute_workgroup_size_z, Less);
         compare!(max_compute_workgroups_per_dimension, Less);
         compare!(max_buffer_size, Less);
+        compare!(max_non_sampler_bindings, Less);
     }
 }
 
@@ -1186,8 +1280,8 @@ bitflags::bitflags! {
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
         const BASE_VERTEX = 1 << 3;
-        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil
-        /// attachment.
+        /// Supports reading from a depth/stencil texture while using it as a read-only
+        /// depth/stencil attachment.
         ///
         /// The WebGL2 and GLES backends do not support RODS.
         const READ_ONLY_DEPTH_STENCIL = 1 << 4;
@@ -4218,73 +4312,73 @@ pub struct VertexAttribute {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum VertexFormat {
-    /// Two unsigned bytes (u8). `uvec2` in shaders.
+    /// Two unsigned bytes (u8). `vec2<u32>` in shaders.
     Uint8x2 = 0,
-    /// Four unsigned bytes (u8). `uvec4` in shaders.
+    /// Four unsigned bytes (u8). `vec4<u32>` in shaders.
     Uint8x4 = 1,
-    /// Two signed bytes (i8). `ivec2` in shaders.
+    /// Two signed bytes (i8). `vec2<i32>` in shaders.
     Sint8x2 = 2,
-    /// Four signed bytes (i8). `ivec4` in shaders.
+    /// Four signed bytes (i8). `vec4<i32>` in shaders.
     Sint8x4 = 3,
-    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2` in shaders.
+    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2<f32>` in shaders.
     Unorm8x2 = 4,
-    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4` in shaders.
+    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 5,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2` in shaders.
+    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 6,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4` in shaders.
+    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 7,
-    /// Two unsigned shorts (u16). `uvec2` in shaders.
+    /// Two unsigned shorts (u16). `vec2<u32>` in shaders.
     Uint16x2 = 8,
-    /// Four unsigned shorts (u16). `uvec4` in shaders.
+    /// Four unsigned shorts (u16). `vec4<u32>` in shaders.
     Uint16x4 = 9,
-    /// Two signed shorts (i16). `ivec2` in shaders.
+    /// Two signed shorts (i16). `vec2<i32>` in shaders.
     Sint16x2 = 10,
-    /// Four signed shorts (i16). `ivec4` in shaders.
+    /// Four signed shorts (i16). `vec4<i32>` in shaders.
     Sint16x4 = 11,
-    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2` in shaders.
+    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2<f32>` in shaders.
     Unorm16x2 = 12,
-    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4` in shaders.
+    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 13,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2` in shaders.
+    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 14,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4` in shaders.
+    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 15,
-    /// Two half-precision floats (no Rust equiv). `vec2` in shaders.
+    /// Two half-precision floats (no Rust equiv). `vec2<f32>` in shaders.
     Float16x2 = 16,
-    /// Four half-precision floats (no Rust equiv). `vec4` in shaders.
+    /// Four half-precision floats (no Rust equiv). `vec4<f32>` in shaders.
     Float16x4 = 17,
-    /// One single-precision float (f32). `float` in shaders.
+    /// One single-precision float (f32). `f32` in shaders.
     Float32 = 18,
-    /// Two single-precision floats (f32). `vec2` in shaders.
+    /// Two single-precision floats (f32). `vec2<f32>` in shaders.
     Float32x2 = 19,
-    /// Three single-precision floats (f32). `vec3` in shaders.
+    /// Three single-precision floats (f32). `vec3<f32>` in shaders.
     Float32x3 = 20,
-    /// Four single-precision floats (f32). `vec4` in shaders.
+    /// Four single-precision floats (f32). `vec4<f32>` in shaders.
     Float32x4 = 21,
-    /// One unsigned int (u32). `uint` in shaders.
+    /// One unsigned int (u32). `u32` in shaders.
     Uint32 = 22,
-    /// Two unsigned ints (u32). `uvec2` in shaders.
+    /// Two unsigned ints (u32). `vec2<u32>` in shaders.
     Uint32x2 = 23,
-    /// Three unsigned ints (u32). `uvec3` in shaders.
+    /// Three unsigned ints (u32). `vec3<u32>` in shaders.
     Uint32x3 = 24,
-    /// Four unsigned ints (u32). `uvec4` in shaders.
+    /// Four unsigned ints (u32). `vec4<u32>` in shaders.
     Uint32x4 = 25,
-    /// One signed int (i32). `int` in shaders.
+    /// One signed int (i32). `i32` in shaders.
     Sint32 = 26,
-    /// Two signed ints (i32). `ivec2` in shaders.
+    /// Two signed ints (i32). `vec2<i32>` in shaders.
     Sint32x2 = 27,
-    /// Three signed ints (i32). `ivec3` in shaders.
+    /// Three signed ints (i32). `vec3<i32>` in shaders.
     Sint32x3 = 28,
-    /// Four signed ints (i32). `ivec4` in shaders.
+    /// Four signed ints (i32). `vec4<i32>` in shaders.
     Sint32x4 = 29,
-    /// One double-precision float (f64). `double` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// One double-precision float (f64). `f32` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64 = 30,
-    /// Two double-precision floats (f64). `dvec2` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Two double-precision floats (f64). `vec2<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x2 = 31,
-    /// Three double-precision floats (f64). `dvec3` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Three double-precision floats (f64). `vec3<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x3 = 32,
-    /// Four double-precision floats (f64). `dvec4` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Four double-precision floats (f64). `vec4<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x4 = 33,
 }
 
@@ -6311,9 +6405,28 @@ pub enum Dx12Compiler {
     Dxc {
         /// Path to the `dxil.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxil_path: Option<PathBuf>,
-        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxil.dll` file. Passing `None` will use standard platform specific dll loading rules.
+        /// Path to the `dxcompiler.dll` file, or path to the directory containing `dxcompiler.dll` file. Passing `None` will use standard platform specific dll loading rules.
         dxc_path: Option<PathBuf>,
     },
+}
+
+/// Selects which OpenGL ES 3 minor version to request.
+///
+/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1 on APIs like D3D11.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub enum Gles3MinorVersion {
+    /// No explicit minor version is requested, the driver automatically picks the highest available.
+    #[default]
+    Automatic,
+
+    /// Request an ES 3.0 context.
+    Version0,
+
+    /// Request an ES 3.1 context.
+    Version1,
+
+    /// Request an ES 3.2 context.
+    Version2,
 }
 
 /// Options for creating an instance.
@@ -6322,6 +6435,8 @@ pub struct InstanceDescriptor {
     pub backends: Backends,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
+    /// Which OpenGL ES 3 minor version to request.
+    pub gles_minor_version: Gles3MinorVersion,
 }
 
 impl Default for InstanceDescriptor {
@@ -6329,6 +6444,7 @@ impl Default for InstanceDescriptor {
         Self {
             backends: Backends::all(),
             dx12_shader_compiler: Dx12Compiler::default(),
+            gles_minor_version: Gles3MinorVersion::default(),
         }
     }
 }

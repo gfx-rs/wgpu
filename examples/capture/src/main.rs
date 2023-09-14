@@ -40,6 +40,7 @@ async fn create_red_image_with_dimensions(
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+        gles_minor_version: wgpu::Gles3MinorVersion::default(),
     });
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -104,6 +105,8 @@ async fn create_red_image_with_dimensions(
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         // Copy the data from the texture to the buffer
@@ -146,13 +149,13 @@ async fn create_png(
     //
     // We pass our submission index so we don't need to wait for any other possible submissions.
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(submission_index));
-    // If a file system is available, write the buffer as a PNG
-    let has_file_system_available = cfg!(not(target_arch = "wasm32"));
-    if !has_file_system_available {
-        return;
-    }
 
     if let Some(Ok(())) = receiver.receive().await {
+        // If a file system is available, write the buffer as a PNG
+        let has_file_system_available = cfg!(not(target_arch = "wasm32"));
+        if !has_file_system_available {
+            return;
+        }
         let padded_buffer = buffer_slice.get_mapped_range();
 
         let mut png_encoder = png::Encoder::new(

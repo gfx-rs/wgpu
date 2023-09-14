@@ -51,7 +51,7 @@ version = "0.17"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+rev = "cc87b8f9eb30bb55d0735b89d3df3e099e1a6e7c"
 version = "0.13.0"
 
 [workspace.dependencies]
@@ -60,7 +60,7 @@ arrayvec = "0.7"
 async-executor = "1"
 bitflags = "2"
 bit-vec = "0.6"
-bytemuck = { version = "1.13", features = ["derive"] }
+bytemuck = { version = "1.14", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
@@ -82,14 +82,14 @@ obj = "0.10"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
-png = "0.17.9"
+png = "0.17.10"
 pollster = "0.3"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
 renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
-serde_json = "1.0.96"
+serde_json = "1.0.107"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
@@ -141,7 +141,7 @@ deno_url = "0.106.0"
 deno_web = "0.137.0"
 deno_webidl = "0.106.0"
 deno_webgpu = { path = "./deno_webgpu" }
-tokio = "1.28.2"
+tokio = "1.32.0"
 termcolor = "1.2.0"
 
 [patch."https://github.com/gfx-rs/naga"]

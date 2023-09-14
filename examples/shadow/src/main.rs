@@ -777,6 +777,8 @@ impl wgpu_example::framework::Example for Example {
                         }),
                         stencil_ops: None,
                     }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
                 });
                 pass.set_pipeline(&self.shadow_pass.pipeline);
                 pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
@@ -819,6 +821,8 @@ impl wgpu_example::framework::Example for Example {
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             pass.set_pipeline(&self.forward_pass.pipeline);
             pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);
@@ -853,9 +857,15 @@ fn shadow() {
         base_test_parameters: wgpu_test::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS)
             // rpi4 on VK doesn't work: https://gitlab.freedesktop.org/mesa/mesa/-/issues/3916
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("V3D"), false)
+            .expect_fail(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "V3D",
+            ))
             // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("llvmpipe"), true),
+            .skip(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "llvmpipe",
+            )),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }

@@ -1143,7 +1143,7 @@ impl crate::Device<super::Api> for super::Device {
         }
 
         if desc.anisotropy_clamp != 1 {
-            // We only enable anisotropy if it is supported, and wgpu-hal interface guarentees
+            // We only enable anisotropy if it is supported, and wgpu-hal interface guarantees
             // the clamp is in the range [1, 16] which is always supported if anisotropy is.
             vk_info = vk_info
                 .anisotropy_enable(true)
@@ -1188,20 +1188,15 @@ impl crate::Device<super::Api> for super::Device {
             free: Vec::new(),
             discarded: Vec::new(),
             rpass_debug_marker_active: false,
+            end_of_pass_timer_query: None,
         })
     }
     unsafe fn destroy_command_encoder(&self, cmd_encoder: super::CommandEncoder) {
         unsafe {
-            if !cmd_encoder.free.is_empty() {
-                self.shared
-                    .raw
-                    .free_command_buffers(cmd_encoder.raw, &cmd_encoder.free)
-            }
-            if !cmd_encoder.discarded.is_empty() {
-                self.shared
-                    .raw
-                    .free_command_buffers(cmd_encoder.raw, &cmd_encoder.discarded)
-            }
+            // `vkDestroyCommandPool` also frees any command buffers allocated
+            // from that pool, so there's no need to explicitly call
+            // `vkFreeCommandBuffers` on `cmd_encoder`'s `free` and `discarded`
+            // fields.
             self.shared.raw.destroy_command_pool(cmd_encoder.raw, None);
         }
     }
