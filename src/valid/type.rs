@@ -90,8 +90,6 @@ pub enum Disalignment {
 pub enum TypeError {
     #[error("Capability {0:?} is required")]
     MissingCapability(Capabilities),
-    #[error("The {0:?} scalar width {1} is not supported")]
-    InvalidWidth(crate::ScalarKind, crate::Bytes),
     #[error("The {0:?} scalar width {1} is not supported for an atomic")]
     InvalidAtomicWidth(crate::ScalarKind, crate::Bytes),
     #[error("Invalid type for pointer target {0:?}")]
@@ -126,6 +124,22 @@ pub enum TypeError {
     },
     #[error("Structure types must have at least one member")]
     EmptyStruct,
+    #[error(transparent)]
+    WidthError(#[from] WidthError),
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum WidthError {
+    #[error("The {0:?} scalar width {1} is not supported")]
+    Invalid(crate::ScalarKind, crate::Bytes),
+    #[error("Using `{name}` values requires the `naga::valid::Capabilities::{flag}` flag")]
+    MissingCapability {
+        name: &'static str,
+        flag: &'static str,
+    },
+
+    #[error("64-bit integers are not yet supported")]
+    Unsupported64Bit,
 }
 
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
@@ -209,16 +223,21 @@ impl super::Validator {
         }
     }
 
-    pub(super) fn check_width(
+    pub(super) const fn check_width(
         &self,
         kind: crate::ScalarKind,
         width: crate::Bytes,
-    ) -> Result<(), TypeError> {
+    ) -> Result<(), WidthError> {
         let good = match kind {
             crate::ScalarKind::Bool => width == crate::BOOL_WIDTH,
             crate::ScalarKind::Float => {
                 if width == 8 {
-                    self.require_type_capability(Capabilities::FLOAT64)?;
+                    if !self.capabilities.contains(Capabilities::FLOAT64) {
+                        return Err(WidthError::MissingCapability {
+                            name: "f64",
+                            flag: "FLOAT64",
+                        });
+                    }
                     true
                 } else {
                     width == 4
@@ -229,7 +248,7 @@ impl super::Validator {
         if good {
             Ok(())
         } else {
-            Err(TypeError::InvalidWidth(kind, width))
+            Err(WidthError::Invalid(kind, width))
         }
     }
 
