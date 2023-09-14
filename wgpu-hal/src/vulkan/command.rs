@@ -212,15 +212,44 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     }
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
-        unsafe {
-            self.device.raw.cmd_fill_buffer(
-                self.active,
-                buffer.raw,
-                range.start,
-                range.end - range.start,
-                0,
-            )
-        };
+        let range_size = range.end - range.start;
+        if self.device.workarounds.contains(
+            super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
+        ) && range_size >= 4096
+            && range.start % 16 != 0
+        {
+            let rounded_start = wgt::math::align_to(range.start, 16);
+            let prefix_size = rounded_start - range.start;
+
+            unsafe {
+                self.device.raw.cmd_fill_buffer(
+                    self.active,
+                    buffer.raw,
+                    range.start,
+                    prefix_size,
+                    0,
+                )
+            };
+
+            // This will never be zero, as rounding can only add up to 12 bytes, and the total size is 4096.
+            let suffix_size = range.end - rounded_start;
+
+            unsafe {
+                self.device.raw.cmd_fill_buffer(
+                    self.active,
+                    buffer.raw,
+                    rounded_start,
+                    suffix_size,
+                    0,
+                )
+            };
+        } else {
+            unsafe {
+                self.device
+                    .raw
+                    .cmd_fill_buffer(self.active, buffer.raw, range.start, range_size, 0)
+            };
+        }
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
