@@ -207,6 +207,28 @@ bitflags::bitflags!(
         /// Qualcomm OOMs when there are zero color attachments but a non-null pointer
         /// to a subpass resolve attachment array. This nulls out that pointer in that case.
         const EMPTY_RESOLVE_ATTACHMENT_LISTS = 0x2;
+        /// If the following code returns false, then nvidia will end up filling the wrong range.
+        ///
+        /// ```skip
+        /// fn nvidia_succeeds() -> bool {
+        ///   # let (copy_length, start_offset) = (0, 0);
+        ///     if copy_length >= 4096 {
+        ///         if start_offset % 16 != 0 {
+        ///             if copy_length == 4096 {
+        ///                 return true;
+        ///             }
+        ///             if copy_length % 16 == 0 {
+        ///                 return false;
+        ///             }
+        ///         }
+        ///     }
+        ///     true
+        /// }
+        /// ```
+        ///
+        /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
+        /// if they cover a range of 4096 bytes or more.
+        const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 0x4;
     }
 );
 
