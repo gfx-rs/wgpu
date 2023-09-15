@@ -151,10 +151,10 @@ impl Layouter {
         self.layouts.clear();
     }
 
-    /// Extend this `Layouter` with layouts for any new entries in `types`.
+    /// Extend this `Layouter` with layouts for any new entries in `gctx.types`.
     ///
-    /// Ensure that every type in `types` has a corresponding [TypeLayout] in
-    /// [`self.layouts`].
+    /// Ensure that every type in `gctx.types` has a corresponding [TypeLayout]
+    /// in [`self.layouts`].
     ///
     /// Some front ends need to be able to compute layouts for existing types
     /// while module construction is still in progress and new types are still
