@@ -1,11 +1,10 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::ZeroCopyBuf;
 use std::borrow::Cow;
 use std::cell::RefCell;
 
@@ -18,11 +17,12 @@ impl Resource for WebGpuComputePass {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_set_pipeline(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
-    pipeline: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
+    #[smi] pipeline: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pipeline_resource = state
         .resource_table
@@ -39,10 +39,11 @@ pub fn op_webgpu_compute_pass_set_pipeline(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_dispatch_workgroups(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
     x: u32,
     y: u32,
     z: u32,
@@ -61,12 +62,13 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_dispatch_workgroups_indirect(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
-    indirect_buffer: ResourceId,
-    indirect_offset: u64,
+    #[smi] compute_pass_rid: ResourceId,
+    #[smi] indirect_buffer: ResourceId,
+    #[number] indirect_offset: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -84,11 +86,12 @@ pub fn op_webgpu_compute_pass_dispatch_workgroups_indirect(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_begin_pipeline_statistics_query(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
-    query_set: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
+    #[smi] query_set: ResourceId,
     query_index: u32,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
@@ -107,10 +110,11 @@ pub fn op_webgpu_compute_pass_begin_pipeline_statistics_query(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_end_pipeline_statistics_query(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
         .resource_table
@@ -123,11 +127,12 @@ pub fn op_webgpu_compute_pass_end_pipeline_statistics_query(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_write_timestamp(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
-    query_set: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
+    #[smi] query_set: ResourceId,
     query_index: u32,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
@@ -146,11 +151,12 @@ pub fn op_webgpu_compute_pass_write_timestamp(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_end(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    compute_pass_rid: ResourceId,
+    #[smi] command_encoder_rid: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource =
         state
@@ -169,15 +175,16 @@ pub fn op_webgpu_compute_pass_end(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_set_bind_group(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
     index: u32,
-    bind_group: ResourceId,
-    dynamic_offsets_data: ZeroCopyBuf,
-    dynamic_offsets_data_start: usize,
-    dynamic_offsets_data_length: usize,
+    #[smi] bind_group: ResourceId,
+    #[buffer] dynamic_offsets_data: &[u32],
+    #[number] dynamic_offsets_data_start: usize,
+    #[number] dynamic_offsets_data_length: usize,
 ) -> Result<WebGpuResult, AnyError> {
     let bind_group_resource = state
         .resource_table
@@ -185,14 +192,6 @@ pub fn op_webgpu_compute_pass_set_bind_group(
     let compute_pass_resource = state
         .resource_table
         .get::<WebGpuComputePass>(compute_pass_rid)?;
-
-    // Align the data
-    assert!(dynamic_offsets_data_start % std::mem::size_of::<u32>() == 0);
-    // SAFETY: A u8 to u32 cast is safe because we asserted that the length is a
-    // multiple of 4.
-    let (prefix, dynamic_offsets_data, suffix) = unsafe { dynamic_offsets_data.align_to::<u32>() };
-    assert!(prefix.is_empty());
-    assert!(suffix.is_empty());
 
     let start = dynamic_offsets_data_start;
     let len = dynamic_offsets_data_length;
@@ -218,11 +217,12 @@ pub fn op_webgpu_compute_pass_set_bind_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_push_debug_group(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
-    group_label: String,
+    #[smi] compute_pass_rid: ResourceId,
+    #[string] group_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
         .resource_table
@@ -242,10 +242,11 @@ pub fn op_webgpu_compute_pass_push_debug_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_pop_debug_group(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
+    #[smi] compute_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
         .resource_table
@@ -258,11 +259,12 @@ pub fn op_webgpu_compute_pass_pop_debug_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pass_insert_debug_marker(
     state: &mut OpState,
-    compute_pass_rid: ResourceId,
-    marker_label: String,
+    #[smi] compute_pass_rid: ResourceId,
+    #[string] marker_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let compute_pass_resource = state
         .resource_table

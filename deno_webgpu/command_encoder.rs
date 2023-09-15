@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -44,11 +44,12 @@ impl Resource for WebGpuCommandBuffer {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_command_encoder(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Option<String>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -91,14 +92,15 @@ pub struct GpuRenderPassDepthStencilAttachment {
     stencil_read_only: bool,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_begin_render_pass(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    label: Option<String>,
-    color_attachments: Vec<Option<GpuRenderPassColorAttachment>>,
-    depth_stencil_attachment: Option<GpuRenderPassDepthStencilAttachment>,
-    occlusion_query_set: Option<ResourceId>,
+    #[smi] command_encoder_rid: ResourceId,
+    #[string] label: Option<String>,
+    #[serde] color_attachments: Vec<Option<GpuRenderPassColorAttachment>>,
+    #[serde] depth_stencil_attachment: Option<GpuRenderPassDepthStencilAttachment>,
+    #[smi] occlusion_query_set: Option<ResourceId>,
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -196,11 +198,12 @@ pub fn op_webgpu_command_encoder_begin_render_pass(
     Ok(WebGpuResult::rid(rid))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_begin_compute_pass(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    label: Option<String>,
+    #[smi] command_encoder_rid: ResourceId,
+    #[string] label: Option<String>,
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table
@@ -223,15 +226,16 @@ pub fn op_webgpu_command_encoder_begin_compute_pass(
     Ok(WebGpuResult::rid(rid))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_copy_buffer_to_buffer(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    source: ResourceId,
-    source_offset: u64,
-    destination: ResourceId,
-    destination_offset: u64,
-    size: u64,
+    #[smi] command_encoder_rid: ResourceId,
+    #[smi] source: ResourceId,
+    #[number] source_offset: u64,
+    #[smi] destination: ResourceId,
+    #[number] destination_offset: u64,
+    #[number] size: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -275,13 +279,14 @@ pub struct GpuImageCopyTexture {
     pub aspect: wgpu_types::TextureAspect,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    source: GpuImageCopyBuffer,
-    destination: GpuImageCopyTexture,
-    copy_size: wgpu_types::Extent3d,
+    #[smi] command_encoder_rid: ResourceId,
+    #[serde] source: GpuImageCopyBuffer,
+    #[serde] destination: GpuImageCopyTexture,
+    #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -317,13 +322,14 @@ pub fn op_webgpu_command_encoder_copy_buffer_to_texture(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    source: GpuImageCopyTexture,
-    destination: GpuImageCopyBuffer,
-    copy_size: wgpu_types::Extent3d,
+    #[smi] command_encoder_rid: ResourceId,
+    #[serde] source: GpuImageCopyTexture,
+    #[serde] destination: GpuImageCopyBuffer,
+    #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -359,13 +365,14 @@ pub fn op_webgpu_command_encoder_copy_texture_to_buffer(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_copy_texture_to_texture(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    source: GpuImageCopyTexture,
-    destination: GpuImageCopyTexture,
-    copy_size: wgpu_types::Extent3d,
+    #[smi] command_encoder_rid: ResourceId,
+    #[serde] source: GpuImageCopyTexture,
+    #[serde] destination: GpuImageCopyTexture,
+    #[serde] copy_size: wgpu_types::Extent3d,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -399,13 +406,14 @@ pub fn op_webgpu_command_encoder_copy_texture_to_texture(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_clear_buffer(
     state: &mut OpState,
-    command_encoder_rid: u32,
-    buffer_rid: u32,
-    offset: u64,
-    size: u64,
+    #[smi] command_encoder_rid: ResourceId,
+    #[smi] buffer_rid: ResourceId,
+    #[number] offset: u64,
+    #[number] size: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -424,11 +432,12 @@ pub fn op_webgpu_command_encoder_clear_buffer(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_push_debug_group(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    group_label: String,
+    #[smi] command_encoder_rid: ResourceId,
+    #[string] group_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -436,13 +445,14 @@ pub fn op_webgpu_command_encoder_push_debug_group(
         .get::<WebGpuCommandEncoder>(command_encoder_rid)?;
     let command_encoder = command_encoder_resource.1;
 
-    gfx_ok!(command_encoder => instance.command_encoder_push_debug_group(command_encoder, &group_label))
+    gfx_ok!(command_encoder => instance.command_encoder_push_debug_group(command_encoder, group_label))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_pop_debug_group(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
+    #[smi] command_encoder_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -453,11 +463,12 @@ pub fn op_webgpu_command_encoder_pop_debug_group(
     gfx_ok!(command_encoder => instance.command_encoder_pop_debug_group(command_encoder))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_insert_debug_marker(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    marker_label: String,
+    #[smi] command_encoder_rid: ResourceId,
+    #[string] marker_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -467,15 +478,16 @@ pub fn op_webgpu_command_encoder_insert_debug_marker(
 
     gfx_ok!(command_encoder => instance.command_encoder_insert_debug_marker(
       command_encoder,
-      &marker_label
+      marker_label
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_write_timestamp(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    query_set: ResourceId,
+    #[smi] command_encoder_rid: ResourceId,
+    #[smi] query_set: ResourceId,
     query_index: u32,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -494,15 +506,16 @@ pub fn op_webgpu_command_encoder_write_timestamp(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_resolve_query_set(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    query_set: ResourceId,
+    #[smi] command_encoder_rid: ResourceId,
+    #[smi] query_set: ResourceId,
     first_query: u32,
     query_count: u32,
-    destination: ResourceId,
-    destination_offset: u64,
+    #[smi] destination: ResourceId,
+    #[number] destination_offset: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let command_encoder_resource = state
@@ -526,11 +539,12 @@ pub fn op_webgpu_command_encoder_resolve_query_set(
     ))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_command_encoder_finish(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    label: Option<String>,
+    #[smi] command_encoder_rid: ResourceId,
+    #[string] label: Option<String>,
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource = state
         .resource_table

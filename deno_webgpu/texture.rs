@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -58,10 +58,11 @@ pub struct CreateTextureArgs {
     view_formats: Vec<wgpu_types::TextureFormat>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_texture(
     state: &mut OpState,
-    args: CreateTextureArgs,
+    #[serde] args: CreateTextureArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -106,10 +107,11 @@ pub struct CreateTextureViewArgs {
     range: wgpu_types::ImageSubresourceRange,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_texture_view(
     state: &mut OpState,
-    args: CreateTextureViewArgs,
+    #[serde] args: CreateTextureViewArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let texture_resource = state

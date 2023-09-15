@@ -2,11 +2,10 @@
 
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::ZeroCopyBuf;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -48,10 +47,11 @@ pub struct CreateRenderBundleEncoderArgs {
     stencil_read_only: bool,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_render_bundle_encoder(
     state: &mut OpState,
-    args: CreateRenderBundleEncoderArgs,
+    #[serde] args: CreateRenderBundleEncoderArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let device_resource = state
         .resource_table
@@ -92,11 +92,12 @@ pub fn op_webgpu_create_render_bundle_encoder(
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_finish(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
-    label: Option<String>,
+    #[smi] render_bundle_encoder_rid: ResourceId,
+    #[string] label: Option<String>,
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -117,15 +118,16 @@ pub fn op_webgpu_render_bundle_encoder_finish(
   ) => state, WebGpuRenderBundle)
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_set_bind_group(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
+    #[smi] render_bundle_encoder_rid: ResourceId,
     index: u32,
-    bind_group: ResourceId,
-    dynamic_offsets_data: ZeroCopyBuf,
-    dynamic_offsets_data_start: usize,
-    dynamic_offsets_data_length: usize,
+    #[smi] bind_group: ResourceId,
+    #[buffer] dynamic_offsets_data: &[u32],
+    #[number] dynamic_offsets_data_start: usize,
+    #[number] dynamic_offsets_data_length: usize,
 ) -> Result<WebGpuResult, AnyError> {
     let bind_group_resource = state
         .resource_table
@@ -134,14 +136,6 @@ pub fn op_webgpu_render_bundle_encoder_set_bind_group(
         .resource_table
         .get::<WebGpuRenderBundleEncoder>(render_bundle_encoder_rid)?;
 
-    // Align the data
-    assert!(dynamic_offsets_data.len() % std::mem::size_of::<u32>() == 0);
-    // SAFETY: A u8 to u32 cast is safe because we asserted that the length is a
-    // multiple of 4.
-    let (prefix, dynamic_offsets_data, suffix) = unsafe { dynamic_offsets_data.align_to::<u32>() };
-    assert!(prefix.is_empty());
-    assert!(suffix.is_empty());
-
     let start = dynamic_offsets_data_start;
     let len = dynamic_offsets_data_length;
 
@@ -149,7 +143,7 @@ pub fn op_webgpu_render_bundle_encoder_set_bind_group(
     assert!(start <= dynamic_offsets_data.len());
     assert!(len <= dynamic_offsets_data.len() - start);
 
-    let dynamic_offsets_data: &[u32] = &dynamic_offsets_data[start..start + len];
+    let dynamic_offsets_data = &dynamic_offsets_data[start..start + len];
 
     // SAFETY: the raw pointer and length are of the same slice, and that slice
     // lives longer than the below function invocation.
@@ -166,11 +160,12 @@ pub fn op_webgpu_render_bundle_encoder_set_bind_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_push_debug_group(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
-    group_label: String,
+    #[smi] render_bundle_encoder_rid: ResourceId,
+    #[string] group_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -189,10 +184,11 @@ pub fn op_webgpu_render_bundle_encoder_push_debug_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_pop_debug_group(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
+    #[smi] render_bundle_encoder_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -205,11 +201,12 @@ pub fn op_webgpu_render_bundle_encoder_pop_debug_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_insert_debug_marker(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
-    marker_label: String,
+    #[smi] render_bundle_encoder_rid: ResourceId,
+    #[string] marker_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -228,11 +225,12 @@ pub fn op_webgpu_render_bundle_encoder_insert_debug_marker(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_set_pipeline(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
-    pipeline: ResourceId,
+    #[smi] render_bundle_encoder_rid: ResourceId,
+    #[smi] pipeline: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pipeline_resource = state
         .resource_table
@@ -249,14 +247,15 @@ pub fn op_webgpu_render_bundle_encoder_set_pipeline(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_set_index_buffer(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
-    buffer: ResourceId,
-    index_format: wgpu_types::IndexFormat,
-    offset: u64,
-    size: u64,
+    #[smi] render_bundle_encoder_rid: ResourceId,
+    #[smi] buffer: ResourceId,
+    #[serde] index_format: wgpu_types::IndexFormat,
+    #[number] offset: u64,
+    #[number] size: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -276,14 +275,15 @@ pub fn op_webgpu_render_bundle_encoder_set_index_buffer(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
+    #[smi] render_bundle_encoder_rid: ResourceId,
     slot: u32,
-    buffer: ResourceId,
-    offset: u64,
-    size: Option<u64>,
+    #[smi] buffer: ResourceId,
+    #[number] offset: u64,
+    #[number] size: Option<u64>,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -311,10 +311,11 @@ pub fn op_webgpu_render_bundle_encoder_set_vertex_buffer(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_draw(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
+    #[smi] render_bundle_encoder_rid: ResourceId,
     vertex_count: u32,
     instance_count: u32,
     first_vertex: u32,
@@ -335,10 +336,11 @@ pub fn op_webgpu_render_bundle_encoder_draw(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_draw_indexed(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
+    #[smi] render_bundle_encoder_rid: ResourceId,
     index_count: u32,
     instance_count: u32,
     first_index: u32,
@@ -361,12 +363,13 @@ pub fn op_webgpu_render_bundle_encoder_draw_indexed(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_bundle_encoder_draw_indirect(
     state: &mut OpState,
-    render_bundle_encoder_rid: ResourceId,
-    indirect_buffer: ResourceId,
-    indirect_offset: u64,
+    #[smi] render_bundle_encoder_rid: ResourceId,
+    #[smi] indirect_buffer: ResourceId,
+    #[number] indirect_offset: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table

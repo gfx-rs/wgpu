@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -176,12 +176,13 @@ impl From<GpuBindingType> for wgpu_types::BindingType {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_bind_group_layout(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    entries: Vec<GpuBindGroupLayoutEntry>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Option<String>,
+    #[serde] entries: Vec<GpuBindGroupLayoutEntry>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -213,12 +214,13 @@ pub fn op_webgpu_create_bind_group_layout(
   ) => state, WebGpuBindGroupLayout)
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_pipeline_layout(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    bind_group_layouts: Vec<u32>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Option<String>,
+    #[serde] bind_group_layouts: Vec<u32>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -257,13 +259,14 @@ pub struct GpuBindGroupEntry {
     size: Option<u64>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_bind_group(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    layout: ResourceId,
-    entries: Vec<GpuBindGroupEntry>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Option<String>,
+    #[smi] layout: ResourceId,
+    #[serde] entries: Vec<GpuBindGroupEntry>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state

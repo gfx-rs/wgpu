@@ -3,7 +3,7 @@
 #![warn(unsafe_op_in_unsafe_fn)]
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -12,7 +12,6 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::rc::Rc;
 pub use wgpu_core;
 pub use wgpu_types;
@@ -385,10 +384,11 @@ pub struct GpuAdapterDevice {
     is_software: bool,
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_request_adapter(
     state: Rc<RefCell<OpState>>,
-    power_preference: Option<wgpu_types::PowerPreference>,
+    #[serde] power_preference: Option<wgpu_types::PowerPreference>,
     force_fallback_adapter: bool,
 ) -> Result<GpuAdapterDeviceOrErr, AnyError> {
     let mut state = state.borrow_mut();
@@ -630,13 +630,14 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
     }
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_request_device(
     state: Rc<RefCell<OpState>>,
-    adapter_rid: ResourceId,
-    label: Option<String>,
-    required_features: GpuRequiredFeatures,
-    required_limits: Option<wgpu_types::Limits>,
+    #[smi] adapter_rid: ResourceId,
+    #[string] label: Option<String>,
+    #[serde] required_features: GpuRequiredFeatures,
+    #[serde] required_limits: Option<wgpu_types::Limits>,
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
@@ -684,10 +685,11 @@ pub struct GPUAdapterInfo {
     description: String,
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_request_adapter_info(
     state: Rc<RefCell<OpState>>,
-    adapter_rid: ResourceId,
+    #[smi] adapter_rid: ResourceId,
 ) -> Result<GPUAdapterInfo, AnyError> {
     let state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
@@ -759,10 +761,11 @@ impl From<GpuQueryType> for wgpu_types::QueryType {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_query_set(
     state: &mut OpState,
-    args: CreateQuerySetArgs,
+    #[serde] args: CreateQuerySetArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let device_resource = state.resource_table.get::<WebGpuDevice>(args.device_rid)?;
     let device = device_resource.1;
