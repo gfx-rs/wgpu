@@ -20,6 +20,7 @@ mod instance;
 mod occlusion_query;
 mod partially_bounded_arrays;
 mod poll;
+mod query_set;
 mod queue_transfer;
 mod resource_descriptor_accessor;
 mod resource_error;
