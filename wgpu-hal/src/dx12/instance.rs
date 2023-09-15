@@ -12,7 +12,9 @@ impl Drop for super::Instance {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let lib_main = d3d12::D3D12Lib::new().map_err(|_| crate::InstanceError)?;
+        let lib_main = d3d12::D3D12Lib::new().map_err(|e| {
+            crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
+        })?;
 
         if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
             // Enable debug layer
@@ -95,7 +97,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: None,
             }),
-            _ => Err(crate::InstanceError),
+            _ => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Win32 handle"
+            ))),
         }
     }
     unsafe fn destroy_surface(&self, _surface: super::Surface) {

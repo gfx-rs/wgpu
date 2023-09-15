@@ -93,7 +93,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install MSRV toolchain
         run: |
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@v2
@@ -219,7 +219,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -284,6 +284,7 @@ jobs:
           done
 
       - uses: actions/upload-artifact@v3
+        if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images
           path: |
@@ -308,7 +309,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: disable debug
         shell: bash
@@ -335,7 +336,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: run rustfmt
         run: |
@@ -346,7 +347,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install MSRV toolchain
         run: |
@@ -375,7 +376,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v1
@@ -389,7 +390,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v1

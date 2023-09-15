@@ -152,12 +152,11 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 }
 
 impl super::Swapchain {
+    /// # Safety
+    ///
+    /// - The device must have been made idle before calling this function.
     unsafe fn release_resources(self, device: &ash::Device) -> Self {
         profiling::scope!("Swapchain::release_resources");
-        {
-            profiling::scope!("vkDeviceWaitIdle");
-            let _ = unsafe { device.device_wait_idle() };
-        };
         unsafe { device.destroy_fence(self.fence, None) };
         self
     }
@@ -186,7 +185,20 @@ impl super::Instance {
         &self.shared
     }
 
-    pub fn required_extensions(
+    /// Return the instance extension names wgpu would like to enable.
+    ///
+    /// Return a vector of the names of instance extensions actually available
+    /// on `entry` that wgpu would like to enable.
+    ///
+    /// The `driver_api_version` argument should be the instance's Vulkan API
+    /// version, as obtained from `vkEnumerateInstanceVersion`. This is the same
+    /// space of values as the `VK_API_VERSION` constants.
+    ///
+    /// Note that wgpu can function without many of these extensions (for
+    /// example, `VK_KHR_wayland_surface` is certainly not going to be available
+    /// everywhere), but if one of these extensions is available at all, wgpu
+    /// assumes that it has been enabled.
+    pub fn desired_extensions(
         entry: &ash::Entry,
         _driver_api_version: u32,
         flags: crate::InstanceFlags,
@@ -194,8 +206,10 @@ impl super::Instance {
         let instance_extensions = entry
             .enumerate_instance_extension_properties(None)
             .map_err(|e| {
-                log::info!("enumerate_instance_extension_properties: {:?}", e);
-                crate::InstanceError
+                crate::InstanceError::with_source(
+                    String::from("enumerate_instance_extension_properties() failed"),
+                    e,
+                )
             })?;
 
         // Check our extensions against the available extensions
@@ -263,7 +277,7 @@ impl super::Instance {
     ///
     /// - `raw_instance` must be created from `entry`
     /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
-    /// - `extensions` must be a superset of `required_extensions()` and must be created from the
+    /// - `extensions` must be a superset of `desired_extensions()` and must be created from the
     ///   same entry, driver_api_version and flags.
     /// - `android_sdk_version` is ignored and can be `0` for all platforms besides Android
     ///
@@ -366,8 +380,9 @@ impl super::Instance {
         window: vk::Window,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XlibSurface::name()) {
-            log::warn!("Vulkan driver does not support VK_KHR_xlib_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_xlib_surface",
+            )));
         }
 
         let surface = {
@@ -391,8 +406,9 @@ impl super::Instance {
         window: vk::xcb_window_t,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::XcbSurface::name()) {
-            log::warn!("Vulkan driver does not support VK_KHR_xcb_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_xcb_surface",
+            )));
         }
 
         let surface = {
@@ -420,8 +436,9 @@ impl super::Instance {
             .extensions
             .contains(&khr::WaylandSurface::name())
         {
-            log::debug!("Vulkan driver does not support VK_KHR_wayland_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_wayland_surface",
+            )));
         }
 
         let surface = {
@@ -447,8 +464,9 @@ impl super::Instance {
             .extensions
             .contains(&khr::AndroidSurface::name())
         {
-            log::warn!("Vulkan driver does not support VK_KHR_android_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_android_surface",
+            )));
         }
 
         let surface = {
@@ -470,8 +488,9 @@ impl super::Instance {
         hwnd: *mut c_void,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&khr::Win32Surface::name()) {
-            log::debug!("Vulkan driver does not support VK_KHR_win32_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_win32_surface",
+            )));
         }
 
         let surface = {
@@ -496,8 +515,9 @@ impl super::Instance {
         view: *mut c_void,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::MetalSurface::name()) {
-            log::warn!("Vulkan driver does not support VK_EXT_metal_surface");
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_EXT_metal_surface",
+            )));
         }
 
         let layer = unsafe {
@@ -546,20 +566,18 @@ impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         use crate::auxil::cstr_from_bytes_until_nul;
 
-        let entry = match unsafe { ash::Entry::load() } {
-            Ok(entry) => entry,
-            Err(err) => {
-                log::info!("Missing Vulkan entry points: {:?}", err);
-                return Err(crate::InstanceError);
-            }
-        };
+        let entry = unsafe { ash::Entry::load() }.map_err(|err| {
+            crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)
+        })?;
         let driver_api_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
             Ok(Some(version)) => version,
             Ok(None) => vk::API_VERSION_1_0,
             Err(err) => {
-                log::warn!("try_enumerate_instance_version: {:?}", err);
-                return Err(crate::InstanceError);
+                return Err(crate::InstanceError::with_source(
+                    String::from("try_enumerate_instance_version() failed"),
+                    err,
+                ));
             }
         };
 
@@ -586,11 +604,14 @@ impl crate::Instance<super::Api> for super::Instance {
                 },
             );
 
-        let extensions = Self::required_extensions(&entry, driver_api_version, desc.flags)?;
+        let extensions = Self::desired_extensions(&entry, driver_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
-            crate::InstanceError
+            crate::InstanceError::with_source(
+                String::from("enumerate_instance_layer_properties() failed"),
+                e,
+            )
         })?;
 
         fn find_layer<'layers>(
@@ -682,8 +703,10 @@ impl crate::Instance<super::Api> for super::Instance {
                 .enabled_extension_names(&str_pointers[layers.len()..]);
 
             unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
-                log::warn!("create_instance: {:?}", e);
-                crate::InstanceError
+                crate::InstanceError::with_source(
+                    String::from("Entry::create_instance() failed"),
+                    e,
+                )
             })?
         };
 
@@ -739,7 +762,9 @@ impl crate::Instance<super::Api> for super::Instance {
             {
                 self.create_surface_from_view(handle.ui_view)
             }
-            (_, _) => Err(crate::InstanceError),
+            (_, _) => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Vulkan-compatible handle"
+            ))),
         }
     }
 
@@ -773,13 +798,22 @@ impl crate::Instance<super::Api> for super::Instance {
                 if exposed.info.device_type == wgt::DeviceType::IntegratedGpu
                     && exposed.info.vendor == db::intel::VENDOR
                 {
-                    // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
-                    log::warn!(
-                        "Disabling presentation on '{}' (id {:?}) because of NV Optimus (on Linux)",
-                        exposed.info.name,
-                        exposed.adapter.raw
-                    );
-                    exposed.adapter.private_caps.can_present = false;
+                    // Check if mesa driver and version less than 21.2
+                    if let Some(version) = exposed.info.driver_info.split_once("Mesa ").map(|s| {
+                        s.1.rsplit_once('.')
+                            .map(|v| v.0.parse::<f32>().unwrap_or_default())
+                            .unwrap_or_default()
+                    }) {
+                        if version < 21.2 {
+                            // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
+                            log::warn!(
+                                "Disabling presentation on '{}' (id {:?}) due to NV Optimus and Intel Mesa < v21.2",
+                                exposed.info.name,
+                                exposed.adapter.raw
+                            );
+                            exposed.adapter.private_caps.can_present = false;
+                        }
+                    }
                 }
             }
         }
@@ -794,6 +828,7 @@ impl crate::Surface<super::Api> for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
+        // Safety: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
         let old = self
             .swapchain
             .take()
@@ -807,6 +842,7 @@ impl crate::Surface<super::Api> for super::Surface {
 
     unsafe fn unconfigure(&mut self, device: &super::Device) {
         if let Some(sc) = self.swapchain.take() {
+            // Safety: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
             let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
             unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
         }
