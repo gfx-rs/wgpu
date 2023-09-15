@@ -2839,11 +2839,35 @@ class GPUCommandEncoder {
       },
     );
 
+    const occlusionQuerySet = assertResource(
+        descriptor.occlusionQuerySet,
+        {
+          prefix,
+          context: "occlusionQuerySet",
+        },
+    );
+
+    let timestampWrites = null;
+    if (descriptor.timestampWrites) {
+      const querySet = assertResource(descriptor.querySet, {
+        prefix,
+        context: "querySet",
+      });
+
+      timestampWrites = {
+        querySet,
+        beginningOfPassWriteIndex: descriptor.beginningOfPassWriteIndex,
+        endOfPassWriteIndex: descriptor.endOfPassWriteIndex,
+      }
+    }
+
     const { rid } = ops.op_webgpu_command_encoder_begin_render_pass(
       commandEncoderRid,
       descriptor.label,
       colorAttachments,
       depthStencilAttachment,
+      occlusionQuerySet,
+      timestampWrites,
     );
 
     const renderPassEncoder = createGPURenderPassEncoder(
@@ -2873,9 +2897,24 @@ class GPUCommandEncoder {
       context: "this",
     });
 
+    let timestampWrites = null;
+    if (descriptor.timestampWrites) {
+      const querySet = assertResource(descriptor.querySet, {
+        prefix,
+        context: "querySet",
+      });
+
+      timestampWrites = {
+        querySet,
+        beginningOfPassWriteIndex: descriptor.beginningOfPassWriteIndex,
+        endOfPassWriteIndex: descriptor.endOfPassWriteIndex,
+      }
+    }
+
     const { rid } = ops.op_webgpu_command_encoder_begin_compute_pass(
       commandEncoderRid,
       descriptor.label,
+      timestampWrites,
     );
 
     const computePassEncoder = createGPUComputePassEncoder(
@@ -3591,51 +3630,17 @@ class GPURenderPassEncoder {
   }
 
   /**
-   * @param {GPUQuerySet} querySet
    * @param {number} queryIndex
    */
-  beginPipelineStatisticsQuery(querySet, queryIndex) {
+  beginOcclusionQuery(queryIndex) {
     webidl.assertBranded(this, GPURenderPassEncoderPrototype);
     const prefix =
-      "Failed to execute 'beginPipelineStatisticsQuery' on 'GPURenderPassEncoder'";
-    webidl.requiredArguments(arguments.length, 2, { prefix });
-    querySet = webidl.converters.GPUQuerySet(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
+      "Failed to execute 'beginOcclusionQuery' on 'GPUComputePassEncoder'";
+    webidl.requiredArguments(arguments.length, 1, { prefix });
     queryIndex = webidl.converters.GPUSize32(queryIndex, {
       prefix,
-      context: "Argument 2",
-    });
-    const device = assertDevice(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    assertResource(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    const renderPassRid = assertResource(this, { prefix, context: "this" });
-    const querySetRid = assertResource(querySet, {
-      prefix,
       context: "Argument 1",
     });
-    assertDeviceMatch(device, querySet, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
-    ops.op_webgpu_render_pass_begin_pipeline_statistics_query(
-      renderPassRid,
-      querySetRid,
-      queryIndex,
-    );
-  }
-
-  endPipelineStatisticsQuery() {
-    webidl.assertBranded(this, GPURenderPassEncoderPrototype);
-    const prefix =
-      "Failed to execute 'endPipelineStatisticsQuery' on 'GPURenderPassEncoder'";
     assertDevice(this[_encoder], {
       prefix,
       context: "encoder referenced by this",
@@ -3645,27 +3650,17 @@ class GPURenderPassEncoder {
       context: "encoder referenced by this",
     });
     const renderPassRid = assertResource(this, { prefix, context: "this" });
-    ops.op_webgpu_render_pass_end_pipeline_statistics_query(renderPassRid);
+    ops.op_webgpu_render_pass_begin_occlusion_query(
+      renderPassRid,
+      queryIndex,
+    );
   }
 
-  /**
-   * @param {GPUQuerySet} querySet
-   * @param {number} queryIndex
-   */
-  writeTimestamp(querySet, queryIndex) {
+  endOcclusionQuery() {
     webidl.assertBranded(this, GPURenderPassEncoderPrototype);
     const prefix =
-      "Failed to execute 'writeTimestamp' on 'GPURenderPassEncoder'";
-    webidl.requiredArguments(arguments.length, 2, { prefix });
-    querySet = webidl.converters.GPUQuerySet(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
-    queryIndex = webidl.converters.GPUSize32(queryIndex, {
-      prefix,
-      context: "Argument 2",
-    });
-    const device = assertDevice(this[_encoder], {
+      "Failed to execute 'endOcclusionQuery' on 'GPUComputePassEncoder'";
+    assertDevice(this[_encoder], {
       prefix,
       context: "encoder referenced by this",
     });
@@ -3674,20 +3669,7 @@ class GPURenderPassEncoder {
       context: "encoder referenced by this",
     });
     const renderPassRid = assertResource(this, { prefix, context: "this" });
-    const querySetRid = assertResource(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
-    assertDeviceMatch(device, querySet, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
-    ops.op_webgpu_render_pass_write_timestamp(
-      renderPassRid,
-      querySetRid,
-      queryIndex,
-    );
+    ops.op_webgpu_render_pass_end_occlusion_query(renderPassRid);
   }
 
   /**
@@ -4343,106 +4325,6 @@ class GPUComputePassEncoder {
       computePassRid,
       indirectBufferRid,
       indirectOffset,
-    );
-  }
-
-  /**
-   * @param {GPUQuerySet} querySet
-   * @param {number} queryIndex
-   */
-  beginPipelineStatisticsQuery(querySet, queryIndex) {
-    webidl.assertBranded(this, GPUComputePassEncoderPrototype);
-    const prefix =
-      "Failed to execute 'beginPipelineStatisticsQuery' on 'GPUComputePassEncoder'";
-    webidl.requiredArguments(arguments.length, 2, { prefix });
-    querySet = webidl.converters.GPUQuerySet(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
-    queryIndex = webidl.converters.GPUSize32(queryIndex, {
-      prefix,
-      context: "Argument 2",
-    });
-    const device = assertDevice(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    assertResource(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    const computePassRid = assertResource(this, { prefix, context: "this" });
-    const querySetRid = assertResource(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
-    assertDeviceMatch(device, querySet, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
-    ops.op_webgpu_compute_pass_begin_pipeline_statistics_query(
-      computePassRid,
-      querySetRid,
-      queryIndex,
-    );
-  }
-
-  endPipelineStatisticsQuery() {
-    webidl.assertBranded(this, GPUComputePassEncoderPrototype);
-    const prefix =
-      "Failed to execute 'endPipelineStatisticsQuery' on 'GPUComputePassEncoder'";
-    assertDevice(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    assertResource(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    const computePassRid = assertResource(this, { prefix, context: "this" });
-    ops.op_webgpu_compute_pass_end_pipeline_statistics_query(computePassRid);
-  }
-
-  /**
-   * @param {GPUQuerySet} querySet
-   * @param {number} queryIndex
-   */
-  writeTimestamp(querySet, queryIndex) {
-    webidl.assertBranded(this, GPUComputePassEncoderPrototype);
-    const prefix =
-      "Failed to execute 'writeTimestamp' on 'GPUComputePassEncoder'";
-    webidl.requiredArguments(arguments.length, 2, { prefix });
-    querySet = webidl.converters.GPUQuerySet(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
-    queryIndex = webidl.converters.GPUSize32(queryIndex, {
-      prefix,
-      context: "Argument 2",
-    });
-    const device = assertDevice(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    assertResource(this[_encoder], {
-      prefix,
-      context: "encoder referenced by this",
-    });
-    const computePassRid = assertResource(this, { prefix, context: "this" });
-    const querySetRid = assertResource(querySet, {
-      prefix,
-      context: "Argument 1",
-    });
-    assertDeviceMatch(device, querySet, {
-      prefix,
-      resourceContext: "Argument 1",
-      selfContext: "this",
-    });
-    ops.op_webgpu_compute_pass_write_timestamp(
-      computePassRid,
-      querySetRid,
-      queryIndex,
     );
   }
 
@@ -5205,7 +5087,7 @@ const GPUQuerySetPrototype = GPUQuerySet.prototype;
 // otherwise their converters might not be available yet.
 // DICTIONARY: GPUObjectDescriptorBase
 const dictMembersGPUObjectDescriptorBase = [
-  { key: "label", converter: webidl.converters["USVString"] },
+  { key: "label", converter: webidl.converters["USVString"], defaultValue: "" },
 ];
 webidl.converters["GPUObjectDescriptorBase"] = webidl
   .createDictionaryConverter(
@@ -5285,7 +5167,7 @@ webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     "texture-compression-astc-hdr",
     "texture-adapter-specific-format-features",
     // api
-    "pipeline-statistics-query",
+    //"pipeline-statistics-query",
     "timestamp-query-inside-passes",
     "mappable-primary-buffers",
     "texture-binding-array",
@@ -6862,8 +6744,33 @@ webidl.converters.GPUComputePassEncoder = webidl.createInterfaceConverter(
   GPUComputePassEncoder.prototype,
 );
 
+// DICTIONARY: GPUComputePassTimestampWrites
+webidl.converters["GPUComputePassTimestampWrites"] = webidl.createDictionaryConverter(
+  "GPUComputePassTimestampWrites",
+  [
+    {
+      key: "querySet",
+      converter: webidl.converters["GPUQuerySet"],
+      required: true,
+    },
+    {
+      key: "beginningOfPassWriteIndex",
+      converter: webidl.converters["GPUSize32"],
+    },
+    {
+      key: "endOfPassWriteIndex",
+      converter: webidl.converters["GPUSize32"],
+    },
+  ],
+);
+
 // DICTIONARY: GPUComputePassDescriptor
-const dictMembersGPUComputePassDescriptor = [];
+const dictMembersGPUComputePassDescriptor = [
+  {
+    key: "timestampWrites",
+    converter: webidl.converters["GPUComputePassTimestampWrites"],
+  },
+];
 webidl.converters["GPUComputePassDescriptor"] = webidl
   .createDictionaryConverter(
     "GPUComputePassDescriptor",
@@ -7005,6 +6912,26 @@ webidl.converters.GPUQuerySet = webidl.createInterfaceConverter(
   GPUQuerySet.prototype,
 );
 
+// DICTIONARY: GPURenderPassTimestampWrites
+webidl.converters["GPURenderPassTimestampWrites"] = webidl.createDictionaryConverter(
+  "GPURenderPassTimestampWrites",
+  [
+    {
+      key: "querySet",
+      converter: webidl.converters["GPUQuerySet"],
+      required: true,
+    },
+    {
+      key: "beginningOfPassWriteIndex",
+      converter: webidl.converters["GPUSize32"],
+    },
+    {
+      key: "endOfPassWriteIndex",
+      converter: webidl.converters["GPUSize32"],
+    },
+  ],
+);
+
 // DICTIONARY: GPURenderPassDescriptor
 const dictMembersGPURenderPassDescriptor = [
   {
@@ -7019,6 +6946,14 @@ const dictMembersGPURenderPassDescriptor = [
   {
     key: "depthStencilAttachment",
     converter: webidl.converters["GPURenderPassDepthStencilAttachment"],
+  },
+  {
+    key: "occlusionQuerySet",
+    converter: webidl.converters["GPUQuerySet"],
+  },
+  {
+    key: "timestampWrites",
+    converter: webidl.converters["GPURenderPassTimestampWrites"],
   },
 ];
 webidl.converters["GPURenderPassDescriptor"] = webidl
@@ -7109,20 +7044,7 @@ webidl.converters["GPUQueryType"] = webidl.createEnumConverter(
   "GPUQueryType",
   [
     "occlusion",
-    "pipeline-statistics",
     "timestamp",
-  ],
-);
-
-// ENUM: GPUPipelineStatisticName
-webidl.converters["GPUPipelineStatisticName"] = webidl.createEnumConverter(
-  "GPUPipelineStatisticName",
-  [
-    "vertex-shader-invocations",
-    "clipper-invocations",
-    "clipper-primitives-out",
-    "fragment-shader-invocations",
-    "compute-shader-invocations",
   ],
 );
 

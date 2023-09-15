@@ -30,7 +30,7 @@ impl Resource for WebGpuShaderModule {
 pub fn op_webgpu_create_shader_module(
     state: &mut OpState,
     #[smi] device_rid: ResourceId,
-    #[string] label: Option<String>,
+    #[string] label: Cow<str>,
     #[string] code: Cow<str>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -42,7 +42,7 @@ pub fn op_webgpu_create_shader_module(
     let source = wgpu_core::pipeline::ShaderModuleSource::Wgsl(code);
 
     let descriptor = wgpu_core::pipeline::ShaderModuleDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         shader_bound_checks: wgpu_types::ShaderBoundChecks::default(),
     };
 

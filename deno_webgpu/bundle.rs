@@ -39,7 +39,7 @@ impl Resource for WebGpuRenderBundle {
 #[serde(rename_all = "camelCase")]
 pub struct CreateRenderBundleEncoderArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     color_formats: Vec<Option<wgpu_types::TextureFormat>>,
     depth_stencil_format: Option<wgpu_types::TextureFormat>,
     sample_count: u32,
@@ -67,7 +67,7 @@ pub fn op_webgpu_create_render_bundle_encoder(
             });
 
     let descriptor = wgpu_core::command::RenderBundleEncoderDescriptor {
-        label: args.label.map(Cow::from),
+        label: Some(Cow::Owned(args.label)),
         color_formats: Cow::from(args.color_formats),
         sample_count: args.sample_count,
         depth_stencil,
@@ -97,7 +97,7 @@ pub fn op_webgpu_create_render_bundle_encoder(
 pub fn op_webgpu_render_bundle_encoder_finish(
     state: &mut OpState,
     #[smi] render_bundle_encoder_rid: ResourceId,
-    #[string] label: Option<String>,
+    #[string] label: Cow<str>,
 ) -> Result<WebGpuResult, AnyError> {
     let render_bundle_encoder_resource = state
         .resource_table
@@ -112,7 +112,7 @@ pub fn op_webgpu_render_bundle_encoder_finish(
     gfx_put!(render_bundle_encoder.parent() => instance.render_bundle_encoder_finish(
     render_bundle_encoder,
     &wgpu_core::command::RenderBundleDescriptor {
-      label: label.map(Cow::from),
+      label: Some(label),
     },
     ()
   ) => state, WebGpuRenderBundle)

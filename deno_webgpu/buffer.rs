@@ -43,7 +43,7 @@ impl Resource for WebGpuBufferMapped {
 pub fn op_webgpu_create_buffer(
     state: &mut OpState,
     #[smi] device_rid: ResourceId,
-    #[string] label: Option<String>,
+    #[string] label: Cow<str>,
     #[number] size: u64,
     usage: u32,
     mapped_at_creation: bool,
@@ -55,7 +55,7 @@ pub fn op_webgpu_create_buffer(
     let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::BufferDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         size,
         usage: wgpu_types::BufferUsages::from_bits(usage)
             .ok_or_else(|| type_error("usage is not valid"))?,

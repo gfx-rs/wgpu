@@ -86,7 +86,7 @@ pub struct GpuProgrammableStage {
 pub fn op_webgpu_create_compute_pipeline(
     state: &mut OpState,
     #[smi] device_rid: ResourceId,
-    #[string] label: Option<String>,
+    #[string] label: Cow<str>,
     #[serde] layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
     #[serde] compute: GpuProgrammableStage,
 ) -> Result<WebGpuResult, AnyError> {
@@ -109,7 +109,7 @@ pub fn op_webgpu_create_compute_pipeline(
         .get::<super::shader::WebGpuShaderModule>(compute.module)?;
 
     let descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.1,
@@ -316,7 +316,7 @@ struct GpuFragmentState {
 #[serde(rename_all = "camelCase")]
 pub struct CreateRenderPipelineArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
     vertex: GpuVertexState,
     primitive: GpuPrimitiveState,
@@ -375,7 +375,7 @@ pub fn op_webgpu_create_render_pipeline(
         .collect();
 
     let descriptor = wgpu_core::pipeline::RenderPipelineDescriptor {
-        label: args.label.map(Cow::Owned),
+        label: Some(Cow::Owned(args.label)),
         layout,
         vertex: wgpu_core::pipeline::VertexState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {

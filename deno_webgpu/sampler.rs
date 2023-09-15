@@ -30,7 +30,7 @@ impl Resource for WebGpuSampler {
 #[serde(rename_all = "camelCase")]
 pub struct CreateSamplerArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     address_mode_u: wgpu_types::AddressMode,
     address_mode_v: wgpu_types::AddressMode,
     address_mode_w: wgpu_types::AddressMode,
@@ -56,7 +56,7 @@ pub fn op_webgpu_create_sampler(
     let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::SamplerDescriptor {
-        label: args.label.map(Cow::from),
+        label: Some(Cow::Owned(args.label)),
         address_modes: [
             args.address_mode_u,
             args.address_mode_v,
