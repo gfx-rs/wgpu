@@ -2,12 +2,16 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 
 mod regression {
     mod issue_3457;
+    mod issue_4024;
+    mod issue_4122;
 }
 
+mod bind_group_layout_dedup;
 mod buffer;
 mod buffer_copy;
 mod buffer_usages;
 mod clear_texture;
+mod create_surface_error;
 mod device;
 mod encoder;
 mod example_wgsl;

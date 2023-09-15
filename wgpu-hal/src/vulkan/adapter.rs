@@ -755,6 +755,7 @@ impl PhysicalDeviceCapabilities {
             max_compute_workgroup_size_z: max_compute_workgroup_sizes[2],
             max_compute_workgroups_per_dimension,
             max_buffer_size,
+            max_non_sampler_bindings: std::u32::MAX,
         }
     }
 
@@ -982,6 +983,10 @@ impl super::Instance {
             workarounds.set(
                 super::Workarounds::EMPTY_RESOLVE_ATTACHMENT_LISTS,
                 phd_capabilities.properties.vendor_id == db::qualcomm::VENDOR,
+            );
+            workarounds.set(
+                super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
+                phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
         };
 

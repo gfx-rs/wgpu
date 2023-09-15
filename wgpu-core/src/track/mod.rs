@@ -16,8 +16,10 @@ is a corresponding debug assert the checks if that access is valid. This helps
 get bugs caught fast, while still letting users not need to pay for the bounds
 checks.
 
-In wgpu, resource IDs are allocated and re-used, so will always be as low
-as reasonably possible. This allows us to use the ID as an index into an array.
+In wgpu, each resource ID includes a bitfield holding an index.
+Indices are allocated and re-used, so they will always be as low as
+reasonably possible. This allows us to use IDs to index into an array
+of tracking information.
 
 ## Statefulness
 

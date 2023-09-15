@@ -1,6 +1,6 @@
 //! Tests for texture copy
 
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{initialize_test, FailureCase, TestParameters};
 
 use wasm_bindgen_test::*;
 
@@ -8,7 +8,8 @@ use wasm_bindgen_test::*;
 #[wasm_bindgen_test]
 fn write_texture_subset_2d() {
     let size = 256;
-    let parameters = TestParameters::default().backend_failure(wgpu::Backends::DX12);
+    let parameters =
+        TestParameters::default().expect_fail(FailureCase::backend(wgpu::Backends::DX12));
     initialize_test(parameters, |ctx| {
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,

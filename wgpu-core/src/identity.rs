@@ -162,9 +162,14 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<id::SamplerId>
     + IdentityHandlerFactory<id::SurfaceId>
 {
+    fn ids_are_generated_in_wgpu() -> bool;
 }
 
-impl GlobalIdentityHandlerFactory for IdentityManagerFactory {}
+impl GlobalIdentityHandlerFactory for IdentityManagerFactory {
+    fn ids_are_generated_in_wgpu() -> bool {
+        true
+    }
+}
 
 pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input;
 

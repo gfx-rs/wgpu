@@ -242,8 +242,6 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
             | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::POLYGON_MODE_POINT
-            | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
@@ -258,6 +256,10 @@ impl super::Adapter {
         // Alternatively, we could allocate a buffer for the query set,
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
+
+        if max_feature_level as u32 >= d3d12::FeatureLevel::L11_1 as u32 {
+            features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+        }
 
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
@@ -355,7 +357,11 @@ impl super::Adapter {
                     max_compute_workgroup_size_z: d3d12_ty::D3D12_CS_THREAD_GROUP_MAX_Z,
                     max_compute_workgroups_per_dimension:
                         d3d12_ty::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    max_buffer_size: u64::MAX,
+                    // Dx12 does not expose a maximum buffer size in the API.
+                    // This limit is chosen to avoid potential issues with drivers should they internally
+                    // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
+                    max_buffer_size: i32::MAX as u64,
+                    max_non_sampler_bindings: 1_000_000,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -377,7 +383,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
         _features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
@@ -394,6 +400,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let device = super::Device::new(
             self.device.clone(),
             queue.clone(),
+            limits,
             self.private_caps,
             &self.library,
             self.dx12_shader_compiler.clone(),

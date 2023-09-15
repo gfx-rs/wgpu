@@ -1,4 +1,5 @@
 use super::{conv, AsNative};
+use crate::CommandEncoder as _;
 use std::{borrow::Cow, mem, ops::Range};
 
 // has to match `Temp::binding_sizes`
@@ -1052,5 +1053,22 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.state.compute.as_ref().unwrap();
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
+    }
+}
+
+impl Drop for super::CommandEncoder {
+    fn drop(&mut self) {
+        // Metal raises an assert when a MTLCommandEncoder is deallocated without a call
+        // to endEncoding. This isn't documented in the general case at
+        // https://developer.apple.com/documentation/metal/mtlcommandencoder, but for the
+        // more-specific MTLComputeCommandEncoder it is stated as a requirement at
+        // https://developer.apple.com/documentation/metal/mtlcomputecommandencoder. It
+        // appears to be a requirement for all MTLCommandEncoder objects. Failing to call
+        // endEncoding causes a crash with the message 'Command encoder released without
+        // endEncoding'. To prevent this, we explicitiy call discard_encoding, which
+        // calls end_encoding on any still-held metal::CommandEncoders.
+        unsafe {
+            self.discard_encoding();
+        }
     }
 }

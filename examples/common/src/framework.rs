@@ -155,10 +155,12 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler,
+        gles_minor_version,
     });
     let (size, surface) = unsafe {
         let size = window.inner_size();
@@ -623,7 +625,7 @@ pub fn test<E: Example>(mut params: FrameworkRefTest) {
 
             wgpu_test::image::compare_image_output(
                 env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
-                ctx.adapter_info.backend,
+                &ctx.adapter_info,
                 params.width,
                 params.height,
                 &bytes,

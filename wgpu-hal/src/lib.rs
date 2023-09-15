@@ -90,7 +90,7 @@ use std::{
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::atomic::AtomicBool,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use bitflags::bitflags;
@@ -152,9 +152,42 @@ pub enum SurfaceError {
     Other(&'static str),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
-#[error("Not supported")]
-pub struct InstanceError;
+/// Error occurring while trying to create an instance, or create a surface from an instance;
+/// typically relating to the state of the underlying graphics API or hardware.
+#[derive(Clone, Debug, Error)]
+#[error("{message}")]
+pub struct InstanceError {
+    /// These errors are very platform specific, so do not attempt to encode them as an enum.
+    ///
+    /// This message should describe the problem in sufficient detail to be useful for a
+    /// user-to-developer “why won't this work on my machine” bug report, and otherwise follow
+    /// <https://rust-lang.github.io/api-guidelines/interoperability.html#error-types-are-meaningful-and-well-behaved-c-good-err>.
+    message: String,
+
+    /// Underlying error value, if any is available.
+    #[source]
+    source: Option<Arc<dyn std::error::Error + Send + Sync + 'static>>,
+}
+
+impl InstanceError {
+    #[allow(dead_code)] // may be unused on some platforms
+    pub(crate) fn new(message: String) -> Self {
+        Self {
+            message,
+            source: None,
+        }
+    }
+    #[allow(dead_code)] // may be unused on some platforms
+    pub(crate) fn with_source(
+        message: String,
+        source: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            message,
+            source: Some(Arc::new(source)),
+        }
+    }
+}
 
 pub trait Api: Clone + Sized {
     type Instance: Instance<Self>;
@@ -196,12 +229,28 @@ pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
 }
 
 pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
+    /// Configures the surface to use the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All surfaces created using other devices must have been unconfigured before this call.
     unsafe fn configure(
         &mut self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
 
+    /// Unconfigures the surface on the given device.
+    ///
+    /// # Safety
+    ///
+    /// - All gpu work that uses the surface must have been completed.
+    /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
+    /// - The surface must have been configured on the given device.
     unsafe fn unconfigure(&mut self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
@@ -792,6 +841,7 @@ pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: InstanceFlags,
     pub dx12_shader_compiler: wgt::Dx12Compiler,
+    pub gles_minor_version: wgt::Gles3MinorVersion,
 }
 
 #[derive(Clone, Debug)]

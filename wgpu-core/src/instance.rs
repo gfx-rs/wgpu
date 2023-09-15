@@ -82,9 +82,24 @@ impl Instance {
                     name: "wgpu",
                     flags,
                     dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
+                    gles_minor_version: instance_desc.gles_minor_version,
                 };
-                unsafe { hal::Instance::init(&hal_desc).ok() }
+                match unsafe { hal::Instance::init(&hal_desc) } {
+                    Ok(instance) => {
+                        log::debug!("Instance::new: created {:?} backend", A::VARIANT);
+                        Some(instance)
+                    }
+                    Err(err) => {
+                        log::debug!(
+                            "Instance::new: failed to create {:?} backend: {:?}",
+                            A::VARIANT,
+                            err
+                        );
+                        None
+                    }
+                }
             } else {
+                log::trace!("Instance::new: backend {:?} not requested", A::VARIANT);
                 None
             }
         }
