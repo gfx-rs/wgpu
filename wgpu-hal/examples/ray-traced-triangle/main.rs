@@ -13,6 +13,7 @@ use std::{
     ptr::{self, copy_nonoverlapping},
     time::Instant,
 };
+use winit::window::WindowButtons;
 
 const COMMAND_BUFFER_PER_CONTEXT: usize = 100;
 const DESIRED_FRAMES: u32 = 3;
@@ -237,14 +238,14 @@ impl<A: hal::Api> Example<A> {
         let (adapter, features) = unsafe {
             let mut adapters = instance.enumerate_adapters();
             if adapters.is_empty() {
-                return Err(hal::InstanceError);
+                panic!("No adapters found");
             }
             let exposed = adapters.swap_remove(0);
             dbg!(exposed.features);
             (exposed.adapter, exposed.features)
         };
-        let surface_caps =
-            unsafe { adapter.surface_capabilities(&surface) }.ok_or(hal::InstanceError)?;
+        let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
+            .expect("Surface doesn't support presentation");
         log::info!("Surface caps: {:#?}", surface_caps);
 
         let hal::OpenDevice { device, mut queue } =
@@ -1078,6 +1079,7 @@ fn main() {
             height: 512,
         })
         .with_resizable(false)
+        .with_enabled_buttons(WindowButtons::CLOSE)
         .build(&event_loop)
         .unwrap();
 
