@@ -2738,18 +2738,103 @@ impl Drop for Device {
     }
 }
 
-/// Requesting a device failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RequestDeviceError;
+/// Requesting a device from an [`Adapter`] failed.
+#[derive(Clone, Debug)]
+pub struct RequestDeviceError {
+    inner: RequestDeviceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum RequestDeviceErrorKind {
+    /// Error from [`wgpu_core`].
+    // must match dependency cfg
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        feature = "webgl",
+        target_os = "emscripten"
+    ))]
+    Core(core::instance::RequestDeviceError),
+
+    /// Error from web API that was called by `wgpu` to request a device.
+    ///
+    /// (This is currently never used by the webgl backend, but it could be.)
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    Web(wasm_bindgen::JsValue),
+}
+
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for RequestDeviceErrorKind {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for RequestDeviceErrorKind {}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Requesting a device failed")
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.fmt(f),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(error_js_value) => {
+                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
+                write!(f, "{error_js_value:?}")
+            }
+        }
     }
 }
 
-impl error::Error for RequestDeviceError {}
+impl error::Error for RequestDeviceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.source(),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(_) => None,
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+impl From<core::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: core::instance::RequestDeviceError) -> Self {
+        Self {
+            inner: RequestDeviceErrorKind::Core(error),
+        }
+    }
+}
 
 /// [`Instance::create_surface()`] or a related function failed.
 #[derive(Clone, Debug)]
