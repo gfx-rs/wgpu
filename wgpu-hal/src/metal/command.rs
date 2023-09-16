@@ -35,7 +35,7 @@ impl super::CommandEncoder {
             // There is a known bug in Metal where blit encoders won't write timestamps if they don't have a blit operation.
             // See https://github.com/gpuweb/gpuweb/issues/2046#issuecomment-1205793680 & https://source.chromium.org/chromium/chromium/src/+/006c4eb70c96229834bbaf271290f40418144cd3:third_party/dawn/src/dawn/native/metal/BackendMTL.mm;l=350
             //
-            // To things worse:
+            // To make things worse:
             // * what counts as a blit operation is a bit unclear, experimenting seemed to indicate that resolve_counters doesn't count.
             // * in some cases (when?) using `set_start_of_encoder_sample_index` doesn't work, so we have to use `set_end_of_encoder_sample_index` instead
             //
