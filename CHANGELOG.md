@@ -77,7 +77,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
 - Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 - Add validation in accordance with WebGPU `setViewport` valid usage for `x`, `y` and `this.[[attachment_size]]`. By @James2022-rgb in [#4058](https://github.com/gfx-rs/wgpu/pull/4058)
-- `wgpu::CreateSurfaceError` now gives details of the failure, but no longer implements `PartialEq`. By @kpreid in [#4066](https://github.com/gfx-rs/wgpu/pull/4066)
+- `wgpu::CreateSurfaceError` and `wgpu::RequestDeviceError` now give details of the failure, but no longer implement `PartialEq` and cannot be constructed. By @kpreid in [#4066](https://github.com/gfx-rs/wgpu/pull/4066) and [#4145](https://github.com/gfx-rs/wgpu/pull/4145)
 - Make `WGPU_POWER_PREF=none` a valid value. By @fornwall in [4076](https://github.com/gfx-rs/wgpu/pull/4076)
 
 #### Vulkan

@@ -3,6 +3,7 @@ use wasm_bindgen_test::wasm_bindgen_test_configure;
 mod regression {
     mod issue_3457;
     mod issue_4024;
+    mod issue_4122;
 }
 
 mod bind_group_layout_dedup;

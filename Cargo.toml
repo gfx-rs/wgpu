@@ -51,7 +51,7 @@ version = "0.17"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "7a19f3af909202c7eafd36633b5584bfbb353ecb"
+rev = "cc87b8f9eb30bb55d0735b89d3df3e099e1a6e7c"
 version = "0.13.0"
 
 [workspace.dependencies]
@@ -89,7 +89,7 @@ raw-window-handle = "0.5"
 renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
-serde_json = "1.0.105"
+serde_json = "1.0.107"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"

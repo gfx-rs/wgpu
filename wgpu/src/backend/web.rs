@@ -812,7 +812,9 @@ fn future_request_device(
 
             (device_id, device_data, queue_id, queue_data)
         })
-        .map_err(|_| crate::RequestDeviceError)
+        .map_err(|error_value| crate::RequestDeviceError {
+            inner: crate::RequestDeviceErrorKind::Web(error_value),
+        })
 }
 
 fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
