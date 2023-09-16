@@ -158,6 +158,8 @@ termcolor = "1.2.0"
 #glow = { path = "../glow" }
 #d3d12 = { path = "../d3d12-rs" }
 #metal = { path = "../metal-rs" }
+#metal = { path = "../metal-rs" }
+metal = { git = "https://github.com/gfx-rs/metal-rs/", rev = "d24f1a4" } # More timer support via https://github.com/gfx-rs/metal-rs/pull/280
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }
