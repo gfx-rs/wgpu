@@ -51,7 +51,7 @@ use std::{
 };
 
 use super::{
-    life::{self, SuspectedResources},
+    life::{self, ResourceMaps},
     queue::{self},
     DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, EP_FAILURE,
     IMPLICIT_FAILURE, ZERO_BUFFER_SIZE,
@@ -104,7 +104,7 @@ pub struct Device<A: HalApi> {
     life_tracker: Mutex<LifetimeTracker<A>>,
     /// Temporary storage for resource management functions. Cleared at the end
     /// of every call (unless an error occurs).
-    pub(crate) temp_suspected: Mutex<SuspectedResources<A>>,
+    pub(crate) temp_suspected: Mutex<Option<ResourceMaps<A>>>,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
@@ -240,7 +240,7 @@ impl<A: HalApi> Device<A> {
             fence: RwLock::new(Some(fence)),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
-            temp_suspected: Mutex::new(life::SuspectedResources::new()),
+            temp_suspected: Mutex::new(Some(life::ResourceMaps::new())),
             #[cfg(feature = "trace")]
             trace: Mutex::new(trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {
@@ -299,10 +299,11 @@ impl<A: HalApi> Device<A> {
             // call, and cleared by the end. But `Global::queue_submit` is
             // fallible; if it exits early, it may leave some resources in
             // `temp_suspected`.
-            life_tracker
-                .suspected_resources
-                .extend(&self.temp_suspected.lock());
-            self.temp_suspected.lock().clear();
+            {
+                let temp_suspected = self.temp_suspected.lock().take().unwrap();
+                life_tracker.suspected_resources.extend(temp_suspected);
+            }
+            self.temp_suspected.lock().replace(ResourceMaps::new());
 
             life_tracker.triage_suspected(
                 hub,
@@ -356,7 +357,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
-        let mut temp_suspected = self.temp_suspected.lock();
+        let mut temp_suspected = self.temp_suspected.lock().take().unwrap();
         temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
@@ -418,10 +419,8 @@ impl<A: HalApi> Device<A> {
                 }
             }
         }
-
-        self.lock_life().suspected_resources.extend(&temp_suspected);
-
-        temp_suspected.clear();
+        self.lock_life().suspected_resources.extend(temp_suspected);
+        self.temp_suspected.lock().replace(ResourceMaps::new());
     }
 
     pub(crate) fn create_buffer(

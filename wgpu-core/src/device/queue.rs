@@ -6,13 +6,13 @@ use crate::{
         ClearError, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
     },
     conv,
-    device::{DeviceError, WaitIdleError},
+    device::{life::ResourceMaps, DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
     id::{self, QueueId},
     identity::{GlobalIdentityHandlerFactory, Input},
-    init_tracker::{has_copy_partial_init_tracker_coverage, BufferInitTracker, TextureInitRange},
+    init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
         Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, StagingBuffer, Texture,
         TextureInner, TextureView,
@@ -21,7 +21,7 @@ use crate::{
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 use std::{
     iter, mem, ptr,
@@ -160,6 +160,7 @@ pub struct WrappedSubmissionIndex {
 #[derive(Debug)]
 pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
+    StagingBuffer(Arc<StagingBuffer<A>>),
     Texture(Arc<Texture<A>>, SmallVec<[Arc<TextureView<A>>; 1]>),
 }
 
@@ -235,23 +236,9 @@ impl<A: HalApi> PendingWrites<A> {
         self.temp_resources.push(resource);
     }
 
-    fn consume(&mut self, device: &Arc<Device<A>>, buffer: Arc<StagingBuffer<A>>) {
+    fn consume(&mut self, buffer: Arc<StagingBuffer<A>>) {
         self.temp_resources
-            .push(TempResource::Buffer(Arc::new(Buffer::<A> {
-                raw: buffer.raw.lock().take(),
-                device: device.clone(),
-                usage: wgt::BufferUsages::empty(),
-                size: buffer.size,
-                initialization_status: RwLock::new(BufferInitTracker::new(buffer.size)),
-                sync_mapped_writes: Mutex::new(None),
-                map_state: Mutex::new(crate::resource::BufferMapState::Idle),
-                info: ResourceInfo::new(
-                    #[cfg(debug_assertions)]
-                    &buffer.info.label,
-                    #[cfg(not(debug_assertions))]
-                    "<Buffer>",
-                ),
-            })));
+            .push(TempResource::StagingBuffer(buffer));
     }
 
     #[must_use]
@@ -431,12 +418,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
+        let stage_fid = hub.staging_buffers.request::<G>();
+        let staging_buffer = stage_fid.init(staging_buffer);
+
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
             ptr::copy_nonoverlapping(data.as_ptr(), staging_buffer_ptr, data.len());
             staging_buffer.flush(device.raw())
         } {
-            pending_writes.consume(device, Arc::new(staging_buffer));
+            pending_writes.consume(staging_buffer);
             return Err(flush_error.into());
         }
 
@@ -448,7 +438,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer_offset,
         );
 
-        pending_writes.consume(device, Arc::new(staging_buffer));
+        pending_writes.consume(staging_buffer);
         result
     }
 
@@ -510,7 +500,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         if let Err(flush_error) = unsafe { staging_buffer.flush(device.raw()) } {
-            pending_writes.consume(device, staging_buffer);
+            pending_writes.consume(staging_buffer);
             return Err(flush_error.into());
         }
 
@@ -522,7 +512,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer_offset,
         );
 
-        pending_writes.consume(device, staging_buffer);
+        pending_writes.consume(staging_buffer);
         result
     }
 
@@ -820,6 +810,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(device, stage_size)?;
 
+        let stage_fid = hub.staging_buffers.request::<G>();
+        let staging_buffer = stage_fid.init(staging_buffer);
+
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
             // Fast path if the data is already being aligned optimally.
@@ -854,7 +847,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if let Err(e) = unsafe { staging_buffer.flush(device.raw()) } {
-            pending_writes.consume(device, Arc::new(staging_buffer));
+            pending_writes.consume(staging_buffer);
             return Err(e.into());
         }
 
@@ -893,7 +886,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        pending_writes.consume(device, Arc::new(staging_buffer));
+        pending_writes.consume(staging_buffer);
         pending_writes
             .dst_textures
             .insert(destination.texture, dst.clone());
@@ -1119,8 +1112,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut fence = device.fence.write();
             let fence = fence.as_mut().unwrap();
-            device.temp_suspected.lock().clear();
-
             let submit_index = device
                 .active_submission_index
                 .fetch_add(1, Ordering::Relaxed)
@@ -1137,6 +1128,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //TODO: if multiple command buffers are submitted, we can re-use the last
                     // native command buffer of the previous chain instead of always creating
                     // a temporary one, since the chains are not finished.
+                    let mut temp_suspected = device.temp_suspected.lock();
+                    {
+                        let mut suspected = temp_suspected.take().unwrap();
+                        suspected.clear();
+                        temp_suspected.replace(ResourceMaps::new());
+                    }
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
@@ -1200,9 +1197,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         unsafe { device.raw().unmap_buffer(raw_buf) }
                                             .map_err(DeviceError::from)?;
                                     }
-                                    device
-                                        .temp_suspected
-                                        .lock()
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
                                         .buffers
                                         .insert(id, buffer.clone());
                                 } else {
@@ -1226,9 +1223,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 };
                                 texture.info.use_at(submit_index);
                                 if texture.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
                                         .textures
                                         .insert(id, texture.clone());
                                 }
@@ -1243,9 +1240,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             for texture_view in cmd_buf_trackers.views.used_resources() {
                                 texture_view.info.use_at(submit_index);
                                 if texture_view.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
                                         .texture_views
                                         .insert(texture_view.as_info().id(), texture_view.clone());
                                 }
@@ -1263,9 +1260,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         sampler.info.use_at(submit_index);
                                     }
                                     if bg.is_unique() {
-                                        device
-                                            .temp_suspected
-                                            .lock()
+                                        temp_suspected
+                                            .as_mut()
+                                            .unwrap()
                                             .bind_groups
                                             .insert(bg.as_info().id(), bg.clone());
                                     }
@@ -1277,7 +1274,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
-                                    device.temp_suspected.lock().compute_pipelines.insert(
+                                    temp_suspected.as_mut().unwrap().compute_pipelines.insert(
                                         compute_pipeline.as_info().id(),
                                         compute_pipeline.clone(),
                                     );
@@ -1288,7 +1285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
-                                    device.temp_suspected.lock().render_pipelines.insert(
+                                    temp_suspected.as_mut().unwrap().render_pipelines.insert(
                                         render_pipeline.as_info().id(),
                                         render_pipeline.clone(),
                                     );
@@ -1297,9 +1294,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             for query_set in cmd_buf_trackers.query_sets.used_resources() {
                                 query_set.info.use_at(submit_index);
                                 if query_set.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
                                         .query_sets
                                         .insert(query_set.as_info().id(), query_set.clone());
                                 }
@@ -1317,9 +1314,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     query_set.info.use_at(submit_index);
                                 }
                                 if bundle.is_unique() {
-                                    device
-                                        .temp_suspected
-                                        .lock()
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
                                         .render_bundles
                                         .insert(bundle.as_info().id(), bundle.clone());
                                 }

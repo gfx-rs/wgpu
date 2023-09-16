@@ -115,9 +115,9 @@ impl<Id: TypedId> ResourceInfo<Id> {
         self.id.unwrap()
     }
 
-    pub(crate) fn set_id(&mut self, id: Id, identity: &Option<Arc<IdentityManager<Id>>>) {
+    pub(crate) fn set_id(&mut self, id: Id, identity: &Arc<IdentityManager<Id>>) {
         self.id = Some(id);
-        self.identity = identity.clone();
+        self.identity = Some(identity.clone());
     }
 
     /// Record that this resource will be used by the queue submission with the

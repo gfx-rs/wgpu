@@ -22,7 +22,7 @@ use smallvec::SmallVec;
 
 use wgt::{BufferAddress, TextureFormat};
 
-use std::{borrow::Cow, iter, ops::Range, ptr, sync::Arc};
+use std::{borrow::Cow, iter, ops::Range, ptr};
 
 use super::{ImplicitPipelineIds, InvalidDevice, UserClosures};
 
@@ -132,122 +132,133 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare::<G>(id_in);
 
-        let error = loop {
-            let device = match hub.devices.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
-            };
-
-            if desc.usage.is_empty() {
-                // Per spec, `usage` must not be zero.
-                break resource::CreateBufferError::InvalidUsage(desc.usage);
+        let device = match hub.devices.get(device_id) {
+            Ok(device) => device,
+            Err(_) => {
+                let id = fid.assign_error(desc.label.borrow_or_default());
+                return (id, Some(DeviceError::Invalid.into()));
             }
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                let mut desc = desc.clone();
-                let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
-                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-                    desc.usage |= wgt::BufferUsages::COPY_DST;
-                }
-                trace.add(trace::Action::CreateBuffer(fid.id(), desc));
-            }
-
-            let buffer = match device.create_buffer(device_id, desc, false) {
-                Ok(buffer) => buffer,
-                Err(e) => break e,
-            };
-
-            let buffer_use = if !desc.mapped_at_creation {
-                hal::BufferUses::empty()
-            } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-                // buffer is mappable, so we are just doing that at start
-                let map_size = buffer.size;
-                let ptr = if map_size == 0 {
-                    std::ptr::NonNull::dangling()
-                } else {
-                    match map_buffer(device.raw(), &buffer, 0, map_size, HostMap::Write) {
-                        Ok(ptr) => ptr,
-                        Err(e) => {
-                            device.lock_life().schedule_resource_destruction(
-                                queue::TempResource::Buffer(Arc::new(buffer)),
-                                !0,
-                            );
-                            break e.into();
-                        }
-                    }
-                };
-                *buffer.map_state.lock() = resource::BufferMapState::Active {
-                    ptr,
-                    range: 0..map_size,
-                    host: HostMap::Write,
-                };
-                hal::BufferUses::MAP_WRITE
-            } else {
-                // buffer needs staging area for initialization only
-                let stage_desc = wgt::BufferDescriptor {
-                    label: Some(Cow::Borrowed(
-                        "(wgpu internal) initializing unmappable buffer",
-                    )),
-                    size: desc.size,
-                    usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
-                    mapped_at_creation: false,
-                };
-                let stage = match device.create_buffer(device_id, &stage_desc, true) {
-                    Ok(stage) => stage,
-                    Err(e) => {
-                        device.lock_life().schedule_resource_destruction(
-                            queue::TempResource::Buffer(Arc::new(buffer)),
-                            !0,
-                        );
-                        break e;
-                    }
-                };
-                let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
-                    Ok(mapping) => mapping,
-                    Err(e) => {
-                        let mut life_lock = device.lock_life();
-                        life_lock.schedule_resource_destruction(
-                            queue::TempResource::Buffer(Arc::new(buffer)),
-                            !0,
-                        );
-                        life_lock.schedule_resource_destruction(
-                            queue::TempResource::Buffer(Arc::new(stage)),
-                            !0,
-                        );
-                        break DeviceError::from(e).into();
-                    }
-                };
-
-                assert_eq!(buffer.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-                // Zero initialize memory and then mark both staging and buffer as initialized
-                // (it's guaranteed that this is the case by the time the buffer is usable)
-                unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, buffer.size as usize) };
-                buffer.initialization_status.write().drain(0..buffer.size);
-                stage.initialization_status.write().drain(0..buffer.size);
-
-                *buffer.map_state.lock() = resource::BufferMapState::Init {
-                    ptr: mapping.ptr,
-                    needs_flush: !mapping.is_coherent,
-                    stage_buffer: Arc::new(stage),
-                };
-                hal::BufferUses::COPY_DST
-            };
-
-            let (id, resource) = fid.assign(buffer);
-            log::info!("Created Buffer {:?} with {:?}", id, desc);
-
-            device
-                .trackers
-                .lock()
-                .buffers
-                .insert_single(id, resource, buffer_use);
-
-            return (id, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default());
-        (id, Some(error))
+        if desc.usage.is_empty() {
+            // Per spec, `usage` must not be zero.
+            let id = fid.assign_error(desc.label.borrow_or_default());
+            return (
+                id,
+                Some(resource::CreateBufferError::InvalidUsage(desc.usage)),
+            );
+        }
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            let mut desc = desc.clone();
+            let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
+            if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                desc.usage |= wgt::BufferUsages::COPY_DST;
+            }
+            trace.add(trace::Action::CreateBuffer(fid.id(), desc));
+        }
+
+        let buffer = match device.create_buffer(device_id, desc, false) {
+            Ok(buffer) => buffer,
+            Err(e) => {
+                let id = fid.assign_error(desc.label.borrow_or_default());
+                return (id, Some(e));
+            }
+        };
+
+        let (id, resource) = fid.assign(buffer);
+        log::info!("Created Buffer {:?} with {:?}", id, desc);
+
+        let buffer_use = if !desc.mapped_at_creation {
+            hal::BufferUses::empty()
+        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+            // buffer is mappable, so we are just doing that at start
+            let map_size = resource.size;
+            let ptr = if map_size == 0 {
+                std::ptr::NonNull::dangling()
+            } else {
+                match map_buffer(device.raw(), &resource, 0, map_size, HostMap::Write) {
+                    Ok(ptr) => ptr,
+                    Err(e) => {
+                        device.lock_life().schedule_resource_destruction(
+                            queue::TempResource::Buffer(resource),
+                            !0,
+                        );
+                        hub.buffers
+                            .force_replace_with_error(id, desc.label.borrow_or_default());
+                        return (id, Some(e.into()));
+                    }
+                }
+            };
+            *resource.map_state.lock() = resource::BufferMapState::Active {
+                ptr,
+                range: 0..map_size,
+                host: HostMap::Write,
+            };
+            hal::BufferUses::MAP_WRITE
+        } else {
+            // buffer needs staging area for initialization only
+            let stage_desc = wgt::BufferDescriptor {
+                label: Some(Cow::Borrowed(
+                    "(wgpu internal) initializing unmappable buffer",
+                )),
+                size: desc.size,
+                usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            };
+            let stage = match device.create_buffer(device_id, &stage_desc, true) {
+                Ok(stage) => stage,
+                Err(e) => {
+                    device
+                        .lock_life()
+                        .schedule_resource_destruction(queue::TempResource::Buffer(resource), !0);
+                    hub.buffers
+                        .force_replace_with_error(id, desc.label.borrow_or_default());
+                    return (id, Some(e));
+                }
+            };
+            let stage_fid = hub.buffers.request::<G>();
+            let stage = stage_fid.init(stage);
+
+            let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
+                Ok(mapping) => mapping,
+                Err(e) => {
+                    let mut life_lock = device.lock_life();
+                    life_lock
+                        .schedule_resource_destruction(queue::TempResource::Buffer(resource), !0);
+                    life_lock.schedule_resource_destruction(queue::TempResource::Buffer(stage), !0);
+                    hub.buffers
+                        .force_replace_with_error(id, desc.label.borrow_or_default());
+                    return (id, Some(DeviceError::from(e).into()));
+                }
+            };
+
+            assert_eq!(resource.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
+            // Zero initialize memory and then mark both staging and buffer as initialized
+            // (it's guaranteed that this is the case by the time the buffer is usable)
+            unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, resource.size as usize) };
+            resource
+                .initialization_status
+                .write()
+                .drain(0..resource.size);
+            stage.initialization_status.write().drain(0..resource.size);
+
+            *resource.map_state.lock() = resource::BufferMapState::Init {
+                ptr: mapping.ptr,
+                needs_flush: !mapping.is_coherent,
+                stage_buffer: stage,
+            };
+            hal::BufferUses::COPY_DST
+        };
+
+        device
+            .trackers
+            .lock()
+            .buffers
+            .insert_single(id, resource, buffer_use);
+
+        (id, None)
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -455,7 +466,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         if let Some(buffer) = hub.buffers.unregister(buffer_id) {
-            if buffer.is_unique() {
+            if buffer.ref_count() == 1 {
                 buffer.destroy().ok();
             }
 
@@ -548,7 +559,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             },
                         };
                         let view = device.create_texture_view(&resource, &desc).unwrap();
-                        clear_views.push(Arc::new(view));
+                        let view_fid = hub.texture_views.request::<G>();
+                        let view = view_fid.init(view);
+                        clear_views.push(view);
                     }
                 }
                 let mut clear_mode = resource.clear_mode.write();
@@ -798,6 +811,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    #[allow(unused_unsafe)]
     pub fn texture_create_view<A: HalApi>(
         &self,
         texture_id: id::TextureId,
@@ -825,7 +839,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let view = match device.create_texture_view(&texture, desc) {
+            let view = match unsafe { device.create_texture_view(&texture, desc) } {
                 Ok(view) => view,
                 Err(e) => break e,
             };

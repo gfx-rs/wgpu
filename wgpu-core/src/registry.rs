@@ -39,7 +39,7 @@ impl RegistryReport {
 ///
 #[derive(Debug)]
 pub struct Registry<I: id::TypedId, T: Resource<I>> {
-    identity: Option<Arc<IdentityManager<I>>>,
+    identity: Arc<IdentityManager<I>>,
     storage: RwLock<Storage<T, I>>,
     backend: Backend,
 }
@@ -61,7 +61,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
 #[must_use]
 pub(crate) struct FutureId<'a, I: id::TypedId, T: Resource<I>> {
     id: I,
-    identity: Option<Arc<IdentityManager<I>>>,
+    identity: Arc<IdentityManager<I>>,
     data: &'a RwLock<Storage<T, I>>,
 }
 
@@ -75,9 +75,13 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
         self.id
     }
 
-    pub fn assign(self, mut value: T) -> (I, Arc<T>) {
+    pub fn init(&self, mut value: T) -> Arc<T> {
         value.as_info_mut().set_id(self.id, &self.identity);
-        self.data.write().insert(self.id, Arc::new(value));
+        Arc::new(value)
+    }
+
+    pub fn assign(self, value: T) -> (I, Arc<T>) {
+        self.data.write().insert(self.id, self.init(value));
         (self.id, self.data.read().get(self.id).unwrap().clone())
     }
 
@@ -100,10 +104,21 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
         F: IdentityHandlerFactory<I>,
     {
         FutureId {
-            id: match self.identity.as_ref() {
-                Some(identity) => identity.process(self.backend),
-                _ => F::input_to_id(id_in),
+            id: if F::autogenerate_ids() {
+                self.identity.process(self.backend)
+            } else {
+                self.identity.mark_as_used(F::input_to_id(id_in))
             },
+            identity: self.identity.clone(),
+            data: &self.storage,
+        }
+    }
+    pub(crate) fn request<F>(&self) -> FutureId<I, T>
+    where
+        F: IdentityHandlerFactory<I>,
+    {
+        FutureId {
+            id: self.identity.process(self.backend),
             identity: self.identity.clone(),
             data: &self.storage,
         }
@@ -130,6 +145,11 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
         let mut storage = self.storage.write();
         value.as_info_mut().set_id(id, &self.identity);
         storage.force_replace(id, value)
+    }
+    pub fn force_replace_with_error(&self, id: I, label: &str) {
+        let mut storage = self.storage.write();
+        storage.remove(id);
+        storage.insert_error(id, label);
     }
     pub(crate) fn unregister(&self, id: I) -> Option<Arc<T>> {
         let value = self.storage.write().remove(id);
@@ -164,9 +184,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
             element_size: std::mem::size_of::<T>(),
             ..Default::default()
         };
-        if let Some(identity) = self.identity.as_ref() {
-            report.num_allocated = identity.values.lock().count();
-        }
+        report.num_allocated = self.identity.values.lock().count();
         for element in storage.map.iter() {
             match *element {
                 Element::Occupied(..) => report.num_kept_from_user += 1,

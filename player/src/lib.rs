@@ -8,20 +8,21 @@
 #![cfg(not(target_arch = "wasm32"))]
 #![warn(unsafe_op_in_unsafe_fn)]
 
-use wgc::{device::trace, identity::IdentityManager};
+use wgc::device::trace;
 
-use std::{borrow::Cow, fs, path::Path, sync::Arc};
+use std::{borrow::Cow, fs, path::Path};
 
 pub struct IdentityPassThroughFactory;
 
 impl<I: wgc::id::TypedId> wgc::identity::IdentityHandlerFactory<I> for IdentityPassThroughFactory {
     type Input = I;
-    fn spawn(&self) -> Option<Arc<IdentityManager<I>>> {
-        None
-    }
 
     fn input_to_id(id_in: Self::Input) -> I {
         id_in
+    }
+
+    fn autogenerate_ids() -> bool {
+        false
     }
 }
 impl wgc::identity::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}

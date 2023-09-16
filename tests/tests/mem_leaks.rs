@@ -156,7 +156,8 @@ fn draw_test_with_reports(
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
-    assert_eq!(report.texture_views.num_allocated, 1);
+    //1 is clear_view and 1 is user's texture_view
+    assert_eq!(report.texture_views.num_allocated, 2);
     assert_eq!(report.textures.num_allocated, 1);
 
     drop(texture);
@@ -164,7 +165,7 @@ fn draw_test_with_reports(
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
     assert_eq!(report.buffers.num_allocated, 1);
-    assert_eq!(report.texture_views.num_allocated, 1);
+    assert_eq!(report.texture_views.num_allocated, 2);
     assert_eq!(report.texture_views.num_kept_from_user, 1);
     assert_eq!(report.textures.num_allocated, 1);
     assert_eq!(report.textures.num_kept_from_user, 0);
@@ -203,7 +204,7 @@ fn draw_test_with_reports(
     assert_eq!(report.compute_pipelines.num_allocated, 0);
     assert_eq!(report.command_buffers.num_allocated, 1);
     assert_eq!(report.render_bundles.num_allocated, 0);
-    assert_eq!(report.texture_views.num_allocated, 1);
+    assert_eq!(report.texture_views.num_allocated, 2);
     assert_eq!(report.textures.num_allocated, 1);
 
     function(&mut rpass);
@@ -228,7 +229,7 @@ fn draw_test_with_reports(
     assert_eq!(report.bind_group_layouts.num_kept_from_user, 0);
     assert_eq!(report.bind_groups.num_allocated, 1);
     assert_eq!(report.bind_groups.num_kept_from_user, 0);
-    assert_eq!(report.texture_views.num_allocated, 1);
+    assert_eq!(report.texture_views.num_allocated, 2);
     assert_eq!(report.texture_views.num_kept_from_user, 0);
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.buffers.num_kept_from_user, 0);
@@ -250,8 +251,10 @@ fn draw_test_with_reports(
     assert_eq!(report.bind_groups.num_allocated, 0);
     assert_eq!(report.bind_group_layouts.num_allocated, 0);
     assert_eq!(report.pipeline_layouts.num_allocated, 0);
-    assert_eq!(report.texture_views.num_allocated, 0);
     assert_eq!(report.buffers.num_allocated, 0);
+    //surface is still there
+    assert_eq!(report.texture_views.num_allocated, 1);
+    assert_eq!(report.textures.num_allocated, 1);
 
     drop(ctx.queue);
     drop(ctx.device);
