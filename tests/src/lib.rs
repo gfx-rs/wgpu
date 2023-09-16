@@ -449,7 +449,7 @@ pub fn initialize_test(parameters: TestParameters, test_function: impl FnOnce(Te
     }
 }
 
-fn initialize_adapter() -> (Adapter, Option<SurfaceGuard>) {
+pub fn initialize_adapter() -> (Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     let surface_guard: Option<SurfaceGuard>;
     let compatible_surface;
