@@ -268,7 +268,6 @@ fn draw_test_with_reports(
     assert_eq!(report.devices.num_allocated, 1);
     assert_eq!(report.textures.num_kept_from_user, 0);
     assert_eq!(report.devices.num_kept_from_user, 0);
-
 }
 
 #[test]
@@ -277,7 +276,7 @@ fn draw_test_with_reports(
     target_os = "emscripten",
     feature = "webgl"
 ))]
-fn simple_draw_leaks() {
+fn simple_draw_check_mem_leaks() {
     use wgpu_test::{initialize_test, TestParameters};
 
     initialize_test(TestParameters::default().test_features_limits(), |ctx| {
