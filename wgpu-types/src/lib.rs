@@ -270,7 +270,7 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Vulkan
         /// - DX12
-        /// - Metal - TODO: Not yet supported on command encoder.
+        /// - Metal
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
@@ -458,10 +458,9 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
+        /// - Metal (AMD & Intel, not Apple GPUs)
         ///
-        /// This is currently unimplemented on Metal.
-        /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
-        /// (This is a common limitation of tile-based rasterization GPUs)
+        /// This is generally not available on tile-based rasterization GPUs.
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 33;
