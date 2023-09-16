@@ -276,7 +276,7 @@ impl wgpu_example::framework::Example for Example {
                 // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
                 // Users should avoid loading uninitialized memory since this can cause additional overhead.
                 load: wgpu::LoadOp::Load,
-                store: true,
+                store: wgpu::StoreOp::Store,
             },
         })];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
