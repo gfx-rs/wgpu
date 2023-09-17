@@ -1016,7 +1016,9 @@ pub enum LoadOp<V> {
     ///
     /// On some GPU hardware (primarily mobile), "clear" is significantly cheaper
     /// because it avoids loading data from main memory into tile-local memory.
+    ///
     /// On other GPU hardware, there isn’t a significant difference.
+    ///
     /// As a result, it is recommended to use "clear" rather than "load" in cases
     /// where the initial value doesn’t matter
     /// (e.g. the render target will be cleared using a skybox).
