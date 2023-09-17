@@ -1064,6 +1064,9 @@ pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
     /// Whether data will be written to through this attachment.
+    ///
+    /// Note that resolve textures (if specified) are always written to,
+    /// regardless of this setting.
     pub store: StoreOp,
 }
 
@@ -1113,6 +1116,8 @@ pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
+    ///
+    /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
     pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
