@@ -70,7 +70,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 `wgpu::Operations::store` used to be an underdocumented boolean value,
 causing misunderstandings of the effect of setting it to `false`.
 
-The API now resembles WebGPU which distinguishes `store` and `discard`,
+The API now more closely resembles WebGPU which distinguishes between `store` and `discard`,
 see [WebGPU spec on GPUStoreOp](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
 
 ```diff
