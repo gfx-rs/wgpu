@@ -524,6 +524,14 @@ impl PhysicalDeviceFeatures {
         features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
         features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
+        let bgra8unorm_storage = supports_format(
+            instance,
+            phd,
+            vk::Format::B8G8R8A8_UNORM,
+            vk::ImageTiling::OPTIMAL,
+            vk::FormatFeatureFlags::STORAGE_IMAGE,
+        );
+        features.set(F::BGRA8UNORM_STORAGE, bgra8unorm_storage);
         (features, dl_flags)
     }
 
