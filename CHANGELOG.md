@@ -68,7 +68,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 #### Render pass store operation is now an enum
 
 `wgpu::Operations::store` used to be an underdocumented boolean value,
-causing missunderstandings of the effect of setting it to `false`.
+causing misunderstandings of the effect of setting it to `false`.
 
 The API now resembles WebGPU which distinguishes `store` and `discard`,
 see [WebGPU spec on GPUStoreOp](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
