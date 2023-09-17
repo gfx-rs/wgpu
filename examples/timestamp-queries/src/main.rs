@@ -47,6 +47,7 @@ impl QueryResults {
     // * compute end
     const NUM_QUERIES: u64 = 8;
 
+    #[allow(clippy::redundant_closure)] // False positive
     fn from_raw_results(timestamps: Vec<u64>, timestamps_inside_passes: bool) -> Self {
         assert_eq!(timestamps.len(), Self::NUM_QUERIES as usize);
 
@@ -60,9 +61,9 @@ impl QueryResults {
         let mut encoder_timestamps = [0, 0];
         encoder_timestamps[0] = get_next_slot();
         let render_start_end_timestamps = [get_next_slot(), get_next_slot()];
-        let render_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let render_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         let compute_start_end_timestamps = [get_next_slot(), get_next_slot()];
-        let compute_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let compute_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         encoder_timestamps[1] = get_next_slot();
 
         QueryResults {
@@ -79,8 +80,8 @@ impl QueryResults {
         let elapsed_us = |start, end: u64| end.wrapping_sub(start) as f64 * period as f64 / 1000.0;
 
         println!(
-            "Elapsed time render + compute: {:.2} μs",
-            elapsed_us(self.encoder_timestamps[0], self.encoder_timestamps[1])
+            "Elapsed time before render until after compute: {:.2} μs",
+            elapsed_us(self.encoder_timestamps[0], self.encoder_timestamps[1]),
         );
         println!(
             "Elapsed time render pass: {:.2} μs",
@@ -464,13 +465,10 @@ mod tests {
             render_start_end_timestamps[1].wrapping_sub(render_start_end_timestamps[0]);
         let compute_delta =
             compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
+        let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
-        // TODO: Metal encoder timestamps aren't implemented yet.
-        if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
-            let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
-            assert!(encoder_delta > 0);
-            assert!(encoder_delta >= render_delta + compute_delta);
-        }
+        assert!(encoder_delta > 0);
+        assert!(encoder_delta >= render_delta + compute_delta);
 
         if let Some(render_inside_timestamp) = render_inside_timestamp {
             assert!(render_inside_timestamp >= render_start_end_timestamps[0]);

@@ -27,6 +27,7 @@ allow = [
 [sources]
 allow-git = [
 	"https://github.com/grovesNL/glow",
+	"https://github.com/gfx-rs/metal-rs",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

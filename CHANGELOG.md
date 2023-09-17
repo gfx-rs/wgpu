@@ -110,6 +110,10 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 ### Documentation
 - Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4305](https://github.com/gfx-rs/wgpu/pull/4035)
 
+#### Metal
+
+- Support for timestamp queries on encoders and passes. By @wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
+
 ### Bug Fixes
 
 #### General
