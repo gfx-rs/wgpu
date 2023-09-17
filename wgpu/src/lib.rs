@@ -1048,6 +1048,7 @@ pub enum StoreOp {
     /// The attachment/affected texture aspect(s) will be treated as uninitialized afterwards.
     ///
     /// This can be significantly faster on tile-based render hardware.
+    ///
     /// Prefer this if the attachment is not read by subsequent passes.
     Discard,
 }
