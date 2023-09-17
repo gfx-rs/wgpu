@@ -1045,7 +1045,7 @@ pub enum StoreOp {
     Store,
     /// Discards the resulting value of the render pass for this attachment.
     ///
-    /// The attachment/affected texture aspect(s) will be treated as uninitialized afterwards.
+    /// The attachment will be treated as uninitialized afterwards.
     ///
     /// This can be significantly faster on tile-based render hardware.
     ///
