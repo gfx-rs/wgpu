@@ -635,7 +635,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 9] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -672,6 +672,10 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 9] = [
     (
         wgt::Features::RG11B10UFLOAT_RENDERABLE,
         web_sys::GpuFeatureName::Rg11b10ufloatRenderable,
+    ),
+    (
+        wgt::Features::BGRA8UNORM_STORAGE,
+        web_sys::GpuFeatureName::Bgra8unormStorage,
     ),
 ];
 
