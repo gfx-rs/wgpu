@@ -64,6 +64,28 @@ let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
+
+#### Render pass store operation is now an enum
+
+`wgpu::Operations::store` used to be an underdocumented boolean value,
+causing misunderstandings of the effect of setting it to `false`.
+
+The API now more closely resembles WebGPU which distinguishes between `store` and `discard`,
+see [WebGPU spec on GPUStoreOp](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
+
+```diff
+// ...
+depth_ops: Some(wgpu::Operations {
+    load: wgpu::LoadOp::Clear(1.0),
+-   store: false,
++   store: wgpu::StoreOp::Discard,
+}),
+// ...
+```
+
+By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
+
+
 ### Added/New Features
 
 - Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
