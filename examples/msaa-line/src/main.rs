@@ -282,7 +282,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }
             } else {
@@ -293,7 +293,7 @@ impl wgpu_example::framework::Example for Example {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         // Storing pre-resolve MSAA data is unnecessary if it isn't used later.
                         // On tile-based GPU, avoid store can reduce your app's memory footprint.
-                        store: false,
+                        store: wgpu::StoreOp::Discard,
                     },
                 }
             };

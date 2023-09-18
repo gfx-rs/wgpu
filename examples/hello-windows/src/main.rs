@@ -131,7 +131,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
                                 resolve_target: None,
                                 ops: wgpu::Operations {
                                     load: wgpu::LoadOp::Clear(viewport.desc.background),
-                                    store: true,
+                                    store: wgpu::StoreOp::Store,
                                 },
                             })],
                             depth_stencil_attachment: None,

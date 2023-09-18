@@ -155,11 +155,11 @@ impl<'ctx> TestCase<'ctx> {
                     view: &texture.create_view(&TextureViewDescriptor::default()),
                     depth_ops: format.has_depth_aspect().then_some(Operations {
                         load: LoadOp::Clear(1.0),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                     stencil_ops: format.has_stencil_aspect().then_some(Operations {
                         load: LoadOp::Clear(0xFFFFFFFF),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                 }),
                 timestamp_writes: None,
@@ -230,7 +230,7 @@ impl<'ctx> TestCase<'ctx> {
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         },
                     },
                 )],
@@ -239,11 +239,11 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                         stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                     },
                 ),
@@ -264,11 +264,11 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: Some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                         stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Clear(0),
-                            store: true,
+                            store: StoreOp::Store,
                         }),
                     },
                 ),
@@ -289,11 +289,11 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Clear(0.0),
-                            store: true,
+                            store: StoreOp::Store,
                         }),
                         stencil_ops: Some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                     },
                 ),
