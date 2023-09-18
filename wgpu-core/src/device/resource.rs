@@ -2889,11 +2889,7 @@ impl<A: HalApi> Device<A> {
                 }
 
                 if let Some(ref interface) = shader_module.interface {
-                    // Is it here we should set shader_expects_dual_source_blending. Where should we read it?
-                    if pipeline_expects_dual_source_blending {
-                        interface.is_fragment_entry_dual_source(fragment)
-                                .expect("Internal error: Fragment entrypoint should not be set in function if not present in shader interface");
-                    }
+                    shader_expects_dual_source_blending = interface.is_fragment_entry_dual_source(fragment);
                 }
 
                 Some(hal::ProgrammableStage {
@@ -2901,13 +2897,15 @@ impl<A: HalApi> Device<A> {
                     entry_point: fragment.stage.entry_point.as_ref(),
                 })
             }
-            None => {
-                if pipeline_expects_dual_source_blending {
-                    return Err(pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlendingNoFragmentStage);
-                }
-                None
-            }
+            None => None,
         };
+
+        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
+            return Err(pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending);
+        }
+        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
+            return Err(pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending);
+        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.iter() {
