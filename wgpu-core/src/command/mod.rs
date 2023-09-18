@@ -217,7 +217,11 @@ impl<A: HalApi> CommandBuffer<A> {
         profiling::scope!("drain_barriers");
 
         let buffer_barriers = base.buffers.drain_transitions();
-        let texture_barriers = base.textures.drain_transitions();
+        let (transitions, textures) = base.textures.drain_transitions();
+        let texture_barriers = transitions
+            .into_iter()
+            .enumerate()
+            .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
 
         unsafe {
             raw.transition_buffers(buffer_barriers);

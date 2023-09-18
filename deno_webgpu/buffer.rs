@@ -106,7 +106,7 @@ pub async fn op_webgpu_buffer_get_map_async(
                     2 => wgpu_core::device::HostMap::Write,
                     _ => unreachable!(),
                 },
-                callback: wgpu_core::resource::BufferMapCallback::from_rust(callback),
+                callback: Some(wgpu_core::resource::BufferMapCallback::from_rust(callback)),
             }
         ))
         .err();

@@ -794,8 +794,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_raw = dst
-            .inner
+        let dst_inner = dst.inner();
+        let dst_raw = dst_inner
             .as_ref()
             .unwrap()
             .as_raw()
@@ -880,7 +880,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
             unsafe {
-                encoder.transition_textures(transition.map(|pending| pending.into_hal(&dst)));
+                encoder.transition_textures(
+                    transition.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())),
+                );
                 encoder.transition_buffers(iter::once(barrier));
                 encoder.copy_buffer_to_texture(inner_buffer.as_ref().unwrap(), dst_raw, regions);
             }
@@ -1211,7 +1213,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             for texture in cmd_buf_trackers.textures.used_resources() {
                                 let id = texture.info.id();
-                                let should_extend = match *texture.inner.as_ref().unwrap() {
+                                let should_extend = match *texture.inner().as_ref().unwrap() {
                                     TextureInner::Native { raw: None } => {
                                         return Err(QueueSubmitError::DestroyedTexture(id));
                                     }
@@ -1364,7 +1366,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             trackers
                                 .textures
                                 .set_from_usage_scope(&used_surface_textures);
-                            let texture_barriers = trackers.textures.drain_transitions();
+                            let (transitions, textures) = trackers.textures.drain_transitions();
+                            let texture_barriers = transitions
+                                .into_iter()
+                                .enumerate()
+                                .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
                             let present = unsafe {
                                 baked.encoder.transition_textures(texture_barriers);
                                 baked.encoder.end_encoding().unwrap()
@@ -1392,7 +1398,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 used_surface_textures.set_size(texture_guard.len());
                 for (&id, texture) in pending_writes.dst_textures.iter() {
-                    match *texture.inner.as_ref().unwrap() {
+                    match *texture.inner().as_ref().unwrap() {
                         TextureInner::Native { raw: None } => {
                             return Err(QueueSubmitError::DestroyedTexture(id));
                         }
@@ -1414,8 +1420,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     trackers
                         .textures
                         .set_from_usage_scope(&used_surface_textures);
-                    let texture_barriers = trackers.textures.drain_transitions();
-
+                    let (transitions, textures) = trackers.textures.drain_transitions();
+                    let texture_barriers = transitions
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, p)| p.into_hal(textures[i].as_ref().unwrap()));
                     unsafe {
                         pending_writes
                             .command_encoder

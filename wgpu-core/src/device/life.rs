@@ -384,41 +384,37 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .render_bundles
             .retain(|&bundle_id, bundle| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .bundles
-                        .remove_abandoned(bundle_id, hub.render_bundles.contains(bundle_id))
-                };
-                if is_removed {
-                    log::info!("Bundle {:?} is not tracked anymore", bundle_id);
-                    f(&bundle_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .bundles
+                    .remove_abandoned(bundle_id, hub.render_bundles.contains(bundle_id));
 
-                    for v in bundle.used.buffers.used_resources() {
-                        self.suspected_resources
-                            .buffers
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bundle.used.textures.used_resources() {
-                        self.suspected_resources
-                            .textures
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bundle.used.bind_groups.used_resources() {
-                        self.suspected_resources
-                            .bind_groups
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bundle.used.render_pipelines.used_resources() {
-                        self.suspected_resources
-                            .render_pipelines
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bundle.used.query_sets.used_resources() {
-                        self.suspected_resources
-                            .query_sets
-                            .insert(v.as_info().id(), v.clone());
-                    }
+                f(&bundle_id);
+
+                for v in bundle.used.buffers.used_resources() {
+                    self.suspected_resources
+                        .buffers
+                        .insert(v.as_info().id(), v.clone());
+                }
+                for v in bundle.used.textures.used_resources() {
+                    self.suspected_resources
+                        .textures
+                        .insert(v.as_info().id(), v.clone());
+                }
+                for v in bundle.used.bind_groups.used_resources() {
+                    self.suspected_resources
+                        .bind_groups
+                        .insert(v.as_info().id(), v.clone());
+                }
+                for v in bundle.used.render_pipelines.used_resources() {
+                    self.suspected_resources
+                        .render_pipelines
+                        .insert(v.as_info().id(), v.clone());
+                }
+                for v in bundle.used.query_sets.used_resources() {
+                    self.suspected_resources
+                        .query_sets
+                        .insert(v.as_info().id(), v.clone());
                 }
                 !is_removed
             });
@@ -438,52 +434,48 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .bind_groups
             .retain(|&bind_group_id, bind_group| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .bind_groups
-                        .remove_abandoned(bind_group_id, hub.bind_groups.contains(bind_group_id))
-                };
-                if is_removed {
-                    log::info!("BindGroup {:?} is not tracked anymore", bind_group_id);
-                    f(&bind_group_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .bind_groups
+                    .remove_abandoned(bind_group_id, hub.bind_groups.contains(bind_group_id));
 
-                    for v in bind_group.used.buffers.used_resources() {
-                        self.suspected_resources
-                            .buffers
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bind_group.used.textures.used_resources() {
-                        self.suspected_resources
-                            .textures
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bind_group.used.views.used_resources() {
-                        self.suspected_resources
-                            .texture_views
-                            .insert(v.as_info().id(), v.clone());
-                    }
-                    for v in bind_group.used.samplers.used_resources() {
-                        self.suspected_resources
-                            .samplers
-                            .insert(v.as_info().id(), v.clone());
-                    }
+                f(&bind_group_id);
 
+                for v in bind_group.used.buffers.used_resources() {
                     self.suspected_resources
-                        .bind_group_layouts
-                        .insert(bind_group.layout.as_info().id(), bind_group.layout.clone());
-
-                    let submit_index = bind_group.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .bind_groups
-                        .insert(bind_group_id, bind_group.clone());
+                        .buffers
+                        .insert(v.as_info().id(), v.clone());
                 }
+                for v in bind_group.used.textures.used_resources() {
+                    self.suspected_resources
+                        .textures
+                        .insert(v.as_info().id(), v.clone());
+                }
+                for v in bind_group.used.views.used_resources() {
+                    self.suspected_resources
+                        .texture_views
+                        .insert(v.as_info().id(), v.clone());
+                }
+                for v in bind_group.used.samplers.used_resources() {
+                    self.suspected_resources
+                        .samplers
+                        .insert(v.as_info().id(), v.clone());
+                }
+
+                self.suspected_resources
+                    .bind_group_layouts
+                    .insert(bind_group.layout.as_info().id(), bind_group.layout.clone());
+
+                let submit_index = bind_group.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
+                }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .bind_groups
+                    .insert(bind_group_id, bind_group.clone());
                 !is_removed
             });
         submit_indices
@@ -502,32 +494,28 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .texture_views
             .retain(|&view_id, view| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .views
-                        .remove_abandoned(view_id, hub.texture_views.contains(view_id))
-                };
-                if is_removed {
-                    log::info!("TextureView {:?} is not tracked anymore", view_id);
-                    f(&view_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .views
+                    .remove_abandoned(view_id, hub.texture_views.contains(view_id));
 
-                    if let Some(parent_texture) = view.parent.as_ref() {
-                        self.suspected_resources
-                            .textures
-                            .insert(parent_texture.as_info().id(), parent_texture.clone());
-                    }
-                    let submit_index = view.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .texture_views
-                        .insert(view_id, view.clone());
+                f(&view_id);
+
+                if let Some(parent_texture) = view.parent.as_ref() {
+                    self.suspected_resources
+                        .textures
+                        .insert(parent_texture.as_info().id(), parent_texture.clone());
                 }
+                let submit_index = view.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
+                }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .texture_views
+                    .insert(view_id, view.clone());
                 !is_removed
             });
         submit_indices
@@ -545,37 +533,33 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .textures
             .retain(|&texture_id, texture| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .textures
-                        .remove_abandoned(texture_id, hub.textures.contains(texture_id))
-                };
-                if is_removed {
-                    log::info!("Texture {:?} is not tracked anymore", texture_id);
-                    f(&texture_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .textures
+                    .remove_abandoned(texture_id, hub.textures.contains(texture_id));
 
-                    let submit_index = texture.info.submission_index();
-                    let non_referenced_resources = self
-                        .active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources);
+                f(&texture_id);
 
-                    if let &resource::TextureClearMode::RenderPass {
-                        ref clear_views, ..
-                    } = &*texture.clear_mode.read()
-                    {
-                        clear_views.into_iter().for_each(|v| {
-                            non_referenced_resources
-                                .texture_views
-                                .insert(v.as_info().id(), v.clone());
-                        });
-                    }
-                    non_referenced_resources
-                        .textures
-                        .insert(texture_id, texture.clone());
+                let submit_index = texture.info.submission_index();
+                let non_referenced_resources = self
+                    .active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources);
+
+                if let &resource::TextureClearMode::RenderPass {
+                    ref clear_views, ..
+                } = &*texture.clear_mode.read()
+                {
+                    clear_views.into_iter().for_each(|v| {
+                        non_referenced_resources
+                            .texture_views
+                            .insert(v.as_info().id(), v.clone());
+                    });
                 }
+                non_referenced_resources
+                    .textures
+                    .insert(texture_id, texture.clone());
                 !is_removed
             });
         self
@@ -594,27 +578,23 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .samplers
             .retain(|&sampler_id, sampler| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .samplers
-                        .remove_abandoned(sampler_id, hub.samplers.contains(sampler_id))
-                };
-                if is_removed {
-                    log::info!("Sampler {:?} is not tracked anymore", sampler_id);
-                    f(&sampler_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .samplers
+                    .remove_abandoned(sampler_id, hub.samplers.contains(sampler_id));
 
-                    let submit_index = sampler.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .samplers
-                        .insert(sampler_id, sampler.clone());
+                f(&sampler_id);
+
+                let submit_index = sampler.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
                 }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .samplers
+                    .insert(sampler_id, sampler.clone());
                 !is_removed
             });
         submit_indices
@@ -633,35 +613,31 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .buffers
             .retain(|&buffer_id, buffer| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .buffers
-                        .remove_abandoned(buffer_id, hub.buffers.contains(buffer_id))
-                };
-                if is_removed {
-                    log::info!("Buffer {:?} is not tracked anymore", buffer_id);
-                    f(&buffer_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .buffers
+                    .remove_abandoned(buffer_id, hub.buffers.contains(buffer_id));
 
-                    let submit_index = buffer.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    if let resource::BufferMapState::Init {
-                        ref stage_buffer, ..
-                    } = *buffer.map_state.lock()
-                    {
-                        self.free_resources
-                            .buffers
-                            .insert(stage_buffer.as_info().id(), stage_buffer.clone());
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .buffers
-                        .insert(buffer_id, buffer.clone());
+                f(&buffer_id);
+
+                let submit_index = buffer.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
                 }
+                if let resource::BufferMapState::Init {
+                    ref stage_buffer, ..
+                } = *buffer.map_state.lock()
+                {
+                    self.free_resources
+                        .buffers
+                        .insert(stage_buffer.as_info().id(), stage_buffer.clone());
+                }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .buffers
+                    .insert(buffer_id, buffer.clone());
                 !is_removed
             });
         submit_indices
@@ -679,36 +655,29 @@ impl<A: HalApi> LifetimeTracker<A> {
         let mut submit_indices = Vec::new();
         self.suspected_resources.compute_pipelines.retain(
             |&compute_pipeline_id, compute_pipeline| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers.compute_pipelines.remove_abandoned(
-                        compute_pipeline_id,
-                        hub.compute_pipelines.contains(compute_pipeline_id),
-                    )
-                };
-                if is_removed {
-                    log::info!(
-                        "ComputePipeline {:?} is not tracked anymore",
-                        compute_pipeline_id
-                    );
-                    f(&compute_pipeline_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers.compute_pipelines.remove_abandoned(
+                    compute_pipeline_id,
+                    hub.compute_pipelines.contains(compute_pipeline_id),
+                );
 
-                    self.suspected_resources.pipeline_layouts.insert(
-                        compute_pipeline.layout.as_info().id(),
-                        compute_pipeline.layout.clone(),
-                    );
+                f(&compute_pipeline_id);
 
-                    let submit_index = compute_pipeline.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .compute_pipelines
-                        .insert(compute_pipeline_id, compute_pipeline.clone());
+                self.suspected_resources.pipeline_layouts.insert(
+                    compute_pipeline.layout.as_info().id(),
+                    compute_pipeline.layout.clone(),
+                );
+
+                let submit_index = compute_pipeline.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
                 }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .compute_pipelines
+                    .insert(compute_pipeline_id, compute_pipeline.clone());
                 !is_removed
             },
         );
@@ -728,46 +697,35 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .render_pipelines
             .retain(|&render_pipeline_id, render_pipeline| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers.render_pipelines.remove_abandoned(
-                        render_pipeline_id,
-                        hub.render_pipelines.contains(render_pipeline_id),
-                    )
-                };
-                if is_removed {
-                    log::info!(
-                        "RenderPipeline {:?} is not tracked anymore",
-                        render_pipeline_id
-                    );
-                    f(&render_pipeline_id);
+                let mut trackers = trackers.lock();
+                let is_removed = trackers.render_pipelines.remove_abandoned(
+                    render_pipeline_id,
+                    hub.render_pipelines.contains(render_pipeline_id),
+                );
 
-                    self.suspected_resources.pipeline_layouts.insert(
-                        render_pipeline.layout.as_info().id(),
-                        render_pipeline.layout.clone(),
-                    );
+                f(&render_pipeline_id);
 
-                    let submit_index = render_pipeline.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .render_pipelines
-                        .insert(render_pipeline_id, render_pipeline.clone());
+                self.suspected_resources.pipeline_layouts.insert(
+                    render_pipeline.layout.as_info().id(),
+                    render_pipeline.layout.clone(),
+                );
+
+                let submit_index = render_pipeline.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
                 }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .render_pipelines
+                    .insert(render_pipeline_id, render_pipeline.clone());
                 !is_removed
             });
         submit_indices
     }
 
-    fn triage_suspected_pipeline_layouts<F>(
-        &mut self,
-        pipeline_submit_indices: &[u64],
-        mut f: F,
-    ) -> &mut Self
+    fn triage_suspected_pipeline_layouts<F>(&mut self, mut f: F) -> &mut Self
     where
         F: FnMut(&id::PipelineLayoutId),
     {
@@ -775,63 +733,22 @@ impl<A: HalApi> LifetimeTracker<A> {
             .pipeline_layouts
             .retain(|pipeline_layout_id, pipeline_layout| {
                 //Note: this has to happen after all the suspected pipelines are destroyed
+                f(pipeline_layout_id);
 
-                let mut num_ref_in_nonreferenced_resources = 0;
-                pipeline_submit_indices.iter().for_each(|submit_index| {
-                    let resources = self
-                        .active
-                        .iter()
-                        .find(|a| a.index == *submit_index)
-                        .map_or(&self.free_resources, |a| &a.last_resources);
-
-                    resources.compute_pipelines.iter().for_each(|(_id, p)| {
-                        if p.layout.as_info().id() == *pipeline_layout_id {
-                            num_ref_in_nonreferenced_resources += 1;
-                        }
-                    });
-                    resources.render_pipelines.iter().for_each(|(_id, p)| {
-                        if p.layout.as_info().id() == *pipeline_layout_id {
-                            num_ref_in_nonreferenced_resources += 1;
-                        }
-                    });
-                });
-
-                if pipeline_layout.ref_count() == (1 + num_ref_in_nonreferenced_resources) {
-                    log::debug!(
-                        "PipelineLayout {:?} is not tracked anymore",
-                        pipeline_layout_id
-                    );
-
-                    f(pipeline_layout_id);
-
-                    for bgl in &pipeline_layout.bind_group_layouts {
-                        self.suspected_resources
-                            .bind_group_layouts
-                            .insert(bgl.as_info().id(), bgl.clone());
-                    }
-                    self.free_resources
-                        .pipeline_layouts
-                        .insert(*pipeline_layout_id, pipeline_layout.clone());
-
-                    return false;
-                } else {
-                    log::info!(
-                        "PipelineLayout {:?} is still referenced from {}",
-                        pipeline_layout_id,
-                        pipeline_layout.ref_count()
-                    );
+                for bgl in &pipeline_layout.bind_group_layouts {
+                    self.suspected_resources
+                        .bind_group_layouts
+                        .insert(bgl.as_info().id(), bgl.clone());
                 }
-                true
+                self.free_resources
+                    .pipeline_layouts
+                    .insert(*pipeline_layout_id, pipeline_layout.clone());
+                false
             });
         self
     }
 
-    fn triage_suspected_bind_group_layouts<F>(
-        &mut self,
-        bind_group_submit_indices: &[u64],
-        pipeline_submit_indices: &[u64],
-        mut f: F,
-    ) -> &mut Self
+    fn triage_suspected_bind_group_layouts<F>(&mut self, mut f: F) -> &mut Self
     where
         F: FnMut(&id::BindGroupLayoutId),
     {
@@ -841,80 +758,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
                 //Note: same BGL can appear multiple times in the list, but only the last
                 // encounter could drop the refcount to 0.
-                let mut num_ref_in_nonreferenced_resources = 0;
-                bind_group_submit_indices.iter().for_each(|submit_index| {
-                    let resources = self
-                        .active
-                        .iter()
-                        .find(|a| a.index == *submit_index)
-                        .map_or(&self.free_resources, |a| &a.last_resources);
+                f(bind_group_layout_id);
 
-                    resources.bind_groups.iter().for_each(|(_id, b)| {
-                        if b.layout.as_info().id() == *bind_group_layout_id {
-                            num_ref_in_nonreferenced_resources += 1;
-                        }
-                    });
-                    resources.bind_group_layouts.iter().for_each(|(id, _b)| {
-                        if id == bind_group_layout_id {
-                            num_ref_in_nonreferenced_resources += 1;
-                        }
-                    });
-                });
-                pipeline_submit_indices.iter().for_each(|submit_index| {
-                    let resources = self
-                        .active
-                        .iter()
-                        .find(|a| a.index == *submit_index)
-                        .map_or(&self.free_resources, |a| &a.last_resources);
-
-                    resources.compute_pipelines.iter().for_each(|(_id, p)| {
-                        p.layout.bind_group_layouts.iter().for_each(|b| {
-                            if b.as_info().id() == *bind_group_layout_id {
-                                num_ref_in_nonreferenced_resources += 1;
-                            }
-                        });
-                    });
-                    resources.render_pipelines.iter().for_each(|(_id, p)| {
-                        p.layout.bind_group_layouts.iter().for_each(|b| {
-                            if b.as_info().id() == *bind_group_layout_id {
-                                num_ref_in_nonreferenced_resources += 1;
-                            }
-                        });
-                    });
-                    resources.pipeline_layouts.iter().for_each(|(_id, p)| {
-                        p.bind_group_layouts.iter().for_each(|b| {
-                            if b.as_info().id() == *bind_group_layout_id {
-                                num_ref_in_nonreferenced_resources += 1;
-                            }
-                        });
-                    });
-                });
-
-                //Note: this has to happen after all the suspected pipelines are destroyed
-                if bind_group_layout.ref_count() == (1 + num_ref_in_nonreferenced_resources) {
-                    // If This layout points to a compatible one, go over the latter
-                    // to decrement the ref count and potentially destroy it.
-                    //bgl_to_check = bind_group_layout.compatible_layout;
-
-                    log::debug!(
-                        "BindGroupLayout {:?} is not tracked anymore",
-                        bind_group_layout_id
-                    );
-                    f(bind_group_layout_id);
-
-                    self.free_resources
-                        .bind_group_layouts
-                        .insert(*bind_group_layout_id, bind_group_layout.clone());
-
-                    return false;
-                } else {
-                    log::info!(
-                        "BindGroupLayout {:?} is still referenced from {}",
-                        bind_group_layout_id,
-                        bind_group_layout.ref_count()
-                    );
-                }
-                true
+                self.free_resources
+                    .bind_group_layouts
+                    .insert(*bind_group_layout_id, bind_group_layout.clone());
+                false
             },
         );
         self
@@ -929,28 +778,23 @@ impl<A: HalApi> LifetimeTracker<A> {
         self.suspected_resources
             .query_sets
             .retain(|&query_set_id, query_set| {
-                let is_removed = {
-                    let mut trackers = trackers.lock();
-                    trackers
-                        .query_sets
-                        .remove_abandoned(query_set_id, hub.query_sets.contains(query_set_id))
-                };
-                if is_removed {
-                    log::info!("QuerySet {:?} is not tracked anymore", query_set_id);
-                    // #[cfg(feature = "trace")]
-                    // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id)));
+                let mut trackers = trackers.lock();
+                let is_removed = trackers
+                    .query_sets
+                    .remove_abandoned(query_set_id, hub.query_sets.contains(query_set_id));
+                // #[cfg(feature = "trace")]
+                // trace.map(|t| t.add(trace::Action::DestroyComputePipeline(id)));
 
-                    let submit_index = query_set.info.submission_index();
-                    if !submit_indices.contains(&submit_index) {
-                        submit_indices.push(submit_index);
-                    }
-                    self.active
-                        .iter_mut()
-                        .find(|a| a.index == submit_index)
-                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .query_sets
-                        .insert(query_set_id, query_set.clone());
+                let submit_index = query_set.info.submission_index();
+                if !submit_indices.contains(&submit_index) {
+                    submit_indices.push(submit_index);
                 }
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .query_sets
+                    .insert(query_set_id, query_set.clone());
                 !is_removed
             });
         submit_indices
@@ -1009,45 +853,36 @@ impl<A: HalApi> LifetimeTracker<A> {
                 t.add(trace::Action::DestroyRenderBundle(*_id));
             }
         });
-        let compute_pipeline_indices =
-            self.triage_suspected_compute_pipelines(hub, trackers, |_id| {
-                #[cfg(feature = "trace")]
-                if let Some(ref mut t) = trace {
-                    t.add(trace::Action::DestroyComputePipeline(*_id));
-                }
-            });
-        let render_pipeline_indices =
-            self.triage_suspected_render_pipelines(hub, trackers, |_id| {
-                #[cfg(feature = "trace")]
-                if let Some(ref mut t) = trace {
-                    t.add(trace::Action::DestroyRenderPipeline(*_id));
-                }
-            });
-        let mut pipeline_submit_indices = Vec::new();
-        pipeline_submit_indices.extend(compute_pipeline_indices);
-        pipeline_submit_indices.extend(render_pipeline_indices);
-        let bind_group_submit_indices = self.triage_suspected_bind_groups(hub, trackers, |_id| {
+        self.triage_suspected_compute_pipelines(hub, trackers, |_id| {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = trace {
+                t.add(trace::Action::DestroyComputePipeline(*_id));
+            }
+        });
+        self.triage_suspected_render_pipelines(hub, trackers, |_id| {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = trace {
+                t.add(trace::Action::DestroyRenderPipeline(*_id));
+            }
+        });
+        self.triage_suspected_bind_groups(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
                 t.add(trace::Action::DestroyBindGroup(*_id));
             }
         });
-        self.triage_suspected_pipeline_layouts(&pipeline_submit_indices, |_id| {
+        self.triage_suspected_pipeline_layouts(|_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
                 t.add(trace::Action::DestroyPipelineLayout(*_id));
             }
         });
-        self.triage_suspected_bind_group_layouts(
-            &bind_group_submit_indices,
-            &pipeline_submit_indices,
-            |_id| {
-                #[cfg(feature = "trace")]
-                if let Some(ref mut t) = trace {
-                    t.add(trace::Action::DestroyBindGroupLayout(*_id));
-                }
-            },
-        );
+        self.triage_suspected_bind_group_layouts(|_id| {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = trace {
+                t.add(trace::Action::DestroyBindGroupLayout(*_id));
+            }
+        });
         self.triage_suspected_samplers(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {

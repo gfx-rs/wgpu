@@ -11,10 +11,7 @@ extract it from the hub.
 
 use std::{
     borrow::Borrow,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 #[cfg(feature = "trace")]
@@ -203,11 +200,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut presentation = surface.presentation.lock();
                 let present = presentation.as_mut().unwrap();
                 let texture = resource::Texture {
-                    inner: Some(resource::TextureInner::Surface {
-                        raw: ast.texture,
+                    inner: RwLock::new(Some(resource::TextureInner::Surface {
+                        raw: Some(ast.texture),
                         parent_id: surface_id,
                         has_work: AtomicBool::new(false),
-                    }),
+                    })),
                     device: device.clone(),
                     desc: texture_desc,
                     hal_usage,
@@ -310,35 +307,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
-                if let Ok(mut texture) = Arc::try_unwrap(texture) {
-                    texture.clear_mode.write().destroy_clear_views(device.raw());
+                let suf = A::get_surface(&surface);
+                let mut inner = texture.inner_mut();
+                let inner = inner.as_mut().unwrap();
 
-                    let suf = A::get_surface(&surface);
-                    match texture.inner.take().unwrap() {
-                        resource::TextureInner::Surface {
-                            raw,
-                            parent_id,
-                            has_work,
-                        } => {
-                            if surface_id != parent_id {
-                                log::error!("Presented frame is from a different surface");
-                                Err(hal::SurfaceError::Lost)
-                            } else if !has_work.load(Ordering::Relaxed) {
-                                log::error!("No work has been submitted for this frame");
-                                unsafe { suf.unwrap().raw.discard_texture(raw) };
-                                Err(hal::SurfaceError::Outdated)
-                            } else {
-                                unsafe {
-                                    queue.raw.as_ref().unwrap().present(&suf.unwrap().raw, raw)
-                                }
+                match *inner {
+                    resource::TextureInner::Surface {
+                        ref mut raw,
+                        ref parent_id,
+                        ref has_work,
+                    } => {
+                        if surface_id != *parent_id {
+                            log::error!("Presented frame is from a different surface");
+                            Err(hal::SurfaceError::Lost)
+                        } else if !has_work.load(Ordering::Relaxed) {
+                            log::error!("No work has been submitted for this frame");
+                            unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
+                            Err(hal::SurfaceError::Outdated)
+                        } else {
+                            unsafe {
+                                queue
+                                    .raw
+                                    .as_ref()
+                                    .unwrap()
+                                    .present(&suf.unwrap().raw, raw.take().unwrap())
                             }
                         }
-                        resource::TextureInner::Native { .. } => unreachable!(),
                     }
-                } else {
-                    Err(hal::SurfaceError::Other(
-                        "Surface cannot be destroyed because is still in use",
-                    ))
+                    _ => unreachable!(),
                 }
             } else {
                 Err(hal::SurfaceError::Outdated) //TODO?
@@ -402,26 +398,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let texture = hub.textures.unregister(texture_id);
             if let Some(texture) = texture {
-                if let Ok(mut texture) = Arc::try_unwrap(texture) {
-                    texture.clear_mode.write().destroy_clear_views(device.raw());
-
-                    let suf = A::get_surface(&surface);
-                    match texture.inner.take().unwrap() {
-                        resource::TextureInner::Surface {
-                            raw,
-                            parent_id,
-                            has_work: _,
-                        } => {
-                            if surface_id == parent_id {
-                                unsafe { suf.unwrap().raw.discard_texture(raw) };
-                            } else {
-                                log::warn!("Surface texture is outdated");
-                            }
+                let suf = A::get_surface(&surface);
+                match *texture.inner_mut().as_mut().take().as_mut().unwrap() {
+                    &mut resource::TextureInner::Surface {
+                        ref mut raw,
+                        ref parent_id,
+                        has_work: _,
+                    } => {
+                        if surface_id == *parent_id {
+                            unsafe { suf.unwrap().raw.discard_texture(raw.take().unwrap()) };
+                        } else {
+                            log::warn!("Surface texture is outdated");
                         }
-                        resource::TextureInner::Native { .. } => unreachable!(),
                     }
-                } else {
-                    return Err(SurfaceError::StillReferenced);
+                    _ => unreachable!(),
                 }
             }
         }

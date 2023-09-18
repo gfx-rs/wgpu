@@ -534,9 +534,9 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         Texture {
-            inner: Some(resource::TextureInner::Native {
+            inner: RwLock::new(Some(resource::TextureInner::Native {
                 raw: Some(hal_texture),
-            }),
+            })),
             device: self.clone(),
             desc: desc.map_label(|_| ()),
             hal_usage,
@@ -768,8 +768,8 @@ impl<A: HalApi> Device<A> {
         texture: &Arc<Texture<A>>,
         desc: &resource::TextureViewDescriptor,
     ) -> Result<TextureView<A>, resource::CreateTextureViewError> {
-        let texture_raw = texture
-            .inner
+        let inner = texture.inner();
+        let texture_raw = inner
             .as_ref()
             .unwrap()
             .as_raw()

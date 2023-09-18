@@ -1505,10 +1505,12 @@ impl crate::Context for Context {
                 MapMode::Read => wgc::device::HostMap::Read,
                 MapMode::Write => wgc::device::HostMap::Write,
             },
-            callback: wgc::resource::BufferMapCallback::from_rust(Box::new(|status| {
-                let res = status.map_err(|_| crate::BufferAsyncError);
-                callback(res);
-            })),
+            callback: Some(wgc::resource::BufferMapCallback::from_rust(Box::new(
+                |status| {
+                    let res = status.map_err(|_| crate::BufferAsyncError);
+                    callback(res);
+                },
+            ))),
         };
 
         let global = &self.0;

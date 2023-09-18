@@ -189,6 +189,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
                 let min_ref_count = if is_in_registry { 3 } else { 2 };
                 if existing_ref_count <= min_ref_count {
                     self.metadata.remove(index);
+                    log::info!("{} {:?} is not tracked anymore", T::TYPE, id,);
                     return true;
                 } else {
                     log::info!(

@@ -20,7 +20,7 @@ use crate::{
 };
 
 use hal::CommandEncoder;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -242,7 +242,7 @@ unsafe impl Send for BufferMapCallbackC {}
 pub struct BufferMapCallback {
     // We wrap this so creating the enum in the C variant can be unsafe,
     // allowing our call function to be safe.
-    inner: Option<BufferMapCallbackInner>,
+    inner: BufferMapCallbackInner,
 }
 
 #[cfg(any(
@@ -279,7 +279,7 @@ impl Debug for BufferMapCallbackInner {
 impl BufferMapCallback {
     pub fn from_rust(callback: BufferMapCallbackCallback) -> Self {
         Self {
-            inner: Some(BufferMapCallbackInner::Rust { callback }),
+            inner: BufferMapCallbackInner::Rust { callback },
         }
     }
 
@@ -292,17 +292,17 @@ impl BufferMapCallback {
     ///   invoked, which may happen at an unspecified time.
     pub unsafe fn from_c(inner: BufferMapCallbackC) -> Self {
         Self {
-            inner: Some(BufferMapCallbackInner::C { inner }),
+            inner: BufferMapCallbackInner::C { inner },
         }
     }
 
-    pub(crate) fn call(mut self, result: BufferAccessResult) {
-        match self.inner.take() {
-            Some(BufferMapCallbackInner::Rust { callback }) => {
+    pub(crate) fn call(self, result: BufferAccessResult) {
+        match self.inner {
+            BufferMapCallbackInner::Rust { callback } => {
                 callback(result);
             }
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            Some(BufferMapCallbackInner::C { inner }) => unsafe {
+            BufferMapCallbackInner::C { inner } => unsafe {
                 let status = match result {
                     Ok(()) => BufferMapAsyncStatus::Success,
                     Err(BufferAccessError::Device(_)) => BufferMapAsyncStatus::ContextLost,
@@ -331,17 +331,6 @@ impl BufferMapCallback {
 
                 (inner.callback)(status, inner.user_data);
             },
-            None => {
-                panic!("Map callback invoked twice");
-            }
-        }
-    }
-}
-
-impl Drop for BufferMapCallback {
-    fn drop(&mut self) {
-        if self.inner.is_some() {
-            panic!("Map callback was leaked");
         }
     }
 }
@@ -349,7 +338,7 @@ impl Drop for BufferMapCallback {
 #[derive(Debug)]
 pub struct BufferMapOperation {
     pub host: HostMap,
-    pub callback: BufferMapCallback,
+    pub callback: Option<BufferMapCallback>,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -585,8 +574,10 @@ impl<A: HalApi> Buffer<A> {
         }
 
         // Note: outside the scope where locks are held when calling the callback
-        if let Some((operation, status)) = map_closure {
-            operation.callback.call(status);
+        if let Some((mut operation, status)) = map_closure {
+            if let Some(callback) = operation.callback.take() {
+                callback.call(status);
+            }
         }
 
         Ok(())
@@ -688,7 +679,7 @@ pub(crate) enum TextureInner<A: HalApi> {
         raw: Option<A::Texture>,
     },
     Surface {
-        raw: A::SurfaceTexture,
+        raw: Option<A::SurfaceTexture>,
         parent_id: SurfaceId,
         has_work: AtomicBool,
     },
@@ -698,8 +689,10 @@ impl<A: HalApi> TextureInner<A> {
     pub fn as_raw(&self) -> Option<&A::Texture> {
         match *self {
             Self::Native { raw: Some(ref tex) } => Some(tex),
-            Self::Native { raw: None } => None,
-            Self::Surface { ref raw, .. } => Some(raw.borrow()),
+            Self::Surface {
+                raw: Some(ref tex), ..
+            } => Some(tex.borrow()),
+            _ => None,
         }
     }
 }
@@ -720,20 +713,9 @@ pub enum TextureClearMode<A: HalApi> {
     None,
 }
 
-impl<A: HalApi> TextureClearMode<A> {
-    pub(crate) fn destroy_clear_views(&mut self, device: &A::Device) {
-        if let TextureClearMode::Surface { ref mut clear_view } = *self {
-            unsafe {
-                let view = clear_view.take().unwrap();
-                hal::Device::destroy_texture_view(device, view);
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Texture<A: HalApi> {
-    pub(crate) inner: Option<TextureInner<A>>,
+    pub(crate) inner: RwLock<Option<TextureInner<A>>>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
     pub(crate) hal_usage: hal::TextureUses,
@@ -768,10 +750,10 @@ impl<A: HalApi> Drop for Texture<A> {
             }
             _ => {}
         };
-        if self.inner.is_none() {
+        if self.inner.read().is_none() {
             return;
         }
-        let inner = self.inner.take().unwrap();
+        let inner = self.inner.write().take().unwrap();
         if let TextureInner::Native { raw: Some(raw) } = inner {
             unsafe {
                 self.device.raw().destroy_texture(raw);
@@ -781,6 +763,12 @@ impl<A: HalApi> Drop for Texture<A> {
 }
 
 impl<A: HalApi> Texture<A> {
+    pub(crate) fn inner<'a>(&'a self) -> RwLockReadGuard<'a, Option<TextureInner<A>>> {
+        self.inner.read()
+    }
+    pub(crate) fn inner_mut<'a>(&'a self) -> RwLockWriteGuard<'a, Option<TextureInner<A>>> {
+        self.inner.write()
+    }
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode<A>,
         desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
@@ -824,9 +812,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         let texture = { hub.textures.try_get(id).ok().flatten() };
-        let hal_texture = texture
-            .as_ref()
-            .and_then(|tex| tex.inner.as_ref().unwrap().as_raw());
+        let inner = texture.as_ref().unwrap().inner();
+        let hal_texture = inner.as_ref().unwrap().as_raw();
 
         hal_texture_callback(hal_texture);
     }

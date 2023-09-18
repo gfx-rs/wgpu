@@ -748,7 +748,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::TextureClearMode::None => SmallVec::new(),
         };
 
-        match *texture.inner.as_ref().unwrap() {
+        match *texture.inner().as_ref().unwrap() {
             resource::TextureInner::Native { ref raw } => {
                 if !raw.is_none() {
                     let temp = queue::TempResource::Texture(texture.clone(), clear_views);
@@ -2186,9 +2186,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
-        if let Err((op, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
-            op.callback.call(Err(err.clone()));
-
+        if let Err((mut operation, err)) = self.buffer_map_async_inner::<A>(buffer_id, range, op) {
+            if let Some(callback) = operation.callback.take() {
+                callback.call(Err(err.clone()));
+            }
             return Err(err);
         }
 
@@ -2370,8 +2371,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // Note: outside the scope where locks are held when calling the callback
-        if let Some((operation, status)) = closure? {
-            operation.callback.call(status);
+        if let Some((mut operation, status)) = closure? {
+            if let Some(callback) = operation.callback.take() {
+                callback.call(status);
+            }
         }
         Ok(())
     }

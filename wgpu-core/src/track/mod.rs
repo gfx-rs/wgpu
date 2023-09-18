@@ -130,6 +130,8 @@ pub(crate) struct PendingTransition<S: ResourceUses> {
     pub usage: ops::Range<S>,
 }
 
+pub(crate) type PendingTransitionList = Vec<PendingTransition<hal::TextureUses>>;
+
 impl PendingTransition<hal::BufferUses> {
     /// Produce the hal barrier corresponding to the transition.
     pub fn into_hal<'a, A: HalApi>(
@@ -148,14 +150,9 @@ impl PendingTransition<hal::TextureUses> {
     /// Produce the hal barrier corresponding to the transition.
     pub fn into_hal<'a, A: HalApi>(
         self,
-        tex: &'a resource::Texture<A>,
+        tex: &'a resource::TextureInner<A>,
     ) -> hal::TextureBarrier<'a, A> {
-        let texture = tex
-            .inner
-            .as_ref()
-            .unwrap()
-            .as_raw()
-            .expect("Texture is destroyed");
+        let texture = tex.as_raw().expect("Texture is destroyed");
 
         // These showing up in a barrier is always a bug
         strict_assert_ne!(self.usage.start, hal::TextureUses::UNKNOWN);

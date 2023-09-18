@@ -580,6 +580,7 @@ impl<A: HalApi> BufferTracker<A> {
                 let min_ref_count = if is_in_registry { 3 } else { 2 };
                 if existing_ref_count <= min_ref_count {
                     self.metadata.remove(index);
+                    log::info!("Buffer {:?} is not tracked anymore", id,);
                     return true;
                 } else {
                     log::info!(

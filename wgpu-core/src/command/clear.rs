@@ -246,8 +246,8 @@ pub(crate) fn clear_texture<A: HalApi>(
     alignments: &hal::Alignments,
     zero_buffer: &A::Buffer,
 ) -> Result<(), ClearError> {
-    let dst_raw = dst_texture
-        .inner
+    let dst_inner = dst_texture.inner();
+    let dst_raw = dst_inner
         .as_ref()
         .unwrap()
         .as_raw()
@@ -290,7 +290,7 @@ pub(crate) fn clear_texture<A: HalApi>(
     let dst_barrier = texture_tracker
         .set_single(dst_texture, selector, clear_usage)
         .unwrap()
-        .map(|pending| pending.into_hal(dst_texture));
+        .map(|pending| pending.into_hal(dst_inner.as_ref().unwrap()));
     unsafe {
         encoder.transition_textures(dst_barrier.into_iter());
     }

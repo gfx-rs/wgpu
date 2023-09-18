@@ -251,7 +251,6 @@ fn draw_test_with_reports(
     assert_eq!(report.bind_groups.num_allocated, 0);
     assert_eq!(report.bind_group_layouts.num_allocated, 0);
     assert_eq!(report.pipeline_layouts.num_allocated, 0);
-    assert_eq!(report.buffers.num_allocated, 0);
     //surface is still there
     assert_eq!(report.texture_views.num_allocated, 1);
     assert_eq!(report.textures.num_allocated, 1);

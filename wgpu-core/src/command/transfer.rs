@@ -801,8 +801,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
-        let dst_raw = dst_texture
-            .inner
+        let dst_inner = dst_texture.inner();
+        let dst_raw = dst_inner
             .as_ref()
             .unwrap()
             .as_raw()
@@ -812,7 +812,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 TransferError::MissingCopyDstUsageFlag(None, Some(destination.texture)).into(),
             );
         }
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_texture));
+        let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap()));
 
         if !dst_base.aspect.is_one() {
             return Err(TransferError::CopyAspectNotOne.into());
@@ -932,8 +932,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
-        let src_raw = src_texture
-            .inner
+        let src_inner = src_texture.inner();
+        let src_raw = src_inner
             .as_ref()
             .unwrap()
             .as_raw()
@@ -954,7 +954,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .into());
         }
-        let src_barrier = src_pending.map(|pending| pending.into_hal(src_texture));
+        let src_barrier = src_pending.map(|pending| pending.into_hal(src_inner.as_ref().unwrap()));
 
         let (dst_buffer, dst_pending) = {
             let buffer_guard = hub.buffers.read();
@@ -1075,9 +1075,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let src_texture = texture_guard
             .get(source.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
+        let src_inner = src_texture.inner();
         let dst_texture = texture_guard
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(source.texture))?;
+        let dst_inner = dst_texture.inner();
 
         // src and dst texture format must be copy-compatible
         // https://gpuweb.github.io/gpuweb/#copy-compatible
@@ -1139,8 +1141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(src_texture, src_range, hal::TextureUses::COPY_SRC)
             .ok_or(TransferError::InvalidTexture(source.texture))?;
-        let src_raw = src_texture
-            .inner
+        let src_raw = src_inner
             .as_ref()
             .unwrap()
             .as_raw()
@@ -1152,7 +1153,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: try to avoid this the collection. It's needed because both
         // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
         let mut barriers: ArrayVec<_, 2> = src_pending
-            .map(|pending| pending.into_hal(src_texture))
+            .map(|pending| pending.into_hal(src_inner.as_ref().unwrap()))
             .collect();
 
         let dst_pending = cmd_buf_data
@@ -1160,8 +1161,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .set_single(dst_texture, dst_range, hal::TextureUses::COPY_DST)
             .ok_or(TransferError::InvalidTexture(destination.texture))?;
-        let dst_raw = dst_texture
-            .inner
+        let dst_raw = dst_inner
             .as_ref()
             .unwrap()
             .as_raw()
@@ -1172,7 +1172,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
         }
 
-        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
+        barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())));
 
         let hal_copy_size = hal::CopyExtent {
             width: src_copy_size.width.min(dst_copy_size.width),
@@ -1200,6 +1200,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 regions,
             );
         }
+
         Ok(())
     }
 }

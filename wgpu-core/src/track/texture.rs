@@ -19,21 +19,22 @@
  *   will treat the contents as junk.
 !*/
 
-use super::{range::RangedStates, PendingTransition};
+use super::{range::RangedStates, PendingTransition, PendingTransitionList};
 use crate::{
     hal_api::HalApi,
     id::{TextureId, TypedId},
-    resource::{Resource, Texture},
+    resource::{Resource, Texture, TextureInner},
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
         ResourceUses, UsageConflict,
     },
 };
-use hal::{TextureBarrier, TextureUses};
+use hal::TextureUses;
 
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
+use parking_lot::RwLockReadGuard;
 use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
@@ -437,13 +438,24 @@ impl<A: HalApi> TextureTracker<A> {
         self.metadata.owned_resources()
     }
 
-    /// Drains all currently pending transitions.
-    pub fn drain_transitions(&mut self) -> impl Iterator<Item = TextureBarrier<A>> {
-        let texture_barriers = self.temp.drain(..).map(|pending| {
-            let tex = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
-            pending.into_hal(tex)
-        });
-        texture_barriers
+    /// Drain all currently pending transitions.
+    pub fn drain_transitions<'a>(
+        &'a mut self,
+    ) -> (
+        PendingTransitionList,
+        Vec<RwLockReadGuard<'a, Option<TextureInner<A>>>>,
+    ) {
+        let mut textures = Vec::new();
+        let transitions = self
+            .temp
+            .drain(..)
+            .map(|pending| {
+                let tex = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
+                textures.push(tex.inner());
+                pending
+            })
+            .collect();
+        (transitions, textures)
     }
 
     /// Inserts a single texture and a state into the resource tracker.
@@ -707,6 +719,7 @@ impl<A: HalApi> TextureTracker<A> {
                     self.start_set.complex.remove(&index);
                     self.end_set.complex.remove(&index);
                     self.metadata.remove(index);
+                    log::info!("Texture {:?} is not tracked anymore", id,);
                     return true;
                 } else {
                     log::info!(

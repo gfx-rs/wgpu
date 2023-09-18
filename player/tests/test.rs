@@ -113,9 +113,9 @@ impl Test<'_> {
                 expect.offset .. expect.offset+expect.data.len() as wgt::BufferAddress,
                 wgc::resource::BufferMapOperation {
                     host: wgc::device::HostMap::Read,
-                    callback: wgc::resource::BufferMapCallback::from_rust(
+                    callback: Some(wgc::resource::BufferMapCallback::from_rust(
                         Box::new(map_callback)
-                    ),
+                    )),
                 }
             ))
             .unwrap();
