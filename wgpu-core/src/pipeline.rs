@@ -393,8 +393,6 @@ pub enum CreateRenderPipelineError {
     PipelineExpectsShaderToUseDualSourceBlending,
     #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
     ShaderExpectsPipelineToUseDualSourceBlending,
-    #[error("Shader entry point expects the pipeline to make use of dual-source blending, but pipeline contains no fragment stage.")]
-    ShaderExpectsPipelineToUseDualSourceBlendingNoFragmentStage,
 }
 
 bitflags::bitflags! {

@@ -2564,6 +2564,7 @@ impl<A: HalApi> Device<A> {
         let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
         let mut total_attributes = 0;
+        let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
             vertex_steps.push(pipeline::VertexStep {
@@ -2889,7 +2890,8 @@ impl<A: HalApi> Device<A> {
                 }
 
                 if let Some(ref interface) = shader_module.interface {
-                    shader_expects_dual_source_blending = interface.is_fragment_entry_dual_source(fragment);
+                    shader_expects_dual_source_blending =
+                        interface.is_fragment_entry_dual_source(fragment).expect("Internal error: Fragment entrypoint should not be set in function if not present in shader interface");
                 }
 
                 Some(hal::ProgrammableStage {
@@ -2901,10 +2903,14 @@ impl<A: HalApi> Device<A> {
         };
 
         if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
-            return Err(pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending);
+            return Err(
+                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
+            );
         }
         if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
-            return Err(pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending);
+            return Err(
+                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
+            );
         }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
