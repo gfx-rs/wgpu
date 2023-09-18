@@ -13,4 +13,12 @@
 		binding_map: { },
 		zero_initialize_workgroup_memory: true,
 	),
+	msl: (
+		lang_version: (1, 2),
+		per_entry_point_map: {},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: true,
+		zero_initialize_workgroup_memory: true,
+	),
 )

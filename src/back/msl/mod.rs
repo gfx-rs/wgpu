@@ -127,8 +127,6 @@ pub enum Error {
     UnsupportedBuiltIn(crate::BuiltIn),
     #[error("capability {0:?} is not supported")]
     CapabilityNotSupported(crate::valid::Capabilities),
-    #[error("address space {0:?} is not supported for target MSL version")]
-    UnsupportedAddressSpace(crate::AddressSpace),
     #[error("attribute '{0}' is not supported for target MSL version")]
     UnsupportedAttribute(String),
 }
@@ -197,7 +195,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            lang_version: (2, 0),
+            lang_version: (1, 0),
             per_entry_point_map: EntryPointResourceMap::default(),
             inline_samplers: Vec::new(),
             spirv_cross_compatibility: false,

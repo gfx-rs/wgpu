@@ -1,13 +1,11 @@
 (
     god_mode: true,
-    vertex:[
-    ],
-    fragment:[
-        (
-            entry_point:"main",
-            target_profile:"ps_5_1",
-        ),
-    ],
-    compute:[
-    ],
+    msl: (
+		lang_version: (1, 2),
+		per_entry_point_map: {},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+		zero_initialize_workgroup_memory: true,
+	),
 )

@@ -3940,9 +3940,6 @@ impl<W: Write> Writer<W> {
                 let resolved = match var.space {
                     crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
                     crate::AddressSpace::WorkGroup => None,
-                    crate::AddressSpace::Storage { .. } if options.lang_version < (2, 0) => {
-                        return Err(Error::UnsupportedAddressSpace(var.space))
-                    }
                     _ => options
                         .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
                         .ok(),

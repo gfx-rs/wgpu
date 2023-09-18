@@ -5,7 +5,7 @@
 		adjust_coordinate_space: false,
 	),
 	msl: (
-		lang_version: (2, 0),
+		lang_version: (1, 0),
 		per_entry_point_map: {
 			"vertex": (
 				resources: {

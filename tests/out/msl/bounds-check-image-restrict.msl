@@ -1,4 +1,4 @@
-// language: metal2.0
+// language: metal1.2
 #include <metal_stdlib>
 #include <simd/simd.h>
 
