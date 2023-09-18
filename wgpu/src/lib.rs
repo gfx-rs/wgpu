@@ -1046,6 +1046,8 @@ pub enum StoreOp {
     /// Discards the resulting value of the render pass for this attachment.
     ///
     /// The attachment will be treated as uninitialized afterwards.
+    /// (If only either Depth or Stencil texture-aspects is set to `Discard`,
+    /// the respective other texture-aspect will be preserved.)
     ///
     /// This can be significantly faster on tile-based render hardware.
     ///
