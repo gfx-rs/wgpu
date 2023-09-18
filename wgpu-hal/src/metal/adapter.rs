@@ -796,7 +796,7 @@ impl super::PrivateCapabilities {
                 None
             },
             timestamp_query_support,
-            blend_func_extended: version.at_least((11, 0), (14, 0), os_is_mac),
+            dual_source_blending: version.at_least((11, 0), (14, 0), os_is_mac),
         }
     }
 
