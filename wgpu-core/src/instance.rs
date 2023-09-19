@@ -1017,6 +1017,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter_guard
             .get(adapter_id)
             .map(|adapter| adapter.raw.features)
+            .map(|mut features| {
+                // SHADER_F16 is not supported in naga yet (https://github.com/gfx-rs/naga/issues/1884)
+                if features.contains(wgt::Features::SHADER_F16) {
+                    features.remove(wgt::Features::SHADER_F16);
+                }
+                // BGRA8UNORM_STORAGE is not supported in naga yet (https://github.com/gfx-rs/naga/issues/2195)
+                if features.contains(wgt::Features::BGRA8UNORM_STORAGE) {
+                    features.remove(wgt::Features::BGRA8UNORM_STORAGE);
+                }
+                features
+            })
             .map_err(|_| InvalidAdapter)
     }
 
