@@ -250,7 +250,9 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::PUSH_CONSTANTS
             | wgt::Features::SHADER_PRIMITIVE_INDEX
-            | wgt::Features::RG11B10UFLOAT_RENDERABLE;
+            | wgt::Features::RG11B10UFLOAT_RENDERABLE
+            | wgt::Features::DUAL_SOURCE_BLENDING;
+
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
