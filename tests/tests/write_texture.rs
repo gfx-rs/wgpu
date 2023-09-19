@@ -51,9 +51,16 @@ fn write_texture_subset_2d() {
 
         ctx.queue.submit(None);
 
-        let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        let read_buffer_0 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: (size * size) as u64,
+            size: (size * 2) as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let read_buffer_1 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: (size * (size - 2)) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -70,7 +77,7 @@ fn write_texture_subset_2d() {
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::ImageCopyBuffer {
-                buffer: &read_buffer,
+                buffer: &read_buffer_0,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
                     bytes_per_row: Some(size),
@@ -79,22 +86,49 @@ fn write_texture_subset_2d() {
             },
             wgpu::Extent3d {
                 width: size,
-                height: size,
+                height: 2,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        encoder.copy_texture_to_buffer(
+            wgpu::ImageCopyTexture {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 2, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::ImageCopyBuffer {
+                buffer: &read_buffer_1,
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(size),
+                    rows_per_image: Some(size),
+                },
+            },
+            wgpu::Extent3d {
+                width: size,
+                height: size - 2,
                 depth_or_array_layers: 1,
             },
         );
 
         ctx.queue.submit(Some(encoder.finish()));
 
-        let slice = read_buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.device.poll(wgpu::Maintain::Wait);
-        let data: Vec<u8> = slice.get_mapped_range().to_vec();
+        let slice_0 = read_buffer_0.slice(..);
+        slice_0.map_async(wgpu::MapMode::Read, |_| ());
+        let slice_1 = read_buffer_1.slice(..);
+        slice_1.map_async(wgpu::MapMode::Read, |_| ());
 
-        for byte in &data[..(size as usize * 2)] {
+        ctx.device.poll(wgpu::Maintain::Wait);
+
+        let data_0 = slice_0.get_mapped_range();
+        let data_1 = slice_1.get_mapped_range();
+
+        for byte in data_0.as_ref() {
             assert_eq!(*byte, 1);
         }
-        for byte in &data[(size as usize * 2)..] {
+        for byte in data_1.as_ref() {
             assert_eq!(*byte, 0);
         }
     });
