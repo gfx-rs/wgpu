@@ -735,7 +735,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::TextureClearMode::None,
         ) {
             resource::TextureClearMode::BufferCopy => SmallVec::new(),
-            resource::TextureClearMode::RenderPass { clear_views, .. } => clear_views,
+            resource::TextureClearMode::RenderPass {
+                mut clear_views, ..
+            } => clear_views.drain(..).collect(),
             resource::TextureClearMode::Surface { mut clear_view } => {
                 if let Some(view) = clear_view.take() {
                     unsafe {

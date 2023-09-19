@@ -328,6 +328,15 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     pub fn cleanup(&mut self) {
         profiling::scope!("LifetimeTracker::cleanup");
+        self.free_resources.textures.iter().for_each(|(_, t)| {
+            if let &mut resource::TextureClearMode::RenderPass {
+                ref mut clear_views,
+                ..
+            } = &mut *t.clear_mode.write()
+            {
+                clear_views.clear();
+            }
+        });
         self.free_resources.clear();
     }
 
@@ -547,9 +556,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .find(|a| a.index == submit_index)
                     .map_or(&mut self.free_resources, |a| &mut a.last_resources);
 
-                if let &resource::TextureClearMode::RenderPass {
-                    ref clear_views, ..
-                } = &*texture.clear_mode.read()
+                if let &mut resource::TextureClearMode::RenderPass {
+                    ref mut clear_views,
+                    ..
+                } = &mut *texture.clear_mode.write()
                 {
                     clear_views.into_iter().for_each(|v| {
                         non_referenced_resources

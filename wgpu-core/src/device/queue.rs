@@ -1059,8 +1059,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         dst.info
             .use_at(device.active_submission_index.load(Ordering::Relaxed) + 1);
 
-        let dst_raw = dst
-            .inner
+        let dst_inner = dst.inner();
+        let dst_raw = dst_inner
             .as_ref()
             .unwrap()
             .as_raw()
@@ -1083,7 +1083,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .textures
                 .set_single(&dst, selector, hal::TextureUses::COPY_DST)
                 .ok_or(TransferError::InvalidTexture(destination.texture))?;
-            encoder.transition_textures(transitions.map(|pending| pending.into_hal(&dst)));
+            encoder.transition_textures(
+                transitions.map(|pending| pending.into_hal(dst_inner.as_ref().unwrap())),
+            );
             encoder.copy_external_image_to_texture(
                 source,
                 dst_raw,
