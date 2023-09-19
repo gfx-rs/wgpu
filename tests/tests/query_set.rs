@@ -1,11 +1,8 @@
-use wgpu_test::{initialize_test, FailureCase, TestParameters};
+use wgpu_test::{initialize_test, TestParameters};
 
 #[test]
 fn drop_failed_timestamp_query_set() {
-    let parameters = TestParameters::default()
-        // https://github.com/gfx-rs/wgpu/issues/4139
-        .expect_fail(FailureCase::always());
-    initialize_test(parameters, |ctx| {
+    initialize_test(TestParameters::default(), |ctx| {
         // Enter an error scope, so the validation catch-all doesn't
         // report the error too early.
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
