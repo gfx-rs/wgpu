@@ -421,6 +421,15 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> web_sys::GpuBlendFactor {
         BlendFactor::SrcAlphaSaturated => bf::SrcAlphaSaturated,
         BlendFactor::Constant => bf::Constant,
         BlendFactor::OneMinusConstant => bf::OneMinusConstant,
+        BlendFactor::Src1
+        | BlendFactor::OneMinusSrc1
+        | BlendFactor::Src1Alpha
+        | BlendFactor::OneMinusSrc1Alpha => {
+            panic!(
+                "{:?} is not enabled for this backend",
+                wgt::Features::DUAL_SOURCE_BLENDING
+            )
+        }
     }
 }
 

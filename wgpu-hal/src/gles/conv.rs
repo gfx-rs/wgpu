@@ -376,6 +376,10 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> u32 {
         Bf::Constant => glow::CONSTANT_COLOR,
         Bf::OneMinusConstant => glow::ONE_MINUS_CONSTANT_COLOR,
         Bf::SrcAlphaSaturated => glow::SRC_ALPHA_SATURATE,
+        Bf::Src1 => glow::SRC1_COLOR,
+        Bf::OneMinusSrc1 => glow::ONE_MINUS_SRC1_COLOR,
+        Bf::Src1Alpha => glow::SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => glow::ONE_MINUS_SRC1_ALPHA,
     }
 }
 

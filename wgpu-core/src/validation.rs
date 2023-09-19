@@ -116,6 +116,7 @@ struct EntryPoint {
     spec_constants: Vec<SpecializationConstant>,
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
+    dual_source_blending: bool,
 }
 
 #[derive(Debug)]
@@ -903,7 +904,7 @@ impl Interface {
                 ep.sampling_pairs
                     .insert((resource_mapping[&key.image], resource_mapping[&key.sampler]));
             }
-
+            ep.dual_source_blending = info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
 
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
@@ -1176,5 +1177,16 @@ impl Interface {
             })
             .collect();
         Ok(outputs)
+    }
+
+    pub fn fragment_uses_dual_source_blending(
+        &self,
+        entry_point_name: &str,
+    ) -> Result<bool, StageError> {
+        let pair = (naga::ShaderStage::Fragment, entry_point_name.to_string());
+        self.entry_points
+            .get(&pair)
+            .ok_or(StageError::MissingEntryPoint(pair.1))
+            .map(|ep| ep.dual_source_blending)
     }
 }

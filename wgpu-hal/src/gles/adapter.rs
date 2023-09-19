@@ -364,6 +364,10 @@ impl super::Adapter {
             extensions.contains("OVR_multiview2"),
         );
         features.set(
+            wgt::Features::DUAL_SOURCE_BLENDING,
+            extensions.contains("GL_EXT_blend_func_extended"),
+        );
+        features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
         );
