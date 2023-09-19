@@ -796,11 +796,11 @@ impl ConstantEvaluator<'_> {
     /// constant's value into the function's arena so we can operate on it.
     fn copy_from(
         &mut self,
-        handle: Handle<Expression>,
+        expr: Handle<Expression>,
         expressions: &Arena<Expression>,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let span = expressions.get_span(handle);
-        match expressions[handle] {
+        let span = expressions.get_span(expr);
+        match expressions[expr] {
             ref expr @ (Expression::Literal(_)
             | Expression::Constant(_)
             | Expression::ZeroValue(_)) => Ok(self.register_evaluated_expr(expr.clone(), span)),
