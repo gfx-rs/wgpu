@@ -90,6 +90,8 @@ pub enum EntryPointError {
     ForbiddenStageOperations,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
     InvalidGlobalUsage(Handle<crate::GlobalVariable>, GlobalUse),
+    #[error("More than 1 push constant variable is used")]
+    MoreThanOnePushConstantUsed,
     #[error("Bindings for {0:?} conflict with other resource")]
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Argument {0} varying error")]
@@ -699,6 +701,23 @@ impl super::Validator {
 
         for bg in self.bind_group_masks.iter_mut() {
             bg.clear();
+        }
+
+        #[cfg(feature = "validate")]
+        {
+            let used_push_constants = module
+                .global_variables
+                .iter()
+                .filter(|&(_, var)| var.space == crate::AddressSpace::PushConstant)
+                .map(|(handle, _)| handle)
+                .filter(|&handle| !info[handle].is_empty());
+            // Check if there is more than one push constant, and error if so.
+            // Use a loop for when returning multiple errors is supported.
+            #[allow(clippy::never_loop)]
+            for handle in used_push_constants.skip(1) {
+                return Err(EntryPointError::MoreThanOnePushConstantUsed
+                    .with_span_handle(handle, &module.global_variables));
+            }
         }
 
         #[cfg(feature = "validate")]
