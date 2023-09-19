@@ -2764,6 +2764,12 @@ impl Device {
                 )
         }
     }
+
+    /// Trigger the "lose the device" steps, which makes the Device invalid
+    /// and prevents further operations from succeeding.
+    pub fn lose(&self) {
+        self.context.device_lose(&self.id, self.data.as_ref())
+    }
 }
 
 impl Drop for Device {

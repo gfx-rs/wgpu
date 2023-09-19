@@ -1439,6 +1439,10 @@ impl crate::Context for Context {
 
         wgc::gfx_select!(device => global.device_drop(*device));
     }
+    fn device_lose(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_lose(*device));
+    }
     fn device_poll(
         &self,
         device: &Self::DeviceId,
