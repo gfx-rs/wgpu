@@ -2714,8 +2714,8 @@ impl<A: HalApi> Device<A> {
                             blend_mode.alpha.dst_factor,
                         ] {
                             if factor.ref_second_blend_source() {
+                                self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                 if i == 0 {
-                                    self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                     pipeline_expects_dual_source_blending = true;
                                     break;
                                 } else {
@@ -2831,14 +2831,6 @@ impl<A: HalApi> Device<A> {
                         error,
                     })?;
                 validated_stages |= flag;
-
-                let dual_source = interface.has_dual_source_blending_entry_point();
-                if !pipeline_expects_dual_source_blending && dual_source {
-                    return Err(pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending);
-                }
-                if pipeline_expects_dual_source_blending && !dual_source {
-                    return Err(pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending);
-                }
             }
 
             hal::ProgrammableStage {
@@ -2890,8 +2882,12 @@ impl<A: HalApi> Device<A> {
                 }
 
                 if let Some(ref interface) = shader_module.interface {
-                    shader_expects_dual_source_blending =
-                        interface.is_fragment_entry_dual_source(fragment).expect("Internal error: Fragment entrypoint should not be set in function if not present in shader interface");
+                    shader_expects_dual_source_blending = interface
+                        .fragment_uses_dual_source_blending(&fragment.stage.entry_point)
+                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                            stage: flag,
+                            error,
+                        })?;
                 }
 
                 Some(hal::ProgrammableStage {

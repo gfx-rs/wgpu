@@ -792,8 +792,6 @@ bitflags::bitflags! {
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
         const DUAL_SOURCE_BLENDING = 1 << 63;
-
-        // no more space left
     }
 }
 

@@ -796,7 +796,6 @@ impl super::PrivateCapabilities {
                 None
             },
             timestamp_query_support,
-            dual_source_blending: version.at_least((11, 0), (14, 0), os_is_mac),
         }
     }
 
@@ -836,7 +835,7 @@ impl super::PrivateCapabilities {
         );
         features.set(
             F::DUAL_SOURCE_BLENDING,
-            self.msl_version >= MTLLanguageVersion::V1_2,
+            self.msl_version >= MTLLanguageVersion::V1_2 && self.dual_source_blending,
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);

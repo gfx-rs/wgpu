@@ -1179,24 +1179,14 @@ impl Interface {
         Ok(outputs)
     }
 
-    pub fn has_dual_source_blending_entry_point(&self) -> bool {
-        self.entry_points
-            .values()
-            .any(|point| point.dual_source_blending)
-    }
-    pub fn is_fragment_entry_dual_source<'a>(
+    pub fn fragment_uses_dual_source_blending(
         &self,
-        fragment: &crate::pipeline::FragmentState<'a>,
+        entry_point_name: &str,
     ) -> Result<bool, StageError> {
-        if let Some(entry_point) = self.entry_points.get(&(
-            naga::ShaderStage::Fragment,
-            String::from(fragment.stage.entry_point.as_ref()),
-        )) {
-            Ok(entry_point.dual_source_blending)
-        } else {
-            Err(StageError::MissingEntryPoint(String::from(
-                fragment.stage.entry_point.as_ref(),
-            )))
-        }
+        let pair = (naga::ShaderStage::Fragment, entry_point_name.to_string());
+        self.entry_points
+            .get(&pair)
+            .ok_or(StageError::MissingEntryPoint(pair.1))
+            .map(|ep| ep.dual_source_blending)
     }
 }
