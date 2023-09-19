@@ -66,6 +66,28 @@ let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
+
+#### Render pass store operation is now an enum
+
+`wgpu::Operations::store` used to be an underdocumented boolean value,
+causing misunderstandings of the effect of setting it to `false`.
+
+The API now more closely resembles WebGPU which distinguishes between `store` and `discard`,
+see [WebGPU spec on GPUStoreOp](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
+
+```diff
+// ...
+depth_ops: Some(wgpu::Operations {
+    load: wgpu::LoadOp::Clear(1.0),
+-   store: false,
++   store: wgpu::StoreOp::Discard,
+}),
+// ...
+```
+
+By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
+
+
 ### Added/New Features
 
 - Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
@@ -74,6 +96,7 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 #### General
 
+- Update Naga to df8107b7 (2023-9-15). By @jimblandy in [#4149](https://github.com/gfx-rs/wgpu/pull/4149)
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
 - Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 - Add validation in accordance with WebGPU `setViewport` valid usage for `x`, `y` and `this.[[attachment_size]]`. By @James2022-rgb in [#4058](https://github.com/gfx-rs/wgpu/pull/4058)
@@ -89,6 +112,10 @@ By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
 ### Documentation
 - Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4305](https://github.com/gfx-rs/wgpu/pull/4035)
+
+#### Metal
+
+- Support for timestamp queries on encoders and passes. By @wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
 
 ### Bug Fixes
 

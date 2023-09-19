@@ -180,7 +180,7 @@ fn pulling_common(
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
                 resolve_target: None,
                 view: &color_view,

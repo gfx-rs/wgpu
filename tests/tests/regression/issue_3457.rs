@@ -140,7 +140,7 @@ fn pass_reset_vertex_buffer() {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
-                    store: false,
+                    store: StoreOp::Discard,
                 },
             })],
             depth_stencil_attachment: None,
@@ -175,7 +175,7 @@ fn pass_reset_vertex_buffer() {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
-                    store: false,
+                    store: StoreOp::Discard,
                 },
             })],
             depth_stencil_attachment: None,

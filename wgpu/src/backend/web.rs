@@ -621,11 +621,10 @@ fn map_color(color: wgt::Color) -> web_sys::GpuColorDict {
     web_sys::GpuColorDict::new(color.a, color.b, color.g, color.r)
 }
 
-fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
-    if store {
-        web_sys::GpuStoreOp::Store
-    } else {
-        web_sys::GpuStoreOp::Discard
+fn map_store_op(store: crate::StoreOp) -> web_sys::GpuStoreOp {
+    match store {
+        crate::StoreOp::Store => web_sys::GpuStoreOp::Store,
+        crate::StoreOp::Discard => web_sys::GpuStoreOp::Discard,
     }
 }
 
