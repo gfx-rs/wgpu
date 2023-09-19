@@ -142,7 +142,7 @@ deno_web = "0.137.0"
 deno_webidl = "0.106.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.32.0"
-termcolor = "1.2.0"
+termcolor = "1.3.0"
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
