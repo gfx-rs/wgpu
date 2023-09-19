@@ -123,7 +123,10 @@ impl ConstantEvaluator<'_> {
                     Ok(self.constants[c].init)
                 }
             }
-            _ => Err(ConstantEvaluatorError::SubexpressionsAreNotConstant),
+            _ => {
+                log::debug!("check_and_get: SubexpressionsAreNotConstant");
+                Err(ConstantEvaluatorError::SubexpressionsAreNotConstant)
+            }
         }
     }
 
@@ -132,6 +135,7 @@ impl ConstantEvaluator<'_> {
         expr: &Expression,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        log::trace!("try_eval_and_append: {:?}", expr);
         match *expr {
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
                 Ok(self.register_evaluated_expr(expr.clone(), span))
@@ -800,7 +804,10 @@ impl ConstantEvaluator<'_> {
                 let value = self.copy_from(value, expressions)?;
                 Ok(self.register_evaluated_expr(Expression::Splat { size, value }, span))
             }
-            _ => Err(ConstantEvaluatorError::SubexpressionsAreNotConstant),
+            _ => {
+                log::debug!("copy_from: SubexpressionsAreNotConstant");
+                Err(ConstantEvaluatorError::SubexpressionsAreNotConstant)
+            }
         }
     }
 
