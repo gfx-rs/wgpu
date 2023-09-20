@@ -95,9 +95,9 @@ pub fn compact(module: &mut crate::Module) {
 
     // Drop unused types from the type arena.
     //
-    // `IndexSet`s don't have an underlying Vec<T> that we can steal, compact in
-    // place, and then rebuild the `IndexSet` from. So we have to rebuild the
-    // type arena from scratch.
+    // `FastIndexSet`s don't have an underlying Vec<T> that we can
+    // steal, compact in place, and then rebuild the `FastIndexSet`
+    // from. So we have to rebuild the type arena from scratch.
     log::trace!("compacting types");
     let mut new_types = arena::UniqueArena::new();
     for (old_handle, mut ty, span) in module.types.drain_all() {

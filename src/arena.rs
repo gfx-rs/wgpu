@@ -5,8 +5,7 @@ use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32, ops};
 /// the same size and representation as `Handle<T>`.
 type Index = NonZeroU32;
 
-use crate::Span;
-use indexmap::set::IndexSet;
+use crate::{FastIndexSet, Span};
 
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
 #[error("Handle {index} of {kind} is either not present, or inaccessible yet")]
@@ -516,11 +515,11 @@ mod tests {
 /// `UniqueArena` is `HashSet`-like.
 #[cfg_attr(feature = "clone", derive(Clone))]
 pub struct UniqueArena<T> {
-    set: IndexSet<T>,
+    set: FastIndexSet<T>,
 
     /// Spans for the elements, indexed by handle.
     ///
-    /// The length of this vector is always equal to `set.len()`. `IndexSet`
+    /// The length of this vector is always equal to `set.len()`. `FastIndexSet`
     /// promises that its elements "are indexed in a compact range, without
     /// holes in the range 0..set.len()", so we can always use the indices
     /// returned by insertion as indices into this vector.
@@ -532,7 +531,7 @@ impl<T> UniqueArena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub fn new() -> Self {
         UniqueArena {
-            set: IndexSet::new(),
+            set: FastIndexSet::default(),
             #[cfg(feature = "span")]
             span_info: Vec::new(),
         }
@@ -741,7 +740,7 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        let set = IndexSet::deserialize(deserializer)?;
+        let set = FastIndexSet::deserialize(deserializer)?;
         #[cfg(feature = "span")]
         let span_info = std::iter::repeat(Span::default()).take(set.len()).collect();
 
