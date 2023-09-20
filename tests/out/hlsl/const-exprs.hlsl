@@ -25,11 +25,32 @@ void compose_three_deep()
     return;
 }
 
+void non_constant_initializers()
+{
+    int w = 30;
+    int x = (int)0;
+    int y = (int)0;
+    int z = 70;
+
+    int _expr2 = w;
+    x = _expr2;
+    int _expr4 = x;
+    y = _expr4;
+    int _expr9 = w;
+    int _expr10 = x;
+    int _expr11 = y;
+    int _expr12 = z;
+    int4 _expr14 = asint(out_.Load4(0));
+    out_.Store4(0, asuint((_expr14 + int4(_expr9, _expr10, _expr11, _expr12))));
+    return;
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
     swizzle_of_compose();
     index_of_compose();
     compose_three_deep();
+    non_constant_initializers();
     return;
 }

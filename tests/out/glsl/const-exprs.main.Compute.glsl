@@ -31,10 +31,29 @@ void compose_three_deep() {
     return;
 }
 
+void non_constant_initializers() {
+    int w = 30;
+    int x = 0;
+    int y = 0;
+    int z = 70;
+    int _e2 = w;
+    x = _e2;
+    int _e4 = x;
+    y = _e4;
+    int _e9 = w;
+    int _e10 = x;
+    int _e11 = y;
+    int _e12 = z;
+    ivec4 _e14 = _group_0_binding_0_cs;
+    _group_0_binding_0_cs = (_e14 + ivec4(_e9, _e10, _e11, _e12));
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();
     compose_three_deep();
+    non_constant_initializers();
     return;
 }
 

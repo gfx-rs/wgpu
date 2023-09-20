@@ -32,6 +32,26 @@ void compose_three_deep(
     return;
 }
 
+void non_constant_initializers(
+    device metal::int4& out
+) {
+    int w = 30;
+    int x = {};
+    int y = {};
+    int z = 70;
+    int _e2 = w;
+    x = _e2;
+    int _e4 = x;
+    y = _e4;
+    int _e9 = w;
+    int _e10 = x;
+    int _e11 = y;
+    int _e12 = z;
+    metal::int4 _e14 = out;
+    out = _e14 + metal::int4(_e9, _e10, _e11, _e12);
+    return;
+}
+
 kernel void main_(
   device metal::int4& out [[user(fake0)]]
 , device int& out2_ [[user(fake0)]]
@@ -39,5 +59,6 @@ kernel void main_(
     swizzle_of_compose(out);
     index_of_compose(out2_);
     compose_three_deep(out2_);
+    non_constant_initializers(out);
     return;
 }

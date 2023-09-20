@@ -6,6 +6,7 @@ fn main() {
    swizzle_of_compose();
    index_of_compose();
    compose_three_deep();
+   non_constant_initializers();
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -25,4 +26,23 @@ fn index_of_compose() {
 // Index the value of Compose expressions nested three deep
 fn compose_three_deep() {
    out2 += vec4(vec3(vec2(6, 7), 8), 9)[0]; // should assign 6
+}
+
+// While WGSL allows local variables to be declared anywhere in the function,
+// Naga treats them all as appearing at the top of the function. To ensure that
+// WGSL initializer expressions are evaluated at the right time, in the general
+// case they need to be turned into Naga `Store` statements executed at the
+// point of the WGSL declaration.
+//
+// When a variable's initializer is a constant expression, however, it can be
+// evaluated at any time. The WGSL front end thus renders locals with
+// initializers that are constants as Naga locals with initializers. This test
+// checks that Naga local variable initializers are only used when safe.
+fn non_constant_initializers() {
+   var w = 10 + 20;
+   var x = w;
+   var y = x;
+   var z = 30 + 40;
+
+   out += vec4(w, x, y, z);
 }
