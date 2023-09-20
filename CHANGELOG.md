@@ -137,6 +137,7 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
 - DX12 doesn't support `Features::POLYGON_MODE_POINT``. By @teoxoy in [#4032](https://github.com/gfx-rs/wgpu/pull/4032).
 - Set `Features::VERTEX_WRITABLE_STORAGE` based on the right feature level. By @teoxoy in [#4033](https://github.com/gfx-rs/wgpu/pull/4033).
+- Expose DX12 adapters before vulkan ones when enumerating adapters by @nical in [#4156](https://github.com/gfx-rs/wgpu/pull/4156)
 
 #### Metal
 
