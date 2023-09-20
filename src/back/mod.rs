@@ -37,13 +37,28 @@ impl std::fmt::Display for Level {
     }
 }
 
-/// Stores the current function type (either a regular function or an entry point)
+/// Whether we're generating an entry point or a regular function.
 ///
-/// Also stores data needed to identify it (handle for a regular function or index for an entry point)
+/// Backend languages often require different code for a [`Function`]
+/// depending on whether it represents an [`EntryPoint`] or not.
+/// Backends can pass common code one of these values to select the
+/// right behavior.
+///
+/// These values also carry enough information to find the `Function`
+/// in the [`Module`]: the `Handle` for a regular function, or the
+/// index into [`Module::entry_points`] for an entry point.
+///
+/// [`Function`]: crate::Function
+/// [`EntryPoint`]: crate::EntryPoint
+/// [`Module`]: crate::Module
+/// [`Module::entry_points`]: crate::Module::entry_points
 enum FunctionType {
-    /// A regular function and it's handle
+    /// A regular function.
     Function(crate::Handle<crate::Function>),
-    /// A entry point and it's index
+    /// An [`EntryPoint`], and its index in [`Module::entry_points`].
+    ///
+    /// [`EntryPoint`]: crate::EntryPoint
+    /// [`Module::entry_points`]: crate::Module::entry_points
     EntryPoint(crate::proc::EntryPointIndex),
 }
 

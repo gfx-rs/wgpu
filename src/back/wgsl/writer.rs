@@ -247,14 +247,7 @@ impl<W: Write> Writer<W> {
                 self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             // Write argument name
-            let argument_name = match func_ctx.ty {
-                back::FunctionType::Function(handle) => {
-                    &self.names[&NameKey::FunctionArgument(handle, index as u32)]
-                }
-                back::FunctionType::EntryPoint(ep_index) => {
-                    &self.names[&NameKey::EntryPointArgument(ep_index, index as u32)]
-                }
-            };
+            let argument_name = &self.names[&func_ctx.argument_key(index as u32)];
 
             write!(self.out, "{argument_name}: ")?;
             // Write argument type
