@@ -3955,39 +3955,65 @@ impl<W: Write> Writer<W> {
                 if usage.is_empty() || var.space == crate::AddressSpace::Private {
                     continue;
                 }
+
+                if options.lang_version < (1, 2) {
+                    match var.space {
+                        // This restriction is not documented in the MSL spec
+                        // but validation will fail if it is not upheld.
+                        //
+                        // We infer the required version from the "Function
+                        // Buffer Read-Writes" section of [what's new], where
+                        // the feature sets listed correspond with the ones
+                        // supporting MSL 1.2.
+                        //
+                        // [what's new]: https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                        crate::AddressSpace::Storage { access }
+                            if access.contains(crate::StorageAccess::STORE)
+                                && ep.stage == crate::ShaderStage::Fragment =>
+                        {
+                            return Err(Error::UnsupportedWriteableStorageBuffer)
+                        }
+                        crate::AddressSpace::Handle => {
+                            match module.types[var.ty].inner {
+                                crate::TypeInner::Image {
+                                    class: crate::ImageClass::Storage { access, .. },
+                                    ..
+                                } => {
+                                    // This restriction is not documented in the MSL spec
+                                    // but validation will fail if it is not upheld.
+                                    //
+                                    // We infer the required version from the "Function
+                                    // Texture Read-Writes" section of [what's new], where
+                                    // the feature sets listed correspond with the ones
+                                    // supporting MSL 1.2.
+                                    //
+                                    // [what's new]: https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                                    if access.contains(crate::StorageAccess::STORE)
+                                        && (ep.stage == crate::ShaderStage::Vertex
+                                            || ep.stage == crate::ShaderStage::Fragment)
+                                    {
+                                        return Err(Error::UnsupportedWriteableStorageTexture(
+                                            ep.stage,
+                                        ));
+                                    }
+
+                                    if access.contains(
+                                        crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
+                                    ) {
+                                        return Err(Error::UnsupportedRWStorageTexture);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
                 // the resolves have already been checked for `!fake_missing_bindings` case
                 let resolved = match var.space {
                     crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
                     crate::AddressSpace::WorkGroup => None,
-                    // This restriciton is not documented in the MSL spec but validation will fail if not upheld.
-                    // We imply the version check from the "Function Buffer Read-Writes" section of https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
-                    // where the feaure sets listed correspond with the ones supporting MSL 1.2.
-                    crate::AddressSpace::Storage { access }
-                        if access.contains(crate::StorageAccess::STORE)
-                            && options.lang_version < (1, 2)
-                            && ep.stage == crate::ShaderStage::Fragment =>
-                    {
-                        return Err(Error::UnsupportedWriteableStorageBuffer)
-                    }
-                    // This restriciton is not documented in the MSL spec but validation will fail if not upheld.
-                    // We imply the version check from the "Function Texture Read-Writes" section of https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
-                    // where the feaure set listed corresponds with the one supporting MSL 1.2.
-                    crate::AddressSpace::Handle
-                        if match module.types[var.ty].inner {
-                            crate::TypeInner::Image {
-                                class: crate::ImageClass::Storage { access, .. },
-                                ..
-                            } => {
-                                access.contains(crate::StorageAccess::STORE)
-                                    && options.lang_version < (1, 2)
-                                    && (ep.stage == crate::ShaderStage::Vertex
-                                        || ep.stage == crate::ShaderStage::Fragment)
-                            }
-                            _ => false,
-                        } =>
-                    {
-                        return Err(Error::UnsupportedWriteableStorageTexture(ep.stage))
-                    }
                     _ => options
                         .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
                         .ok(),

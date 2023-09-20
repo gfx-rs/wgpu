@@ -135,6 +135,8 @@ pub enum Error {
     UnsupportedWriteableStorageBuffer,
     #[error("can not use writeable storage textures in {0:?} stage prior to MSL 1.2")]
     UnsupportedWriteableStorageTexture(crate::ShaderStage),
+    #[error("can not use read-write storage textures prior to MSL 1.2")]
+    UnsupportedRWStorageTexture,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
