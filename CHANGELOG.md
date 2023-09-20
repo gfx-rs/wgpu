@@ -110,7 +110,8 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
 
 ### Documentation
-- Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4305](https://github.com/gfx-rs/wgpu/pull/4035)
+- Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4035](https://github.com/gfx-rs/wgpu/pull/4035)
+- Fix description of `Features::TEXTURE_COMPRESSION_ASTC_HDR` in [#4157](https://github.com/gfx-rs/wgpu/pull/4157)
 
 #### Metal
 
