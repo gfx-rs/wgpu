@@ -826,15 +826,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .transpose()?;
         let mut device_types = Vec::new();
 
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-        let (id_vulkan, adapters_vk) = gather(
-            hal::api::Vulkan,
-            self.instance.vulkan.as_ref(),
-            &inputs,
-            compatible_surface,
-            desc.force_fallback_adapter,
-            &mut device_types,
-        );
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         let (id_metal, adapters_metal) = gather(
             hal::api::Metal,
@@ -848,6 +839,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (id_dx12, adapters_dx12) = gather(
             hal::api::Dx12,
             self.instance.dx12.as_ref(),
+            &inputs,
+            compatible_surface,
+            desc.force_fallback_adapter,
+            &mut device_types,
+        );
+        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+        let (id_vulkan, adapters_vk) = gather(
+            hal::api::Vulkan,
+            self.instance.vulkan.as_ref(),
             &inputs,
             compatible_surface,
             desc.force_fallback_adapter,
