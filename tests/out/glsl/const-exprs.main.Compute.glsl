@@ -9,15 +9,32 @@ layout(std430) buffer type_block_0Compute { ivec4 _group_0_binding_0_cs; };
 
 layout(std430) buffer type_1_block_1Compute { int _group_0_binding_1_cs; };
 
-layout(std430) buffer type_1_block_2Compute { int _group_0_binding_2_cs; };
 
-
-void main() {
+void swizzle_of_compose() {
     ivec2 a = ivec2(1, 2);
     ivec2 b = ivec2(3, 4);
     _group_0_binding_0_cs = ivec4(4, 3, 2, 1);
-    _group_0_binding_1_cs = 2;
-    _group_0_binding_2_cs = 6;
+    return;
+}
+
+void index_of_compose() {
+    ivec2 a_1 = ivec2(1, 2);
+    ivec2 b_1 = ivec2(3, 4);
+    int _e7 = _group_0_binding_1_cs;
+    _group_0_binding_1_cs = (_e7 + 2);
+    return;
+}
+
+void compose_three_deep() {
+    int _e2 = _group_0_binding_1_cs;
+    _group_0_binding_1_cs = (_e2 + 6);
+    return;
+}
+
+void main() {
+    swizzle_of_compose();
+    index_of_compose();
+    compose_three_deep();
     return;
 }
 
