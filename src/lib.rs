@@ -1996,7 +1996,7 @@ pub struct SpecialTypes {
     ///
     /// Call [`Module::generate_predeclared_type`] to populate this if
     /// needed and return the handle.
-    pub predeclared_types: indexmap::IndexMap<PredeclaredType, Handle<Type>>,
+    pub predeclared_types: FastIndexMap<PredeclaredType, Handle<Type>>,
 }
 
 /// Shader module.
