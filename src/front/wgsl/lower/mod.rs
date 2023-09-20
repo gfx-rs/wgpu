@@ -6,8 +6,7 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::{Emitter, Typifier};
 use crate::proc::{ensure_block_returns, Alignment, Layouter, ResolveContext, TypeResolution};
-use crate::{Arena, FastHashMap, Handle, Span};
-use indexmap::IndexMap;
+use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
 mod construction;
 
@@ -101,7 +100,7 @@ pub struct StatementContext<'source, 'temp, 'out> {
     naga_expressions: &'out mut Arena<crate::Expression>,
     /// Stores the names of expressions that are assigned in `let` statement
     /// Also stores the spans of the names, for use in errors.
-    named_expressions: &'out mut IndexMap<Handle<crate::Expression>, (String, Span)>,
+    named_expressions: &'out mut FastIndexMap<Handle<crate::Expression>, (String, Span)>,
     arguments: &'out [crate::FunctionArgument],
     module: &'out mut crate::Module,
 }
@@ -915,7 +914,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut local_table = FastHashMap::default();
         let mut local_variables = Arena::new();
         let mut expressions = Arena::new();
-        let mut named_expressions = IndexMap::default();
+        let mut named_expressions = FastIndexMap::default();
 
         let arguments = f
             .arguments
