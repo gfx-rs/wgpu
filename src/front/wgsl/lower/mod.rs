@@ -79,10 +79,17 @@ pub struct StatementContext<'source, 'temp, 'out> {
     /// `Handle`s we have built for them, owned by `Lowerer::lower`.
     globals: &'temp mut FastHashMap<&'source str, LoweredGlobalDecl>,
 
-    /// A map from `ast::Local` handles to the Naga expressions we've built for them.
+    /// A map from each `ast::Local` handle to the Naga expression
+    /// we've built for it:
     ///
-    /// The Naga expressions are either [`LocalVariable`] or
-    /// [`FunctionArgument`] expressions.
+    /// - WGSL function arguments become Naga [`FunctionArgument`] expressions.
+    ///
+    /// - WGSL `var` declarations become Naga [`LocalVariable`] expressions.
+    ///
+    /// - WGSL `let` declararations become arbitrary Naga expressions.
+    ///
+    /// This always borrows the `local_table` local variable in
+    /// [`Lowerer::function`].
     ///
     /// [`LocalVariable`]: crate::Expression::LocalVariable
     /// [`FunctionArgument`]: crate::Expression::FunctionArgument
@@ -167,7 +174,11 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
 }
 
 pub struct RuntimeExpressionContext<'temp, 'out> {
-    local_table: &'temp mut FastHashMap<Handle<ast::Local>, TypedExpression>,
+    /// A map from [`ast::Local`] handles to the Naga expressions we've built for them.
+    ///
+    /// This is always [`StatementContext::local_table`] for the
+    /// enclosing statement; see that documentation for details.
+    local_table: &'temp FastHashMap<Handle<ast::Local>, TypedExpression>,
 
     naga_expressions: &'out mut Arena<crate::Expression>,
     local_vars: &'out Arena<crate::LocalVariable>,
