@@ -249,9 +249,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         let list = loop {
             if let Some(list) = self.free_lists.pop() {
-                let reset_result = list
-                    .reset(&self.allocator, d3d12::PipelineState::null())
-                    .into_result();
+                let reset_result = list.reset(&self.allocator, None).into_result();
                 if reset_result.is_ok() {
                     break Some(list);
                 }
@@ -264,12 +262,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             list
         } else {
             self.device
-                .create_graphics_command_list(
-                    d3d12::CmdListType::Direct,
-                    &self.allocator,
-                    d3d12::PipelineState::null(),
-                    0,
-                )
+                .create_graphics_command_list(d3d12::CmdListType::Direct, &self.allocator, None, 0)
                 .into_device_result("Create command list")?
         };
 
@@ -957,7 +950,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         if self.pass.layout.signature != pipeline.layout.signature {
             // D3D12 requires full reset on signature change
-            list.set_graphics_root_signature(&pipeline.layout.signature);
+            list.set_graphics_root_signature(pipeline.layout.signature.as_ref());
             self.reset_signature(&pipeline.layout);
         };
 
@@ -1167,7 +1160,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
         if self.pass.layout.signature != pipeline.layout.signature {
             // D3D12 requires full reset on signature change
-            list.set_compute_root_signature(&pipeline.layout.signature);
+            list.set_compute_root_signature(pipeline.layout.signature.as_ref());
             self.reset_signature(&pipeline.layout);
         };
 

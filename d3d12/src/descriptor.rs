@@ -266,7 +266,7 @@ bitflags::bitflags! {
 }
 
 pub type RootSignature = ComPtr<d3d12::ID3D12RootSignature>;
-pub type BlobResult = D3DResult<(Blob, Error)>;
+pub type BlobResult = D3DResult<(Blob, Option<Error>)>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
@@ -293,17 +293,14 @@ impl crate::D3D12Lib {
             Flags: flags.bits(),
         };
 
-        let mut blob = Blob::null();
-        let mut error = Error::null();
+        let mut blob = std::ptr::null_mut();
+        let mut error = std::ptr::null_mut();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12SerializeRootSignature")?;
-            func(
-                &desc,
-                version as _,
-                blob.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
-            )
+            func(&desc, version as _, &mut blob, &mut error)
         };
+        let blob = unsafe { ComPtr::from_reffed(blob) };
+        let error = (!error.is_null()).then(|| unsafe { ComPtr::from_reffed(error) });
 
         Ok(((blob, error), hr))
     }
@@ -317,8 +314,8 @@ impl RootSignature {
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
     ) -> BlobResult {
-        let mut blob = Blob::null();
-        let mut error = Error::null();
+        let mut blob = std::ptr::null_mut();
+        let mut error = std::ptr::null_mut();
 
         let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -329,13 +326,10 @@ impl RootSignature {
         };
 
         let hr = unsafe {
-            d3d12::D3D12SerializeRootSignature(
-                &desc,
-                version as _,
-                blob.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
-            )
+            d3d12::D3D12SerializeRootSignature(&desc, version as _, &mut blob, &mut error)
         };
+        let blob = unsafe { ComPtr::from_reffed(blob) };
+        let error = unsafe { ComPtr::from_reffed(error) };
 
         ((blob, error), hr)
     }

@@ -153,8 +153,13 @@ impl GraphicsCommandList {
         unsafe { self.Close() }
     }
 
-    pub fn reset(&self, allocator: &CommandAllocator, initial_pso: PipelineState) -> HRESULT {
-        unsafe { self.Reset(allocator.as_mut_ptr(), initial_pso.as_mut_ptr()) }
+    pub fn reset(
+        &self,
+        allocator: &CommandAllocator,
+        initial_pso: Option<&PipelineState>,
+    ) -> HRESULT {
+        let initial_pso = initial_pso.map_or(ptr::null_mut(), |pso| pso.as_mut_ptr());
+        unsafe { self.Reset(allocator.as_mut_ptr(), initial_pso) }
     }
 
     pub fn discard_resource(&self, resource: Resource, region: DiscardRegion) {
@@ -284,15 +289,17 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_signature(&self, signature: &RootSignature) {
+    pub fn set_compute_root_signature(&self, signature: Option<&RootSignature>) {
         unsafe {
-            self.SetComputeRootSignature(signature.as_mut_ptr());
+            self.SetComputeRootSignature(signature.map_or(ptr::null_mut(), |sig| sig.as_mut_ptr()));
         }
     }
 
-    pub fn set_graphics_root_signature(&self, signature: &RootSignature) {
+    pub fn set_graphics_root_signature(&self, signature: Option<&RootSignature>) {
         unsafe {
-            self.SetGraphicsRootSignature(signature.as_mut_ptr());
+            self.SetGraphicsRootSignature(
+                signature.map_or(ptr::null_mut(), |sig| sig.as_mut_ptr()),
+            );
         }
     }
 

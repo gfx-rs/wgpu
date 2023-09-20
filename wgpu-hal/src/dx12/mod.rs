@@ -334,7 +334,7 @@ impl PassState {
             has_label: false,
             resolves: ArrayVec::new(),
             layout: PipelineLayoutShared {
-                signature: d3d12::RootSignature::null(),
+                signature: None,
                 total_root_elements: 0,
                 special_constants_root_index: None,
                 root_constant_info: None,
@@ -538,7 +538,7 @@ struct RootConstantInfo {
 
 #[derive(Clone)]
 struct PipelineLayoutShared {
-    signature: d3d12::RootSignature,
+    signature: Option<d3d12::RootSignature>,
     total_root_elements: RootIndex,
     special_constants_root_index: Option<RootIndex>,
     root_constant_info: Option<RootConstantInfo>,
@@ -755,11 +755,12 @@ impl crate::Surface<Api> for Surface {
                 }
 
                 match unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() }.into_result() {
-                    Ok(swap_chain3) => swap_chain3,
+                    Ok(Some(swap_chain3)) => swap_chain3,
                     Err(err) => {
                         log::error!("Unable to cast swap chain: {}", err);
                         return Err(crate::SurfaceError::Other("swap chain cast to 3"));
                     }
+                    Ok(None) => unreachable!(),
                 }
             }
         };
@@ -786,10 +787,9 @@ impl crate::Surface<Api> for Surface {
 
         let mut resources = Vec::with_capacity(config.swap_chain_size as usize);
         for i in 0..config.swap_chain_size {
-            let mut resource = d3d12::Resource::null();
-            unsafe {
-                swap_chain.GetBuffer(i, &d3d12_ty::ID3D12Resource::uuidof(), resource.mut_void())
-            };
+            let mut resource = std::ptr::null_mut();
+            unsafe { swap_chain.GetBuffer(i, &d3d12_ty::ID3D12Resource::uuidof(), &mut resource) };
+            let resource = unsafe { d3d12::ComPtr::from_reffed(resource.cast()) };
             resources.push(resource);
         }
 

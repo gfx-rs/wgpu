@@ -1,11 +1,11 @@
 use crate::D3DResult;
 use std::{
+    ffi::c_void,
     fmt,
     hash::{Hash, Hasher},
     ops::Deref,
-    ptr,
 };
-use winapi::{ctypes::c_void, um::unknwnbase::IUnknown, Interface};
+use winapi::{um::unknwnbase::IUnknown, Interface};
 
 /// A nullable pointer to a COM object.
 ///
@@ -19,8 +19,19 @@ use winapi::{ctypes::c_void, um::unknwnbase::IUnknown, Interface};
 pub struct ComPtr<T: Interface>(*mut T);
 
 impl<T: Interface> ComPtr<T> {
+    /// Create a ComPtr from a raw pointer. This will _not_ call AddRef on the pointer, assuming
+    /// that it has already been called.
+    ///
+    /// # Safety
+    ///
+    /// - `raw` must be a valid pointer to a COM object that implements T.
+    pub unsafe fn from_reffed(raw: *mut T) -> Self {
+        debug_assert!(!raw.is_null());
+        ComPtr(raw)
+    }
+
     pub fn null() -> Self {
-        ComPtr(ptr::null_mut())
+        ComPtr(std::ptr::null_mut())
     }
 
     /// Constructs a tracked COM pointer from `raw`, calling [`AddRef`] on it.
@@ -32,20 +43,17 @@ impl<T: Interface> ComPtr<T> {
     ///
     /// [`AddRef`]: https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-addref
     pub unsafe fn from_raw(raw: *mut T) -> Self {
-        if !raw.is_null() {
-            (*(raw as *mut IUnknown)).AddRef();
-        }
+        debug_assert!(!raw.is_null());
+        (*raw.cast::<IUnknown>()).AddRef();
         ComPtr(raw)
     }
 
+    /// Returns true if the inner pointer is null.
     pub fn is_null(&self) -> bool {
         self.0.is_null()
     }
 
-    pub fn as_ptr(&self) -> *const T {
-        self.0
-    }
-
+    /// Returns the raw inner pointer as mutable. May be null.
     pub fn as_mut_ptr(&self) -> *mut T {
         self.0
     }
@@ -77,7 +85,10 @@ impl<T: Interface> ComPtr<T> {
     }
 }
 
-impl<T: Interface> ComPtr<T> {
+impl<T: Interface> ComPtr<T>
+where
+    T: Interface,
+{
     /// Returns a reference to the inner pointer, casted to [`IUnknown`].
     ///
     /// # Safety
@@ -87,6 +98,12 @@ impl<T: Interface> ComPtr<T> {
         debug_assert!(!self.is_null());
         &*(self.0 as *mut IUnknown)
     }
+
+    /// Returns a reference to the inner pointer casted as a pointer to [`IUnknown`].
+    pub fn as_unknown(&self) -> &IUnknown {
+        unsafe { &*(self.0.cast()) }
+    }
+
 
     /// Casts the `T` to `U` using `QueryInterface` (AKA [`Interface`]).
     ///
@@ -104,6 +121,21 @@ impl<T: Interface> ComPtr<T> {
         let hr = self
             .as_unknown()
             .QueryInterface(&U::uuidof(), obj.mut_void());
+        (obj, hr)
+    }
+
+    /// Attempts to cast `T` to `U` using `QueryInterface`.
+    pub fn cast<U>(&self) -> D3DResult<Option<ComPtr<U>>>
+    where
+        U: Interface,
+    {
+        let mut obj = std::ptr::null_mut();
+        let unknown = unsafe { self.as_unknown() };
+        // SAFETY: All COM pointers implement `IUnknown`; `unknown` should therefore be valid as an
+        // invariant of this type.
+        let hr = unsafe { unknown.QueryInterface(&U::uuidof(), &mut obj) };
+        // SAFETY: `obj` is either a valid COM pointer to `U` in the case of success, or `null`.
+        let obj = (!obj.is_null()).then(|| unsafe { ComPtr::from_reffed(obj.cast()) });
         (obj, hr)
     }
 }
@@ -128,10 +160,25 @@ impl<T: Interface> Drop for ComPtr<T> {
     }
 }
 
+impl<T: Interface> Drop for ComPtr<T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.as_unknown().Release();
+        }
+    }
+}
+
 impl<T: Interface> Deref for ComPtr<T> {
     type Target = T;
     fn deref(&self) -> &T {
-        debug_assert!(!self.is_null());
+        assert!(!self.is_null());
+        unsafe { &*self.0 }
+    }
+}
+
+impl<T: Interface> Deref for ComPtr<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
         unsafe { &*self.0 }
     }
 }

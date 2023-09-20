@@ -72,8 +72,8 @@ impl<'a> Shader<'a> {
         entry: &ffi::CStr,
         flags: ShaderCompileFlags,
     ) -> D3DResult<(Blob, Error)> {
-        let mut shader = Blob::null();
-        let mut error = Error::null();
+        let mut shader = std::ptr::null_mut();
+        let mut error = std::ptr::null_mut();
 
         let hr = unsafe {
             d3dcompiler::D3DCompile(
@@ -86,10 +86,12 @@ impl<'a> Shader<'a> {
                 target.as_ptr() as *const _,
                 flags.bits(),
                 0,
-                shader.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
+                &mut shader,
+                &mut error,
             )
         };
+        let shader = unsafe { ComPtr::from_reffed(shader) };
+        let error = unsafe { ComPtr::from_reffed(error) };
 
         ((shader, error), hr)
     }

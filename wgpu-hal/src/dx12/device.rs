@@ -30,20 +30,20 @@ impl super::Device {
             None
         };
 
-        let mut idle_fence = d3d12::Fence::null();
+        let mut idle_fence = std::ptr::null_mut();
         let hr = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
             raw.CreateFence(
                 0,
                 d3d12_ty::D3D12_FENCE_FLAG_NONE,
                 &d3d12_ty::ID3D12Fence::uuidof(),
-                idle_fence.mut_void(),
+                &mut idle_fence,
             )
         };
+        let idle_fence = unsafe { d3d12::ComPtr::from_reffed(idle_fence.cast()) };
         hr.into_device_result("Idle fence creation")?;
 
-        let mut zero_buffer = d3d12::Resource::null();
-        unsafe {
+        let zero_buffer = unsafe {
             let raw_desc = d3d12_ty::D3D12_RESOURCE_DESC {
                 Dimension: d3d12_ty::D3D12_RESOURCE_DIMENSION_BUFFER,
                 Alignment: 0,
@@ -72,6 +72,7 @@ impl super::Device {
             };
 
             profiling::scope!("Zero Buffer Allocation");
+            let mut zero_buffer = std::ptr::null_mut();
             raw.CreateCommittedResource(
                 &heap_properties,
                 d3d12_ty::D3D12_HEAP_FLAG_NONE,
@@ -79,9 +80,10 @@ impl super::Device {
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &d3d12_ty::ID3D12Resource::uuidof(),
-                zero_buffer.mut_void(),
+                &mut zero_buffer,
             )
             .into_device_result("Zero buffer creation")?;
+            d3d12::Resource::from_reffed(zero_buffer.cast())
 
             // Note: without `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED`
             // this resource is zeroed by default.
@@ -337,9 +339,8 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let mut resource = d3d12::Resource::null();
-        let (hr, allocation) =
-            super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
+        let (hr, allocation, resource) =
+            super::suballocation::create_buffer_resource(self, desc, raw_desc)?;
 
         hr.into_device_result("Buffer creation")?;
         if let Some(label) = desc.label {
@@ -418,8 +419,7 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let mut resource = d3d12::Resource::null();
-        let (hr, allocation) = create_texture_resource(self, desc, raw_desc, &mut resource)?;
+        let (hr, allocation, resource) = create_texture_resource(self, desc, raw_desc)?;
 
         hr.into_device_result("Texture creation")?;
         if let Some(label) = desc.label {
@@ -1010,7 +1010,7 @@ impl crate::Device<super::Api> for super::Device {
             })?
             .into_device_result("Root signature serialization")?;
 
-        if !error.is_null() {
+        if let Some(error) = error {
             log::error!(
                 "Root signature serialization error: {:?}",
                 unsafe { error.as_c_str() }.to_str().unwrap()
@@ -1032,7 +1032,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::PipelineLayout {
             shared: super::PipelineLayoutShared {
-                signature: raw,
+                signature: Some(raw),
                 total_root_elements: parameters.len() as super::RootIndex,
                 special_constants_root_index,
                 root_constant_info,
@@ -1333,7 +1333,7 @@ impl crate::Device<super::Api> for super::Device {
         };
 
         let raw_desc = d3d12_ty::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
+            pRootSignature: desc.layout.shared.signature.as_ref().unwrap().as_mut_ptr(),
             VS: *blob_vs.create_native_shader(),
             PS: match blob_fs {
                 Some(ref shader) => *shader.create_native_shader(),
@@ -1398,17 +1398,18 @@ impl crate::Device<super::Api> for super::Device {
             Flags: d3d12_ty::D3D12_PIPELINE_STATE_FLAG_NONE,
         };
 
-        let mut raw = d3d12::PipelineState::null();
+        let mut raw = std::ptr::null_mut();
         let hr = {
             profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
             unsafe {
                 self.raw.CreateGraphicsPipelineState(
                     &raw_desc,
                     &d3d12_ty::ID3D12PipelineState::uuidof(),
-                    raw.mut_void(),
+                    &mut raw,
                 )
             }
         };
+        let raw = unsafe { d3d12::PipelineState::from_reffed(raw.cast()) };
 
         unsafe { blob_vs.destroy() };
         if let Some(blob_fs) = blob_fs {
@@ -1441,7 +1442,7 @@ impl crate::Device<super::Api> for super::Device {
         let pair = {
             profiling::scope!("ID3D12Device::CreateComputePipelineState");
             self.raw.create_compute_pipeline_state(
-                &desc.layout.shared.signature,
+                desc.layout.shared.signature.as_ref(),
                 blob_cs.create_native_shader(),
                 0,
                 d3d12::CachedPSO::null(),
@@ -1501,15 +1502,16 @@ impl crate::Device<super::Api> for super::Device {
     unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
-        let mut raw = d3d12::Fence::null();
+        let mut raw = std::ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateFence(
                 0,
                 d3d12_ty::D3D12_FENCE_FLAG_NONE,
                 &d3d12_ty::ID3D12Fence::uuidof(),
-                raw.mut_void(),
+                &mut raw,
             )
         };
+        let raw = unsafe { d3d12::ComPtr::from_reffed(raw.cast()) };
         hr.into_device_result("Fence creation")?;
         Ok(super::Fence { raw })
     }

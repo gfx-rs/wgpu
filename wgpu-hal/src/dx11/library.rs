@@ -63,7 +63,7 @@ impl D3D11Lib {
             d3dcommon::D3D_FEATURE_LEVEL_9_1,
         ];
 
-        let mut device = d3d12::ComPtr::<d3d11::ID3D11Device>::null();
+        let mut device = std::ptr::null_mut();
         let mut feature_level: d3dcommon::D3D_FEATURE_LEVEL = 0;
 
         // We need to try this twice. If the first time fails due to E_INVALIDARG
@@ -81,7 +81,7 @@ impl D3D11Lib {
                 feature_levels.as_ptr(),
                 feature_levels.len() as u32,
                 d3d11::D3D11_SDK_VERSION,
-                device.mut_self(),
+                &mut device,
                 &mut feature_level,
                 ptr::null_mut(), // device context
             )
@@ -98,12 +98,13 @@ impl D3D11Lib {
                     feature_levels[1..].as_ptr(),
                     feature_levels[1..].len() as u32,
                     d3d11::D3D11_SDK_VERSION,
-                    device.mut_self(),
+                    &mut device,
                     &mut feature_level,
                     ptr::null_mut(), // device context
                 )
             };
         }
+        let device = unsafe { d3d12::ComPtr::from_reffed(device) };
 
         // Any errors here are real and we should complain about
         if let Err(err) = hr.into_result() {
@@ -116,24 +117,26 @@ impl D3D11Lib {
         // Device -> Device2
         unsafe {
             match device.cast::<d3d11_2::ID3D11Device2>().into_result() {
-                Ok(device2) => {
+                Ok(Some(device2)) => {
                     return Some((super::D3D11Device::Device2(device2), feature_level));
                 }
                 Err(hr) => {
                     log::info!("Failed to cast device to ID3D11Device2: {}", hr)
                 }
+                Ok(None) => unreachable!(),
             }
         }
 
         // Device -> Device1
         unsafe {
             match device.cast::<d3d11_1::ID3D11Device1>().into_result() {
-                Ok(device1) => {
+                Ok(Some(device1)) => {
                     return Some((super::D3D11Device::Device1(device1), feature_level));
                 }
                 Err(hr) => {
                     log::info!("Failed to cast device to ID3D11Device1: {}", hr)
                 }
+                Ok(None) => unreachable!(),
             }
         }
 

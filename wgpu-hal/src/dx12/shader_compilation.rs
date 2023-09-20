@@ -23,7 +23,7 @@ pub(super) fn compile_fxc(
     log::Level,
 ) {
     profiling::scope!("compile_fxc");
-    let mut shader_data = d3d12::Blob::null();
+    let mut shader_data = std::ptr::null_mut();
     let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
         .private_caps
@@ -32,7 +32,7 @@ pub(super) fn compile_fxc(
     {
         compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
-    let mut error = d3d12::Blob::null();
+    let mut error = std::ptr::null_mut();
     let hr = unsafe {
         profiling::scope!("d3dcompiler::D3DCompile");
         d3dcompiler::D3DCompile(
@@ -45,10 +45,11 @@ pub(super) fn compile_fxc(
             full_stage.as_ptr().cast(),
             compile_flags,
             0,
-            shader_data.mut_void().cast(),
-            error.mut_void().cast(),
+            &mut shader_data,
+            &mut error,
         )
     };
+    let shader_data = unsafe { d3d12::ComPtr::from_reffed(shader_data.cast()) };
 
     match hr.into_result() {
         Ok(()) => (
@@ -58,6 +59,7 @@ pub(super) fn compile_fxc(
         Err(e) => {
             let mut full_msg = format!("FXC D3DCompile error ({e})");
             if !error.is_null() {
+                let error = unsafe { d3d12::Blob::from_reffed(error.cast()) };
                 use std::fmt::Write as _;
                 let message = unsafe {
                     std::slice::from_raw_parts(

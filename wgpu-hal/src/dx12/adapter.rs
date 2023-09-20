@@ -28,7 +28,7 @@ impl Drop for super::Adapter {
 
 impl super::Adapter {
     pub unsafe fn report_live_objects(&self) {
-        if let Ok(debug_device) = unsafe {
+        if let Ok(Some(debug_device)) = unsafe {
             self.raw
                 .cast::<d3d12sdklayers::ID3D12DebugDevice>()
                 .into_result()
