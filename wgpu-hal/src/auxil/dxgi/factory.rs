@@ -1,5 +1,5 @@
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, winerror},
+    shared::{dxgi1_2, dxgi1_4, dxgi1_6, winerror},
     Interface,
 };
 
@@ -21,13 +21,13 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         if let Some(factory6) = factory.as_factory6() {
             profiling::scope!("IDXGIFactory6::EnumAdapterByGpuPreference");
             // We're already at dxgi1.6, we can grab IDXGIAdapter4 directly
-            let mut adapter4 = d3d12::ComPtr::<dxgi1_6::IDXGIAdapter4>::null();
+            let mut adapter4 = std::ptr::null_mut();
             let hr = unsafe {
                 factory6.EnumAdapterByGpuPreference(
                     cur_index,
                     dxgi1_6::DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
                     &dxgi1_6::IDXGIAdapter4::uuidof(),
-                    adapter4.mut_void(),
+                    &mut adapter4,
                 )
             };
 
@@ -39,13 +39,15 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                 break;
             }
 
+            let adapter4 = unsafe { d3d12::ComPtr::from_reffed(adapter4.cast()) };
             adapters.push(d3d12::DxgiAdapter::Adapter4(adapter4));
             continue;
         }
 
         profiling::scope!("IDXGIFactory1::EnumAdapters1");
-        let mut adapter1 = d3d12::ComPtr::<dxgi::IDXGIAdapter1>::null();
-        let hr = unsafe { factory.EnumAdapters1(cur_index, adapter1.mut_self()) };
+        let mut adapter1 = std::ptr::null_mut();
+        let hr = unsafe { factory.EnumAdapters1(cur_index, &mut adapter1) };
+        let adapter1 = unsafe { d3d12::ComPtr::from_reffed(adapter1) };
 
         if hr == winerror::DXGI_ERROR_NOT_FOUND {
             break;
@@ -60,23 +62,25 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         // Adapter1 -> Adapter3
         unsafe {
             match adapter1.cast::<dxgi1_4::IDXGIAdapter3>().into_result() {
-                Ok(adapter3) => {
+                Ok(Some(adapter3)) => {
                     adapters.push(d3d12::DxgiAdapter::Adapter3(adapter3));
                     continue;
                 }
                 Err(err) => {
                     log::info!("Failed casting Adapter1 to Adapter3: {}", err);
                 }
+                Ok(None) => unreachable!(),
             }
         }
 
         // Adapter1 -> Adapter2
         unsafe {
             match adapter1.cast::<dxgi1_2::IDXGIAdapter2>().into_result() {
-                Ok(adapter2) => {
+                Ok(Some(adapter2)) => {
                     adapters.push(d3d12::DxgiAdapter::Adapter2(adapter2));
                     continue;
                 }
+                Ok(None) => unreachable!(),
                 Err(err) => {
                     log::info!("Failed casting Adapter1 to Adapter2: {}", err);
                 }
@@ -154,9 +158,10 @@ pub fn create_factory(
         //  Try to cast the IDXGIFactory4 into IDXGIFactory6
         let factory6 = unsafe { factory4.cast::<dxgi1_6::IDXGIFactory6>().into_result() };
         match factory6 {
-            Ok(factory6) => {
+            Ok(Some(factory6)) => {
                 return Ok((lib_dxgi, d3d12::DxgiFactory::Factory6(factory6)));
             }
+            Ok(None) => unreachable!(),
             // If we require factory6, hard error.
             Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
                 // err is a Cow<str>, not an Error implementor
@@ -195,9 +200,10 @@ pub fn create_factory(
     // Try to cast the IDXGIFactory1 into IDXGIFactory2
     let factory2 = unsafe { factory1.cast::<dxgi1_2::IDXGIFactory2>().into_result() };
     match factory2 {
-        Ok(factory2) => {
+        Ok(Some(factory2)) => {
             return Ok((lib_dxgi, d3d12::DxgiFactory::Factory2(factory2)));
         }
+        Ok(None) => unreachable!(),
         // If we require factory2, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
             // err is a Cow<str>, not an Error implementor

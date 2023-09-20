@@ -64,15 +64,15 @@ mod placed {
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut ComPtr<ID3D12Resource>,
-    ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+    ) -> Result<(HRESULT, Option<AllocationWrapper>, ComPtr<ID3D12Resource>), crate::DeviceError>
+    {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
         // It's a workaround for Intel Xe drivers.
         if !device.private_caps.suballocation_supported {
-            return super::committed::create_buffer_resource(device, desc, raw_desc, resource)
-                .map(|(hr, _)| (hr, None));
+            return super::committed::create_buffer_resource(device, desc, raw_desc)
+                .map(|(hr, _, res)| (hr, None, res));
         }
 
         let location = match (is_cpu_read, is_cpu_write) {
@@ -102,6 +102,7 @@ mod placed {
         );
         let allocation = allocator.allocator.allocate(&allocation_desc)?;
 
+        let mut resource = std::ptr::null_mut();
         let hr = unsafe {
             device.raw.CreatePlacedResource(
                 allocation.heap().as_winapi() as *mut _,
@@ -110,23 +111,24 @@ mod placed {
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &d3d12_ty::ID3D12Resource::uuidof(),
-                resource.mut_void(),
+                &mut resource,
             )
         };
+        let resource = unsafe { d3d12::ComPtr::from_reffed(resource.cast()) };
 
-        Ok((hr, Some(AllocationWrapper { allocation })))
+        Ok((hr, Some(AllocationWrapper { allocation }), resource))
     }
 
     pub(crate) fn create_texture_resource(
         device: &crate::dx12::Device,
         desc: &crate::TextureDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut ComPtr<ID3D12Resource>,
-    ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+    ) -> Result<(HRESULT, Option<AllocationWrapper>, ComPtr<ID3D12Resource>), crate::DeviceError>
+    {
         // It's a workaround for Intel Xe drivers.
         if !device.private_caps.suballocation_supported {
-            return super::committed::create_texture_resource(device, desc, raw_desc, resource)
-                .map(|(hr, _)| (hr, None));
+            return super::committed::create_texture_resource(device, desc, raw_desc)
+                .map(|(hr, _, res)| (hr, None, res));
         }
 
         let location = MemoryLocation::GpuOnly;
@@ -149,6 +151,7 @@ mod placed {
         );
         let allocation = allocator.allocator.allocate(&allocation_desc)?;
 
+        let mut resource = std::ptr::null_mut();
         let hr = unsafe {
             device.raw.CreatePlacedResource(
                 allocation.heap().as_winapi() as *mut _,
@@ -157,11 +160,12 @@ mod placed {
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(), // clear value
                 &d3d12_ty::ID3D12Resource::uuidof(),
-                resource.mut_void(),
+                &mut resource,
             )
         };
+        let resource = unsafe { d3d12::ComPtr::from_reffed(resource.cast()) };
 
-        Ok((hr, Some(AllocationWrapper { allocation })))
+        Ok((hr, Some(AllocationWrapper { allocation }), resource))
     }
 
     pub(crate) fn free_buffer_allocation(
@@ -254,8 +258,8 @@ mod committed {
         device: &crate::dx12::Device,
         desc: &crate::BufferDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut ComPtr<ID3D12Resource>,
-    ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+    ) -> Result<(HRESULT, Option<AllocationWrapper>, ComPtr<ID3D12Resource>), crate::DeviceError>
+    {
         let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
 
@@ -278,6 +282,7 @@ mod committed {
             VisibleNodeMask: 0,
         };
 
+        let mut resource = std::ptr::null_mut();
         let hr = unsafe {
             device.raw.CreateCommittedResource(
                 &heap_properties,
@@ -290,19 +295,20 @@ mod committed {
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &d3d12_ty::ID3D12Resource::uuidof(),
-                resource.mut_void(),
+                &mut resource,
             )
         };
+        let resource = unsafe { d3d12::ComPtr::from_reffed(resource.cast()) };
 
-        Ok((hr, None))
+        Ok((hr, None, resource))
     }
 
     pub(crate) fn create_texture_resource(
         device: &crate::dx12::Device,
         _desc: &crate::TextureDescriptor,
         raw_desc: d3d12_ty::D3D12_RESOURCE_DESC,
-        resource: &mut ComPtr<ID3D12Resource>,
-    ) -> Result<(HRESULT, Option<AllocationWrapper>), crate::DeviceError> {
+    ) -> Result<(HRESULT, Option<AllocationWrapper>, ComPtr<ID3D12Resource>), crate::DeviceError>
+    {
         let heap_properties = d3d12_ty::D3D12_HEAP_PROPERTIES {
             Type: d3d12_ty::D3D12_HEAP_TYPE_CUSTOM,
             CPUPageProperty: d3d12_ty::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
@@ -314,6 +320,7 @@ mod committed {
             VisibleNodeMask: 0,
         };
 
+        let mut resource = std::ptr::null_mut();
         let hr = unsafe {
             device.raw.CreateCommittedResource(
                 &heap_properties,
@@ -326,11 +333,12 @@ mod committed {
                 d3d12_ty::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(), // clear value
                 &d3d12_ty::ID3D12Resource::uuidof(),
-                resource.mut_void(),
+                &mut resource,
             )
         };
+        let resource = unsafe { d3d12::ComPtr::from_reffed(resource.cast()) };
 
-        Ok((hr, None))
+        Ok((hr, None, resource))
     }
 
     #[allow(unused)]

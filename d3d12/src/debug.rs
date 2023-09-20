@@ -13,11 +13,12 @@ impl crate::D3D12Lib {
             *mut *mut winapi::ctypes::c_void,
         ) -> crate::HRESULT;
 
-        let mut debug = Debug::null();
+        let mut debug = std::ptr::null_mut();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12GetDebugInterface")?;
-            func(&d3d12sdklayers::ID3D12Debug::uuidof(), debug.mut_void())
+            func(&d3d12sdklayers::ID3D12Debug::uuidof(), &mut debug)
         };
+        let debug = unsafe { ComPtr::from_reffed(debug.cast()) };
 
         Ok((debug, hr))
     }
@@ -26,13 +27,14 @@ impl crate::D3D12Lib {
 impl Debug {
     #[cfg(feature = "implicit-link")]
     pub fn get_interface() -> crate::D3DResult<Self> {
-        let mut debug = Debug::null();
+        let mut debug = std::ptr::null_mut();
         let hr = unsafe {
             winapi::um::d3d12::D3D12GetDebugInterface(
                 &d3d12sdklayers::ID3D12Debug::uuidof(),
-                debug.mut_void(),
+                &mut debug,
             )
         };
+        let debug = unsafe { ComPtr::from_reffed(debug.cast()) };
 
         (debug, hr)
     }

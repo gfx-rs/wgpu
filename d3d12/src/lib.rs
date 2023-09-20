@@ -100,7 +100,6 @@ pub type Blob = ComPtr<d3dcommon::ID3DBlob>;
 pub type Error = ComPtr<d3dcommon::ID3DBlob>;
 impl Error {
     pub fn as_c_str(&self) -> &CStr {
-        assert!(!self.is_null());
         unsafe {
             let data = self.GetBufferPointer();
             CStr::from_ptr(data as *const _ as *const _)

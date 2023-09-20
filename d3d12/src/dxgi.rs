@@ -115,15 +115,16 @@ impl DxgiLib {
             *mut *mut winapi::ctypes::c_void,
         ) -> HRESULT;
 
-        let mut factory = Factory4::null();
+        let mut factory = std::ptr::null_mut();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
             func(
                 flags.bits(),
                 &dxgi1_4::IDXGIFactory4::uuidof(),
-                factory.mut_void(),
+                &mut factory,
             )
         };
+        let factory = unsafe { ComPtr::from_reffed(factory.cast()) };
 
         Ok((factory, hr))
     }
@@ -134,11 +135,12 @@ impl DxgiLib {
             *mut *mut winapi::ctypes::c_void,
         ) -> HRESULT;
 
-        let mut factory = Factory1::null();
+        let mut factory = std::ptr::null_mut();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory1")?;
-            func(&dxgi::IDXGIFactory1::uuidof(), factory.mut_void())
+            func(&dxgi::IDXGIFactory1::uuidof(), &mut factory)
         };
+        let factory = unsafe { ComPtr::from_reffed(factory.cast()) };
 
         Ok((factory, hr))
     }
@@ -149,12 +151,13 @@ impl DxgiLib {
             *mut *mut winapi::ctypes::c_void,
         ) -> HRESULT;
 
-        let mut factory = FactoryMedia::null();
+        let mut factory = std::ptr::null_mut();
         let hr = unsafe {
             // https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nn-dxgi1_3-idxgifactorymedia
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory1")?;
-            func(&dxgi1_3::IDXGIFactoryMedia::uuidof(), factory.mut_void())
+            func(&dxgi1_3::IDXGIFactoryMedia::uuidof(), &mut factory)
         };
+        let factory = unsafe { ComPtr::from_reffed(factory.cast()) };
 
         Ok((factory, hr))
     }
@@ -166,11 +169,12 @@ impl DxgiLib {
             *mut *mut winapi::ctypes::c_void,
         ) -> HRESULT;
 
-        let mut queue = InfoQueue::null();
+        let mut queue = std::ptr::null_mut();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"DXGIGetDebugInterface1")?;
-            func(0, &dxgidebug::IDXGIInfoQueue::uuidof(), queue.mut_void())
+            func(0, &dxgidebug::IDXGIInfoQueue::uuidof(), &mut queue)
         };
+        let queue = unsafe { ComPtr::from_reffed(queue.cast()) };
         Ok((queue, hr))
     }
 }
@@ -244,8 +248,9 @@ impl Factory1 {
             Flags: desc.flags,
         };
 
-        let mut swapchain = SwapChain::null();
-        let hr = unsafe { self.CreateSwapChain(queue, &mut desc, swapchain.mut_self()) };
+        let mut swapchain = std::ptr::null_mut();
+        let hr = unsafe { self.CreateSwapChain(queue, &mut desc, &mut swapchain) };
+        let swapchain = unsafe { ComPtr::from_reffed(swapchain) };
 
         (swapchain, hr)
     }
@@ -262,7 +267,7 @@ impl Factory2 {
         hwnd: HWND,
         desc: &SwapchainDesc,
     ) -> D3DResult<SwapChain1> {
-        let mut swap_chain = SwapChain1::null();
+        let mut swap_chain = std::ptr::null_mut();
         let hr = unsafe {
             self.CreateSwapChainForHwnd(
                 queue,
@@ -270,9 +275,10 @@ impl Factory2 {
                 &desc.to_desc1(),
                 ptr::null(),
                 ptr::null_mut(),
-                swap_chain.mut_self(),
+                &mut swap_chain,
             )
         };
+        let swap_chain = unsafe { ComPtr::from_reffed(swap_chain) };
 
         (swap_chain, hr)
     }
@@ -285,15 +291,16 @@ impl Factory2 {
         queue: *mut IUnknown,
         desc: &SwapchainDesc,
     ) -> D3DResult<SwapChain1> {
-        let mut swap_chain = SwapChain1::null();
+        let mut swap_chain = std::ptr::null_mut();
         let hr = unsafe {
             self.CreateSwapChainForComposition(
                 queue,
                 &desc.to_desc1(),
                 ptr::null_mut(),
-                swap_chain.mut_self(),
+                &mut swap_chain,
             )
         };
+        let swap_chain = unsafe { ComPtr::from_reffed(swap_chain) };
 
         (swap_chain, hr)
     }
@@ -302,21 +309,23 @@ impl Factory2 {
 impl Factory4 {
     #[cfg(feature = "implicit-link")]
     pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
-        let mut factory = Factory4::null();
+        let mut factory = std::ptr::null_mut();
         let hr = unsafe {
             dxgi1_3::CreateDXGIFactory2(
                 flags.bits(),
                 &dxgi1_4::IDXGIFactory4::uuidof(),
-                factory.mut_void(),
+                &mut factory,
             )
         };
+        let factory = unsafe { ComPtr::from_reffed(factory.cast()) };
 
         (factory, hr)
     }
 
     pub fn enumerate_adapters(&self, id: u32) -> D3DResult<Adapter1> {
-        let mut adapter = Adapter1::null();
-        let hr = unsafe { self.EnumAdapters1(id, adapter.mut_self()) };
+        let mut adapter = std::ptr::null_mut();
+        let hr = unsafe { self.EnumAdapters1(id, &mut adapter) };
+        let adapter = unsafe { ComPtr::from_reffed(adapter) };
 
         (adapter, hr)
     }
@@ -332,16 +341,17 @@ impl FactoryMedia {
         surface_handle: HANDLE,
         desc: &SwapchainDesc,
     ) -> D3DResult<SwapChain1> {
-        let mut swap_chain = SwapChain1::null();
+        let mut swap_chain = std::ptr::null_mut();
         let hr = unsafe {
             self.CreateSwapChainForCompositionSurfaceHandle(
                 queue,
                 surface_handle,
                 &desc.to_desc1(),
                 ptr::null_mut(),
-                swap_chain.mut_self(),
+                &mut swap_chain,
             )
         };
+        let swap_chain = unsafe { ComPtr::from_reffed(swap_chain) };
 
         (swap_chain, hr)
     }
@@ -364,9 +374,9 @@ bitflags::bitflags! {
 
 impl SwapChain {
     pub fn get_buffer(&self, id: u32) -> D3DResult<Resource> {
-        let mut resource = Resource::null();
-        let hr =
-            unsafe { self.GetBuffer(id, &d3d12::ID3D12Resource::uuidof(), resource.mut_void()) };
+        let mut resource = std::ptr::null_mut();
+        let hr = unsafe { self.GetBuffer(id, &d3d12::ID3D12Resource::uuidof(), &mut resource) };
+        let resource = unsafe { ComPtr::from_reffed(resource.cast()) };
 
         (resource, hr)
     }
