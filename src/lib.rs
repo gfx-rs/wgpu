@@ -310,12 +310,13 @@ pub type FastHashSet<K> = rustc_hash::FxHashSet<K>;
 pub type FastIndexSet<K> =
     indexmap::IndexSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
+/// Insertion-order-preserving hash map (`IndexMap<K, V>`), but with the same
+/// hasher as `FastHashMap<K, V>` (faster but not resilient to DoS attacks).
+pub type FastIndexMap<K, V> =
+    indexmap::IndexMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
 /// Map of expressions that have associated variable names
-pub(crate) type NamedExpressions = indexmap::IndexMap<
-    Handle<Expression>,
-    String,
-    std::hash::BuildHasherDefault<rustc_hash::FxHasher>,
->;
+pub(crate) type NamedExpressions = FastIndexMap<Handle<Expression>, String>;
 
 /// Early fragment tests.
 ///
