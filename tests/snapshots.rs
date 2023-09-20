@@ -777,6 +777,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("msl-varyings", Targets::METAL),
+        (
+            "const-exprs",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

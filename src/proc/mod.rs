@@ -638,6 +638,61 @@ impl GlobalCtx<'_> {
     }
 }
 
+/// Return an iterator over the individual components assembled by a
+/// `Compose` expression.
+///
+/// Given `ty` and `components` from an `Expression::Compose`, return an
+/// iterator over the components of the resulting value.
+///
+/// Normally, this would just be an iterator over `components`. However,
+/// `Compose` expressions can concatenate vectors, in which case the i'th
+/// value being composed is not generally the i'th element of `components`.
+/// This function consults `ty` to decide if this concatenation is occuring,
+/// and returns an iterator that produces the components of the result of
+/// the `Compose` expression in either case.
+pub fn flatten_compose<'arenas>(
+    ty: crate::Handle<crate::Type>,
+    components: &'arenas [crate::Handle<crate::Expression>],
+    expressions: &'arenas crate::Arena<crate::Expression>,
+    types: &'arenas crate::UniqueArena<crate::Type>,
+) -> impl Iterator<Item = crate::Handle<crate::Expression>> + 'arenas {
+    // Returning `impl Iterator` is a bit tricky. We may or may not want to
+    // flatten the components, but we have to settle on a single concrete
+    // type to return. The below is a single iterator chain that handles
+    // both the flattening and non-flattening cases.
+    let (size, is_vector) = if let crate::TypeInner::Vector { size, .. } = types[ty].inner {
+        (size as usize, true)
+    } else {
+        (components.len(), false)
+    };
+
+    fn flattener<'c>(
+        component: &'c crate::Handle<crate::Expression>,
+        is_vector: bool,
+        expressions: &'c crate::Arena<crate::Expression>,
+    ) -> &'c [crate::Handle<crate::Expression>] {
+        if is_vector {
+            if let crate::Expression::Compose {
+                ty: _,
+                components: ref subcomponents,
+            } = expressions[*component]
+            {
+                return subcomponents;
+            }
+        }
+        std::slice::from_ref(component)
+    }
+
+    // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to flatten
+    // two levels.
+    components
+        .iter()
+        .flat_map(move |component| flattener(component, is_vector, expressions))
+        .flat_map(move |component| flattener(component, is_vector, expressions))
+        .take(size)
+        .cloned()
+}
+
 #[test]
 fn test_matrix_size() {
     let module = crate::Module::default();

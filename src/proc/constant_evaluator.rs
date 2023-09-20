@@ -73,6 +73,8 @@ pub enum ConstantEvaluatorError {
     SplatScalarOnly,
     #[error("Can only swizzle vector constants")]
     SwizzleVectorOnly,
+    #[error("swizzle component not present in source expression")]
+    SwizzleOutOfBounds,
     #[error("Type is not constructible")]
     TypeNotConstructible,
     #[error("Subexpression(s) are not constant")]
@@ -306,20 +308,31 @@ impl ConstantEvaluator<'_> {
                 let expr = Expression::Splat { size, value };
                 Ok(self.register_evaluated_expr(expr, span))
             }
-            Expression::Compose {
-                ty,
-                components: ref src_components,
-            } => {
+            Expression::Compose { ty, ref components } => {
                 let dst_ty = get_dst_ty(ty)?;
 
-                let components = pattern
+                let mut flattened = [src_constant; 4]; // dummy value
+                let len =
+                    crate::proc::flatten_compose(ty, components, self.expressions, self.types)
+                        .zip(flattened.iter_mut())
+                        .map(|(component, elt)| *elt = component)
+                        .count();
+                let flattened = &flattened[..len];
+
+                let swizzled_components = pattern[..size as usize]
                     .iter()
-                    .take(size as usize)
-                    .map(|&sc| src_components[sc as usize])
-                    .collect();
+                    .map(|&sc| {
+                        let sc = sc as usize;
+                        if let Some(elt) = flattened.get(sc) {
+                            Ok(*elt)
+                        } else {
+                            Err(ConstantEvaluatorError::SwizzleOutOfBounds)
+                        }
+                    })
+                    .collect::<Result<Vec<Handle<Expression>>, _>>()?;
                 let expr = Expression::Compose {
                     ty: dst_ty,
-                    components,
+                    components: swizzled_components,
                 };
                 Ok(self.register_evaluated_expr(expr, span))
             }
@@ -455,9 +468,8 @@ impl ConstantEvaluator<'_> {
                     .components()
                     .ok_or(ConstantEvaluatorError::InvalidAccessBase)?;
 
-                components
-                    .get(index)
-                    .copied()
+                crate::proc::flatten_compose(ty, components, self.expressions, self.types)
+                    .nth(index)
                     .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
             }
             _ => Err(ConstantEvaluatorError::InvalidAccessBase),
