@@ -141,6 +141,8 @@ pub enum Error {
     UnsupportedArrayOf(String),
     #[error("array of type '{0:?}' is not supported")]
     UnsupportedArrayOfType(Handle<crate::Type>),
+    #[error("ray tracing is not supported prior to MSL 2.3")]
+    UnsupportedRayTracing,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

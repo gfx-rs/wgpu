@@ -1961,6 +1961,10 @@ impl<W: Write> Writer<W> {
                 }
             }
             crate::Expression::RayQueryGetIntersection { query, committed } => {
+                if context.lang_version < (2, 4) {
+                    return Err(Error::UnsupportedRayTracing);
+                }
+
                 if !committed {
                     unimplemented!()
                 }
@@ -1971,16 +1975,16 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.type)")?;
                 let fields = [
                     "distance",
-                    "user_instance_id",
+                    "user_instance_id", // req Metal 2.4
                     "instance_id",
                     "", // SBT offset
                     "geometry_id",
                     "primitive_id",
                     "triangle_barycentric_coord",
                     "triangle_front_facing",
-                    "", // padding
-                    "object_to_world_transform",
-                    "world_to_object_transform",
+                    "",                          // padding
+                    "object_to_world_transform", // req Metal 2.4
+                    "world_to_object_transform", // req Metal 2.4
                 ];
                 for field in fields {
                     write!(self.out, ", ")?;
@@ -2913,6 +2917,10 @@ impl<W: Write> Writer<W> {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
+                    if context.expression.lang_version < (2, 4) {
+                        return Err(Error::UnsupportedRayTracing);
+                    }
+
                     match *fun {
                         crate::RayQueryFunction::Initialize {
                             acceleration_structure,
@@ -3104,33 +3112,36 @@ impl<W: Write> Writer<W> {
         // Work around Metal bug where `uint` is not available by default
         writeln!(self.out, "using {NAMESPACE}::uint;")?;
 
-        if module.types.iter().any(|(_, t)| match t.inner {
-            crate::TypeInner::RayQuery => true,
-            _ => false,
-        }) {
-            let tab = back::INDENT;
-            writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
-            let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
-            writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
-            writeln!(
-                self.out,
-                "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
-            )?;
-            writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
-            writeln!(self.out, "}};")?;
-            writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
-            let v_triangle = back::RayIntersectionType::Triangle as u32;
-            let v_bbox = back::RayIntersectionType::BoundingBox as u32;
-            writeln!(
-                self.out,
-                "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
-            )?;
-            writeln!(
-                self.out,
-                "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
-            )?;
-            writeln!(self.out, "}}")?;
+        let mut uses_ray_query = false;
+        for (_, ty) in module.types.iter() {
+            match ty.inner {
+                crate::TypeInner::AccelerationStructure => {
+                    if options.lang_version < (2, 4) {
+                        return Err(Error::UnsupportedRayTracing);
+                    }
+                }
+                crate::TypeInner::RayQuery => {
+                    if options.lang_version < (2, 4) {
+                        return Err(Error::UnsupportedRayTracing);
+                    }
+                    uses_ray_query = true;
+                }
+                _ => (),
+            }
         }
+
+        if module.special_types.ray_desc.is_some()
+            || module.special_types.ray_intersection.is_some()
+        {
+            if options.lang_version < (2, 4) {
+                return Err(Error::UnsupportedRayTracing);
+            }
+        }
+
+        if uses_ray_query {
+            self.put_ray_query_type()?;
+        }
+
         if options
             .bounds_check_policies
             .contains(index::BoundsCheckPolicy::ReadZeroSkipWrite)
@@ -3185,6 +3196,32 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "{tab}{tab}return T {{}};")?;
         writeln!(self.out, "{tab}}}")?;
         writeln!(self.out, "}};")?;
+        Ok(())
+    }
+
+    fn put_ray_query_type(&mut self) -> BackendResult {
+        let tab = back::INDENT;
+        writeln!(self.out, "struct {RAY_QUERY_TYPE} {{")?;
+        let full_type = format!("{RT_NAMESPACE}::intersector<{RT_NAMESPACE}::instancing, {RT_NAMESPACE}::triangle_data, {RT_NAMESPACE}::world_space_data>");
+        writeln!(self.out, "{tab}{full_type} {RAY_QUERY_FIELD_INTERSECTOR};")?;
+        writeln!(
+            self.out,
+            "{tab}{full_type}::result_type {RAY_QUERY_FIELD_INTERSECTION};"
+        )?;
+        writeln!(self.out, "{tab}bool {RAY_QUERY_FIELD_READY} = false;")?;
+        writeln!(self.out, "}};")?;
+        writeln!(self.out, "constexpr {NAMESPACE}::uint {RAY_QUERY_FUN_MAP_INTERSECTION}(const {RT_NAMESPACE}::intersection_type ty) {{")?;
+        let v_triangle = back::RayIntersectionType::Triangle as u32;
+        let v_bbox = back::RayIntersectionType::BoundingBox as u32;
+        writeln!(
+            self.out,
+            "{tab}return ty=={RT_NAMESPACE}::intersection_type::triangle ? {v_triangle} : "
+        )?;
+        writeln!(
+            self.out,
+            "{tab}{tab}ty=={RT_NAMESPACE}::intersection_type::bounding_box ? {v_bbox} : 0;"
+        )?;
+        writeln!(self.out, "}}")?;
         Ok(())
     }
 
