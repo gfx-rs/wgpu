@@ -137,6 +137,10 @@ pub enum Error {
     UnsupportedWriteableStorageTexture(crate::ShaderStage),
     #[error("can not use read-write storage textures prior to MSL 1.2")]
     UnsupportedRWStorageTexture,
+    #[error("array of '{0}' is not supported for target MSL version")]
+    UnsupportedArrayOf(String),
+    #[error("array of type '{0:?}' is not supported")]
+    UnsupportedArrayOfType(Handle<crate::Type>),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

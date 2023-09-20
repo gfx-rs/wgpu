@@ -4010,6 +4010,65 @@ impl<W: Write> Writer<W> {
                     }
                 }
 
+                // Check min MSL version for binding arrays
+                match var.space {
+                    crate::AddressSpace::Handle => match module.types[var.ty].inner {
+                        crate::TypeInner::BindingArray { base, .. } => {
+                            match module.types[base].inner {
+                                crate::TypeInner::Sampler { .. } => {
+                                    if options.lang_version < (2, 0) {
+                                        return Err(Error::UnsupportedArrayOf(
+                                            "samplers".to_string(),
+                                        ));
+                                    }
+                                }
+                                crate::TypeInner::Image { class, .. } => match class {
+                                    crate::ImageClass::Sampled { .. }
+                                    | crate::ImageClass::Depth { .. }
+                                    | crate::ImageClass::Storage {
+                                        access: crate::StorageAccess::LOAD,
+                                        ..
+                                    } => {
+                                        // Array of textures since:
+                                        // - iOS: Metal 1.2 (check depends on https://github.com/gfx-rs/naga/issues/2164)
+                                        // - macOS: Metal 2
+
+                                        if options.lang_version < (2, 0) {
+                                            return Err(Error::UnsupportedArrayOf(
+                                                "textures".to_string(),
+                                            ));
+                                        }
+                                    }
+                                    crate::ImageClass::Storage {
+                                        access: crate::StorageAccess::STORE,
+                                        ..
+                                    } => {
+                                        // Array of write-only textures since:
+                                        // - iOS: Metal 2.2 (check depends on https://github.com/gfx-rs/naga/issues/2164)
+                                        // - macOS: Metal 2
+
+                                        if options.lang_version < (2, 0) {
+                                            return Err(Error::UnsupportedArrayOf(
+                                                "write-only textures".to_string(),
+                                            ));
+                                        }
+                                    }
+                                    crate::ImageClass::Storage { .. } => {
+                                        return Err(Error::UnsupportedArrayOf(
+                                            "read-write textures".to_string(),
+                                        ));
+                                    }
+                                },
+                                _ => {
+                                    return Err(Error::UnsupportedArrayOfType(base));
+                                }
+                            }
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+
                 // the resolves have already been checked for `!fake_missing_bindings` case
                 let resolved = match var.space {
                     crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
