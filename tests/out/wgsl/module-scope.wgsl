@@ -9,12 +9,12 @@ var Texture: texture_2d<f32>;
 @group(0) @binding(1) 
 var Sampler: sampler;
 
-fn returns() -> S {
-    return S(Value);
-}
-
 fn statement() {
     return;
+}
+
+fn returns() -> S {
+    return S(Value);
 }
 
 fn call() {

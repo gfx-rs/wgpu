@@ -2,7 +2,7 @@ use crate::front::wgsl::error::{Error, ExpectedToken};
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::SymbolTable;
-use crate::{Arena, FastHashSet, Handle, ShaderStage, Span};
+use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
 
 pub mod ast;
 pub mod conv;
@@ -51,7 +51,7 @@ struct ExpressionContext<'input, 'temp, 'out> {
     ///
     /// [`GlobalDecl`]: ast::GlobalDecl
     /// [`dependencies`]: ast::GlobalDecl::dependencies
-    unresolved: &'out mut FastHashSet<ast::Dependency<'input>>,
+    unresolved: &'out mut FastIndexSet<ast::Dependency<'input>>,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -2076,7 +2076,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         out: &mut ast::TranslationUnit<'a>,
-        dependencies: &mut FastHashSet<ast::Dependency<'a>>,
+        dependencies: &mut FastIndexSet<ast::Dependency<'a>>,
     ) -> Result<ast::Function<'a>, Error<'a>> {
         self.push_rule_span(Rule::FunctionDecl, lexer);
         // read function name
@@ -2238,7 +2238,7 @@ impl Parser {
             (None, None) => {}
         }
 
-        let mut dependencies = FastHashSet::default();
+        let mut dependencies = FastIndexSet::default();
         let mut ctx = ExpressionContext {
             expressions: &mut out.expressions,
             local_table: &mut SymbolTable::default(),
