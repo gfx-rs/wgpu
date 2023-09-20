@@ -3940,6 +3940,35 @@ impl<W: Write> Writer<W> {
                 let resolved = match var.space {
                     crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
                     crate::AddressSpace::WorkGroup => None,
+                    // This restriciton is not documented in the MSL spec but validation will fail if not upheld.
+                    // We imply the version check from the "Function Buffer Read-Writes" section of https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                    // where the feaure sets listed correspond with the ones supporting MSL 1.2.
+                    crate::AddressSpace::Storage { access }
+                        if access.contains(crate::StorageAccess::STORE)
+                            && options.lang_version < (1, 2)
+                            && ep.stage == crate::ShaderStage::Fragment =>
+                    {
+                        return Err(Error::UnsupportedWriteableStorageBuffer)
+                    }
+                    // This restriciton is not documented in the MSL spec but validation will fail if not upheld.
+                    // We imply the version check from the "Function Texture Read-Writes" section of https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                    // where the feaure set listed corresponds with the one supporting MSL 1.2.
+                    crate::AddressSpace::Handle
+                        if match module.types[var.ty].inner {
+                            crate::TypeInner::Image {
+                                class: crate::ImageClass::Storage { access, .. },
+                                ..
+                            } => {
+                                access.contains(crate::StorageAccess::STORE)
+                                    && options.lang_version < (1, 2)
+                                    && (ep.stage == crate::ShaderStage::Vertex
+                                        || ep.stage == crate::ShaderStage::Fragment)
+                            }
+                            _ => false,
+                        } =>
+                    {
+                        return Err(Error::UnsupportedWriteableStorageTexture(ep.stage))
+                    }
                     _ => options
                         .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
                         .ok(),
