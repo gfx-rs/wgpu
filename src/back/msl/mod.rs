@@ -232,16 +232,25 @@ impl Options {
     ) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(mut built_in) => {
-                if let crate::BuiltIn::Position { ref mut invariant } = built_in {
-                    if *invariant && self.lang_version < (2, 1) {
-                        return Err(Error::UnsupportedAttribute("invariant".to_string()));
-                    }
+                match built_in {
+                    crate::BuiltIn::Position { ref mut invariant } => {
+                        if *invariant && self.lang_version < (2, 1) {
+                            return Err(Error::UnsupportedAttribute("invariant".to_string()));
+                        }
 
-                    // The 'invariant' attribute may only appear on vertex
-                    // shader outputs, not fragment shader inputs.
-                    if !matches!(mode, LocationMode::VertexOutput) {
-                        *invariant = false;
+                        // The 'invariant' attribute may only appear on vertex
+                        // shader outputs, not fragment shader inputs.
+                        if !matches!(mode, LocationMode::VertexOutput) {
+                            *invariant = false;
+                        }
                     }
+                    crate::BuiltIn::BaseInstance if self.lang_version < (1, 2) => {
+                        return Err(Error::UnsupportedAttribute("base_instance".to_string()));
+                    }
+                    crate::BuiltIn::InstanceIndex if self.lang_version < (1, 2) => {
+                        return Err(Error::UnsupportedAttribute("instance_id".to_string()));
+                    }
+                    _ => {}
                 }
 
                 Ok(ResolvedBinding::BuiltIn(built_in))
