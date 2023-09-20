@@ -503,6 +503,7 @@ struct ExpressionContext<'a> {
     module: &'a crate::Module,
     mod_info: &'a valid::ModuleInfo,
     pipeline_options: &'a PipelineOptions,
+    lang_version: (u8, u8),
     policies: index::BoundsCheckPolicies,
 
     /// A bitset containing the `Expression` handle indexes of expressions used
@@ -1788,6 +1789,23 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack2x16unorm => "unpack_unorm2x16_to_float",
                     Mf::Unpack2x16float => "",
                 };
+
+                match fun {
+                    Mf::ReverseBits | Mf::ExtractBits | Mf::InsertBits => {
+                        // reverse_bits is listed as requiring MSL 2.1 but that
+                        // is a copy/paste error. Looking at previous snapshots
+                        // on web.archive.org it's present in MSL 1.2.
+                        //
+                        // https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html
+                        // also talks about MSL 1.2 adding "New integer
+                        // functions to extract, insert, and reverse bits, as
+                        // described in Integer Functions."
+                        if context.lang_version < (1, 2) {
+                            return Err(Error::UnsupportedFunction(fun_name.to_string()));
+                        }
+                    }
+                    _ => {}
+                }
 
                 if fun == Mf::Distance && scalar_argument {
                     write!(self.out, "{NAMESPACE}::abs(")?;
@@ -3559,6 +3577,7 @@ impl<W: Write> Writer<W> {
                     function: fun,
                     origin: FunctionOrigin::Handle(fun_handle),
                     info: fun_info,
+                    lang_version: options.lang_version,
                     policies: options.bounds_check_policies,
                     guarded_indices,
                     module,
@@ -4141,6 +4160,7 @@ impl<W: Write> Writer<W> {
                     function: fun,
                     origin: FunctionOrigin::EntryPoint(ep_index as _),
                     info: fun_info,
+                    lang_version: options.lang_version,
                     policies: options.bounds_check_policies,
                     guarded_indices,
                     module,

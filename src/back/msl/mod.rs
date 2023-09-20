@@ -129,6 +129,8 @@ pub enum Error {
     CapabilityNotSupported(crate::valid::Capabilities),
     #[error("attribute '{0}' is not supported for target MSL version")]
     UnsupportedAttribute(String),
+    #[error("function '{0}' is not supported for target MSL version")]
+    UnsupportedFunction(String),
     #[error("can not use writeable storage buffers in fragment stage prior to MSL 1.2")]
     UnsupportedWriteableStorageBuffer,
     #[error("can not use writeable storage textures in {0:?} stage prior to MSL 1.2")]
