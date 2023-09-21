@@ -421,6 +421,15 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> web_sys::GpuBlendFactor {
         BlendFactor::SrcAlphaSaturated => bf::SrcAlphaSaturated,
         BlendFactor::Constant => bf::Constant,
         BlendFactor::OneMinusConstant => bf::OneMinusConstant,
+        BlendFactor::Src1
+        | BlendFactor::OneMinusSrc1
+        | BlendFactor::Src1Alpha
+        | BlendFactor::OneMinusSrc1Alpha => {
+            panic!(
+                "{:?} is not enabled for this backend",
+                wgt::Features::DUAL_SOURCE_BLENDING
+            )
+        }
     }
 }
 
@@ -621,11 +630,10 @@ fn map_color(color: wgt::Color) -> web_sys::GpuColorDict {
     web_sys::GpuColorDict::new(color.a, color.b, color.g, color.r)
 }
 
-fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
-    if store {
-        web_sys::GpuStoreOp::Store
-    } else {
-        web_sys::GpuStoreOp::Discard
+fn map_store_op(store: crate::StoreOp) -> web_sys::GpuStoreOp {
+    match store {
+        crate::StoreOp::Store => web_sys::GpuStoreOp::Store,
+        crate::StoreOp::Discard => web_sys::GpuStoreOp::Discard,
     }
 }
 
@@ -812,7 +820,9 @@ fn future_request_device(
 
             (device_id, device_data, queue_id, queue_data)
         })
-        .map_err(|_| crate::RequestDeviceError)
+        .map_err(|error_value| crate::RequestDeviceError {
+            inner: crate::RequestDeviceErrorKind::Web(error_value),
+        })
 }
 
 fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {

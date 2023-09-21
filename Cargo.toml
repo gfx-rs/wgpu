@@ -51,7 +51,7 @@ version = "0.17"
 
 [workspace.dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "cc87b8f9eb30bb55d0735b89d3df3e099e1a6e7c"
+rev = "df8107b7"
 version = "0.13.0"
 
 [workspace.dependencies]
@@ -142,7 +142,7 @@ deno_web = "0.150.0"
 deno_webidl = "0.119.0"
 deno_webgpu = { path = "./deno_webgpu" }
 tokio = "1.32.0"
-termcolor = "1.2.0"
+termcolor = "1.3.0"
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
@@ -158,6 +158,8 @@ termcolor = "1.2.0"
 #glow = { path = "../glow" }
 #d3d12 = { path = "../d3d12-rs" }
 #metal = { path = "../metal-rs" }
+#metal = { path = "../metal-rs" }
+metal = { git = "https://github.com/gfx-rs/metal-rs/", rev = "d24f1a4" } # More timer support via https://github.com/gfx-rs/metal-rs/pull/280
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }
 #js-sys = { path = "../wasm-bindgen/crates/js-sys" }
 #wasm-bindgen = { path = "../wasm-bindgen" }

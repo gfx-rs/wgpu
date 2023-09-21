@@ -5,6 +5,8 @@ use wgt::{AstcBlock, AstcChannel};
 
 use std::{sync::Arc, thread};
 
+use super::TimestampQuerySupport;
+
 const MAX_COMMAND_BUFFERS: u64 = 2048;
 
 unsafe impl Send for super::Adapter {}
@@ -536,6 +538,26 @@ impl super::PrivateCapabilities {
             MTLReadWriteTextureTier::TierNone
         };
 
+        let mut timestamp_query_support = TimestampQuerySupport::empty();
+        if version.at_least((11, 0), (14, 0), os_is_mac)
+            && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary)
+        {
+            // If we don't support at stage boundary, don't support anything else.
+            timestamp_query_support.insert(TimestampQuerySupport::STAGE_BOUNDARIES);
+
+            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary) {
+                timestamp_query_support.insert(TimestampQuerySupport::ON_RENDER_ENCODER);
+            }
+            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary)
+            {
+                timestamp_query_support.insert(TimestampQuerySupport::ON_COMPUTE_ENCODER);
+            }
+            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtBlitBoundary) {
+                timestamp_query_support.insert(TimestampQuerySupport::ON_BLIT_ENCODER);
+            }
+            // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
+        }
+
         Self {
             family_check,
             msl_version: if os_is_xr || version.at_least((12, 0), (15, 0), os_is_mac) {
@@ -773,13 +795,7 @@ impl super::PrivateCapabilities {
             } else {
                 None
             },
-            support_timestamp_query: version.at_least((11, 0), (14, 0), os_is_mac)
-                && device
-                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary),
-            support_timestamp_query_in_passes: version.at_least((11, 0), (14, 0), os_is_mac)
-                && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary)
-                && device
-                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary),
+            timestamp_query_support,
         }
     }
 
@@ -807,12 +823,20 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::MULTI_DRAW_INDIRECT;
 
-        features.set(F::TIMESTAMP_QUERY, self.support_timestamp_query);
-        // TODO: Not yet implemented.
-        // features.set(
-        //     F::TIMESTAMP_QUERY_INSIDE_PASSES,
-        //     self.support_timestamp_query_in_passes,
-        // );
+        features.set(
+            F::TIMESTAMP_QUERY,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+        );
+        features.set(
+            F::TIMESTAMP_QUERY_INSIDE_PASSES,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
+        );
+        features.set(
+            F::DUAL_SOURCE_BLENDING,
+            self.msl_version >= MTLLanguageVersion::V1_2 && self.dual_source_blending,
+        );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
@@ -847,6 +871,7 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
+        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         features
     }

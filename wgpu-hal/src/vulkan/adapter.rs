@@ -177,6 +177,7 @@ impl PhysicalDeviceFeatures {
                 //.shader_resource_residency(requested_features.contains(wgt::Features::SHADER_RESOURCE_RESIDENCY))
                 .geometry_shader(requested_features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX))
                 .depth_clamp(requested_features.contains(wgt::Features::DEPTH_CLIP_CONTROL))
+                .dual_src_blend(requested_features.contains(wgt::Features::DUAL_SOURCE_BLENDING))
                 .build(),
             descriptor_indexing: if requested_features.intersects(indexing_features()) {
                 Some(
@@ -460,6 +461,7 @@ impl PhysicalDeviceFeatures {
         }
 
         features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
+        features.set(F::DUAL_SOURCE_BLENDING, self.core.dual_src_blend != 0);
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
@@ -520,6 +522,7 @@ impl PhysicalDeviceFeatures {
                 | vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND,
         );
         features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
+        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         (features, dl_flags)
     }
