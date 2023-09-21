@@ -101,7 +101,6 @@ impl super::Device {
             cmd_signatures: super::CommandSignatures {
                 draw: raw
                     .create_command_signature(
-                        d3d12::RootSignature::null(),
                         &[d3d12::IndirectArgument::draw()],
                         mem::size_of::<wgt::DrawIndirectArgs>() as u32,
                         0,
@@ -109,7 +108,6 @@ impl super::Device {
                     .into_device_result("Command (draw) signature creation")?,
                 draw_indexed: raw
                     .create_command_signature(
-                        d3d12::RootSignature::null(),
                         &[d3d12::IndirectArgument::draw_indexed()],
                         mem::size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
                         0,
@@ -117,7 +115,6 @@ impl super::Device {
                     .into_device_result("Command (draw_indexed) signature creation")?,
                 dispatch: raw
                     .create_command_signature(
-                        d3d12::RootSignature::null(),
                         &[d3d12::IndirectArgument::dispatch()],
                         mem::size_of::<wgt::DispatchIndirectArgs>() as u32,
                         0,
