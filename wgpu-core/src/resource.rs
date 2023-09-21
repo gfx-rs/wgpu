@@ -702,7 +702,7 @@ pub enum TextureClearMode<A: HalApi> {
     BufferCopy,
     // View for clear via RenderPass for every subsurface (mip/layer/slice)
     RenderPass {
-        clear_views: SmallVec<[Arc<TextureView<A>>; 1]>,
+        clear_views: SmallVec<[Option<A::TextureView>; 1]>,
         is_color: bool,
     },
     Surface {
@@ -746,7 +746,13 @@ impl<A: HalApi> Drop for Texture<A> {
                 ref mut clear_views,
                 ..
             } => {
-                clear_views.clear();
+                clear_views.iter_mut().for_each(|clear_view| {
+                    if let Some(view) = clear_view.take() {
+                        unsafe {
+                            self.device.raw().destroy_texture_view(view);
+                        }
+                    }
+                });
             }
             _ => {}
         };
@@ -793,7 +799,7 @@ impl<A: HalApi> Texture<A> {
                 } else {
                     mip_level * desc.size.depth_or_array_layers
                 } + depth_or_layer;
-                clear_views[index as usize].raw()
+                clear_views[index as usize].as_ref().unwrap()
             }
         }
     }
@@ -1024,7 +1030,7 @@ pub enum TextureViewNotRenderableReason {
 pub struct TextureView<A: HalApi> {
     pub(crate) raw: Option<A::TextureView>,
     // if it's a surface texture - it's none
-    pub(crate) parent: Option<Arc<Texture<A>>>,
+    pub(crate) parent: RwLock<Option<Arc<Texture<A>>>>,
     pub(crate) device: Arc<Device<A>>,
     //TODO: store device_id for quick access?
     pub(crate) desc: HalTextureViewDescriptor,

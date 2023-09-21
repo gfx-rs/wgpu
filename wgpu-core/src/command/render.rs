@@ -693,7 +693,7 @@ struct RenderAttachment<'a, A: HalApi> {
 impl<A: HalApi> TextureView<A> {
     fn to_render_attachment(&self, usage: hal::TextureUses) -> RenderAttachment<A> {
         RenderAttachment {
-            texture: self.parent.as_ref().unwrap().clone(),
+            texture: self.parent.read().as_ref().unwrap().clone(),
             selector: &self.selector,
             usage,
         }
@@ -728,7 +728,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         if channel.load_op == LoadOp::Load {
             pending_discard_init_fixups.extend(texture_memory_actions.register_init_action(
                 &TextureInitTrackerAction {
-                    texture: view.parent.as_ref().unwrap().clone(),
+                    texture: view.parent.read().as_ref().unwrap().clone(),
                     range: TextureInitRange::from(view.selector.clone()),
                     // Note that this is needed even if the target is discarded,
                     kind: MemoryInitKind::NeedsInitializedMemory,
@@ -737,7 +737,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         } else if channel.store_op == StoreOp::Store {
             // Clear + Store
             texture_memory_actions.register_implicit_init(
-                view.parent.as_ref().unwrap(),
+                view.parent.read().as_ref().unwrap(),
                 TextureInitRange::from(view.selector.clone()),
             );
         }
@@ -746,7 +746,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
             // discard right away be alright since the texture can't be used
             // during the pass anyways
             texture_memory_actions.discard(TextureSurfaceDiscard {
-                texture: view.parent.as_ref().unwrap().clone(),
+                texture: view.parent.read().as_ref().unwrap().clone(),
                 mip_level: view.selector.mips.start,
                 layer: view.selector.layers.start,
             });
@@ -915,7 +915,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 if need_init_beforehand {
                     pending_discard_init_fixups.extend(
                         texture_memory_actions.register_init_action(&TextureInitTrackerAction {
-                            texture: view.parent.as_ref().unwrap().clone(),
+                            texture: view.parent.read().as_ref().unwrap().clone(),
                             range: TextureInitRange::from(view.selector.clone()),
                             kind: MemoryInitKind::NeedsInitializedMemory,
                         }),
@@ -933,7 +933,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 if at.depth.store_op != at.stencil.store_op {
                     if !need_init_beforehand {
                         texture_memory_actions.register_implicit_init(
-                            view.parent.as_ref().unwrap(),
+                            view.parent.read().as_ref().unwrap(),
                             TextureInitRange::from(view.selector.clone()),
                         );
                     }
@@ -948,7 +948,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 } else if at.depth.store_op == StoreOp::Discard {
                     // Both are discarded using the regular path.
                     discarded_surfaces.push(TextureSurfaceDiscard {
-                        texture: view.parent.as_ref().unwrap().clone(),
+                        texture: view.parent.read().as_ref().unwrap().clone(),
                         mip_level: view.selector.mips.start,
                         layer: view.selector.layers.start,
                     });
@@ -1074,7 +1074,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
                 }
 
                 texture_memory_actions.register_implicit_init(
-                    resolve_view.parent.as_ref().unwrap(),
+                    resolve_view.parent.read().as_ref().unwrap(),
                     TextureInitRange::from(resolve_view.selector.clone()),
                 );
                 render_attachments

@@ -18,7 +18,6 @@ use crate::{
 
 use hal::Device as _;
 use parking_lot::RwLock;
-use smallvec::SmallVec;
 
 use wgt::{BufferAddress, TextureFormat};
 
@@ -529,48 +528,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, resource) = fid.assign(texture);
             log::info!("Created Texture {:?} with {:?}", id, desc);
 
-            let format_features = device
-                .describe_format_features(&device.adapter, desc.format)
-                .unwrap();
-            let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
-            if hal_usage
-                .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
-            {
-                let is_color = !desc.format.is_depth_stencil_format();
-                let dimension = match desc.dimension {
-                    wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
-                    wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
-                    wgt::TextureDimension::D3 => unreachable!(),
-                };
-
-                let mut clear_views = SmallVec::new();
-                for mip_level in 0..desc.mip_level_count {
-                    for array_layer in 0..desc.size.depth_or_array_layers {
-                        let desc = resource::TextureViewDescriptor {
-                            label: Some(Cow::Borrowed("(wgpu internal) clear texture view")),
-                            format: Some(desc.format),
-                            dimension: Some(dimension),
-                            range: wgt::ImageSubresourceRange {
-                                aspect: wgt::TextureAspect::All,
-                                base_mip_level: mip_level,
-                                mip_level_count: Some(1),
-                                base_array_layer: array_layer,
-                                array_layer_count: Some(1),
-                            },
-                        };
-                        let view = device.create_texture_view(&resource, &desc).unwrap();
-                        let view_fid = hub.texture_views.request::<G>();
-                        let view = view_fid.init(view);
-                        clear_views.push(view);
-                    }
-                }
-                let mut clear_mode = resource.clear_mode.write();
-                *clear_mode = resource::TextureClearMode::RenderPass {
-                    clear_views,
-                    is_color,
-                };
-            }
-
             device.trackers.lock().textures.insert_single(
                 id,
                 resource,
@@ -730,45 +687,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let last_submit_index = texture.info.submission_index();
 
-        let mut clear_views = match std::mem::replace(
-            &mut *texture.clear_mode.write(),
-            resource::TextureClearMode::None,
-        ) {
-            resource::TextureClearMode::BufferCopy => SmallVec::new(),
-            resource::TextureClearMode::RenderPass {
-                mut clear_views, ..
-            } => clear_views.drain(..).collect(),
-            resource::TextureClearMode::Surface { mut clear_view } => {
-                if let Some(view) = clear_view.take() {
-                    unsafe {
-                        use hal::Device;
-                        device.raw().destroy_texture_view(view);
-                    }
-                }
-                SmallVec::new()
-            }
-            resource::TextureClearMode::None => SmallVec::new(),
-        };
-
-        match *texture.inner().as_ref().unwrap() {
-            resource::TextureInner::Native { ref raw } => {
-                if !raw.is_none() {
-                    let temp = queue::TempResource::Texture(texture.clone(), clear_views);
-                    let mut pending_writes = device.pending_writes.lock();
-                    let pending_writes = pending_writes.as_mut().unwrap();
-                    if pending_writes.dst_textures.contains_key(&texture_id) {
-                        pending_writes.temp_resources.push(temp);
-                    } else {
-                        device
-                            .lock_life()
-                            .schedule_resource_destruction(temp, last_submit_index);
-                    }
+        if let resource::TextureInner::Native { ref raw } = *texture.inner().as_ref().unwrap() {
+            if !raw.is_none() {
+                let temp = queue::TempResource::Texture(texture.clone());
+                let mut pending_writes = device.pending_writes.lock();
+                let pending_writes = pending_writes.as_mut().unwrap();
+                if pending_writes.dst_textures.contains_key(&texture_id) {
+                    pending_writes.temp_resources.push(temp);
                 } else {
-                    return Err(resource::DestroyError::AlreadyDestroyed);
+                    device
+                        .lock_life()
+                        .schedule_resource_destruction(temp, last_submit_index);
                 }
-            }
-            resource::TextureInner::Surface { .. } => {
-                clear_views.clear();
+            } else {
+                return Err(resource::DestroyError::AlreadyDestroyed);
             }
         }
 

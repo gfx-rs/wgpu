@@ -56,18 +56,18 @@ impl<A: HalApi> ResourceMaps<A> {
         }
     }
     pub(crate) fn clear(&mut self) {
-        self.buffers.clear();
-        self.staging_buffers.clear();
-        self.textures.clear();
-        self.texture_views.clear();
-        self.samplers.clear();
+        self.render_bundles.clear();
         self.bind_groups.clear();
         self.compute_pipelines.clear();
         self.render_pipelines.clear();
         self.bind_group_layouts.clear();
         self.pipeline_layouts.clear();
-        self.render_bundles.clear();
+        self.texture_views.clear();
+        self.samplers.clear();
+        self.staging_buffers.clear();
         self.query_sets.clear();
+        self.textures.clear();
+        self.buffers.clear();
     }
 
     pub(crate) fn extend(&mut self, other: Self) {
@@ -242,11 +242,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                         .staging_buffers
                         .insert(raw.as_info().id(), raw);
                 }
-                TempResource::Texture(raw, views) => {
+                TempResource::Texture(raw) => {
                     last_resources.textures.insert(raw.as_info().id(), raw);
-                    views.into_iter().for_each(|v| {
-                        last_resources.texture_views.insert(v.as_info().id(), v);
-                    });
                 }
             }
         }
@@ -328,15 +325,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     pub fn cleanup(&mut self) {
         profiling::scope!("LifetimeTracker::cleanup");
-        self.free_resources.textures.iter().for_each(|(_, t)| {
-            if let &mut resource::TextureClearMode::RenderPass {
-                ref mut clear_views,
-                ..
-            } = &mut *t.clear_mode.write()
-            {
-                clear_views.clear();
-            }
-        });
         self.free_resources.clear();
     }
 
@@ -357,10 +345,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             TempResource::StagingBuffer(raw) => {
                 resources.staging_buffers.insert(raw.as_info().id(), raw);
             }
-            TempResource::Texture(raw, views) => {
-                views.into_iter().for_each(|v| {
-                    resources.texture_views.insert(v.as_info().id(), v);
-                });
+            TempResource::Texture(raw) => {
                 resources.textures.insert(raw.as_info().id(), raw);
             }
         }
@@ -400,27 +385,27 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                 f(&bundle_id);
 
-                for v in bundle.used.buffers.used_resources() {
+                for v in bundle.used.buffers.write().drain_resources() {
                     self.suspected_resources
                         .buffers
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bundle.used.textures.used_resources() {
+                for v in bundle.used.textures.write().drain_resources() {
                     self.suspected_resources
                         .textures
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bundle.used.bind_groups.used_resources() {
+                for v in bundle.used.bind_groups.write().drain_resources() {
                     self.suspected_resources
                         .bind_groups
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bundle.used.render_pipelines.used_resources() {
+                for v in bundle.used.render_pipelines.write().drain_resources() {
                     self.suspected_resources
                         .render_pipelines
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bundle.used.query_sets.used_resources() {
+                for v in bundle.used.query_sets.write().drain_resources() {
                     self.suspected_resources
                         .query_sets
                         .insert(v.as_info().id(), v.clone());
@@ -450,22 +435,22 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                 f(&bind_group_id);
 
-                for v in bind_group.used.buffers.used_resources() {
+                for v in bind_group.used.buffers.drain_resources() {
                     self.suspected_resources
                         .buffers
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bind_group.used.textures.used_resources() {
+                for v in bind_group.used.textures.drain_resources() {
                     self.suspected_resources
                         .textures
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bind_group.used.views.used_resources() {
+                for v in bind_group.used.views.drain_resources() {
                     self.suspected_resources
                         .texture_views
                         .insert(v.as_info().id(), v.clone());
                 }
-                for v in bind_group.used.samplers.used_resources() {
+                for v in bind_group.used.samplers.drain_resources() {
                     self.suspected_resources
                         .samplers
                         .insert(v.as_info().id(), v.clone());
@@ -510,10 +495,13 @@ impl<A: HalApi> LifetimeTracker<A> {
 
                 f(&view_id);
 
-                if let Some(parent_texture) = view.parent.as_ref() {
-                    self.suspected_resources
-                        .textures
-                        .insert(parent_texture.as_info().id(), parent_texture.clone());
+                {
+                    let mut lock = view.parent.write();
+                    if let Some(parent_texture) = lock.take() {
+                        self.suspected_resources
+                            .textures
+                            .insert(parent_texture.as_info().id(), parent_texture);
+                    }
                 }
                 let submit_index = view.info.submission_index();
                 if !submit_indices.contains(&submit_index) {
@@ -555,18 +543,6 @@ impl<A: HalApi> LifetimeTracker<A> {
                     .iter_mut()
                     .find(|a| a.index == submit_index)
                     .map_or(&mut self.free_resources, |a| &mut a.last_resources);
-
-                if let &mut resource::TextureClearMode::RenderPass {
-                    ref mut clear_views,
-                    ..
-                } = &mut *texture.clear_mode.write()
-                {
-                    clear_views.into_iter().for_each(|v| {
-                        non_referenced_resources
-                            .texture_views
-                            .insert(v.as_info().id(), v.clone());
-                    });
-                }
                 non_referenced_resources
                     .textures
                     .insert(texture_id, texture.clone());
@@ -893,16 +869,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                 t.add(trace::Action::DestroyBindGroupLayout(*_id));
             }
         });
+        self.triage_suspected_query_sets(hub, trackers);
         self.triage_suspected_samplers(hub, trackers, |_id| {
             #[cfg(feature = "trace")]
             if let Some(ref mut t) = trace {
                 t.add(trace::Action::DestroySampler(*_id));
-            }
-        });
-        self.triage_suspected_buffers(hub, trackers, |_id| {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut t) = trace {
-                t.add(trace::Action::DestroyBuffer(*_id));
             }
         });
         self.triage_suspected_texture_views(hub, trackers, |_id| {
@@ -917,7 +888,12 @@ impl<A: HalApi> LifetimeTracker<A> {
                 t.add(trace::Action::DestroyTexture(*_id));
             }
         });
-        self.triage_suspected_query_sets(hub, trackers);
+        self.triage_suspected_buffers(hub, trackers, |_id| {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut t) = trace {
+                t.add(trace::Action::DestroyBuffer(*_id));
+            }
+        });
     }
 
     /// Determine which buffers are ready to map, and which must wait for the

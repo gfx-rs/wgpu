@@ -109,6 +109,7 @@ use crate::{
     storage::Storage,
 };
 
+use parking_lot::RwLock;
 use std::{fmt, ops};
 use thiserror::Error;
 
@@ -353,12 +354,13 @@ impl<A: HalApi> BindGroupStates<A> {
 /// and need to be owned by the render bundles.
 #[derive(Debug)]
 pub(crate) struct RenderBundleScope<A: HalApi> {
-    pub buffers: BufferUsageScope<A>,
-    pub textures: TextureUsageScope<A>,
+    pub buffers: RwLock<BufferUsageScope<A>>,
+    pub textures: RwLock<TextureUsageScope<A>>,
     // Don't need to track views and samplers, they are never used directly, only by bind groups.
-    pub bind_groups: StatelessTracker<A, id::BindGroupId, binding_model::BindGroup<A>>,
-    pub render_pipelines: StatelessTracker<A, id::RenderPipelineId, pipeline::RenderPipeline<A>>,
-    pub query_sets: StatelessTracker<A, id::QuerySetId, resource::QuerySet<A>>,
+    pub bind_groups: RwLock<StatelessTracker<A, id::BindGroupId, binding_model::BindGroup<A>>>,
+    pub render_pipelines:
+        RwLock<StatelessTracker<A, id::RenderPipelineId, pipeline::RenderPipeline<A>>>,
+    pub query_sets: RwLock<StatelessTracker<A, id::QuerySetId, resource::QuerySet<A>>>,
 }
 
 impl<A: HalApi> RenderBundleScope<A> {
@@ -370,19 +372,22 @@ impl<A: HalApi> RenderBundleScope<A> {
         render_pipelines: &Storage<pipeline::RenderPipeline<A>, id::RenderPipelineId>,
         query_sets: &Storage<resource::QuerySet<A>, id::QuerySetId>,
     ) -> Self {
-        let mut value = Self {
-            buffers: BufferUsageScope::new(),
-            textures: TextureUsageScope::new(),
-            bind_groups: StatelessTracker::new(),
-            render_pipelines: StatelessTracker::new(),
-            query_sets: StatelessTracker::new(),
+        let value = Self {
+            buffers: RwLock::new(BufferUsageScope::new()),
+            textures: RwLock::new(TextureUsageScope::new()),
+            bind_groups: RwLock::new(StatelessTracker::new()),
+            render_pipelines: RwLock::new(StatelessTracker::new()),
+            query_sets: RwLock::new(StatelessTracker::new()),
         };
 
-        value.buffers.set_size(buffers.len());
-        value.textures.set_size(textures.len());
-        value.bind_groups.set_size(bind_groups.len());
-        value.render_pipelines.set_size(render_pipelines.len());
-        value.query_sets.set_size(query_sets.len());
+        value.buffers.write().set_size(buffers.len());
+        value.textures.write().set_size(textures.len());
+        value.bind_groups.write().set_size(bind_groups.len());
+        value
+            .render_pipelines
+            .write()
+            .set_size(render_pipelines.len());
+        value.query_sets.write().set_size(query_sets.len());
 
         value
     }
@@ -400,8 +405,12 @@ impl<A: HalApi> RenderBundleScope<A> {
         &mut self,
         bind_group: &BindGroupStates<A>,
     ) -> Result<(), UsageConflict> {
-        unsafe { self.buffers.merge_bind_group(&bind_group.buffers)? };
-        unsafe { self.textures.merge_bind_group(&bind_group.textures)? };
+        unsafe { self.buffers.write().merge_bind_group(&bind_group.buffers)? };
+        unsafe {
+            self.textures
+                .write()
+                .merge_bind_group(&bind_group.textures)?
+        };
 
         Ok(())
     }
@@ -466,8 +475,10 @@ impl<A: HalApi> UsageScope<A> {
         &mut self,
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
-        self.buffers.merge_usage_scope(&render_bundle.buffers)?;
-        self.textures.merge_usage_scope(&render_bundle.textures)?;
+        self.buffers
+            .merge_usage_scope(&*render_bundle.buffers.read())?;
+        self.textures
+            .merge_usage_scope(&*render_bundle.textures.read())?;
 
         Ok(())
     }
@@ -594,10 +605,11 @@ impl<A: HalApi> Tracker<A> {
         render_bundle: &RenderBundleScope<A>,
     ) -> Result<(), UsageConflict> {
         self.bind_groups
-            .add_from_tracker(&render_bundle.bind_groups);
+            .add_from_tracker(&*render_bundle.bind_groups.read());
         self.render_pipelines
-            .add_from_tracker(&render_bundle.render_pipelines);
-        self.query_sets.add_from_tracker(&render_bundle.query_sets);
+            .add_from_tracker(&*render_bundle.render_pipelines.read());
+        self.query_sets
+            .add_from_tracker(&*render_bundle.query_sets.read());
 
         Ok(())
     }

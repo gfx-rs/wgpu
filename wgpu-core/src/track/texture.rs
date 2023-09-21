@@ -34,7 +34,7 @@ use hal::TextureUses;
 use arrayvec::ArrayVec;
 use naga::FastHashMap;
 
-use parking_lot::RwLockReadGuard;
+use parking_lot::{Mutex, RwLockReadGuard};
 use wgt::{strict_assert, strict_assert_eq};
 
 use std::{borrow::Cow, iter, marker::PhantomData, ops::Range, sync::Arc, vec::Drain};
@@ -158,12 +158,12 @@ struct TextureBindGroupStateData<A: HalApi> {
 /// Stores all the textures that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct TextureBindGroupState<A: HalApi> {
-    textures: Vec<TextureBindGroupStateData<A>>,
+    textures: Mutex<Vec<TextureBindGroupStateData<A>>>,
 }
 impl<A: HalApi> TextureBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            textures: Vec::new(),
+            textures: Mutex::new(Vec::new()),
         }
     }
 
@@ -171,24 +171,30 @@ impl<A: HalApi> TextureBindGroupState<A> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
-    pub(crate) fn optimize(&mut self) {
-        self.textures
-            .sort_unstable_by_key(|v| v.texture.as_info().id().unzip().0);
+    pub(crate) fn optimize(&self) {
+        let mut textures = self.textures.lock();
+        textures.sort_unstable_by_key(|v| v.texture.as_info().id().unzip().0);
     }
 
     /// Returns a list of all textures tracked. May contain duplicates.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
-        self.textures.iter().map(|v| &v.texture)
+    pub fn drain_resources(&self) -> impl Iterator<Item = Arc<Texture<A>>> + '_ {
+        let mut textures = self.textures.lock();
+        textures
+            .drain(..)
+            .map(|v| v.texture)
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Adds the given resource with the given state.
     pub fn add_single<'a>(
-        &mut self,
+        &self,
         texture: &'a Arc<Texture<A>>,
         selector: Option<TextureSelector>,
         state: TextureUses,
     ) -> Option<&'a Arc<Texture<A>>> {
-        self.textures.push(TextureBindGroupStateData {
+        let mut textures = self.textures.lock();
+        textures.push(TextureBindGroupStateData {
             selector,
             texture: texture.clone(),
             usage: state,
@@ -211,6 +217,11 @@ impl TextureStateSet {
         }
     }
 
+    fn clear(&mut self) {
+        self.simple.clear();
+        self.complex.clear();
+    }
+
     fn set_size(&mut self, size: usize) {
         self.simple.resize(size, TextureUses::UNINITIALIZED);
     }
@@ -220,7 +231,6 @@ impl TextureStateSet {
 #[derive(Debug)]
 pub(crate) struct TextureUsageScope<A: HalApi> {
     set: TextureStateSet,
-
     metadata: ResourceMetadata<A, TextureId, Texture<A>>,
 }
 
@@ -256,9 +266,11 @@ impl<A: HalApi> TextureUsageScope<A> {
         self.metadata.set_size(size);
     }
 
-    /// Returns a list of all textures tracked.
-    pub(crate) fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
-        self.metadata.owned_resources()
+    /// Drains all textures tracked.
+    pub(crate) fn drain_resources(&mut self) -> impl Iterator<Item = Arc<Texture<A>>> + '_ {
+        let resources = self.metadata.drain_resources();
+        self.set.clear();
+        resources.into_iter()
     }
 
     /// Returns true if the tracker owns no resources.
@@ -320,7 +332,8 @@ impl<A: HalApi> TextureUsageScope<A> {
         &mut self,
         bind_group: &TextureBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for t in &bind_group.textures {
+        let textures = bind_group.textures.lock();
+        for t in &*textures {
             unsafe { self.merge_single(&t.texture, t.selector.clone(), t.usage)? };
         }
 
@@ -434,7 +447,7 @@ impl<A: HalApi> TextureTracker<A> {
     }
 
     /// Returns a list of all textures tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Texture<A>>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = Arc<Texture<A>>> + '_ {
         self.metadata.owned_resources()
     }
 
@@ -638,7 +651,8 @@ impl<A: HalApi> TextureTracker<A> {
             self.set_size(incoming_size);
         }
 
-        for t in bind_group_state.textures.iter() {
+        let textures = bind_group_state.textures.lock();
+        for t in textures.iter() {
             let index = t.texture.as_info().id().unzip().0 as usize;
             scope.tracker_assert_in_bounds(index);
 

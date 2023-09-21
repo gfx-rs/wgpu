@@ -295,6 +295,7 @@ impl RenderBundleEncoder {
                     let bind_group = state
                         .trackers
                         .bind_groups
+                        .write()
                         .add_single(&*bind_group_guard, bind_group_id)
                         .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                         .map_pass_err(scope)?;
@@ -360,6 +361,7 @@ impl RenderBundleEncoder {
                     let pipeline = state
                         .trackers
                         .render_pipelines
+                        .write()
                         .add_single(&*pipeline_guard, pipeline_id)
                         .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                         .map_pass_err(scope)?;
@@ -402,6 +404,7 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
+                        .write()
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
@@ -430,6 +433,7 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
+                        .write()
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
@@ -565,6 +569,7 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
+                        .write()
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
@@ -603,6 +608,7 @@ impl RenderBundleEncoder {
                     let buffer = state
                         .trackers
                         .buffers
+                        .write()
                         .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDIRECT)
                         .map_pass_err(scope)?;
                     self.check_valid_to_use(buffer.device.info.id())
@@ -780,7 +786,8 @@ impl<A: HalApi> RenderBundle<A> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let bind_group = trackers.bind_groups.get(bind_group_id).unwrap();
+                    let bind_groups = trackers.bind_groups.read();
+                    let bind_group = bind_groups.get(bind_group_id).unwrap();
                     unsafe {
                         raw.set_bind_group(
                             pipeline_layout.as_ref().unwrap().raw(),
@@ -792,7 +799,8 @@ impl<A: HalApi> RenderBundle<A> {
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = trackers.render_pipelines.get(pipeline_id).unwrap();
+                    let render_pipelines = trackers.render_pipelines.read();
+                    let pipeline = render_pipelines.get(pipeline_id).unwrap();
                     unsafe { raw.set_render_pipeline(pipeline.raw()) };
 
                     pipeline_layout = Some(pipeline.layout.clone());
@@ -803,7 +811,8 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
+                    let buffers = trackers.buffers.read();
+                    let buffer = buffers.get(buffer_id).unwrap().raw();
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -817,7 +826,8 @@ impl<A: HalApi> RenderBundle<A> {
                     offset,
                     size,
                 } => {
-                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
+                    let buffers = trackers.buffers.read();
+                    let buffer = buffers.get(buffer_id).unwrap().raw();
                     let bb = hal::BufferBinding {
                         buffer,
                         offset,
@@ -895,7 +905,8 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
+                    let buffers = trackers.buffers.read();
+                    let buffer = buffers.get(buffer_id).unwrap().raw();
                     unsafe { raw.draw_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect {
@@ -904,7 +915,8 @@ impl<A: HalApi> RenderBundle<A> {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = trackers.buffers.get(buffer_id).unwrap().raw();
+                    let buffers = trackers.buffers.read();
+                    let buffer = buffers.get(buffer_id).unwrap().raw();
                     unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                 }
                 RenderCommand::MultiDrawIndirect { .. }

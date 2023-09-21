@@ -15,14 +15,14 @@ use crate::{
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
         Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, StagingBuffer, Texture,
-        TextureInner, TextureView,
+        TextureInner,
     },
     track, FastHashMap, SubmissionIndex,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
-use smallvec::SmallVec;
+
 use std::{
     iter, mem, ptr,
     sync::{atomic::Ordering, Arc},
@@ -161,7 +161,7 @@ pub struct WrappedSubmissionIndex {
 pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
-    Texture(Arc<Texture<A>>, SmallVec<[Arc<TextureView<A>>; 1]>),
+    Texture(Arc<Texture<A>>),
 }
 
 /// A queue execution for a particular command encoder.
@@ -1236,7 +1236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 if should_extend {
                                     unsafe {
                                         used_surface_textures
-                                            .merge_single(texture, None, hal::TextureUses::PRESENT)
+                                            .merge_single(&texture, None, hal::TextureUses::PRESENT)
                                             .unwrap();
                                     };
                                 }
@@ -1310,11 +1310,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 // We need to update the submission indices for the contained
                                 // state-less (!) resources as well, excluding the bind groups.
                                 // They don't get deleted too early if the bundle goes out of scope.
-                                for render_pipeline in bundle.used.render_pipelines.used_resources()
+                                for render_pipeline in
+                                    bundle.used.render_pipelines.read().used_resources()
                                 {
                                     render_pipeline.info.use_at(submit_index);
                                 }
-                                for query_set in bundle.used.query_sets.used_resources() {
+                                for query_set in bundle.used.query_sets.read().used_resources() {
                                     query_set.info.use_at(submit_index);
                                 }
                                 if bundle.is_unique() {

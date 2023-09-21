@@ -37,6 +37,7 @@ use arrayvec::ArrayVec;
 use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard, RwLock};
 
+use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{TextureFormat, TextureSampleType, TextureViewDimension};
 
@@ -750,7 +751,50 @@ impl<A: HalApi> Device<A> {
                 .map_err(DeviceError::from)?
         };
 
-        let clear_mode = resource::TextureClearMode::BufferCopy;
+        let clear_mode = if hal_usage
+            .intersects(hal::TextureUses::DEPTH_STENCIL_WRITE | hal::TextureUses::COLOR_TARGET)
+        {
+            let (is_color, usage) = if desc.format.is_depth_stencil_format() {
+                (false, hal::TextureUses::DEPTH_STENCIL_WRITE)
+            } else {
+                (true, hal::TextureUses::COLOR_TARGET)
+            };
+            let dimension = match desc.dimension {
+                wgt::TextureDimension::D1 => wgt::TextureViewDimension::D1,
+                wgt::TextureDimension::D2 => wgt::TextureViewDimension::D2,
+                wgt::TextureDimension::D3 => unreachable!(),
+            };
+
+            let mut clear_views = SmallVec::new();
+            for mip_level in 0..desc.mip_level_count {
+                for array_layer in 0..desc.size.depth_or_array_layers {
+                    let desc = hal::TextureViewDescriptor {
+                        label: Some("(wgpu internal) clear texture view"),
+                        format: desc.format,
+                        dimension,
+                        usage,
+                        range: wgt::ImageSubresourceRange {
+                            aspect: wgt::TextureAspect::All,
+                            base_mip_level: mip_level,
+                            mip_level_count: Some(1),
+                            base_array_layer: array_layer,
+                            array_layer_count: Some(1),
+                        },
+                    };
+                    clear_views.push(Some(
+                        unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
+                            .map_err(DeviceError::from)?,
+                    ));
+                }
+            }
+            resource::TextureClearMode::RenderPass {
+                clear_views,
+                is_color,
+            }
+        } else {
+            resource::TextureClearMode::BufferCopy
+        };
+
         let mut texture = self.create_texture_from_hal(
             raw_texture,
             hal_usage,
@@ -1049,7 +1093,7 @@ impl<A: HalApi> Device<A> {
 
         Ok(TextureView {
             raw: Some(raw),
-            parent: Some(texture.clone()),
+            parent: RwLock::new(Some(texture.clone())),
             device: self.clone(),
             desc: resource::HalTextureViewDescriptor {
                 format: resolved_format,
@@ -1752,13 +1796,14 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         used_texture_ranges: &mut Vec<TextureInitTrackerAction<A>>,
     ) -> Result<(), binding_model::CreateBindGroupError> {
-        let texture_id = view.parent.as_ref().unwrap().as_info().id();
+        let texture = view.parent.read();
+        let texture_id = texture.as_ref().unwrap().as_info().id();
         // Careful here: the texture may no longer have its own ref count,
         // if it was deleted by the user.
         let texture = used
             .textures
             .add_single(
-                view.parent.as_ref().unwrap(),
+                texture.as_ref().unwrap(),
                 Some(view.selector.clone()),
                 internal_use,
             )

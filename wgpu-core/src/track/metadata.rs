@@ -133,14 +133,29 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
     }
 
     /// Returns an iterator over the resources owned by `self`.
-    pub(super) fn owned_resources(&self) -> impl Iterator<Item = &Arc<T>> + '_ {
+    pub(super) fn owned_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
         if !self.owned.is_empty() {
             self.tracker_assert_in_bounds(self.owned.len() - 1)
         };
         iterate_bitvec_indices(&self.owned).map(move |index| {
             let resource = unsafe { self.resources.get_unchecked(index) };
-            resource.as_ref().unwrap()
+            resource.as_ref().unwrap().clone()
         })
+    }
+
+    /// Returns an iterator over the resources owned by `self`.
+    pub(super) fn drain_resources(&mut self) -> Vec<Arc<T>> {
+        if !self.owned.is_empty() {
+            self.tracker_assert_in_bounds(self.owned.len() - 1)
+        };
+        let mut resources = Vec::new();
+        iterate_bitvec_indices(&self.owned).for_each(|index| {
+            let resource = unsafe { self.resources.get_unchecked(index) };
+            resources.push(resource.as_ref().unwrap().clone());
+        });
+        self.owned.clear();
+        self.resources.clear();
+        resources
     }
 
     /// Returns an iterator over the indices of all resources owned by `self`.

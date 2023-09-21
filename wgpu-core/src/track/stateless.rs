@@ -6,6 +6,8 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
+use parking_lot::Mutex;
+
 use crate::{
     hal_api::HalApi, id::TypedId, resource::Resource, storage::Storage, track::ResourceMetadata,
 };
@@ -13,13 +15,13 @@ use crate::{
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct StatelessBindGroupSate<Id: TypedId, T: Resource<Id>> {
-    resources: Vec<(Id, Arc<T>)>,
+    resources: Mutex<Vec<(Id, Arc<T>)>>,
 }
 
 impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     pub fn new() -> Self {
         Self {
-            resources: Vec::new(),
+            resources: Mutex::new(Vec::new()),
         }
     }
 
@@ -27,20 +29,37 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
     ///
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
-    pub(crate) fn optimize(&mut self) {
-        self.resources.sort_unstable_by_key(|&(id, _)| id.unzip().0);
+    pub(crate) fn optimize(&self) {
+        let mut resources = self.resources.lock();
+        resources.sort_unstable_by_key(|&(id, _)| id.unzip().0);
     }
 
     /// Returns a list of all resources tracked. May contain duplicates.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<T>> + '_ {
-        self.resources.iter().map(|&(_, ref resource)| resource)
+    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
+        let resources = self.resources.lock();
+        resources
+            .iter()
+            .map(|&(_, ref resource)| resource.clone())
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
+    /// Returns a list of all resources tracked. May contain duplicates.
+    pub fn drain_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
+        let mut resources = self.resources.lock();
+        resources
+            .drain(..)
+            .map(|(_, r)| r)
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Adds the given resource.
-    pub fn add_single<'a>(&mut self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
+    pub fn add_single<'a>(&self, storage: &'a Storage<T, Id>, id: Id) -> Option<&'a T> {
         let resource = storage.get(id).ok()?;
 
-        self.resources.push((id, resource.clone()));
+        let mut resources = self.resources.lock();
+        resources.push((id, resource.clone()));
 
         Some(resource)
     }
@@ -50,7 +69,6 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
 #[derive(Debug)]
 pub(crate) struct StatelessTracker<A: HalApi, Id: TypedId, T: Resource<Id>> {
     metadata: ResourceMetadata<A, Id, T>,
-
     _phantom: PhantomData<Id>,
 }
 
@@ -58,7 +76,6 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     pub fn new() -> Self {
         Self {
             metadata: ResourceMetadata::new(),
-
             _phantom: PhantomData,
         }
     }
@@ -83,8 +100,14 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
     }
 
     /// Returns a list of all resources tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<T>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = Arc<T>> + '_ {
         self.metadata.owned_resources()
+    }
+
+    /// Returns a list of all resources tracked.
+    pub fn drain_resources(&mut self) -> impl Iterator<Item = Arc<T>> + '_ {
+        let resources = self.metadata.drain_resources();
+        resources.into_iter()
     }
 
     /// Inserts a single resource into the resource tracker.

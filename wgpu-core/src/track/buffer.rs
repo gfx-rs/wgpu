@@ -19,6 +19,7 @@ use crate::{
     },
 };
 use hal::{BufferBarrier, BufferUses};
+use parking_lot::Mutex;
 use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {
@@ -43,14 +44,14 @@ impl ResourceUses for BufferUses {
 /// Stores all the buffers that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct BufferBindGroupState<A: HalApi> {
-    buffers: Vec<(Arc<Buffer<A>>, BufferUses)>,
+    buffers: Mutex<Vec<(Arc<Buffer<A>>, BufferUses)>>,
 
     _phantom: PhantomData<A>,
 }
 impl<A: HalApi> BufferBindGroupState<A> {
     pub fn new() -> Self {
         Self {
-            buffers: Vec::new(),
+            buffers: Mutex::new(Vec::new()),
 
             _phantom: PhantomData,
         }
@@ -61,33 +62,43 @@ impl<A: HalApi> BufferBindGroupState<A> {
     /// When this list of states is merged into a tracker, the memory
     /// accesses will be in a constant assending order.
     #[allow(clippy::pattern_type_mismatch)]
-    pub(crate) fn optimize(&mut self) {
-        self.buffers
-            .sort_unstable_by_key(|(b, _)| b.as_info().id().unzip().0);
+    pub(crate) fn optimize(&self) {
+        let mut buffers = self.buffers.lock();
+        buffers.sort_unstable_by_key(|(b, _)| b.as_info().id().unzip().0);
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
     #[allow(clippy::pattern_type_mismatch)]
     pub fn used_ids(&self) -> impl Iterator<Item = BufferId> + '_ {
-        self.buffers.iter().map(|(ref b, _)| b.as_info().id())
+        let buffers = self.buffers.lock();
+        buffers
+            .iter()
+            .map(|(ref b, _)| b.as_info().id())
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Returns a list of all buffers tracked. May contain duplicates.
-    #[allow(clippy::pattern_type_mismatch)]
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer<A>>> + '_ {
-        self.buffers.iter().map(|(ref buffer, _u)| buffer)
+    pub fn drain_resources(&self) -> impl Iterator<Item = Arc<Buffer<A>>> + '_ {
+        let mut buffers = self.buffers.lock();
+        buffers
+            .drain(..)
+            .map(|(buffer, _u)| buffer)
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Adds the given resource with the given state.
     pub fn add_single<'a>(
-        &mut self,
+        &self,
         storage: &'a Storage<Buffer<A>, BufferId>,
         id: BufferId,
         state: BufferUses,
     ) -> Option<&'a Arc<Buffer<A>>> {
         let buffer = storage.get(id).ok()?;
 
-        self.buffers.push((buffer.clone(), state));
+        let mut buffers = self.buffers.lock();
+        buffers.push((buffer.clone(), state));
 
         Some(buffer)
     }
@@ -131,9 +142,11 @@ impl<A: HalApi> BufferUsageScope<A> {
         }
     }
 
-    /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer<A>>> + '_ {
-        self.metadata.owned_resources()
+    /// Drains all buffers tracked.
+    pub fn drain_resources(&mut self) -> impl Iterator<Item = Arc<Buffer<A>>> + '_ {
+        let resources = self.metadata.drain_resources();
+        self.state.clear();
+        resources.into_iter()
     }
 
     pub fn get(&self, id: BufferId) -> Option<&Arc<Buffer<A>>> {
@@ -166,7 +179,8 @@ impl<A: HalApi> BufferUsageScope<A> {
         &mut self,
         bind_group: &BufferBindGroupState<A>,
     ) -> Result<(), UsageConflict> {
-        for &(ref resource, state) in &bind_group.buffers {
+        let buffers = bind_group.buffers.lock();
+        for &(ref resource, state) in &*buffers {
             let index = resource.as_info().id().unzip().0 as usize;
 
             unsafe {
@@ -314,7 +328,7 @@ impl<A: HalApi> BufferTracker<A> {
     }
 
     /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer<A>>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = Arc<Buffer<A>>> + '_ {
         self.metadata.owned_resources()
     }
 
