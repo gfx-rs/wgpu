@@ -104,18 +104,28 @@ fn device_lose_then_more() {
             height: 512,
             depth_or_array_layers: 1,
         };
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        let texture_for_view = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: texture_extent,
             mip_level_count: 2,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rg8Uint,
-            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
+        let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let target_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: texture_extent,
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Uint,
+            usage: wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
 
         // Create some buffers.
         let buffer_source = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -176,7 +186,7 @@ fn device_lose_then_more() {
         // Texture clear should fail.
         fail(&ctx.device, || {
             encoder_for_clear.clear_texture(
-                &texture,
+                &texture_for_write,
                 &wgpu::ImageSubresourceRange {
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
@@ -224,7 +234,7 @@ fn device_lose_then_more() {
                     bytes_per_row: Some(4),
                     rows_per_image: None,
                 },
-            }, texture.as_image_copy(), texture_extent);
+            }, texture_for_write.as_image_copy(), texture_extent);
         });
     })
 }
