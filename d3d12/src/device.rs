@@ -291,7 +291,6 @@ impl Device {
 
     pub fn create_command_signature(
         &self,
-        root_signature: RootSignature,
         arguments: &[IndirectArgument],
         stride: u32,
         node_mask: NodeMask,
@@ -307,7 +306,7 @@ impl Device {
         let hr = unsafe {
             self.CreateCommandSignature(
                 &desc,
-                root_signature.as_mut_ptr(),
+                std::ptr::null_mut(),
                 &d3d12::ID3D12CommandSignature::uuidof(),
                 signature.mut_void(),
             )
