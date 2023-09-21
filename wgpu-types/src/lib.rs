@@ -371,7 +371,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with Unorm/UnormSrgb channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -409,7 +409,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for BCn formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with the HDR channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -736,6 +736,15 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 53;
+
+        /// Allows vertex shaders to have outputs which are not consumed
+        /// by the fragment shader.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
 
         // 54..59 available
 
