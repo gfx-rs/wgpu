@@ -122,6 +122,7 @@ struct EntryPoint {
 #[derive(Debug)]
 pub struct Interface {
     limits: wgt::Limits,
+    features: wgt::Features,
     resources: naga::Arena<Resource>,
     entry_points: FastHashMap<(naga::ShaderStage, String), EntryPoint>,
 }
@@ -831,7 +832,12 @@ impl Interface {
         list.push(varying);
     }
 
-    pub fn new(module: &naga::Module, info: &naga::valid::ModuleInfo, limits: wgt::Limits) -> Self {
+    pub fn new(
+        module: &naga::Module,
+        info: &naga::valid::ModuleInfo,
+        limits: wgt::Limits,
+        features: wgt::Features,
+    ) -> Self {
         let mut resources = naga::Arena::new();
         let mut resource_mapping = FastHashMap::default();
         for (var_handle, var) in module.global_variables.iter() {
@@ -912,6 +918,7 @@ impl Interface {
 
         Self {
             limits,
+            features,
             resources,
             entry_points,
         }
@@ -1121,7 +1128,12 @@ impl Interface {
         }
 
         // Check all vertex outputs and make sure the fragment shader consumes them.
-        if shader_stage == naga::ShaderStage::Fragment {
+        // This requirement is removed if the `SHADER_UNUSED_VERTEX_OUTPUT` feature is enabled.
+        if shader_stage == naga::ShaderStage::Fragment
+            && !self
+                .features
+                .contains(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT)
+        {
             for &index in inputs.keys() {
                 // This is a linear scan, but the count should be low enough
                 // that this should be fine.
