@@ -1006,16 +1006,24 @@ static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
-/// The render target must be cleared at least once before its content is loaded.
-///
-/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop).
+/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
+/// plus the corresponding clearValue.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum LoadOp<V> {
-    /// Clear with a specified value.
+    /// Loads the specified value for this attachment into the render pass.
+    ///
+    /// On some GPU hardware (primarily mobile), "clear" is significantly cheaper
+    /// because it avoids loading data from main memory into tile-local memory.
+    ///
+    /// On other GPU hardware, there isn’t a significant difference.
+    ///
+    /// As a result, it is recommended to use "clear" rather than "load" in cases
+    /// where the initial value doesn’t matter
+    /// (e.g. the render target will be cleared using a skybox).
     Clear(V),
-    /// Load from memory.
+    /// Loads the existing value for this attachment into the render pass.
     Load,
 }
 
@@ -1023,6 +1031,28 @@ impl<V: Default> Default for LoadOp<V> {
     fn default() -> Self {
         Self::Clear(Default::default())
     }
+}
+
+/// Operation to perform to the output attachment at the end of a render pass.
+///
+/// Corresponds to [WebGPU `GPUStoreOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum StoreOp {
+    /// Stores the resulting value of the render pass for this attachment.
+    #[default]
+    Store,
+    /// Discards the resulting value of the render pass for this attachment.
+    ///
+    /// The attachment will be treated as uninitialized afterwards.
+    /// (If only either Depth or Stencil texture-aspects is set to `Discard`,
+    /// the respective other texture-aspect will be preserved.)
+    ///
+    /// This can be significantly faster on tile-based render hardware.
+    ///
+    /// Prefer this if the attachment is not read by subsequent passes.
+    Discard,
 }
 
 /// Pair of load and store operations for an attachment aspect.
@@ -1036,14 +1066,18 @@ pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
     /// Whether data will be written to through this attachment.
-    pub store: bool,
+    ///
+    /// Note that resolve textures (if specified) are always written to,
+    /// regardless of this setting.
+    pub store: StoreOp,
 }
 
 impl<V: Default> Default for Operations<V> {
+    #[inline]
     fn default() -> Self {
         Self {
-            load: Default::default(),
-            store: true,
+            load: LoadOp::<V>::default(),
+            store: StoreOp::default(),
         }
     }
 }
@@ -1084,6 +1118,8 @@ pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
+    ///
+    /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
     pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
@@ -2752,18 +2788,103 @@ impl Drop for Device {
     }
 }
 
-/// Requesting a device failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RequestDeviceError;
+/// Requesting a device from an [`Adapter`] failed.
+#[derive(Clone, Debug)]
+pub struct RequestDeviceError {
+    inner: RequestDeviceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum RequestDeviceErrorKind {
+    /// Error from [`wgpu_core`].
+    // must match dependency cfg
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        feature = "webgl",
+        target_os = "emscripten"
+    ))]
+    Core(core::instance::RequestDeviceError),
+
+    /// Error from web API that was called by `wgpu` to request a device.
+    ///
+    /// (This is currently never used by the webgl backend, but it could be.)
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    Web(wasm_bindgen::JsValue),
+}
+
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for RequestDeviceErrorKind {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for RequestDeviceErrorKind {}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Requesting a device failed")
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.fmt(f),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(error_js_value) => {
+                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
+                write!(f, "{error_js_value:?}")
+            }
+        }
     }
 }
 
-impl error::Error for RequestDeviceError {}
+impl error::Error for RequestDeviceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.source(),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(_) => None,
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+impl From<core::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: core::instance::RequestDeviceError) -> Self {
+        Self {
+            inner: RequestDeviceErrorKind::Core(error),
+        }
+    }
+}
 
 /// [`Instance::create_surface()`] or a related function failed.
 #[derive(Clone, Debug)]

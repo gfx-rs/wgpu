@@ -270,7 +270,7 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Vulkan
         /// - DX12
-        /// - Metal - TODO: Not yet supported on command encoder.
+        /// - Metal
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
@@ -371,7 +371,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with Unorm/UnormSrgb channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -409,7 +409,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for BCn formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with the HDR channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -458,10 +458,9 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
+        /// - Metal (AMD & Intel, not Apple GPUs)
         ///
-        /// This is currently unimplemented on Metal.
-        /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
-        /// (This is a common limitation of tile-based rasterization GPUs)
+        /// This is generally not available on tile-based rasterization GPUs.
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 33;
@@ -738,6 +737,15 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 53;
 
+        /// Allows vertex shaders to have outputs which are not consumed
+        /// by the fragment shader.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
+
         // 54..59 available
 
         // Shader:
@@ -782,7 +790,17 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const SHADER_EARLY_DEPTH_TEST = 1 << 62;
 
-        // 62..64 available
+        /// Allows two outputs from a shader to be used for blending.
+        /// Note that dual-source blending doesn't support multiple render targets.
+        ///
+        /// For more info see the OpenGL ES extension GL_EXT_blend_func_extended.
+        ///
+        /// Supported platforms:
+        /// - OpenGL ES (with GL_EXT_blend_func_extended)
+        /// - Metal (with MSL 1.2+)
+        /// - Vulkan (with dualSrcBlend)
+        /// - DX12
+        const DUAL_SOURCE_BLENDING = 1 << 63;
     }
 }
 
@@ -1550,6 +1568,8 @@ impl TextureViewDimension {
 ///
 /// Corresponds to [WebGPU `GPUBlendFactor`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpublendfactor).
+/// Values using S1 requires [`Features::DUAL_SOURCE_BLENDING`] and can only be
+/// used with the first render target.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1582,6 +1602,29 @@ pub enum BlendFactor {
     Constant = 11,
     /// 1.0 - Constant
     OneMinusConstant = 12,
+    /// S1.component
+    Src1 = 13,
+    /// 1.0 - S1.component
+    OneMinusSrc1 = 14,
+    /// S1.alpha
+    Src1Alpha = 15,
+    /// 1.0 - S1.alpha
+    OneMinusSrc1Alpha = 16,
+}
+
+impl BlendFactor {
+    /// Returns `true` if the blend factor references the second blend source.
+    ///
+    /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
+    pub fn ref_second_blend_source(&self) -> bool {
+        match self {
+            BlendFactor::Src1
+            | BlendFactor::OneMinusSrc1
+            | BlendFactor::Src1Alpha
+            | BlendFactor::OneMinusSrc1Alpha => true,
+            _ => false,
+        }
+    }
 }
 
 /// Alpha blend operation.

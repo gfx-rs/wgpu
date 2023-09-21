@@ -4,7 +4,7 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
@@ -441,6 +441,13 @@ fn map_texture_tagged_copy_view(
     }
 }
 
+fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
+    match op {
+        StoreOp::Store => wgc::command::StoreOp::Store,
+        StoreOp::Discard => wgc::command::StoreOp::Discard,
+    }
+}
+
 fn map_pass_channel<V: Copy + Default>(
     ops: Option<&Operations<V>>,
 ) -> wgc::command::PassChannel<V> {
@@ -450,11 +457,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Clear,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value,
             read_only: false,
         },
@@ -463,11 +466,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Load,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value: V::default(),
             read_only: false,
         },
@@ -671,8 +670,7 @@ impl crate::Context for Context {
             ()
         ));
         if let Some(err) = error {
-            log::error!("Error in Adapter::request_device: {}", err);
-            return ready(Err(crate::RequestDeviceError));
+            return ready(Err(err.into()));
         }
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {

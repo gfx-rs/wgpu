@@ -222,6 +222,10 @@ pub fn map_polygon_mode(mode: wgt::PolygonMode) -> d3d12_ty::D3D12_FILL_MODE {
     }
 }
 
+/// D3D12 doesn't support passing factors ending in `_COLOR` for alpha blending
+/// (see https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_render_target_blend_desc).
+/// Therefore this function takes an additional `is_alpha` argument
+/// which if set will return an equivalent `_ALPHA` factor.
 fn map_blend_factor(factor: wgt::BlendFactor, is_alpha: bool) -> d3d12_ty::D3D12_BLEND {
     use wgt::BlendFactor as Bf;
     match factor {
@@ -242,12 +246,12 @@ fn map_blend_factor(factor: wgt::BlendFactor, is_alpha: bool) -> d3d12_ty::D3D12
         Bf::Constant => d3d12_ty::D3D12_BLEND_BLEND_FACTOR,
         Bf::OneMinusConstant => d3d12_ty::D3D12_BLEND_INV_BLEND_FACTOR,
         Bf::SrcAlphaSaturated => d3d12_ty::D3D12_BLEND_SRC_ALPHA_SAT,
-        //Bf::Src1Color if is_alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
-        //Bf::Src1Color => d3d12_ty::D3D12_BLEND_SRC1_COLOR,
-        //Bf::OneMinusSrc1Color if is_alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
-        //Bf::OneMinusSrc1Color => d3d12_ty::D3D12_BLEND_INV_SRC1_COLOR,
-        //Bf::Src1Alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
-        //Bf::OneMinusSrc1Alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
+        Bf::Src1 if is_alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
+        Bf::Src1 => d3d12_ty::D3D12_BLEND_SRC1_COLOR,
+        Bf::OneMinusSrc1 if is_alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
+        Bf::OneMinusSrc1 => d3d12_ty::D3D12_BLEND_INV_SRC1_COLOR,
+        Bf::Src1Alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
     }
 }
 
