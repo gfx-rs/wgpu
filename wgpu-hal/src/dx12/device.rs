@@ -321,7 +321,6 @@ impl crate::Device<super::Api> for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let mut resource = d3d12::Resource::null();
         let mut size = desc.size;
         if desc.usage.contains(crate::BufferUses::UNIFORM) {
             let align_mask = d3d12_ty::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
@@ -344,6 +343,7 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
+        let mut resource = d3d12::Resource::null();
         let (hr, allocation) =
             super::suballocation::create_buffer_resource(self, desc, raw_desc, &mut resource)?;
 
@@ -403,8 +403,6 @@ impl crate::Device<super::Api> for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         use super::suballocation::create_texture_resource;
 
-        let mut resource = d3d12::Resource::null();
-
         let raw_desc = d3d12_ty::D3D12_RESOURCE_DESC {
             Dimension: conv::map_texture_dimension(desc.dimension),
             Alignment: 0,
@@ -426,6 +424,7 @@ impl crate::Device<super::Api> for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
+        let mut resource = d3d12::Resource::null();
         let (hr, allocation) = create_texture_resource(self, desc, raw_desc, &mut resource)?;
 
         hr.into_device_result("Texture creation")?;
