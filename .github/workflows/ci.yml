@@ -280,7 +280,7 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report --features vulkan-portability
+            WGPU_BACKEND=$backend METAL_DEVICE_WRAPPER_TYPE=1 cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report --features vulkan-portability
           done
 
       - uses: actions/upload-artifact@v3
