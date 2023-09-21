@@ -1915,7 +1915,7 @@ impl crate::context::Context for Context {
     }
 
     fn device_lose(&self, _device: &Self::DeviceId, device_data: &Self::DeviceData) {
-        device_data.0.lose()
+        // TODO: figure out the GPUDevice implementation of this.
     }
 
     fn device_poll(
