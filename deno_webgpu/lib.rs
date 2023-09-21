@@ -365,6 +365,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
         return_features.push("shader-early-depth-test");
     }
+    if features.contains(wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT) {
+        return_features.push("shader-unused-vertex-output");
+    }
 
     return_features
 }
@@ -623,6 +626,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::SHADER_EARLY_DEPTH_TEST,
             required_features.0.contains("shader-early-depth-test"),
+        );
+        features.set(
+            wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT,
+            required_features.0.contains("shader-unused-vertex-output"),
         );
 
         features
