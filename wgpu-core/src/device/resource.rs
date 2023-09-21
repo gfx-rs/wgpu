@@ -1308,7 +1308,8 @@ impl<A: HalApi> Device<A> {
                     inner: Box::new(inner),
                 })
             })?;
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
+        let interface =
+            validation::Interface::new(&module, &info, self.limits.clone(), self.features);
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 
         let hal_desc = hal::ShaderModuleDescriptor {
