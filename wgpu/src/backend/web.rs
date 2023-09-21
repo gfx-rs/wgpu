@@ -1914,7 +1914,7 @@ impl crate::context::Context for Context {
         // Device is dropped automatically
     }
 
-    fn device_lose(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+    fn device_lose(&self, _device: &Self::DeviceId, device_data: &Self::DeviceData) {
         device_data.0.lose()
     }
 
