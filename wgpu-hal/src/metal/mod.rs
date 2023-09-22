@@ -34,7 +34,10 @@ use std::{
 
 use arrayvec::ArrayVec;
 use metal::foreign_types::ForeignTypeRef as _;
+use naga::{FastHashMap, ResourceBinding};
 use parking_lot::Mutex;
+
+use crate::BindGroupEntry;
 
 #[derive(Clone)]
 pub struct Api;
@@ -629,9 +632,24 @@ struct BufferResource {
 #[derive(Debug, Default)]
 pub struct BindGroup {
     counters: MultiStageResourceCounters,
-    buffers: Vec<BufferResource>,
-    samplers: Vec<SamplerPtr>,
-    textures: Vec<TexturePtr>,
+    // buffers: Vec<BufferResource>,
+    // samplers: Vec<SamplerPtr>,
+    // textures: Vec<TexturePtr>,
+    bindings: Vec<MetalBinding>,
+}
+
+#[derive(Debug)]
+pub struct MetalBinding {
+    binding: u32,
+    visibility: wgt::ShaderStages,
+    resource: MetalBindGroupResource,
+}
+
+#[derive(Debug)]
+enum MetalBindGroupResource {
+    Buffer(Vec<BufferResource>),
+    Texture(Vec<TexturePtr>),
+    Sampler(Vec<SamplerPtr>),
 }
 
 unsafe impl Send for BindGroup {}
@@ -656,6 +674,9 @@ struct PipelineStageInfo {
     ///
     /// See [`device::CompiledShader::sized_bindings`] for more details.
     sized_bindings: Vec<naga::ResourceBinding>,
+
+    /// An argument buffer, if necessary
+    argument_buffer: Option<Arc<ArgumentBuffer>>,
 }
 
 impl PipelineStageInfo {
@@ -663,6 +684,7 @@ impl PipelineStageInfo {
         self.push_constants = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
+        self.argument_buffer = None;
     }
 
     fn assign_from(&mut self, other: &Self) {
@@ -670,6 +692,7 @@ impl PipelineStageInfo {
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
+        self.argument_buffer = other.argument_buffer.clone();
     }
 }
 
@@ -816,3 +839,11 @@ pub struct CommandBuffer {
 
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
+
+#[derive(Debug, Clone)]
+struct ArgumentBuffer {
+    id: u32,
+    encoder: metal::ArgumentEncoder,
+    buffer: metal::Buffer,
+    entries: FastHashMap<naga::ResourceBinding, u32>,
+}

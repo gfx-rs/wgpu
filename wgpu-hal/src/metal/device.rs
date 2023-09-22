@@ -1,3 +1,4 @@
+use naga::{FastHashMap, ShaderStage};
 use parking_lot::Mutex;
 use std::{
     num::NonZeroU32,
@@ -6,8 +7,8 @@ use std::{
     thread, time,
 };
 
-use super::conv;
-use crate::auxil::map_naga_stage;
+use super::{conv, ArgumentBuffer};
+use crate::{auxil::map_naga_stage, RenderPipelineDescriptor};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
@@ -28,6 +29,7 @@ struct CompiledShader {
     sized_bindings: Vec<naga::ResourceBinding>,
 
     immutable_buffer_mask: usize,
+    argument_buffer_entries: FastHashMap<naga::ResourceBinding, u32>,
 }
 
 fn create_stencil_desc(
@@ -114,7 +116,7 @@ impl super::Device {
             },
         };
 
-        let (source, info) = naga::back::msl::write_string(
+        let (source, mut translation_info) = naga::back::msl::write_string(
             module,
             &stage.module.naga.info,
             &options,
@@ -152,9 +154,12 @@ impl super::Device {
             .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
         let ep = &module.entry_points[ep_index];
-        let ep_name = info.entry_point_names[ep_index]
-            .as_ref()
+        let ep_info = translation_info
+            .entry_point_info
+            .swap_remove(ep_index)
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
+
+        let ep_name = &ep_info.name;
 
         let wg_size = metal::MTLSize {
             width: ep.workgroup_size[0] as _,
@@ -168,14 +173,15 @@ impl super::Device {
         })?;
 
         // collect sizes indices, immutable buffers, and work group memory sizes
-        let ep_info = &stage.module.naga.info.get_entry_point(ep_index);
+        let function_info = &stage.module.naga.info.get_entry_point(ep_index);
         let mut wg_memory_sizes = Vec::new();
         let mut sized_bindings = Vec::new();
         let mut immutable_buffer_mask = 0;
+
         for (var_handle, var) in module.global_variables.iter() {
             match var.space {
                 naga::AddressSpace::WorkGroup => {
-                    if !ep_info[var_handle].is_empty() {
+                    if !function_info[var_handle].is_empty() {
                         let size = module.types[var.ty].inner.size(module.to_ctx());
                         wg_memory_sizes.push(size);
                     }
@@ -193,7 +199,7 @@ impl super::Device {
                     };
 
                     // check for an immutable buffer
-                    if !ep_info[var_handle].is_empty() && !storage_access_store {
+                    if !function_info[var_handle].is_empty() && !storage_access_store {
                         let slot = ep_resources.resources[&br].buffer.unwrap();
                         immutable_buffer_mask |= 1 << slot;
                     }
@@ -222,6 +228,7 @@ impl super::Device {
             wg_memory_sizes,
             sized_bindings,
             immutable_buffer_mask,
+            argument_buffer_entries: ep_info.argument_buffer_entries,
         })
     }
 
@@ -270,6 +277,50 @@ impl super::Device {
 
     pub fn raw_device(&self) -> &Mutex<metal::Device> {
         &self.shared.device
+    }
+
+    fn create_argument_buffer(
+        &self,
+        argument_buffer_entries: FastHashMap<naga::ResourceBinding, u32>,
+        function: &metal::Function,
+    ) -> Option<Arc<ArgumentBuffer>> {
+        // Check to see if this shader needs an argument buffer.
+        if argument_buffer_entries.is_empty() {
+            return None;
+        }
+        // How many bind groups does this entry point use?
+        // if shader.argument_buffers_used.is_empty() {
+        //     return Vec::new();
+        // }
+
+        // let mut buffers = Vec::new();
+        // for id in shader.argument_buffers_used.iter().copied() {
+        let encoder = function.new_argument_encoder(0);
+
+        let size = encoder.encoded_length();
+        if size == 0 {
+            return None;
+        }
+
+        let id = 0;
+
+        log::debug!("Creating argument buffer at index {id} of size: {size}");
+        let buffer = self
+            .shared
+            .device
+            .lock()
+            .new_buffer(size, metal::MTLResourceOptions::empty());
+        // TODO (KR): more meaningful label
+        buffer.set_label(&format!("ArgumentBufferGroup{id}"));
+        log::info!("Created argument buffer: {:?}", buffer);
+        encoder.set_argument_buffer(&buffer, 0);
+        Some(Arc::new(ArgumentBuffer {
+            id,
+            encoder,
+            buffer,
+            entries: argument_buffer_entries,
+        }))
+        // }
     }
 }
 
@@ -474,6 +525,8 @@ impl crate::Device<super::Api> for super::Device {
 
             descriptor.set_lod_min_clamp(desc.lod_clamp.start);
             descriptor.set_lod_max_clamp(desc.lod_clamp.end);
+
+            descriptor.set_support_argument_buffers(true);
 
             if let Some(fun) = desc.compare {
                 descriptor.set_compare_function(conv::map_compare_function(fun));
@@ -705,30 +758,35 @@ impl crate::Device<super::Api> for super::Device {
         for (&stage, counter) in super::NAGA_STAGES.iter().zip(bg.counters.iter_mut()) {
             let stage_bit = map_naga_stage(stage);
             let mut dynamic_offsets_count = 0u32;
-            for (entry, layout) in desc.entries.iter().zip(desc.layout.entries.iter()) {
-                let size = layout.count.map_or(1, |c| c.get());
+            for (bind_group_entry, layout_entry) in
+                desc.entries.iter().zip(desc.layout.entries.iter())
+            {
+                let size = layout_entry.count.map_or(1, |c| c.get());
+                let visibility = layout_entry.visibility;
+                let binding = bind_group_entry.binding;
                 if let wgt::BindingType::Buffer {
                     has_dynamic_offset: true,
                     ..
-                } = layout.ty
+                } = layout_entry.ty
                 {
                     dynamic_offsets_count += size;
                 }
-                if !layout.visibility.contains(stage_bit) {
+                if !visibility.contains(stage_bit) {
                     continue;
                 }
-                match layout.ty {
+                match layout_entry.ty {
                     wgt::BindingType::Buffer {
                         ty,
                         has_dynamic_offset,
                         ..
                     } => {
-                        let start = entry.resource_index as usize;
+                        let start = bind_group_entry.resource_index as usize;
                         let end = start + size as usize;
-                        bg.buffers
-                            .extend(desc.buffers[start..end].iter().map(|source| {
-                                // Given the restrictions on `BufferBinding::offset`,
-                                // this should never be `None`.
+                        // Given the restrictions on `BufferBinding::offset`,
+                        // this should never be `None`.
+                        let buffers = desc.buffers[start..end]
+                            .iter()
+                            .map(|source| {
                                 let remaining_size =
                                     wgt::BufferSize::new(source.buffer.size - source.offset);
                                 let binding_size = match ty {
@@ -746,26 +804,44 @@ impl crate::Device<super::Api> for super::Device {
                                         None
                                     },
                                     binding_size,
-                                    binding_location: layout.binding,
+                                    binding_location: layout_entry.binding,
                                 }
-                            }));
+                            })
+                            .collect();
+
+                        bg.bindings.push(super::MetalBinding {
+                            binding,
+                            visibility,
+                            resource: super::MetalBindGroupResource::Buffer(buffers),
+                        });
                         counter.buffers += 1;
                     }
                     wgt::BindingType::Sampler { .. } => {
-                        let start = entry.resource_index as usize;
+                        let start = bind_group_entry.resource_index as usize;
                         let end = start + size as usize;
-                        bg.samplers
-                            .extend(desc.samplers[start..end].iter().map(|samp| samp.as_raw()));
+                        let samplers = desc.samplers[start..end]
+                            .iter()
+                            .map(|samp| samp.as_raw())
+                            .collect();
+                        bg.bindings.push(super::MetalBinding {
+                            binding,
+                            visibility,
+                            resource: super::MetalBindGroupResource::Sampler(samplers),
+                        });
                         counter.samplers += size;
                     }
                     wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
-                        let start = entry.resource_index as usize;
+                        let start = bind_group_entry.resource_index as usize;
                         let end = start + size as usize;
-                        bg.textures.extend(
-                            desc.textures[start..end]
-                                .iter()
-                                .map(|tex| tex.view.as_raw()),
-                        );
+                        let textures = desc.textures[start..end]
+                            .iter()
+                            .map(|tex| tex.view.as_raw())
+                            .collect();
+                        bg.bindings.push(super::MetalBinding {
+                            binding,
+                            visibility,
+                            resource: super::MetalBindGroupResource::Texture(textures),
+                        });
                         counter.textures += size;
                     }
                 }
@@ -796,7 +872,7 @@ impl crate::Device<super::Api> for super::Device {
 
     unsafe fn create_render_pipeline(
         &self,
-        desc: &crate::RenderPipelineDescriptor<super::Api>,
+        desc: &RenderPipelineDescriptor<super::Api>,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPipelineDescriptor::new();
@@ -822,6 +898,9 @@ impl crate::Device<super::Api> for super::Device {
                     naga::ShaderStage::Vertex,
                 )?;
 
+                let argument_buffer =
+                    self.create_argument_buffer(vs.argument_buffer_entries, &vs.function);
+
                 descriptor.set_vertex_function(Some(&vs.function));
                 if self.shared.private_caps.supports_mutability {
                     Self::set_buffers_mutability(
@@ -834,6 +913,7 @@ impl crate::Device<super::Api> for super::Device {
                     push_constants: desc.layout.push_constants_infos.vs,
                     sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
                     sized_bindings: vs.sized_bindings,
+                    argument_buffer,
                 };
 
                 (vs.library, info)
@@ -849,6 +929,9 @@ impl crate::Device<super::Api> for super::Device {
                         naga::ShaderStage::Fragment,
                     )?;
 
+                    let argument_buffer =
+                        self.create_argument_buffer(fs.argument_buffer_entries, &fs.function);
+
                     descriptor.set_fragment_function(Some(&fs.function));
                     if self.shared.private_caps.supports_mutability {
                         Self::set_buffers_mutability(
@@ -861,6 +944,7 @@ impl crate::Device<super::Api> for super::Device {
                         push_constants: desc.layout.push_constants_infos.fs,
                         sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
                         sized_bindings: fs.sized_bindings,
+                        argument_buffer,
                     };
 
                     (Some(fs.library), Some(info))
@@ -1053,6 +1137,7 @@ impl crate::Device<super::Api> for super::Device {
                 push_constants: desc.layout.push_constants_infos.cs,
                 sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
                 sized_bindings: cs.sized_bindings,
+                argument_buffer: None,
             };
 
             if let Some(name) = desc.label {

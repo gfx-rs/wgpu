@@ -1,3 +1,5 @@
+use metal::MTLResourceUsage;
+
 use super::{conv, AsNative};
 use crate::CommandEncoder as _;
 use std::{borrow::Cow, mem, ops::Range};
@@ -499,161 +501,221 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     ) {
         let bg_info = &layout.bind_group_infos[group_index as usize];
 
+        // TODO iterate through shader stages
         if let Some(ref encoder) = self.state.render {
-            let mut changes_sizes_buffer = false;
-            for index in 0..group.counters.vs.buffers {
-                let buf = &group.buffers[index as usize];
-                let mut offset = buf.offset;
-                if let Some(dyn_index) = buf.dynamic_index {
-                    offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                }
-                encoder.set_vertex_buffer(
-                    (bg_info.base_resource_indices.vs.buffers + index) as u64,
-                    Some(buf.ptr.as_native()),
-                    offset,
-                );
-                if let Some(size) = buf.binding_size {
-                    let br = naga::ResourceBinding {
-                        group: group_index,
-                        binding: buf.binding_location,
-                    };
-                    self.state.storage_buffer_length_map.insert(br, size);
-                    changes_sizes_buffer = true;
-                }
-            }
-            if changes_sizes_buffer {
-                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
-                    naga::ShaderStage::Vertex,
-                    &mut self.temp.binding_sizes,
-                ) {
-                    encoder.set_vertex_bytes(
-                        index as _,
-                        (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr() as _,
-                    );
+            for entry in &group.bindings {
+                for (stage, stage_info) in [
+                    (wgt::ShaderStages::VERTEX, &self.state.stage_infos.vs),
+                    (wgt::ShaderStages::FRAGMENT, &self.state.stage_infos.fs),
+                ] {
+                    if entry.visibility.contains(stage) {
+                        // TODO: It *should* be impossible to have bindings but no argument buffer.
+                        let Some(ref argument_buffer) =
+                            stage_info.argument_buffer.as_ref() else {
+                                log::warn!("Attempted to set bind group but no argument buffer found for vertex stage!");
+                                continue;
+                            };
+
+                        let index = argument_buffer.entries[&naga::ResourceBinding {
+                            group: group_index,
+                            binding: entry.binding,
+                        }];
+
+                        match &entry.resource {
+                            super::MetalBindGroupResource::Buffer(buffers) => {
+                                for (buffer_index, buffer) in buffers.iter().enumerate() {
+                                    let mut offset = buffer.offset;
+                                    if let Some(dyn_index) = buffer.dynamic_index {
+                                        offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+                                    }
+                                    let native = buffer.ptr.as_native();
+                                    encoder.use_resource(native, MTLResourceUsage::Read);
+                                    argument_buffer.encoder.set_buffer(
+                                        (index as usize + buffer_index) as _,
+                                        native,
+                                        offset,
+                                    )
+                                }
+                            }
+                            super::MetalBindGroupResource::Texture(textures) => {
+                                // PERF: potentially needless vec allocation?
+                                for (texture_index, texture) in textures.iter().enumerate() {
+                                    encoder
+                                        .use_resource(texture.as_native(), MTLResourceUsage::Read);
+                                    argument_buffer.encoder.set_texture(
+                                        (index as usize + texture_index) as _,
+                                        texture.as_native(),
+                                    )
+                                }
+                            }
+                            super::MetalBindGroupResource::Sampler(samplers) => {
+                                for (sampler_index, sampler) in samplers.iter().enumerate() {
+                                    // encoder
+                                    //     .use_resource(sampler.as_native(), MTLResourceUsage::Read);
+                                    argument_buffer.encoder.set_sampler_state(
+                                        (index as usize + sampler_index) as _,
+                                        sampler.as_native(),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            changes_sizes_buffer = false;
-            for index in 0..group.counters.fs.buffers {
-                let buf = &group.buffers[(group.counters.vs.buffers + index) as usize];
-                let mut offset = buf.offset;
-                if let Some(dyn_index) = buf.dynamic_index {
-                    offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                }
-                encoder.set_fragment_buffer(
-                    (bg_info.base_resource_indices.fs.buffers + index) as u64,
-                    Some(buf.ptr.as_native()),
-                    offset,
-                );
-                if let Some(size) = buf.binding_size {
-                    let br = naga::ResourceBinding {
-                        group: group_index,
-                        binding: buf.binding_location,
-                    };
-                    self.state.storage_buffer_length_map.insert(br, size);
-                    changes_sizes_buffer = true;
-                }
-            }
-            if changes_sizes_buffer {
-                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
-                    naga::ShaderStage::Fragment,
-                    &mut self.temp.binding_sizes,
-                ) {
-                    encoder.set_fragment_bytes(
-                        index as _,
-                        (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr() as _,
-                    );
-                }
-            }
+            // TODO: Handle dynamic offsets
+            //     let mut changes_sizes_buffer = false;
+            //     for index in 0..group.counters.vs.buffers {
+            //         let buf = &group.buffers[index as usize];
+            //         let mut offset = buf.offset;
+            //         if let Some(dyn_index) = buf.dynamic_index {
+            //             offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+            //         }
+            //         encoder.set_vertex_buffer(
+            //             (bg_info.base_resource_indices.vs.buffers + index) as u64,
+            //             Some(buf.ptr.as_native()),
+            //             offset,
+            //         );
+            //         if let Some(size) = buf.binding_size {
+            //             let br = naga::ResourceBinding {
+            //                 group: group_index,
+            //                 binding: buf.binding_location,
+            //             };
+            //             self.state.storage_buffer_length_map.insert(br, size);
+            //             changes_sizes_buffer = true;
+            //         }
+            //     }
+            //     if changes_sizes_buffer {
+            //         if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
+            //             naga::ShaderStage::Vertex,
+            //             &mut self.temp.binding_sizes,
+            //         ) {
+            //             encoder.set_vertex_bytes(
+            //                 index as _,
+            //                 (sizes.len() * WORD_SIZE) as u64,
+            //                 sizes.as_ptr() as _,
+            //             );
+            //         }
+            //     }
 
-            for index in 0..group.counters.vs.samplers {
-                let res = group.samplers[index as usize];
-                encoder.set_vertex_sampler_state(
-                    (bg_info.base_resource_indices.vs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.fs.samplers {
-                let res = group.samplers[(group.counters.vs.samplers + index) as usize];
-                encoder.set_fragment_sampler_state(
-                    (bg_info.base_resource_indices.fs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
+            //     changes_sizes_buffer = false;
+            //     for index in 0..group.counters.fs.buffers {
+            //         let buf = &group.buffers[(group.counters.vs.buffers + index) as usize];
+            //         let mut offset = buf.offset;
+            //         if let Some(dyn_index) = buf.dynamic_index {
+            //             offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+            //         }
+            //         encoder.set_fragment_buffer(
+            //             (bg_info.base_resource_indices.fs.buffers + index) as u64,
+            //             Some(buf.ptr.as_native()),
+            //             offset,
+            //         );
+            //         if let Some(size) = buf.binding_size {
+            //             let br = naga::ResourceBinding {
+            //                 group: group_index,
+            //                 binding: buf.binding_location,
+            //             };
+            //             self.state.storage_buffer_length_map.insert(br, size);
+            //             changes_sizes_buffer = true;
+            //         }
+            //     }
+            //     if changes_sizes_buffer {
+            //         if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
+            //             naga::ShaderStage::Fragment,
+            //             &mut self.temp.binding_sizes,
+            //         ) {
+            //             encoder.set_fragment_bytes(
+            //                 index as _,
+            //                 (sizes.len() * WORD_SIZE) as u64,
+            //                 sizes.as_ptr() as _,
+            //             );
+            //         }
+            //     }
 
-            for index in 0..group.counters.vs.textures {
-                let res = group.textures[index as usize];
-                encoder.set_vertex_texture(
-                    (bg_info.base_resource_indices.vs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.fs.textures {
-                let res = group.textures[(group.counters.vs.textures + index) as usize];
-                encoder.set_fragment_texture(
-                    (bg_info.base_resource_indices.fs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-        }
+            //     for index in 0..group.counters.vs.samplers {
+            //         let res = group.samplers[index as usize];
+            //         encoder.set_vertex_sampler_state(
+            //             (bg_info.base_resource_indices.vs.samplers + index) as u64,
+            //             Some(res.as_native()),
+            //         );
+            //     }
+            //     for index in 0..group.counters.fs.samplers {
+            //         let res = group.samplers[(group.counters.vs.samplers + index) as usize];
+            //         encoder.set_fragment_sampler_state(
+            //             (bg_info.base_resource_indices.fs.samplers + index) as u64,
+            //             Some(res.as_native()),
+            //         );
+            //     }
 
-        if let Some(ref encoder) = self.state.compute {
-            let index_base = super::ResourceData {
-                buffers: group.counters.vs.buffers + group.counters.fs.buffers,
-                samplers: group.counters.vs.samplers + group.counters.fs.samplers,
-                textures: group.counters.vs.textures + group.counters.fs.textures,
-            };
+            //     for index in 0..group.counters.vs.textures {
+            //         let res = group.textures[index as usize];
+            //         encoder.set_vertex_texture(
+            //             (bg_info.base_resource_indices.vs.textures + index) as u64,
+            //             Some(res.as_native()),
+            //         );
+            //     }
+            //     for index in 0..group.counters.fs.textures {
+            //         let res = group.textures[(group.counters.vs.textures + index) as usize];
+            //         encoder.set_fragment_texture(
+            //             (bg_info.base_resource_indices.fs.textures + index) as u64,
+            //             Some(res.as_native()),
+            //         );
+            //     }
 
-            let mut changes_sizes_buffer = false;
-            for index in 0..group.counters.cs.buffers {
-                let buf = &group.buffers[(index_base.buffers + index) as usize];
-                let mut offset = buf.offset;
-                if let Some(dyn_index) = buf.dynamic_index {
-                    offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                }
-                encoder.set_buffer(
-                    (bg_info.base_resource_indices.cs.buffers + index) as u64,
-                    Some(buf.ptr.as_native()),
-                    offset,
-                );
-                if let Some(size) = buf.binding_size {
-                    let br = naga::ResourceBinding {
-                        group: group_index,
-                        binding: buf.binding_location,
-                    };
-                    self.state.storage_buffer_length_map.insert(br, size);
-                    changes_sizes_buffer = true;
-                }
-            }
-            if changes_sizes_buffer {
-                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
-                    naga::ShaderStage::Compute,
-                    &mut self.temp.binding_sizes,
-                ) {
-                    encoder.set_bytes(
-                        index as _,
-                        (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr() as _,
-                    );
-                }
-            }
+            //     let index_base = super::ResourceData {
+            //         buffers: group.counters.vs.buffers + group.counters.fs.buffers,
+            //         samplers: group.counters.vs.samplers + group.counters.fs.samplers,
+            //         textures: group.counters.vs.textures + group.counters.fs.textures,
+            //     };
 
-            for index in 0..group.counters.cs.samplers {
-                let res = group.samplers[(index_base.samplers + index) as usize];
-                encoder.set_sampler_state(
-                    (bg_info.base_resource_indices.cs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.cs.textures {
-                let res = group.textures[(index_base.textures + index) as usize];
-                encoder.set_texture(
-                    (bg_info.base_resource_indices.cs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
+            //     let mut changes_sizes_buffer = false;
+            //     for index in 0..group.counters.cs.buffers {
+            //         let buf = &group.buffers[(index_base.buffers + index) as usize];
+            //         let mut offset = buf.offset;
+            //         if let Some(dyn_index) = buf.dynamic_index {
+            //             offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+            //         }
+            //         encoder.set_buffer(
+            //             (bg_info.base_resource_indices.cs.buffers + index) as u64,
+            //             Some(buf.ptr.as_native()),
+            //             offset,
+            //         );
+            //         if let Some(size) = buf.binding_size {
+            //             let br = naga::ResourceBinding {
+            //                 group: group_index,
+            //                 binding: buf.binding_location,
+            //             };
+            //             self.state.storage_buffer_length_map.insert(br, size);
+            //             changes_sizes_buffer = true;
+            //         }
+            //     }
+            //     if changes_sizes_buffer {
+            //         if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
+            //             naga::ShaderStage::Compute,
+            //             &mut self.temp.binding_sizes,
+            //         ) {
+            //             encoder.set_bytes(
+            //                 index as _,
+            //                 (sizes.len() * WORD_SIZE) as u64,
+            //                 sizes.as_ptr() as _,
+            //             );
+            //         }
+            //     }
+
+            //     for index in 0..group.counters.cs.samplers {
+            //         let res = group.samplers[(index_base.samplers + index) as usize];
+            //         encoder.set_sampler_state(
+            //             (bg_info.base_resource_indices.cs.samplers + index) as u64,
+            //             Some(res.as_native()),
+            //         );
+            //     }
+            //     for index in 0..group.counters.cs.textures {
+            //         let res = group.textures[(index_base.textures + index) as usize];
+            //         encoder.set_texture(
+            //             (bg_info.base_resource_indices.cs.textures + index) as u64,
+            //             Some(res.as_native()),
+            //         );
+            //     }
         }
     }
 
@@ -760,6 +822,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     sizes.as_ptr() as _,
                 );
             }
+        }
+
+        if let Some(ref vs_argument_buffer) = self.state.stage_infos.vs.argument_buffer {
+            // TODO this is probably overriding the buffer with, you know. The vertices.
+            encoder.set_vertex_buffer(0, Some(&vs_argument_buffer.buffer), 0);
+        }
+
+        if let Some(ref fs_argument_buffer) = self.state.stage_infos.fs.argument_buffer {
+            encoder.set_fragment_buffer(0, Some(&fs_argument_buffer.buffer), 0);
         }
     }
 
