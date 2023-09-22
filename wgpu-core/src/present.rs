@@ -139,7 +139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref present) => {
                 let device = &device_guard[present.device_id.value];
                 if !device.is_valid() {
-                  return Err(DeviceError::Invalid.into());
+                    return Err(DeviceError::Invalid.into());
                 }
                 (device, present.config.clone())
             }
@@ -294,7 +294,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &mut device_guard[present.device_id.value];
         if !device.is_valid() {
-          return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Invalid.into());
         }
 
         #[cfg(feature = "trace")]
@@ -383,7 +383,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &mut device_guard[present.device_id.value];
         if !device.is_valid() {
-          return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Invalid.into());
         }
 
         #[cfg(feature = "trace")]

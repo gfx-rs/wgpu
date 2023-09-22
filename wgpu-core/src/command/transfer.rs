@@ -572,7 +572,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &device_guard[cmd_buf.device_id.value];
         if !device.is_valid() {
-          return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
         }
 
         #[cfg(feature = "trace")]
@@ -720,7 +720,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &device_guard[cmd_buf.device_id.value];
         if !device.is_valid() {
-          return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
         }
 
         #[cfg(feature = "trace")]
@@ -867,7 +867,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &device_guard[cmd_buf.device_id.value];
         if !device.is_valid() {
-          return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
         }
 
         #[cfg(feature = "trace")]
@@ -1032,7 +1032,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &device_guard[cmd_buf.device_id.value];
         if !device.is_valid() {
-          return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
         }
 
         #[cfg(feature = "trace")]

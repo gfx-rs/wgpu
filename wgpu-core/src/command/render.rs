@@ -1350,7 +1350,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[cmd_buf.device_id.value];
             if !device.is_valid() {
-              return Err(RenderPassErrorInner::InvalidDevice(cmd_buf.device_id.value.0)).map_pass_err(init_scope);
+                return Err(RenderPassErrorInner::InvalidDevice(
+                    cmd_buf.device_id.value.0,
+                ))
+                .map_pass_err(init_scope);
             }
             cmd_buf.encoder.open_pass(base.label);
 

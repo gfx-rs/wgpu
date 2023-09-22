@@ -394,7 +394,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = &device_guard[cmd_buf.device_id.value];
         if !device.is_valid() {
-          return Err(ComputePassErrorInner::InvalidDevice(cmd_buf.device_id.value.0)).map_pass_err(init_scope);
+            return Err(ComputePassErrorInner::InvalidDevice(
+                cmd_buf.device_id.value.0,
+            ))
+            .map_pass_err(init_scope);
         }
 
         #[cfg(feature = "trace")]

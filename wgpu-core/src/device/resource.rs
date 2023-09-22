@@ -229,7 +229,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub fn is_valid(&self) -> bool {
-      self.valid
+        self.valid
     }
 
     pub(super) fn lock_life<'this, 'token: 'this>(

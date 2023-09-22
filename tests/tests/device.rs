@@ -94,147 +94,164 @@ async fn request_device_error_message() {
 
 #[test]
 fn device_lose_then_more() {
-    initialize_test(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE), |ctx| {
-        // Create some resources on the device that we will attempt to use *after* losing the
-        // device.
+    initialize_test(
+        TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
+        |ctx| {
+            // Create some resources on the device that we will attempt to use *after* losing the
+            // device.
 
-        // Create a 512 x 512 2D texture, and a target view of it.
-        let texture_extent = wgpu::Extent3d {
-            width: 512,
-            height: 512,
-            depth_or_array_layers: 1,
-        };
-        let texture_for_view = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: texture_extent,
-            mip_level_count: 2,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rg8Uint,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: texture_extent,
-            mip_level_count: 2,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rg8Uint,
-            usage: wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-
-        // Create some buffers.
-        let buffer_source = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: 256,
-            usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: 256,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create some command encoders.
-        let mut encoder_for_clear = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        let mut encoder_for_compute_pass = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        let mut encoder_for_render_pass = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        let mut encoder_for_buffer_copy = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-        // Lose the device. This will cause all other requests to return some variation of a
-        // device invalid error.
-        ctx.device.lose();
-
-        // TODO: change these fail calls to check for the specific errors which indicate that
-        // the device is not valid.
-
-        // Creating a texture should fail.
-        fail(&ctx.device, || {
-            ctx.device.create_texture(&wgpu::TextureDescriptor {
+            // Create a 512 x 512 2D texture, and a target view of it.
+            let texture_extent = wgpu::Extent3d {
+                width: 512,
+                height: 512,
+                depth_or_array_layers: 1,
+            };
+            let texture_for_view = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
-                size: wgpu::Extent3d {
-                    width: 512,
-                    height: 512,
-                    depth_or_array_layers: 1,
-                },
+                size: texture_extent,
                 mip_level_count: 2,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rg8Uint,
-                usage: wgpu::TextureUsages::COPY_SRC,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             });
-        });
+            let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Texture clear should fail.
-        fail(&ctx.device, || {
-            encoder_for_clear.clear_texture(
-                &texture_for_write,
-                &wgpu::ImageSubresourceRange {
-                    aspect: wgpu::TextureAspect::All,
-                    base_mip_level: 0,
-                    mip_level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                }
-            );
-        });
-
-        // Creating a compute pass should fail.
-        fail(&ctx.device, || {
-            encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
-                timestamp_writes: None,
+                size: texture_extent,
+                mip_level_count: 2,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rg8Uint,
+                usage: wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
             });
-        });
 
-        // Creating a render pass should fail.
-        fail(&ctx.device, || {
-            encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
+            // Create some buffers.
+            let buffer_source = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    ops: wgpu::Operations::default(),
-                    resolve_target: None,
-                    view: &target_view,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
+                size: 256,
+                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
             });
-        });
+            let buffer_dest = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 256,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
 
-        // Copying a buffer to a buffer should fail.
-        fail(&ctx.device, || {
-            encoder_for_buffer_copy.copy_buffer_to_buffer(&buffer_source, 0, &buffer_dest, 0, 256);
-        });
+            // Create some command encoders.
+            let mut encoder_for_clear = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        // Copying a buffer to a texture should fail.
-        fail(&ctx.device, || {
-            encoder_for_buffer_copy.copy_buffer_to_texture(wgpu::ImageCopyBuffer {
-                buffer: &buffer_source,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4),
-                    rows_per_image: None,
-                },
-            }, texture_for_write.as_image_copy(), texture_extent);
-        });
-    })
+            let mut encoder_for_compute_pass = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            let mut encoder_for_render_pass = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            let mut encoder_for_buffer_buffer_copy = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            let mut encoder_for_buffer_texture_copy = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            // Lose the device. This will cause all other requests to return some variation of a
+            // device invalid error.
+            ctx.device.lose();
+
+            // TODO: change these fail calls to check for the specific errors which indicate that
+            // the device is not valid.
+
+            // Creating a texture should fail.
+            fail(&ctx.device, || {
+                ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    size: wgpu::Extent3d {
+                        width: 512,
+                        height: 512,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 2,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rg8Uint,
+                    usage: wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
+                });
+            });
+
+            // Texture clear should fail.
+            fail(&ctx.device, || {
+                encoder_for_clear.clear_texture(
+                    &texture_for_write,
+                    &wgpu::ImageSubresourceRange {
+                        aspect: wgpu::TextureAspect::All,
+                        base_mip_level: 0,
+                        mip_level_count: None,
+                        base_array_layer: 0,
+                        array_layer_count: None,
+                    },
+                );
+            });
+
+            // Creating a compute pass should fail.
+            fail(&ctx.device, || {
+                encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: None,
+                    timestamp_writes: None,
+                });
+            });
+
+            // Creating a render pass should fail.
+            fail(&ctx.device, || {
+                encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        ops: wgpu::Operations::default(),
+                        resolve_target: None,
+                        view: &target_view,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            });
+
+            // Copying a buffer to a buffer should fail.
+            fail(&ctx.device, || {
+                encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
+                    &buffer_source,
+                    0,
+                    &buffer_dest,
+                    0,
+                    256,
+                );
+            });
+
+            // Copying a buffer to a texture should fail.
+            fail(&ctx.device, || {
+                encoder_for_buffer_texture_copy.copy_buffer_to_texture(
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer_source,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: None,
+                        },
+                    },
+                    texture_for_write.as_image_copy(),
+                    texture_extent,
+                );
+            });
+        },
+    )
 }
