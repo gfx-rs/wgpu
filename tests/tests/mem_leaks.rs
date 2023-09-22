@@ -238,13 +238,15 @@ fn draw_test_with_reports(
     assert_eq!(report.textures.num_allocated, 1);
 
     let submit_index = ctx.queue.submit(Some(encoder.finish()));
+    ctx.device
+        .poll(wgpu::Maintain::WaitForSubmissionIndex(submit_index));
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
     assert_eq!(report.command_buffers.num_allocated, 0);
 
     ctx.device
-        .poll(wgpu::Maintain::WaitForSubmissionIndex(submit_index));
+        .poll(wgpu::Maintain::Wait);
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
