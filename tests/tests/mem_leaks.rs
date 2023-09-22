@@ -245,8 +245,7 @@ fn draw_test_with_reports(
     let report = global_report.hub_report();
     assert_eq!(report.command_buffers.num_allocated, 0);
 
-    ctx.device
-        .poll(wgpu::Maintain::Wait);
+    ctx.device.poll(wgpu::Maintain::Wait);
 
     let global_report = ctx.instance.generate_report();
     let report = global_report.hub_report();
