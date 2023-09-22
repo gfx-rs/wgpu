@@ -1915,7 +1915,8 @@ impl crate::context::Context for Context {
     }
 
     fn device_lose(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        // TODO: figure out the GPUDevice implementation of this.
+        // TODO: figure out the GPUDevice implementation of this, including resolving
+        // the device.lost promise.
     }
 
     fn device_poll(

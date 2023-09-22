@@ -94,8 +94,22 @@ async fn request_device_error_message() {
 
 #[test]
 fn device_lose_then_more() {
+    // This is a test of device behavior after "lose the device". Specifically, all operations
+    // should trigger errors. To test this, it calls an explicit function to lose the device,
+    // which is not part of normal use and ideally wouldn't be exposed at all.
+    //
+    // TODO: Figure out how to make device.lose a private function only available to the test
+    // harness.
+    //
+    // On DX12 this test fails with a validation error in the very artifical actions taken
+    // after lose the device. The error is "ID3D12CommandAllocator::Reset: The command
+    // allocator cannot be reset because a command list is currently being recorded with the
+    // allocator." That may indicate that DX12 doesn't like opened command buffers staying
+    // open even after they return an error. For now, this test is skipped on DX12.
     initialize_test(
-        TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE),
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE)
+            .skip(FailureCase::backend(wgpu::Backends::DX12)),
         |ctx| {
             // Create some resources on the device that we will attempt to use *after* losing the
             // device.
