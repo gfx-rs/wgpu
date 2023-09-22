@@ -374,13 +374,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .set(naga::back::spv::WriterFlags::DEBUG, true);
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
-                file_name: input_path
-                    .file_name()
-                    .and_then(std::ffi::OsStr::to_str)
-                    .ok_or(CliError(
-                        "input path for couldn't be converted to string \
-                         for `--generate-debug-symbols",
-                    ))?,
+                file_name: input_path,
             })
         } else {
             eprintln!(

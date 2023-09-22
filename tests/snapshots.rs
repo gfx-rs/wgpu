@@ -159,7 +159,7 @@ fn check_targets(
         let debug_info = if cfg!(feature = "span") {
             source_code.map(|code| naga::back::spv::DebugInfo {
                 source_code: code,
-                file_name: name,
+                file_name: name.as_ref(),
             })
         } else {
             None
