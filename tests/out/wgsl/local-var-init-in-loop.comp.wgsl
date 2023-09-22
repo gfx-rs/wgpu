@@ -1,7 +1,7 @@
 fn main_1() {
     var sum: vec4<f32> = vec4(0.0);
     var i: i32 = 0;
-    var a: vec4<f32> = vec4(1.0);
+    var a: vec4<f32>;
 
     loop {
         let _e6 = i;
@@ -9,8 +9,7 @@ fn main_1() {
             break;
         }
         {
-            let _e15 = vec4(1.0);
-            a = _e15;
+            a = vec4(1.0);
             let _e17 = sum;
             let _e18 = a;
             sum = (_e17 + _e18);

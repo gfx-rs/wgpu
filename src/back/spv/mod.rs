@@ -557,6 +557,9 @@ struct BlockContext<'w> {
 
     /// The `Writer`'s temporary vector, for convenience.
     temp_list: Vec<Word>,
+
+    /// Tracks the constness of `Expression`s residing in `self.ir_function.expressions`
+    expression_constness: crate::proc::ExpressionConstnessTracker,
 }
 
 impl BlockContext<'_> {

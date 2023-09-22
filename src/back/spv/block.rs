@@ -245,7 +245,7 @@ impl<'w> BlockContext<'w> {
             crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
             crate::Expression::Compose { ty, ref components } => {
                 self.temp_list.clear();
-                if self.ir_function.expressions.is_const(expr_handle) {
+                if self.expression_constness.is_const(expr_handle) {
                     self.temp_list.extend(
                         crate::proc::flatten_compose(
                             ty,
@@ -274,7 +274,7 @@ impl<'w> BlockContext<'w> {
                 let value_id = self.cached[value];
                 let components = &[value_id; 4][..size as usize];
 
-                if self.ir_function.expressions.is_const(expr_handle) {
+                if self.expression_constness.is_const(expr_handle) {
                     let ty = self
                         .writer
                         .get_expression_lookup_type(&self.fun_info[expr_handle].ty);
@@ -1776,7 +1776,8 @@ impl<'w> BlockContext<'w> {
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
-                        if !self.ir_function.expressions.is_const(handle) {
+                        // omit const expressions as we've already cached those
+                        if !self.expression_constness.is_const(handle) {
                             self.cache_expression_value(handle, &mut block)?;
                         }
                     }

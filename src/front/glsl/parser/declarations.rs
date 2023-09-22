@@ -246,18 +246,26 @@ impl<'source> ParsingContext<'source> {
                 })
                 .transpose()?;
 
-            let (decl_initializer, late_initializer) = if is_global_const {
-                (init, None)
+            let decl_initializer;
+            let late_initializer;
+            if is_global_const {
+                decl_initializer = init;
+                late_initializer = None;
             } else if ctx.external {
-                let decl_initializer =
+                decl_initializer =
                     init.and_then(|expr| ctx.ctx.lift_up_const_expression(expr).ok());
-                (decl_initializer, None)
+                late_initializer = None;
+            } else if let Some(init) = init {
+                if ctx.is_inside_loop || !ctx.ctx.expression_constness.is_const(init) {
+                    decl_initializer = None;
+                    late_initializer = Some(init);
+                } else {
+                    decl_initializer = Some(init);
+                    late_initializer = None;
+                }
             } else {
-                let decl_initializer = init.filter(|expr| ctx.ctx.expressions.is_const(*expr));
-                let late_initializer = (decl_initializer.is_none() || ctx.is_inside_loop)
-                    .then_some(init)
-                    .flatten();
-                (decl_initializer, late_initializer)
+                decl_initializer = None;
+                late_initializer = None;
             };
 
             let pointer = ctx.add_var(frontend, ty, name, decl_initializer, meta)?;

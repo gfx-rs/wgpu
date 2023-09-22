@@ -6,8 +6,8 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::Typifier;
 use crate::proc::{
-    ensure_block_returns, Alignment, ConstantEvaluator, ConstantEvaluatorEmitter, Emitter,
-    Layouter, ResolveContext, TypeResolution,
+    ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
+    TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -106,6 +106,8 @@ pub struct StatementContext<'source, 'temp, 'out> {
     named_expressions: &'out mut FastIndexMap<Handle<crate::Expression>, (String, Span)>,
     arguments: &'out [crate::FunctionArgument],
     module: &'out mut crate::Module,
+    /// Tracks the constness of `Expression`s residing in `self.naga_expressions`
+    expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
 }
 
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
@@ -122,6 +124,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             named_expressions: self.named_expressions,
             arguments: self.arguments,
             module: self.module,
+            expression_constness: self.expression_constness,
         }
     }
 
@@ -147,6 +150,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
                 typifier: self.typifier,
                 block,
                 emitter,
+                expression_constness: self.expression_constness,
             }),
         }
     }
@@ -188,6 +192,8 @@ pub struct RuntimeExpressionContext<'temp, 'out> {
     block: &'temp mut crate::Block,
     emitter: &'temp mut Emitter,
     typifier: &'temp mut Typifier,
+    /// Tracks the constness of `Expression`s residing in `self.naga_expressions`
+    expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
 }
 
 impl RuntimeExpressionContext<'_, '_> {
@@ -200,6 +206,7 @@ impl RuntimeExpressionContext<'_, '_> {
             block: self.block,
             emitter: self.emitter,
             typifier: self.typifier,
+            expression_constness: self.expression_constness,
         }
     }
 }
@@ -333,16 +340,13 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx) => {
-                let mut eval = ConstantEvaluator {
-                    types: &mut self.module.types,
-                    constants: &self.module.constants,
-                    expressions: rctx.naga_expressions,
-                    const_expressions: Some(&self.module.const_expressions),
-                    emitter: Some(ConstantEvaluatorEmitter {
-                        emitter: rctx.emitter,
-                        block: rctx.block,
-                    }),
-                };
+                let mut eval = ConstantEvaluator::for_function(
+                    self.module,
+                    rctx.naga_expressions,
+                    rctx.expression_constness,
+                    rctx.emitter,
+                    rctx.block,
+                );
 
                 match eval.try_eval_and_append(&expr, span) {
                     Ok(expr) => Ok(expr),
@@ -350,14 +354,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 }
             }
             ExpressionContextType::Constant => {
-                let mut eval = ConstantEvaluator {
-                    types: &mut self.module.types,
-                    constants: &self.module.constants,
-                    expressions: &mut self.module.const_expressions,
-                    const_expressions: None,
-                    emitter: None,
-                };
-
+                let mut eval = ConstantEvaluator::for_module(self.module);
                 eval.try_eval_and_append(&expr, span)
                     .map_err(|e| Error::ConstantEvaluatorError(e, span))
             }
@@ -1027,6 +1024,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 types: ctx.types,
                 module: ctx.module,
                 arguments: &arguments,
+                expression_constness: &mut crate::proc::ExpressionConstnessTracker::new(),
             },
         )?;
         ensure_block_returns(&mut body);
@@ -1179,7 +1177,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let (const_initializer, initializer) = {
                         match initializer {
-                            Some(init) if ctx.naga_expressions.is_const(init) => {
+                            Some(init) if ctx.expression_constness.is_const(init) => {
                                 (Some(init), is_inside_loop.then_some(init))
                             }
                             Some(init) => (None, Some(init)),

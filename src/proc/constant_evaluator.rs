@@ -6,21 +6,64 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ConstantEvaluator<'a> {
-    pub types: &'a mut UniqueArena<Type>,
-    pub constants: &'a Arena<Constant>,
-    pub expressions: &'a mut Arena<Expression>,
-    pub const_expressions: Option<&'a Arena<Expression>>,
+    types: &'a mut UniqueArena<Type>,
+    constants: &'a Arena<Constant>,
+    expressions: &'a mut Arena<Expression>,
 
-    /// When `expressions` refers to a function's local expression
-    /// arena, this is the emitter we should interrupt when inserting
-    /// new things into it.
-    pub emitter: Option<ConstantEvaluatorEmitter<'a>>,
+    /// When `self.expressions` refers to a function's local expression
+    /// arena, this needs to be populated
+    function_local_data: Option<FunctionLocalData<'a>>,
 }
 
 #[derive(Debug)]
-pub struct ConstantEvaluatorEmitter<'a> {
-    pub emitter: &'a mut super::Emitter,
-    pub block: &'a mut crate::Block,
+struct FunctionLocalData<'a> {
+    /// Global constant expressions
+    const_expressions: &'a Arena<Expression>,
+    /// Tracks the constness of expressions residing in `ConstantEvaluator.expressions`
+    expression_constness: &'a mut ExpressionConstnessTracker,
+    emitter: &'a mut super::Emitter,
+    block: &'a mut crate::Block,
+}
+
+#[derive(Debug)]
+pub struct ExpressionConstnessTracker {
+    inner: bit_set::BitSet,
+}
+
+impl ExpressionConstnessTracker {
+    pub fn new() -> Self {
+        Self {
+            inner: bit_set::BitSet::new(),
+        }
+    }
+
+    fn insert(&mut self, value: Handle<Expression>) {
+        self.inner.insert(value.index());
+    }
+
+    pub fn is_const(&self, value: Handle<Expression>) -> bool {
+        self.inner.contains(value.index())
+    }
+
+    pub fn from_arena(arena: &Arena<Expression>) -> Self {
+        let mut tracker = Self::new();
+        for (handle, expr) in arena.iter() {
+            let insert = match *expr {
+                crate::Expression::Literal(_)
+                | crate::Expression::ZeroValue(_)
+                | crate::Expression::Constant(_) => true,
+                crate::Expression::Compose { ref components, .. } => {
+                    components.iter().all(|h| tracker.is_const(*h))
+                }
+                crate::Expression::Splat { value, .. } => tracker.is_const(value),
+                _ => false,
+            };
+            if insert {
+                tracker.insert(handle);
+            }
+        }
+        tracker
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -94,44 +137,68 @@ pub enum ConstantEvaluatorError {
 // Math
 // As
 
-// TODO(teoxoy): consider accumulating this metadata instead of recursing through subexpressions
-impl Arena<Expression> {
-    pub fn is_const(&self, handle: Handle<Expression>) -> bool {
-        match self[handle] {
-            Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => true,
-            Expression::Compose { ref components, .. } => {
-                components.iter().all(|h| self.is_const(*h))
-            }
-            Expression::Splat { ref value, .. } => self.is_const(*value),
-            _ => false,
+impl<'a> ConstantEvaluator<'a> {
+    pub fn for_module(module: &'a mut crate::Module) -> Self {
+        Self {
+            types: &mut module.types,
+            constants: &module.constants,
+            expressions: &mut module.const_expressions,
+            function_local_data: None,
         }
     }
-}
 
-impl ConstantEvaluator<'_> {
+    pub fn for_function(
+        module: &'a mut crate::Module,
+        expressions: &'a mut Arena<Expression>,
+        expression_constness: &'a mut ExpressionConstnessTracker,
+        emitter: &'a mut super::Emitter,
+        block: &'a mut crate::Block,
+    ) -> Self {
+        Self {
+            types: &mut module.types,
+            constants: &module.constants,
+            expressions,
+            function_local_data: Some(FunctionLocalData {
+                const_expressions: &module.const_expressions,
+                expression_constness,
+                emitter,
+                block,
+            }),
+        }
+    }
+
+    fn check(&self, expr: Handle<Expression>) -> Result<(), ConstantEvaluatorError> {
+        if let Some(ref function_local_data) = self.function_local_data {
+            if !function_local_data.expression_constness.is_const(expr) {
+                log::debug!("check: SubexpressionsAreNotConstant");
+                return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant);
+            }
+        }
+        Ok(())
+    }
+
     fn check_and_get(
         &mut self,
         expr: Handle<Expression>,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         match self.expressions[expr] {
-            Expression::Literal(_)
-            | Expression::ZeroValue(_)
-            | Expression::Compose { .. }
-            | Expression::Splat { .. } => Ok(expr),
             Expression::Constant(c) => {
                 // Are we working in a function's expression arena, or the
                 // module's constant expression arena?
-                if let Some(const_expressions) = self.const_expressions {
+                if let Some(ref function_local_data) = self.function_local_data {
                     // Deep-copy the constant's value into our arena.
-                    self.copy_from(self.constants[c].init, const_expressions)
+                    self.copy_from(
+                        self.constants[c].init,
+                        function_local_data.const_expressions,
+                    )
                 } else {
                     // "See through" the constant and use its initializer.
                     Ok(self.constants[c].init)
                 }
             }
             _ => {
-                log::debug!("check_and_get: SubexpressionsAreNotConstant");
-                Err(ConstantEvaluatorError::SubexpressionsAreNotConstant)
+                self.check(expr)?;
+                Ok(expr)
             }
         }
     }
@@ -148,12 +215,12 @@ impl ConstantEvaluator<'_> {
             }
             Expression::Compose { ref components, .. } => {
                 for component in components {
-                    self.check_and_get(*component)?;
+                    self.check(*component)?;
                 }
                 Ok(self.register_evaluated_expr(expr.clone(), span))
             }
             Expression::Splat { value, .. } => {
-                self.check_and_get(value)?;
+                self.check(value)?;
                 Ok(self.register_evaluated_expr(expr.clone(), span))
             }
             Expression::AccessIndex { base, index } => {
@@ -835,20 +902,29 @@ impl ConstantEvaluator<'_> {
     }
 
     fn register_evaluated_expr(&mut self, expr: Expression, span: Span) -> Handle<Expression> {
-        if let Some(ref mut emitter) = self.emitter {
-            let is_running = emitter.emitter.is_running();
+        if let Some(FunctionLocalData {
+            ref mut emitter,
+            ref mut block,
+            ref mut expression_constness,
+            ..
+        }) = self.function_local_data
+        {
+            let is_running = emitter.is_running();
             let needs_pre_emit = expr.needs_pre_emit();
             if is_running && needs_pre_emit {
-                emitter
-                    .block
-                    .extend(emitter.emitter.finish(self.expressions));
+                block.extend(emitter.finish(self.expressions));
                 let h = self.expressions.append(expr, span);
-                emitter.emitter.start(self.expressions);
-                return h;
+                emitter.start(self.expressions);
+                expression_constness.insert(h);
+                h
+            } else {
+                let h = self.expressions.append(expr, span);
+                expression_constness.insert(h);
+                h
             }
+        } else {
+            self.expressions.append(expr, span)
         }
-
-        self.expressions.append(expr, span)
     }
 }
 
@@ -1016,8 +1092,7 @@ mod tests {
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
-            const_expressions: None,
-            emitter: None,
+            function_local_data: None,
         };
 
         let res1 = solver
@@ -1103,8 +1178,7 @@ mod tests {
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
-            const_expressions: None,
-            emitter: None,
+            function_local_data: None,
         };
 
         let res = solver
@@ -1222,8 +1296,7 @@ mod tests {
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
-            const_expressions: None,
-            emitter: None,
+            function_local_data: None,
         };
 
         let root1 = Expression::AccessIndex { base, index: 1 };

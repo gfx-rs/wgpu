@@ -10,7 +10,9 @@ mod namer;
 mod terminator;
 mod typifier;
 
-pub use constant_evaluator::{ConstantEvaluator, ConstantEvaluatorEmitter, ConstantEvaluatorError};
+pub use constant_evaluator::{
+    ConstantEvaluator, ConstantEvaluatorError, ExpressionConstnessTracker,
+};
 pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};

@@ -620,13 +620,16 @@ impl Writer {
             // Steal the Writer's temp list for a bit.
             temp_list: std::mem::take(&mut self.temp_list),
             writer: self,
+            expression_constness: crate::proc::ExpressionConstnessTracker::from_arena(
+                &ir_function.expressions,
+            ),
         };
 
-        // fill up the pre-emitted expressions
+        // fill up the pre-emitted and const expressions
         context.cached.reset(ir_function.expressions.len());
         for (handle, expr) in ir_function.expressions.iter() {
             if (expr.needs_pre_emit() && !matches!(*expr, crate::Expression::LocalVariable(_)))
-                || ir_function.expressions.is_const(handle)
+                || context.expression_constness.is_const(handle)
             {
                 context.cache_expression_value(handle, &mut prelude)?;
             }
@@ -665,8 +668,9 @@ impl Writer {
                 .insert(handle, LocalVariable { id, instruction });
         }
 
+        // cache local variable expressions
         for (handle, expr) in ir_function.expressions.iter() {
-            if expr.needs_pre_emit() && matches!(*expr, crate::Expression::LocalVariable(_)) {
+            if matches!(*expr, crate::Expression::LocalVariable(_)) {
                 context.cache_expression_value(handle, &mut prelude)?;
             }
         }
