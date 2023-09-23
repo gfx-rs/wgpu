@@ -186,12 +186,13 @@ impl WgpuContext {
                 | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        // In WebGPU (unlike many graphics libraries), you aren't allowed to map
-        // primary buffers (anything that has any use that isn't COPY_SRC, COPY_DST,
-        // MAP_READ, or MAP_WRITE) (as in get pointers to their memory from the CPU).
-        // In WebGPU, the idea is that you copy the data into a specialized reading
-        // buffer and then read from there. Same would be true for writes if it weren't
-        // for the Queue::write_buffer method.
+        // For portability reasons, WebGPU draws a distinction between memory that is
+        // accessible by the CPU and memory that is accessible by the GPU. Only
+        // buffers accessible by the CPU can be mapped and accessed by the CPU and
+        // only buffers visible to the GPU can be used in shaders. In order to get
+        // data from the GPU, we need to use CommandEncoder::copy_buffer_to_buffer
+        // (which we will later) to copy the buffer modified by the GPU into a
+        // mappable, CPU-accessible buffer which we'll create here.
         let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: buffer_size as wgpu::BufferAddress,
