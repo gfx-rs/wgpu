@@ -418,33 +418,37 @@ impl<A: HalApi> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
-    fn triage_resources<Id, R, F>(
+    fn triage_resources<Id, R, F, T>(
         resources_map: &mut HashMap<Id, Arc<R>>,
         active: &mut [ActiveSubmission<A>],
         free_resources: &mut ResourceMaps,
         trackers: &mut impl ResourceTracker<Id, R>,
         registry: &Registry<Id, R>,
-        mut f: F,
+        count_fn: F,
+        mut on_remove: T,
     ) -> Vec<Arc<R>>
     where
         Id: id::TypedId,
         R: Resource<Id>,
-        F: FnMut(&Id, &Arc<R>),
+        F: Fn(u64, &[ActiveSubmission<A>], &Id) -> usize,
+        T: FnMut(&Id, &Arc<R>),
     {
         let mut removed_resources = Vec::new();
         resources_map.retain(|&id, resource| {
             let submit_index = resource.as_info().submission_index();
+            let mut count = 1;
+            count += count_fn(submit_index, active, &id);
+            count += registry.contains(id) as usize;
+
             let non_referenced_resources = active
                 .iter_mut()
                 .find(|a| a.index == submit_index)
                 .map_or(&mut *free_resources, |a| &mut a.last_resources);
-
-            let mut count = 1;
-            count += registry.contains(id) as usize;
             count += non_referenced_resources.contains::<Id, R>(&id) as usize;
+
             let is_removed = trackers.remove_abandoned(id, count);
             if is_removed {
-                f(&id, resource);
+                on_remove(&id, resource);
                 removed_resources.push(resource.clone());
                 non_referenced_resources.insert(id, resource.clone());
             }
@@ -467,6 +471,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.bundles,
             &hub.render_bundles,
+            |_submit_index, _active, _id| 0,
             |_bundle_id, _bundle| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -476,19 +481,19 @@ impl<A: HalApi> LifetimeTracker<A> {
         );
         removed_resources.drain(..).for_each(|bundle| {
             for v in bundle.used.buffers.write().drain_resources() {
-                self.suspected_resources.insert(v.as_info().id(), v.clone());
+                self.suspected_resources.insert(v.as_info().id(), v);
             }
             for v in bundle.used.textures.write().drain_resources() {
-                self.suspected_resources.insert(v.as_info().id(), v.clone());
+                self.suspected_resources.insert(v.as_info().id(), v);
             }
             for v in bundle.used.bind_groups.write().drain_resources() {
-                self.suspected_resources.insert(v.as_info().id(), v.clone());
+                self.suspected_resources.insert(v.as_info().id(), v);
             }
             for v in bundle.used.render_pipelines.write().drain_resources() {
-                self.suspected_resources.insert(v.as_info().id(), v.clone());
+                self.suspected_resources.insert(v.as_info().id(), v);
             }
             for v in bundle.used.query_sets.write().drain_resources() {
-                self.suspected_resources.insert(v.as_info().id(), v.clone());
+                self.suspected_resources.insert(v.as_info().id(), v);
             }
         });
         self
@@ -508,6 +513,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.bind_groups,
             &hub.bind_groups,
+            |_submit_index, _active, _id| 0,
             |_bind_group_id, _bind_group| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -528,6 +534,10 @@ impl<A: HalApi> LifetimeTracker<A> {
             for v in bind_group.used.samplers.drain_resources() {
                 self.suspected_resources.insert(v.as_info().id(), v);
             }
+            //Releasing safely unused resources to decrement refcount
+            bind_group.used_buffer_ranges.write().clear();
+            bind_group.used_texture_ranges.write().clear();
+            bind_group.dynamic_binding_info.write().clear();
 
             self.suspected_resources
                 .insert(bind_group.layout.as_info().id(), bind_group.layout.clone());
@@ -549,6 +559,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.views,
             &hub.texture_views,
+            |_submit_index, _active, _id| 0,
             |_texture_view_id, _texture_view| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -580,6 +591,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.textures,
             &hub.textures,
+            |_submit_index, _active, _id| 0,
             |_texture_id, _texture| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -604,6 +616,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.samplers,
             &hub.samplers,
+            |_submit_index, _active, _id| 0,
             |_sampler_id, _sampler| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -628,6 +641,19 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.buffers,
             &hub.buffers,
+            |submit_index, active, buffer_id| {
+                let mut count = 0;
+                let mapped = active
+                    .iter()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&self.mapped, |a| &a.mapped);
+                mapped.iter().for_each(|b| {
+                    if b.as_info().id() == *buffer_id {
+                        count += 1;
+                    }
+                });
+                count
+            },
             |_buffer_id, _buffer| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -661,6 +687,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.compute_pipelines,
             &hub.compute_pipelines,
+            |_submit_index, _active, _id| 0,
             |_compute_pipeline_id, _compute_pipeline| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -691,6 +718,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.render_pipelines,
             &hub.render_pipelines,
+            |_submit_index, _active, _id| 0,
             |_render_pipeline_id, _render_pipeline| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -767,6 +795,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             &mut self.free_resources,
             &mut trackers.query_sets,
             &hub.query_sets,
+            |_submit_index, _active, _id| 0,
             |_query_set_id, _query_set| {},
         );
         self

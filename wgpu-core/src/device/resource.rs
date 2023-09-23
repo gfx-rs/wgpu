@@ -2049,9 +2049,9 @@ impl<A: HalApi> Device<A> {
             layout: layout.clone(),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
             used,
-            used_buffer_ranges,
-            used_texture_ranges,
-            dynamic_binding_info,
+            used_buffer_ranges: RwLock::new(used_buffer_ranges),
+            used_texture_ranges: RwLock::new(used_texture_ranges),
+            dynamic_binding_info: RwLock::new(dynamic_binding_info),
             // collect in the order of BGL iteration
             late_buffer_binding_sizes: layout
                 .entries
