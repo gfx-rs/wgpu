@@ -789,7 +789,7 @@ fn convert_glsl_folder() {
                 &module,
                 &info,
                 &dest,
-                &file_name.replace('.', "-"),
+                &file_name,
                 &WgslOutParameters::default(),
             );
         }
