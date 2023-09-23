@@ -19,7 +19,7 @@
  *   will treat the contents as junk.
 !*/
 
-use super::{range::RangedStates, PendingTransition, PendingTransitionList};
+use super::{range::RangedStates, PendingTransition, PendingTransitionList, ResourceTracker};
 use crate::{
     hal_api::HalApi,
     id::{TextureId, TypedId},
@@ -392,6 +392,50 @@ pub(crate) struct TextureTracker<A: HalApi> {
 
     _phantom: PhantomData<A>,
 }
+
+impl<A: HalApi> ResourceTracker<TextureId, Texture<A>> for TextureTracker<A> {
+    /// Removes the given resource from the tracker iff we have the last reference to the
+    /// resource and the epoch matches.
+    ///
+    /// Returns true if the resource was removed.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// false will be returned.
+    fn remove_abandoned(&mut self, id: TextureId, external_count: usize) -> bool {
+        let index = id.unzip().0 as usize;
+
+        if index > self.metadata.size() {
+            return false;
+        }
+
+        self.tracker_assert_in_bounds(index);
+
+        unsafe {
+            if self.metadata.contains_unchecked(index) {
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
+                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
+                //so not appearing in Registry
+                let min_ref_count = 1 + external_count;
+                if existing_ref_count <= min_ref_count {
+                    self.start_set.complex.remove(&index);
+                    self.end_set.complex.remove(&index);
+                    self.metadata.remove(index);
+                    log::info!("Texture {:?} is not tracked anymore", id,);
+                    return true;
+                } else {
+                    log::info!(
+                        "Texture {:?} is still referenced from {}",
+                        id,
+                        existing_ref_count
+                    );
+                }
+            }
+        }
+
+        false
+    }
+}
+
 impl<A: HalApi> TextureTracker<A> {
     pub fn new() -> Self {
         Self {
@@ -701,47 +745,6 @@ impl<A: HalApi> TextureTracker<A> {
                 self.end_set.complex.remove(&index);
                 self.metadata.remove(index);
                 return true;
-            }
-        }
-
-        false
-    }
-
-    /// Removes the given resource from the tracker iff we have the last reference to the
-    /// resource and the epoch matches.
-    ///
-    /// Returns true if the resource was removed.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// false will be returned.
-    pub fn remove_abandoned(&mut self, id: TextureId, is_in_registry: bool) -> bool {
-        let index = id.unzip().0 as usize;
-
-        if index > self.metadata.size() {
-            return false;
-        }
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
-                //so not appearing in Registry
-                let min_ref_count = if is_in_registry { 3 } else { 2 };
-                if existing_ref_count <= min_ref_count {
-                    self.start_set.complex.remove(&index);
-                    self.end_set.complex.remove(&index);
-                    self.metadata.remove(index);
-                    log::info!("Texture {:?} is not tracked anymore", id,);
-                    return true;
-                } else {
-                    log::info!(
-                        "Texture {:?} is still referenced from {}",
-                        id,
-                        existing_ref_count
-                    );
-                }
             }
         }
 

@@ -3,9 +3,10 @@ use std::{
     any::Any,
     cmp::Ordering,
     fmt::{self, Debug},
+    hash::Hash,
     marker::PhantomData,
 };
-use wgt::Backend;
+use wgt::{Backend, WasmNotSend, WasmNotSync};
 
 #[cfg(feature = "id32")]
 type IdType = u32;
@@ -71,7 +72,7 @@ type Dummy = hal::api::Empty;
     all(feature = "serde", not(feature = "replay")),
     derive(serde::Deserialize)
 )]
-pub struct Id<T: 'static>(NonZeroId, PhantomData<T>);
+pub struct Id<T: 'static + WasmNotSend + WasmNotSync>(NonZeroId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
 #[allow(dead_code)]
@@ -82,14 +83,20 @@ enum SerialId {
     Id(Index, Epoch, Backend),
 }
 #[cfg(feature = "trace")]
-impl<T: 'static> From<Id<T>> for SerialId {
+impl<T> From<Id<T>> for SerialId
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn from(id: Id<T>) -> Self {
         let (index, epoch, backend) = id.unzip();
         Self::Id(index, epoch, backend)
     }
 }
 #[cfg(feature = "replay")]
-impl<T> From<SerialId> for Id<T> {
+impl<T> From<SerialId> for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn from(id: SerialId) -> Self {
         match id {
             SerialId::Id(index, epoch, backend) => TypedId::zip(index, epoch, backend),
@@ -97,7 +104,10 @@ impl<T> From<SerialId> for Id<T> {
     }
 }
 
-impl<T> Id<T> {
+impl<T> Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     /// # Safety
     ///
     /// The raw id must be valid for the type.
@@ -128,41 +138,59 @@ impl<T> Id<T> {
     }
 }
 
-impl<T> Copy for Id<T> {}
+impl<T> Copy for Id<T> where T: 'static + WasmNotSend + WasmNotSync {}
 
-impl<T> Clone for Id<T> {
+impl<T> Clone for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn clone(&self) -> Self {
         Self(self.0, PhantomData)
     }
 }
 
-impl<T> Debug for Id<T> {
+impl<T> Debug for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         self.unzip().fmt(formatter)
     }
 }
 
-impl<T> std::hash::Hash for Id<T> {
+impl<T> Hash for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
-impl<T> PartialEq for Id<T> {
+impl<T> PartialEq for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T> Eq for Id<T> {}
+impl<T> Eq for Id<T> where T: 'static + WasmNotSend + WasmNotSync {}
 
-impl<T> PartialOrd for Id<T> {
+impl<T> PartialOrd for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<T> Ord for Id<T> {
+impl<T> Ord for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
     }
@@ -173,14 +201,17 @@ impl<T> Ord for Id<T> {
 /// Most `wgpu-core` clients should not use this trait. Unusual clients that
 /// need to construct `Id` values directly, or access their components, like the
 /// WGPU recording player, may use this trait to do so.
-pub trait TypedId: Copy + Debug + Any {
+pub trait TypedId: Copy + Debug + Any + 'static + WasmNotSend + WasmNotSync + Eq + Hash {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
     fn into_raw(self) -> NonZeroId;
 }
 
 #[allow(trivial_numeric_casts)]
-impl<T: 'static> TypedId for Id<T> {
+impl<T> TypedId for Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
         assert_eq!(0, epoch >> EPOCH_BITS);
         assert_eq!(0, (index as IdType) >> INDEX_BITS);

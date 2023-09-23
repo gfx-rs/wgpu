@@ -486,7 +486,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device
                     .lock_life()
                     .suspected_resources
-                    .buffers
                     .insert(buffer_id, buffer);
             }
 
@@ -731,7 +730,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } else {
                     life_lock
                         .suspected_resources
-                        .textures
                         .insert(texture_id, texture.clone());
                 }
             }
@@ -807,7 +805,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             view.device
                 .lock_life()
                 .suspected_resources
-                .texture_views
                 .insert(texture_view_id, view.clone());
 
             if wait {
@@ -876,7 +873,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
-                .samplers
                 .insert(sampler_id, sampler.clone());
         }
     }
@@ -965,7 +961,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
-                .bind_group_layouts
                 .insert(bind_group_layout_id, layout.clone());
         }
     }
@@ -1028,7 +1023,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
-                .pipeline_layouts
                 .insert(pipeline_layout_id, layout.clone());
         }
     }
@@ -1099,7 +1093,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
-                .bind_groups
                 .insert(bind_group_id, bind_group.clone());
         }
     }
@@ -1376,7 +1369,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .device
                 .lock_life()
                 .suspected_resources
-                .render_bundles
                 .insert(render_bundle_id, bundle.clone());
         }
     }
@@ -1442,7 +1434,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device
                 .lock_life()
                 .suspected_resources
-                .query_sets
                 .insert(query_set_id, query_set.clone());
         }
     }
@@ -1558,12 +1549,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
-                .render_pipelines
                 .insert(render_pipeline_id, pipeline.clone());
 
             life_lock
                 .suspected_resources
-                .pipeline_layouts
                 .insert(layout_id, pipeline.layout.clone());
         }
     }
@@ -1676,11 +1665,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
-                .compute_pipelines
                 .insert(compute_pipeline_id, pipeline.clone());
             life_lock
                 .suspected_resources
-                .pipeline_layouts
                 .insert(layout_id, pipeline.layout.clone());
         }
     }

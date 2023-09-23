@@ -3016,7 +3016,10 @@ impl crate::Context for Context {
     }
 }
 
-impl<T> From<ObjectId> for wgc::id::Id<T> {
+impl<T> From<ObjectId> for wgc::id::Id<T>
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn from(id: ObjectId) -> Self {
         // If the id32 feature is enabled in wgpu-core, this will make sure that the id fits in a NonZeroU32.
         #[allow(clippy::useless_conversion)]
@@ -3026,7 +3029,10 @@ impl<T> From<ObjectId> for wgc::id::Id<T> {
     }
 }
 
-impl<T> From<wgc::id::Id<T>> for ObjectId {
+impl<T> From<wgc::id::Id<T>> for ObjectId
+where
+    T: 'static + WasmNotSend + WasmNotSync,
+{
     fn from(id: wgc::id::Id<T>) -> Self {
         // If the id32 feature is enabled in wgpu-core, the conversion is not useless
         #[allow(clippy::useless_conversion)]

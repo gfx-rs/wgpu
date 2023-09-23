@@ -24,7 +24,7 @@ use crate::hub::Hub;
 use crate::id::CommandBufferId;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::{Resource, ResourceInfo};
+use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
 use crate::{global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory, Label};
 
@@ -278,7 +278,7 @@ impl<A: HalApi> CommandBuffer<A> {
 }
 
 impl<A: HalApi> Resource<CommandBufferId> for CommandBuffer<A> {
-    const TYPE: &'static str = "CommandBuffer";
+    const TYPE: ResourceType = "CommandBuffer";
 
     fn as_info(&self) -> &ResourceInfo<CommandBufferId> {
         &self.info

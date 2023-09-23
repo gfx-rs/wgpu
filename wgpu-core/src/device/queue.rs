@@ -14,8 +14,8 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, StagingBuffer, Texture,
-        TextureInner,
+        Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, ResourceType,
+        StagingBuffer, Texture, TextureInner,
     },
     track, FastHashMap, SubmissionIndex,
 };
@@ -38,7 +38,7 @@ pub struct Queue<A: HalApi> {
 }
 
 impl<A: HalApi> Resource<QueueId> for Queue<A> {
-    const TYPE: &'static str = "Queue";
+    const TYPE: ResourceType = "Queue";
 
     fn as_info(&self) -> &ResourceInfo<QueueId> {
         &self.info
@@ -1136,7 +1136,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     {
                         let mut suspected = temp_suspected.take().unwrap();
                         suspected.clear();
-                        temp_suspected.replace(ResourceMaps::new());
+                        temp_suspected.replace(ResourceMaps::new::<A>());
                     }
 
                     // finish all the command buffers first
@@ -1201,11 +1201,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         unsafe { device.raw().unmap_buffer(raw_buf) }
                                             .map_err(DeviceError::from)?;
                                     }
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .buffers
-                                        .insert(id, buffer.clone());
+                                    temp_suspected.as_mut().unwrap().insert(id, buffer.clone());
                                 } else {
                                     match *buffer.map_state.lock() {
                                         BufferMapState::Idle => (),
@@ -1227,11 +1223,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 };
                                 texture.info.use_at(submit_index);
                                 if texture.is_unique() {
-                                    temp_suspected
-                                        .as_mut()
-                                        .unwrap()
-                                        .textures
-                                        .insert(id, texture.clone());
+                                    temp_suspected.as_mut().unwrap().insert(id, texture.clone());
                                 }
                                 if should_extend {
                                     unsafe {
@@ -1247,7 +1239,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
-                                        .texture_views
                                         .insert(texture_view.as_info().id(), texture_view.clone());
                                 }
                             }
@@ -1267,7 +1258,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         temp_suspected
                                             .as_mut()
                                             .unwrap()
-                                            .bind_groups
                                             .insert(bg.as_info().id(), bg.clone());
                                     }
                                 }
@@ -1278,7 +1268,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 compute_pipeline.info.use_at(submit_index);
                                 if compute_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().compute_pipelines.insert(
+                                    temp_suspected.as_mut().unwrap().insert(
                                         compute_pipeline.as_info().id(),
                                         compute_pipeline.clone(),
                                     );
@@ -1289,7 +1279,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             {
                                 render_pipeline.info.use_at(submit_index);
                                 if render_pipeline.is_unique() {
-                                    temp_suspected.as_mut().unwrap().render_pipelines.insert(
+                                    temp_suspected.as_mut().unwrap().insert(
                                         render_pipeline.as_info().id(),
                                         render_pipeline.clone(),
                                     );
@@ -1301,7 +1291,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
-                                        .query_sets
                                         .insert(query_set.as_info().id(), query_set.clone());
                                 }
                             }
@@ -1322,7 +1311,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     temp_suspected
                                         .as_mut()
                                         .unwrap()
-                                        .render_bundles
                                         .insert(bundle.as_info().id(), bundle.clone());
                                 }
                             }

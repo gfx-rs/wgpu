@@ -484,6 +484,14 @@ impl<A: HalApi> UsageScope<A> {
     }
 }
 
+pub(crate) trait ResourceTracker<Id, R>
+where
+    Id: TypedId,
+    R: resource::Resource<Id>,
+{
+    fn remove_abandoned(&mut self, id: Id, external_count: usize) -> bool;
+}
+
 /// A full double sided tracker used by CommandBuffers and the Device.
 pub(crate) struct Tracker<A: HalApi> {
     pub buffers: BufferTracker<A>,

@@ -7,7 +7,7 @@ use crate::{
         TextureViewId,
     },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
-    resource::{Resource, ResourceInfo},
+    resource::{Resource, ResourceInfo, ResourceType},
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label,
@@ -481,7 +481,7 @@ impl<A: HalApi> Drop for BindGroupLayout<A> {
 }
 
 impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
-    const TYPE: &'static str = "BindGroupLayout";
+    const TYPE: ResourceType = "BindGroupLayout";
 
     fn as_info(&self) -> &ResourceInfo<BindGroupLayoutId> {
         &self.info
@@ -730,7 +730,7 @@ impl<A: HalApi> PipelineLayout<A> {
 }
 
 impl<A: HalApi> Resource<PipelineLayoutId> for PipelineLayout<A> {
-    const TYPE: &'static str = "PipelineLayout";
+    const TYPE: ResourceType = "PipelineLayout";
 
     fn as_info(&self) -> &ResourceInfo<PipelineLayoutId> {
         &self.info
@@ -921,7 +921,7 @@ impl<A: HalApi> BindGroup<A> {
 }
 
 impl<A: HalApi> Resource<BindGroupId> for BindGroup<A> {
-    const TYPE: &'static str = "BindGroup";
+    const TYPE: ResourceType = "BindGroup";
 
     fn as_info(&self) -> &ResourceInfo<BindGroupId> {
         &self.info

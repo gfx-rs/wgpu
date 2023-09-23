@@ -7,7 +7,7 @@
 
 use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
-use super::PendingTransition;
+use super::{PendingTransition, ResourceTracker};
 use crate::{
     hal_api::HalApi,
     id::{BufferId, TypedId},
@@ -291,6 +291,62 @@ pub(crate) struct BufferTracker<A: HalApi> {
 
     temp: Vec<PendingTransition<BufferUses>>,
 }
+
+impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
+    /// Removes the buffer `id` from this tracker if it is otherwise unused.
+    ///
+    /// A buffer is 'otherwise unused' when the only references to it are:
+    ///
+    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_suspected`, has just
+    ///    drained from `LifetimeTracker::suspected_resources`,
+    ///
+    /// 2) its `Arc` in [`self.metadata`] (owned by [`Device::trackers`]), and
+    ///
+    /// 3) its `Arc` in the [`Hub::buffers`] registry.
+    ///
+    /// If the buffer is indeed unused, this function removes 2), and
+    /// `triage_suspected` will remove 3), leaving 1) as the sole
+    /// remaining reference.
+    ///
+    /// Return `true` if this tracker contained the buffer `id`. This
+    /// implies that we removed it.
+    ///
+    /// [`Device::trackers`]: crate::device::Device
+    /// [`self.metadata`]: BufferTracker::metadata
+    /// [`Hub::buffers`]: crate::hub::Hub::buffers
+    fn remove_abandoned(&mut self, id: BufferId, external_count: usize) -> bool {
+        let index = id.unzip().0 as usize;
+
+        if index > self.metadata.size() {
+            return false;
+        }
+
+        self.tracker_assert_in_bounds(index);
+
+        unsafe {
+            if self.metadata.contains_unchecked(index) {
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
+                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
+                //so not appearing in Registry
+                let min_ref_count = 1 + external_count;
+                if existing_ref_count <= min_ref_count {
+                    self.metadata.remove(index);
+                    log::info!("Buffer {:?} is not tracked anymore", id,);
+                    return true;
+                } else {
+                    log::info!(
+                        "Buffer {:?} is still referenced from {}",
+                        id,
+                        existing_ref_count
+                    );
+                }
+            }
+        }
+
+        false
+    }
+}
+
 impl<A: HalApi> BufferTracker<A> {
     pub fn new() -> Self {
         Self {
@@ -554,59 +610,6 @@ impl<A: HalApi> BufferTracker<A> {
             }
         }
         None
-    }
-
-    /// Removes the buffer `id` from this tracker if it is otherwise unused.
-    ///
-    /// A buffer is 'otherwise unused' when the only references to it are:
-    ///
-    /// 1) the `Arc` that our caller, `LifetimeTracker::triage_suspected`, has just
-    ///    drained from `LifetimeTracker::suspected_resources`,
-    ///
-    /// 2) its `Arc` in [`self.metadata`] (owned by [`Device::trackers`]), and
-    ///
-    /// 3) its `Arc` in the [`Hub::buffers`] registry.
-    ///
-    /// If the buffer is indeed unused, this function removes 2), and
-    /// `triage_suspected` will remove 3), leaving 1) as the sole
-    /// remaining reference.
-    ///
-    /// Return `true` if this tracker contained the buffer `id`. This
-    /// implies that we removed it.
-    ///
-    /// [`Device::trackers`]: crate::device::Device
-    /// [`self.metadata`]: BufferTracker::metadata
-    /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    pub fn remove_abandoned(&mut self, id: BufferId, is_in_registry: bool) -> bool {
-        let index = id.unzip().0 as usize;
-
-        if index > self.metadata.size() {
-            return false;
-        }
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
-                //so not appearing in Registry
-                let min_ref_count = if is_in_registry { 3 } else { 2 };
-                if existing_ref_count <= min_ref_count {
-                    self.metadata.remove(index);
-                    log::info!("Buffer {:?} is not tracked anymore", id,);
-                    return true;
-                } else {
-                    log::info!(
-                        "Buffer {:?} is still referenced from {}",
-                        id,
-                        existing_ref_count
-                    );
-                }
-            }
-        }
-
-        false
     }
 }
 

@@ -8,7 +8,7 @@ use crate::{
     id::{AdapterId, DeviceId, QueueId, SurfaceId},
     identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
-    resource::{Resource, ResourceInfo},
+    resource::{Resource, ResourceInfo, ResourceType},
     LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
@@ -162,7 +162,7 @@ pub struct Surface {
 }
 
 impl Resource<SurfaceId> for Surface {
-    const TYPE: &'static str = "Surface";
+    const TYPE: ResourceType = "Surface";
 
     fn as_info(&self) -> &ResourceInfo<SurfaceId> {
         &self.info
@@ -386,7 +386,7 @@ impl<A: HalApi> Adapter<A> {
 }
 
 impl<A: HalApi> Resource<AdapterId> for Adapter<A> {
-    const TYPE: &'static str = "Adapter";
+    const TYPE: ResourceType = "Adapter";
 
     fn as_info(&self) -> &ResourceInfo<AdapterId> {
         &self.info

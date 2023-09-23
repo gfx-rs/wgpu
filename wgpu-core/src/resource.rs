@@ -23,6 +23,7 @@ use hal::CommandEncoder;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
+use wgt::{WasmNotSend, WasmNotSync};
 
 use std::{
     borrow::Borrow,
@@ -132,8 +133,10 @@ impl<Id: TypedId> ResourceInfo<Id> {
     }
 }
 
-pub trait Resource<Id: TypedId> {
-    const TYPE: &'static str;
+pub(crate) type ResourceType = &'static str;
+
+pub trait Resource<Id: TypedId>: 'static + WasmNotSend + WasmNotSync {
+    const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Id>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Id>;
     fn label(&self) -> String {
@@ -604,7 +607,7 @@ pub enum CreateBufferError {
 }
 
 impl<A: HalApi> Resource<BufferId> for Buffer<A> {
-    const TYPE: &'static str = "Buffer";
+    const TYPE: ResourceType = "Buffer";
 
     fn as_info(&self) -> &ResourceInfo<BufferId> {
         &self.info
@@ -656,7 +659,7 @@ impl<A: HalApi> Drop for StagingBuffer<A> {
 }
 
 impl<A: HalApi> Resource<StagingBufferId> for StagingBuffer<A> {
-    const TYPE: &'static str = "StagingBuffer";
+    const TYPE: ResourceType = "StagingBuffer";
 
     fn as_info(&self) -> &ResourceInfo<StagingBufferId> {
         &self.info
@@ -956,7 +959,7 @@ pub enum CreateTextureError {
 }
 
 impl<A: HalApi> Resource<TextureId> for Texture<A> {
-    const TYPE: &'static str = "Texture";
+    const TYPE: ResourceType = "Texture";
 
     fn as_info(&self) -> &ResourceInfo<TextureId> {
         &self.info
@@ -1112,7 +1115,7 @@ pub enum CreateTextureViewError {
 pub enum TextureViewDestroyError {}
 
 impl<A: HalApi> Resource<TextureViewId> for TextureView<A> {
-    const TYPE: &'static str = "TextureView";
+    const TYPE: ResourceType = "TextureView";
 
     fn as_info(&self) -> &ResourceInfo<TextureViewId> {
         &self.info
@@ -1227,7 +1230,7 @@ pub enum CreateSamplerError {
 }
 
 impl<A: HalApi> Resource<SamplerId> for Sampler<A> {
-    const TYPE: &'static str = "Sampler";
+    const TYPE: ResourceType = "Sampler";
 
     fn as_info(&self) -> &ResourceInfo<SamplerId> {
         &self.info
@@ -1274,7 +1277,7 @@ impl<A: HalApi> Drop for QuerySet<A> {
 }
 
 impl<A: HalApi> Resource<QuerySetId> for QuerySet<A> {
-    const TYPE: &'static str = "QuerySet";
+    const TYPE: ResourceType = "QuerySet";
 
     fn as_info(&self) -> &ResourceInfo<QuerySetId> {
         &self.info

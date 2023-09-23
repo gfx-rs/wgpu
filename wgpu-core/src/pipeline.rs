@@ -6,7 +6,7 @@ use crate::{
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     hal_api::HalApi,
     id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
-    resource::{Resource, ResourceInfo},
+    resource::{Resource, ResourceInfo, ResourceType},
     validation, Label,
 };
 use arrayvec::ArrayVec;
@@ -69,7 +69,7 @@ impl<A: HalApi> Drop for ShaderModule<A> {
 }
 
 impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
-    const TYPE: &'static str = "ShaderModule";
+    const TYPE: ResourceType = "ShaderModule";
 
     fn as_info(&self) -> &ResourceInfo<ShaderModuleId> {
         &self.info
@@ -264,7 +264,7 @@ impl<A: HalApi> Drop for ComputePipeline<A> {
 }
 
 impl<A: HalApi> Resource<ComputePipelineId> for ComputePipeline<A> {
-    const TYPE: &'static str = "ComputePipeline";
+    const TYPE: ResourceType = "ComputePipeline";
 
     fn as_info(&self) -> &ResourceInfo<ComputePipelineId> {
         &self.info
@@ -496,7 +496,7 @@ impl<A: HalApi> Drop for RenderPipeline<A> {
 }
 
 impl<A: HalApi> Resource<RenderPipelineId> for RenderPipeline<A> {
-    const TYPE: &'static str = "RenderPipeline";
+    const TYPE: ResourceType = "RenderPipeline";
 
     fn as_info(&self) -> &ResourceInfo<RenderPipelineId> {
         &self.info

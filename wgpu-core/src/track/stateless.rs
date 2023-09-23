@@ -12,6 +12,8 @@ use crate::{
     hal_api::HalApi, id::TypedId, resource::Resource, storage::Storage, track::ResourceMetadata,
 };
 
+use super::ResourceTracker;
+
 /// Stores all the resources that a bind group stores.
 #[derive(Debug)]
 pub(crate) struct StatelessBindGroupSate<Id: TypedId, T: Resource<Id>> {
@@ -70,6 +72,50 @@ impl<Id: TypedId, T: Resource<Id>> StatelessBindGroupSate<Id, T> {
 pub(crate) struct StatelessTracker<A: HalApi, Id: TypedId, T: Resource<Id>> {
     metadata: ResourceMetadata<A, Id, T>,
     _phantom: PhantomData<Id>,
+}
+
+impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
+    for StatelessTracker<A, Id, T>
+{
+    /// Removes the given resource from the tracker iff we have the last reference to the
+    /// resource and the epoch matches.
+    ///
+    /// Returns true if the resource was removed.
+    ///
+    /// If the ID is higher than the length of internal vectors,
+    /// false will be returned.
+    fn remove_abandoned(&mut self, id: Id, external_count: usize) -> bool {
+        let index = id.unzip().0 as usize;
+
+        if index > self.metadata.size() {
+            return false;
+        }
+
+        self.tracker_assert_in_bounds(index);
+
+        unsafe {
+            if self.metadata.contains_unchecked(index) {
+                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
+                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
+                //so not appearing in Registry
+                let min_ref_count = 1 + external_count;
+                if existing_ref_count <= min_ref_count {
+                    self.metadata.remove(index);
+                    log::info!("{} {:?} is not tracked anymore", T::TYPE, id,);
+                    return true;
+                } else {
+                    log::info!(
+                        "{} {:?} is still referenced from {}",
+                        T::TYPE,
+                        id,
+                        existing_ref_count
+                    );
+                }
+            }
+        }
+
+        false
+    }
 }
 
 impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
@@ -186,45 +232,5 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> StatelessTracker<A, Id, T> {
             }
         }
         None
-    }
-
-    /// Removes the given resource from the tracker iff we have the last reference to the
-    /// resource and the epoch matches.
-    ///
-    /// Returns true if the resource was removed.
-    ///
-    /// If the ID is higher than the length of internal vectors,
-    /// false will be returned.
-    pub fn remove_abandoned(&mut self, id: Id, is_in_registry: bool) -> bool {
-        let index = id.unzip().0 as usize;
-
-        if index > self.metadata.size() {
-            return false;
-        }
-
-        self.tracker_assert_in_bounds(index);
-
-        unsafe {
-            if self.metadata.contains_unchecked(index) {
-                let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
-                //so not appearing in Registry
-                let min_ref_count = if is_in_registry { 3 } else { 2 };
-                if existing_ref_count <= min_ref_count {
-                    self.metadata.remove(index);
-                    log::info!("{} {:?} is not tracked anymore", T::TYPE, id,);
-                    return true;
-                } else {
-                    log::info!(
-                        "{} {:?} is still referenced from {}",
-                        T::TYPE,
-                        id,
-                        existing_ref_count
-                    );
-                }
-            }
-        }
-
-        false
     }
 }

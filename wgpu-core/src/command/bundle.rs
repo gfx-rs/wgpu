@@ -95,7 +95,7 @@ use crate::{
     id::{self, RenderBundleId},
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags, RenderPipeline},
-    resource::{Resource, ResourceInfo},
+    resource::{Resource, ResourceInfo, ResourceType},
     track::RenderBundleScope,
     validation::check_buffer_usage,
     Label, LabelHelpers,
@@ -952,7 +952,7 @@ impl<A: HalApi> RenderBundle<A> {
 }
 
 impl<A: HalApi> Resource<RenderBundleId> for RenderBundle<A> {
-    const TYPE: &'static str = "RenderBundle";
+    const TYPE: ResourceType = "RenderBundle";
 
     fn as_info(&self) -> &ResourceInfo<RenderBundleId> {
         &self.info
