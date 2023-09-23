@@ -738,7 +738,7 @@ fn convert_glsl_variations_check() {
             &file,
         )
         .unwrap();
-    check_targets(&mut module, "variations-glsl", Targets::GLSL, None);
+    check_targets(&mut module, "variations", Targets::GLSL, None);
 }
 
 #[cfg(feature = "glsl-in")]
