@@ -14,7 +14,7 @@ OpEntryPoint Fragment %587 "fs_main" %580 %582 %584 %586
 OpExecutionMode %348 LocalSize 64 1 1
 OpExecutionMode %470 OriginUpperLeft
 OpExecutionMode %587 OriginUpperLeft
-%3 = OpString "debug-symbol-terrain"
+%3 = OpString "debug-symbol-terrain.wgsl"
 OpSource Unknown 0 %3 "// Taken from https://github.com/sotrh/learn-wgpu/blob/11820796f5e1dbce42fb1119f04ddeb4b167d2a0/code/intermediate/tutorial13-terrain/src/terrain.wgsl
 // ============================
 // Terrain Generation
