@@ -691,12 +691,6 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     )
     .unwrap();
     check_targets(&mut module, name, targets, None);
-    naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::default(),
-    )
-    .validate(&module)
-    .unwrap();
 }
 
 #[cfg(feature = "spv-in")]
