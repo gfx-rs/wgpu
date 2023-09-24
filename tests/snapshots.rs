@@ -400,8 +400,6 @@ fn write_output_spv(
     use naga::back::spv;
     use rspirv::binary::Disassemble;
 
-    println!("writing SPIR-V");
-
     let mut flags = spv::WriterFlags::LABEL_VARYINGS;
     flags.set(spv::WriterFlags::DEBUG, params.debug);
     flags.set(
@@ -456,7 +454,7 @@ fn write_output_spv_inner(
 ) {
     use naga::back::spv;
     use rspirv::binary::Disassemble;
-    println!("Writing SPIR-V for {:?}", input.file_name);
+    println!("Generating SPIR-V for {:?}", input.file_name);
     let spv = spv::write_vec(module, info, options, pipeline_options).unwrap();
     let dis = rspirv::dr::load_words(spv)
         .expect("Produced invalid SPIR-V")
@@ -482,7 +480,7 @@ fn write_output_msl(
 ) {
     use naga::back::msl;
 
-    println!("writing MSL");
+    println!("generating MSL");
 
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
@@ -512,7 +510,7 @@ fn write_output_glsl(
 ) {
     use naga::back::glsl;
 
-    println!("writing GLSL");
+    println!("generating GLSL");
 
     let pipeline_options = glsl::PipelineOptions {
         shader_stage: stage,
@@ -546,7 +544,7 @@ fn write_output_hlsl(
     use naga::back::hlsl;
     use std::fmt::Write as _;
 
-    println!("writing HLSL");
+    println!("generating HLSL");
 
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
@@ -590,7 +588,7 @@ fn write_output_wgsl(
 ) {
     use naga::back::wgsl;
 
-    println!("writing WGSL");
+    println!("generating WGSL");
 
     let mut flags = wgsl::WriterFlags::empty();
     flags.set(wgsl::WriterFlags::EXPLICIT_TYPES, params.explicit_types);
