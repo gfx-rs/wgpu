@@ -259,8 +259,28 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 wgpu_context_ref.queue.write_buffer(
                     &wgpu_context_ref.uniform_buffer,
                     0,
-                    // Ew gross I know. We have to do this to circumvent bytemuck's requirement
-                    // that AppState implement POD (Plain Old Data).
+                    // Translating Rust structures to WGSL is always tricky and can prove
+                    // incredibly difficult to remember all the rules by which WGSL
+                    // lays out and formats structs in memory. It is also often extremely
+                    // frustrating to debug when things don't go right.
+                    //
+                    // You may sometimes see structs translated to bytes through
+                    // implementing bytemuck's POD trait so that one can cast the bytes.
+                    // The problem is that there are a lot of things you need to be able
+                    // to guarantee about how _Rust_ lays out the struct in memory and
+                    // it's never wise to throw around manual implementations of POD
+                    // without knowing yourself that it is sound to do so. Generally,
+                    // translating structs to bytes using bytemuck and POD should be
+                    // avoided. It's not only safer but often necessary to implement
+                    // translations to bytes manually, ie constructing a Vec of bytes and
+                    // filling it according to an equivalent WGSL layout with padding as
+                    // necessary.
+                    //
+                    // Luckily for us, the AppState struct we use in WGSL is layed out
+                    // in such a way that it can also be internally represented as an
+                    // array of f32's. We will construct a WGSL AppState by laying out the
+                    // members in order of declaration (as is guaranteed for WGSL, unlike
+                    // Rust) as an array.
                     bytemuck::bytes_of(&[
                         state_ref.cursor_pos[0],
                         state_ref.cursor_pos[1],
