@@ -19,6 +19,7 @@ mod external_texture;
 mod instance;
 mod occlusion_query;
 mod partially_bounded_arrays;
+mod pipeline;
 mod poll;
 mod query_set;
 mod queue_transfer;
