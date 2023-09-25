@@ -68,7 +68,7 @@ ddsfile = "0.5"
 env_logger = "0.10"
 futures-intrusive = "0.5"
 rustc-hash = "1.1.0"
-glam = "0.24.1"
+glam = "0.24.2"
 image = { version = "0.24", default-features = false, features = ["png"] }
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
 libloading = ">=0.7,<0.9"
