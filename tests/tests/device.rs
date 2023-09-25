@@ -2,6 +2,7 @@ use wasm_bindgen_test::*;
 
 use wgpu_test::{fail, initialize_test, FailureCase, TestParameters};
 
+
 #[test]
 #[wasm_bindgen_test]
 fn device_initialization() {
@@ -93,28 +94,26 @@ async fn request_device_error_message() {
 }
 
 #[test]
-fn device_lose_then_more() {
-    // This is a test of device behavior after "lose the device". Specifically, all operations
-    // should trigger errors. To test this, it calls an explicit function to lose the device,
-    // which is not part of normal use and ideally wouldn't be exposed at all.
-    //
-    // TODO: Figure out how to make device.lose a private function only available to the test
-    // harness.
+fn device_destroy_then_more() {
+    // This is a test of device behavior after device.destroy. Specifically, all operations
+    // should trigger errors since the device is lost.
     //
     // On DX12 this test fails with a validation error in the very artifical actions taken
     // after lose the device. The error is "ID3D12CommandAllocator::Reset: The command
     // allocator cannot be reset because a command list is currently being recorded with the
     // allocator." That may indicate that DX12 doesn't like opened command buffers staying
     // open even after they return an error. For now, this test is skipped on DX12.
+    //
+    // The DX12 issue may be related to https://github.com/gfx-rs/wgpu/issues/3193.
     initialize_test(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE)
             .skip(FailureCase::backend(wgpu::Backends::DX12)),
         |ctx| {
-            // Create some resources on the device that we will attempt to use *after* losing the
-            // device.
+            // Create some resources on the device that we will attempt to use *after* losing
+            // the device.
 
-            // Create a 512 x 512 2D texture, and a target view of it.
+            // Create some 512 x 512 2D textures.
             let texture_extent = wgpu::Extent3d {
                 width: 512,
                 height: 512,
@@ -131,6 +130,17 @@ fn device_lose_then_more() {
                 view_formats: &[],
             });
             let target_view = texture_for_view.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let texture_for_read = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                size: texture_extent,
+                mip_level_count: 2,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rg8Uint,
+                usage: wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
+            });
 
             let texture_for_write = ctx.device.create_texture(&wgpu::TextureDescriptor {
                 label: None,
@@ -157,6 +167,18 @@ fn device_lose_then_more() {
                 mapped_at_creation: false,
             });
 
+            // Create a bind group layout.
+            let bind_group_layout = ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[],
+            });
+
+            // Create a shader module.
+            let shader_module = ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
+            });
+
             // Create some command encoders.
             let mut encoder_for_clear = ctx
                 .device
@@ -178,12 +200,54 @@ fn device_lose_then_more() {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-            // Lose the device. This will cause all other requests to return some variation of a
-            // device invalid error.
-            ctx.device.lose();
+            let mut encoder_for_texture_buffer_copy = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            let mut encoder_for_texture_texture_copy = ctx
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+            // Destroy the device. This will cause all other requests to return some variation of
+            // a device invalid error.
+            ctx.device.destroy();
+
+            // TODO: verify the following operations will return an invalid device error:
+            // * Run a compute pass
+            // * Run a render pass
+            // * Finish a render bundle encoder
+            // * Create a texture from HAL
+            // * Create a buffer from HAL
+            // * Create a sampler
+            // * Validate a surface configuration
+            // * Start capture
+            // * Stop capture
+            // * Buffer map
+
+            // TODO: figure out how to structure a test around these operations which panic when
+            // the device is invalid:
+            // * device.features()
+            // * device.limits()
+            // * device.downlevel_properties()
+            // * device.create_query_set()
 
             // TODO: change these fail calls to check for the specific errors which indicate that
             // the device is not valid.
+
+            // Creating a commmand encoder should fail.
+            fail(&ctx.device, || {
+                ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            });
+
+            // Creating a buffer should fail.
+            fail(&ctx.device, || {
+                ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: None,
+                    size: 256,
+                    usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+                    mapped_at_creation: false,
+                });
+            });
 
             // Creating a texture should fail.
             fail(&ctx.device, || {
@@ -265,6 +329,114 @@ fn device_lose_then_more() {
                     texture_for_write.as_image_copy(),
                     texture_extent,
                 );
+            });
+
+            // Copying a texture to a buffer should fail.
+            fail(&ctx.device, || {
+                encoder_for_texture_buffer_copy.copy_texture_to_buffer(
+                    texture_for_read.as_image_copy(),
+                    wgpu::ImageCopyBuffer {
+                        buffer: &buffer_source,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: None,
+                        },
+                    },
+                    texture_extent,
+                );
+            });
+
+            // Copying a texture to a texture should fail.
+            fail(&ctx.device, || {
+                encoder_for_texture_texture_copy.copy_texture_to_texture(
+                    texture_for_read.as_image_copy(),
+                    texture_for_write.as_image_copy(),
+                    texture_extent,
+                );
+            });
+
+            // Creating a bind group layout should fail.
+            fail(&ctx.device, || {
+                ctx
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[],
+                });
+            });
+
+            // Creating a bind group should fail.
+            fail(&ctx.device, || {
+                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: None,
+                    layout: &bind_group_layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(buffer_source.as_entire_buffer_binding()),
+                    }],
+                });
+            });
+
+            // Creating a pipeline layout should fail.
+            fail(&ctx.device, || {
+                ctx
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[],
+                    push_constant_ranges: &[],
+                });
+            });
+
+            // Creating a shader module should fail.
+            fail(&ctx.device, || {
+                ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: None,
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
+                });
+            });
+
+            // Creating a shader module spirv should fail.
+            fail(&ctx.device, || {
+                unsafe {
+                    ctx.device.create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+                        label: None,
+                        source: std::borrow::Cow::Borrowed(&[]),
+                    });
+                }
+            });
+
+            // Creating a render pipeline should fail.
+            fail(&ctx.device, || {
+                ctx
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: None,
+                    layout: None,
+                    vertex: wgpu::VertexState {
+                        module: &shader_module,
+                        entry_point: "",
+                        buffers: &[],
+                    },
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    fragment: None,
+                    multiview: None,
+                });
+            });
+
+            // Creating a compute pipeline should fail.
+            fail(&ctx.device, || {
+                ctx
+                .device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor{
+                    label: None,
+                    layout: None,
+                    module: &shader_module,
+                    entry_point: "",
+                });
             });
         },
     )

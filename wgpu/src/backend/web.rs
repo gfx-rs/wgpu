@@ -1914,9 +1914,14 @@ impl crate::context::Context for Context {
         // Device is dropped automatically
     }
 
+    fn device_destroy(&self, _buffer: &Self::DeviceId, device_data: &Self::DeviceData) {
+        device_data.0.destroy();
+    }
+
     fn device_lose(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         // TODO: figure out the GPUDevice implementation of this, including resolving
-        // the device.lost promise.
+        // the device.lost promise, which will require a different invocation pattern
+        // with a callback.
     }
 
     fn device_poll(

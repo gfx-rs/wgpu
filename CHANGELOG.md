@@ -101,7 +101,7 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 - `wgpu::CreateSurfaceError` and `wgpu::RequestDeviceError` now give details of the failure, but no longer implement `PartialEq` and cannot be constructed. By @kpreid in [#4066](https://github.com/gfx-rs/wgpu/pull/4066) and [#4145](https://github.com/gfx-rs/wgpu/pull/4145)
 - Make `WGPU_POWER_PREF=none` a valid value. By @fornwall in [4076](https://github.com/gfx-rs/wgpu/pull/4076)
 - Support dual source blending in OpenGL ES, Metal, Vulkan & DX12. By @freqmod in [4022](https://github.com/gfx-rs/wgpu/pull/4022)
-- Add stub support for "lose the device" and device validity. By @bradwerth in [4163](https://github.com/gfx-rs/wgpu/pull/4163)
+- Add stub support for device destroy and device validity. By @bradwerth in [4163](https://github.com/gfx-rs/wgpu/pull/4163)
 
 #### Vulkan
 
@@ -113,10 +113,6 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 ### Documentation
 - Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4035](https://github.com/gfx-rs/wgpu/pull/4035)
 - Fix description of `Features::TEXTURE_COMPRESSION_ASTC_HDR` in [#4157](https://github.com/gfx-rs/wgpu/pull/4157)
-
-#### Metal
-
-- Support for timestamp queries on encoders and passes. By @wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
 
 #### Metal
 

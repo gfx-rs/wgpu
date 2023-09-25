@@ -3174,12 +3174,25 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn lose(&mut self) {
+    pub(crate) fn lose(&mut self, _reason: Option<&str>) {
+        // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
+
         // Mark the device explicitly as invalid. This is checked in various
-        // places to prevent new work from being submitted, allowing a later
-        // call to `poll_devices` to drop this device when the work queues
-        // are cleared.
+        // places to prevent new work from being submitted.
         self.valid = false;
+
+        // The following steps remain in "lose the device":
+        // 1) Resolve the GPUDevice device.lost promise.
+
+        // TODO: triggger this passively or actively, and supply the reason.
+
+        // 2) Complete any outstanding mapAsync() steps.
+        // 3) Complete any outstanding onSubmittedWorkDone() steps.
+
+        // These parts are passively accomplished by setting valid to false,
+        // since that will prevent any new work from being added to the queues.
+        // Future calls to poll_devices will continue to check the work queues
+        // until they are cleared, and then drop the device.
     }
 }
 

@@ -2510,13 +2510,43 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn device_lose<A: HalApi>(&self, device_id: DeviceId) {
+    pub fn device_destroy<A: HalApi>(&self, device_id: DeviceId) {
         let hub = A::hub(self);
         let mut token = Token::root();
 
         let (mut device_guard, _) = hub.devices.write(&mut token);
         if let Ok(device) = device_guard.get_mut(device_id) {
-            device.lose();
+            // Follow the steps at
+            // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
+
+            // It's legal to call destroy multiple times, but if the device
+            // is already invalid, there's nothing more to do. There's also
+            // no need to return an error.
+            if !device.valid {
+                return;
+            }
+
+            // The last part of destroy is to lose the device. The spec says
+            // delay that until all "currently-enqueued operations on any
+            // queue on this device are completed."
+
+            // TODO: implement this delay.
+
+            // Finish by losing the device.
+
+            // TODO: associate this "destroyed" reason more tightly with
+            // the GPUDeviceLostReason defined in webgpu.idl.
+            device.lose(Some("destroyed"));
+        }
+    }
+
+    pub fn device_lose<A: HalApi>(&self, device_id: DeviceId, reason: Option<&str>) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, _) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            device.lose(reason);
         }
     }
 
