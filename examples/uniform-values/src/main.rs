@@ -266,12 +266,13 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     //
                     // You may sometimes see structs translated to bytes through
                     // implementing bytemuck's POD trait so that one can cast the bytes.
-                    // The problem is that there are a lot of things you need to be able
-                    // to guarantee about how _Rust_ lays out the struct in memory and
-                    // it's never wise to throw around manual implementations of POD
-                    // without knowing yourself that it is sound to do so. Generally,
-                    // translating structs to bytes using bytemuck and POD should be
-                    // avoided. It's not only safer but often necessary to implement
+                    // The problem is 1. Rust representations of structs are not only often
+                    // incompatible but also complicated to predict and 2. Even using
+                    // #[repr(C)] does not guarantee that the struct's bytes are formatted
+                    // according to WGSL's rules. Generally, it's never wise to throw around
+                    // manual implementations of POD unless you *know* that it is sound to
+                    // do so and translating structs to bytes using bytemuck and POD should
+                    // be avoided. It's not only safer but often necessary to implement
                     // translations to bytes manually, ie constructing a Vec of bytes and
                     // filling it according to an equivalent WGSL layout with padding as
                     // necessary.
