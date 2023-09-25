@@ -93,10 +93,14 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // code for the buffer to be mapped and even worse, calling get_mapped_range or
     // get_mapped_range_mut prematurely will cause a panic, not return an error.
     //
-    // Using async channels solves this as awaiting the receiving of a message from
+    // Using channels solves this as awaiting the receiving of a message from
     // the passed closure will force the outside code to wait. It also doesn't hurt
     // if the closure finishes before the outside code catches up as the message is
     // buffered and receiving will just pick that up.
+    //
+    // It may also be worth noting that although on native, the usage of asynchronous
+    // channels is wholely unnecessary, for the sake of portability to WASM (std channels
+    // don't work on WASM,) we'll use async channels that work on both native and WASM.
     let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     // In order for the mapping to be completed, one of three things must happen.
