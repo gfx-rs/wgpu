@@ -81,7 +81,6 @@ RWByteAddressBuffer bar : register(u0);
 cbuffer baz : register(b1) { Baz baz; }
 RWByteAddressBuffer qux : register(u2);
 cbuffer nested_mat_cx2_ : register(b3) { MatCx2InArray nested_mat_cx2_; }
-groupshared uint val;
 
 Baz ConstructBaz(float3x2 arg0) {
     Baz ret = (Baz)0;
@@ -288,12 +287,9 @@ float4 foo_frag() : SV_Target0
 }
 
 [numthreads(1, 1, 1)]
-void assign_through_ptr(uint3 __local_invocation_id : SV_GroupThreadID)
+void assign_through_ptr()
 {
-    if (all(__local_invocation_id == uint3(0u, 0u, 0u))) {
-        val = (uint)0;
-    }
-    GroupMemoryBarrierWithGroupSync();
+    uint val = 33u;
     float4 arr[2] = Constructarray2_float4_((6.0).xxxx, (7.0).xxxx);
 
     assign_through_ptr_fn(val);

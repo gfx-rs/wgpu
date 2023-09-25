@@ -46,7 +46,6 @@
                 ("READ"),
                 (""),
                 (""),
-                (""),
             ],
             expressions: [
                 (
@@ -1144,7 +1143,6 @@
                 (""),
                 (""),
                 ("READ"),
-                (""),
             ],
             expressions: [
                 (
@@ -2414,7 +2412,6 @@
                 (""),
                 (""),
                 (""),
-                (""),
             ],
             expressions: [
                 (
@@ -2449,7 +2446,6 @@
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (""),
                 (""),
                 (""),
                 (""),
@@ -2503,7 +2499,6 @@
                 (""),
                 (""),
                 (""),
-                (""),
             ],
             expressions: [
                 (
@@ -2541,7 +2536,6 @@
             may_kill: false,
             sampling_set: [],
             global_uses: [
-                (""),
                 (""),
                 (""),
                 (""),
@@ -2638,7 +2632,6 @@
                 ("READ"),
                 ("READ"),
                 ("READ"),
-                (""),
             ],
             expressions: [
                 (
@@ -3302,7 +3295,6 @@
                 (""),
                 ("WRITE"),
                 (""),
-                (""),
             ],
             expressions: [
                 (
@@ -3736,9 +3728,32 @@
                 (""),
                 (""),
                 (""),
-                ("READ"),
             ],
             expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar(
+                        kind: Uint,
+                        width: 4,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 1,
+                        space: Function,
+                    )),
+                ),
                 (
                     uniformity: (
                         non_uniform_result: None,
@@ -3800,7 +3815,7 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: Some(8),
                         requirements: (""),
                     ),
                     ref_count: 1,
@@ -3808,18 +3823,6 @@
                     ty: Value(Pointer(
                         base: 28,
                         space: Function,
-                    )),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: Some(6),
-                    ty: Value(Pointer(
-                        base: 1,
-                        space: WorkGroup,
                     )),
                 ),
             ],

@@ -151,9 +151,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
 	return vec4<f32>(0.0);
 }
 
-var<workgroup> val: u32;
-
-fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
+fn assign_through_ptr_fn(p: ptr<function, u32>) {
     *p = 42u;
 }
 
@@ -163,8 +161,9 @@ fn assign_array_through_ptr_fn(foo: ptr<function, array<vec4<f32>, 2>>) {
 
 @compute @workgroup_size(1)
 fn assign_through_ptr() {
-	var arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
-
+    var val = 33u;
     assign_through_ptr_fn(&val);
+
+	var arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
     assign_array_through_ptr_fn(&arr);
 }

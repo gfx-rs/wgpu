@@ -1065,7 +1065,7 @@ fn invalid_functions() {
         })
     }
 
-    // Pointers of these storage classes cannot be passed as arguments.
+    // Pointers of these address spaces cannot be passed as arguments.
     check_validation! {
         "fn unacceptable_ptr_space(arg: ptr<storage, array<f32>>) { }":
         Err(naga::valid::ValidationError::Function {
@@ -1079,7 +1079,6 @@ fn invalid_functions() {
         })
         if function_name == "unacceptable_ptr_space" && argument_name == "arg"
     }
-
     check_validation! {
         "fn unacceptable_ptr_space(arg: ptr<uniform, f32>) { }":
         Err(naga::valid::ValidationError::Function {
@@ -1088,6 +1087,19 @@ fn invalid_functions() {
                 index: 0,
                 name: argument_name,
                 space: naga::AddressSpace::Uniform,
+            },
+            ..
+        })
+        if function_name == "unacceptable_ptr_space" && argument_name == "arg"
+    }
+    check_validation! {
+        "fn unacceptable_ptr_space(arg: ptr<workgroup, f32>) { }":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidArgumentPointerSpace {
+                index: 0,
+                name: argument_name,
+                space: naga::AddressSpace::WorkGroup,
             },
             ..
         })

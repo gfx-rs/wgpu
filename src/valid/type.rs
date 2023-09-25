@@ -164,12 +164,14 @@ fn check_member_layout(
 /// `TypeFlags::empty()`.
 ///
 /// Pointers passed as arguments to user-defined functions must be in the
-/// `Function`, `Private`, or `Workgroup` storage space.
+/// `Function` or `Private` address space.
 const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
-        As::Function | As::Private | As::WorkGroup => TypeFlags::ARGUMENT,
-        As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant => TypeFlags::empty(),
+        As::Function | As::Private => TypeFlags::ARGUMENT,
+        As::Uniform | As::Storage { .. } | As::Handle | As::PushConstant | As::WorkGroup => {
+            TypeFlags::empty()
+        }
     }
 }
 
@@ -316,7 +318,7 @@ impl super::Validator {
                     return Err(TypeError::InvalidPointerBase(base));
                 }
 
-                // Runtime-sized values can only live in the `Storage` storage
+                // Runtime-sized values can only live in the `Storage` address
                 // space, so it's useless to have a pointer to such a type in
                 // any other space.
                 //
@@ -336,7 +338,7 @@ impl super::Validator {
                     }
                 }
 
-                // `Validator::validate_function` actually checks the storage
+                // `Validator::validate_function` actually checks the address
                 // space of pointer arguments explicitly before checking the
                 // `ARGUMENT` flag, to give better error messages. But it seems
                 // best to set `ARGUMENT` accurately anyway.
@@ -364,7 +366,7 @@ impl super::Validator {
                 // `InvalidPointerBase` or `InvalidPointerToUnsized`.
                 self.check_width(kind, width)?;
 
-                // `Validator::validate_function` actually checks the storage
+                // `Validator::validate_function` actually checks the address
                 // space of pointer arguments explicitly before checking the
                 // `ARGUMENT` flag, to give better error messages. But it seems
                 // best to set `ARGUMENT` accurately anyway.

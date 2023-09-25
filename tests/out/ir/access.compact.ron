@@ -279,7 +279,7 @@
             name: None,
             inner: Pointer(
                 base: 1,
-                space: WorkGroup,
+                space: Function,
             ),
         ),
         (
@@ -354,13 +354,6 @@
                 binding: 3,
             )),
             ty: 20,
-            init: None,
-        ),
-        (
-            name: Some("val"),
-            space: WorkGroup,
-            binding: None,
-            ty: 1,
             init: None,
         ),
     ],
@@ -2138,53 +2131,59 @@
                 result: None,
                 local_variables: [
                     (
+                        name: Some("val"),
+                        ty: 1,
+                        init: Some(1),
+                    ),
+                    (
                         name: Some("arr"),
                         ty: 28,
-                        init: Some(5),
+                        init: Some(7),
                     ),
                 ],
                 expressions: [
+                    Literal(U32(33)),
+                    LocalVariable(1),
                     Literal(F32(6.0)),
-                    Splat(
-                        size: Quad,
-                        value: 1,
-                    ),
-                    Literal(F32(7.0)),
                     Splat(
                         size: Quad,
                         value: 3,
                     ),
+                    Literal(F32(7.0)),
+                    Splat(
+                        size: Quad,
+                        value: 5,
+                    ),
                     Compose(
                         ty: 28,
                         components: [
-                            2,
                             4,
+                            6,
                         ],
                     ),
-                    LocalVariable(1),
-                    GlobalVariable(6),
+                    LocalVariable(2),
                 ],
                 named_expressions: {},
                 body: [
-                    Emit((
-                        start: 1,
-                        end: 2,
-                    )),
-                    Emit((
-                        start: 3,
-                        end: 5,
-                    )),
                     Call(
                         function: 5,
                         arguments: [
-                            7,
+                            2,
                         ],
                         result: None,
                     ),
+                    Emit((
+                        start: 3,
+                        end: 4,
+                    )),
+                    Emit((
+                        start: 5,
+                        end: 7,
+                    )),
                     Call(
                         function: 6,
                         arguments: [
-                            6,
+                            8,
                         ],
                         result: None,
                     ),

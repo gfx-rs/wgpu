@@ -34,7 +34,6 @@ var<uniform> baz: Baz;
 var<storage, read_write> qux: vec2<i32>;
 @group(0) @binding(3) 
 var<uniform> nested_mat_cx2_: MatCx2InArray;
-var<workgroup> val: u32;
 
 fn test_matrix_within_struct_accesses() {
     var idx: i32 = 1;
@@ -117,7 +116,7 @@ fn test_arr_as_arg(a: array<array<f32, 10>, 5>) -> f32 {
     return a[4][9];
 }
 
-fn assign_through_ptr_fn(p: ptr<workgroup, u32>) {
+fn assign_through_ptr_fn(p: ptr<function, u32>) {
     (*p) = 42u;
     return;
 }
@@ -162,6 +161,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
 
 @compute @workgroup_size(1, 1, 1) 
 fn assign_through_ptr() {
+    var val: u32 = 33u;
     var arr: array<vec4<f32>, 2> = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
 
     assign_through_ptr_fn((&val));

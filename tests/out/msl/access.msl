@@ -146,7 +146,7 @@ float test_arr_as_arg(
 }
 
 void assign_through_ptr_fn(
-    threadgroup uint& p
+    thread uint& p
 ) {
     p = 42u;
     return;
@@ -210,13 +210,8 @@ fragment foo_fragOutput foo_frag(
 
 
 kernel void assign_through_ptr(
-  metal::uint3 __local_invocation_id [[thread_position_in_threadgroup]]
-, threadgroup uint& val
 ) {
-    if (metal::all(__local_invocation_id == metal::uint3(0u))) {
-        val = {};
-    }
-    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    uint val = 33u;
     type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);

@@ -1001,12 +1001,7 @@ impl super::Validator {
         #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
             match module.types[argument.ty].inner.pointer_space() {
-                Some(
-                    crate::AddressSpace::Private
-                    | crate::AddressSpace::Function
-                    | crate::AddressSpace::WorkGroup,
-                )
-                | None => {}
+                Some(crate::AddressSpace::Private | crate::AddressSpace::Function) | None => {}
                 Some(other) => {
                     return Err(FunctionError::InvalidArgumentPointerSpace {
                         index,
