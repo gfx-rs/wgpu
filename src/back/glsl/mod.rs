@@ -189,6 +189,10 @@ impl Version {
         *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
     }
 
+    fn supports_frexp_function(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+    }
+
     fn supports_derivative_control(&self) -> bool {
         *self >= Version::Desktop(450)
     }
@@ -667,15 +671,27 @@ impl<'a, W: Write> Writer<'a, W> {
                     let struct_name = &self.names[&NameKey::Type(*struct_ty)];
 
                     writeln!(self.out)?;
-                    writeln!(
-                        self.out,
-                        "{} {defined_func_name}({arg_type_name} arg) {{
+                    if !self.options.version.supports_frexp_function()
+                        && matches!(type_key, &crate::PredeclaredType::FrexpResult { .. })
+                    {
+                        writeln!(
+                            self.out,
+                            "{struct_name} {defined_func_name}({arg_type_name} arg) {{
+    {other_type_name} other = arg == {arg_type_name}(0) ? {other_type_name}(0) : {other_type_name}({arg_type_name}(1) + log2(arg));
+    {arg_type_name} fract = arg * exp2({arg_type_name}(-other));
+    return {struct_name}(fract, other);
+}}",
+                        )?;
+                    } else {
+                        writeln!(
+                            self.out,
+                            "{struct_name} {defined_func_name}({arg_type_name} arg) {{
     {other_type_name} other;
     {arg_type_name} fract = {called_func_name}(arg, other);
-    return {}(fract, other);
+    return {struct_name}(fract, other);
 }}",
-                        struct_name, struct_name
-                    )?;
+                        )?;
+                    }
                 }
                 &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
             }
