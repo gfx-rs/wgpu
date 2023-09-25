@@ -315,14 +315,15 @@ impl Device {
         (signature, hr)
     }
 
-    pub fn create_render_target_view(
+    pub fn create_render_target_view_from_desc(
         &self,
-        resource: Resource,
         desc: &RenderTargetViewDesc,
         descriptor: CpuDescriptor,
     ) {
+        // A null pResource is used to initialize a null descriptor,
+        // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
         unsafe {
-            self.CreateRenderTargetView(resource.as_mut_ptr(), &desc.0 as *const _, descriptor);
+            self.CreateRenderTargetView(std::ptr::null_mut(), &desc.0 as *const _, descriptor);
         }
     }
 
