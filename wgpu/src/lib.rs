@@ -54,6 +54,8 @@ pub use wgt::{
 ))]
 #[doc(hidden)]
 pub use ::hal;
+#[cfg(feature = "naga")]
+pub use ::naga;
 #[cfg(any(
     not(target_arch = "wasm32"),
     feature = "webgl",
