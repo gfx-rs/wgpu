@@ -44,27 +44,23 @@ impl<T: Interface> ComPtr<T> {
 }
 
 impl<T: Interface> ComPtr<T> {
-    /// Returns a reference to the inner pointer casted as a pointer IUnknown.
-    ///
-    /// # Safety
-    ///
-    /// - This pointer must not be null.
-    pub unsafe fn as_unknown(&self) -> &IUnknown {
-        &*(self.0 as *mut IUnknown)
+    /// Returns a reference to the inner pointer casted as a pointer to [`IUnknown`].
+    pub fn as_unknown(&self) -> &IUnknown {
+        unsafe { &*(self.0.cast()) }
     }
 
-    /// Casts the T to U using QueryInterface.
-    ///
-    /// # Safety
-    ///
-    /// - This pointer must not be null.
-    pub unsafe fn cast<U>(&self) -> D3DResult<Option<ComPtr<U>>>
+    /// Attempts to cast `T` to `U` using `QueryInterface`.
+    pub fn cast<U>(&self) -> D3DResult<Option<ComPtr<U>>>
     where
         U: Interface,
     {
         let mut obj = std::ptr::null_mut();
-        let hr = self.as_unknown().QueryInterface(&U::uuidof(), &mut obj);
-        let obj = (!obj.is_null()).then(|| ComPtr::from_reffed(obj.cast()));
+        let unknown = self.as_unknown();
+        // SAFETY: All COM pointers implement `IUnknown`; `unknown` should therefore be valid as an
+        // invariant of this type.
+        let hr = unsafe { unknown.QueryInterface(&U::uuidof(), &mut obj) };
+        // SAFETY: `obj` is either a valid COM pointer to `U` in the case of success, or `null`.
+        let obj = (!obj.is_null()).then(|| unsafe { ComPtr::from_reffed(obj.cast()) });
         (obj, hr)
     }
 }
