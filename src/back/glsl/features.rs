@@ -209,11 +209,6 @@ impl FeaturesManager {
             writeln!(out, "#extension GL_OES_sample_variables : require")?;
         }
 
-        if self.0.contains(Features::SAMPLE_VARIABLES) && version.is_es() {
-            // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_sample_variables.txt
-            writeln!(out, "#extension GL_OES_sample_variables : require")?;
-        }
-
         if self.0.contains(Features::MULTI_VIEW) {
             if let Version::Embedded { is_webgl: true, .. } = version {
                 // https://www.khronos.org/registry/OpenGL/extensions/OVR/OVR_multiview2.txt
