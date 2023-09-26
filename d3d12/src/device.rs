@@ -6,8 +6,8 @@ use crate::{
     descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc},
     heap::{Heap, HeapFlags, HeapProperties},
     pso, query, queue, Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap,
-    Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature,
-    Shader, TextureAddressMode,
+    Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, RootSignature, Shader,
+    TextureAddressMode,
 };
 use std::ops::Range;
 use winapi::{um::d3d12, Interface};
