@@ -492,7 +492,7 @@ impl super::Validator {
                             } => {}
                             _ => return Err(ExpressionError::InvalidSampleLevelBiasType(expr)),
                         }
-                        ShaderStages::all()
+                        ShaderStages::FRAGMENT
                     }
                     crate::SampleLevel::Gradient { x, y } => {
                         match resolver[x] {
