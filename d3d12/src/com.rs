@@ -23,7 +23,7 @@ impl<T: Interface> ComPtr<T> {
         ComPtr(ptr::null_mut())
     }
 
-    /// Create a `ComPtr` from a raw pointer. This will call [`AddRef`] on the pointer.
+    /// Constructs a tracked COM pointer from `raw`, calling [`AddRef`] on it.
     ///
     /// # Safety
     ///
