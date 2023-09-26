@@ -20,9 +20,9 @@ struct Test3_ {
 };
 uniform Test_block_0Vertex { Test _group_0_binding_0_vs; };
 
-uniform Test2__block_1Vertex { Test2_ _group_0_binding_1_vs; };
+uniform Test2_block_1Vertex { Test2_ _group_0_binding_1_vs; };
 
-uniform Test3__block_2Vertex { Test3_ _group_0_binding_2_vs; };
+uniform Test3_block_2Vertex { Test3_ _group_0_binding_2_vs; };
 
 
 void main() {

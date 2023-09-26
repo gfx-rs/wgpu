@@ -1129,7 +1129,8 @@ impl<'a, W: Write> Writer<'a, W> {
         let ty_name = &self.names[&NameKey::Type(global.ty)];
         let block_name = format!(
             "{}_block_{}{:?}",
-            ty_name,
+            // avoid double underscores as they are reserved in GLSL
+            ty_name.trim_end_matches('_'),
             self.block_id.generate(),
             self.entry_point.stage,
         );

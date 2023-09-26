@@ -4,55 +4,55 @@
 
 using metal::uint;
 
-struct __modf_result_f32_ {
+struct _modf_result_f32_ {
     float fract;
     float whole;
 };
-struct __modf_result_vec2_f32_ {
+struct _modf_result_vec2_f32_ {
     metal::float2 fract;
     metal::float2 whole;
 };
-struct __modf_result_vec4_f32_ {
+struct _modf_result_vec4_f32_ {
     metal::float4 fract;
     metal::float4 whole;
 };
-struct __frexp_result_f32_ {
+struct _frexp_result_f32_ {
     float fract;
     int exp;
 };
-struct __frexp_result_vec4_f32_ {
+struct _frexp_result_vec4_f32_ {
     metal::float4 fract;
     metal::int4 exp;
 };
 
-__modf_result_f32_ naga_modf(float arg) {
+_modf_result_f32_ naga_modf(float arg) {
     float other;
     float fract = metal::modf(arg, other);
-    return __modf_result_f32_{ fract, other };
+    return _modf_result_f32_{ fract, other };
 }
 
-__modf_result_vec2_f32_ naga_modf(metal::float2 arg) {
+_modf_result_vec2_f32_ naga_modf(metal::float2 arg) {
     metal::float2 other;
     metal::float2 fract = metal::modf(arg, other);
-    return __modf_result_vec2_f32_{ fract, other };
+    return _modf_result_vec2_f32_{ fract, other };
 }
 
-__modf_result_vec4_f32_ naga_modf(metal::float4 arg) {
+_modf_result_vec4_f32_ naga_modf(metal::float4 arg) {
     metal::float4 other;
     metal::float4 fract = metal::modf(arg, other);
-    return __modf_result_vec4_f32_{ fract, other };
+    return _modf_result_vec4_f32_{ fract, other };
 }
 
-__frexp_result_f32_ naga_frexp(float arg) {
+_frexp_result_f32_ naga_frexp(float arg) {
     int other;
     float fract = metal::frexp(arg, other);
-    return __frexp_result_f32_{ fract, other };
+    return _frexp_result_f32_{ fract, other };
 }
 
-__frexp_result_vec4_f32_ naga_frexp(metal::float4 arg) {
+_frexp_result_vec4_f32_ naga_frexp(metal::float4 arg) {
     int4 other;
     metal::float4 fract = metal::frexp(arg, other);
-    return __frexp_result_vec4_f32_{ fract, other };
+    return _frexp_result_vec4_f32_{ fract, other };
 }
 
 fragment void main_(
@@ -95,13 +95,13 @@ fragment void main_(
     metal::uint2 clz_d = metal::clz(metal::uint2(1u));
     float lde_a = metal::ldexp(1.0, 2);
     metal::float2 lde_b = metal::ldexp(metal::float2(1.0, 2.0), metal::int2(3, 4));
-    __modf_result_f32_ modf_a = naga_modf(1.5);
+    _modf_result_f32_ modf_a = naga_modf(1.5);
     float modf_b = naga_modf(1.5).fract;
     float modf_c = naga_modf(1.5).whole;
-    __modf_result_vec2_f32_ modf_d = naga_modf(metal::float2(1.5, 1.5));
+    _modf_result_vec2_f32_ modf_d = naga_modf(metal::float2(1.5, 1.5));
     float modf_e = naga_modf(metal::float4(1.5, 1.5, 1.5, 1.5)).whole.x;
     float modf_f = naga_modf(metal::float2(1.5, 1.5)).fract.y;
-    __frexp_result_f32_ frexp_a = naga_frexp(1.5);
+    _frexp_result_f32_ frexp_a = naga_frexp(1.5);
     float frexp_b = naga_frexp(1.5).fract;
     int frexp_c = naga_frexp(1.5).exp;
     int frexp_d = naga_frexp(metal::float4(1.5, 1.5, 1.5, 1.5)).exp.x;

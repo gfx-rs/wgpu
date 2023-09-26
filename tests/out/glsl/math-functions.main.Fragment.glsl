@@ -3,55 +3,55 @@
 precision highp float;
 precision highp int;
 
-struct __modf_result_f32_ {
+struct _modf_result_f32_ {
     float fract_;
     float whole;
 };
-struct __modf_result_vec2_f32_ {
+struct _modf_result_vec2_f32_ {
     vec2 fract_;
     vec2 whole;
 };
-struct __modf_result_vec4_f32_ {
+struct _modf_result_vec4_f32_ {
     vec4 fract_;
     vec4 whole;
 };
-struct __frexp_result_f32_ {
+struct _frexp_result_f32_ {
     float fract_;
     int exp_;
 };
-struct __frexp_result_vec4_f32_ {
+struct _frexp_result_vec4_f32_ {
     vec4 fract_;
     ivec4 exp_;
 };
 
-__modf_result_f32_ naga_modf(float arg) {
+_modf_result_f32_ naga_modf(float arg) {
     float other;
     float fract = modf(arg, other);
-    return __modf_result_f32_(fract, other);
+    return _modf_result_f32_(fract, other);
 }
 
-__modf_result_vec2_f32_ naga_modf(vec2 arg) {
+_modf_result_vec2_f32_ naga_modf(vec2 arg) {
     vec2 other;
     vec2 fract = modf(arg, other);
-    return __modf_result_vec2_f32_(fract, other);
+    return _modf_result_vec2_f32_(fract, other);
 }
 
-__modf_result_vec4_f32_ naga_modf(vec4 arg) {
+_modf_result_vec4_f32_ naga_modf(vec4 arg) {
     vec4 other;
     vec4 fract = modf(arg, other);
-    return __modf_result_vec4_f32_(fract, other);
+    return _modf_result_vec4_f32_(fract, other);
 }
 
-__frexp_result_f32_ naga_frexp(float arg) {
+_frexp_result_f32_ naga_frexp(float arg) {
     int other;
     float fract = frexp(arg, other);
-    return __frexp_result_f32_(fract, other);
+    return _frexp_result_f32_(fract, other);
 }
 
-__frexp_result_vec4_f32_ naga_frexp(vec4 arg) {
+_frexp_result_vec4_f32_ naga_frexp(vec4 arg) {
     ivec4 other;
     vec4 fract = frexp(arg, other);
-    return __frexp_result_vec4_f32_(fract, other);
+    return _frexp_result_vec4_f32_(fract, other);
 }
 
 void main() {
@@ -90,13 +90,13 @@ void main() {
     uvec2 clz_d = uvec2(ivec2(31) - findMSB(uvec2(1u)));
     float lde_a = ldexp(1.0, 2);
     vec2 lde_b = ldexp(vec2(1.0, 2.0), ivec2(3, 4));
-    __modf_result_f32_ modf_a = naga_modf(1.5);
+    _modf_result_f32_ modf_a = naga_modf(1.5);
     float modf_b = naga_modf(1.5).fract_;
     float modf_c = naga_modf(1.5).whole;
-    __modf_result_vec2_f32_ modf_d = naga_modf(vec2(1.5, 1.5));
+    _modf_result_vec2_f32_ modf_d = naga_modf(vec2(1.5, 1.5));
     float modf_e = naga_modf(vec4(1.5, 1.5, 1.5, 1.5)).whole.x;
     float modf_f = naga_modf(vec2(1.5, 1.5)).fract_.y;
-    __frexp_result_f32_ frexp_a = naga_frexp(1.5);
+    _frexp_result_f32_ frexp_a = naga_frexp(1.5);
     float frexp_b = naga_frexp(1.5).fract_;
     int frexp_c = naga_frexp(1.5).exp_;
     int frexp_d = naga_frexp(vec4(1.5, 1.5, 1.5, 1.5)).exp_.x;
