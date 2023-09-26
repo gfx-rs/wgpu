@@ -2,7 +2,6 @@ use wasm_bindgen_test::*;
 
 use wgpu_test::{fail, initialize_test, FailureCase, TestParameters};
 
-
 #[test]
 #[wasm_bindgen_test]
 fn device_initialization() {
@@ -168,16 +167,20 @@ fn device_destroy_then_more() {
             });
 
             // Create a bind group layout.
-            let bind_group_layout = ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[],
-            });
+            let bind_group_layout =
+                ctx.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[],
+                    });
 
             // Create a shader module.
-            let shader_module = ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-            });
+            let shader_module = ctx
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: None,
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
+                });
 
             // Create some command encoders.
             let mut encoder_for_clear = ctx
@@ -236,7 +239,8 @@ fn device_destroy_then_more() {
 
             // Creating a commmand encoder should fail.
             fail(&ctx.device, || {
-                ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                ctx.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             });
 
             // Creating a buffer should fail.
@@ -358,12 +362,11 @@ fn device_destroy_then_more() {
 
             // Creating a bind group layout should fail.
             fail(&ctx.device, || {
-                ctx
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[],
-                });
+                ctx.device
+                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &[],
+                    });
             });
 
             // Creating a bind group should fail.
@@ -373,70 +376,69 @@ fn device_destroy_then_more() {
                     layout: &bind_group_layout,
                     entries: &[wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(buffer_source.as_entire_buffer_binding()),
+                        resource: wgpu::BindingResource::Buffer(
+                            buffer_source.as_entire_buffer_binding(),
+                        ),
                     }],
                 });
             });
 
             // Creating a pipeline layout should fail.
             fail(&ctx.device, || {
-                ctx
-                .device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: None,
-                    bind_group_layouts: &[],
-                    push_constant_ranges: &[],
-                });
+                ctx.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: None,
+                        bind_group_layouts: &[],
+                        push_constant_ranges: &[],
+                    });
             });
 
             // Creating a shader module should fail.
             fail(&ctx.device, || {
-                ctx.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: None,
-                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-                });
+                ctx.device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: None,
+                        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
+                    });
             });
 
             // Creating a shader module spirv should fail.
-            fail(&ctx.device, || {
-                unsafe {
-                    ctx.device.create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+            fail(&ctx.device, || unsafe {
+                ctx.device
+                    .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
                         label: None,
                         source: std::borrow::Cow::Borrowed(&[]),
                     });
-                }
             });
 
             // Creating a render pipeline should fail.
             fail(&ctx.device, || {
-                ctx
-                .device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: None,
-                    layout: None,
-                    vertex: wgpu::VertexState {
-                        module: &shader_module,
-                        entry_point: "",
-                        buffers: &[],
-                    },
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    fragment: None,
-                    multiview: None,
-                });
+                ctx.device
+                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        vertex: wgpu::VertexState {
+                            module: &shader_module,
+                            entry_point: "",
+                            buffers: &[],
+                        },
+                        primitive: wgpu::PrimitiveState::default(),
+                        depth_stencil: None,
+                        multisample: wgpu::MultisampleState::default(),
+                        fragment: None,
+                        multiview: None,
+                    });
             });
 
             // Creating a compute pipeline should fail.
             fail(&ctx.device, || {
-                ctx
-                .device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor{
-                    label: None,
-                    layout: None,
-                    module: &shader_module,
-                    entry_point: "",
-                });
+                ctx.device
+                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                        label: None,
+                        layout: None,
+                        module: &shader_module,
+                        entry_point: "",
+                    });
             });
         },
     )
