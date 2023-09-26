@@ -28,7 +28,7 @@ impl<T: Interface> ComPtr<T> {
     /// - `raw` must be a valid pointer to a COM object that implements T.
     pub unsafe fn from_raw(raw: *mut T) -> Self {
         debug_assert!(!raw.is_null());
-        (*(raw as *mut IUnknown)).AddRef();
+        (*raw.cast::<IUnknown>()).AddRef();
         ComPtr(raw)
     }
 
