@@ -16,6 +16,10 @@ use std::ops;
 
 pub type NonUniformResult = Option<Handle<crate::Expression>>;
 
+// Remove this once we update our uniformity analysis and
+// add support for the `derivative_uniformity` diagnostic
+const DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE: bool = true;
+
 bitflags::bitflags! {
     /// Kinds of expressions that require uniform control flow.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -23,8 +27,8 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct UniformityRequirements: u8 {
         const WORK_GROUP_BARRIER = 0x1;
-        const DERIVATIVE = 0x2;
-        const IMPLICIT_LEVEL = 0x4;
+        const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
+        const IMPLICIT_LEVEL = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x4 };
     }
 }
 
@@ -1185,21 +1189,28 @@ fn uniform_control_flow() {
         .into(),
         reject: crate::Block::new(),
     };
-    assert_eq!(
-        info.process_block(
+    {
+        let block_info = info.process_block(
             &vec![stmt_emit2, stmt_if_non_uniform].into(),
             &[],
             None,
-            &expressions
-        ),
-        Err(FunctionError::NonUniformControlFlow(
-            UniformityRequirements::DERIVATIVE,
-            derivative_expr,
-            UniformityDisruptor::Expression(non_uniform_global_expr)
-        )
-        .with_span()),
-    );
-    assert_eq!(info[derivative_expr].ref_count, 1);
+            &expressions,
+        );
+        if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE {
+            assert_eq!(info[derivative_expr].ref_count, 2);
+        } else {
+            assert_eq!(
+                block_info,
+                Err(FunctionError::NonUniformControlFlow(
+                    UniformityRequirements::DERIVATIVE,
+                    derivative_expr,
+                    UniformityDisruptor::Expression(non_uniform_global_expr)
+                )
+                .with_span()),
+            );
+            assert_eq!(info[derivative_expr].ref_count, 1);
+        }
+    }
     assert_eq!(info[non_uniform_global], GlobalUse::READ);
 
     let stmt_emit3 = S::Emit(emit_range_globals);
