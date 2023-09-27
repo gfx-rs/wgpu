@@ -2767,6 +2767,11 @@ impl Device {
                 )
         }
     }
+
+    /// Destroy this device.
+    pub fn destroy(&self) {
+        DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
+    }
 }
 
 impl Drop for Device {

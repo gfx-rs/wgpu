@@ -18,6 +18,7 @@ use crate::{
     hal_api::HalApi,
     hub::Token,
     id,
+    id::DeviceId,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
@@ -523,6 +524,8 @@ pub enum RenderPassErrorInner {
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
+    #[error("Device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("Attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
@@ -1346,6 +1349,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let device = &device_guard[cmd_buf.device_id.value];
+            if !device.is_valid() {
+                return Err(RenderPassErrorInner::InvalidDevice(
+                    cmd_buf.device_id.value.0,
+                ))
+                .map_pass_err(init_scope);
+            }
             cmd_buf.encoder.open_pass(base.label);
 
             let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
