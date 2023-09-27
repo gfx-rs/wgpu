@@ -1907,7 +1907,7 @@ checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 
 [[package]]
 name = "player"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "env_logger",
  "log",
@@ -2934,7 +2934,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "arrayvec 0.7.4",
  "cfg-if",
@@ -2957,7 +2957,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-boids-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "nanorand",
@@ -2970,7 +2970,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-bunnymark-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "glam",
@@ -2985,7 +2985,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-capture-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",
@@ -3003,7 +3003,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-conservative-raster-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "wasm-bindgen-test",
  "wgpu",
@@ -3037,7 +3037,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-cube-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "glam",
@@ -3050,7 +3050,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "async-executor",
  "console_error_panic_hook",
@@ -3114,7 +3114,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hello-compute-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",
@@ -3132,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hello-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -3147,7 +3147,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hello-triangle-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",
@@ -3162,7 +3162,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hello-windows-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",
@@ -3174,7 +3174,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "anyhow",
  "bitflags 2.3.3",
@@ -3188,7 +3188,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-mipmap-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "glam",
@@ -3201,7 +3201,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-msaa-line-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "glam",
@@ -3215,7 +3215,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-shadow-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "glam",
@@ -3228,7 +3228,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-skybox-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "ddsfile",
@@ -3244,7 +3244,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-stencil-triangle-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "wasm-bindgen-test",
@@ -3256,7 +3256,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bitflags 2.3.3",
  "bytemuck",
@@ -3281,7 +3281,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-texture-arrays-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "wasm-bindgen-test",
@@ -3304,7 +3304,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-water-example"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "bytemuck",
  "glam",
