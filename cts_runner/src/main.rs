@@ -110,7 +110,7 @@ mod native {
     fn op_write_file_sync(#[string] path: &str, #[buffer] buf: &[u8]) -> Result<(), AnyError> {
         let path = std::path::Path::new(path);
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&buf)?;
+        file.write_all(buf)?;
         Ok(())
     }
 
