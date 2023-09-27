@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.17.0"
+version = "0.17.1"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -52,7 +52,10 @@ id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
 # Implement `Send` and `Sync` on Wasm.
-fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "wgt/fragile-send-sync-non-atomic-wasm"]
+fragile-send-sync-non-atomic-wasm = [
+    "hal/fragile-send-sync-non-atomic-wasm",
+    "wgt/fragile-send-sync-non-atomic-wasm",
+]
 
 [dependencies]
 arrayvec = "0.7"
@@ -88,4 +91,7 @@ version = "0.17"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.64", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
+web-sys = { version = "0.3.64", features = [
+    "HtmlCanvasElement",
+    "OffscreenCanvas",
+] }
