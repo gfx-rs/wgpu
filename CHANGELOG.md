@@ -40,11 +40,22 @@ Bottom level categories:
 
 ## Unreleased
 
-## v0.17.1
+## v0.17.1 (2023-09-27)
 
 ### Added/New Features
 
 - Add `get_mapped_range_as_array_buffer` for faster buffer read-backs in wasm builds. By @ryankaplan in [#4042] (https://github.com/gfx-rs/wgpu/pull/4042).
+
+### Bug Fixes
+
+#### DX12
+
+- Fix panic on resize when using DX12. By @cwfitzgerald in [#4106](https://github.com/gfx-rs/wgpu/pull/4106)
+
+#### Vulkan
+
+- Suppress validation error caused by OBS layer. This was also fixed upstream. By @cwfitzgerald in [#4002](https://github.com/gfx-rs/wgpu/pull/4002)
+- Work around bug in nvidia's vkCmdFillBuffer implementation. By @cwfitzgerald in [#4132](https://github.com/gfx-rs/wgpu/pull/4132).
 
 ## v0.17.0 (2023-07-20)
 
