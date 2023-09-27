@@ -13,6 +13,7 @@ env:
   RUST_LOG: info
   RUST_BACKTRACE: full
   MSRV: 1.65
+  DENO_MSRV: 1.70
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -351,8 +352,8 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.DENO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup default ${{ env.DENO_MSRV }}
 
       - name: disable debug
         shell: bash

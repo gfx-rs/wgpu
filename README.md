@@ -33,7 +33,7 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 ### MSRV policy
 
 Minimum Supported Rust Version is **1.65**.
-It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
+It is enforced on CI (in "/.github/workflows/ci.yml") with `MSRV` variable.
 This version can only be upgraded in breaking releases.
 
 The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
@@ -42,6 +42,10 @@ determined by the value of `MINIMUM_RUST_VERSION` in
 [`python/mozboot/mozboot/util.py`][util]. However, Firefox uses `cargo
 vendor` to extract only those crates it actually uses, so the
 workspace's other crates can have more recent MSRVs.
+
+The `rust-toolchain` file's value is the `MSRV` required for `deno_webgpu`
+and `cts_runner`, and not the Firefox MSRV, as these require newer MSRVs than 
+the rest of the codebase due to their dependencies on Deno.
 
 _Note for Rust 1.64_: The workspace itself can even use a newer MSRV
 than Firefox, as long as the vendoring step's `Cargo.toml` rewriting

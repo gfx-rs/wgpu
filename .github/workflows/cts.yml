@@ -11,7 +11,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  MSRV: 1.65
+  DENO_MSRV: 1.70
 
 jobs:
   cts:
@@ -51,8 +51,8 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.DENO_MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
+          rustup default ${{ env.DENO_MSRV }}
 
       - name: caching
         uses: Swatinem/rust-cache@v2
