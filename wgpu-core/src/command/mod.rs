@@ -391,6 +391,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::push_debug_group");
+        log::trace!("CommandEncoder::push_debug_group {label}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -416,6 +417,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::insert_debug_marker");
+        log::trace!("CommandEncoder::insert_debug_marker {label}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -440,6 +442,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::pop_debug_marker");
+        log::trace!("CommandEncoder::pop_debug_group");
 
         let hub = A::hub(self);
         let mut token = Token::root();

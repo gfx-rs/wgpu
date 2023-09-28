@@ -103,6 +103,7 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 - Make `WGPU_POWER_PREF=none` a valid value. By @fornwall in [4076](https://github.com/gfx-rs/wgpu/pull/4076)
 - Support dual source blending in OpenGL ES, Metal, Vulkan & DX12. By @freqmod in [4022](https://github.com/gfx-rs/wgpu/pull/4022)
 - Add stub support for device destroy and device validity. By @bradwerth in [4163](https://github.com/gfx-rs/wgpu/pull/4163)
+- Add trace-level logging for most entry points in wgpu-core By @nical in [4183](https://github.com/gfx-rs/wgpu/pull/4183)
 
 #### Vulkan
 

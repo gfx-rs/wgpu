@@ -302,6 +302,8 @@ impl<A: HalApi> Adapter<A> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
+        log::trace!("Adapter::create_device");
+
         let caps = &self.raw.capabilities;
         Device::new(
             open,
@@ -656,6 +658,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("Surface::drop");
+        log::trace!("Surface::drop {id:?}");
+
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         let mut surface = surface.unwrap();
@@ -722,6 +726,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
+        log::trace!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
 
@@ -779,6 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("Instance::pick_adapter");
+        log::trace!("Instance::pick_adapter");
 
         fn gather<A: HalApi, I: Clone>(
             _: A,
@@ -1060,6 +1066,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
+        log::trace!("Adapter::drop {adapter_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1085,6 +1092,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
         profiling::scope!("Adapter::request_device");
+        log::trace!("Adapter::request_device");
 
         let hub = A::hub(self);
         let mut token = Token::root();
