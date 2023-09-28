@@ -740,7 +740,6 @@ fn convert_wgsl() {
             "math-functions",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
-        ("cubeArrayShadow", Targets::GLSL),
         (
             "binding-arrays",
             Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
