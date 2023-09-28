@@ -1,5 +1,6 @@
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, infra::GpuTestConfiguration, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, infra::GpuTestConfiguration, FailureCase, TestParameters,
+    TestingContext,
 };
 
 static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
@@ -328,7 +329,7 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
 static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .webgl2_failure()
+            .skip(FailureCase::webgl2())
             .features(wgpu::Features::CLEAR_TEXTURE),
     )
     .run_sync(|ctx| {
@@ -339,8 +340,8 @@ static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfigurat
 static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .webgl2_failure()
-            .backend_failure(wgpu::Backends::GL)
+            .skip(FailureCase::webgl2())
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL))
             .features(wgpu::Features::CLEAR_TEXTURE),
     )
     .run_sync(|ctx| {
@@ -351,7 +352,7 @@ static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::
 static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .webgl2_failure()
+            .skip(FailureCase::webgl2())
             .downlevel_flags(
                 wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                     | wgpu::DownlevelFlags::COMPUTE_SHADERS,
@@ -378,8 +379,10 @@ static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration
     .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
+            // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
+            // compressed texture copy to buffer not yet implemented
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_sync(|ctx| {
         clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
@@ -394,8 +397,10 @@ static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguratio
                 max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
                 ..wgpu::Limits::downlevel_defaults()
             })
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
+            // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
+            // compressed texture copy to buffer not yet implemented
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_sync(|ctx| {
         clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
@@ -406,8 +411,10 @@ static CLEAR_TEXTURE_COMPRESSED_ETC2: GpuTestConfiguration = GpuTestConfiguratio
     .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("ANGLE"), false) // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-            .backend_failure(wgpu::Backends::GL), // compressed texture copy to buffer not yet implemented
+            // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+            .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
+            // compressed texture copy to buffer not yet implemented
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_sync(|ctx| {
         clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);

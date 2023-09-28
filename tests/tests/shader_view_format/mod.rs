@@ -1,6 +1,7 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
 use wgpu_test::{
-    gpu_test, image::calc_difference, infra::GpuTestConfiguration, TestParameters, TestingContext,
+    gpu_test, image::calc_difference, infra::GpuTestConfiguration, FailureCase, TestParameters,
+    TestingContext,
 };
 
 #[gpu_test]
@@ -8,7 +9,11 @@ static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            .skip(FailureCase {
+                backends: Some(wgpu::Backends::GL),
+                ..FailureCase::default()
+            }),
     )
     .run_sync(|ctx| {
         let unorm_data: [[u8; 4]; 4] = [
@@ -132,13 +137,15 @@ fn reinterpret(
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations::default(),
             resolve_target: None,
             view: &target_view,
         })],
         depth_stencil_attachment: None,
-        label: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bind_group, &[]);

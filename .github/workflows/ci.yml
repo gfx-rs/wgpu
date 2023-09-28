@@ -12,7 +12,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_LOG: info
   RUST_BACKTRACE: full
-  MSRV: 1.65
+  MSRV: 1.70
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -93,7 +93,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install MSRV toolchain
         run: |
@@ -138,6 +138,7 @@ jobs:
           set -e
 
           # build for WebGPU
+          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
@@ -154,11 +155,7 @@ jobs:
           # build for Emscripten
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
-          # build cube example
-          cargo clippy --target ${{ matrix.target }} --bin cube
-
-          # build raw-gles example
-          cargo clippy --target ${{ matrix.target }} --example raw-gles
+          # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
 
           # all features
           cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
@@ -184,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@v2
@@ -219,7 +216,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -274,6 +271,7 @@ jobs:
           cargo xtask test --llvm-cov
 
       - uses: actions/upload-artifact@v3
+        if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images
           path: |
@@ -298,7 +296,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: disable debug
         shell: bash
@@ -325,7 +323,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: run rustfmt
         run: |
@@ -337,7 +335,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install MSRV toolchain
         run: |
@@ -366,7 +364,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v1
@@ -380,7 +378,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v1

@@ -1,4 +1,6 @@
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters, TestingContext,
+};
 
 fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) {
     let r = wgpu::BufferUsages::MAP_READ;
@@ -82,7 +84,7 @@ fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) 
 
 #[gpu_test]
 static EMPTY_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().failure())
+    .parameters(TestParameters::default().expect_fail(FailureCase::always()))
     .run_sync(|ctx| {
         test_empty_buffer_range(&ctx, 2048, "regular buffer");
         test_empty_buffer_range(&ctx, 0, "zero-sized buffer");

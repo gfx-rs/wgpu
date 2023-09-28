@@ -1,8 +1,10 @@
 use crate::{
-    binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
+    binding_model::{
+        BindGroup, BindGroupLayouts, LateMinBufferBindingSizeMismatch, PipelineLayout,
+    },
     device::SHADER_STAGE_COUNT,
     hal_api::HalApi,
-    id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
+    id::{BindGroupId, PipelineLayoutId, Valid},
     pipeline::LateSizedBufferGroup,
     storage::Storage,
     Stored,
@@ -13,37 +15,42 @@ use arrayvec::ArrayVec;
 type BindGroupMask = u8;
 
 mod compat {
+    use crate::{
+        binding_model::BindGroupLayouts,
+        id::{BindGroupLayoutId, Valid},
+    };
     use std::ops::Range;
 
-    #[derive(Debug)]
-    struct Entry<T> {
-        assigned: Option<T>,
-        expected: Option<T>,
+    #[derive(Debug, Default)]
+    struct Entry {
+        assigned: Option<Valid<BindGroupLayoutId>>,
+        expected: Option<Valid<BindGroupLayoutId>>,
     }
-    impl<T> Default for Entry<T> {
-        fn default() -> Self {
-            Self {
-                assigned: None,
-                expected: None,
-            }
-        }
-    }
-    impl<T: Copy + PartialEq> Entry<T> {
+
+    impl Entry {
         fn is_active(&self) -> bool {
             self.assigned.is_some() && self.expected.is_some()
         }
 
-        fn is_valid(&self) -> bool {
-            self.expected.is_none() || self.expected == self.assigned
+        fn is_valid<A: hal::Api>(&self, bind_group_layouts: &BindGroupLayouts<A>) -> bool {
+            if self.expected.is_none() || self.expected == self.assigned {
+                return true;
+            }
+
+            if let Some(id) = self.assigned {
+                return bind_group_layouts[id].compatible_layout == self.expected;
+            }
+
+            false
         }
     }
 
     #[derive(Debug)]
-    pub struct Manager<T> {
-        entries: [Entry<T>; hal::MAX_BIND_GROUPS],
+    pub(crate) struct BoundBindGroupLayouts {
+        entries: [Entry; hal::MAX_BIND_GROUPS],
     }
 
-    impl<T: Copy + PartialEq> Manager<T> {
+    impl BoundBindGroupLayouts {
         pub fn new() -> Self {
             Self {
                 entries: Default::default(),
@@ -60,7 +67,10 @@ mod compat {
             start_index..end.max(start_index)
         }
 
-        pub fn update_expectations(&mut self, expectations: &[T]) -> Range<usize> {
+        pub fn update_expectations(
+            &mut self,
+            expectations: &[Valid<BindGroupLayoutId>],
+        ) -> Range<usize> {
             let start_index = self
                 .entries
                 .iter()
@@ -79,7 +89,7 @@ mod compat {
             self.make_range(start_index)
         }
 
-        pub fn assign(&mut self, index: usize, value: T) -> Range<usize> {
+        pub fn assign(&mut self, index: usize, value: Valid<BindGroupLayoutId>) -> Range<usize> {
             self.entries[index].assigned = Some(value);
             self.make_range(index)
         }
@@ -91,9 +101,12 @@ mod compat {
                 .filter_map(|(i, e)| if e.is_active() { Some(i) } else { None })
         }
 
-        pub fn invalid_mask(&self) -> super::BindGroupMask {
+        pub fn invalid_mask<A: hal::Api>(
+            &self,
+            bind_group_layouts: &BindGroupLayouts<A>,
+        ) -> super::BindGroupMask {
             self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
-                if entry.is_valid() {
+                if entry.is_valid(bind_group_layouts) {
                     mask
                 } else {
                     mask | 1u8 << i
@@ -104,32 +117,36 @@ mod compat {
 
     #[test]
     fn test_compatibility() {
-        let mut man = Manager::<i32>::new();
+        fn id(val: u32) -> Valid<BindGroupLayoutId> {
+            BindGroupLayoutId::dummy(val)
+        }
+
+        let mut man = BoundBindGroupLayouts::new();
         man.entries[0] = Entry {
-            expected: Some(3),
-            assigned: Some(2),
+            expected: Some(id(3)),
+            assigned: Some(id(2)),
         };
         man.entries[1] = Entry {
-            expected: Some(1),
-            assigned: Some(1),
+            expected: Some(id(1)),
+            assigned: Some(id(1)),
         };
         man.entries[2] = Entry {
-            expected: Some(4),
-            assigned: Some(5),
+            expected: Some(id(4)),
+            assigned: Some(id(5)),
         };
         // check that we rebind [1] after [0] became compatible
-        assert_eq!(man.assign(0, 3), 0..2);
+        assert_eq!(man.assign(0, id(3)), 0..2);
         // check that nothing is rebound
-        assert_eq!(man.update_expectations(&[3, 2]), 1..1);
+        assert_eq!(man.update_expectations(&[id(3), id(2)]), 1..1);
         // check that [1] and [2] are rebound on expectations change
-        assert_eq!(man.update_expectations(&[3, 1, 5]), 1..3);
+        assert_eq!(man.update_expectations(&[id(3), id(1), id(5)]), 1..3);
         // reset the first two bindings
-        assert_eq!(man.update_expectations(&[4, 6, 5]), 0..0);
+        assert_eq!(man.update_expectations(&[id(4), id(6), id(5)]), 0..0);
         // check that nothing is rebound, even if there is a match,
         // since earlier binding is incompatible.
-        assert_eq!(man.assign(1, 6), 1..1);
+        assert_eq!(man.assign(1, id(6)), 1..1);
         // finally, bind everything
-        assert_eq!(man.assign(0, 4), 0..3);
+        assert_eq!(man.assign(0, id(4)), 0..3);
     }
 }
 
@@ -161,7 +178,7 @@ impl EntryPayload {
 #[derive(Debug)]
 pub(super) struct Binder {
     pub(super) pipeline_layout_id: Option<Valid<PipelineLayoutId>>, //TODO: strongly `Stored`
-    manager: compat::Manager<Valid<BindGroupLayoutId>>,
+    manager: compat::BoundBindGroupLayouts,
     payloads: [EntryPayload; hal::MAX_BIND_GROUPS],
 }
 
@@ -169,14 +186,14 @@ impl Binder {
     pub(super) fn new() -> Self {
         Self {
             pipeline_layout_id: None,
-            manager: compat::Manager::new(),
+            manager: compat::BoundBindGroupLayouts::new(),
             payloads: Default::default(),
         }
     }
 
     pub(super) fn reset(&mut self) {
         self.pipeline_layout_id = None;
-        self.manager = compat::Manager::new();
+        self.manager = compat::BoundBindGroupLayouts::new();
         for payload in self.payloads.iter_mut() {
             payload.reset();
         }
@@ -275,8 +292,11 @@ impl Binder {
             .map(move |index| payloads[index].group_id.as_ref().unwrap().value)
     }
 
-    pub(super) fn invalid_mask(&self) -> BindGroupMask {
-        self.manager.invalid_mask()
+    pub(super) fn invalid_mask<A: hal::Api>(
+        &self,
+        bind_group_layouts: &BindGroupLayouts<A>,
+    ) -> BindGroupMask {
+        self.manager.invalid_mask(bind_group_layouts)
     }
 
     /// Scan active buffer bindings corresponding to layouts without `min_binding_size` specified.

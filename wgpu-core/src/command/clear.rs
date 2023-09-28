@@ -219,6 +219,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(ClearError::InvalidDevice(cmd_buf.device_id.value.0));
+        }
 
         clear_texture(
             &*texture_guard,
@@ -452,6 +455,8 @@ fn clear_texture_via_render_passes<A: hal::Api>(
                     color_attachments,
                     depth_stencil_attachment,
                     multiview: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
                 });
                 encoder.end_render_pass();
             }

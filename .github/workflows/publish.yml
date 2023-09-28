@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -25,10 +25,10 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen-cli
-        run: cargo +stable install wasm-bindgen-cli --version=0.2.86
+        run: cargo +stable install wasm-bindgen-cli --version=0.2.87
 
       - name: Pin wasm-bindgen version
-        run: cargo update -p wasm-bindgen --precise 0.2.86
+        run: cargo update -p wasm-bindgen --precise 0.2.87
 
       - name: Build WebGPU examples
         run: cargo build --release --target wasm32-unknown-unknown
@@ -41,7 +41,7 @@ jobs:
           done
 
       - name: Deploy WebGPU examples
-        uses: JamesIves/github-pages-deploy-action@v4.4.2
+        uses: JamesIves/github-pages-deploy-action@v4.4.3
         if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
@@ -64,7 +64,7 @@ jobs:
           done
 
       - name: Deploy WebGL examples
-        uses: JamesIves/github-pages-deploy-action@v4.4.2
+        uses: JamesIves/github-pages-deploy-action@v4.4.3
         if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}

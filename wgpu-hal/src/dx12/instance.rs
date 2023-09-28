@@ -6,14 +6,15 @@ use std::{mem, sync::Arc};
 
 impl Drop for super::Instance {
     fn drop(&mut self) {
-        unsafe { self.factory.destroy() };
         crate::auxil::dxgi::exception::unregister_exception_handler();
     }
 }
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
-        let lib_main = d3d12::D3D12Lib::new().map_err(|_| crate::InstanceError)?;
+        let lib_main = d3d12::D3D12Lib::new().map_err(|e| {
+            crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
+        })?;
 
         if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
             // Enable debug layer
@@ -21,7 +22,6 @@ impl crate::Instance<super::Api> for super::Instance {
                 Ok(pair) => match pair.into_result() {
                     Ok(debug_controller) => {
                         debug_controller.enable_layer();
-                        unsafe { debug_controller.Release() };
                     }
                     Err(err) => {
                         log::warn!("Unable to enable D3D12 debug interface: {}", err);
@@ -91,13 +91,15 @@ impl crate::Instance<super::Api> for super::Instance {
     ) -> Result<super::Surface, crate::InstanceError> {
         match window_handle {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
-                factory: self.factory,
-                factory_media: self.factory_media,
+                factory: self.factory.clone(),
+                factory_media: self.factory_media.clone(),
                 target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: None,
             }),
-            _ => Err(crate::InstanceError),
+            _ => Err(crate::InstanceError::new(format!(
+                "window handle {window_handle:?} is not a Win32 handle"
+            ))),
         }
     }
     unsafe fn destroy_surface(&self, _surface: super::Surface) {
@@ -105,7 +107,7 @@ impl crate::Instance<super::Api> for super::Instance {
     }
 
     unsafe fn enumerate_adapters(&self) -> Vec<crate::ExposedAdapter<super::Api>> {
-        let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory);
+        let adapters = auxil::dxgi::factory::enumerate_adapters(self.factory.clone());
 
         adapters
             .into_iter()

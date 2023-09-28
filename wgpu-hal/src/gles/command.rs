@@ -49,10 +49,7 @@ impl super::CommandBuffer {
 
     fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
         let data_raw = unsafe {
-            std::slice::from_raw_parts(
-                data.as_ptr() as *const _,
-                data.len() * mem::size_of::<u32>(),
-            )
+            std::slice::from_raw_parts(data.as_ptr() as *const _, mem::size_of_val(data))
         };
         let start = self.data_bytes.len();
         assert!(start < u32::MAX as usize);
@@ -1033,7 +1030,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     // compute
 
-    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor) {
+    unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
         if let Some(label) = desc.label {
             let range = self.cmd_buffer.add_marker(label);
             self.cmd_buffer.commands.push(C::PushDebugGroup(range));

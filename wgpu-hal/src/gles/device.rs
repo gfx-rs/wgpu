@@ -221,7 +221,8 @@ impl super::Device {
         let policies = naga::proc::BoundsCheckPolicies {
             index: BoundsCheckPolicy::Unchecked,
             buffer: BoundsCheckPolicy::Unchecked,
-            image: image_check,
+            image_load: image_check,
+            image_store: BoundsCheckPolicy::Unchecked,
             binding_array: BoundsCheckPolicy::Unchecked,
         };
 
@@ -525,6 +526,10 @@ impl crate::Device<super::Api> for super::Device {
                 if is_coherent {
                     map_flags |= glow::MAP_COHERENT_BIT;
                 }
+            }
+            // TODO: may also be required for other calls involving `buffer_sub_data_u8_slice` (e.g. copy buffer to buffer and clear buffer)
+            if desc.usage.intersects(crate::BufferUses::QUERY_RESOLVE) {
+                map_flags |= glow::DYNAMIC_STORAGE_BIT;
             }
             unsafe { gl.buffer_storage(target, raw_size, None, map_flags) };
         } else {
@@ -1237,7 +1242,7 @@ impl crate::Device<super::Api> for super::Device {
         Ok(super::QuerySet {
             queries: queries.into_boxed_slice(),
             target: match desc.ty {
-                wgt::QueryType::Occlusion => glow::ANY_SAMPLES_PASSED,
+                wgt::QueryType::Occlusion => glow::ANY_SAMPLES_PASSED_CONSERVATIVE,
                 _ => unimplemented!(),
             },
         })
@@ -1321,8 +1326,15 @@ impl crate::Device<super::Api> for super::Device {
     }
 }
 
-// SAFE: Wasm doesn't have threads
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Sync for super::Device {}
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
 unsafe impl Send for super::Device {}

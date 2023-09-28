@@ -77,8 +77,7 @@ async fn execute_gpu_inner(
     });
 
     // Gets the size in bytes of the buffer.
-    let slice_size = numbers.len() * std::mem::size_of::<u32>();
-    let size = slice_size as wgpu::BufferAddress;
+    let size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
 
     // Instantiates buffer without data.
     // `usage` of buffer specifies how it can be used:
@@ -134,7 +133,10 @@ async fn execute_gpu_inner(
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.insert_debug_marker("compute collatz iterations");
@@ -201,4 +203,3 @@ mod tests;
 
 #[cfg(test)]
 wgpu_test::gpu_test_main!();
-

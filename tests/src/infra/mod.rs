@@ -34,7 +34,7 @@ pub fn main() -> MainResult {
     Ok(())
 }
 
-fn execute_native<'a>(tests: impl IntoIterator<Item = SingleTest>) {
+fn execute_native(tests: impl IntoIterator<Item = SingleTest>) {
     let args = libtest_mimic::Arguments::from_args();
     let trials = tests.into_iter().map(SingleTest::into_trial).collect();
 

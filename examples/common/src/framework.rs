@@ -13,9 +13,9 @@ use winit::{
 
 #[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
-    use std::{mem::size_of, slice::from_raw_parts};
+    use std::{mem::size_of_val, slice::from_raw_parts};
 
-    unsafe { from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>()) }
+    unsafe { from_raw_parts(data.as_ptr() as *const u8, size_of_val(data)) }
 }
 
 #[allow(dead_code)]
@@ -156,10 +156,12 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         dx12_shader_compiler,
+        gles_minor_version,
     });
     let (size, surface) = unsafe {
         let size = window.inner_size();
@@ -181,10 +183,9 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
         (size, surface)
     };
-    let adapter =
-        wgpu::util::initialize_adapter_from_env_or_default(&instance, backends, Some(&surface))
-            .await
-            .expect("No suitable GPU adapters found on the system!");
+    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, Some(&surface))
+        .await
+        .expect("No suitable GPU adapters found on the system!");
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -309,11 +310,22 @@ fn start<E: Example>(
                     },
                 ..
             } => {
-                log::info!("Resizing to {:?}", size);
-                config.width = size.width.max(1);
-                config.height = size.height.max(1);
-                example.resize(&config, &device, &queue);
-                surface.configure(&device, &config);
+                // Once winit is fixed, the detection conditions here can be removed.
+                // https://github.com/rust-windowing/winit/issues/2876
+                let max_dimension = adapter.limits().max_texture_dimension_2d;
+                if size.width > max_dimension || size.height > max_dimension {
+                    log::warn!(
+                        "The resizing size {:?} exceeds the limit of {}.",
+                        size,
+                        max_dimension
+                    );
+                } else {
+                    log::info!("Resizing to {:?}", size);
+                    config.width = size.width.max(1);
+                    config.height = size.height.max(1);
+                    example.resize(&config, &device, &queue);
+                    surface.configure(&device, &config);
+                }
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
@@ -444,7 +456,7 @@ pub fn run<E: Example>(title: &str) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn run<E: Example>(title: &str) {
-    use wasm_bindgen::{prelude::*, JsCast};
+    use wasm_bindgen::prelude::*;
 
     let title = title.to_owned();
     wasm_bindgen_futures::spawn_local(async move {
@@ -619,7 +631,7 @@ impl<E: Example + Send + Sync> From<ExampleTestParams<E>> for GpuTestConfigurati
 
                 wgpu_test::image::compare_image_output(
                     env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
-                    ctx.adapter_info.backend,
+                    &ctx.adapter_info,
                     params.width,
                     params.height,
                     &bytes,

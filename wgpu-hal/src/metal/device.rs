@@ -99,7 +99,8 @@ impl super::Device {
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
                 index: bounds_check_policy,
                 buffer: bounds_check_policy,
-                image: bounds_check_policy,
+                image_load: bounds_check_policy,
+                image_store: naga::proc::BoundsCheckPolicy::Unchecked,
                 // TODO: support bounds checks on binding arrays
                 binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
             },
@@ -107,7 +108,7 @@ impl super::Device {
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
-            allow_point_size: match primitive_class {
+            allow_and_force_point_size: match primitive_class {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
@@ -261,6 +262,10 @@ impl super::Device {
             shared: Arc::new(super::AdapterShared::new(raw)),
             features,
         }
+    }
+
+    pub unsafe fn buffer_from_raw(raw: metal::Buffer, size: wgt::BufferAddress) -> super::Buffer {
+        super::Buffer { raw, size }
     }
 
     pub fn raw_device(&self) -> &Mutex<metal::Device> {
@@ -1093,11 +1098,51 @@ impl crate::Device<super::Api> for super::Device {
                     }
                     Ok(super::QuerySet {
                         raw_buffer,
+                        counter_sample_buffer: None,
                         ty: desc.ty,
                     })
                 }
-                wgt::QueryType::Timestamp | wgt::QueryType::PipelineStatistics(_) => {
-                    Err(crate::DeviceError::OutOfMemory)
+                wgt::QueryType::Timestamp => {
+                    let size = desc.count as u64 * crate::QUERY_SIZE;
+                    let device = self.shared.device.lock();
+                    let destination_buffer =
+                        device.new_buffer(size, metal::MTLResourceOptions::empty());
+
+                    let csb_desc = metal::CounterSampleBufferDescriptor::new();
+                    csb_desc.set_storage_mode(metal::MTLStorageMode::Shared);
+                    csb_desc.set_sample_count(desc.count as _);
+                    if let Some(label) = desc.label {
+                        csb_desc.set_label(label);
+                    }
+
+                    let counter_sets = device.counter_sets();
+                    let timestamp_counter =
+                        match counter_sets.iter().find(|cs| cs.name() == "timestamp") {
+                            Some(counter) => counter,
+                            None => {
+                                log::error!("Failed to obtain timestamp counter set.");
+                                return Err(crate::DeviceError::ResourceCreationFailed);
+                            }
+                        };
+                    csb_desc.set_counter_set(timestamp_counter);
+
+                    let counter_sample_buffer =
+                        match device.new_counter_sample_buffer_with_descriptor(&csb_desc) {
+                            Ok(buffer) => buffer,
+                            Err(err) => {
+                                log::error!("Failed to create counter sample buffer: {:?}", err);
+                                return Err(crate::DeviceError::ResourceCreationFailed);
+                            }
+                        };
+
+                    Ok(super::QuerySet {
+                        raw_buffer: destination_buffer,
+                        counter_sample_buffer: Some(counter_sample_buffer),
+                        ty: desc.ty,
+                    })
+                }
+                _ => {
+                    todo!()
                 }
             }
         })

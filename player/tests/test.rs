@@ -185,6 +185,7 @@ impl Corpus {
             wgt::InstanceDescriptor {
                 backends: corpus.backends,
                 dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+                gles_minor_version: wgt::Gles3MinorVersion::default(),
             },
         );
         for &backend in BACKENDS {
@@ -193,7 +194,7 @@ impl Corpus {
             }
             let adapter = match global.request_adapter(
                 &wgc::instance::RequestAdapterOptions {
-                    power_preference: wgt::PowerPreference::LowPower,
+                    power_preference: wgt::PowerPreference::None,
                     force_fallback_adapter: false,
                     compatible_surface: None,
                 },

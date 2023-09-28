@@ -32,7 +32,7 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.64**.
+Minimum Supported Rust Version is **1.65**.
 It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
 This version can only be upgraded in breaking releases.
 
@@ -135,8 +135,9 @@ All testing and example infrastructure shares the same set of environment variab
 
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
 - `WGPU_BACKEND` with a comma separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
-- `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high` or `low`)
+- `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high`, `low` or `none`)
 - `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc` or `fxc`, note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory otherwise it will fall back to `fxc`)
+- `WGPU_GLES_MINOR_VERSION` with the minor OpenGL ES 3 version number to request (`0`, `1`, `2` or `automatic`).
 
 When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`.
 

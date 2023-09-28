@@ -375,10 +375,12 @@ impl wgpu_example::framework::Example for Example {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);

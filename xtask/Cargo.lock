@@ -378,9 +378,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-cli-support"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8315d6503415e5d44ff64f1ba34aefd8264c561df17e0f1c8eb8c96bde79c45e"
+checksum = "d21c60239a09bf9bab8dfa752be4e6c637db22296b9ded493800090448692da9"
 dependencies = [
  "anyhow",
  "base64",
@@ -400,9 +400,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-externref-xform"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4522bf3be16c6274c87a5a2c5d2a62efa80253b025f8e813f9682d0d6a8a8fca"
+checksum = "bafbe1984f67cc12645f12ab65e6145e8ddce1ab265d0be58435f25bb0ce2608"
 dependencies = [
  "anyhow",
  "walrus",
@@ -410,9 +410,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-multi-value-xform"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "113256596776ebb4b243512d3711e73d5475eaeff373e1ae65427c66e5aa2073"
+checksum = "581419e3995571a1d2d066e360ca1c0c09da097f5a53c98e6f00d96eddaf0ffe"
 dependencies = [
  "anyhow",
  "walrus",
@@ -420,15 +420,15 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed9d5b4305409d1fc9482fee2d7f9bcbf24b3972bf59817ef757e23982242a93"
+checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
 
 [[package]]
 name = "wasm-bindgen-threads-xform"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89106aaf83a2b80464fc8f60a074a4575135b73a491e174f35bbeae6ff0d7ec6"
+checksum = "e05d272073981137e8426cf2a6830d43d1f84f988a050b2f8b210f0e266b8983"
 dependencies = [
  "anyhow",
  "walrus",
@@ -437,9 +437,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-wasm-conventions"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e5ad27a7930400994cb40823d3d4a7ef235fac52d0c75ebd61fa40eba994a8"
+checksum = "0e9c65b1ff5041ea824ca24c519948aec16fb6611c617d601623c0657dfcd47b"
 dependencies = [
  "anyhow",
  "walrus",
@@ -447,9 +447,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-wasm-interpreter"
-version = "0.2.86"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e69500063b7b20f3e9422d78c2b381dd192c7c4ebaef34d205332877cd78e0d3"
+checksum = "7c5c796220738ab5d44666f37205728a74141c0039d1166bcf8110b26bafaa1e"
 dependencies = [
  "anyhow",
  "log",

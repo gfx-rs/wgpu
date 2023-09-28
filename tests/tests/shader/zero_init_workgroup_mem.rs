@@ -1,14 +1,14 @@
 use std::num::NonZeroU64;
 
 use wgpu::{
-    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBinding, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
     ComputePipelineDescriptor, DownlevelFlags, Limits, Maintain, MapMode, PipelineLayoutDescriptor,
     ShaderStages,
 };
 
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
 
 #[gpu_test]
 static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -17,18 +17,20 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             // remove both of these once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
             // https://github.com/gfx-rs/wgpu/issues/3160
-            .specific_failure(
-                Some(wgpu::Backends::DX12),
-                Some(5140),
-                Some("Microsoft Basic Render Driver"),
-                true,
-            )
-            .specific_failure(
-                Some(wgpu::Backends::VULKAN),
-                None,
-                Some("swiftshader"),
-                true,
-            )
+            .skip(FailureCase {
+                backends: Some(Backends::DX12),
+                vendor: Some(5140),
+                adapter: Some("Microsoft Basic Render Driver"),
+                ..FailureCase::default()
+            })
+            .skip(FailureCase::backend_adapter(
+                Backends::VULKAN,
+                "swiftshader",
+            ))
+            .skip(FailureCase::backend_adapter(
+                Backends::VULKAN,
+                "llvmpipe",
+            ))
             .limits(Limits::downlevel_defaults()),
     )
     .run_sync(|ctx| {

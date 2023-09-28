@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
@@ -39,7 +39,7 @@ jobs:
         if: ${{ failure() }}
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@v4.4.2
+        uses: JamesIves/github-pages-deploy-action@v4.4.3
         with:
           token: ${{ secrets.WEB_DEPLOY }}
           folder: target/doc

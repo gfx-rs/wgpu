@@ -1,10 +1,10 @@
 //! Tests for texture copy
 
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
 
 #[gpu_test]
 static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().backend_failure(wgpu::Backends::DX12))
+    .parameters(TestParameters::default().expect_fail(FailureCase::backend(wgpu::Backends::DX12)))
     .run_sync(|ctx| {
         let size = 256;
 

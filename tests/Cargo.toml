@@ -27,6 +27,7 @@ webgl = ["wgpu/webgl"]
 anyhow.workspace = true
 arrayvec.workspace = true
 bitflags.workspace = true
+bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 env_logger.workspace = true
@@ -53,13 +54,12 @@ wasm-bindgen.workspace = true
 web-sys = { workspace = true }
 
 [dev-dependencies]
-bytemuck.workspace = true
 naga = { workspace = true, features = ["wgsl-in"] }
 wasm-bindgen-test.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-js-sys.workspace = true
 image.workspace = true
-wasm-bindgen.workspace = true
+js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
+wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }

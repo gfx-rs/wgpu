@@ -1,4 +1,4 @@
-use wgpu::util::{align_to, DeviceExt};
+use wgpu::util::DeviceExt;
 use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters, TestingContext};
 
 //
@@ -85,7 +85,7 @@ static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
 fn pulling_common(
     ctx: TestingContext,
     expected: &[u8],
-    function: impl FnOnce(&mut wgpu::RenderPass<'_>),
+    draw_command: impl FnOnce(&mut wgpu::RenderPass<'_>),
 ) {
     let shader = ctx
         .device
@@ -164,83 +164,33 @@ fn pulling_common(
     });
     let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+    let readback_buffer = wgpu_test::image::ReadbackBuffers::new(&ctx.device, &color_texture);
+
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                store: true,
-            },
-            resolve_target: None,
-            view: &color_view,
-        })],
-        depth_stencil_attachment: None,
-        label: None,
-    });
-
-    rpass.set_pipeline(&pipeline);
-    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    function(&mut rpass);
-
-    drop(rpass);
-
-    ctx.queue.submit(Some(encoder.finish()));
-
-    let data = capture_rgba_u8_texture(ctx, color_texture, texture_size);
-
-    assert_eq!(data, expected);
-}
-
-fn capture_rgba_u8_texture(
-    ctx: TestingContext,
-    color_texture: wgpu::Texture,
-    texture_size: wgpu::Extent3d,
-) -> Vec<u8> {
-    let bytes_per_row = align_to(4 * texture_size.width, wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-    let buffer_size = bytes_per_row * texture_size.height;
-    let output_buffer = ctx
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            contents: &vec![0u8; buffer_size as usize],
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                    store: wgpu::StoreOp::Store,
+                },
+                resolve_target: None,
+                view: &color_view,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
-    let mut encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-
-    encoder.copy_texture_to_buffer(
-        wgpu::ImageCopyTexture {
-            texture: &color_texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        wgpu::ImageCopyBuffer {
-            buffer: &output_buffer,
-            layout: wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: None,
-            },
-        },
-        texture_size,
-    );
-
+        rpass.set_pipeline(&pipeline);
+        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        draw_command(&mut rpass);
+    }
+    readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
     ctx.queue.submit(Some(encoder.finish()));
-    let slice = output_buffer.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.device.poll(wgpu::Maintain::Wait);
-    let data: Vec<u8> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
-    // Chunk rows from output buffer, take actual pixel
-    // bytes from each row and flatten into a vector.
-    data.chunks_exact(bytes_per_row as usize)
-        .flat_map(|x| x.iter().take(4 * texture_size.width as usize))
-        .copied()
-        .collect()
+    assert!(readback_buffer.check_buffer_contents(&ctx.device, expected));
 }

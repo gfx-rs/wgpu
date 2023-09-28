@@ -3,7 +3,7 @@ use std::fmt::Write;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
@@ -180,7 +180,7 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false)
+            .expect_fail(FailureCase::backend(wgpu::Backends::VULKAN))
             .limits(Limits::downlevel_defaults()),
     )
     .run_sync(|ctx| {
@@ -216,7 +216,7 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_push_constant_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
             })
-            .backend_failure(Backends::GL),
+            .expect_fail(FailureCase::backend(Backends::GL)),
     )
     .run_sync(|ctx| {
         shader_input_output_test(

@@ -637,6 +637,8 @@ impl RenderBundleEncoder {
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
                 RenderCommand::WriteTimestamp { .. } // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
+                | RenderCommand::BeginOcclusionQuery { .. }
+                | RenderCommand::EndOcclusionQuery
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
                 | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
@@ -746,7 +748,21 @@ pub struct RenderBundle<A: HalApi> {
     pub(crate) life_guard: LifeGuard,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: HalApi> Send for RenderBundle<A> {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl<A: HalApi> Sync for RenderBundle<A> {}
 
 impl<A: HalApi> RenderBundle<A> {
@@ -936,6 +952,8 @@ impl<A: HalApi> RenderBundle<A> {
                     return Err(ExecutionError::Unimplemented("debug-markers"))
                 }
                 RenderCommand::WriteTimestamp { .. }
+                | RenderCommand::BeginOcclusionQuery { .. }
+                | RenderCommand::EndOcclusionQuery
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
                 | RenderCommand::EndPipelineStatisticsQuery => {
                     return Err(ExecutionError::Unimplemented("queries"))

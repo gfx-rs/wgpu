@@ -2,7 +2,9 @@ use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt;
 
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters, TestingContext,
+};
 
 fn pulling_common(
     ctx: TestingContext,
@@ -107,13 +109,15 @@ fn pulling_common(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             ops: wgpu::Operations::default(),
             resolve_target: None,
             view: &dummy,
         })],
         depth_stencil_attachment: None,
-        label: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
     });
 
     rpass.set_pipeline(&pipeline);
@@ -139,7 +143,7 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
             cmb.draw(0..6, 0..1);
         })
     });
-    
+
 #[gpu_test]
 static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().test_features_limits())
@@ -152,7 +156,11 @@ static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
 
 #[gpu_test]
 static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
+    )
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..2);
@@ -161,7 +169,11 @@ static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
 
 #[gpu_test]
 static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
+    )
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..1);

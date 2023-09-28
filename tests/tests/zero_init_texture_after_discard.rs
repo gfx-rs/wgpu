@@ -1,13 +1,14 @@
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, infra::GpuTestConfiguration, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, infra::GpuTestConfiguration, FailureCase, TestParameters,
+    TestingContext,
 };
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
 #[gpu_test]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
     GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().webgl2_failure())
+    .parameters(TestParameters::default().skip(FailureCase::webgl2()))
     .run_sync(|mut ctx| {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
@@ -24,7 +25,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
 #[gpu_test]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().webgl2_failure())
+    .parameters(TestParameters::default().skip(FailureCase::webgl2()))
     .run_sync(|mut ctx| {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
@@ -154,13 +155,15 @@ impl<'ctx> TestCase<'ctx> {
                     view: &texture.create_view(&TextureViewDescriptor::default()),
                     depth_ops: format.has_depth_aspect().then_some(Operations {
                         load: LoadOp::Clear(1.0),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                     stencil_ops: format.has_stencil_aspect().then_some(Operations {
                         load: LoadOp::Clear(0xFFFFFFFF),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             ctx.queue.submit([encoder.finish()]);
         } else {
@@ -227,7 +230,7 @@ impl<'ctx> TestCase<'ctx> {
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         },
                     },
                 )],
@@ -236,14 +239,16 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                         stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                     },
                 ),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
     }
 
@@ -259,14 +264,16 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: Some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                         stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Clear(0),
-                            store: true,
+                            store: StoreOp::Store,
                         }),
                     },
                 ),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
     }
 
@@ -282,14 +289,16 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Clear(0.0),
-                            store: true,
+                            store: StoreOp::Store,
                         }),
                         stencil_ops: Some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                     },
                 ),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
     }
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
 
 #[gpu_test]
 static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -9,7 +9,8 @@ static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true),
+            .features(wgpu::Features::TIMESTAMP_QUERY)
+            .skip(FailureCase::adapter("V3D")),
     )
     .run_async(|ctx| {
         let input = &[1, 2, 3, 4];
@@ -23,7 +24,8 @@ static COMPUTE_2: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true),
+            .features(wgpu::Features::TIMESTAMP_QUERY)
+            .skip(FailureCase::adapter("V3D")),
     )
     .run_async(|ctx| {
         let input = &[5, 23, 10, 9];
@@ -37,7 +39,8 @@ static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true),
+            .features(wgpu::Features::TIMESTAMP_QUERY)
+            .skip(FailureCase::adapter("V3D")),
     )
     .run_async(|ctx| {
         let input = &[77031, 837799, 8400511, 63728127];
@@ -47,7 +50,8 @@ static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
                 &ctx.queue,
                 input,
                 &[350, 524, OVERFLOW, OVERFLOW],
-            ).await
+            )
+            .await
         }
     });
 
@@ -57,9 +61,16 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true)
+            .features(wgpu::Features::TIMESTAMP_QUERY)
+            .skip(FailureCase::adapter("V3D"))
+            // https://github.com/gfx-rs/wgpu/issues/3944
+            .skip(FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "swiftshader",
+            ))
             // https://github.com/gfx-rs/wgpu/issues/3250
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
+            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe"))
+            .skip(FailureCase::molten_vk()),
     )
     .run_sync(|ctx| {
         use std::{sync::mpsc, thread, time::Duration};

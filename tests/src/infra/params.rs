@@ -30,10 +30,10 @@ impl GpuTestConfiguration {
 
     #[doc(hidden)]
     /// Derives the name from a `struct S` in the function initializing the test.
-    /// 
+    ///
     /// Does not overwrite a given name if a name has already been set
     pub fn name_from_init_function_typename<S>(self, name: &'static str) -> Self {
-        if self.name != "" {
+        if !self.name.is_empty() {
             return self;
         }
         let type_name = std::any::type_name::<S>();
@@ -82,5 +82,11 @@ impl GpuTestConfiguration {
             test: Some(Arc::new(move |ctx| Box::pin(test(ctx)))),
             ..self
         }
+    }
+}
+
+impl Default for GpuTestConfiguration {
+    fn default() -> Self {
+        Self::new()
     }
 }
