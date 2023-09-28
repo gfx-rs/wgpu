@@ -33,6 +33,8 @@ pub enum GlobalVariableError {
     ),
     #[error("Initializer doesn't match the variable type")]
     InitializerType,
+    #[error("Initializer can't be used with address space {0:?}")]
+    InitializerNotAllowed(crate::AddressSpace),
     #[error("Storage address space doesn't support write-only access")]
     StorageAddressSpaceWriteOnlyNotSupported,
 }
@@ -572,6 +574,13 @@ impl super::Validator {
         }
 
         if let Some(init) = var.init {
+            match var.space {
+                crate::AddressSpace::Private | crate::AddressSpace::Function => {}
+                _ => {
+                    return Err(GlobalVariableError::InitializerNotAllowed(var.space));
+                }
+            }
+
             let decl_ty = &gctx.types[var.ty].inner;
             let init_ty = mod_info[init].inner_with(gctx.types);
             if !decl_ty.equivalent(init_ty, gctx.types) {

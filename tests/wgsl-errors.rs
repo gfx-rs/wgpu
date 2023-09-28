@@ -1607,6 +1607,21 @@ fn host_shareable_types() {
 }
 
 #[test]
+fn var_init() {
+    check_validation! {
+        "
+        var<workgroup> initialized: u32 = 0u;
+        ":
+        Err(
+            naga::valid::ValidationError::GlobalVariable {
+                source: naga::valid::GlobalVariableError::InitializerNotAllowed(naga::AddressSpace::WorkGroup),
+                ..
+            },
+        )
+    }
+}
+
+#[test]
 fn misplaced_break_if() {
     check(
         "
