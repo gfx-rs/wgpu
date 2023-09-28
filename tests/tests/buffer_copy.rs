@@ -2,7 +2,7 @@
 
 use wgt::BufferAddress;
 
-use wgpu_test::{fail_if, infra::GpuTest};
+use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration};
 
 fn try_copy(
     ctx: &wgpu_test::TestingContext,
@@ -17,24 +17,20 @@ fn try_copy(
     });
 }
 
-#[derive(Default)]
-pub struct CopyAlignmentTest;
+#[gpu_test]
+static COPY_ALIGNMENT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    try_copy(&ctx, 0, 0, false);
+    try_copy(&ctx, 4, 16 + 1, true);
+    try_copy(&ctx, 64, 20 + 2, true);
+    try_copy(&ctx, 256, 44 + 3, true);
+    try_copy(&ctx, 1024, 8 + 4, false);
 
-impl GpuTest for CopyAlignmentTest {
-    fn run(&self, ctx: wgpu_test::TestingContext) {
-        try_copy(&ctx, 0, 0, false);
-        try_copy(&ctx, 4, 16 + 1, true);
-        try_copy(&ctx, 64, 20 + 2, true);
-        try_copy(&ctx, 256, 44 + 3, true);
-        try_copy(&ctx, 1024, 8 + 4, false);
-
-        try_copy(&ctx, 0, 4, false);
-        try_copy(&ctx, 4 + 1, 8, true);
-        try_copy(&ctx, 64 + 2, 12, true);
-        try_copy(&ctx, 256 + 3, 16, true);
-        try_copy(&ctx, 1024 + 4, 4, false);
-    }
-}
+    try_copy(&ctx, 0, 4, false);
+    try_copy(&ctx, 4 + 1, 8, true);
+    try_copy(&ctx, 64 + 2, 12, true);
+    try_copy(&ctx, 256 + 3, 16, true);
+    try_copy(&ctx, 1024 + 4, 4, false);
+});
 
 const BUFFER_SIZE: BufferAddress = 1234;
 

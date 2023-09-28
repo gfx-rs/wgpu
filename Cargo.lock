@@ -557,6 +557,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37e366bff8cd32dd8754b0991fb66b279dc48f598c3a18914852a6673deef583"
+dependencies = [
+ "quote",
+ "syn 2.0.18",
+]
+
+[[package]]
 name = "cts_runner"
 version = "0.1.0"
 dependencies = [
@@ -3295,7 +3305,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "env_logger",
- "futures-intrusive",
+ "flume",
  "log",
  "pollster",
  "wasm-bindgen-futures",
@@ -3359,6 +3369,15 @@ dependencies = [
  "serde_json",
  "wgpu",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-macros"
+version = "0.16.0"
+dependencies = [
+ "heck",
+ "quote",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -3439,6 +3458,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "console_log",
+ "ctor",
  "env_logger",
  "futures-lite",
  "heck",
@@ -3448,6 +3468,7 @@ dependencies = [
  "log",
  "naga",
  "nv-flip",
+ "parking_lot 0.12.1",
  "png",
  "pollster",
  "raw-window-handle 0.5.2",
@@ -3458,6 +3479,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgpu-macros",
  "wgpu-types",
 ]
 

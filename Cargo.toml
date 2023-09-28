@@ -9,6 +9,7 @@ members = [
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
+    "wgpu-macros",
     "wgpu-types",
     "tests",
 ]
@@ -20,6 +21,7 @@ default-members = [
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
+    "wgpu-macros",
     "wgpu-types",
     "tests"
 ]
@@ -64,6 +66,7 @@ bytemuck = { version = "1.13", features = ["derive"] }
 cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
+ctor = "0.2"
 ddsfile = "0.5"
 env_logger = "0.10"
 flume = "0.10"
@@ -85,6 +88,7 @@ num-traits = { version = "0.2" }
 # This will not be required in the next release since it has been removed from the default feature in https://github.com/Razaekel/noise-rs/commit/1af9e1522236b2c584fb9a02150c9c67a5e6bb04#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
 noise = { version = "0.7", default-features = false }
 obj = "0.10"
+once_cell = "1"
 # parking_lot 0.12 switches from `winapi` to `windows`; permit either
 parking_lot = ">=0.11,<0.13"
 pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
@@ -101,6 +105,7 @@ static_assertions = "1.1.0"
 thiserror = "1"
 wgpu = { version = "0.16", path = "./wgpu" }
 wgpu-example = { version = "0.16", path = "./examples/common" }
+wgpu-macros = { version = "0.16", path = "./wgpu-macros" }
 wgpu-test = { version = "0.16", path = "./tests"}
 winit = "0.27.1"
 

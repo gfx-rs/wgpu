@@ -150,7 +150,7 @@ async fn execute_gpu_inner(
     // Note that we're not calling `.await` here.
     let buffer_slice = staging_buffer.slice(..);
     // Sets the buffer up for mapping, sending over the result of the mapping back to us when it is finished.
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
     // Poll the device in a blocking manner so that our future resolves.
@@ -159,7 +159,7 @@ async fn execute_gpu_inner(
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
-    if let Some(Ok(())) = receiver.receive().await {
+    if let Ok(Ok(())) = receiver.recv_async().await {
         // Gets contents of buffer
         let data = buffer_slice.get_mapped_range();
         // Since contents are got in bytes, this converts these bytes back to u32
@@ -200,16 +200,5 @@ fn main() {
 mod tests;
 
 #[cfg(test)]
-fn main() -> wgpu_test::infra::MainResult {
-    use wgpu_test::infra::GpuTest;
+wgpu_test::gpu_test_main!();
 
-    wgpu_test::infra::main(
-        [
-            tests::Compute1Test::new(),
-            tests::Compute2Test::new(),
-            tests::ComputeOverflowTest::new(),
-            tests::MultithreadedComputeTest::new(),
-        ],
-        [],
-    )
-}

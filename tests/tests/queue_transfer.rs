@@ -1,12 +1,10 @@
 //! Tests for buffer copy validation.
 
-use wgpu_test::{fail, infra::GpuTest};
+use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration};
 
-#[derive(Default)]
-pub struct QueueWriteTextureOverflowTest;
-
-impl GpuTest for QueueWriteTextureOverflowTest {
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+#[gpu_test]
+static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
@@ -46,5 +44,4 @@ impl GpuTest for QueueWriteTextureOverflowTest {
                 },
             );
         });
-    }
-}
+    });

@@ -2,7 +2,7 @@ use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt;
 
-use wgpu_test::{infra::GpuTest, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters, TestingContext};
 
 fn pulling_common(
     ctx: TestingContext,
@@ -131,64 +131,30 @@ fn pulling_common(
     assert_eq!(data, expected);
 }
 
-#[derive(Default)]
-pub struct DrawTest;
-
-impl GpuTest for DrawTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params.test_features_limits()
-    }
-
-    fn run(&self, ctx: TestingContext) {
+#[gpu_test]
+static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..6, 0..1);
         })
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct DrawVertexTest;
-
-impl GpuTest for DrawVertexTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params.test_features_limits()
-    }
-
-    fn run(&self, ctx: TestingContext) {
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
-            cmb.draw(0..3, 0..1);
-            cmb.draw(3..6, 0..1);
-        })
-    }
-}
-
-#[derive(Default)]
-pub struct DrawInstancedTest;
-
-impl GpuTest for DrawInstancedTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params.test_features_limits()
-    }
-
-    fn run(&self, ctx: TestingContext) {
+#[gpu_test]
+static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..2);
         })
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct DrawInstancedOffsetTest;
-
-impl GpuTest for DrawInstancedOffsetTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params.test_features_limits()
-    }
-
-    fn run(&self, ctx: TestingContext) {
+#[gpu_test]
+static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..1);
             cmb.draw(0..3, 1..2);
         })
-    }
-}
+    });

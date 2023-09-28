@@ -1,90 +1,67 @@
 use std::sync::Arc;
 
 use super::*;
-use wgpu_test::{infra::GpuTest, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
 
-#[derive(Default)]
-pub struct Compute1Test;
-
-impl GpuTest for Compute1Test {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .specific_failure(None, None, Some("V3D"), true),
+    )
+    .run_async(|ctx| {
         let input = &[1, 2, 3, 4];
 
-        pollster::block_on(assert_execute_gpu(
-            &ctx.device,
-            &ctx.queue,
-            input,
-            &[0, 1, 7, 2],
-        ));
-    }
-}
+        async move { assert_execute_gpu(&ctx.device, &ctx.queue, input, &[0, 1, 7, 2]).await }
+    });
 
-#[derive(Default)]
-pub struct Compute2Test;
-
-impl GpuTest for Compute2Test {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static COMPUTE_2: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .specific_failure(None, None, Some("V3D"), true),
+    )
+    .run_async(|ctx| {
         let input = &[5, 23, 10, 9];
 
-        pollster::block_on(assert_execute_gpu(
-            &ctx.device,
-            &ctx.queue,
-            input,
-            &[5, 15, 6, 19],
-        ));
-    }
-}
+        async move { assert_execute_gpu(&ctx.device, &ctx.queue, input, &[5, 15, 6, 19]).await }
+    });
 
-#[derive(Default)]
-pub struct ComputeOverflowTest;
-
-impl GpuTest for ComputeOverflowTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .specific_failure(None, None, Some("V3D"), true),
+    )
+    .run_async(|ctx| {
         let input = &[77031, 837799, 8400511, 63728127];
-        pollster::block_on(assert_execute_gpu(
-            &ctx.device,
-            &ctx.queue,
-            input,
-            &[350, 524, OVERFLOW, OVERFLOW],
-        ));
-    }
-}
+        async move {
+            assert_execute_gpu(
+                &ctx.device,
+                &ctx.queue,
+                input,
+                &[350, 524, OVERFLOW, OVERFLOW],
+            ).await
+        }
+    });
 
-#[derive(Default)]
-pub struct MultithreadedComputeTest;
-
-impl GpuTest for MultithreadedComputeTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .specific_failure(None, None, Some("V3D"), true)
             // https://github.com/gfx-rs/wgpu/issues/3250
-            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .specific_failure(Some(wgpu::Backends::GL), None, Some("llvmpipe"), true),
+    )
+    .run_sync(|ctx| {
         use std::{sync::mpsc, thread, time::Duration};
 
         let ctx = Arc::new(ctx);
@@ -111,8 +88,7 @@ impl GpuTest for MultithreadedComputeTest {
             rx.recv_timeout(Duration::from_secs(10))
                 .expect("A thread never completed.");
         }
-    }
-}
+    });
 
 async fn assert_execute_gpu(
     device: &wgpu::Device,

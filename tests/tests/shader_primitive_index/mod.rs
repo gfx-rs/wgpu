@@ -1,5 +1,5 @@
 use wgpu::util::{align_to, DeviceExt};
-use wgpu_test::{infra::GpuTest, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters, TestingContext};
 
 //
 // These tests render two triangles to a 2x2 render target. The first triangle
@@ -35,16 +35,15 @@ use wgpu_test::{infra::GpuTest, TestParameters, TestingContext};
 // draw_indexed() draws the triangles in the opposite order, using index
 // buffer [3, 4, 5, 0, 1, 2]. This also swaps the resulting pixel colors.
 //
-#[derive(Default)]
-pub struct DrawTest;
 
-impl GpuTest for DrawTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX)
-    }
-    fn run(&self, ctx: TestingContext) {
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+    )
+    .run_sync(|ctx| {
         //
         //   +-----+-----+
         //   |white|blue |
@@ -58,20 +57,16 @@ impl GpuTest for DrawTest {
         pulling_common(ctx, &expected, |rpass| {
             rpass.draw(0..6, 0..1);
         })
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct DrawIndexedTest;
-
-impl GpuTest for DrawIndexedTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX)
-    }
-
-    fn run(&self, ctx: TestingContext) {
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+    )
+    .run_sync(|ctx| {
         //
         //   +-----+-----+
         //   |white| red |
@@ -85,8 +80,7 @@ impl GpuTest for DrawIndexedTest {
         pulling_common(ctx, &expected, |rpass| {
             rpass.draw_indexed(0..6, 0, 0..1);
         })
-    }
-}
+    });
 
 fn pulling_common(
     ctx: TestingContext,

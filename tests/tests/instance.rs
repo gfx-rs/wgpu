@@ -1,7 +1,4 @@
-use wgpu_test::{infra::GpuTest, TestingContext};
-#[derive(Clone, Default)]
-pub struct InitializeTest;
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration};
 
-impl GpuTest for InitializeTest {
-    fn run(&self, _ctx: TestingContext) {}
-}
+#[gpu_test]
+static INITIALIZE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|_ctx| {});

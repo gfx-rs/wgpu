@@ -1,11 +1,11 @@
+use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-use std::{future::Future, pin::Pin};
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
-use wgpu_test::infra::GpuTest;
+use wgpu_test::infra::GpuTestConfiguration;
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -507,135 +507,125 @@ pub struct ExampleTestParams<E> {
     pub _phantom: std::marker::PhantomData<E>,
 }
 
-impl<E: Example + Send + Sync> GpuTest for ExampleTestParams<E> {
-    fn name(&self) -> String {
-        self.name.into()
-    }
+impl<E: Example + Send + Sync> From<ExampleTestParams<E>> for GpuTestConfiguration {
+    fn from(params: ExampleTestParams<E>) -> Self {
+        GpuTestConfiguration::new()
+            .name(params.name)
+            .parameters({
+                assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
-    fn parameters(&self, _params: wgpu_test::TestParameters) -> wgpu_test::TestParameters {
-        assert_eq!(self.width % 64, 0, "width needs to be aligned 64");
+                let features = E::required_features() | params.optional_features;
 
-        let features = E::required_features() | self.optional_features;
-
-        self.base_test_parameters.clone().features(features)
-    }
-
-    fn run(&self, _ctx: wgpu_test::TestingContext) {
-        unimplemented!()
-    }
-
-    fn run_async<'a>(
-        &'a self,
-        ctx: wgpu_test::TestingContext,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'a>> {
-        Box::pin(async move {
-            let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("destination"),
-                size: wgpu::Extent3d {
-                    width: self.width,
-                    height: self.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            });
-
-            let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("image map buffer"),
-                size: self.width as u64 * self.height as u64 * 4,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            });
-
-            let mut example = E::init(
-                &wgpu::SurfaceConfiguration {
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                params.base_test_parameters.clone().features(features)
+            })
+            .run_async(move |ctx| async move {
+                let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("destination"),
+                    size: wgpu::Extent3d {
+                        width: params.width,
+                        height: params.height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    width: self.width,
-                    height: self.height,
-                    present_mode: wgpu::PresentMode::Fifo,
-                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
-                    view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
-                },
-                &ctx.adapter,
-                &ctx.device,
-                &ctx.queue,
-            );
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
+                });
 
-            {
-                let spawner = Spawner::new();
-                example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-                // Handle specific case for bunnymark
-                #[allow(deprecated)]
-                if self.image_path == "/examples/bunnymark/screenshot.png" {
-                    // Press spacebar to spawn bunnies
-                    example.update(winit::event::WindowEvent::KeyboardInput {
-                        input: winit::event::KeyboardInput {
-                            scancode: 0,
-                            state: winit::event::ElementState::Pressed,
-                            virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                            modifiers: winit::event::ModifiersState::empty(),
-                        },
-                        device_id: unsafe { winit::event::DeviceId::dummy() },
-                        is_synthetic: false,
-                    });
+                let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("image map buffer"),
+                    size: params.width as u64 * params.height as u64 * 4,
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                });
 
-                    // Step 3 extra frames
-                    for _ in 0..3 {
-                        example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                let mut example = E::init(
+                    &wgpu::SurfaceConfiguration {
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        width: params.width,
+                        height: params.height,
+                        present_mode: wgpu::PresentMode::Fifo,
+                        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                        view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
+                    },
+                    &ctx.adapter,
+                    &ctx.device,
+                    &ctx.queue,
+                );
+
+                {
+                    let spawner = Spawner::new();
+                    example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+
+                    // Handle specific case for bunnymark
+                    #[allow(deprecated)]
+                    if params.image_path == "/examples/bunnymark/screenshot.png" {
+                        // Press spacebar to spawn bunnies
+                        example.update(winit::event::WindowEvent::KeyboardInput {
+                            input: winit::event::KeyboardInput {
+                                scancode: 0,
+                                state: winit::event::ElementState::Pressed,
+                                virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+                                modifiers: winit::event::ModifiersState::empty(),
+                            },
+                            device_id: unsafe { winit::event::DeviceId::dummy() },
+                            is_synthetic: false,
+                        });
+
+                        // Step 3 extra frames
+                        for _ in 0..3 {
+                            example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                        }
                     }
                 }
-            }
 
-            let mut cmd_buf = ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                let mut cmd_buf = ctx
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-            cmd_buf.copy_texture_to_buffer(
-                wgpu::ImageCopyTexture {
-                    texture: &dst_texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::ImageCopyBuffer {
-                    buffer: &dst_buffer,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(self.width * 4),
-                        rows_per_image: None,
+                cmd_buf.copy_texture_to_buffer(
+                    wgpu::ImageCopyTexture {
+                        texture: &dst_texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
                     },
-                },
-                wgpu::Extent3d {
-                    width: self.width,
-                    height: self.height,
-                    depth_or_array_layers: 1,
-                },
-            );
+                    wgpu::ImageCopyBuffer {
+                        buffer: &dst_buffer,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(params.width * 4),
+                            rows_per_image: None,
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width: params.width,
+                        height: params.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
 
-            ctx.queue.submit(Some(cmd_buf.finish()));
+                ctx.queue.submit(Some(cmd_buf.finish()));
 
-            let dst_buffer_slice = dst_buffer.slice(..);
-            dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-            ctx.device.poll(wgpu::Maintain::Wait);
-            let bytes = dst_buffer_slice.get_mapped_range().to_vec();
+                let dst_buffer_slice = dst_buffer.slice(..);
+                dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
+                ctx.device.poll(wgpu::Maintain::Wait);
+                let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
-            wgpu_test::image::compare_image_output(
-                env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + self.image_path,
-                ctx.adapter_info.backend,
-                self.width,
-                self.height,
-                &bytes,
-                self.comparisons,
-            )
-            .await;
-        })
+                wgpu_test::image::compare_image_output(
+                    env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
+                    ctx.adapter_info.backend,
+                    params.width,
+                    params.height,
+                    &bytes,
+                    params.comparisons,
+                )
+                .await;
+            })
     }
 }

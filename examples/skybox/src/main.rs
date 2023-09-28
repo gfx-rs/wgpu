@@ -464,61 +464,66 @@ fn main() {
     wgpu_example::framework::run::<Example>("skybox");
 }
 
-// Test example
 #[cfg(test)]
-fn main() -> wgpu_test::infra::MainResult {
-    use std::marker::PhantomData;
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "skybox",
+        image_path: "/examples/skybox/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: wgpu_test::TestParameters::default().specific_failure(
+            Some(wgpu::Backends::GL),
+            None,
+            Some("ANGLE"),
+            false,
+        ),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-    use wgpu_test::infra::GpuTest;
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_BCN: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "skybox-bc1",
+        image_path: "/examples/skybox/screenshot-bc1.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
+        base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-    wgpu_test::infra::main(
-        [
-            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
-                name: "skybox",
-                image_path: "/examples/skybox/screenshot.png",
-                width: 1024,
-                height: 768,
-                optional_features: wgpu::Features::default(),
-                base_test_parameters: wgpu_test::TestParameters::default().specific_failure(
-                    Some(wgpu::Backends::GL),
-                    None,
-                    Some("ANGLE"),
-                    false,
-                ),
-                comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
-                _phantom: PhantomData::<Example>,
-            }),
-            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
-                name: "skybox-bc1",
-                image_path: "/examples/skybox/screenshot-bc1.png",
-                width: 1024,
-                height: 768,
-                optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
-                base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-                comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
-                _phantom: PhantomData::<Example>,
-            }),
-            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
-                name: "skybox-etc2",
-                image_path: "/examples/skybox/screenshot-etc2.png",
-                width: 1024,
-                height: 768,
-                optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
-                base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-                comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
-                _phantom: PhantomData::<Example>,
-            }),
-            GpuTest::from_value(wgpu_example::framework::ExampleTestParams {
-                name: "skybox-astc",
-                image_path: "/examples/skybox/screenshot-astc.png",
-                width: 1024,
-                height: 768,
-                optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
-                base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
-                comparisons: &[wgpu_test::ComparisonType::Mean(0.016)],
-                _phantom: PhantomData::<Example>,
-            }),
-        ],
-        [],
-    )
-}
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_ETC2: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "skybox-etc2",
+        image_path: "/examples/skybox/screenshot-etc2.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
+        base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_ASTC: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "skybox-astc",
+        image_path: "/examples/skybox/screenshot-astc.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
+        base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.016)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

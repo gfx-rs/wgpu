@@ -313,26 +313,19 @@ fn main() {
     wgpu_example::framework::run::<Example>("conservative-raster");
 }
 
-// Test example
 #[cfg(test)]
-fn main() -> wgpu_test::infra::MainResult {
-    use std::marker::PhantomData;
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "conservative-raster",
+        image_path: "/examples/conservative-raster/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-    use wgpu_test::infra::GpuTest;
-
-    wgpu_test::infra::main(
-        [GpuTest::from_value(
-            wgpu_example::framework::ExampleTestParams {
-                name: "conservative-raster",
-                image_path: "/examples/conservative-raster/screenshot.png",
-                width: 1024,
-                height: 768,
-                optional_features: wgpu::Features::default(),
-                base_test_parameters: wgpu_test::TestParameters::default(),
-                comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
-                _phantom: PhantomData::<Example>,
-            },
-        )],
-        [],
-    )
-}
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

@@ -3,7 +3,7 @@ use std::fmt::Write;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{infra::GpuTest, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
@@ -174,66 +174,54 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     tests
 }
 
-#[derive(Default)]
-pub struct UniformInputTest;
-
-impl GpuTest for UniformInputTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
             .specific_failure(Some(wgpu::Backends::VULKAN), None, None, false)
-            .limits(Limits::downlevel_defaults())
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_sync(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::Uniform,
             create_struct_layout_tests(InputStorageType::Uniform),
         );
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct StorageInputTest;
-
-impl GpuTest for StorageInputTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults())
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_sync(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
             create_struct_layout_tests(InputStorageType::Storage),
         );
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct PushConstantInputTest;
-
-impl GpuTest for PushConstantInputTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .features(Features::PUSH_CONSTANTS)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits {
                 max_push_constant_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
             })
-            .backend_failure(Backends::GL)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .backend_failure(Backends::GL),
+    )
+    .run_sync(|ctx| {
         shader_input_output_test(
             ctx,
             InputStorageType::PushConstant,
             create_struct_layout_tests(InputStorageType::PushConstant),
         );
-    }
-}
+    });

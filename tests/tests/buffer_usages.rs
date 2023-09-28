@@ -1,7 +1,7 @@
 //! Tests for buffer usages validation.
 
 use wgpu::BufferUsages as Bu;
-use wgpu_test::{fail_if, infra::GpuTest, TestParameters};
+use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration, TestParameters};
 use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
@@ -42,31 +42,22 @@ fn try_create(ctx: wgpu_test::TestingContext, usages: &[(bool, &[wgpu::BufferUsa
     }
 }
 
-#[derive(Default)]
-pub struct BufferUsageTest;
+#[gpu_test]
+static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    try_create(
+        ctx,
+        &[
+            (false, ALWAYS_VALID),
+            (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
+            (true, ALWAYS_FAIL),
+        ],
+    );
+});
 
-impl GpuTest for BufferUsageTest {
-    fn run(&self, ctx: wgpu_test::TestingContext) {
-        try_create(
-            ctx,
-            &[
-                (false, ALWAYS_VALID),
-                (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
-                (true, ALWAYS_FAIL),
-            ],
-        );
-    }
-}
-
-#[derive(Default)]
-pub struct BufferUsageMappablePrimaryTest;
-
-impl GpuTest for BufferUsageMappablePrimaryTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params.features(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+#[gpu_test]
+static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+    .run_sync(|ctx| {
         try_create(
             ctx,
             &[
@@ -75,5 +66,4 @@ impl GpuTest for BufferUsageMappablePrimaryTest {
                 (true, ALWAYS_FAIL),
             ],
         );
-    }
-}
+    });

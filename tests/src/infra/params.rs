@@ -1,73 +1,59 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use heck::ToSnakeCase;
-
 use crate::{TestParameters, TestingContext};
 
-pub trait GpuTest: Send + Sync + 'static {
-    #[allow(clippy::new_ret_no_self)]
-    fn new() -> Arc<dyn GpuTest + Send + Sync>
+pub type RunTestAsync =
+    Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>;
+
+#[derive(Clone)]
+pub struct GpuTestConfiguration {
+    pub name: &'static str,
+    pub params: TestParameters,
+    pub test: Option<RunTestAsync>,
+}
+
+impl GpuTestConfiguration {
+    pub fn new() -> Self {
+        Self {
+            name: "",
+            params: TestParameters::default(),
+            test: None,
+        }
+    }
+
+    pub fn name(self, name: &'static str) -> Self {
+        Self { name, ..self }
+    }
+
+    pub fn name_if_not_set(self, name: &'static str) -> Self {
+        if self.name != "" {
+            return self;
+        }
+        Self { name, ..self }
+    }
+
+    pub fn parameters(self, parameters: TestParameters) -> Self {
+        Self {
+            params: parameters,
+            ..self
+        }
+    }
+
+    pub fn run_sync(self, test: impl Fn(TestingContext) + Copy + Send + Sync + 'static) -> Self {
+        Self {
+            test: Some(Arc::new(move |ctx| Box::pin(async move { test(ctx) }))),
+            ..self
+        }
+    }
+
+    pub fn run_async<F, R>(self, test: F) -> Self
     where
-        Self: Sized + Default,
+        F: Fn(TestingContext) -> R + Send + Sync + 'static,
+        R: Future<Output = ()> + Send + Sync + 'static,
     {
-        Self::from_value(Self::default())
-    }
-
-    fn from_value(value: Self) -> Arc<dyn GpuTest + Send + Sync>
-    where
-        Self: Sized,
-    {
-        Arc::new(value)
-    }
-
-    fn name(&self) -> String {
-        let name = std::any::type_name::<Self>();
-        let (path, type_name) = name.rsplit_once("::").unwrap();
-        let snake_case = type_name.to_snake_case();
-        let snake_case_trimmed = snake_case.trim_end_matches("_test");
-        assert_ne!(
-            &snake_case, snake_case_trimmed,
-            "Type name of the test must end with \"Test\""
-        );
-        format!("{path}::{snake_case_trimmed}")
-    }
-
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
-    }
-
-    fn run(&self, ctx: TestingContext);
-
-    fn run_async<'a>(
-        &'a self,
-        ctx: TestingContext,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'a>> {
-        Box::pin(async move { self.run(ctx) })
-    }
-}
-
-pub struct CpuTest {
-    name: &'static str,
-    test: Box<dyn FnOnce() + Send + Sync + 'static>,
-}
-
-impl CpuTest {
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-
-    pub fn call(self) {
-        (self.test)();
-    }
-}
-
-// This needs to be generic, otherwise we will get the generic type name of `fn() -> ()`.
-pub fn cpu_test<T>(test: T) -> CpuTest
-where
-    T: FnOnce() + Send + Sync + 'static,
-{
-    CpuTest {
-        name: std::any::type_name::<T>(),
-        test: Box::new(test),
+        Self {
+            test: Some(Arc::new(move |ctx| Box::pin(test(ctx)))),
+            ..self
+        }
     }
 }

@@ -818,27 +818,20 @@ fn main() {
     wgpu_example::framework::run::<Example>("water");
 }
 
-// Test example
 #[cfg(test)]
-fn main() -> wgpu_test::infra::MainResult {
-    use std::marker::PhantomData;
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "water",
+        image_path: "/examples/water/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::default(),
+        base_test_parameters: wgpu_test::TestParameters::default()
+            .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-    use wgpu_test::infra::GpuTest;
-
-    wgpu_test::infra::main(
-        [GpuTest::from_value(
-            wgpu_example::framework::ExampleTestParams {
-                name: "water",
-                image_path: "/examples/water/screenshot.png",
-                width: 1024,
-                height: 768,
-                optional_features: wgpu::Features::default(),
-                base_test_parameters: wgpu_test::TestParameters::default()
-                    .downlevel_flags(wgpu::DownlevelFlags::READ_ONLY_DEPTH_STENCIL),
-                comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
-                _phantom: PhantomData::<Example>,
-            },
-        )],
-        [],
-    )
-}
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

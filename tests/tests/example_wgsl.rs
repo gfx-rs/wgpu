@@ -2,6 +2,7 @@ use naga::{front::wgsl, valid::Validator};
 use std::{fs, path::PathBuf};
 
 /// Runs through all example shaders and ensures they are valid wgsl.
+#[test]
 pub fn parse_example_wgsl() {
     let read_dir = match PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")

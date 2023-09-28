@@ -1,10 +1,10 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin};
 
 use arrayvec::ArrayVec;
 
 use crate::{
-    infra::{params::CpuTest, report::AdapterReport, GpuTest},
-    initialize_test, TestParameters,
+    infra::{report::AdapterReport, GpuTestConfiguration},
+    initialize_test,
 };
 
 pub(super) struct SingleTest {
@@ -13,25 +13,14 @@ pub(super) struct SingleTest {
 }
 
 impl SingleTest {
-    pub fn from_cpu_test(cpu_test: CpuTest) -> Self {
-        Self {
-            name: cpu_test.name().to_owned(),
-            future: Box::pin(async move {
-                cpu_test.call();
-                Ok(())
-            }),
-        }
-    }
-
     pub fn from_gpu_test(
-        test: Arc<dyn GpuTest + Send + Sync>,
+        test: GpuTestConfiguration,
         adapter: &AdapterReport,
         adapter_index: usize,
     ) -> Self {
-        let params = TestParameters::default();
-        let params = test.parameters(params);
+        let params = test.params;
 
-        let base_name = test.name();
+        let base_name = test.name;
         let backend = &adapter.info.backend;
         let device_name = &adapter.info.name;
 
@@ -89,7 +78,7 @@ impl SingleTest {
                     params,
                     expected_failure.map(|(reasons, _)| reasons),
                     adapter_index,
-                    &*test,
+                    test.test.expect("Test must be specified"),
                 )
                 .await;
                 Ok(())

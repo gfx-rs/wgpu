@@ -11,9 +11,11 @@ pub mod image;
 pub mod infra;
 mod isolation;
 
-use crate::infra::GpuTest;
+use crate::infra::RunTestAsync;
 
 pub use self::image::ComparisonType;
+pub use ctor::ctor;
+pub use wgpu_macros::gpu_test;
 
 const CANVAS_ID: &str = "test-canvas";
 
@@ -241,7 +243,7 @@ pub async fn initialize_test(
     parameters: TestParameters,
     expected_failure_reason: Option<FailureReasons>,
     adapter_index: usize,
-    test: &dyn GpuTest,
+    test: RunTestAsync,
 ) {
     // We don't actually care if it fails
     #[cfg(not(target_arch = "wasm32"))]
@@ -268,11 +270,11 @@ pub async fn initialize_test(
         adapter_downlevel_capabilities,
         device,
         device_features: parameters.required_features,
-        device_limits: parameters.required_limits,
+        device_limits: parameters.required_limits.clone(),
         queue,
     };
 
-    let panicked = AssertUnwindSafe(test.run_async(context))
+    let panicked = AssertUnwindSafe(test(context))
         .catch_unwind()
         .await
         .is_err();
@@ -473,4 +475,13 @@ pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnc
     } else {
         valid(device, callback)
     }
+}
+
+#[macro_export]
+macro_rules! gpu_test_main {
+    () => {
+        fn main() -> $crate::infra::MainResult {
+            $crate::infra::main()
+        }
+    };
 }

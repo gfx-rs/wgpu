@@ -1,16 +1,11 @@
 //! Tests for texture copy
 
-use wgpu_test::{infra::GpuTest, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
 
-#[derive(Default)]
-pub struct WriteTextureSubset2dTest;
-
-impl GpuTest for WriteTextureSubset2dTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params.backend_failure(wgpu::Backends::DX12)
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+#[gpu_test]
+static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().backend_failure(wgpu::Backends::DX12))
+    .run_sync(|ctx| {
         let size = 256;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -99,14 +94,11 @@ impl GpuTest for WriteTextureSubset2dTest {
         for byte in &data[(size as usize * 2)..] {
             assert_eq!(*byte, 0);
         }
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct WriteTextureSubset3dTest;
-
-impl GpuTest for WriteTextureSubset3dTest {
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+#[gpu_test]
+static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         let size = 256;
         let depth = 4;
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -195,5 +187,4 @@ impl GpuTest for WriteTextureSubset3dTest {
         for byte in &data[((size * size) as usize * 2)..] {
             assert_eq!(*byte, 0);
         }
-    }
-}
+    });

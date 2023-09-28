@@ -8,14 +8,12 @@ use wgpu::{
     ShaderStages,
 };
 
-use wgpu_test::{infra::GpuTest, TestParameters};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
 
-#[derive(Default)]
-pub struct ZeroInitWorkgroupMemTest;
-
-impl GpuTest for ZeroInitWorkgroupMemTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             // remove both of these once we get to https://github.com/gfx-rs/wgpu/issues/3193 or
             // https://github.com/gfx-rs/wgpu/issues/3160
@@ -25,11 +23,15 @@ impl GpuTest for ZeroInitWorkgroupMemTest {
                 Some("Microsoft Basic Render Driver"),
                 true,
             )
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("swiftshader"), true)
-            .limits(Limits::downlevel_defaults())
-    }
-
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+            .specific_failure(
+                Some(wgpu::Backends::VULKAN),
+                None,
+                Some("swiftshader"),
+                true,
+            )
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_sync(|ctx| {
         let bgl = ctx
             .device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -157,8 +159,7 @@ impl GpuTest for ZeroInitWorkgroupMemTest {
 
         drop(mapped);
         mapping_buffer.unmap();
-    }
-}
+    });
 
 const DISPATCH_SIZE: (u32, u32, u32) = (64, 64, 64);
 const TOTAL_WORK_GROUPS: u32 = DISPATCH_SIZE.0 * DISPATCH_SIZE.1 * DISPATCH_SIZE.2;

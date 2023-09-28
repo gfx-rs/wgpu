@@ -14,7 +14,7 @@ harness = false
 [dependencies]
 bytemuck.workspace = true
 env_logger.workspace = true
-futures-intrusive.workspace = true
+flume.workspace = true
 pollster.workspace = true
 wgpu.workspace = true
 winit.workspace = true
@@ -28,4 +28,3 @@ wasm-bindgen-futures.workspace = true
 [dev-dependencies]
 wasm-bindgen-test.workspace = true
 wgpu-test.workspace = true
-

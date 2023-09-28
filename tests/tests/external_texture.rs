@@ -3,136 +3,136 @@
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 use wgpu::ExternalImageSource;
-use wgpu_test::{fail_if, initialize_test, TestParameters};
+use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration, initialize_test};
 
-#[wasm_bindgen_test]
-async fn image_bitmap_import() {
-    let image_encoded = include_bytes!("3x3_colors.png");
+#[gpu_test]
+static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|ctx| async move {
+        let image_encoded = include_bytes!("3x3_colors.png");
 
-    // Create an array-of-arrays for Blob's constructor
-    let array = js_sys::Array::new();
-    array.push(&js_sys::Uint8Array::from(&image_encoded[..]));
+        // Create an array-of-arrays for Blob's constructor
+        let array = js_sys::Array::new();
+        array.push(&js_sys::Uint8Array::from(&image_encoded[..]));
 
-    // We're passing an array of Uint8Arrays
-    let blob = web_sys::Blob::new_with_u8_array_sequence(&array).unwrap();
+        // We're passing an array of Uint8Arrays
+        let blob = web_sys::Blob::new_with_u8_array_sequence(&array).unwrap();
 
-    // Parse the image from the blob
+        // Parse the image from the blob
 
-    // Because we need to call the function in a way that isn't bound by
-    // web_sys, we need to manually construct the options struct and call
-    // the function.
-    let image_bitmap_function: js_sys::Function = web_sys::window()
-        .unwrap()
-        .get("createImageBitmap")
-        .unwrap()
-        .dyn_into()
-        .unwrap();
-
-    let options_arg = js_sys::Object::new();
-    js_sys::Reflect::set(
-        &options_arg,
-        &wasm_bindgen::JsValue::from_str("premultiplyAlpha"),
-        &wasm_bindgen::JsValue::from_str("none"),
-    )
-    .unwrap();
-    let image_bitmap_promise: js_sys::Promise = image_bitmap_function
-        .call2(&wasm_bindgen::JsValue::UNDEFINED, &blob, &options_arg)
-        .unwrap()
-        .dyn_into()
-        .unwrap();
-
-    // Wait for the parsing to be done
-    let image_bitmap: web_sys::ImageBitmap =
-        wasm_bindgen_futures::JsFuture::from(image_bitmap_promise)
-            .await
+        // Because we need to call the function in a way that isn't bound by
+        // web_sys, we need to manually construct the options struct and call
+        // the function.
+        let image_bitmap_function: js_sys::Function = web_sys::window()
+            .unwrap()
+            .get("createImageBitmap")
             .unwrap()
             .dyn_into()
             .unwrap();
 
-    // Sanity checks
-    assert_eq!(image_bitmap.width(), 3);
-    assert_eq!(image_bitmap.height(), 3);
-
-    // Due to restrictions with premultiplication with ImageBitmaps, we also create an HtmlCanvasElement
-    // by drawing the image bitmap onto the canvas.
-    let canvas: web_sys::HtmlCanvasElement = web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .create_element("canvas")
-        .unwrap()
-        .dyn_into()
+        let options_arg = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &options_arg,
+            &wasm_bindgen::JsValue::from_str("premultiplyAlpha"),
+            &wasm_bindgen::JsValue::from_str("none"),
+        )
         .unwrap();
-    canvas.set_width(3);
-    canvas.set_height(3);
+        let image_bitmap_promise: js_sys::Promise = image_bitmap_function
+            .call2(&wasm_bindgen::JsValue::UNDEFINED, &blob, &options_arg)
+            .unwrap()
+            .dyn_into()
+            .unwrap();
 
-    let d2_context: web_sys::CanvasRenderingContext2d = canvas
-        .get_context("2d")
-        .unwrap()
-        .unwrap()
-        .dyn_into()
-        .unwrap();
-    d2_context
-        .draw_image_with_image_bitmap(&image_bitmap, 0.0, 0.0)
-        .unwrap();
+        // Wait for the parsing to be done
+        let image_bitmap: web_sys::ImageBitmap =
+            wasm_bindgen_futures::JsFuture::from(image_bitmap_promise)
+                .await
+                .unwrap()
+                .dyn_into()
+                .unwrap();
 
-    // Decode it cpu side
-    let raw_image = image::load_from_memory_with_format(image_encoded, image::ImageFormat::Png)
-        .unwrap()
-        .into_rgba8();
+        // Sanity checks
+        assert_eq!(image_bitmap.width(), 3);
+        assert_eq!(image_bitmap.height(), 3);
 
-    // Set of test cases to test with image import
-    #[derive(Debug, Copy, Clone)]
-    enum TestCase {
-        // Import the image as normal
-        Normal,
-        // Sets the FlipY flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
-        //
-        // Only works on canvases.
-        FlipY,
-        // Sets the premultiplied alpha flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
-        //
-        // Only works on canvases.
-        Premultiplied,
-        // Sets the color space to P3.
-        //
-        // Only works on canvases.
-        ColorSpace,
-        // Sets the premultiplied alpha flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
-        // Set both the input offset and output offset to 1 in x, so the first column is omitted.
-        TrimLeft,
-        // Set the size to 2 in x, so the last column is omitted
-        TrimRight,
-        // Set only the output offset to 1, so the second column gets the first column's data.
-        SlideRight,
-        // Try to copy from out of bounds of the source image
-        SourceOutOfBounds,
-        // Try to copy from out of bounds of the destination image
-        DestOutOfBounds,
-        // Try to copy more than one slice from the source
-        MultiSliceCopy,
-        // Copy into the second slice of a 2D array texture,
-        SecondSliceCopy,
-    }
-    let sources = [
-        ExternalImageSource::ImageBitmap(image_bitmap),
-        ExternalImageSource::HTMLCanvasElement(canvas),
-    ];
-    let cases = [
-        TestCase::Normal,
-        TestCase::FlipY,
-        TestCase::Premultiplied,
-        TestCase::ColorSpace,
-        TestCase::TrimLeft,
-        TestCase::TrimRight,
-        TestCase::SlideRight,
-        TestCase::SourceOutOfBounds,
-        TestCase::DestOutOfBounds,
-        TestCase::MultiSliceCopy,
-        TestCase::SecondSliceCopy,
-    ];
+        // Due to restrictions with premultiplication with ImageBitmaps, we also create an HtmlCanvasElement
+        // by drawing the image bitmap onto the canvas.
+        let canvas: web_sys::HtmlCanvasElement = web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .create_element("canvas")
+            .unwrap()
+            .dyn_into()
+            .unwrap();
+        canvas.set_width(3);
+        canvas.set_height(3);
 
-    initialize_test(TestParameters::default(), |ctx| {
+        let d2_context: web_sys::CanvasRenderingContext2d = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into()
+            .unwrap();
+        d2_context
+            .draw_image_with_image_bitmap(&image_bitmap, 0.0, 0.0)
+            .unwrap();
+
+        // Decode it cpu side
+        let raw_image = image::load_from_memory_with_format(image_encoded, image::ImageFormat::Png)
+            .unwrap()
+            .into_rgba8();
+
+        // Set of test cases to test with image import
+        #[derive(Debug, Copy, Clone)]
+        enum TestCase {
+            // Import the image as normal
+            Normal,
+            // Sets the FlipY flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
+            //
+            // Only works on canvases.
+            FlipY,
+            // Sets the premultiplied alpha flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
+            //
+            // Only works on canvases.
+            Premultiplied,
+            // Sets the color space to P3.
+            //
+            // Only works on canvases.
+            ColorSpace,
+            // Sets the premultiplied alpha flag. Deals with global state on GLES, so run before other tests to ensure it's reset.
+            // Set both the input offset and output offset to 1 in x, so the first column is omitted.
+            TrimLeft,
+            // Set the size to 2 in x, so the last column is omitted
+            TrimRight,
+            // Set only the output offset to 1, so the second column gets the first column's data.
+            SlideRight,
+            // Try to copy from out of bounds of the source image
+            SourceOutOfBounds,
+            // Try to copy from out of bounds of the destination image
+            DestOutOfBounds,
+            // Try to copy more than one slice from the source
+            MultiSliceCopy,
+            // Copy into the second slice of a 2D array texture,
+            SecondSliceCopy,
+        }
+        let sources = [
+            ExternalImageSource::ImageBitmap(image_bitmap),
+            ExternalImageSource::HTMLCanvasElement(canvas),
+        ];
+        let cases = [
+            TestCase::Normal,
+            TestCase::FlipY,
+            TestCase::Premultiplied,
+            TestCase::ColorSpace,
+            TestCase::TrimLeft,
+            TestCase::TrimRight,
+            TestCase::SlideRight,
+            TestCase::SourceOutOfBounds,
+            TestCase::DestOutOfBounds,
+            TestCase::MultiSliceCopy,
+            TestCase::SecondSliceCopy,
+        ];
+
         for source in sources {
             for case in cases {
                 // Copy the data, so we can modify it for tests
@@ -346,5 +346,4 @@ async fn image_bitmap_import() {
                 }
             }
         }
-    })
-}
+    });

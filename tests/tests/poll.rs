@@ -7,7 +7,7 @@ use wgpu::{
     Maintain, ShaderStages,
 };
 
-use wgpu_test::{infra::GpuTest, TestingContext};
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestingContext};
 
 struct DummyWorkData {
     _buffer: Buffer,
@@ -67,68 +67,49 @@ impl DummyWorkData {
     }
 }
 
-#[derive(Default)]
-pub struct WaitTest;
+#[gpu_test]
+static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let data = DummyWorkData::new(&ctx);
 
-impl GpuTest for WaitTest {
-    fn run(&self, ctx: TestingContext) {
-        let data = DummyWorkData::new(&ctx);
+    ctx.queue.submit(Some(data.cmd_buf));
+    ctx.device.poll(Maintain::Wait);
+});
 
-        ctx.queue.submit(Some(data.cmd_buf));
-        ctx.device.poll(Maintain::Wait);
-    }
-}
+#[gpu_test]
+static DOUBLE_WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let data = DummyWorkData::new(&ctx);
 
-#[derive(Default)]
-pub struct DoubleWaitTest;
+    ctx.queue.submit(Some(data.cmd_buf));
+    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(Maintain::Wait);
+});
 
-impl GpuTest for DoubleWaitTest {
-    fn run(&self, ctx: TestingContext) {
-        let data = DummyWorkData::new(&ctx);
+#[gpu_test]
+static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let data = DummyWorkData::new(&ctx);
 
-        ctx.queue.submit(Some(data.cmd_buf));
-        ctx.device.poll(Maintain::Wait);
-        ctx.device.poll(Maintain::Wait);
-    }
-}
+    let index = ctx.queue.submit(Some(data.cmd_buf));
+    ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
+});
 
-#[derive(Default)]
-pub struct WaitOnSubmissionTest;
-
-impl GpuTest for WaitOnSubmissionTest {
-    fn run(&self, ctx: TestingContext) {
-        let data = DummyWorkData::new(&ctx);
-
-        let index = ctx.queue.submit(Some(data.cmd_buf));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
-    }
-}
-
-#[derive(Default)]
-pub struct DoubleWaitOnSubmissionTest;
-
-impl GpuTest for DoubleWaitOnSubmissionTest {
-    fn run(&self, ctx: TestingContext) {
+#[gpu_test]
+static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         let data = DummyWorkData::new(&ctx);
 
         let index = ctx.queue.submit(Some(data.cmd_buf));
         ctx.device
             .poll(Maintain::WaitForSubmissionIndex(index.clone()));
         ctx.device.poll(Maintain::WaitForSubmissionIndex(index));
-    }
-}
+    });
 
-#[derive(Default)]
-pub struct WaitOutOfOrderTest;
+#[gpu_test]
+static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let data1 = DummyWorkData::new(&ctx);
+    let data2 = DummyWorkData::new(&ctx);
 
-impl GpuTest for WaitOutOfOrderTest {
-    fn run(&self, ctx: TestingContext) {
-        let data1 = DummyWorkData::new(&ctx);
-        let data2 = DummyWorkData::new(&ctx);
-
-        let index1 = ctx.queue.submit(Some(data1.cmd_buf));
-        let index2 = ctx.queue.submit(Some(data2.cmd_buf));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index2));
-        ctx.device.poll(Maintain::WaitForSubmissionIndex(index1));
-    }
-}
+    let index1 = ctx.queue.submit(Some(data1.cmd_buf));
+    let index2 = ctx.queue.submit(Some(data2.cmd_buf));
+    ctx.device.poll(Maintain::WaitForSubmissionIndex(index2));
+    ctx.device.poll(Maintain::WaitForSubmissionIndex(index1));
+});

@@ -1,17 +1,16 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
-use wgpu_test::{image::calc_difference, infra::GpuTest, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, image::calc_difference, infra::GpuTestConfiguration, TestParameters, TestingContext,
+};
 
-#[derive(Default)]
-pub struct ReinterpretSrgbTest;
-
-impl GpuTest for ReinterpretSrgbTest {
-    fn parameters(&self, params: TestParameters) -> TestParameters {
-        params
+#[gpu_test]
+static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
             .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
-            .limits(Limits::downlevel_defaults())
-    }
-
-    fn run(&self, ctx: TestingContext) {
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_sync(|ctx| {
         let unorm_data: [[u8; 4]; 4] = [
             [180, 0, 0, 255],
             [0, 84, 0, 127],
@@ -56,8 +55,7 @@ impl GpuTest for ReinterpretSrgbTest {
             &srgb_data,
             &unorm_data,
         );
-    }
-}
+    });
 
 fn reinterpret(
     ctx: &TestingContext,

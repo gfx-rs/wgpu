@@ -1,4 +1,4 @@
-use wgpu_test::infra::GpuTest;
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration};
 
 use wgpu::*;
 
@@ -14,11 +14,9 @@ use wgpu::*;
 ///
 /// We use non-consecutive vertex attribute locations (0 and 5) in order to also test
 /// that we unset the correct locations (see PR #3706).
-#[derive(Default)]
-pub struct PassResetVertexBufferTest;
-
-impl GpuTest for PassResetVertexBufferTest {
-    fn run(&self, ctx: wgpu_test::TestingContext) {
+#[gpu_test]
+static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         let module = ctx
             .device
             .create_shader_module(include_wgsl!("issue_3457.wgsl"));
@@ -186,5 +184,4 @@ impl GpuTest for PassResetVertexBufferTest {
         drop(single_rpass);
 
         ctx.queue.submit(Some(encoder2.finish()));
-    }
-}
+    });

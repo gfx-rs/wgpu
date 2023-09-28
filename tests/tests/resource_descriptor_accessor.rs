@@ -1,22 +1,17 @@
-use wgpu_test::infra::GpuTest;
+use wgpu_test::{gpu_test, infra::GpuTestConfiguration};
 
-/// Buffer's size and usage can be read back.
-#[derive(Default)]
-pub struct BufferSizeAndUsageTest;
+#[gpu_test]
+static BUFFER_SIZE_AND_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 1234,
+        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
 
-impl GpuTest for BufferSizeAndUsageTest {
-    fn run(&self, ctx: wgpu_test::TestingContext) {
-        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: 1234,
-            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        assert_eq!(buffer.size(), 1234);
-        assert_eq!(
-            buffer.usage(),
-            wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST
-        );
-    }
-}
+    assert_eq!(buffer.size(), 1234);
+    assert_eq!(
+        buffer.usage(),
+        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST
+    );
+});
