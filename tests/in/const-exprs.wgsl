@@ -7,6 +7,8 @@ fn main() {
    index_of_compose();
    compose_three_deep();
    non_constant_initializers();
+   splat_of_constant();
+   compose_of_constant();
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -45,4 +47,16 @@ fn non_constant_initializers() {
    var z = 30 + 40;
 
    out += vec4(w, x, y, z);
+}
+
+// Constant evaluation should be able to see through constants to
+// their values.
+const FOUR: i32 = 4;
+
+fn splat_of_constant() {
+    out = -vec4(FOUR);
+}
+
+fn compose_of_constant() {
+    out = -vec4(FOUR, FOUR, FOUR, FOUR);
 }

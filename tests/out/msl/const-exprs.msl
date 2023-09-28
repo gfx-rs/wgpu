@@ -4,6 +4,7 @@
 
 using metal::uint;
 
+constant int FOUR = 4;
 
 void swizzle_of_compose(
     device metal::int4& out
@@ -52,6 +53,20 @@ void non_constant_initializers(
     return;
 }
 
+void splat_of_constant(
+    device metal::int4& out
+) {
+    out = -(metal::int4(FOUR));
+    return;
+}
+
+void compose_of_constant(
+    device metal::int4& out
+) {
+    out = -(metal::int4(FOUR, FOUR, FOUR, FOUR));
+    return;
+}
+
 kernel void main_(
   device metal::int4& out [[user(fake0)]]
 , device int& out2_ [[user(fake0)]]
@@ -60,5 +75,7 @@ kernel void main_(
     index_of_compose(out2_);
     compose_three_deep(out2_);
     non_constant_initializers(out);
+    splat_of_constant(out);
+    compose_of_constant(out);
     return;
 }

@@ -5,6 +5,8 @@ precision highp int;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
+const int FOUR = 4;
+
 layout(std430) buffer type_block_0Compute { ivec4 _group_0_binding_0_cs; };
 
 layout(std430) buffer type_1_block_1Compute { int _group_0_binding_1_cs; };
@@ -49,11 +51,23 @@ void non_constant_initializers() {
     return;
 }
 
+void splat_of_constant() {
+    _group_0_binding_0_cs = -(ivec4(FOUR));
+    return;
+}
+
+void compose_of_constant() {
+    _group_0_binding_0_cs = -(ivec4(FOUR, FOUR, FOUR, FOUR));
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();
     compose_three_deep();
     non_constant_initializers();
+    splat_of_constant();
+    compose_of_constant();
     return;
 }
 

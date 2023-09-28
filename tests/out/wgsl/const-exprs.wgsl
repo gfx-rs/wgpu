@@ -1,3 +1,5 @@
+const FOUR: i32 = 4;
+
 @group(0) @binding(0) 
 var<storage, read_write> out: vec4<i32>;
 @group(0) @binding(1) 
@@ -43,11 +45,23 @@ fn non_constant_initializers() {
     return;
 }
 
+fn splat_of_constant() {
+    out = -(vec4(FOUR));
+    return;
+}
+
+fn compose_of_constant() {
+    out = -(vec4<i32>(FOUR, FOUR, FOUR, FOUR));
+    return;
+}
+
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
     swizzle_of_compose();
     index_of_compose();
     compose_three_deep();
     non_constant_initializers();
+    splat_of_constant();
+    compose_of_constant();
     return;
 }

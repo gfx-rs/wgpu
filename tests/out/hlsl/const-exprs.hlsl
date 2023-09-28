@@ -1,3 +1,5 @@
+static const int FOUR = 4;
+
 RWByteAddressBuffer out_ : register(u0);
 RWByteAddressBuffer out2_ : register(u1);
 
@@ -45,6 +47,18 @@ void non_constant_initializers()
     return;
 }
 
+void splat_of_constant()
+{
+    out_.Store4(0, asuint(-((FOUR).xxxx)));
+    return;
+}
+
+void compose_of_constant()
+{
+    out_.Store4(0, asuint(-(int4(FOUR, FOUR, FOUR, FOUR))));
+    return;
+}
+
 [numthreads(1, 1, 1)]
 void main()
 {
@@ -52,5 +66,7 @@ void main()
     index_of_compose();
     compose_three_deep();
     non_constant_initializers();
+    splat_of_constant();
+    compose_of_constant();
     return;
 }
