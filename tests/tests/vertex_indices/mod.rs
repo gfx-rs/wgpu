@@ -132,11 +132,21 @@ fn pulling_common(
 }
 
 #[gpu_test]
-static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().test_features_limits())
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..6, 0..1);
+        })
+    });
+    
+#[gpu_test]
+static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+            cmb.draw(0..3, 0..1);
+            cmb.draw(3..6, 0..1);
         })
     });
 

@@ -18,9 +18,11 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[cfg(not(target_arch = "wasm32"))]
         #[::wgpu_test::ctor]
         fn #register_test_name() {
+            struct S;
+
             ::wgpu_test::infra::TEST_LIST.lock().push(
                 // Allow any type that can be converted to a GpuTestConfiguration
-                ::wgpu_test::infra::GpuTestConfiguration::from(#expr).name_if_not_set(#ident_lower)
+                ::wgpu_test::infra::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower)
             )
         }
 
