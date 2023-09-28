@@ -68,10 +68,7 @@ impl SingleTest {
         let running_msg = if let Some(reasons) = skip_reason {
             skip = true;
 
-            let names: ArrayVec<_, 4> = reasons
-                .iter_names()
-                .map(|(name, _)| name)
-                .collect();
+            let names: ArrayVec<_, 4> = reasons.iter_names().map(|(name, _)| name).collect();
             let names_text = names.join(" | ");
 
             format!("Skipped Failure: {}", names_text)

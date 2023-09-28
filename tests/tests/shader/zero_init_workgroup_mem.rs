@@ -27,10 +27,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 Backends::VULKAN,
                 "swiftshader",
             ))
-            .skip(FailureCase::backend_adapter(
-                Backends::VULKAN,
-                "llvmpipe",
-            ))
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
             .limits(Limits::downlevel_defaults()),
     )
     .run_sync(|ctx| {

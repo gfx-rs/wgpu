@@ -1,9 +1,7 @@
-use wgpu_test::{
-    fail, gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters,
-};
+use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
 
 #[gpu_test]
-static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
+static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().skip(FailureCase::always()))
     .run_sync(|ctx| {
         // Create a bind group uisng a layout from another device. This should be a validation

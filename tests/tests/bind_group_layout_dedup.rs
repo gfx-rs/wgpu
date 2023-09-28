@@ -137,11 +137,6 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
         ctx.queue.submit(Some(encoder.finish()));
     });
 
-#[test]
-fn bind_group_layout_deduplication() {
-    initialize_test(TestParameters::default(), |ctx| {})
-}
-
 const SHADER_SRC: &str = "
 @vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(1.0); }
 @fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }
