@@ -10,10 +10,6 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
-[features]
-angle = ["wgc/angle"]
-vulkan-portability = ["wgc/vulkan"]
-
 [dependencies]
 env_logger.workspace = true
 log.workspace = true
