@@ -328,7 +328,7 @@ jobs:
       - name: run rustfmt
         run: |
           cargo fmt -- --check
-          cargo fmt --manifest-path xtask/ -- --check
+          cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
   check-msrv-cts_runner:
     name: Clippy cts_runner

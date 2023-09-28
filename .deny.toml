@@ -6,7 +6,8 @@ skip-tree = [
 	{ name = "wgpu-info" },
 ]
 skip = [
-	{ name = "wgpu" }
+	{ name = "wgpu" },
+	{ name = "fastrand" }
 ]
 wildcards = "deny"
 

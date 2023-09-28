@@ -88,7 +88,7 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 ///
 /// This test will fail on nvidia if the bug is not properly worked around.
 #[gpu_test]
-static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
+static CLEAR_BUFFER_RANGE_RESPECTED: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         // This hits most of the cases in nvidia's clear buffer bug
         let mut succeeded = true;
