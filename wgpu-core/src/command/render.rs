@@ -2393,6 +2393,7 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         pipeline_id: id::RenderPipelineId,
     ) {
+        log::trace!("RenderPass::set_pipeline {pipeline_id:?}");
         if pass.current_pipeline.set_and_check_redundant(pipeline_id) {
             return;
         }
@@ -2410,6 +2411,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
+        log::trace!("RenderPass::set_vertex_buffer {buffer_id:?}");
         pass.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
@@ -2426,11 +2428,13 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
+        log::trace!("RenderPass::set_index_buffer {buffer:?}");
         pass.set_index_buffer(buffer, index_format, offset, size);
     }
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_blend_constant(pass: &mut RenderPass, color: &Color) {
+        log::trace!("RenderPass::set_blend_constant");
         pass.base
             .commands
             .push(RenderCommand::SetBlendConstant(*color));
@@ -2438,6 +2442,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
+        log::trace!("RenderPass::set_stencil_reference {value}");
         pass.base
             .commands
             .push(RenderCommand::SetStencilReference(value));
@@ -2453,6 +2458,7 @@ pub mod render_ffi {
         depth_min: f32,
         depth_max: f32,
     ) {
+        log::trace!("RenderPass::set_viewport {x} {y} {w} {h}");
         pass.base.commands.push(RenderCommand::SetViewport {
             rect: Rect { x, y, w, h },
             depth_min,
@@ -2468,6 +2474,7 @@ pub mod render_ffi {
         w: u32,
         h: u32,
     ) {
+        log::trace!("RenderPass::set_scissor_rect {x} {y} {w} {h}");
         pass.base
             .commands
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
@@ -2485,6 +2492,7 @@ pub mod render_ffi {
         size_bytes: u32,
         data: *const u8,
     ) {
+        log::trace!("RenderPass::set_push_constants");
         assert_eq!(
             offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
             0,
@@ -2522,6 +2530,10 @@ pub mod render_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
+        log::trace!(
+            "RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}"
+        );
+
         pass.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
@@ -2539,6 +2551,7 @@ pub mod render_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
+        log::trace!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
         pass.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -2554,6 +2567,7 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
+        log::trace!("RenderPass::draw_indirect {buffer_id:?} {offset}");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2568,6 +2582,7 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
+        log::trace!("RenderPass::draw_indexed_indirect {buffer_id:?} {offset}");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2583,6 +2598,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         count: u32,
     ) {
+        log::trace!("RenderPass::multi_draw_indirect {buffer_id:?} {offset} {count}");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2598,6 +2614,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         count: u32,
     ) {
+        log::trace!("RenderPass::multi_draw_indexed_indirect {buffer_id:?} {offset} {count}");
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
@@ -2615,6 +2632,7 @@ pub mod render_ffi {
         count_buffer_offset: BufferAddress,
         max_count: u32,
     ) {
+        log::trace!("RenderPass::multi_draw_indirect_count {buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset} {max_count}");
         pass.base
             .commands
             .push(RenderCommand::MultiDrawIndirectCount {
@@ -2636,6 +2654,7 @@ pub mod render_ffi {
         count_buffer_offset: BufferAddress,
         max_count: u32,
     ) {
+        log::trace!("RenderPass::multi_draw_indexed_indirect_count {buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset} {max_count}");
         pass.base
             .commands
             .push(RenderCommand::MultiDrawIndirectCount {
@@ -2658,7 +2677,10 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
+        let cstr = unsafe { ffi::CStr::from_ptr(label) };
+        log::trace!("RenderPass::push_debug_group {cstr:?}");
+
+        let bytes = cstr.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::PushDebugGroup {
@@ -2669,6 +2691,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
+        log::trace!("RenderPass::pop_debug_group");
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
@@ -2682,7 +2705,10 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
-        let bytes = unsafe { ffi::CStr::from_ptr(label) }.to_bytes();
+        let cstr = unsafe { ffi::CStr::from_ptr(label) };
+        log::trace!("RenderPass::insert_debug_marker {cstr:?}");
+
+        let bytes = cstr.to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
         pass.base.commands.push(RenderCommand::InsertDebugMarker {
@@ -2697,6 +2723,7 @@ pub mod render_ffi {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
+        log::trace!("RenderPass::write_timestamps {query_set_id:?} {query_index}");
         pass.base.commands.push(RenderCommand::WriteTimestamp {
             query_set_id,
             query_index,
@@ -2708,6 +2735,7 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         query_index: u32,
     ) {
+        log::trace!("RenderPass::begin_occlusion_query {query_index}");
         pass.base
             .commands
             .push(RenderCommand::BeginOcclusionQuery { query_index });
@@ -2715,6 +2743,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_end_occlusion_query(pass: &mut RenderPass) {
+        log::trace!("RenderPass::end_occlusion_query");
         pass.base.commands.push(RenderCommand::EndOcclusionQuery);
     }
 
@@ -2724,6 +2753,7 @@ pub mod render_ffi {
         query_set_id: id::QuerySetId,
         query_index: u32,
     ) {
+        log::trace!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
         pass.base
             .commands
             .push(RenderCommand::BeginPipelineStatisticsQuery {
@@ -2734,6 +2764,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_end_pipeline_statistics_query(pass: &mut RenderPass) {
+        log::trace!("RenderPass::end_pipeline_statistics_query");
         pass.base
             .commands
             .push(RenderCommand::EndPipelineStatisticsQuery);
@@ -2749,6 +2780,7 @@ pub mod render_ffi {
         render_bundle_ids: *const id::RenderBundleId,
         render_bundle_ids_length: usize,
     ) {
+        log::trace!("RenderPass::execute_bundles");
         for &bundle_id in
             unsafe { slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) }
         {
