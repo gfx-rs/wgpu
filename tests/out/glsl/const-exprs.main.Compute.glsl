@@ -52,7 +52,7 @@ void non_constant_initializers() {
 }
 
 void splat_of_constant() {
-    _group_0_binding_0_cs = -(ivec4(FOUR));
+    _group_0_binding_0_cs = ivec4(-4, -4, -4, -4);
     return;
 }
 

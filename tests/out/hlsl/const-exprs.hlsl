@@ -49,7 +49,7 @@ void non_constant_initializers()
 
 void splat_of_constant()
 {
-    out_.Store4(0, asuint(-((FOUR).xxxx)));
+    out_.Store4(0, asuint(int4(-4, -4, -4, -4)));
     return;
 }
 

@@ -220,9 +220,9 @@ impl<'a> ConstantEvaluator<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(self.register_evaluated_expr(Expression::Compose { ty, components }, span))
             }
-            Expression::Splat { value, .. } => {
-                self.check(value)?;
-                Ok(self.register_evaluated_expr(expr.clone(), span))
+            Expression::Splat { size, value } => {
+                let value = self.check_and_get(value)?;
+                Ok(self.register_evaluated_expr(Expression::Splat { size, value }, span))
             }
             Expression::AccessIndex { base, index } => {
                 let base = self.check_and_get(base)?;
@@ -1399,6 +1399,89 @@ mod tests {
                 &Expression::Compose {
                     ty: vec2_i32_ty,
                     components: vec![h_expr, h_expr],
+                },
+                Default::default(),
+            )
+            .unwrap();
+        let solved_negate = solver
+            .try_eval_and_append(
+                &Expression::Unary {
+                    op: UnaryOperator::Negate,
+                    expr: solved_compose,
+                },
+                Default::default(),
+            )
+            .unwrap();
+
+        let pass = match const_expressions[solved_negate] {
+            Expression::Compose { ty, ref components } => {
+                ty == vec2_i32_ty
+                    && components.iter().all(|&component| {
+                        let component = &const_expressions[component];
+                        matches!(*component, Expression::Literal(Literal::I32(-4)))
+                    })
+            }
+            _ => false,
+        };
+        if !pass {
+            panic!("unexpected evaluation result")
+        }
+    }
+
+    #[test]
+    fn splat_of_constant() {
+        let mut types = UniqueArena::new();
+        let mut constants = Arena::new();
+        let mut const_expressions = Arena::new();
+
+        let i32_ty = types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar {
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                },
+            },
+            Default::default(),
+        );
+
+        let vec2_i32_ty = types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: VectorSize::Bi,
+                    kind: ScalarKind::Sint,
+                    width: 4,
+                },
+            },
+            Default::default(),
+        );
+
+        let h = constants.append(
+            Constant {
+                name: None,
+                r#override: crate::Override::None,
+                ty: i32_ty,
+                init: const_expressions
+                    .append(Expression::Literal(Literal::I32(4)), Default::default()),
+            },
+            Default::default(),
+        );
+
+        let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
+
+        let mut solver = ConstantEvaluator {
+            types: &mut types,
+            constants: &constants,
+            expressions: &mut const_expressions,
+            function_local_data: None,
+        };
+
+        let solved_compose = solver
+            .try_eval_and_append(
+                &Expression::Splat {
+                    size: VectorSize::Bi,
+                    value: h_expr,
                 },
                 Default::default(),
             )

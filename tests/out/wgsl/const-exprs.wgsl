@@ -46,7 +46,7 @@ fn non_constant_initializers() {
 }
 
 fn splat_of_constant() {
-    out = -(vec4(FOUR));
+    out = vec4<i32>(-4, -4, -4, -4);
     return;
 }
 

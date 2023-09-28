@@ -56,7 +56,7 @@ void non_constant_initializers(
 void splat_of_constant(
     device metal::int4& out
 ) {
-    out = -(metal::int4(FOUR));
+    out = metal::int4(-4, -4, -4, -4);
     return;
 }
 
