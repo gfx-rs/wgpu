@@ -63,7 +63,7 @@ void splat_of_constant(
 void compose_of_constant(
     device metal::int4& out
 ) {
-    out = -(metal::int4(FOUR, FOUR, FOUR, FOUR));
+    out = metal::int4(-4, -4, -4, -4);
     return;
 }
 

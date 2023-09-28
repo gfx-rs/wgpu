@@ -51,7 +51,7 @@ fn splat_of_constant() {
 }
 
 fn compose_of_constant() {
-    out = -(vec4<i32>(FOUR, FOUR, FOUR, FOUR));
+    out = vec4<i32>(-4, -4, -4, -4);
     return;
 }
 

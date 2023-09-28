@@ -14,7 +14,7 @@ fn statement() {
 }
 
 fn returns() -> S {
-    return S(Value);
+    return S(1);
 }
 
 fn call() {

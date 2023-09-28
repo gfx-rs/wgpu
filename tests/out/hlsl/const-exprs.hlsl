@@ -55,7 +55,7 @@ void splat_of_constant()
 
 void compose_of_constant()
 {
-    out_.Store4(0, asuint(-(int4(FOUR, FOUR, FOUR, FOUR))));
+    out_.Store4(0, asuint(int4(-4, -4, -4, -4)));
     return;
 }
 
