@@ -1,3 +1,5 @@
+static const uint TWO = 2u;
+static const int THREE = 3;
 static const int FOUR = 4;
 static const int FOUR_ALIAS = 4;
 static const int TEST_CONSTANT_ADDITION = 8;
@@ -58,7 +60,7 @@ void compose_of_constant()
     return;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(2, 3, 1)]
 void main()
 {
     swizzle_of_compose();

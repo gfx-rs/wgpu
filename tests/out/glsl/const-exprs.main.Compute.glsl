@@ -3,8 +3,10 @@
 precision highp float;
 precision highp int;
 
-layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 2, local_size_y = 3, local_size_z = 1) in;
 
+const uint TWO = 2u;
+const int THREE = 3;
 const int FOUR = 4;
 const int FOUR_ALIAS = 4;
 const int TEST_CONSTANT_ADDITION = 8;

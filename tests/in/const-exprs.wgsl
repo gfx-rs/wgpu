@@ -1,7 +1,10 @@
 @group(0) @binding(0) var<storage, read_write> out: vec4<i32>;
 @group(0) @binding(1) var<storage, read_write> out2: i32;
 
-@compute @workgroup_size(1)
+const TWO: u32 = 2u;
+const THREE: i32 = 3i;
+
+@compute @workgroup_size(TWO, THREE, TWO - 1u)
 fn main() {
    swizzle_of_compose();
    index_of_compose();

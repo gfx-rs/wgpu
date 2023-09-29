@@ -4,6 +4,8 @@
 
 using metal::uint;
 
+constant uint TWO = 2u;
+constant int THREE = 3;
 constant int FOUR = 4;
 constant int FOUR_ALIAS = 4;
 constant int TEST_CONSTANT_ADDITION = 8;
