@@ -582,20 +582,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::ConstructorType::PartialArray => ConcreteConstructorHandle::PartialArray,
             ast::ConstructorType::Array { base, size } => {
                 let base = self.resolve_ast_type(base, ctx.as_global())?;
-                let size = match size {
-                    ast::ArraySize::Constant(expr) => {
-                        let const_expr = self.expression(expr, ctx.as_const())?;
-                        crate::ArraySize::Constant(ctx.as_const().array_length(const_expr)?)
-                    }
-                    ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
-                };
+                let size = self.array_size(size, ctx.as_global())?;
 
                 self.layouter.update(ctx.module.to_ctx()).unwrap();
-                let ty = ctx.ensure_type_exists(crate::TypeInner::Array {
-                    base,
-                    size,
-                    stride: self.layouter[base].to_stride(),
-                });
+                let stride = self.layouter[base].to_stride();
+
+                let ty = ctx.ensure_type_exists(crate::TypeInner::Array { base, size, stride });
                 ConcreteConstructorHandle::Type(ty)
             }
             ast::ConstructorType::Type(ty) => ConcreteConstructorHandle::Type(ty),

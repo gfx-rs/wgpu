@@ -396,57 +396,30 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    fn array_length(
-        &mut self,
-        const_expr: Handle<crate::Expression>,
-    ) -> Result<NonZeroU32, Error<'source>> {
-        match self.expr_type {
-            ExpressionContextType::Runtime(_) => {
-                unreachable!()
-            }
-            ExpressionContextType::Constant => {
-                let span = self.module.const_expressions.get_span(const_expr);
-                let len =
-                    self.module
-                        .to_ctx()
-                        .eval_expr_to_u32(const_expr)
-                        .map_err(|err| match err {
-                            crate::proc::U32EvalError::NonConst => {
-                                Error::ExpectedConstExprConcreteIntegerScalar(span)
-                            }
-                            crate::proc::U32EvalError::Negative => {
-                                Error::ExpectedPositiveArrayLength(span)
-                            }
-                        })?;
-                NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))
-            }
-        }
-    }
-
     fn gather_component(
         &mut self,
         expr: Handle<crate::Expression>,
+        component_span: Span,
         gather_span: Span,
     ) -> Result<crate::SwizzleComponent, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref rctx) => {
-                let expr_span = rctx.naga_expressions.get_span(expr);
                 let index = self
                     .module
                     .to_ctx()
                     .eval_expr_to_u32_from(expr, rctx.naga_expressions)
                     .map_err(|err| match err {
                         crate::proc::U32EvalError::NonConst => {
-                            Error::ExpectedConstExprConcreteIntegerScalar(expr_span)
+                            Error::ExpectedConstExprConcreteIntegerScalar(component_span)
                         }
                         crate::proc::U32EvalError::Negative => {
-                            Error::ExpectedNonNegative(expr_span)
+                            Error::ExpectedNonNegative(component_span)
                         }
                     })?;
                 crate::SwizzleComponent::XYZW
                     .get(index as usize)
                     .copied()
-                    .ok_or(Error::InvalidGatherComponent(expr_span))
+                    .ok_or(Error::InvalidGatherComponent(component_span))
             }
             // This means a `gather` operation appeared in a constant expression.
             // This error refers to the `gather` itself, not its "component" argument.
@@ -1258,6 +1231,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         Ok(crate::SwitchCase {
                             value: match case.value {
                                 ast::SwitchValue::Expr(expr) => {
+                                    let span = ctx.ast_expressions.get_span(expr);
                                     let expr = self.expression(expr, ctx.as_global().as_const())?;
                                     match ctx.module.to_ctx().eval_expr_to_literal(expr) {
                                         Some(crate::Literal::I32(value)) if !uint => {
@@ -1267,10 +1241,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                             crate::SwitchValue::U32(value)
                                         }
                                         _ => {
-                                            return Err(Error::InvalidSwitchValue {
-                                                uint,
-                                                span: ctx.module.const_expressions.get_span(expr),
-                                            });
+                                            return Err(Error::InvalidSwitchValue { uint, span });
                                         }
                                     }
                                 }
@@ -2338,6 +2309,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let (image, image_span, gather) = match fun {
             Texture::Gather => {
                 let image_or_component = args.next()?;
+                let image_or_component_span = ctx.ast_expressions.get_span(image_or_component);
                 // Gathers from depth textures don't take an initial `component` argument.
                 let lowered_image_or_component =
                     self.expression(image_or_component, ctx.reborrow())?;
@@ -2347,20 +2319,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     crate::TypeInner::Image {
                         class: crate::ImageClass::Depth { .. },
                         ..
-                    } => {
-                        let image_span = ctx.ast_expressions.get_span(image_or_component);
-                        (
-                            lowered_image_or_component,
-                            image_span,
-                            Some(crate::SwizzleComponent::X),
-                        )
-                    }
+                    } => (
+                        lowered_image_or_component,
+                        image_or_component_span,
+                        Some(crate::SwizzleComponent::X),
+                    ),
                     _ => {
                         let (image, image_span) = get_image_and_span(self, &mut args, &mut ctx)?;
                         (
                             image,
                             image_span,
-                            Some(ctx.gather_component(lowered_image_or_component, span)?),
+                            Some(ctx.gather_component(
+                                lowered_image_or_component,
+                                image_or_component_span,
+                                span,
+                            )?),
                         )
                     }
                 }
@@ -2516,8 +2489,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         expr: Handle<ast::Expression<'source>>,
         mut ctx: ExpressionContext<'source, '_, '_>,
     ) -> Result<(u32, Span), Error<'source>> {
+        let span = ctx.ast_expressions.get_span(expr);
         let expr = self.expression(expr, ctx.reborrow())?;
-        let span = ctx.module.const_expressions.get_span(expr);
         let value = ctx
             .module
             .to_ctx()
@@ -2529,6 +2502,34 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::proc::U32EvalError::Negative => Error::ExpectedNonNegative(span),
             })?;
         Ok((value, span))
+    }
+
+    fn array_size(
+        &mut self,
+        size: ast::ArraySize<'source>,
+        mut ctx: GlobalContext<'source, '_, '_>,
+    ) -> Result<crate::ArraySize, Error<'source>> {
+        Ok(match size {
+            ast::ArraySize::Constant(expr) => {
+                let span = ctx.ast_expressions.get_span(expr);
+                let const_expr = self.expression(expr, ctx.as_const())?;
+                let len =
+                    ctx.module
+                        .to_ctx()
+                        .eval_expr_to_u32(const_expr)
+                        .map_err(|err| match err {
+                            crate::proc::U32EvalError::NonConst => {
+                                Error::ExpectedConstExprConcreteIntegerScalar(span)
+                            }
+                            crate::proc::U32EvalError::Negative => {
+                                Error::ExpectedPositiveArrayLength(span)
+                            }
+                        })?;
+                let size = NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
+                crate::ArraySize::Constant(size)
+            }
+            ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
+        })
     }
 
     /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
@@ -2558,19 +2559,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Type::Array { base, size } => {
                 let base = self.resolve_ast_type(base, ctx.reborrow())?;
-                self.layouter.update(ctx.module.to_ctx()).unwrap();
+                let size = self.array_size(size, ctx.reborrow())?;
 
-                crate::TypeInner::Array {
-                    base,
-                    size: match size {
-                        ast::ArraySize::Constant(constant) => {
-                            let const_expr = self.expression(constant, ctx.as_const())?;
-                            crate::ArraySize::Constant(ctx.as_const().array_length(const_expr)?)
-                        }
-                        ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
-                    },
-                    stride: self.layouter[base].to_stride(),
-                }
+                self.layouter.update(ctx.module.to_ctx()).unwrap();
+                let stride = self.layouter[base].to_stride();
+
+                crate::TypeInner::Array { base, size, stride }
             }
             ast::Type::Image {
                 dim,
@@ -2586,17 +2580,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Type::RayQuery => crate::TypeInner::RayQuery,
             ast::Type::BindingArray { base, size } => {
                 let base = self.resolve_ast_type(base, ctx.reborrow())?;
-
-                crate::TypeInner::BindingArray {
-                    base,
-                    size: match size {
-                        ast::ArraySize::Constant(constant) => {
-                            let const_expr = self.expression(constant, ctx.as_const())?;
-                            crate::ArraySize::Constant(ctx.as_const().array_length(const_expr)?)
-                        }
-                        ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
-                    },
-                }
+                let size = self.array_size(size, ctx.reborrow())?;
+                crate::TypeInner::BindingArray { base, size }
             }
             ast::Type::RayDesc => {
                 return Ok(ctx.module.generate_ray_desc_type());
