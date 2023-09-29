@@ -16,17 +16,13 @@ layout(std430) buffer type_1_block_1Compute { int _group_0_binding_1_cs; };
 
 
 void swizzle_of_compose() {
-    ivec2 a = ivec2(1, 2);
-    ivec2 b = ivec2(3, 4);
     _group_0_binding_0_cs = ivec4(4, 3, 2, 1);
     return;
 }
 
 void index_of_compose() {
-    ivec2 a_1 = ivec2(1, 2);
-    ivec2 b_1 = ivec2(3, 4);
-    int _e7 = _group_0_binding_1_cs;
-    _group_0_binding_1_cs = (_e7 + 2);
+    int _e2 = _group_0_binding_1_cs;
+    _group_0_binding_1_cs = (_e2 + 2);
     return;
 }
 

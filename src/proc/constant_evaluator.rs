@@ -37,6 +37,11 @@ impl ExpressionConstnessTracker {
         }
     }
 
+    /// Forces the the expression to not be const
+    pub fn force_non_const(&mut self, value: Handle<Expression>) {
+        self.inner.remove(value.index());
+    }
+
     fn insert(&mut self, value: Handle<Expression>) {
         self.inner.insert(value.index());
     }

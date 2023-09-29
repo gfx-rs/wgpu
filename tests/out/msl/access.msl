@@ -180,7 +180,7 @@ vertex foo_vertOutput foo_vert(
     test_matrix_within_array_within_struct_accesses(nested_mat_cx2_);
     metal::float4x3 _matrix = bar._matrix;
     type_9 arr_1 = bar.arr;
-    float b = bar._matrix[3].x;
+    float b = bar._matrix[3u].x;
     int a_1 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
     float _e33 = read_from_private(foo);

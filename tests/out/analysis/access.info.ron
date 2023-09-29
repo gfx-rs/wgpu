@@ -2774,7 +2774,7 @@
                         non_uniform_result: None,
                         requirements: (""),
                     ),
-                    ref_count: 0,
+                    ref_count: 1,
                     assignable_global: None,
                     ty: Value(Scalar(
                         kind: Uint,

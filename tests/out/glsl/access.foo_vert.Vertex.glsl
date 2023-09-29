@@ -132,7 +132,7 @@ void main() {
     test_matrix_within_array_within_struct_accesses();
     mat4x3 _matrix = _group_0_binding_0_vs._matrix;
     uvec2 arr_1[2] = _group_0_binding_0_vs.arr;
-    float b = _group_0_binding_0_vs._matrix[3][0];
+    float b = _group_0_binding_0_vs._matrix[3u][0];
     int a_1 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c = _group_0_binding_2_vs;
     float _e33 = read_from_private(foo);

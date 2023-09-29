@@ -138,7 +138,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     test_matrix_within_array_within_struct_accesses();
     let _matrix = bar._matrix;
     let arr_1 = bar.arr;
-    let b = bar._matrix[3][0];
+    let b = bar._matrix[3u][0];
     let a_1 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let c = qux;
     let data_pointer = (&bar.data[0].value);

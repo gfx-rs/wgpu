@@ -1759,47 +1759,47 @@ fn assign_to_let() {
 "###,
     );
 
-    //     check(
-    //         "
-    //         fn f() {
-    //             let a = array(1, 2);
-    // 			a[0] = 1;
-    //         }
-    //         ",
-    //         r###"error: invalid left-hand side of assignment
-    //   ┌─ wgsl:3:17
-    //   │
-    // 3 │             let a = array(1, 2);
-    //   │                 ^ this is an immutable binding
-    // 4 │             a[0] = 1;
-    //   │             ^^^^ cannot assign to this expression
-    //   │
-    //   = note: consider declaring 'a' with `var` instead of `let`
+    check(
+        "
+        fn f() {
+            let a = array(1, 2);
+			a[0] = 1;
+        }
+        ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:3:17
+  │
+3 │             let a = array(1, 2);
+  │                 ^ this is an immutable binding
+4 │             a[0] = 1;
+  │             ^^^^ cannot assign to this expression
+  │
+  = note: consider declaring 'a' with `var` instead of `let`
 
-    // "###,
-    //     );
+"###,
+    );
 
-    //     check(
-    //         "
-    //         struct S { a: i32 }
+    check(
+        "
+        struct S { a: i32 }
 
-    //         fn f() {
-    //             let a = S(10);
-    // 	        a.a = 20;
-    //         }
-    //         ",
-    //         r###"error: invalid left-hand side of assignment
-    //   ┌─ wgsl:5:17
-    //   │
-    // 5 │             let a = S(10);
-    //   │                 ^ this is an immutable binding
-    // 6 │             a.a = 20;
-    //   │             ^^^ cannot assign to this expression
-    //   │
-    //   = note: consider declaring 'a' with `var` instead of `let`
+        fn f() {
+            let a = S(10);
+	        a.a = 20;
+        }
+        ",
+        r###"error: invalid left-hand side of assignment
+  ┌─ wgsl:5:17
+  │
+5 │             let a = S(10);
+  │                 ^ this is an immutable binding
+6 │             a.a = 20;
+  │             ^^^ cannot assign to this expression
+  │
+  = note: consider declaring 'a' with `var` instead of `let`
 
-    // "###,
-    //     );
+"###,
+    );
 }
 
 #[test]

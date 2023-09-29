@@ -12,8 +12,6 @@ constant int TEST_CONSTANT_ALIAS_ADDITION = 8;
 void swizzle_of_compose(
     device metal::int4& out
 ) {
-    metal::int2 a = metal::int2(1, 2);
-    metal::int2 b = metal::int2(3, 4);
     out = metal::int4(4, 3, 2, 1);
     return;
 }
@@ -21,10 +19,8 @@ void swizzle_of_compose(
 void index_of_compose(
     device int& out2_
 ) {
-    metal::int2 a_1 = metal::int2(1, 2);
-    metal::int2 b_1 = metal::int2(3, 4);
-    int _e7 = out2_;
-    out2_ = _e7 + 2;
+    int _e2 = out2_;
+    out2_ = _e2 + 2;
     return;
 }
 

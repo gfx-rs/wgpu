@@ -13,16 +13,12 @@ fn main() {
 
 // Swizzle the value of nested Compose expressions.
 fn swizzle_of_compose() {
-   let a = vec2(1, 2);
-   let b = vec2(3, 4);
-   out = vec4(a, b).wzyx; // should assign vec4(4, 3, 2, 1);
+   out = vec4(vec2(1, 2), vec2(3, 4)).wzyx; // should assign vec4(4, 3, 2, 1);
 }
 
 // Index the value of nested Compose expressions.
 fn index_of_compose() {
-   let a = vec2(1, 2);
-   let b = vec2(3, 4);
-   out2 += vec4(a, b)[1]; // should assign 2
+   out2 += vec4(vec2(1, 2), vec2(3, 4))[1]; // should assign 2
 }
 
 // Index the value of Compose expressions nested three deep

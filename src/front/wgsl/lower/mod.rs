@@ -363,11 +363,16 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
 
     fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
         match self.expr_type {
-            ExpressionContextType::Runtime(ref ctx) => self
-                .module
-                .to_ctx()
-                .eval_expr_to_u32_from(handle, ctx.naga_expressions)
-                .ok(),
+            ExpressionContextType::Runtime(ref ctx) => {
+                if !ctx.expression_constness.is_const(handle) {
+                    return None;
+                }
+
+                self.module
+                    .to_ctx()
+                    .eval_expr_to_u32_from(handle, ctx.naga_expressions)
+                    .ok()
+            }
             ExpressionContextType::Constant => self.module.to_ctx().eval_expr_to_u32(handle).ok(),
         }
     }
@@ -404,6 +409,12 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<crate::SwizzleComponent, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref rctx) => {
+                if !rctx.expression_constness.is_const(expr) {
+                    return Err(Error::ExpectedConstExprConcreteIntegerScalar(
+                        component_span,
+                    ));
+                }
+
                 let index = self
                     .module
                     .to_ctx()
@@ -1076,6 +1087,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     emitter.start(ctx.naga_expressions);
 
                     let value = self.expression(l.init, ctx.as_expression(block, &mut emitter))?;
+                    ctx.expression_constness.force_non_const(value);
 
                     let explicit_ty =
                         l.ty.map(|ty| self.resolve_ast_type(ty, ctx.as_global()))

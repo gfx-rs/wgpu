@@ -256,7 +256,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     test_matrix_within_array_within_struct_accesses();
     float4x3 _matrix = float4x3(asfloat(bar.Load3(0+0)), asfloat(bar.Load3(0+16)), asfloat(bar.Load3(0+32)), asfloat(bar.Load3(0+48)));
     uint2 arr_1[2] = Constructarray2_uint2_(asuint(bar.Load2(144+0)), asuint(bar.Load2(144+8)));
-    float b = asfloat(bar.Load(0+48+0));
+    float b = asfloat(bar.Load(0+3u*16+0));
     int a_1 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
     const float _e33 = read_from_private(foo);
