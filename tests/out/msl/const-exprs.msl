@@ -13,6 +13,9 @@ constant int TEST_CONSTANT_ALIAS_ADDITION = 8;
 constant float PI = 3.141;
 constant float phi_sun = 6.282;
 constant metal::float4 DIV = metal::float4(0.44444445, 0.0, 0.0, 0.0);
+constant int TEXTURE_KIND_REGULAR = 0;
+constant int TEXTURE_KIND_WARP = 1;
+constant int TEXTURE_KIND_SKY = 2;
 
 void swizzle_of_compose(
     device metal::int4& out
@@ -69,6 +72,25 @@ void compose_of_constant(
 ) {
     out = metal::int4(-4, -4, -4, -4);
     return;
+}
+
+uint map_texture_kind(
+    int texture_kind
+) {
+    switch(texture_kind) {
+        case 0: {
+            return 10u;
+        }
+        case 1: {
+            return 20u;
+        }
+        case 2: {
+            return 30u;
+        }
+        default: {
+            return 0u;
+        }
+    }
 }
 
 kernel void main_(

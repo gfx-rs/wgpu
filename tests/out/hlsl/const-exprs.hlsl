@@ -7,6 +7,9 @@ static const int TEST_CONSTANT_ALIAS_ADDITION = 8;
 static const float PI = 3.141;
 static const float phi_sun = 6.282;
 static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
+static const int TEXTURE_KIND_REGULAR = 0;
+static const int TEXTURE_KIND_WARP = 1;
+static const int TEXTURE_KIND_SKY = 2;
 
 RWByteAddressBuffer out_ : register(u0);
 RWByteAddressBuffer out2_ : register(u1);
@@ -61,6 +64,24 @@ void compose_of_constant()
 {
     out_.Store4(0, asuint(int4(-4, -4, -4, -4)));
     return;
+}
+
+uint map_texture_kind(int texture_kind)
+{
+    switch(texture_kind) {
+        case 0: {
+            return 10u;
+        }
+        case 1: {
+            return 20u;
+        }
+        case 2: {
+            return 30u;
+        }
+        default: {
+            return 0u;
+        }
+    }
 }
 
 [numthreads(2, 3, 1)]

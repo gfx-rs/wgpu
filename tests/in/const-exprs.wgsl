@@ -69,3 +69,16 @@ const PI: f32 = 3.141;
 const phi_sun: f32 = PI * 2.0;
 
 const DIV: vec4f = vec4(4.0 / 9.0, 0.0, 0.0, 0.0);
+
+const TEXTURE_KIND_REGULAR: i32 = 0;
+const TEXTURE_KIND_WARP: i32 = 1;
+const TEXTURE_KIND_SKY: i32 = 2;
+
+fn map_texture_kind(texture_kind: i32) -> u32 {
+    switch (texture_kind) {
+        case TEXTURE_KIND_REGULAR: { return 10u; }
+        case TEXTURE_KIND_WARP: { return 20u; }
+        case TEXTURE_KIND_SKY: { return 30u; }
+        default: { return 0u; }
+    }
+}

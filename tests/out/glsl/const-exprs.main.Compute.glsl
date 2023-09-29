@@ -14,6 +14,9 @@ const int TEST_CONSTANT_ALIAS_ADDITION = 8;
 const float PI = 3.141;
 const float phi_sun = 6.282;
 const vec4 DIV = vec4(0.44444445, 0.0, 0.0, 0.0);
+const int TEXTURE_KIND_REGULAR = 0;
+const int TEXTURE_KIND_WARP = 1;
+const int TEXTURE_KIND_SKY = 2;
 
 layout(std430) buffer type_block_0Compute { ivec4 _group_0_binding_0_cs; };
 
@@ -63,6 +66,23 @@ void splat_of_constant() {
 void compose_of_constant() {
     _group_0_binding_0_cs = ivec4(-4, -4, -4, -4);
     return;
+}
+
+uint map_texture_kind(int texture_kind) {
+    switch(texture_kind) {
+        case 0: {
+            return 10u;
+        }
+        case 1: {
+            return 20u;
+        }
+        case 2: {
+            return 30u;
+        }
+        default: {
+            return 0u;
+        }
+    }
 }
 
 void main() {
