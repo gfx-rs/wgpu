@@ -6,6 +6,9 @@ precision highp int;
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 const int FOUR = 4;
+const int FOUR_ALIAS = 4;
+const int TEST_CONSTANT_ADDITION = 8;
+const int TEST_CONSTANT_ALIAS_ADDITION = 8;
 
 layout(std430) buffer type_block_0Compute { ivec4 _group_0_binding_0_cs; };
 

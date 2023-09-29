@@ -1,4 +1,7 @@
 const FOUR: i32 = 4;
+const FOUR_ALIAS: i32 = 4;
+const TEST_CONSTANT_ADDITION: i32 = 8;
+const TEST_CONSTANT_ALIAS_ADDITION: i32 = 8;
 
 @group(0) @binding(0) 
 var<storage, read_write> out: vec4<i32>;

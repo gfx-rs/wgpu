@@ -210,6 +210,11 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         log::trace!("try_eval_and_append: {:?}", expr);
         match *expr {
+            Expression::Constant(c) if self.function_local_data.is_none() => {
+                // "See through" the constant and use its initializer.
+                // This is mainly done to avoid having constants pointing to other constants.
+                Ok(self.constants[c].init)
+            }
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
                 Ok(self.register_evaluated_expr(expr.clone(), span))
             }

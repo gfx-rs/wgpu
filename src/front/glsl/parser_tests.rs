@@ -543,25 +543,18 @@ fn constants() {
         }
     );
 
-    let (init_a_handle, init_a) = const_expressions.next().unwrap();
-    assert_eq!(init_a, &Expression::Literal(crate::Literal::F32(1.0)));
+    let (init_handle, init) = const_expressions.next().unwrap();
+    assert_eq!(init, &Expression::Literal(crate::Literal::F32(1.0)));
 
-    let (constant_a_handle, constant_a) = constants.next().unwrap();
     assert_eq!(
-        constant_a,
+        constants.next().unwrap().1,
         &Constant {
             name: Some("a".to_owned()),
             r#override: crate::Override::None,
             ty: ty_handle,
-            init: init_a_handle
+            init: init_handle
         }
     );
-
-    // skip const expr that was inserted for `global` var
-    const_expressions.next().unwrap();
-
-    let (init_b_handle, init_b) = const_expressions.next().unwrap();
-    assert_eq!(init_b, &Expression::Constant(constant_a_handle));
 
     assert_eq!(
         constants.next().unwrap().1,
@@ -569,7 +562,7 @@ fn constants() {
             name: Some("b".to_owned()),
             r#override: crate::Override::None,
             ty: ty_handle,
-            init: init_b_handle
+            init: init_handle
         }
     );
 

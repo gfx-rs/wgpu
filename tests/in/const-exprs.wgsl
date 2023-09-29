@@ -53,6 +53,11 @@ fn non_constant_initializers() {
 // their values.
 const FOUR: i32 = 4;
 
+const FOUR_ALIAS: i32 = FOUR;
+
+const TEST_CONSTANT_ADDITION: i32 = FOUR + FOUR;
+const TEST_CONSTANT_ALIAS_ADDITION: i32 = FOUR_ALIAS + FOUR_ALIAS;
+
 fn splat_of_constant() {
     out = -vec4(FOUR);
 }
