@@ -64,3 +64,8 @@ fn splat_of_constant() {
 fn compose_of_constant() {
     out = -vec4(FOUR, FOUR, FOUR, FOUR);
 }
+
+const PI: f32 = 3.141;
+const phi_sun: f32 = PI * 2.0;
+
+const DIV: vec4f = vec4(4.0 / 9.0, 0.0, 0.0, 0.0);

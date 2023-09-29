@@ -4,6 +4,9 @@ const FOUR: i32 = 4;
 const FOUR_ALIAS: i32 = 4;
 const TEST_CONSTANT_ADDITION: i32 = 8;
 const TEST_CONSTANT_ALIAS_ADDITION: i32 = 8;
+const PI: f32 = 3.141;
+const phi_sun: f32 = 6.282;
+const DIV: vec4<f32> = vec4<f32>(0.44444445, 0.0, 0.0, 0.0);
 
 @group(0) @binding(0) 
 var<storage, read_write> out: vec4<i32>;

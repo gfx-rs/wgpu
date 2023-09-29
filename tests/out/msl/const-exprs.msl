@@ -10,6 +10,9 @@ constant int FOUR = 4;
 constant int FOUR_ALIAS = 4;
 constant int TEST_CONSTANT_ADDITION = 8;
 constant int TEST_CONSTANT_ALIAS_ADDITION = 8;
+constant float PI = 3.141;
+constant float phi_sun = 6.282;
+constant metal::float4 DIV = metal::float4(0.44444445, 0.0, 0.0, 0.0);
 
 void swizzle_of_compose(
     device metal::int4& out

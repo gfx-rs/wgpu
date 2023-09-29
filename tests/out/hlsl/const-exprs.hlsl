@@ -4,6 +4,9 @@ static const int FOUR = 4;
 static const int FOUR_ALIAS = 4;
 static const int TEST_CONSTANT_ADDITION = 8;
 static const int TEST_CONSTANT_ALIAS_ADDITION = 8;
+static const float PI = 3.141;
+static const float phi_sun = 6.282;
+static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
 
 RWByteAddressBuffer out_ : register(u0);
 RWByteAddressBuffer out2_ : register(u1);
