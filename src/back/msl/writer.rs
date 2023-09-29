@@ -3689,6 +3689,15 @@ impl<W: Write> Writer<W> {
                 }
             };
 
+            // Since `Namer.reset` wasn't expecting struct members to be
+            // suddenly injected into another namespace like this,
+            // `self.names` doesn't keep them distinct from other variables.
+            // Generate fresh names for these arguments, and remember the
+            // mapping.
+            let mut flattened_member_names = FastHashMap::default();
+            // Varyings' members get their own namespace
+            let mut varyings_namer = crate::proc::Namer::default();
+
             // List all the Naga `EntryPoint`'s `Function`'s arguments,
             // flattening structs into their members. In Metal, we will pass
             // each of these values to the entry point as a separate argument—
@@ -3704,6 +3713,14 @@ impl<W: Write> Writer<W> {
                                 member.ty,
                                 member.binding.as_ref(),
                             ));
+                            let name_key = NameKey::StructMember(arg.ty, member_index);
+                            let name = match member.binding {
+                                Some(crate::Binding::Location { .. }) => {
+                                    varyings_namer.call(&self.names[&name_key])
+                                }
+                                _ => self.namer.call(&self.names[&name_key]),
+                            };
+                            flattened_member_names.insert(name_key, name);
                         }
                     }
                     _ => flattened_arguments.push((
@@ -3727,7 +3744,10 @@ impl<W: Write> Writer<W> {
                         _ => continue,
                     };
                     has_varyings = true;
-                    let name = &self.names[name_key];
+                    let name = match *name_key {
+                        NameKey::StructMember(..) => &flattened_member_names[name_key],
+                        _ => &self.names[name_key],
+                    };
                     let ty_name = TypeContext {
                         handle: ty,
                         gctx: module.to_ctx(),
@@ -3840,27 +3860,14 @@ impl<W: Write> Writer<W> {
 
             // Then pass the remaining arguments not included in the varyings
             // struct.
-            //
-            // Since `Namer.reset` wasn't expecting struct members to be
-            // suddenly injected into the normal namespace like this,
-            // `self.names` doesn't keep them distinct from other variables.
-            // Generate fresh names for these arguments, and remember the
-            // mapping.
-            let mut flattened_member_names = FastHashMap::default();
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
                     Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
-                let name = if let NameKey::StructMember(ty, index) = *name_key {
-                    // We should always insert a fresh entry here, but use
-                    // `or_insert` to get a reference to the `String` we just
-                    // inserted.
-                    flattened_member_names
-                        .entry(NameKey::StructMember(ty, index))
-                        .or_insert_with(|| self.namer.call(&self.names[name_key]))
-                } else {
-                    &self.names[name_key]
+                let name = match *name_key {
+                    NameKey::StructMember(..) => &flattened_member_names[name_key],
+                    _ => &self.names[name_key],
                 };
 
                 if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
@@ -4057,15 +4064,7 @@ impl<W: Write> Writer<W> {
                         )?;
                         for (member_index, member) in members.iter().enumerate() {
                             let key = NameKey::StructMember(arg.ty, member_index as u32);
-                            // If it's not in the varying struct, then we should
-                            // have passed it as its own argument and assigned
-                            // it a new name.
-                            let name = match member.binding {
-                                Some(crate::Binding::BuiltIn { .. }) => {
-                                    &flattened_member_names[&key]
-                                }
-                                _ => &self.names[&key],
-                            };
+                            let name = &flattened_member_names[&key];
                             if member_index != 0 {
                                 write!(self.out, ", ")?;
                             }
