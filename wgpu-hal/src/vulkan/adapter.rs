@@ -489,6 +489,24 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        if let Some(ref subgroup) = caps.subgroup {
+            features.set(
+                F::SUBGROUP_OPERATIONS,
+                subgroup.supported_operations.contains(
+                    vk::SubgroupFeatureFlags::BASIC
+                        | vk::SubgroupFeatureFlags::VOTE
+                        | vk::SubgroupFeatureFlags::ARITHMETIC
+                        | vk::SubgroupFeatureFlags::BALLOT
+                        | vk::SubgroupFeatureFlags::SHUFFLE
+                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE
+                        | vk::SubgroupFeatureFlags::CLUSTERED
+                        | vk::SubgroupFeatureFlags::QUAD,
+                ) && subgroup
+                    .supported_stages
+                    .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT),
+            );
+        }
+
         let supports_depth_format = |format| {
             supports_format(
                 instance,
@@ -551,6 +569,8 @@ pub struct PhysicalDeviceCapabilities {
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+    subgroup: Option<vk::PhysicalDeviceSubgroupProperties>,
+    /// The effective driver api version supported by the physical device.
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -813,6 +833,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .driver
                         .insert(vk::PhysicalDeviceDriverPropertiesKHR::default());
+                    builder = builder.push_next(next);
+                }
+
+                if capabilities.device_api_version >= vk::API_VERSION_1_1 {
+                    let next = capabilities
+                        .subgroup
+                        .insert(vk::PhysicalDeviceSubgroupProperties::default());
                     builder = builder.push_next(next);
                 }
 
@@ -1252,6 +1279,19 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Geometry);
             }
 
+            if features.contains(wgt::Features::SUBGROUP_OPERATIONS) {
+                capabilities.push(spv::Capability::GroupNonUniform);
+                capabilities.push(spv::Capability::GroupNonUniformVote);
+                capabilities.push(spv::Capability::GroupNonUniformArithmetic);
+                capabilities.push(spv::Capability::GroupNonUniformBallot);
+                capabilities.push(spv::Capability::GroupNonUniformShuffle);
+                capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
+                capabilities.push(spv::Capability::GroupNonUniformClustered);
+                capabilities.push(spv::Capability::GroupNonUniformQuad);
+                capabilities.push(spv::Capability::SubgroupBallotKHR);
+                capabilities.push(spv::Capability::SubgroupVoteKHR);
+            }
+
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                     | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
@@ -1279,7 +1319,11 @@ impl super::Adapter {
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
             spv::Options {
-                lang_version: (1, 0),
+                lang_version: if features.contains(wgt::Features::SUBGROUP_OPERATIONS) {
+                    (1, 3)
+                } else {
+                    (1, 0)
+                },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
                 bounds_check_policies: naga::proc::BoundsCheckPolicies {
