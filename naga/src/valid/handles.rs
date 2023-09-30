@@ -394,6 +394,7 @@ impl super::Validator {
             }
             crate::Expression::AtomicResult { .. }
             | crate::Expression::RayQueryProceedResult
+            | crate::Expression::SubgroupBallotResult
             | crate::Expression::WorkGroupUniformLoadResult { .. } => (),
             crate::Expression::ArrayLength(array) => {
                 handle.check_dep(array)?;
@@ -537,6 +538,10 @@ impl super::Validator {
                     }
                     crate::RayQueryFunction::Terminate => {}
                 }
+                Ok(())
+            }
+            crate::Statement::SubgroupBallot { result } => {
+                validate_expr(result)?;
                 Ok(())
             }
             crate::Statement::Break

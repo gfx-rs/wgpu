@@ -2004,6 +2004,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, "{level}}}")?
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::SubgroupBallot { result } => {
+                write!(self.out, "{level}")?;
+
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                write!(self.out, "const uint4 {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                writeln!(self.out, "WaveActiveBallot(true);")?;
+            }
         }
 
         Ok(())
@@ -3152,7 +3161,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. }
-            | Expression::RayQueryProceedResult => {}
+            | Expression::RayQueryProceedResult
+            | Expression::SubgroupBallotResult => {}
         }
 
         if !closing_bracket.is_empty() {

@@ -1399,7 +1399,9 @@ pub enum Expression {
     ///
     /// For [`TypeInner::Atomic`] the result is a corresponding scalar.
     /// For other types behind the `pointer<T>`, the result is `T`.
-    Load { pointer: Handle<Expression> },
+    Load {
+        pointer: Handle<Expression>,
+    },
     /// Sample a point from a sampled or a depth image.
     ImageSample {
         image: Handle<Expression>,
@@ -1539,7 +1541,10 @@ pub enum Expression {
     /// Result of calling another function.
     CallResult(Handle<Function>),
     /// Result of an atomic operation.
-    AtomicResult { ty: Handle<Type>, comparison: bool },
+    AtomicResult {
+        ty: Handle<Type>,
+        comparison: bool,
+    },
     /// Result of a [`WorkGroupUniformLoad`] statement.
     ///
     /// [`WorkGroupUniformLoad`]: Statement::WorkGroupUniformLoad
@@ -1567,6 +1572,7 @@ pub enum Expression {
         query: Handle<Expression>,
         committed: bool,
     },
+    SubgroupBallotResult,
 }
 
 pub use block::Block;
@@ -1838,6 +1844,12 @@ pub enum Statement {
 
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
+    },
+    SubgroupBallot {
+        /// The [`SubgroupBallotResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupBallotResult`]: Expression::SubgroupBallotResult
+        result: Handle<Expression>,
     },
 }
 

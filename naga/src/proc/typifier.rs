@@ -905,6 +905,11 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
+                kind: crate::ScalarKind::Uint,
+                size: crate::VectorSize::Quad,
+                width: 4,
+            }),
         })
     }
 }

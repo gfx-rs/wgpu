@@ -1130,7 +1130,8 @@ impl<'w> BlockContext<'w> {
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
-            | crate::Expression::RayQueryProceedResult => self.cached[expr_handle],
+            | crate::Expression::RayQueryProceedResult
+            | crate::Expression::SubgroupBallotResult => self.cached[expr_handle],
             crate::Expression::As {
                 expr,
                 kind,
@@ -2337,6 +2338,24 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
+                }
+                crate::Statement::SubgroupBallot { result } => {
+                    let vec4_u32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+                        vector_size: Some(crate::VectorSize::Quad),
+                        kind: crate::ScalarKind::Uint,
+                        width: 4,
+                        pointer_space: None,
+                    }));
+                    let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+                    let predicate = self.writer.get_constant_scalar(crate::Literal::Bool(true));
+                    let id = self.gen_id();
+                    block.body.push(Instruction::group_non_uniform_ballot(
+                        vec4_u32_type_id,
+                        id,
+                        exec_scope_id,
+                        predicate,
+                    ));
+                    self.cached[result] = id;
                 }
             }
         }

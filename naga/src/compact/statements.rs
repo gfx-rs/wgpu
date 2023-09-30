@@ -95,6 +95,9 @@ impl FunctionTracer<'_> {
                         self.trace_expression(query);
                         self.trace_ray_query_function(fun);
                     }
+                    St::SubgroupBallot { result } => {
+                        self.trace_expression(result);
+                    }
 
                     // Trivial statements.
                     St::Break
@@ -244,6 +247,7 @@ impl FunctionMap {
                         adjust(query);
                         self.adjust_ray_query_function(fun);
                     }
+                    St::SubgroupBallot { ref mut result } => adjust(result),
 
                     // Trivial statements.
                     St::Break

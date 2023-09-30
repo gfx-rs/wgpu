@@ -279,6 +279,10 @@ impl StatementGraph {
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
                 }
+                S::SubgroupBallot { result } => {
+                    self.emits.push((id, result));
+                    "SubgroupBallot"
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -586,6 +590,7 @@ fn write_function_expressions(
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("rayQueryGet{}Intersection", ty).into(), 4)
             }
+            E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
         };
 
         // give uniform expressions an outline

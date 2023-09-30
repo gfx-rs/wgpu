@@ -1037,6 +1037,23 @@ impl super::Instruction {
         instruction.add_operand(semantics_id);
         instruction
     }
+
+    // Group Instructions
+
+    pub(super) fn group_non_uniform_ballot(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        predicate: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformBallot);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(predicate);
+
+        instruction
+    }
 }
 
 impl From<crate::StorageFormat> for spirv::ImageFormat {

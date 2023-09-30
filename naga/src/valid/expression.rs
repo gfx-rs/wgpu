@@ -1537,6 +1537,7 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },
+            E::SubgroupBallotResult => ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
         };
         Ok(stages)
     }

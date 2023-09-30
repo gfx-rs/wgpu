@@ -2294,6 +2294,16 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::SubgroupBallot { result } => {
+                write!(self.out, "{level}")?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                self.write_value_type(res_ty)?;
+                write!(self.out, " {res_name} = ")?;
+                self.named_expressions.insert(result, res_name);
+
+                writeln!(self.out, "subgroupBallot(true);")?;
+            }
         }
 
         Ok(())
@@ -3467,7 +3477,8 @@ impl<'a, W: Write> Writer<'a, W> {
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
             | Expression::RayQueryProceedResult
-            | Expression::WorkGroupUniformLoadResult { .. } => unreachable!(),
+            | Expression::WorkGroupUniformLoadResult { .. }
+            | Expression::SubgroupBallotResult => unreachable!(),
             // `ArrayLength` is written as `expr.length()` and we convert it to a uint
             Expression::ArrayLength(expr) => {
                 write!(self.out, "uint(")?;

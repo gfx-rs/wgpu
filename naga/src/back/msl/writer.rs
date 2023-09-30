@@ -1997,6 +1997,7 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, "}}")?;
             }
+            crate::Expression::SubgroupBallotResult => todo!(),
         }
         Ok(())
     }
@@ -3010,6 +3011,7 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                crate::Statement::SubgroupBallot { .. } => todo!(),
             }
         }
 

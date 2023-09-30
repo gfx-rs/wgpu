@@ -921,6 +921,14 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::SubgroupBallot { result } => {
+                write!(self.out, "{level}")?;
+                let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                self.start_named_expr(module, result, func_ctx, &res_name)?;
+                self.named_expressions.insert(result, res_name);
+
+                writeln!(self.out, "subgroupBallot();")?;
+            }
         }
 
         Ok(())
@@ -1659,6 +1667,7 @@ impl<W: Write> Writer<W> {
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
             | Expression::RayQueryProceedResult
+            | Expression::SubgroupBallotResult
             | Expression::WorkGroupUniformLoadResult { .. } => {}
         }
 

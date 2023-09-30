@@ -133,6 +133,8 @@ pub enum ConstantEvaluatorError {
     ImageExpression,
     #[error("Constants don't support ray query expressions")]
     RayQueryExpression,
+    #[error("Constants don't support subgroup operations")]
+    SubgroupOperation,
     #[error("Cannot access the type")]
     InvalidAccessBase,
     #[error("Cannot access at the index")]
@@ -439,6 +441,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
                 Err(ConstantEvaluatorError::RayQueryExpression)
             }
+            Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupOperation),
         }
     }
 

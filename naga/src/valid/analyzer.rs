@@ -740,6 +740,10 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::SubgroupBallotResult => Uniformity {
+                non_uniform_result: None,
+                requirements: UniformityRequirements::empty(),
+            },
         };
 
         let ty = resolve_context.resolve(expression, |h| Ok(&self[h].ty))?;
@@ -983,6 +987,7 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::SubgroupBallot { result: _ } => FunctionUniformity::new(),
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

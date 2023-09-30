@@ -919,6 +919,9 @@ impl super::Validator {
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }
+                S::SubgroupBallot { result } => {
+                    self.emit_expression(result, context)?;
+                }
             }
         }
         Ok(BlockInfo { stages, finished })
