@@ -1935,6 +1935,7 @@ impl<W: Write> Writer<W> {
             crate::Expression::CallResult(_)
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
+            | crate::Expression::SubgroupBallotResult
             | crate::Expression::RayQueryProceedResult => {
                 unreachable!()
             }
@@ -1997,7 +1998,6 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, "}}")?;
             }
-            crate::Expression::SubgroupBallotResult => todo!(),
         }
         Ok(())
     }
@@ -3011,7 +3011,13 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
-                crate::Statement::SubgroupBallot { .. } => todo!(),
+                crate::Statement::SubgroupBallot { result } => {
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    write!(self.out, "{NAMESPACE}::simd_active_threads_mask();")?;
+                }
             }
         }
 
