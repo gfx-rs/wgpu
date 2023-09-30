@@ -2340,6 +2340,10 @@ impl<'w> BlockContext<'w> {
                     self.write_ray_query_function(query, fun, &mut block);
                 }
                 crate::Statement::SubgroupBallot { result } => {
+                    self.writer.require_any(
+                        "GroupNonUniformBallot",
+                        &[spirv::Capability::GroupNonUniformBallot],
+                    )?;
                     let vec4_u32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                         vector_size: Some(crate::VectorSize::Quad),
                         kind: crate::ScalarKind::Uint,
