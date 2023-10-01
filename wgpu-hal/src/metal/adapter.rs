@@ -833,6 +833,10 @@ impl super::PrivateCapabilities {
             self.timestamp_query_support
                 .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
         );
+        features.set(
+            F::DUAL_SOURCE_BLENDING,
+            self.msl_version >= MTLLanguageVersion::V1_2 && self.dual_source_blending,
+        );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
@@ -867,6 +871,7 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
+        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         features
     }

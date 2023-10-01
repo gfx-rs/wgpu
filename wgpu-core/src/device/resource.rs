@@ -96,6 +96,19 @@ pub struct Device<A: HalApi> {
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
     pub(crate) fence: RwLock<Option<A::Fence>>,
 
+    /// Is this device valid? Valid is closely associated with "lose the device",
+    /// which can be triggered by various methods, including at the end of device
+    /// destroy, and by any GPU errors that cause us to no longer trust the state
+    /// of the device. Ideally we would like to fold valid into the storage of
+    /// the device itself (for example as an Error enum), but unfortunately we
+    /// need to continue to be able to retrieve the device in poll_devices to
+    /// determine if it can be dropped. If our internal accesses of devices were
+    /// done through ref-counted references and external accesses checked for
+    /// Error enums, we wouldn't need this. For now, we need it. All the call
+    /// sites where we check it are areas that should be revisited if we start
+    /// using ref-counted references for internal access.
+    pub(crate) valid: bool,
+
     /// All live resources allocated with this [`Device`].
     ///
     /// Has to be locked temporarily only (locked last)
@@ -239,6 +252,7 @@ impl<A: HalApi> Device<A> {
             command_allocator: Mutex::new(Some(com_alloc)),
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
+            valid: true,
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(Some(life::ResourceMaps::new::<A>())),
@@ -264,6 +278,10 @@ impl<A: HalApi> Device<A> {
         })
     }
 
+    pub fn is_valid(&self) -> bool {
+        self.valid
+    }
+  
     pub(crate) fn release_queue(&self, queue: A::Queue) {
         self.queue_to_drop.write().replace(queue);
     }
@@ -1291,6 +1309,10 @@ impl<A: HalApi> Device<A> {
                 .flags
                 .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
         );
+        caps.set(
+            Caps::DUAL_SOURCE_BLENDING,
+            self.features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
@@ -1301,7 +1323,8 @@ impl<A: HalApi> Device<A> {
                     inner: Box::new(inner),
                 })
             })?;
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
+        let interface =
+            validation::Interface::new(&module, &info, self.limits.clone(), self.features);
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 
         let hal_desc = hal::ShaderModuleDescriptor {
@@ -2555,6 +2578,8 @@ impl<A: HalApi> Device<A> {
         let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
         let mut total_attributes = 0;
+        let mut shader_expects_dual_source_blending = false;
+        let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
             vertex_steps.push(pipeline::VertexStep {
                 stride: vb_state.array_stride,
@@ -2695,7 +2720,25 @@ impl<A: HalApi> Device<A> {
                     {
                         break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
                     }
-
+                    if let Some(blend_mode) = cs.blend {
+                        for factor in [
+                            blend_mode.color.src_factor,
+                            blend_mode.color.dst_factor,
+                            blend_mode.alpha.src_factor,
+                            blend_mode.alpha.dst_factor,
+                        ] {
+                            if factor.ref_second_blend_source() {
+                                self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
+                                if i == 0 {
+                                    pipeline_expects_dual_source_blending = true;
+                                    break;
+                                } else {
+                                    return Err(crate::pipeline::CreateRenderPipelineError
+                            ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
+                                }
+                            }
+                        }
+                    }
                     break None;
                 };
                 if let Some(e) = error {
@@ -2855,6 +2898,15 @@ impl<A: HalApi> Device<A> {
                     }
                 }
 
+                if let Some(ref interface) = shader_module.interface {
+                    shader_expects_dual_source_blending = interface
+                        .fragment_uses_dual_source_blending(&fragment.stage.entry_point)
+                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                            stage: flag,
+                            error,
+                        })?;
+                }
+
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
                     entry_point: fragment.stage.entry_point.as_ref(),
@@ -2862,6 +2914,17 @@ impl<A: HalApi> Device<A> {
             }
             None => None,
         };
+
+        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
+            return Err(
+                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
+            );
+        }
+        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
+            return Err(
+                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
+            );
+        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.iter() {
@@ -3110,6 +3173,27 @@ impl<A: HalApi> Device<A> {
             info: ResourceInfo::new(""),
             desc: desc.map_label(|_| ()),
         })
+    }
+
+    pub(crate) fn lose(&mut self, _reason: Option<&str>) {
+        // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
+
+        // Mark the device explicitly as invalid. This is checked in various
+        // places to prevent new work from being submitted.
+        self.valid = false;
+
+        // The following steps remain in "lose the device":
+        // 1) Resolve the GPUDevice device.lost promise.
+
+        // TODO: triggger this passively or actively, and supply the reason.
+
+        // 2) Complete any outstanding mapAsync() steps.
+        // 3) Complete any outstanding onSubmittedWorkDone() steps.
+
+        // These parts are passively accomplished by setting valid to false,
+        // since that will prevent any new work from being added to the queues.
+        // Future calls to poll_devices will continue to check the work queues
+        // until they are cleared, and then drop the device.
     }
 }
 

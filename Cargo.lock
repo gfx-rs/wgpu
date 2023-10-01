@@ -35,11 +35,11 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "ahash"
-version = "0.7.6"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+checksum = "2c99f64d1e06488f620f932677e24bc6e2897582980441ae90a671415bd7ec2f"
 dependencies = [
- "getrandom 0.2.10",
+ "cfg-if",
  "once_cell",
  "version_check",
 ]
@@ -52,6 +52,12 @@ checksum = "43f6cb1bf222025340178f382c426f13757b2960e89779dfcb319c32542a5a41"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "allocator-api2"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
 name = "android-activity"
@@ -124,9 +130,9 @@ dependencies = [
 
 [[package]]
 name = "async-executor"
-version = "1.5.1"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fa3dc5f2a8564f07759c008b9109dc0d39de92a88d5588b8a5036d286383afb"
+checksum = "78f2db9467baa66a700abce2a18c5ad793f6f83310aca1284796fc3921d113fd"
 dependencies = [
  "async-lock",
  "async-task",
@@ -850,12 +856,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "1.9.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
-dependencies = [
- "instant",
-]
+checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "fdeflate"
@@ -1036,13 +1039,8 @@ version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49a9d51ce47660b1e808d3c990b4709f2f415d928835a17dfd16991515c46bce"
 dependencies = [
- "fastrand",
  "futures-core",
- "futures-io",
- "memchr",
- "parking",
  "pin-project-lite",
- "waker-fn",
 ]
 
 [[package]]
@@ -1127,9 +1125,9 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42218cb640844e3872cc3c153dc975229e080a6c4733b34709ef445610550226"
+checksum = "b5418c17512bdf42730f9032c74e1ae39afc408745ebb2acf72fbc4691c17945"
 
 [[package]]
 name = "glow"
@@ -1242,13 +1240,13 @@ dependencies = [
 
 [[package]]
 name = "gpu-descriptor"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b0c02e1ba0bdb14e965058ca34e09c020f8e507a760df1121728e0aef68d57a"
+checksum = "cc11df1ace8e7e564511f53af41f3e42ddc95b56fd07b3f4445d2a6048bc682c"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.4.0",
  "gpu-descriptor-types",
- "hashbrown 0.12.3",
+ "hashbrown 0.14.0",
 ]
 
 [[package]]
@@ -1265,15 +1263,16 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-dependencies = [
- "ahash",
-]
 
 [[package]]
 name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+dependencies = [
+ "ahash",
+ "allocator-api2",
+]
 
 [[package]]
 name = "hassle-rs"
@@ -1952,12 +1951,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parking"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f2252c834a40ed9bb5422029649578e63aa341ac401f74e719dd1afda8394e"
-
-[[package]]
 name = "parking_lot"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2060,7 +2053,7 @@ dependencies = [
  "serde",
  "wgpu-core",
  "wgpu-types",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -2129,9 +2122,9 @@ dependencies = [
 
 [[package]]
 name = "profiling"
-version = "1.0.10"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45f10e75d83c7aec79a6aa46f897075890e156b105eebe51cfa0abce51af025f"
+checksum = "f89dff0959d98c9758c88826cc002e2c3d0b9dfac4139711d1f30de442f1139b"
 
 [[package]]
 name = "quote"
@@ -2543,9 +2536,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.11.0"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62bb4feee49fdd9f707ef802e22365a35de4b7b299de4763d44bfea899442ff9"
+checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 
 [[package]]
 name = "smithay-client-toolkit"
@@ -2644,27 +2637,27 @@ dependencies = [
 
 [[package]]
 name = "termcolor"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
+checksum = "6093bad37da69aab9d123a8091e4be0aa4a03e4d601ec641c327398315f62b64"
 dependencies = [
  "winapi-util",
 ]
 
 [[package]]
 name = "thiserror"
-version = "1.0.48"
+version = "1.0.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d6d7a740b8a666a7e828dd00da9c0dc290dff53154ea77ac109281de90589b7"
+checksum = "1177e8c6d7ede7afde3585fd2513e611227efd6481bd78d2e82ba1ce16557ed4"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.48"
+version = "1.0.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49922ecae66cc8a249b77e68d1d0623c1b2c514f0060c27cdc68bd62a1219d35"
+checksum = "10712f02019e9288794769fba95cd6847df9874d49d871d062172f9dd41bc4cc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2946,12 +2939,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
 
 [[package]]
-name = "waker-fn"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
-
-[[package]]
 name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3179,7 +3166,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3194,7 +3181,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3212,7 +3199,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-example",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3223,7 +3210,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3259,7 +3246,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3280,7 +3267,7 @@ dependencies = [
  "wgpu",
  "wgpu-hal",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3323,7 +3310,7 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winapi",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3341,7 +3328,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3371,7 +3358,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3383,7 +3370,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3410,7 +3397,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3424,7 +3411,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3437,7 +3424,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3453,7 +3440,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3465,7 +3452,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3503,7 +3490,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3521,7 +3508,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3547,7 +3534,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.28.6",
+ "winit 0.28.7",
 ]
 
 [[package]]
@@ -3817,9 +3804,9 @@ dependencies = [
 
 [[package]]
 name = "winit"
-version = "0.28.6"
+version = "0.28.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "866db3f712fffba75d31bf0cdecf357c8aeafd158c5b7ab51dba2a2b2d47f196"
+checksum = "9596d90b45384f5281384ab204224876e8e8bf7d58366d9b795ad99aa9894b94"
 dependencies = [
  "android-activity",
  "bitflags 1.3.2",

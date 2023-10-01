@@ -15,6 +15,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id,
+    id::DeviceId,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
@@ -192,6 +193,8 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
+    #[error("Device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
@@ -365,6 +368,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, encoder_id).map_pass_err(init_scope)?;
+        let device = &cmd_buf.device;
+        if !device.is_valid() {
+            return Err(ComputePassErrorInner::InvalidDevice(
+                cmd_buf.device_id.value.0,
+            ))
+            .map_pass_err(init_scope);
+        }
+      
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -389,7 +400,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // will be reset to true if recording is done without errors
         *status = CommandEncoderStatus::Error;
         let raw = encoder.open();
-        let device = &cmd_buf.device;
 
         let bind_group_guard = hub.bind_groups.read();
         let pipeline_guard = hub.compute_pipelines.read();

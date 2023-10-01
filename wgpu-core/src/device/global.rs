@@ -95,7 +95,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
     ) -> Result<wgt::Features, InvalidDevice> {
         let hub = A::hub(self);
+      
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
 
         Ok(device.features)
     }
@@ -105,7 +109,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
     ) -> Result<wgt::Limits, InvalidDevice> {
         let hub = A::hub(self);
+      
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
 
         Ok(device.limits.clone())
     }
@@ -115,7 +123,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
     ) -> Result<wgt::DownlevelCapabilities, InvalidDevice> {
         let hub = A::hub(self);
+      
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
 
         Ok(device.downlevel.clone())
     }
@@ -138,6 +150,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return (id, Some(DeviceError::Invalid.into()));
             }
         };
+        if !device.valid {
+            break DeviceError::Invalid.into();
+        }
 
         if desc.usage.is_empty() {
             // Per spec, `usage` must not be zero.
@@ -460,6 +475,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
         profiling::scope!("Buffer::drop");
+      
         log::debug!("Buffer {:?} is asked to be dropped", buffer_id);
 
         let hub = A::hub(self);
@@ -515,6 +531,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
@@ -524,6 +543,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
+          
             let (id, resource) = fid.assign(texture);
             log::info!("Created Texture {:?} with {:?}", id, desc);
 
@@ -552,7 +572,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("Device::create_texture");
+        profiling::scope!("Device::create_texture_from_hal");
 
         let hub = A::hub(self);
 
@@ -563,6 +583,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -633,6 +656,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
 
             // NB: Any change done through the raw buffer handle will not be
             // recorded in the replay
@@ -668,6 +694,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("Texture::destroy");
+        log::trace!("Texture::destroy {texture_id:?}");
 
         let hub = A::hub(self);
 
@@ -708,6 +735,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
         profiling::scope!("Texture::drop");
+      
         log::debug!("Texture {:?} is asked to be dropped", texture_id);
 
         let hub = A::hub(self);
@@ -775,12 +803,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(view) => view,
                 Err(e) => break e,
             };
+          
             let (id, resource) = fid.assign(view);
             log::info!("Created TextureView {:?}", id);
             device.trackers.lock().views.insert_single(id, resource);
             return (id, None);
         };
 
+        log::error!("Texture::create_view {:?} error {:?}", texture_id, error);
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -795,6 +825,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         profiling::scope!("TextureView::drop");
+      
         log::debug!("TextureView {:?} is asked to be dropped", texture_view_id);
 
         let hub = A::hub(self);
@@ -837,6 +868,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateSampler(fid.id(), desc.clone()));
@@ -850,7 +885,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (id, resource) = fid.assign(sampler);
             log::info!("Created Sampler {:?}", id);
             device.trackers.lock().samplers.insert_single(id, resource);
-
+          
             return (id, None);
         };
 
@@ -896,6 +931,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
@@ -934,7 +973,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             layout.compatible_layout = compatible_layout;
 
             let (id, _) = fid.assign(layout);
-            log::info!("Created BindGroupLayout {:?}", id);
+            if let Some(dupe) = compatible_layout {
+                log::info!("Created BindGroupLayout (duplicate of {dupe:?}) -> {:?}", id);
+                log::trace!(
+                    "Device::create_bind_group_layout (duplicate of {dupe:?}) -> {:?}",
+                    id.0
+                );
+            } else {
+                log::info!("Created BindGroupLayout {:?}", id);
+            }
 
             return (id, None);
         };
@@ -949,6 +996,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
         profiling::scope!("BindGroupLayout::drop");
+      
         log::debug!(
             "BindGroupLayout {:?} is asked to be dropped",
             bind_group_layout_id
@@ -984,6 +1032,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
@@ -1012,6 +1064,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         profiling::scope!("PipelineLayout::drop");
+      
         log::debug!(
             "PipelineLayout {:?} is asked to be dropped",
             pipeline_layout_id
@@ -1043,6 +1096,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
@@ -1084,6 +1141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
         profiling::scope!("BindGroup::drop");
+      
         log::debug!("BindGroup {:?} is asked to be dropped", bind_group_id);
 
         let hub = A::hub(self);
@@ -1117,6 +1175,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let data = match source {
@@ -1145,6 +1207,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(shader) => shader,
                 Err(e) => break e,
             };
+          
             let (id, _) = fid.assign(shader);
             log::info!("Created ShaderModule {:?} with {:?}", id, desc);
             return (id, None);
@@ -1180,6 +1243,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let data = trace.make_binary("spv", unsafe {
@@ -1211,8 +1278,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
         profiling::scope!("ShaderModule::drop");
+      
         log::debug!("ShaderModule {:?} is asked to be dropped", shader_module_id);
-
+      
         let hub = A::hub(self);
         hub.shader_modules.unregister(shader_module_id);
     }
@@ -1233,6 +1301,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid,
             };
+            if !device.valid {
+                break DeviceError::Invalid;
+            }
             let queue = match hub.queues.get(device.queue_id.read().unwrap()) {
                 Ok(queue) => queue,
                 Err(_) => break DeviceError::InvalidQueueId,
@@ -1270,6 +1341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("CommandEncoder::drop");
+      
         log::debug!(
             "CommandEncoder {:?} is asked to be dropped",
             command_encoder_id
@@ -1286,6 +1358,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
+      
         log::debug!(
             "CommandBuffer {:?} is asked to be dropped",
             command_buffer_id
@@ -1302,6 +1375,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Option<command::CreateRenderBundleError>,
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
+        log::trace!("Device::device_create_render_bundle_encoder");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -1326,6 +1400,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break command::RenderBundleError::INVALID_DEVICE,
             };
+            if !device.valid {
+                break command::RenderBundleError::INVALID_DEVICE;
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateRenderBundle {
@@ -1361,7 +1439,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
         profiling::scope!("RenderBundle::drop");
+      
         log::debug!("RenderBundle {:?} is asked to be dropped", render_bundle_id);
+      
         let hub = A::hub(self);
 
         if let Some(bundle) = hub.render_bundles.unregister(render_bundle_id) {
@@ -1389,6 +1469,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateQuerySet {
@@ -1413,12 +1497,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        let id = fid.assign_error("");
+        let id = fid.assign_error("");      
         (id, Some(error))
     }
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
         profiling::scope!("QuerySet::drop");
+      
         log::debug!("QuerySet {:?} is asked to be dropped", query_set_id);
 
         let hub = A::hub(self);
@@ -1464,6 +1549,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateRenderPipeline {
@@ -1478,7 +1566,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Ok(pair) => pair,
                     Err(e) => break e,
                 };
-
+          
             let (id, resource) = fid.assign(pipeline);
             log::info!("Created RenderPipeline {:?} with {:?}", id, desc);
 
@@ -1537,10 +1625,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
         profiling::scope!("RenderPipeline::drop");
+      
         log::debug!(
             "RenderPipeline {:?} is asked to be dropped",
             render_pipeline_id
         );
+      
         let hub = A::hub(self);
 
         if let Some(pipeline) = hub.render_pipelines.unregister(render_pipeline_id) {
@@ -1579,6 +1669,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateComputePipeline {
@@ -1653,10 +1747,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
         profiling::scope!("ComputePipeline::drop");
+      
         log::debug!(
             "ComputePipeline {:?} is asked to be dropped",
             compute_pipeline_id
         );
+      
         let hub = A::hub(self);
 
         if let Some(pipeline) = hub.compute_pipelines.unregister(compute_pipeline_id) {
@@ -1802,6 +1898,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Invalid.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::ConfigureSurface(surface_id, config.clone()));
@@ -1947,6 +2047,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
+        log::trace!("Device::poll");
+
         let (closures, queue_empty) = {
             if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
                 if submission_index.queue_id != device_id {
@@ -2054,21 +2156,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_start_capture<A: HalApi>(&self, id: DeviceId) {
+        log::trace!("Device::start_capture");
+
         let hub = A::hub(self);
+      
         if let Ok(device) = hub.devices.get(id) {
+            if !device.valid {
+                return;
+            }
             unsafe { device.raw().start_capture() };
         }
     }
 
     pub fn device_stop_capture<A: HalApi>(&self, id: DeviceId) {
+        log::trace!("Device::stop_capture");
+
         let hub = A::hub(self);
+      
         if let Ok(device) = hub.devices.get(id) {
+            if !device.valid {
+                return;
+            }
             unsafe { device.raw().stop_capture() };
         }
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
+      
         log::debug!("Device {:?} is asked to be dropped", device_id);
 
         let hub = A::hub(self);
@@ -2085,6 +2200,81 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             drop(device);
+        }
+    }
+  
+    pub fn device_destroy<A: HalApi>(&self, device_id: DeviceId) {
+        log::trace!("Device::destroy {device_id:?}");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, _) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            // Follow the steps at
+            // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
+
+            // It's legal to call destroy multiple times, but if the device
+            // is already invalid, there's nothing more to do. There's also
+            // no need to return an error.
+            if !device.valid {
+                return;
+            }
+
+            // The last part of destroy is to lose the device. The spec says
+            // delay that until all "currently-enqueued operations on any
+            // queue on this device are completed."
+
+            // TODO: implement this delay.
+
+            // Finish by losing the device.
+
+            // TODO: associate this "destroyed" reason more tightly with
+            // the GPUDeviceLostReason defined in webgpu.idl.
+            device.lose(Some("destroyed"));
+        }
+    }
+
+    pub fn device_lose<A: HalApi>(&self, device_id: DeviceId, reason: Option<&str>) {
+        log::trace!("Device::lose {device_id:?}");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, _) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            device.lose(reason);
+        }
+    }
+
+    /// Exit the unreferenced, inactive device `device_id`.
+    fn exit_device<A: HalApi>(&self, device_id: DeviceId) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+        let mut free_adapter_id = None;
+        {
+            let (device, mut _token) = hub.devices.unregister(device_id, &mut token);
+            if let Some(mut device) = device {
+                // The things `Device::prepare_to_die` takes care are mostly
+                // unnecessary here. We know our queue is empty, so we don't
+                // need to wait for submissions or triage them. We know we were
+                // just polled, so `life_tracker.free_resources` is empty.
+                debug_assert!(device.lock_life(&mut _token).queue_empty());
+                device.pending_writes.deactivate();
+
+                // Adapter is only referenced by the device and itself.
+                // This isn't a robust way to destroy them, we should find a better one.
+                if device.adapter_id.ref_count.load() == 1 {
+                    free_adapter_id = Some(device.adapter_id.value.0);
+                }
+
+                device.dispose();
+            }
+        }
+
+        let hub = A::hub(self);
+        if let Some(queue) = hub.queues.unregister(queue_id) {
+            drop(queue);
         }
     }
 
@@ -2104,6 +2294,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
+        log::trace!("Buffer::map_async {buffer_id:?}");
+
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
@@ -2150,6 +2342,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     return Err((op, e));
                 }
             };
+
+            let device = &device_guard[buffer.device_id.value];
+            if !device.valid {
+                return Err((op, BufferAccessError::Invalid));
+            }
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
                 return Err((op, e.into()));
@@ -2216,6 +2413,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
+        log::trace!("Buffer::get_mapped_range {buffer_id:?}");
 
         let hub = A::hub(self);
 
@@ -2277,6 +2475,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
     pub fn buffer_unmap<A: HalApi>(&self, buffer_id: id::BufferId) -> BufferAccessResult {
         profiling::scope!("unmap", "Buffer");
+        log::trace!("Buffer::unmap {buffer_id:?}");
 
         let closure;
         {

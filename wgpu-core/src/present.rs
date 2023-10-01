@@ -135,7 +135,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
             match present.device.downcast_clone::<A>() {
-                Some(device) => (device, present.config.clone()),
+                Some(device) => {
+                  if !device.is_valid() {
+                      return Err(DeviceError::Invalid.into());
+                  }
+                  (device, present.config.clone())
+                },
                 None => return Err(SurfaceError::NotConfigured),
             }
         } else {
@@ -283,6 +288,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
+        if !device.is_valid() {
+            return Err(DeviceError::Invalid.into());
+        }
         let queue_id = device.queue_id.read().unwrap();
         let queue = hub.queues.get(queue_id).unwrap();
 
@@ -376,6 +384,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = present.device.downcast_ref::<A>().unwrap();
+        if !device.is_valid() {
+            return Err(DeviceError::Invalid.into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {

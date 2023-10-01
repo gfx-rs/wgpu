@@ -1444,6 +1444,15 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(queue => global.queue_drop(*queue));
     }
+    fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_destroy(*device));
+    }
+    fn device_lose(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        // TODO: accept a reason, and pass it to device_lose.
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_lose(*device, None));
+    }
     fn device_poll(
         &self,
         device: &Self::DeviceId,

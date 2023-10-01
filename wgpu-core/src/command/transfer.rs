@@ -7,7 +7,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    id::{BufferId, CommandEncoderId, TextureId},
+    id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
@@ -41,6 +41,8 @@ pub enum CopySide {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransferError {
+    #[error("Device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("Texture {0:?} is invalid or destroyed")]
@@ -576,6 +578,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
         let device = &cmd_buf.device;
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
@@ -726,6 +731,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let device = &cmd_buf.device;
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
+      
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -744,8 +754,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
 
         let texture_guard = hub.textures.read();
-
-        let device = &cmd_buf.device;
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_buffer_to_texture of size 0");
@@ -881,6 +889,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let device = &cmd_buf.device;
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
+      
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -899,7 +912,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let texture_guard = hub.textures.read();
 
-        let device = &cmd_buf.device;
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_buffer of size 0");
@@ -1048,6 +1060,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let device = &cmd_buf.device;
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
+      
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 
@@ -1065,7 +1082,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let texture_guard = hub.textures.read();
 
-        let device = &cmd_buf.device;
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
             log::trace!("Ignoring copy_texture_to_texture of size 0");

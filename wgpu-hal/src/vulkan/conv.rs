@@ -792,6 +792,10 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> vk::BlendFactor {
         Bf::SrcAlphaSaturated => vk::BlendFactor::SRC_ALPHA_SATURATE,
         Bf::Constant => vk::BlendFactor::CONSTANT_COLOR,
         Bf::OneMinusConstant => vk::BlendFactor::ONE_MINUS_CONSTANT_COLOR,
+        Bf::Src1 => vk::BlendFactor::SRC1_COLOR,
+        Bf::OneMinusSrc1 => vk::BlendFactor::ONE_MINUS_SRC1_COLOR,
+        Bf::Src1Alpha => vk::BlendFactor::SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => vk::BlendFactor::ONE_MINUS_SRC1_ALPHA,
     }
 }
 

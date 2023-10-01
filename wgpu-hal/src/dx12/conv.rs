@@ -246,12 +246,12 @@ fn map_blend_factor(factor: wgt::BlendFactor, is_alpha: bool) -> d3d12_ty::D3D12
         Bf::Constant => d3d12_ty::D3D12_BLEND_BLEND_FACTOR,
         Bf::OneMinusConstant => d3d12_ty::D3D12_BLEND_INV_BLEND_FACTOR,
         Bf::SrcAlphaSaturated => d3d12_ty::D3D12_BLEND_SRC_ALPHA_SAT,
-        //Bf::Src1Color if is_alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
-        //Bf::Src1Color => d3d12_ty::D3D12_BLEND_SRC1_COLOR,
-        //Bf::OneMinusSrc1Color if is_alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
-        //Bf::OneMinusSrc1Color => d3d12_ty::D3D12_BLEND_INV_SRC1_COLOR,
-        //Bf::Src1Alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
-        //Bf::OneMinusSrc1Alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
+        Bf::Src1 if is_alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
+        Bf::Src1 => d3d12_ty::D3D12_BLEND_SRC1_COLOR,
+        Bf::OneMinusSrc1 if is_alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
+        Bf::OneMinusSrc1 => d3d12_ty::D3D12_BLEND_INV_SRC1_COLOR,
+        Bf::Src1Alpha => d3d12_ty::D3D12_BLEND_SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => d3d12_ty::D3D12_BLEND_INV_SRC1_ALPHA,
     }
 }
 
