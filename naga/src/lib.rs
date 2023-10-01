@@ -435,6 +435,9 @@ pub enum BuiltIn {
     WorkGroupId,
     WorkGroupSize,
     NumWorkGroups,
+    // subgroup
+    SubgroupInvocationId,
+    SubgroupSize,
 }
 
 /// Number of bytes per scalar.

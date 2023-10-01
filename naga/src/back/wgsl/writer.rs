@@ -1769,6 +1769,8 @@ fn builtin_str(built_in: crate::BuiltIn) -> Result<&'static str, Error> {
         Bi::SampleMask => "sample_mask",
         Bi::PrimitiveIndex => "primitive_index",
         Bi::ViewIndex => "view_index",
+        Bi::SubgroupInvocationId => "subgroup_invocation_id",
+        Bi::SubgroupSize => "subgroup_size",
         Bi::BaseInstance
         | Bi::BaseVertex
         | Bi::ClipDistance

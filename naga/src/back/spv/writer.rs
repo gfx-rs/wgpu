@@ -1589,6 +1589,24 @@ impl Writer {
                     Bi::WorkGroupId => BuiltIn::WorkgroupId,
                     Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
                     Bi::NumWorkGroups => BuiltIn::NumWorkgroups,
+                    // Subgroup
+                    Bi::SubgroupInvocationId => {
+                        self.require_any(
+                            "`subgroup_invocation_id` built-in",
+                            &[spirv::Capability::GroupNonUniform],
+                        )?;
+                        BuiltIn::SubgroupLocalInvocationId
+                    }
+                    Bi::SubgroupSize => {
+                        self.require_any(
+                            "`subgroup_invocation_id` built-in",
+                            &[
+                                spirv::Capability::GroupNonUniform,
+                                spirv::Capability::SubgroupBallotKHR,
+                            ],
+                        )?;
+                        BuiltIn::SubgroupSize
+                    }
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);

@@ -4212,6 +4212,9 @@ const fn glsl_built_in(
         Bi::WorkGroupId => "gl_WorkGroupID",
         Bi::WorkGroupSize => "gl_WorkGroupSize",
         Bi::NumWorkGroups => "gl_NumWorkGroups",
+        // subgroup
+        Bi::SubgroupInvocationId => "gl_SubgroupInvocationID",
+        Bi::SubgroupSize => "gl_SubgroupSize",
     }
 }
 

@@ -299,6 +299,17 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
+                    Bi::SubgroupInvocationId | Bi::SubgroupSize => (
+                        match self.stage {
+                            St::Compute | St::Fragment => !self.output,
+                            St::Vertex => false,
+                        },
+                        *ty_inner
+                            == Ti::Scalar {
+                                kind: Sk::Uint,
+                                width,
+                            },
+                    ),
                 };
 
                 if !visible {
