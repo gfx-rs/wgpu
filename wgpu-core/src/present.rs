@@ -136,11 +136,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device, config) = if let Some(ref present) = *surface.presentation.lock() {
             match present.device.downcast_clone::<A>() {
                 Some(device) => {
-                  if !device.is_valid() {
-                      return Err(DeviceError::Invalid.into());
-                  }
-                  (device, present.config.clone())
-                },
+                    if !device.is_valid() {
+                        return Err(DeviceError::Invalid.into());
+                    }
+                    (device, present.config.clone())
+                }
                 None => return Err(SurfaceError::NotConfigured),
             }
         } else {

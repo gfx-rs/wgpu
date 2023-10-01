@@ -371,11 +371,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &cmd_buf.device;
         if !device.is_valid() {
             return Err(ComputePassErrorInner::InvalidDevice(
-                cmd_buf.device_id.value.0,
+                cmd_buf.device.as_info().id(),
             ))
             .map_pass_err(init_scope);
         }
-      
+
         let mut cmd_buf_data = cmd_buf.data.lock();
         let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
 

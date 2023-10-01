@@ -1923,7 +1923,7 @@ impl crate::context::Context for Context {
         // the device.lost promise, which will require a different invocation pattern
         // with a callback.
     }
-  
+
     fn queue_drop(&self, _queue: &Self::QueueId, _queue_data: &Self::QueueData) {
         // Queue is dropped automatically
     }

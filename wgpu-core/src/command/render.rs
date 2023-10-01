@@ -1307,11 +1307,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     occlusion_query_set_id,
                 });
             }
-          
+
             let device = &cmd_buf.device;
             if !device.is_valid() {
                 return Err(RenderPassErrorInner::InvalidDevice(
-                    cmd_buf.device_id.value.0,
+                    cmd_buf.device.as_info().id(),
                 ))
                 .map_pass_err(init_scope);
             }

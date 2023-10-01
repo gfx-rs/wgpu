@@ -46,7 +46,7 @@ use std::{
     iter,
     num::NonZeroU32,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
 };
@@ -107,7 +107,7 @@ pub struct Device<A: HalApi> {
     /// Error enums, we wouldn't need this. For now, we need it. All the call
     /// sites where we check it are areas that should be revisited if we start
     /// using ref-counted references for internal access.
-    pub(crate) valid: bool,
+    pub(crate) valid: AtomicBool,
 
     /// All live resources allocated with this [`Device`].
     ///
@@ -252,7 +252,7 @@ impl<A: HalApi> Device<A> {
             command_allocator: Mutex::new(Some(com_alloc)),
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
-            valid: true,
+            valid: AtomicBool::new(true),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(Some(life::ResourceMaps::new::<A>())),
@@ -279,9 +279,9 @@ impl<A: HalApi> Device<A> {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.valid
+        self.valid.load(Ordering::Acquire)
     }
-  
+
     pub(crate) fn release_queue(&self, queue: A::Queue) {
         self.queue_to_drop.write().replace(queue);
     }
@@ -3175,12 +3175,12 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn lose(&mut self, _reason: Option<&str>) {
+    pub(crate) fn lose(&self, _reason: Option<&str>) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
         // places to prevent new work from being submitted.
-        self.valid = false;
+        self.valid.store(false, Ordering::Release);
 
         // The following steps remain in "lose the device":
         // 1) Resolve the GPUDevice device.lost promise.

@@ -2441,7 +2441,7 @@ where
         let device_data = downcast_ref(device_data);
         Context::device_lose(self, &device, device_data)
     }
-  
+
     fn queue_drop(&self, queue: &ObjectId, queue_data: &crate::Data) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);

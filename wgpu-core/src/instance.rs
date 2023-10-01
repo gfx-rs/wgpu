@@ -723,7 +723,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("Surface::drop");
-      
+
         log::info!("Surface::drop {id:?}");
 
         fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
