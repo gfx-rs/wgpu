@@ -656,6 +656,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id.0
     }
 
+    #[cfg(all(feature = "dx12", windows))]
+    /// # Safety
+    ///
+    /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
+    pub unsafe fn instance_create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
+
+        let surface = Surface {
+            presentation: None,
+            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            vulkan: None,
+            dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
+                raw: unsafe { inst.create_surface_from_swap_chain_panel(swap_chain_panel) },
+            }),
+            dx11: None,
+            #[cfg(feature = "gles")]
+            gl: None,
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("Surface::drop");
         log::trace!("Surface::drop {id:?}");

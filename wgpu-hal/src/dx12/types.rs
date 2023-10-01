@@ -32,3 +32,8 @@ winapi::STRUCT! {
         BarycentricsSupported: winapi::shared::minwindef::BOOL,
     }
 }
+
+winapi::RIDL!{#[uuid(0x63aad0b8, 0x7c24, 0x40ff, 0x64, 0x0d, 0x94, 0x4c, 0xc3, 0x25)]
+interface ISwapChainPanelNative(ISwapChainPanelNativeVtbl): IUnknown(IUnknownVtbl) {
+    fn SetSwapChain(swapChain: *mut winapi::shared::dxgi::IDXGISwapChain) -> winapi::um::winnt::HRESULT,
+}}
