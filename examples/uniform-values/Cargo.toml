@@ -11,8 +11,9 @@ name = "uniform-values"
 path = "src/main.rs"
 
 [dependencies]
-bytemuck.workspace = true
+encase = { version = "0.6.1", features = ["glam"] }
 env_logger.workspace = true
+glam = "0.24"
 pollster.workspace = true
 wgpu.workspace = true
 winit.workspace = true

@@ -360,6 +360,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_panic"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6051f239ecec86fde3410901ab7860d458d160371533842974fc61f96d15879b"
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -695,6 +701,38 @@ name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+
+[[package]]
+name = "encase"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fce2eeef77fd4a293a54b62aa00ac9daebfbcda4bf8998c5a815635b004aa1c"
+dependencies = [
+ "const_panic",
+ "encase_derive",
+ "glam 0.24.2",
+ "thiserror",
+]
+
+[[package]]
+name = "encase_derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e520cde08cbf4f7cc097f61573ec06ce467019803de8ae82fb2823fa1554a0e"
+dependencies = [
+ "encase_derive_impl",
+]
+
+[[package]]
+name = "encase_derive_impl"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fe2568f851fd6144a45fa91cfed8fe5ca8fc0b56ba6797bfc1ed2771b90e37c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
 
 [[package]]
 name = "encoding_rs"
@@ -1048,6 +1086,12 @@ name = "glam"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "518faa5064866338b013ff9b2350dc318e14cc4fcd6cb8206d7e7c9886c98815"
+
+[[package]]
+name = "glam"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5418c17512bdf42730f9032c74e1ae39afc408745ebb2acf72fbc4691c17945"
 
 [[package]]
 name = "glow"
@@ -2993,7 +3037,7 @@ name = "wgpu-bunnymark-example"
 version = "0.16.0"
 dependencies = [
  "bytemuck",
- "glam",
+ "glam 0.21.3",
  "nanorand",
  "png",
  "wasm-bindgen-test",
@@ -3042,7 +3086,7 @@ name = "wgpu-cube-example"
 version = "0.16.0"
 dependencies = [
  "bytemuck",
- "glam",
+ "glam 0.21.3",
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-example",
@@ -3139,7 +3183,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "env_logger",
- "glam",
+ "glam 0.21.3",
  "log",
  "pollster",
  "wasm-bindgen-futures",
@@ -3229,7 +3273,7 @@ name = "wgpu-mipmap-example"
 version = "0.16.0"
 dependencies = [
  "bytemuck",
- "glam",
+ "glam 0.21.3",
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-example",
@@ -3242,7 +3286,7 @@ name = "wgpu-msaa-line-example"
 version = "0.16.0"
 dependencies = [
  "bytemuck",
- "glam",
+ "glam 0.21.3",
  "log",
  "wasm-bindgen-test",
  "wgpu",
@@ -3296,7 +3340,7 @@ name = "wgpu-shadow-example"
 version = "0.16.0"
 dependencies = [
  "bytemuck",
- "glam",
+ "glam 0.21.3",
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-example",
@@ -3310,7 +3354,7 @@ version = "0.16.0"
 dependencies = [
  "bytemuck",
  "ddsfile",
- "glam",
+ "glam 0.21.3",
  "log",
  "obj",
  "wasm-bindgen-test",
@@ -3405,10 +3449,11 @@ dependencies = [
 name = "wgpu-uniform-values-example"
 version = "0.16.0"
 dependencies = [
- "bytemuck",
  "console_error_panic_hook",
  "console_log",
+ "encase",
  "env_logger",
+ "glam 0.24.2",
  "png",
  "pollster",
  "wasm-bindgen-futures",
@@ -3422,7 +3467,7 @@ name = "wgpu-water-example"
 version = "0.16.0"
 dependencies = [
  "bytemuck",
- "glam",
+ "glam 0.21.3",
  "nanorand",
  "noise",
  "wasm-bindgen-test",

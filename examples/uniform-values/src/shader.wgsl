@@ -5,7 +5,7 @@ struct AppState {
     pos_x: f32,
     pos_y: f32,
     zoom: f32,
-    max_iterations: f32,
+    max_iterations: u32,
 }
 
 struct VertexInput {
@@ -37,7 +37,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let max_iterations = u32(app_state.max_iterations);
+    let max_iterations = app_state.max_iterations;
     var final_iteration = max_iterations;
     let c = vec2(
         // Translated to put everything nicely in frame.

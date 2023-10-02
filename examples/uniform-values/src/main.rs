@@ -16,6 +16,9 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
+// We won't bring StorageBuffer into scope as that might be too easy to confuse
+// with actual GPU-allocated WGPU storage buffers.
+use encase::ShaderType;
 use winit::{
     event::{Event, VirtualKeyCode, WindowEvent},
     event_loop::EventLoop,
@@ -26,15 +29,39 @@ const ZOOM_INCREMENT_FACTOR: f32 = 1.1;
 const CAMERA_POS_INCREMENT_FACTOR: f32 = 0.1;
 
 // (1)
-#[derive(Debug)]
+#[derive(Debug, ShaderType)]
 struct AppState {
-    pub cursor_pos: [f32; 2],
+    pub cursor_pos: glam::Vec2,
     pub zoom: f32,
-    // This is f32 so we can more easily turn it into bytes using the method we will use.
-    pub max_iterations: f32,
+    pub max_iterations: u32,
 }
 
 impl AppState {
+    // Translating Rust structures to WGSL is always tricky and can prove
+    // incredibly difficult to remember all the rules by which WGSL
+    // lays out and formats structs in memory. It is also often extremely
+    // frustrating to debug when things don't go right.
+    //
+    // You may sometimes see structs translated to bytes through
+    // using `#[repr(C)]` on the struct so that the struct has a defined,
+    // guaranteed internal layout and then implementing bytemuck's POD
+    // trait so that one can preform a bitwise cast. There are issues with
+    // this approach though as C's struct layouts aren't always compatible
+    // with WGSL, such as when special WGSL types like vec's and mat's
+    // get involved that have special alignment rules and especially
+    // when the target buffer is going to be used in the uniform memory
+    // space.
+    //
+    // Here though, we use the encase crate which makes translating potentially
+    // complex Rust structs easy through combined use of the [`ShaderType`] trait
+    // / derive macro and the buffer structs which hold data formatted for WGSL
+    // in either the storage or uniform spaces.
+    fn as_wgsl_bytes(&self) -> encase::internal::Result<Vec<u8>> {
+        let mut buffer = encase::UniformBuffer::new(Vec::new());
+        buffer.write(self)?;
+        Ok(buffer.into_inner())
+    }
+
     fn translate_view(&mut self, increments: i32, axis: usize) {
         self.cursor_pos[axis] += CAMERA_POS_INCREMENT_FACTOR * increments as f32 / self.zoom;
     }
@@ -48,9 +75,9 @@ impl AppState {
 impl Default for AppState {
     fn default() -> Self {
         AppState {
-            cursor_pos: [0.0, 0.0],
+            cursor_pos: glam::Vec2::ZERO,
             zoom: 1.0,
-            max_iterations: 50.0,
+            max_iterations: 50,
         }
     }
 }
@@ -222,8 +249,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             VirtualKeyCode::Down => state_mut.translate_view(-1, 1),
                             VirtualKeyCode::Left => state_mut.translate_view(-1, 0),
                             VirtualKeyCode::Right => state_mut.translate_view(1, 0),
-                            VirtualKeyCode::U => state_mut.max_iterations += 3.0,
-                            VirtualKeyCode::D => state_mut.max_iterations -= 3.0,
+                            VirtualKeyCode::U => state_mut.max_iterations += 3,
+                            VirtualKeyCode::D => state_mut.max_iterations -= 3,
                             _ => {}
                         }
                         wgpu_context_ref.window.request_redraw();
@@ -259,35 +286,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 wgpu_context_ref.queue.write_buffer(
                     &wgpu_context_ref.uniform_buffer,
                     0,
-                    // Translating Rust structures to WGSL is always tricky and can prove
-                    // incredibly difficult to remember all the rules by which WGSL
-                    // lays out and formats structs in memory. It is also often extremely
-                    // frustrating to debug when things don't go right.
-                    //
-                    // You may sometimes see structs translated to bytes through
-                    // implementing bytemuck's POD trait so that one can cast the bytes.
-                    // The problem is 1. Rust representations of structs are not only often
-                    // incompatible but also complicated to predict and 2. Even using
-                    // #[repr(C)] does not guarantee that the struct's bytes are formatted
-                    // according to WGSL's rules. Generally, it's never wise to throw around
-                    // manual implementations of POD unless you *know* that it is sound to
-                    // do so and translating structs to bytes using bytemuck and POD should
-                    // be avoided. It's not only safer but often necessary to implement
-                    // translations to bytes manually, ie constructing a Vec of bytes and
-                    // filling it according to an equivalent WGSL layout with padding as
-                    // necessary.
-                    //
-                    // Luckily for us, the AppState struct we use in WGSL is layed out
-                    // in such a way that it can also be internally represented as an
-                    // array of f32's. We will construct a WGSL AppState by laying out the
-                    // members in order of declaration (as is guaranteed for WGSL, unlike
-                    // Rust) as an array.
-                    bytemuck::bytes_of(&[
-                        state_ref.cursor_pos[0],
-                        state_ref.cursor_pos[1],
-                        state_ref.zoom,
-                        state_ref.max_iterations,
-                    ]),
+                    &state_ref.as_wgsl_bytes().expect(
+                        "Error in encase translating AppState \
+                    struct to WGSL bytes.",
+                    ),
                 );
                 let mut encoder = wgpu_context_ref
                     .device
