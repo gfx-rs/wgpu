@@ -2949,7 +2949,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Glo::InverseSqrt => Mf::InverseSqrt,
                         Glo::MatrixInverse => Mf::Inverse,
                         Glo::Determinant => Mf::Determinant,
-                        Glo::Modf => Mf::Modf,
+                        Glo::ModfStruct => Mf::Modf,
                         Glo::FMin | Glo::UMin | Glo::SMin | Glo::NMin => Mf::Min,
                         Glo::FMax | Glo::UMax | Glo::SMax | Glo::NMax => Mf::Max,
                         Glo::FClamp | Glo::UClamp | Glo::SClamp | Glo::NClamp => Mf::Clamp,
@@ -2957,7 +2957,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Glo::Step => Mf::Step,
                         Glo::SmoothStep => Mf::SmoothStep,
                         Glo::Fma => Mf::Fma,
-                        Glo::Frexp => Mf::Frexp, //TODO: FrexpStruct?
+                        Glo::FrexpStruct => Mf::Frexp,
                         Glo::Ldexp => Mf::Ldexp,
                         Glo::Length => Mf::Length,
                         Glo::Distance => Mf::Distance,
@@ -2978,7 +2978,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Glo::UnpackSnorm2x16 => Mf::Unpack2x16snorm,
                         Glo::FindILsb => Mf::FindLsb,
                         Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
-                        _ => return Err(Error::UnsupportedExtInst(inst_id)),
+                        // TODO: https://github.com/gfx-rs/naga/issues/2526
+                        Glo::Modf | Glo::Frexp => return Err(Error::UnsupportedExtInst(inst_id)),
+                        Glo::IMix
+                        | Glo::PackDouble2x32
+                        | Glo::UnpackDouble2x32
+                        | Glo::InterpolateAtCentroid
+                        | Glo::InterpolateAtSample
+                        | Glo::InterpolateAtOffset => {
+                            return Err(Error::UnsupportedExtInst(inst_id))
+                        }
                     };
 
                     let arg_count = fun.argument_count();
