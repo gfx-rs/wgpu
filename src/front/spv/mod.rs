@@ -54,7 +54,6 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::CullDistance,
     spirv::Capability::SampleRateShading,
     spirv::Capability::DerivativeControl,
-    spirv::Capability::InterpolationFunction,
     spirv::Capability::Matrix,
     spirv::Capability::ImageQuery,
     spirv::Capability::Sampled1D,
