@@ -262,7 +262,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(buffer, &mut token);
-            log::trace!("Device::create_buffer -> {:?}", id);
+            log::trace!("Device::create_buffer -> {:?}", id.0);
 
             device
                 .trackers
@@ -616,7 +616,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
-            log::trace!("Device::create_texture -> {id:?}");
+            log::trace!("Device::create_texture -> {:?}", id.0);
 
             device.trackers.lock().textures.insert_single(
                 id.0,
@@ -696,7 +696,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
-            log::trace!("Device::create_texture -> {id:?}");
+            log::trace!("Device::create_texture -> {:?}", id.0);
 
             device.trackers.lock().textures.insert_single(
                 id.0,
@@ -756,7 +756,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = buffer.life_guard.add_ref();
 
             let id = fid.assign(buffer, &mut token);
-            log::trace!("Device::create_buffer -> {id:?}");
+            log::trace!("Device::create_buffer -> {:?}", id.0);
 
             device
                 .trackers
@@ -1869,7 +1869,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
-            log::trace!("Device::create_render_pipeline -> {id:?}");
+            log::trace!("Device::create_render_pipeline -> {:?}", id.0);
 
             device
                 .trackers
@@ -2014,7 +2014,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
-            log::trace!("Device::create_compute_pipeline -> {id:?}");
+            log::trace!("Device::create_compute_pipeline -> {:?}", id.0);
 
             device
                 .trackers
