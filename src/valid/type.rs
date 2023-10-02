@@ -559,9 +559,17 @@ impl super::Validator {
 
                 ti
             }
-            Ti::Image { .. } | Ti::Sampler { .. } => {
+            Ti::Image {
+                dim,
+                arrayed,
+                class: _,
+            } => {
+                if arrayed && matches!(dim, crate::ImageDimension::Cube) {
+                    self.require_type_capability(Capabilities::CUBE_ARRAY_TEXTURES)?;
+                }
                 TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE)
             }
+            Ti::Sampler { .. } => TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE),
             Ti::AccelerationStructure => {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
                 TypeInfo::new(TypeFlags::ARGUMENT, Alignment::ONE)

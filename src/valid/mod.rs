@@ -113,14 +113,16 @@ bitflags::bitflags! {
         const MULTISAMPLED_SHADING = 0x800;
         /// Support for ray queries and acceleration structures.
         const RAY_QUERY = 0x1000;
-        /// Support for generating two sources for blending from fragement shaders
+        /// Support for generating two sources for blending from fragement shaders.
         const DUAL_SOURCE_BLENDING = 0x2000;
+        /// Support for arrayed cube textures.
+        const CUBE_ARRAY_TEXTURES = 0x4000;
     }
 }
 
 impl Default for Capabilities {
     fn default() -> Self {
-        Self::MULTISAMPLED_SHADING
+        Self::MULTISAMPLED_SHADING | Self::CUBE_ARRAY_TEXTURES
     }
 }
 
