@@ -111,6 +111,10 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
 
+#### DX12
+
+- Bump `gpu-allocator` to 0.23. By @Elabajaba in [#4198](https://github.com/gfx-rs/wgpu/pull/4198)
+
 
 ### Documentation
 - Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4035](https://github.com/gfx-rs/wgpu/pull/4035)
