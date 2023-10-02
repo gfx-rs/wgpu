@@ -150,6 +150,7 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 #### WebGPU
 
 - Ensure that limit requests and reporting is done correctly. By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)
+- Validate usage of polygon mode. By @teoxoy in [#4196](https://github.com/gfx-rs/wgpu/pull/4196)
 
 #### Testing
 
