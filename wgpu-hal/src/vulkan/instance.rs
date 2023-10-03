@@ -743,10 +743,12 @@ impl crate::Instance<super::Api> for super::Instance {
                 self.create_surface_from_wayland(display.display.as_ptr(), handle.surface.as_ptr())
             }
             (Rwh::Xlib(handle), Rdh::Xlib(display)) => {
-                self.create_surface_from_xlib(display.display, handle.window)
+                let display = display.display.expect("Display pointer is not set.");
+                self.create_surface_from_xlib(display.as_ptr() as *mut *const c_void, handle.window)
             }
             (Rwh::Xcb(handle), Rdh::Xcb(display)) => {
-                self.create_surface_from_xcb(display.connection, handle.window.get())
+                let connection = display.connection.expect("Pointer to X-Server is not set.");
+                self.create_surface_from_xcb(connection.as_ptr(), handle.window.get())
             }
             (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window.as_ptr()),
             #[cfg(windows)]
