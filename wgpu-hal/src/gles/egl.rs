@@ -922,7 +922,7 @@ impl crate::Instance<super::Api> for Instance {
             (Rwh::Wayland(_), raw_window_handle::RawDisplayHandle::Wayland(display_handle)) => {
                 if inner
                     .wl_display
-                    .map(|ptr| ptr != display_handle.display)
+                    .map(|ptr| ptr != display_handle.display.as_ptr())
                     .unwrap_or(true)
                 {
                     /* Wayland displays are not sharable between surfaces so if the
@@ -943,7 +943,7 @@ impl crate::Instance<super::Api> for Instance {
                         .unwrap()
                         .get_platform_display(
                             EGL_PLATFORM_WAYLAND_KHR,
-                            display_handle.display,
+                            display_handle.display.as_ptr(),
                             &display_attributes,
                         )
                         .unwrap();
@@ -956,7 +956,7 @@ impl crate::Instance<super::Api> for Instance {
                     )?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
-                    inner.wl_display = Some(display_handle.display);
+                    inner.wl_display = Some(display_handle.display.as_ptr());
 
                     drop(old_inner);
                 }
@@ -1196,24 +1196,24 @@ impl crate::Surface<super::Api> for Surface {
                         &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
                     }
                     (WindowKind::AngleX11, Rwh::Xcb(handle)) => {
-                        handle.window as *mut std::ffi::c_void
+                        handle.window.get() as *mut std::ffi::c_void
                     }
-                    (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => handle.a_native_window,
+                    (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => handle.a_native_window.as_ptr(),
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
-                        let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) }
+                        let window = unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
                             as *mut _ as *mut std::ffi::c_void;
                         wl_window = Some(window);
                         window
                     }
                     #[cfg(target_os = "emscripten")]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
-                    (WindowKind::Unknown, Rwh::Win32(handle)) => handle.hwnd,
+                    (WindowKind::Unknown, Rwh::Win32(handle)) => handle.hwnd.get() as * mut std::ffi::c_void,
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => {
                         #[cfg(not(target_os = "macos"))]
-                        let window_ptr = handle.ns_view;
+                        let window_ptr = handle.ns_view.as_ptr();
                         #[cfg(target_os = "macos")]
                         let window_ptr = {
                             use objc::{msg_send, runtime::Object, sel, sel_impl};

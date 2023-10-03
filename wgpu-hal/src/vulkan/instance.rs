@@ -740,15 +740,15 @@ impl crate::Instance<super::Api> for super::Instance {
 
         match (window_handle, display_handle) {
             (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
-                self.create_surface_from_wayland(display.display, handle.surface)
+                self.create_surface_from_wayland(display.display.as_ptr(), handle.surface.as_ptr())
             }
             (Rwh::Xlib(handle), Rdh::Xlib(display)) => {
-                self.create_surface_from_xlib(display.display as *mut _, handle.window)
+                self.create_surface_from_xlib(display.display, handle.window)
             }
             (Rwh::Xcb(handle), Rdh::Xcb(display)) => {
-                self.create_surface_from_xcb(display.connection, handle.window)
+                self.create_surface_from_xcb(display.connection, handle.window.get())
             }
-            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window),
+            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window.as_ptr()),
             #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
