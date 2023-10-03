@@ -85,6 +85,12 @@ depth_ops: Some(wgpu::Operations {
 
 By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
+#### The GLES backend is now optional on Windows & macOS
+
+The `angle` feature flag has to be set for the GLES backend to be enabled on Windows & macOS.
+
+By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
+
 
 ### Added/New Features
 
