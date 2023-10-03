@@ -1314,7 +1314,11 @@ impl Writer {
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
         );
-        let exec_scope_id = self.get_index_constant(spirv::Scope::Workgroup as u32);
+        let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
+            self.get_index_constant(spirv::Scope::Subgroup as u32)
+        } else {
+            self.get_index_constant(spirv::Scope::Workgroup as u32)
+        };
         let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         block.body.push(Instruction::control_barrier(

@@ -4354,6 +4354,9 @@ impl<W: Write> Writer<W> {
                 "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
         }
+        if flags.contains(crate::Barrier::SUB_GROUP) {
+            unimplemented!(); // FIXME
+        }
         Ok(())
     }
 }

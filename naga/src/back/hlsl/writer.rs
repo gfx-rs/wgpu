@@ -3229,6 +3229,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if barrier.contains(crate::Barrier::WORK_GROUP) {
             writeln!(self.out, "{level}GroupMemoryBarrierWithGroupSync();")?;
         }
+        if barrier.contains(crate::Barrier::SUB_GROUP) {
+            unimplemented!() // FIXME
+        }
         Ok(())
     }
 }

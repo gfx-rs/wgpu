@@ -1269,9 +1269,11 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct Barrier: u32 {
         /// Barrier affects all `AddressSpace::Storage` accesses.
-        const STORAGE = 0x1;
+        const STORAGE = 1 << 0;
         /// Barrier affects all `AddressSpace::WorkGroup` accesses.
-        const WORK_GROUP = 0x2;
+        const WORK_GROUP = 1 << 1;
+        /// Barrier synchronizes execution across all invocations within a subgroup that exectue this instruction.
+        const SUB_GROUP = 1 << 2;
     }
 }
 
