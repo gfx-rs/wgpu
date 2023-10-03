@@ -71,6 +71,7 @@ impl crate::StorageFormat {
             Sf::Rgba8Snorm => "rgba8snorm",
             Sf::Rgba8Uint => "rgba8uint",
             Sf::Rgba8Sint => "rgba8sint",
+            Sf::Rgb10a2Uint => "rgb10a2uint",
             Sf::Rgb10a2Unorm => "rgb10a2unorm",
             Sf::Rg11b10Float => "rg11b10float",
             Sf::Rg32Uint => "rg32uint",

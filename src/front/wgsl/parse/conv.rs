@@ -84,6 +84,7 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat
         "rgba8snorm" => Sf::Rgba8Snorm,
         "rgba8uint" => Sf::Rgba8Uint,
         "rgba8sint" => Sf::Rgba8Sint,
+        "rgb10a2uint" => Sf::Rgb10a2Uint,
         "rgb10a2unorm" => Sf::Rgb10a2Unorm,
         "rg11b10float" => Sf::Rg11b10Float,
         "rg32uint" => Sf::Rg32Uint,
