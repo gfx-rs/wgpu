@@ -159,6 +159,8 @@ impl super::Swapchain {
         profiling::scope!("Swapchain::release_resources");
         {
             profiling::scope!("vkDeviceWaitIdle");
+            // We need to also wait until all presentation work is done. Because there is no way to portably wait until
+            // the presentation work is done, we are forced to wait until the device is idle.
             let _ = unsafe { device.device_wait_idle() };
         };
         unsafe { device.destroy_fence(self.fence, None) };
