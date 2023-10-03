@@ -1937,15 +1937,15 @@ impl Instance {
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
     pub unsafe fn create_surface<
-        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+        W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
     >(
         &self,
         window: &W,
     ) -> Result<Surface, CreateSurfaceError> {
         let (id, data) = DynContext::instance_create_surface(
             &*self.context,
-            raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
-            raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
+            raw_window_handle::HasDisplayHandle::display_handle(window),
+            raw_window_handle::HasWindowHandle::window_handle(window),
         )?;
         Ok(Surface {
             context: Arc::clone(&self.context),
