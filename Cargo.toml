@@ -71,7 +71,7 @@ rustc-hash = "1.1.0"
 glam = "0.24.2"
 image = { version = "0.24", default-features = false, features = ["png"] }
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
-libloading = ">=0.7,<0.9"
+libloading = ">=0.7, <0.9"
 libc = "0.2"
 log = "0.4"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
