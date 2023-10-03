@@ -1224,7 +1224,7 @@ impl super::Adapter {
             use naga::back::spv;
 
             // The following capabilities are always available
-            // see https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap51.html#spirvenv-capabilities
+            // see https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap52.html#spirvenv-capabilities
             let mut capabilities = vec![
                 spv::Capability::Shader,
                 spv::Capability::Matrix,
