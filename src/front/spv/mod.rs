@@ -60,7 +60,6 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Image1D,
     spirv::Capability::SampledCubeArray,
     spirv::Capability::ImageCubeArray,
-    spirv::Capability::ImageMSArray,
     spirv::Capability::StorageImageExtendedFormats,
     spirv::Capability::Int8,
     spirv::Capability::Int16,
