@@ -473,6 +473,7 @@ pub struct BindGroupLayoutInner<A: hal::Api> {
 }
 
 impl<A: hal::Api> BindGroupLayout<A> {
+    #[track_caller]
     pub(crate) fn assume_deduplicated(&self) -> &BindGroupLayoutInner<A> {
         self.as_inner().unwrap()
     }
