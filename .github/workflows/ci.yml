@@ -12,7 +12,11 @@ env:
   CARGO_TERM_COLOR: always
   RUST_LOG: info
   RUST_BACKTRACE: full
-  MSRV: 1.65
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.70"
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # to ensure that they can be used with firefox.
+  CORE_MSRV: "1.65"
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -32,7 +36,7 @@ env:
 # It adds overhead to the build and another point of failure.
 
 jobs:
-  check-msrv:
+  check:
     strategy:
       fail-fast: false
       matrix:
@@ -97,8 +101,9 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup default ${{ env.REPO_MSRV }}
+          rm rust-toolchain.toml
 
       - name: disable debug
         shell: bash
@@ -175,6 +180,63 @@ jobs:
 
           # build docs
           cargo doc --target ${{ matrix.target }} --all-features --no-deps
+
+  # We run minimal checks on the MSRV of the core crates, ensuring that
+  # its dependency tree does not cause issues for firefox.
+  #
+  # We don't test all platforms, just ones with different dependency stacks.
+  check-core-msrv:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+          # MacOS
+          - name: MacOS x86_64
+            os: macos-12
+            target: x86_64-apple-darwin
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    name: Core MSRV ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup default ${{ env.CORE_MSRV }}
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: core-msrv-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+
+      - name: check native
+        shell: bash
+        run: |
+          set -e
+
+          # check with no features
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
   wasm-test:
     name: Test WebAssembly
