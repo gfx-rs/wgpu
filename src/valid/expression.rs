@@ -897,7 +897,7 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidBooleanVector(argument));
                         }
                     },
-                    Rf::IsNan | Rf::IsInf | Rf::IsFinite | Rf::IsNormal => match *argument_inner {
+                    Rf::IsNan | Rf::IsInf => match *argument_inner {
                         Ti::Scalar {
                             kind: Sk::Float, ..
                         }

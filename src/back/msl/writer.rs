@@ -1671,8 +1671,6 @@ impl<W: Write> Writer<W> {
                     crate::RelationalFunction::All => "all",
                     crate::RelationalFunction::IsNan => "isnan",
                     crate::RelationalFunction::IsInf => "isinf",
-                    crate::RelationalFunction::IsFinite => "isfinite",
-                    crate::RelationalFunction::IsNormal => "isnormal",
                 };
                 write!(self.out, "{NAMESPACE}::{op}")?;
                 self.put_call_parameters(iter::once(argument), context)?;

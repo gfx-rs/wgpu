@@ -2981,12 +2981,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 use crate::RelationalFunction as Rf;
 
                 let fun_name = match fun {
-                    // There's no specific function for this but we can invert the result of `isinf`
-                    Rf::IsFinite => "!isinf",
                     Rf::IsInf => "isinf",
                     Rf::IsNan => "isnan",
-                    // There's also no function for this but we can invert `isnan`
-                    Rf::IsNormal => "!isnan",
                     Rf::All => "all",
                     Rf::Any => "any",
                 };

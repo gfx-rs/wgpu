@@ -52,8 +52,6 @@ pub(super) const fn map_relational_fun(
         Op::Any => Ok(Rf::Any),
         Op::IsNan => Ok(Rf::IsNan),
         Op::IsInf => Ok(Rf::IsInf),
-        Op::IsFinite => Ok(Rf::IsFinite),
-        Op::IsNormal => Ok(Rf::IsNormal),
         _ => Err(Error::UnknownRelationalFunction(word)),
     }
 }

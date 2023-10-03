@@ -648,25 +648,24 @@ impl<'a> ResolveContext<'a> {
                         width: crate::BOOL_WIDTH,
                     })
                 }
-                crate::RelationalFunction::IsNan
-                | crate::RelationalFunction::IsInf
-                | crate::RelationalFunction::IsFinite
-                | crate::RelationalFunction::IsNormal => match *past(argument)?.inner_with(types) {
-                    Ti::Scalar { .. } => TypeResolution::Value(Ti::Scalar {
-                        kind: crate::ScalarKind::Bool,
-                        width: crate::BOOL_WIDTH,
-                    }),
-                    Ti::Vector { size, .. } => TypeResolution::Value(Ti::Vector {
-                        kind: crate::ScalarKind::Bool,
-                        width: crate::BOOL_WIDTH,
-                        size,
-                    }),
-                    ref other => {
-                        return Err(ResolveError::IncompatibleOperands(format!(
-                            "{fun:?}({other:?})"
-                        )))
+                crate::RelationalFunction::IsNan | crate::RelationalFunction::IsInf => {
+                    match *past(argument)?.inner_with(types) {
+                        Ti::Scalar { .. } => TypeResolution::Value(Ti::Scalar {
+                            kind: crate::ScalarKind::Bool,
+                            width: crate::BOOL_WIDTH,
+                        }),
+                        Ti::Vector { size, .. } => TypeResolution::Value(Ti::Vector {
+                            kind: crate::ScalarKind::Bool,
+                            width: crate::BOOL_WIDTH,
+                            size,
+                        }),
+                        ref other => {
+                            return Err(ResolveError::IncompatibleOperands(format!(
+                                "{fun:?}({other:?})"
+                            )))
+                        }
                     }
-                },
+                }
             },
             crate::Expression::Math {
                 fun,

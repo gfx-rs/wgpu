@@ -1406,10 +1406,6 @@ impl<'w> BlockContext<'w> {
                     Rf::Any => spirv::Op::Any,
                     Rf::IsNan => spirv::Op::IsNan,
                     Rf::IsInf => spirv::Op::IsInf,
-                    //TODO: these require Kernel capability
-                    Rf::IsFinite | Rf::IsNormal => {
-                        return Err(Error::FeatureNotImplemented("is finite/normal"))
-                    }
                 };
                 let id = self.gen_id();
                 block

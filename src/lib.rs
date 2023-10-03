@@ -1117,8 +1117,6 @@ pub enum RelationalFunction {
     Any,
     IsNan,
     IsInf,
-    IsFinite,
-    IsNormal,
 }
 
 /// Built-in shader function for math.
