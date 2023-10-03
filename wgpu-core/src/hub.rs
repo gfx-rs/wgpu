@@ -575,8 +575,10 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         for element in self.bind_group_layouts.data.write().map.drain(..) {
             if let Element::Occupied(bgl, _) = element {
                 let device = &devices[bgl.device_id.value];
-                unsafe {
-                    device.raw.destroy_bind_group_layout(bgl.raw);
+                if let Some(inner) = bgl.into_inner() {
+                    unsafe {
+                        device.raw.destroy_bind_group_layout(inner.raw);
+                    }
                 }
             }
         }

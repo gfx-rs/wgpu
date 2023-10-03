@@ -38,7 +38,7 @@ mod compat {
             }
 
             if let Some(id) = self.assigned {
-                return bind_group_layouts[id].compatible_layout == self.expected;
+                return bind_group_layouts[id].as_duplicate() == self.expected;
             }
 
             false
