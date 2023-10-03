@@ -1942,10 +1942,22 @@ impl Instance {
         &self,
         window: &W,
     ) -> Result<Surface, CreateSurfaceError> {
+        let raw_display_handle = window
+            .display_handle()
+            .map_err(|e| CreateSurfaceError {
+                inner: CreateSurfaceErrorKind::RawHandle(e)
+            })?
+            .as_raw();
+        let raw_window_handle = window
+            .window_handle()
+            .map_err(|e| CreateSurfaceError {
+                inner: CreateSurfaceErrorKind::RawHandle(e)
+            })?
+            .as_raw();
         let (id, data) = DynContext::instance_create_surface(
             &*self.context,
-            raw_window_handle::HasDisplayHandle::display_handle(window),
-            raw_window_handle::HasWindowHandle::window_handle(window),
+            raw_display_handle,
+            raw_window_handle
         )?;
         Ok(Surface {
             context: Arc::clone(&self.context),
@@ -2900,6 +2912,10 @@ enum CreateSurfaceErrorKind {
     /// Error from WebGPU surface creation.
     #[allow(dead_code)] // may be unused depending on target and features
     Web(String),
+
+    /// Error when trying to get a [`DisplayHandle`] or a [`WindowHandle`] from
+    /// `raw_window_handle`.
+    RawHandle(raw_window_handle::HandleError),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
@@ -2913,6 +2929,7 @@ impl fmt::Display for CreateSurfaceError {
             ))]
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
+            CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
         }
     }
 }
@@ -2927,6 +2944,7 @@ impl error::Error for CreateSurfaceError {
             ))]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            CreateSurfaceErrorKind::RawHandle(e) => e.source(),
         }
     }
 }

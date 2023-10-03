@@ -98,7 +98,7 @@ arrayvec.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true
-raw-window-handle.workspace = true
+raw-window-handle = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
