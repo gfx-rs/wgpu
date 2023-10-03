@@ -157,6 +157,12 @@ impl super::Swapchain {
     /// - The device must have been made idle before calling this function.
     unsafe fn release_resources(self, device: &ash::Device) -> Self {
         profiling::scope!("Swapchain::release_resources");
+        {
+            profiling::scope!("vkDeviceWaitIdle");
+            // We need to also wait until all presentation work is done. Because there is no way to portably wait until
+            // the presentation work is done, we are forced to wait until the device is idle.
+            let _ = unsafe { device.device_wait_idle() };
+        };
         unsafe { device.destroy_fence(self.fence, None) };
         self
     }
