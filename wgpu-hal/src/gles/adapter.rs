@@ -828,6 +828,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba8Snorm => filterable,
             Tf::Rgba8Uint => renderable | storage,
             Tf::Rgba8Sint => renderable | storage,
+            Tf::Rgb10a2Uint => renderable,
             Tf::Rgb10a2Unorm => filterable_renderable,
             Tf::Rg11b10Float => filterable | float_renderable,
             Tf::Rg32Uint => renderable,
