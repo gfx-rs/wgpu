@@ -249,9 +249,9 @@ impl<'a> Context<'a> {
 
     pub fn add_expression(&mut self, expr: Expression, meta: Span) -> Result<Handle<Expression>> {
         let mut eval = if self.is_const {
-            crate::proc::ConstantEvaluator::for_module(self.module)
+            crate::proc::ConstantEvaluator::for_glsl_module(self.module)
         } else {
-            crate::proc::ConstantEvaluator::for_function(
+            crate::proc::ConstantEvaluator::for_glsl_function(
                 self.module,
                 &mut self.expressions,
                 &mut self.expression_constness,

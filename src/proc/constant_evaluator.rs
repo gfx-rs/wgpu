@@ -5,7 +5,14 @@ use crate::{
 };
 
 #[derive(Debug)]
+enum Behavior {
+    Wgsl,
+    Glsl,
+}
+
+#[derive(Debug)]
 pub struct ConstantEvaluator<'a> {
+    behavior: Behavior,
     types: &'a mut UniqueArena<Type>,
     constants: &'a Arena<Constant>,
     expressions: &'a mut Arena<Expression>,
@@ -109,6 +116,8 @@ pub enum ConstantEvaluatorError {
     InvalidAccessIndexTy,
     #[error("Constants don't support bitcasts")]
     Bitcast,
+    #[error("Constants don't support array length expressions")]
+    ArrayLength,
     #[error("Cannot cast type")]
     InvalidCastArg,
     #[error("Cannot apply the unary op to the argument")]
@@ -131,20 +140,18 @@ pub enum ConstantEvaluatorError {
     NotImplemented(String),
 }
 
-// Access
-// AccessIndex
-// Splat
-// Swizzle
-// Unary
-// Binary
-// Select
-// Relational
-// Math
-// As
-
 impl<'a> ConstantEvaluator<'a> {
-    pub fn for_module(module: &'a mut crate::Module) -> Self {
+    pub fn for_wgsl_module(module: &'a mut crate::Module) -> Self {
+        Self::for_module(Behavior::Wgsl, module)
+    }
+
+    pub fn for_glsl_module(module: &'a mut crate::Module) -> Self {
+        Self::for_module(Behavior::Glsl, module)
+    }
+
+    fn for_module(behavior: Behavior, module: &'a mut crate::Module) -> Self {
         Self {
+            behavior,
             types: &mut module.types,
             constants: &module.constants,
             expressions: &mut module.const_expressions,
@@ -152,7 +159,42 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    pub fn for_function(
+    pub fn for_wgsl_function(
+        module: &'a mut crate::Module,
+        expressions: &'a mut Arena<Expression>,
+        expression_constness: &'a mut ExpressionConstnessTracker,
+        emitter: &'a mut super::Emitter,
+        block: &'a mut crate::Block,
+    ) -> Self {
+        Self::for_function(
+            Behavior::Wgsl,
+            module,
+            expressions,
+            expression_constness,
+            emitter,
+            block,
+        )
+    }
+
+    pub fn for_glsl_function(
+        module: &'a mut crate::Module,
+        expressions: &'a mut Arena<Expression>,
+        expression_constness: &'a mut ExpressionConstnessTracker,
+        emitter: &'a mut super::Emitter,
+        block: &'a mut crate::Block,
+    ) -> Self {
+        Self::for_function(
+            Behavior::Glsl,
+            module,
+            expressions,
+            expression_constness,
+            emitter,
+            block,
+        )
+    }
+
+    fn for_function(
+        behavior: Behavior,
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         expression_constness: &'a mut ExpressionConstnessTracker,
@@ -160,6 +202,7 @@ impl<'a> ConstantEvaluator<'a> {
         block: &'a mut crate::Block,
     ) -> Self {
         Self {
+            behavior,
             types: &mut module.types,
             constants: &module.constants,
             expressions,
@@ -288,20 +331,36 @@ impl<'a> ConstantEvaluator<'a> {
 
                 match convert {
                     Some(width) => self.cast(expr, kind, width, span),
-                    None => Err(ConstantEvaluatorError::Bitcast),
+                    None => match self.behavior {
+                        Behavior::Wgsl => Err(ConstantEvaluatorError::NotImplemented(
+                            "bitcast built-in function".into(),
+                        )),
+                        Behavior::Glsl => Err(ConstantEvaluatorError::Bitcast),
+                    },
                 }
             }
-            Expression::ArrayLength(expr) => {
-                let expr = self.check_and_get(expr)?;
-
-                self.array_length(expr, span)
-            }
-
+            Expression::Select { .. } => match self.behavior {
+                Behavior::Wgsl => Err(ConstantEvaluatorError::NotImplemented(
+                    "select built-in function".into(),
+                )),
+                Behavior::Glsl => Err(ConstantEvaluatorError::Select),
+            },
+            Expression::Relational { fun, .. } => match self.behavior {
+                Behavior::Wgsl => Err(ConstantEvaluatorError::NotImplemented(format!(
+                    "{fun:?} built-in function"
+                ))),
+                Behavior::Glsl => Err(ConstantEvaluatorError::Relational),
+            },
+            Expression::ArrayLength(expr) => match self.behavior {
+                Behavior::Wgsl => Err(ConstantEvaluatorError::ArrayLength),
+                Behavior::Glsl => {
+                    let expr = self.check_and_get(expr)?;
+                    self.array_length(expr, span)
+                }
+            },
             Expression::Load { .. } => Err(ConstantEvaluatorError::Load),
-            Expression::Select { .. } => Err(ConstantEvaluatorError::Select),
             Expression::LocalVariable(_) => Err(ConstantEvaluatorError::LocalVariable),
             Expression::Derivative { .. } => Err(ConstantEvaluatorError::Derivative),
-            Expression::Relational { .. } => Err(ConstantEvaluatorError::Relational),
             Expression::CallResult { .. } => Err(ConstantEvaluatorError::Call),
             Expression::WorkGroupUniformLoadResult { .. } => {
                 Err(ConstantEvaluatorError::WorkGroupUniformLoadResult)
@@ -468,16 +527,18 @@ impl<'a> ConstantEvaluator<'a> {
                         _ => return Err(ConstantEvaluatorError::InvalidMathArg),
                     },
                     _ => {
-                        return Err(ConstantEvaluatorError::NotImplemented(format!(
-                            "{fun:?} applied to vector values"
-                        )))
+                        return Err(ConstantEvaluatorError::NotImplemented(
+                            "clamp built-in function with vector values".into(),
+                        ))
                     }
                 };
 
                 let expr = Expression::Literal(literal);
                 Ok(self.register_evaluated_expr(expr, span))
             }
-            _ => Err(ConstantEvaluatorError::NotImplemented(format!("{fun:?}"))),
+            fun => Err(ConstantEvaluatorError::NotImplemented(format!(
+                "{fun:?} built-in function"
+            ))),
         }
     }
 
@@ -999,7 +1060,7 @@ mod tests {
         UniqueArena, VectorSize,
     };
 
-    use super::ConstantEvaluator;
+    use super::{Behavior, ConstantEvaluator};
 
     #[test]
     fn nan_handling() {
@@ -1100,6 +1161,7 @@ mod tests {
         };
 
         let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
@@ -1186,6 +1248,7 @@ mod tests {
         };
 
         let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
@@ -1304,6 +1367,7 @@ mod tests {
         let base = const_expressions.append(Expression::Constant(h), Default::default());
 
         let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
@@ -1398,6 +1462,7 @@ mod tests {
         let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
 
         let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,
@@ -1481,6 +1546,7 @@ mod tests {
         let h_expr = const_expressions.append(Expression::Constant(h), Default::default());
 
         let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
             expressions: &mut const_expressions,

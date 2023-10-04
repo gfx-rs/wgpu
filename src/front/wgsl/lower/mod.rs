@@ -340,7 +340,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx) => {
-                let mut eval = ConstantEvaluator::for_function(
+                let mut eval = ConstantEvaluator::for_wgsl_function(
                     self.module,
                     rctx.naga_expressions,
                     rctx.expression_constness,
@@ -354,7 +354,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 }
             }
             ExpressionContextType::Constant => {
-                let mut eval = ConstantEvaluator::for_module(self.module);
+                let mut eval = ConstantEvaluator::for_wgsl_module(self.module);
                 eval.try_eval_and_append(&expr, span)
                     .map_err(|e| Error::ConstantEvaluatorError(e, span))
             }
