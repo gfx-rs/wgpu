@@ -1203,8 +1203,7 @@ impl crate::Surface<super::Api> for Surface {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
-                        let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) }
-                            as *mut _ as *mut std::ffi::c_void;
+                        let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) };
                         wl_window = Some(window);
                         window
                     }
