@@ -397,6 +397,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let result = self.queue_write_staging_buffer_impl(
+            queue_id,
             device,
             device_token,
             &staging_buffer,
@@ -464,6 +465,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let result = self.queue_write_staging_buffer_impl(
+            queue_id,
             device,
             device_token,
             &staging_buffer,
@@ -531,6 +533,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     fn queue_write_staging_buffer_impl<A: HalApi>(
         &self,
+        device_id: id::DeviceId,
         device: &mut super::Device<A>,
         device_token: &mut Token<super::Device<A>>,
         staging_buffer: &StagingBuffer<A>,
@@ -550,6 +553,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .raw
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
+
+        if dst.device_id.value.0 != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(dst, buffer_id, buffer_offset, src_buffer_size)?;
@@ -626,6 +633,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst = texture_guard
             .get_mut(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
+
+        if dst.device_id.value.0 != queue_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
@@ -1105,6 +1116,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Some(cmdbuf) => cmdbuf,
                             None => continue,
                         };
+
+                        if cmdbuf.device_id.value.0 != queue_id {
+                            return Err(DeviceError::WrongDevice.into());
+                        }
+
                         #[cfg(feature = "trace")]
                         if let Some(ref trace) = device.trace {
                             trace.lock().add(Action::Submit(

@@ -300,6 +300,8 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("Attempt to use a resource with a different device from the one that created it")]
+    WrongDevice,
 }
 
 impl From<hal::DeviceError> for DeviceError {
