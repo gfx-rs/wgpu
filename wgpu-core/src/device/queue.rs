@@ -1051,6 +1051,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
         profiling::scope!("Queue::submit");
+        log::trace!("Queue::submit {queue_id:?}");
 
         let (submit_index, callbacks) = {
             let hub = A::hub(self);
@@ -1434,6 +1435,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
+        log::trace!("Queue::on_submitted_work_done {queue_id:?}");
+
         //TODO: flush pending writes
         let hub = A::hub(self);
         let mut token = Token::root();

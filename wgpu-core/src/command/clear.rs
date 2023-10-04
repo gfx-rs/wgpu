@@ -79,7 +79,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) -> Result<(), ClearError> {
-        profiling::scope!("CommandEncoder::fill_buffer");
+        profiling::scope!("CommandEncoder::clear_buffer");
+        log::trace!("CommandEncoder::clear_buffer {dst:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -158,6 +159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         subresource_range: &ImageSubresourceRange,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_texture");
+        log::trace!("CommandEncoder::clear_texture {dst:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();

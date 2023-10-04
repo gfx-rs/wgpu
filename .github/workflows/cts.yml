@@ -11,7 +11,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
-  MSRV: 1.65
+  MSRV: "1.70"
 
 jobs:
   cts:
@@ -49,10 +49,11 @@ jobs:
           cd cts
           git checkout $(cat ../wgpu/cts_runner/revision.txt)
 
-      - name: Install MSRV toolchain
+      - name: Install Repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
-          rustup default ${{ env.MSRV }}
+          rustup override set ${{ env.MSRV }}
+          cargo -V
 
       - name: caching
         uses: Swatinem/rust-cache@v2

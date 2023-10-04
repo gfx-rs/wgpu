@@ -166,6 +166,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 flags.set(Tfc::STORAGE, pc.format_rgba8_srgb_all);
                 flags
             }
+            Tf::Rgb10a2Uint => {
+                let mut flags = Tfc::COLOR_ATTACHMENT | msaa_count;
+                flags.set(Tfc::STORAGE, pc.format_rgb10a2_uint_write);
+                flags
+            }
             Tf::Rgb10a2Unorm => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rgb10a2_unorm_all);
@@ -399,7 +404,7 @@ const RGB10A2UNORM_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-const RGB10A2UINT_COLOR_WRITE: &[MTLFeatureSet] = &[
+const RGB10A2UINT_WRITE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
@@ -636,8 +641,7 @@ impl super::PrivateCapabilities {
             format_rgba8_srgb_no_write: !Self::supports_any(device, RGBA8_SRGB),
             format_rgb10a2_unorm_all: Self::supports_any(device, RGB10A2UNORM_ALL),
             format_rgb10a2_unorm_no_write: !Self::supports_any(device, RGB10A2UNORM_ALL),
-            format_rgb10a2_uint_color: !Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
-            format_rgb10a2_uint_color_write: Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
+            format_rgb10a2_uint_write: Self::supports_any(device, RGB10A2UINT_WRITE),
             format_rg11b10_all: Self::supports_any(device, RG11B10FLOAT_ALL),
             format_rg11b10_no_write: !Self::supports_any(device, RG11B10FLOAT_ALL),
             format_rgb9e5_all: Self::supports_any(device, RGB9E5FLOAT_ALL),
@@ -971,6 +975,7 @@ impl super::PrivateCapabilities {
             Tf::Bgra8Unorm => BGRA8Unorm,
             Tf::Rgba8Uint => RGBA8Uint,
             Tf::Rgba8Sint => RGBA8Sint,
+            Tf::Rgb10a2Uint => RGB10A2Uint,
             Tf::Rgb10a2Unorm => RGB10A2Unorm,
             Tf::Rg11b10Float => RG11B10Float,
             Tf::Rg32Uint => RG32Uint,
