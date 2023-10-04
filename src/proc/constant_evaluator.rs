@@ -96,12 +96,8 @@ pub enum ConstantEvaluatorError {
     WorkGroupUniformLoadResult,
     #[error("Constants don't support atomic functions")]
     Atomic,
-    #[error("Constants don't support relational functions")]
-    Relational,
     #[error("Constants don't support derivative functions")]
     Derivative,
-    #[error("Constants don't support select expressions")]
-    Select,
     #[error("Constants don't support load expressions")]
     Load,
     #[error("Constants don't support image expressions")]
@@ -114,8 +110,6 @@ pub enum ConstantEvaluatorError {
     InvalidAccessIndex,
     #[error("Cannot access with index of type")]
     InvalidAccessIndexTy,
-    #[error("Constants don't support bitcasts")]
-    Bitcast,
     #[error("Constants don't support array length expressions")]
     ArrayLength,
     #[error("Cannot cast type")]
@@ -335,26 +329,17 @@ impl<'a> ConstantEvaluator<'a> {
 
                 match convert {
                     Some(width) => self.cast(expr, kind, width, span),
-                    None => match self.behavior {
-                        Behavior::Wgsl => Err(ConstantEvaluatorError::NotImplemented(
-                            "bitcast built-in function".into(),
-                        )),
-                        Behavior::Glsl => Err(ConstantEvaluatorError::Bitcast),
-                    },
+                    None => Err(ConstantEvaluatorError::NotImplemented(
+                        "bitcast built-in function".into(),
+                    )),
                 }
             }
-            Expression::Select { .. } => match self.behavior {
-                Behavior::Wgsl => Err(ConstantEvaluatorError::NotImplemented(
-                    "select built-in function".into(),
-                )),
-                Behavior::Glsl => Err(ConstantEvaluatorError::Select),
-            },
-            Expression::Relational { fun, .. } => match self.behavior {
-                Behavior::Wgsl => Err(ConstantEvaluatorError::NotImplemented(format!(
-                    "{fun:?} built-in function"
-                ))),
-                Behavior::Glsl => Err(ConstantEvaluatorError::Relational),
-            },
+            Expression::Select { .. } => Err(ConstantEvaluatorError::NotImplemented(
+                "select built-in function".into(),
+            )),
+            Expression::Relational { fun, .. } => Err(ConstantEvaluatorError::NotImplemented(
+                format!("{fun:?} built-in function"),
+            )),
             Expression::ArrayLength(expr) => match self.behavior {
                 Behavior::Wgsl => Err(ConstantEvaluatorError::ArrayLength),
                 Behavior::Glsl => {
