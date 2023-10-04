@@ -1,7 +1,10 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{self, get_bind_group_layout, try_get_bind_group_layout},
+    binding_model::{
+        self, get_bind_group_layout, try_get_bind_group_layout, BglOrDuplicate,
+        BindGroupLayoutInner,
+    },
     command, conv,
     device::life::WaitIdleError,
     device::{
@@ -1392,8 +1395,9 @@ impl<A: HalApi> Device<A> {
             .iter(self_id.backend())
             .find(|&(_, bgl)| {
                 bgl.device_id.value.0 == self_id
-                    && bgl.compatible_layout.is_none()
-                    && bgl.entries == *entry_map
+                    && bgl
+                        .as_inner()
+                        .map_or(false, |inner| inner.entries == *entry_map)
             })
             .map(|(id, value)| {
                 value.multi_ref_count.inc();
@@ -1408,7 +1412,12 @@ impl<A: HalApi> Device<A> {
         pipeline_layout
             .bind_group_layout_ids
             .iter()
-            .map(|&id| &bgl_guard[id].entries)
+            .map(|&id| {
+                &get_bind_group_layout(bgl_guard, id)
+                    .1
+                    .assume_deduplicated()
+                    .entries
+            })
             .collect()
     }
 
@@ -1427,7 +1436,9 @@ impl<A: HalApi> Device<A> {
             .iter()
             .enumerate()
             .map(|(group_index, &bgl_id)| pipeline::LateSizedBufferGroup {
-                shader_sizes: bgl_guard[bgl_id]
+                shader_sizes: get_bind_group_layout(bgl_guard, bgl_id)
+                    .1
+                    .assume_deduplicated()
                     .entries
                     .values()
                     .filter_map(|entry| match entry.ty {
@@ -1639,21 +1650,22 @@ impl<A: HalApi> Device<A> {
             .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
         Ok(binding_model::BindGroupLayout {
-            raw,
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
             },
             multi_ref_count: MultiRefCount::new(),
-            dynamic_count: entry_map
-                .values()
-                .filter(|b| b.ty.has_dynamic_offset())
-                .count(),
-            count_validator,
-            entries: entry_map,
-            #[cfg(debug_assertions)]
-            label: label.unwrap_or("").to_string(),
-            compatible_layout: None,
+            inner: BglOrDuplicate::Inner(BindGroupLayoutInner {
+                raw,
+                dynamic_count: entry_map
+                    .values()
+                    .filter(|b| b.ty.has_dynamic_offset())
+                    .count(),
+                count_validator,
+                entries: entry_map,
+                #[cfg(debug_assertions)]
+                label: label.unwrap_or("").to_string(),
+            }),
         })
     }
 
@@ -1823,6 +1835,8 @@ impl<A: HalApi> Device<A> {
         Ok(())
     }
 
+    // This function expects the provided bind group layout to be resolved
+    // (not passing a duplicate) beforehand.
     pub(super) fn create_bind_group<G: GlobalIdentityHandlerFactory>(
         &self,
         self_id: id::DeviceId,
@@ -1837,7 +1851,7 @@ impl<A: HalApi> Device<A> {
             // Check that the number of entries in the descriptor matches
             // the number of entries in the layout.
             let actual = desc.entries.len();
-            let expected = layout.entries.len();
+            let expected = layout.assume_deduplicated().entries.len();
             if actual != expected {
                 return Err(Error::BindingsNumMismatch { expected, actual });
             }
@@ -1868,6 +1882,7 @@ impl<A: HalApi> Device<A> {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
             let decl = layout
+                .assume_deduplicated()
                 .entries
                 .get(&binding)
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
@@ -2044,9 +2059,11 @@ impl<A: HalApi> Device<A> {
             }
         }
 
+        let layout_inner = layout.assume_deduplicated();
+
         let hal_desc = hal::BindGroupDescriptor {
             label: desc.label.borrow_option(),
-            layout: &layout.raw,
+            layout: &layout_inner.raw,
             entries: &hal_entries,
             buffers: &hal_buffers,
             samplers: &hal_samplers,
@@ -2074,7 +2091,7 @@ impl<A: HalApi> Device<A> {
             used_texture_ranges,
             dynamic_binding_info,
             // collect in the order of BGL iteration
-            late_buffer_binding_sizes: layout
+            late_buffer_binding_sizes: layout_inner
                 .entries
                 .keys()
                 .flat_map(|binding| late_buffer_binding_sizes.get(binding).cloned())
@@ -2304,10 +2321,10 @@ impl<A: HalApi> Device<A> {
 
         // validate total resource counts
         for &id in desc.bind_group_layouts.iter() {
-            let bind_group_layout = bgl_guard
-                .get(id)
-                .map_err(|_| Error::InvalidBindGroupLayout(id))?;
-            count_validator.merge(&bind_group_layout.count_validator);
+            let Some(bind_group_layout) = try_get_bind_group_layout(bgl_guard, id) else {
+                return Err(Error::InvalidBindGroupLayout(id));
+            };
+            count_validator.merge(&bind_group_layout.assume_deduplicated().count_validator);
         }
         count_validator
             .validate(&self.limits)
@@ -2316,7 +2333,12 @@ impl<A: HalApi> Device<A> {
         let bgl_vec = desc
             .bind_group_layouts
             .iter()
-            .map(|&id| &try_get_bind_group_layout(bgl_guard, id).unwrap().raw)
+            .map(|&id| {
+                &try_get_bind_group_layout(bgl_guard, id)
+                    .unwrap()
+                    .assume_deduplicated()
+                    .raw
+            })
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.borrow_option(),
