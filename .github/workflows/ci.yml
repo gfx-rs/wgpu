@@ -205,7 +205,7 @@ jobs:
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
 
-    name: Core MSRV ${{ matrix.name }}
+    name: MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -229,7 +229,7 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: core-msrv-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
       - name: check native
         shell: bash
@@ -379,6 +379,12 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
       - name: disable debug
         shell: bash
         run: |
@@ -390,7 +396,7 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+          key: doctests-${{ env.CACHE_SUFFIX }}
 
       - name: run doctests
         shell: bash
@@ -406,11 +412,17 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
       - name: run rustfmt
         run: |
           cargo fmt -- --check
 
-  check-msrv-cts_runner:
+  check-cts-runner:
     name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
@@ -434,14 +446,17 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: cts_runner-${{ env.CACHE_SUFFIX }}
+          key: cts-runner-${{ env.CACHE_SUFFIX }}
 
       - name: build Deno
         run: |
           cargo clippy --manifest-path cts_runner/Cargo.toml
 
+  # Separate job so that new advisories don't block CI.
+  #
+  # This job is not required to pass for PRs to be merged.
   cargo-deny-check-advisories:
-    name: "Run `cargo deny check advisories`"
+    name: "cargo-deny advisories"
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
@@ -455,7 +470,7 @@ jobs:
           rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
-    name: "Run `cargo deny check`"
+    name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
