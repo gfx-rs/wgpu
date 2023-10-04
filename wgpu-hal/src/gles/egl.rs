@@ -145,11 +145,6 @@ struct DisplayOwner {
     display: DisplayRef,
 }
 
-/// # Safety
-/// `library` implements `Send` and `display` is just an enum which gets passed
-/// around.
-unsafe impl Send for DisplayOwner {}
-
 impl Drop for DisplayOwner {
     fn drop(&mut self) {
         match self.display {
