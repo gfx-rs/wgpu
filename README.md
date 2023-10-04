@@ -32,24 +32,17 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### MSRV policy
 
-Minimum Supported Rust Version is **1.65**.
-It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
-This version can only be upgraded in breaking releases.
+Due to complex dependants, we have two MSRV policies:
+ - `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
+ - The rest of the workspace has the MSRV of **1.70**.
+
+It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
+This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
 
 The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
 require an MSRV ahead of Firefox's MSRV for nightly builds, as
 determined by the value of `MINIMUM_RUST_VERSION` in
-[`python/mozboot/mozboot/util.py`][util]. However, Firefox uses `cargo
-vendor` to extract only those crates it actually uses, so the
-workspace's other crates can have more recent MSRVs.
-
-_Note for Rust 1.64_: The workspace itself can even use a newer MSRV
-than Firefox, as long as the vendoring step's `Cargo.toml` rewriting
-removes any features Firefox's MSRV couldn't handle. For example,
-`wgpu` can use manifest key inheritance, added in Rust 1.64, even
-before Firefox reaches that MSRV, because `cargo vendor` copies
-inherited values directly into the individual crates' `Cargo.toml`
-files, producing 1.63-compatible files.
+[`python/mozboot/mozboot/util.py`][util].
 
 [util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
 
