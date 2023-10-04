@@ -1223,6 +1223,8 @@ impl super::Adapter {
         let naga_options = {
             use naga::back::spv;
 
+            // The following capabilities are always available
+            // see https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap52.html#spirvenv-capabilities
             let mut capabilities = vec![
                 spv::Capability::Shader,
                 spv::Capability::Matrix,
@@ -1230,14 +1232,22 @@ impl super::Adapter {
                 spv::Capability::Image1D,
                 spv::Capability::ImageQuery,
                 spv::Capability::DerivativeControl,
-                spv::Capability::SampledCubeArray,
-                spv::Capability::SampleRateShading,
-                //Note: this is requested always, no matter what the actual
-                // adapter supports. It's not the responsibility of SPV-out
-                // translation to handle the storage support for formats.
                 spv::Capability::StorageImageExtendedFormats,
-                //TODO: fill out the rest
             ];
+
+            if self
+                .downlevel_flags
+                .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES)
+            {
+                capabilities.push(spv::Capability::SampledCubeArray);
+            }
+
+            if self
+                .downlevel_flags
+                .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING)
+            {
+                capabilities.push(spv::Capability::SampleRateShading);
+            }
 
             if features.contains(wgt::Features::MULTIVIEW) {
                 capabilities.push(spv::Capability::MultiView);

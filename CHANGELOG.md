@@ -85,6 +85,12 @@ depth_ops: Some(wgpu::Operations {
 
 By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
+#### The GLES backend is now optional on Windows & macOS
+
+The `angle` feature flag has to be set for the GLES backend to be enabled on Windows & macOS.
+
+By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
+
 
 ### Added/New Features
 
@@ -111,6 +117,10 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 - Rename `wgpu_hal::vulkan::Instance::required_extensions` to `desired_extensions`. By @jimblandy in [#4115](https://github.com/gfx-rs/wgpu/pull/4115)
 
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
+
+#### DX12
+
+- Bump `gpu-allocator` to 0.23. By @Elabajaba in [#4198](https://github.com/gfx-rs/wgpu/pull/4198)
 
 
 ### Documentation
@@ -159,6 +169,31 @@ By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 ### Documentation
 
 - Add an overview of `RenderPass` and how render state works. By @kpreid in [#4055](https://github.com/gfx-rs/wgpu/pull/4055)
+
+## v0.17.2 (2023-10-03)
+
+### Bug Fixes
+
+#### Vulkan
+
+- Fix x11 hang while resizing on vulkan. @Azorlogh in [#4184](https://github.com/gfx-rs/wgpu/pull/4184).
+
+## v0.17.1 (2023-09-27)
+
+### Added/New Features
+
+- Add `get_mapped_range_as_array_buffer` for faster buffer read-backs in wasm builds. By @ryankaplan in [#4042] (https://github.com/gfx-rs/wgpu/pull/4042).
+
+### Bug Fixes
+
+#### DX12
+
+- Fix panic on resize when using DX12. By @cwfitzgerald in [#4106](https://github.com/gfx-rs/wgpu/pull/4106)
+
+#### Vulkan
+
+- Suppress validation error caused by OBS layer. This was also fixed upstream. By @cwfitzgerald in [#4002](https://github.com/gfx-rs/wgpu/pull/4002)
+- Work around bug in nvidia's vkCmdFillBuffer implementation. By @cwfitzgerald in [#4132](https://github.com/gfx-rs/wgpu/pull/4132).
 
 ## v0.17.0 (2023-07-20)
 
