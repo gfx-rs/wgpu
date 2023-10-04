@@ -1,21 +1,23 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
+use crate::command_encoder::WebGpuCommandBuffer;
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
+use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::ZeroCopyBuf;
 use serde::Deserialize;
 
 use super::error::WebGpuResult;
 
 type WebGpuQueue = super::WebGpuDevice;
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_queue_submit(
     state: &mut OpState,
-    queue_rid: ResourceId,
-    command_buffers: Vec<ResourceId>,
+    #[smi] queue_rid: ResourceId,
+    #[serde] command_buffers: Vec<ResourceId>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let queue_resource = state.resource_table.get::<WebGpuQueue>(queue_rid)?;
@@ -24,9 +26,7 @@ pub fn op_webgpu_queue_submit(
     let ids = command_buffers
         .iter()
         .map(|rid| {
-            let buffer_resource = state
-                .resource_table
-                .get::<super::command_encoder::WebGpuCommandBuffer>(*rid)?;
+            let buffer_resource = state.resource_table.get::<WebGpuCommandBuffer>(*rid)?;
             let mut id = buffer_resource.1.borrow_mut();
             Ok(id.take().unwrap())
         })
@@ -35,7 +35,8 @@ pub fn op_webgpu_queue_submit(
     let maybe_err = gfx_select!(queue => instance.queue_submit(queue, &ids)).err();
 
     for rid in command_buffers {
-        state.resource_table.close(rid)?;
+        let resource = state.resource_table.take::<WebGpuCommandBuffer>(rid)?;
+        resource.close();
     }
 
     Ok(WebGpuResult::maybe_err(maybe_err))
@@ -59,15 +60,16 @@ impl From<GpuImageDataLayout> for wgpu_types::ImageDataLayout {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_write_buffer(
     state: &mut OpState,
-    queue_rid: ResourceId,
-    buffer: ResourceId,
-    buffer_offset: u64,
-    data_offset: usize,
-    size: Option<usize>,
-    buf: ZeroCopyBuf,
+    #[smi] queue_rid: ResourceId,
+    #[smi] buffer: ResourceId,
+    #[number] buffer_offset: u64,
+    #[number] data_offset: usize,
+    #[number] size: Option<usize>,
+    #[buffer] buf: &[u8],
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let buffer_resource = state
@@ -92,14 +94,15 @@ pub fn op_webgpu_write_buffer(
     Ok(WebGpuResult::maybe_err(maybe_err))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_write_texture(
     state: &mut OpState,
-    queue_rid: ResourceId,
-    destination: super::command_encoder::GpuImageCopyTexture,
-    data_layout: GpuImageDataLayout,
-    size: wgpu_types::Extent3d,
-    buf: ZeroCopyBuf,
+    #[smi] queue_rid: ResourceId,
+    #[serde] destination: super::command_encoder::GpuImageCopyTexture,
+    #[serde] data_layout: GpuImageDataLayout,
+    #[serde] size: wgpu_types::Extent3d,
+    #[buffer] buf: &[u8],
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let texture_resource = state
@@ -119,7 +122,7 @@ pub fn op_webgpu_write_texture(
     gfx_ok!(queue => instance.queue_write_texture(
       queue,
       &destination,
-      &*buf,
+      buf,
       &data_layout,
       &size
     ))

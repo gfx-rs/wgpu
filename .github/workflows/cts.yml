@@ -75,7 +75,7 @@ jobs:
       - name: disable debug
         shell: bash
         run: |
-          mkdir wgpu/.cargo
+          mkdir -p wgpu/.cargo
           echo """[profile.dev]
           debug = 1" > wgpu/.cargo/config.toml
 

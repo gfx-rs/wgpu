@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -176,12 +176,13 @@ impl From<GpuBindingType> for wgpu_types::BindingType {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_bind_group_layout(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    entries: Vec<GpuBindGroupLayoutEntry>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Cow<str>,
+    #[serde] entries: Vec<GpuBindGroupLayoutEntry>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -202,7 +203,7 @@ pub fn op_webgpu_create_bind_group_layout(
         .collect::<Vec<_>>();
 
     let descriptor = wgpu_core::binding_model::BindGroupLayoutDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         entries: Cow::from(entries),
     };
 
@@ -213,12 +214,13 @@ pub fn op_webgpu_create_bind_group_layout(
   ) => state, WebGpuBindGroupLayout)
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_pipeline_layout(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    bind_group_layouts: Vec<u32>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Cow<str>,
+    #[serde] bind_group_layouts: Vec<u32>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -235,7 +237,7 @@ pub fn op_webgpu_create_pipeline_layout(
         .collect::<Result<Vec<_>, AnyError>>()?;
 
     let descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         bind_group_layouts: Cow::from(bind_group_layouts),
         push_constant_ranges: Default::default(),
     };
@@ -257,13 +259,14 @@ pub struct GpuBindGroupEntry {
     size: Option<u64>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_bind_group(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    layout: ResourceId,
-    entries: Vec<GpuBindGroupEntry>,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Cow<str>,
+    #[smi] layout: ResourceId,
+    #[serde] entries: Vec<GpuBindGroupEntry>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -313,7 +316,7 @@ pub fn op_webgpu_create_bind_group(
     let bind_group_layout = state.resource_table.get::<WebGpuBindGroupLayout>(layout)?;
 
     let descriptor = wgpu_core::binding_model::BindGroupDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         layout: bind_group_layout.1,
         entries: Cow::from(entries),
     };
