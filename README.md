@@ -30,27 +30,15 @@ The following binaries:
 
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
-### MSRV policy
-
-Due to complex dependants, we have two MSRV policies:
- - `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
- - The rest of the workspace has the MSRV of **1.70**.
-
-It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
-This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
-
-The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
-require an MSRV ahead of Firefox's MSRV for nightly builds, as
-determined by the value of `MINIMUM_RUST_VERSION` in
-[`python/mozboot/mozboot/util.py`][util].
-
-[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
-
 ## Getting Started
 
 ### Rust
 
-Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --bin name`. See the [list of examples](examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
+Rust examples can be found at `wgpu/examples`. You can run the examples on native with `cargo run --bin <name>`. See the [list of examples](examples).
+
+To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin <name>`. Then connect to `http://localhost:8000` in your WebGPU enabled browser.
+
+To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin <name> --features webgl`. Then connect to `http://localhost:8000` in your WebGL enabled browser.
 
 If you are looking for a wgpu tutorial, look at the following:
 
@@ -121,6 +109,22 @@ These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSof
 On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
 On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
+### MSRV policy
+
+Due to complex dependants, we have two MSRV policies:
+ - `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
+ - The rest of the workspace has the MSRV of **1.70**.
+
+It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
+This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
+
+The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
+require an MSRV ahead of Firefox's MSRV for nightly builds, as
+determined by the value of `MINIMUM_RUST_VERSION` in
+[`python/mozboot/mozboot/util.py`][util].
+
+[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
+
 ## Environment Variables
 
 All testing and example infrastructure shares the same set of environment variables that determine which Backend/GPU it will run on.
@@ -139,42 +143,32 @@ We have multiple methods of testing, each of which tests different qualities abo
 
 | Backend/Platform | Tests              | CTS                | Notes                                 |
 | ---------------- | ------------------ | ------------------ | ------------------------------------- |
-| DX12/Windows 10  | :heavy_check_mark: | :heavy_check_mark: | using WARP                            |
+| DX12/Windows 10  | :heavy_check_mark: | -                  | using WARP                            |
 | DX11/Windows 10  | :construction:     | —                  | using WARP                            |
-| Metal/MacOS      | —                  | —                  | metal requires GPU                    |
-| Vulkan/Linux     | :heavy_check_mark: | :x:                | using lavapipe, [cts hangs][cts-hang] |
+| Metal/MacOS      | :heavy_check_mark: | —                  | using hardware runner                 |
+| Vulkan/Linux     | :heavy_check_mark: | -                  | using swiftshader                     |
 | GLES/Linux       | :heavy_check_mark: | —                  | using llvmpipe                        |
-
-[cts-hang]: https://github.com/gfx-rs/wgpu/issues/1974
+| WebGL/Chrome     | :heavy_check_mark: | —                  | using swiftshader                     |
 
 ### Core Test Infrastructure
 
 We use a tool called [`cargo nextest`](https://github.com/nextest-rs/nextest) to run our tests.
 To install it, run `cargo install cargo-nextest`.
 
-To run the test suite on the default device:
+To run the test suite:
 
 ```
 cargo nextest run --no-fail-fast
 ```
 
-`wgpu-info` can run the tests once for each adapter on your system.
+To run the test suite on WebGL (currently incomplete):
 
 ```
-cargo run --bin wgpu-info -- cargo nextest run --no-fail-fast
+cd wgpu
+wasm-pack test --headless --chrome --features webgl --workspace
 ```
 
-Then to run an example's image comparison tests, run:
-
-```
-cargo nextest run <example-test-name> --no-fail-fast
-```
-
-Or run a part of the integration test suite:
-
-```
-cargo nextest run -p wgpu -- <name-of-test>
-```
+This will automatically run the tests using a packaged browser. Remove `--headless` to run the tests with whatever browser you wish at `http://localhost:8000`.
 
 If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases.
 
