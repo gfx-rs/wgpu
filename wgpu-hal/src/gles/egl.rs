@@ -688,6 +688,9 @@ enum WindowKind {
 
 #[derive(Clone, Debug)]
 struct WindowSystemInterface {
+    // Mutex: Because `Sync` is not implemented for `DisplayOwner`.
+    // See: https://rust-lang.github.io/rust-clippy/master/index.html#arc_with_non_send_sync
+    // for more information
     display_owner: Option<Arc<Mutex<DisplayOwner>>>,
     kind: WindowKind,
 }
