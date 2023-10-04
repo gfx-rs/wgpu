@@ -135,7 +135,7 @@ impl DisplayRef {
 }
 
 /// DisplayOwner ties the lifetime of the system display handle
-/// tk that of the loaded library.
+/// to that of the loaded library.
 /// It implements Drop to ensure that the display handle is closed
 /// prior to unloading the library so that we don't leak the
 /// associated file descriptors
