@@ -126,6 +126,8 @@ pub enum ConstantEvaluatorError {
     InvalidBinaryOpArgs,
     #[error("Cannot apply math function to type")]
     InvalidMathArg,
+    #[error("{0:?} built-in function expects {1:?} arguments but {2:?} were supplied")]
+    InvalidMathArgCount(crate::MathFunction, usize, usize),
     #[error("Splat is defined only on scalar values")]
     SplatScalarOnly,
     #[error("Can only swizzle vector constants")]
@@ -486,6 +488,19 @@ impl<'a> ConstantEvaluator<'a> {
         fun: crate::MathFunction,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let expected = fun.argument_count();
+        let given = Some(arg)
+            .into_iter()
+            .chain(arg1)
+            .chain(arg2)
+            .chain(arg3)
+            .count();
+        if expected != given {
+            return Err(ConstantEvaluatorError::InvalidMathArgCount(
+                fun, expected, given,
+            ));
+        }
+
         let const0 = &self.expressions[arg];
         let const1 = arg1.map(|arg| &self.expressions[arg]);
         let const2 = arg2.map(|arg| &self.expressions[arg]);
