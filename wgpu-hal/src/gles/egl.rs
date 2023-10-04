@@ -135,7 +135,7 @@ impl DisplayRef {
 }
 
 /// DisplayOwner ties the lifetime of the system display handle
-/// to that of the loaded library.
+/// tk that of the loaded library.
 /// It implements Drop to ensure that the display handle is closed
 /// prior to unloading the library so that we don't leak the
 /// associated file descriptors
@@ -144,6 +144,11 @@ struct DisplayOwner {
     library: libloading::Library,
     display: DisplayRef,
 }
+
+/// # Safety
+/// `library` implements `Send` and `display` is just an enum which gets passed
+/// around.
+unsafe impl Send for DisplayOwner {}
 
 impl Drop for DisplayOwner {
     fn drop(&mut self) {
@@ -683,7 +688,7 @@ enum WindowKind {
 
 #[derive(Clone, Debug)]
 struct WindowSystemInterface {
-    display_owner: Option<Arc<DisplayOwner>>,
+    display_owner: Option<Arc<Mutex<DisplayOwner>>>,
     kind: WindowKind,
 }
 
@@ -797,7 +802,11 @@ impl crate::Instance<super::Api> for Instance {
                         &display_attributes,
                     )
                     .unwrap();
-                (display, Some(Arc::new(library)), WindowKind::Wayland)
+                (
+                    display,
+                    Some(Arc::new(Mutex::new(library))),
+                    WindowKind::Wayland,
+                )
             } else if let (Some(display_owner), Some(egl)) = (x11_display_library, egl1_5) {
                 log::info!("Using X11 platform");
                 let display_attributes = [khronos_egl::ATTRIB_NONE];
@@ -808,7 +817,11 @@ impl crate::Instance<super::Api> for Instance {
                         &display_attributes,
                     )
                     .unwrap();
-                (display, Some(Arc::new(display_owner)), WindowKind::X11)
+                (
+                    display,
+                    Some(Arc::new(Mutex::new(display_owner))),
+                    WindowKind::X11,
+                )
             } else if let (Some(display_owner), Some(egl)) = (angle_x11_display_library, egl1_5) {
                 log::info!("Using Angle platform with X11");
                 let display_attributes = [
@@ -825,7 +838,11 @@ impl crate::Instance<super::Api> for Instance {
                         &display_attributes,
                     )
                     .unwrap();
-                (display, Some(Arc::new(display_owner)), WindowKind::AngleX11)
+                (
+                    display,
+                    Some(Arc::new(Mutex::new(display_owner))),
+                    WindowKind::AngleX11,
+                )
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
                 log::info!("No windowing system present. Using surfaceless platform");
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
@@ -1200,7 +1217,7 @@ impl crate::Surface<super::Api> for Surface {
                     }
                     (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => handle.a_native_window,
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
-                        let library = &self.wsi.display_owner.as_ref().unwrap().library;
+                        let library = { &self.wsi.display_owner.as_ref().unwrap().lock().library };
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
                         let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) };
@@ -1303,7 +1320,7 @@ impl crate::Surface<super::Api> for Surface {
         };
 
         if let Some(window) = wl_window {
-            let library = &self.wsi.display_owner.as_ref().unwrap().library;
+            let library = { &self.wsi.display_owner.as_ref().unwrap().lock().library };
             let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
                 unsafe { library.get(b"wl_egl_window_resize") }.unwrap();
             unsafe {
@@ -1369,12 +1386,15 @@ impl crate::Surface<super::Api> for Surface {
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
             if let Some(window) = wl_window {
-                let library = &self
-                    .wsi
-                    .display_owner
-                    .as_ref()
-                    .expect("unsupported window")
-                    .library;
+                let library = {
+                    &self
+                        .wsi
+                        .display_owner
+                        .as_ref()
+                        .expect("unsupported window")
+                        .lock()
+                        .library
+                };
                 let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> =
                     unsafe { library.get(b"wl_egl_window_destroy") }.unwrap();
                 unsafe { wl_egl_window_destroy(window) };
