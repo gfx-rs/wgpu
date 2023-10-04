@@ -236,7 +236,7 @@ jobs:
         run: |
           set -e
 
-          # check with no features
+          # check wgpu-core with all features. This will also get wgpu-hal and wgpu-types.
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
   wasm-test:
