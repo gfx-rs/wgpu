@@ -197,6 +197,9 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
         // Packed 32-bit formats
         TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
+        TextureFormat::Rgb10a2Uint => {
+            unimplemented!("Current version of web_sys is missing {texture_format:?}")
+        }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
         // 64-bit formats
@@ -1912,6 +1915,16 @@ impl crate::context::Context for Context {
 
     fn device_drop(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
+    }
+
+    fn device_destroy(&self, _buffer: &Self::DeviceId, device_data: &Self::DeviceData) {
+        device_data.0.destroy();
+    }
+
+    fn device_lose(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        // TODO: figure out the GPUDevice implementation of this, including resolving
+        // the device.lost promise, which will require a different invocation pattern
+        // with a callback.
     }
 
     fn device_poll(

@@ -54,6 +54,8 @@ pub use wgt::{
 ))]
 #[doc(hidden)]
 pub use ::hal;
+#[cfg(feature = "naga")]
+pub use ::naga;
 #[cfg(any(
     not(target_arch = "wasm32"),
     feature = "webgl",
@@ -523,7 +525,7 @@ impl Drop for ShaderModule {
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -560,7 +562,7 @@ static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ShaderModuleDescriptor<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -574,6 +576,7 @@ static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
+#[derive(Debug)]
 pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -2763,6 +2766,11 @@ impl Device {
                     hal_device_callback,
                 )
         }
+    }
+
+    /// Destroy this device.
+    pub fn destroy(&self) {
+        DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
     }
 }
 

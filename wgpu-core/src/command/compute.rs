@@ -16,6 +16,7 @@ use crate::{
     hal_api::HalApi,
     hub::Token,
     id,
+    id::DeviceId,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
@@ -193,6 +194,8 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
+    #[error("Device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
@@ -390,6 +393,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let raw = cmd_buf.encoder.open();
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(ComputePassErrorInner::InvalidDevice(
+                cmd_buf.device_id.value.0,
+            ))
+            .map_pass_err(init_scope);
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
