@@ -632,6 +632,17 @@ impl<'a> ConstantEvaluator<'a> {
 
     fn constant_index(&self, expr: Handle<Expression>) -> Result<usize, ConstantEvaluatorError> {
         match self.expressions[expr] {
+            Expression::ZeroValue(ty)
+                if matches!(
+                    self.types[ty].inner,
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    }
+                ) =>
+            {
+                Ok(0)
+            }
             Expression::Literal(Literal::U32(index)) => Ok(index as usize),
             _ => Err(ConstantEvaluatorError::InvalidAccessIndexTy),
         }
