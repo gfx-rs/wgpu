@@ -141,7 +141,7 @@ impl Queries {
         encoder.resolve_query_set(
             &self.set,
             // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Musn't be larger than the number valid queries in the set.
-            0..self.next_unused_query as u32,
+            0..self.next_unused_query,
             &self.resolve_buffer,
             0,
         );
