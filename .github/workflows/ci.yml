@@ -99,11 +99,11 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
-      - name: Install MSRV toolchain
+      - name: Install Repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.REPO_MSRV }}
-          rm rust-toolchain.toml
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -212,10 +212,11 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
-      - name: Install MSRV toolchain
+      - name: Install Core MSRV toolchain
         run: |
           rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.CORE_MSRV }}
+          rustup override set ${{ env.CORE_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -244,6 +245,12 @@ jobs:
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target wasm32-unknown-unknown
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@v2
@@ -274,7 +281,6 @@ jobs:
           - name: Linux x86_64
             os: ubuntu-22.04
             backends: vulkan gl
-
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -413,8 +419,9 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -445,7 +452,7 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
-          rust-version: ${{ env.MSRV }}
+          rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
     name: "Run `cargo deny check`"
@@ -459,4 +466,4 @@ jobs:
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
-          rust-version: ${{ env.MSRV }}
+          rust-version: ${{ env.REPO_MSRV }}
