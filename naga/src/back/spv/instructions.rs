@@ -1054,19 +1054,55 @@ impl super::Instruction {
 
         instruction
     }
+    pub(super) fn group_non_uniform_broadcast(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+        index: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformBroadcast);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+        instruction.add_operand(index);
+
+        instruction
+    }
+    pub(super) fn group_non_uniform_broadcast_first(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformBroadcastFirst);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+
+        instruction
+    }
     pub(super) fn group_non_uniform_arithmetic(
         op: Op,
         result_type_id: Word,
         id: Word,
         exec_scope_id: Word,
-        group_op: spirv::GroupOperation,
+        group_op: Option<spirv::GroupOperation>,
         value: Word,
     ) -> Self {
+        println!(
+            "{:?}",
+            (op, result_type_id, id, exec_scope_id, group_op, value)
+        );
         let mut instruction = Self::new(op);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(exec_scope_id);
-        instruction.add_operand(group_op as u32);
+        if let Some(group_op) = group_op {
+            instruction.add_operand(group_op as u32);
+        }
         instruction.add_operand(value);
 
         instruction

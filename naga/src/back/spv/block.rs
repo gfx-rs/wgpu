@@ -2368,14 +2368,14 @@ impl<'w> BlockContext<'w> {
                     argument,
                     result,
                 } => {
-                    self.write_subgroup_operation(op, collective_op, argument, result, &mut block);
+                    self.write_subgroup_operation(op, collective_op, argument, result, &mut block)?;
                 }
                 crate::Statement::SubgroupBroadcast {
                     ref mode,
                     argument,
                     result,
                 } => {
-                    unimplemented!() // FIXME
+                    self.write_subgroup_broadcast(mode, argument, result, &mut block)?;
                 }
             }
         }

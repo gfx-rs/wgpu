@@ -10,20 +10,30 @@ impl<'w> BlockContext<'w> {
         result: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<(), Error> {
-        self.writer.require_any(
-            "GroupNonUniformArithmetic",
-            &[
-                spirv::Capability::GroupNonUniformArithmetic,
-                spirv::Capability::GroupNonUniformClustered,
-                spirv::Capability::GroupNonUniformPartitionedNV,
-            ],
-        )?;
+        use crate::SubgroupOperation as sg;
+        match op {
+            sg::All | sg::Any => {
+                self.writer.require_any(
+                    "GroupNonUniformVote",
+                    &[spirv::Capability::GroupNonUniformVote],
+                )?;
+            }
+            _ => {
+                self.writer.require_any(
+                    "GroupNonUniformArithmetic",
+                    &[
+                        spirv::Capability::GroupNonUniformArithmetic,
+                        spirv::Capability::GroupNonUniformClustered,
+                        spirv::Capability::GroupNonUniformPartitionedNV,
+                    ],
+                )?;
+            }
+        }
 
         let id = self.gen_id();
         let result_ty = &self.fun_info[result].ty;
         let result_type_id = self.get_expression_type_id(result_ty);
         let result_ty_inner = result_ty.inner_with(&self.ir_module.types);
-        let kind = result_ty_inner.scalar_kind().unwrap();
 
         let (is_scalar, kind) = match result_ty_inner {
             TypeInner::Scalar { kind, .. } => (true, kind),
@@ -32,7 +42,6 @@ impl<'w> BlockContext<'w> {
         };
 
         use crate::ScalarKind as sk;
-        use crate::SubgroupOperation as sg;
         let spirv_op = match (kind, op) {
             (sk::Bool, sg::All) if is_scalar => spirv::Op::GroupNonUniformAll,
             (sk::Bool, sg::Any) if is_scalar => spirv::Op::GroupNonUniformAny,
@@ -62,10 +71,13 @@ impl<'w> BlockContext<'w> {
         let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
 
         use crate::CollectiveOperation as c;
-        let group_op = match collective_op {
-            c::Reduce => spirv::GroupOperation::Reduce,
-            c::InclusiveScan => spirv::GroupOperation::InclusiveScan,
-            c::ExclusiveScan => spirv::GroupOperation::ExclusiveScan,
+        let group_op = match op {
+            sg::All | sg::Any => None,
+            _ => Some(match collective_op {
+                c::Reduce => spirv::GroupOperation::Reduce,
+                c::InclusiveScan => spirv::GroupOperation::InclusiveScan,
+                c::ExclusiveScan => spirv::GroupOperation::ExclusiveScan,
+            }),
         };
 
         let arg_id = self.cached[argument];
@@ -77,6 +89,50 @@ impl<'w> BlockContext<'w> {
             group_op,
             arg_id,
         ));
+        self.cached[result] = id;
+        Ok(())
+    }
+    pub(super) fn write_subgroup_broadcast(
+        &mut self,
+        mode: &crate::BroadcastMode,
+        argument: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        self.writer.require_any(
+            "GroupNonUniformBallot",
+            &[spirv::Capability::GroupNonUniformBallot],
+        )?;
+
+        let id = self.gen_id();
+        let result_ty = &self.fun_info[result].ty;
+        let result_type_id = self.get_expression_type_id(result_ty);
+
+        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+
+        let arg_id = self.cached[argument];
+        match mode {
+            crate::BroadcastMode::Index(index) => {
+                let index_id = self.cached[*index];
+                block.body.push(Instruction::group_non_uniform_broadcast(
+                    result_type_id,
+                    id,
+                    exec_scope_id,
+                    arg_id,
+                    index_id,
+                ));
+            }
+            crate::BroadcastMode::First => {
+                block
+                    .body
+                    .push(Instruction::group_non_uniform_broadcast_first(
+                        result_type_id,
+                        id,
+                        exec_scope_id,
+                        arg_id,
+                    ));
+            }
+        }
         self.cached[result] = id;
         Ok(())
     }

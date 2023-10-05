@@ -238,3 +238,24 @@ pub fn map_conservative_depth(
         _ => Err(Error::UnknownConservativeDepth(span)),
     }
 }
+
+pub fn map_subgroup_operation(
+    word: &str,
+) -> Option<(crate::SubgroupOperation, crate::CollectiveOperation)> {
+    use crate::CollectiveOperation as co;
+    use crate::SubgroupOperation as sg;
+    Some(match word {
+        "subgroupAll" => (sg::All, co::Reduce),
+        "subgroupAny" => (sg::Any, co::Reduce),
+        "subgroupAdd" => (sg::Add, co::Reduce),
+        "subgroupMul" => (sg::Mul, co::Reduce),
+        "subgroupMin" => (sg::Min, co::Reduce),
+        "subgroupMax" => (sg::Max, co::Reduce),
+        "subgroupAnd" => (sg::And, co::Reduce),
+        "subgroupOr" => (sg::Or, co::Reduce),
+        "subgroupXor" => (sg::Xor, co::Reduce),
+        "subgroupPrefixAdd" => (sg::Add, co::InclusiveScan),
+        "subgroupPrefixMul" => (sg::Mul, co::InclusiveScan),
+        _ => return None,
+    })
+}

@@ -1866,6 +1866,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
+                } else if let Some((op, cop)) = conv::map_subgroup_operation(function.name) {
+                    return Ok(Some(self.subgroup_helper(span, op, cop, arguments, ctx)?));
                 } else {
                     match function.name {
                         "select" => {
@@ -2260,43 +2262,51 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             return Ok(Some(result));
                         }
                         "subgroupBroadcast" => {
-                            unimplemented!(); // FIXME
+                            let mut args = ctx.prepare_args(arguments, 2, span);
+
+                            let index = self.expression(args.next()?, ctx)?;
+                            let argument = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let ty = ctx.register_type(argument)?;
+
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::SubgroupBroadcast {
+                                    mode: crate::BroadcastMode::Index(index),
+                                    argument,
+                                    result,
+                                },
+                                span,
+                            );
+                            return Ok(Some(result));
                         }
                         "subgroupBroadcastFirst" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupAll" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupAny" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupAdd" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupMul" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupMin" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupMax" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupAnd" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupOr" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupXor" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupPrefixAdd" => {
-                            unimplemented!(); // FIXME
-                        }
-                        "subgroupPrefixMul" => {
-                            unimplemented!(); // FIXME
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+
+                            let argument = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let ty = ctx.register_type(argument)?;
+
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::SubgroupBroadcast {
+                                    mode: crate::BroadcastMode::First,
+                                    argument,
+                                    result,
+                                },
+                                span,
+                            );
+                            return Ok(Some(result));
                         }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }
@@ -2487,6 +2497,35 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             level,
             depth_ref,
         })
+    }
+    fn subgroup_helper(
+        &mut self,
+        span: Span,
+        op: crate::SubgroupOperation,
+        collective_op: crate::CollectiveOperation,
+        arguments: &[Handle<ast::Expression<'source>>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        let mut args = ctx.prepare_args(arguments, 1, span);
+
+        let argument = self.expression(args.next()?, ctx)?;
+        args.finish()?;
+
+        let ty = ctx.register_type(argument)?;
+
+        let result =
+            ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+        let rctx = ctx.runtime_expression_ctx(span)?;
+        rctx.block.push(
+            crate::Statement::SubgroupCollectiveOperation {
+                op,
+                collective_op,
+                argument,
+                result,
+            },
+            span,
+        );
+        Ok(result)
     }
 
     fn r#struct(

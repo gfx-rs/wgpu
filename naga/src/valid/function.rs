@@ -433,7 +433,6 @@ impl super::Validator {
         result: Handle<crate::Expression>,
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
-        self.emit_expression(argument, context)?;
         let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
 
         let (is_scalar, kind) = match argument_inner {
@@ -480,7 +479,6 @@ impl super::Validator {
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
         if let crate::BroadcastMode::Index(expr) = *mode {
-            self.emit_expression(expr, context)?;
             let index_ty = context.resolve_type(expr, &self.valid_expression_set)?;
             match index_ty {
                 crate::TypeInner::Scalar {
@@ -488,20 +486,22 @@ impl super::Validator {
                     ..
                 } => {}
                 _ => {
-                    log::error!("Subgroup broadcast index type {:?}", index_ty);
+                    log::error!(
+                        "Subgroup broadcast index type {:?}, expected unsigned int",
+                        index_ty
+                    );
                     return Err(SubgroupError::InvalidOperand(argument)
-                        .with_span_handle(argument, context.expressions)
+                        .with_span_handle(expr, context.expressions)
                         .into_other());
                 }
             }
         }
-        self.emit_expression(argument, context)?;
         let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
 
         match argument_inner {
             crate::TypeInner::Scalar { .. } | crate::TypeInner::Vector { .. } => {}
             _ => {
-                log::error!("Subgroup operand type {:?}", argument_inner);
+                log::error!("Subgroup broadcast operand type {:?}", argument_inner);
                 return Err(SubgroupError::InvalidOperand(argument)
                     .with_span_handle(argument, context.expressions)
                     .into_other());
