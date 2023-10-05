@@ -32,6 +32,4 @@ mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;
 
-// wasm_bindgen_test_configure!(run_in_browser);
-
 wgpu_test::gpu_test_main!();

@@ -1,9 +1,14 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use wgt::{WasmNotSend, WasmNotSync};
+
 use crate::{TestParameters, TestingContext};
 
+#[cfg(not(target_arch = "wasm32"))]
 pub type RunTestAsync =
     Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>;
+#[cfg(target_arch = "wasm32")]
+pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()>>>>;
 
 #[derive(Clone)]
 pub struct GpuTestConfiguration {
@@ -66,7 +71,10 @@ impl GpuTestConfiguration {
         }
     }
 
-    pub fn run_sync(self, test: impl Fn(TestingContext) + Copy + Send + Sync + 'static) -> Self {
+    pub fn run_sync(
+        self,
+        test: impl Fn(TestingContext) + Copy + WasmNotSend + WasmNotSync + 'static,
+    ) -> Self {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(async move { test(ctx) }))),
             ..self
@@ -75,8 +83,8 @@ impl GpuTestConfiguration {
 
     pub fn run_async<F, R>(self, test: F) -> Self
     where
-        F: Fn(TestingContext) -> R + Send + Sync + 'static,
-        R: Future<Output = ()> + Send + Sync + 'static,
+        F: Fn(TestingContext) -> R + WasmNotSend + WasmNotSync + 'static,
+        R: Future<Output = ()> + WasmNotSend + WasmNotSync + 'static,
     {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(test(ctx)))),

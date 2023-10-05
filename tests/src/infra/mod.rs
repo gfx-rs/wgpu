@@ -2,17 +2,19 @@ use anyhow::Context;
 
 pub use params::{GpuTestConfiguration, RunTestAsync};
 use parking_lot::Mutex;
-
-use crate::infra::single::SingleTest;
+pub use report::AdapterReport;
+pub use single::{SingleTest, TestInfo};
 
 mod params;
 mod report;
 mod single;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub static TEST_LIST: Mutex<Vec<GpuTestConfiguration>> = Mutex::new(Vec::new());
 
 pub type MainResult = anyhow::Result<()>;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn main() -> MainResult {
     let config_text =
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
@@ -27,13 +29,14 @@ pub fn main() -> MainResult {
             .iter()
             .enumerate()
             .map(move |(adapter_index, adapter)| {
-                SingleTest::from_gpu_test(test.clone(), adapter, adapter_index)
+                SingleTest::from_configuration(test.clone(), adapter, adapter_index)
             })
     }));
 
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn execute_native(tests: impl IntoIterator<Item = SingleTest>) {
     let args = libtest_mimic::Arguments::from_args();
     let trials = tests.into_iter().map(SingleTest::into_trial).collect();

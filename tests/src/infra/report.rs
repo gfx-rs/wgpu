@@ -24,3 +24,20 @@ pub struct AdapterReport {
     pub downlevel_caps: DownlevelCapabilities,
     pub texture_format_features: HashMap<TextureFormat, TextureFormatFeatures>,
 }
+
+impl AdapterReport {
+    pub fn from_adapter(adapter: &wgpu::Adapter) -> Self {
+        let info = adapter.get_info();
+        let features = adapter.features();
+        let limits = adapter.limits();
+        let downlevel_caps = adapter.get_downlevel_capabilities();
+
+        Self {
+            info,
+            features,
+            limits,
+            downlevel_caps,
+            texture_format_features: HashMap::new(), // todo
+        }
+    }
+}

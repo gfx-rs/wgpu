@@ -1,7 +1,6 @@
 #![cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 
 use wasm_bindgen::JsCast;
-use wasm_bindgen_test::*;
 use wgpu::ExternalImageSource;
 use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration, initialize_test};
 

@@ -4,24 +4,22 @@ use arrayvec::ArrayVec;
 
 use crate::{
     infra::{report::AdapterReport, GpuTestConfiguration},
-    initialize_test,
+    initialize_test, FailureReasons,
 };
 
-pub(super) struct SingleTest {
-    name: String,
-    future: Pin<Box<dyn Future<Output = Result<(), libtest_mimic::Failed>> + Send + Sync>>,
+#[cfg(target_arch = "wasm32")]
+type SingleTestFuture = Pin<Box<dyn Future<Output = ()>>>;
+#[cfg(not(target_arch = "wasm32"))]
+type SingleTestFuture = Pin<Box<dyn Future<Output = ()> + Send + Sync>>;
+
+pub struct TestInfo {
+    pub skip: bool,
+    pub expected_failure_reason: Option<FailureReasons>,
+    pub running_msg: String,
 }
 
-impl SingleTest {
-    pub fn from_gpu_test(
-        test: GpuTestConfiguration,
-        adapter: &AdapterReport,
-        adapter_index: usize,
-    ) -> Self {
-        let base_name = test.name;
-        let backend = &adapter.info.backend;
-        let device_name = &adapter.info.name;
-
+impl TestInfo {
+    pub fn from_configuration(test: &GpuTestConfiguration, adapter: &AdapterReport) -> Self {
         // Figure out if we should skip the test and if so, why.
         let mut skipped_reasons: ArrayVec<_, 4> = ArrayVec::new();
         let missing_features = test.params.required_features - adapter.features;
@@ -58,7 +56,7 @@ impl SingleTest {
             .iter()
             .find_map(|case| case.applies_to(&adapter_lowercase_info));
 
-        let expected_failure = test
+        let expected_failure_reason = test
             .params
             .failures
             .iter()
@@ -75,7 +73,11 @@ impl SingleTest {
         } else if !skipped_reasons.is_empty() {
             skip = true;
             format!("Skipped: {}", skipped_reasons.join(" | "))
-        } else if let Some(failure_resasons) = expected_failure {
+        } else if let Some(failure_resasons) = expected_failure_reason {
+            if cfg!(target_arch = "wasm32") {
+                skip = true;
+            }
+
             let names: ArrayVec<_, 4> = failure_resasons
                 .iter_names()
                 .map(|(name, _)| name)
@@ -87,28 +89,51 @@ impl SingleTest {
             String::from("Executed")
         };
 
-        let full_name =
-            format!("[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}");
+        Self {
+            skip,
+            expected_failure_reason,
+            running_msg,
+        }
+    }
+}
 
+pub struct SingleTest {
+    name: String,
+    future: SingleTestFuture,
+}
+
+impl SingleTest {
+    pub fn from_configuration(
+        config: GpuTestConfiguration,
+        adapter: &AdapterReport,
+        adapter_index: usize,
+    ) -> Self {
+        let backend = &adapter.info.backend;
+        let device_name = &adapter.info.name;
+
+        let test_info = TestInfo::from_configuration(&config, adapter);
+
+        let full_name = format!(
+            "[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}",
+            running_msg = test_info.running_msg,
+            base_name = config.name,
+        );
         Self {
             name: full_name,
             future: Box::pin(async move {
-                if skip {
-                    return Ok(());
+                if test_info.skip {
+                    return;
                 }
-                initialize_test(
-                    test.params,
-                    expected_failure,
-                    adapter_index,
-                    test.test.expect("Test must be specified"),
-                )
-                .await;
-                Ok(())
+                initialize_test(config, Some(test_info), adapter_index).await;
             }),
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn into_trial(self) -> libtest_mimic::Trial {
-        libtest_mimic::Trial::test(self.name, || pollster::block_on(self.future))
+        libtest_mimic::Trial::test(self.name, || {
+            pollster::block_on(self.future);
+            Ok(())
+        })
     }
 }

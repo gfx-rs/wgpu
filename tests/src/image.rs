@@ -1,4 +1,4 @@
-use std::{borrow::Cow, ffi::OsStr, io, path::Path};
+use std::{borrow::Cow, ffi::OsStr, path::Path};
 
 use wgpu::util::{align_to, DeviceExt};
 use wgpu::*;
@@ -16,7 +16,7 @@ async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec
             return None;
         }
     };
-    let decoder = png::Decoder::new(io::Cursor::new(data));
+    let decoder = png::Decoder::new(std::io::Cursor::new(data));
     let mut reader = decoder.read_info().ok()?;
 
     let mut buffer = vec![0; reader.output_buffer_size()];
@@ -54,7 +54,7 @@ async fn write_png(
     data: &[u8],
     compression: png::Compression,
 ) {
-    let file = io::BufWriter::new(std::fs::File::create(path).unwrap());
+    let file = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
 
     let mut encoder = png::Encoder::new(file, width, height);
     encoder.set_color(png::ColorType::Rgba);
@@ -275,7 +275,7 @@ pub async fn compare_image_output(
 ) {
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = (path, adapter_info, width, height, test_with_alpha, checks);
+        let _ = (path, width, height, test_with_alpha, checks);
     }
 }
 

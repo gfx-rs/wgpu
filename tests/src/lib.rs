@@ -10,7 +10,7 @@ pub mod image;
 pub mod infra;
 mod isolation;
 
-use crate::infra::RunTestAsync;
+use crate::infra::{AdapterReport, GpuTestConfiguration, TestInfo};
 
 pub use self::image::ComparisonType;
 pub use ctor::ctor;
@@ -329,11 +329,15 @@ impl TestParameters {
 }
 
 pub async fn initialize_test(
-    parameters: TestParameters,
-    expected_failure_reason: Option<FailureReasons>,
+    config: GpuTestConfiguration,
+    test_info: Option<TestInfo>,
     adapter_index: usize,
-    test: RunTestAsync,
 ) {
+    // If we get information externally, skip based on that information before we do anything.
+    if let Some(TestInfo { skip: true, .. }) = test_info {
+        return;
+    }
+
     // We don't actually care if it fails
     #[cfg(not(target_arch = "wasm32"))]
     let _ = env_logger::try_init();
@@ -345,13 +349,23 @@ pub async fn initialize_test(
     let (adapter, _surface_guard) = initialize_adapter(adapter_index);
 
     let adapter_info = adapter.get_info();
-
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
+
+    let test_info = test_info.unwrap_or_else(|| {
+        let adapter_report = AdapterReport::from_adapter(&adapter);
+        TestInfo::from_configuration(&config, &adapter_report)
+    });
+
+    // We are now guaranteed to have information about this test, so skip if we need to.
+    if test_info.skip {
+        log::info!("TEST RESULT: SKIPPED");
+        return;
+    }
 
     let (device, queue) = pollster::block_on(initialize_device(
         &adapter,
-        parameters.required_features,
-        parameters.required_limits.clone(),
+        config.params.required_features,
+        config.params.required_limits.clone(),
     ));
 
     let context = TestingContext {
@@ -359,13 +373,13 @@ pub async fn initialize_test(
         adapter_info,
         adapter_downlevel_capabilities,
         device,
-        device_features: parameters.required_features,
-        device_limits: parameters.required_limits.clone(),
+        device_features: config.params.required_features,
+        device_limits: config.params.required_limits.clone(),
         queue,
     };
 
     // Run the test, and catch panics (possibly due to failed assertions).
-    let panicked = AssertUnwindSafe(test(context))
+    let panicked = AssertUnwindSafe((config.test.as_ref().unwrap())(context))
         .catch_unwind()
         .await
         .is_err();
@@ -388,9 +402,9 @@ pub async fn initialize_test(
     };
 
     // Compare actual results against expectations.
-    match (failure_cause, expected_failure_reason) {
+    match (failure_cause, test_info.expected_failure_reason) {
         // The test passed, as expected.
-        (None, None) => {}
+        (None, None) => log::info!("TEST RESULT: PASSED"),
         // The test failed unexpectedly.
         (Some(cause), None) => {
             panic!("UNEXPECTED TEST FAILURE DUE TO {cause}")
@@ -402,7 +416,7 @@ pub async fn initialize_test(
         // The test failed, as expected.
         (Some(cause), Some(reason_expected)) => {
             log::info!(
-                "EXPECTED FAILURE DUE TO {} (expected because of {:?})",
+                "TEST RESULT: EXPECTED FAILURE DUE TO {} (expected because of {:?})",
                 cause,
                 reason_expected
             );
@@ -412,6 +426,8 @@ pub async fn initialize_test(
 
 pub fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
+    #[allow(unused_variables)]
+    let surface: wgpu::Surface;
     let surface_guard: Option<SurfaceGuard>;
 
     // Create a canvas iff we need a WebGL2RenderingContext to have a working device.
@@ -449,7 +465,7 @@ pub fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard
             }
         }
 
-        let surface = unsafe {
+        surface = unsafe {
             instance
                 .create_surface(&WindowHandle)
                 .expect("could not create surface from canvas")
@@ -575,8 +591,14 @@ pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnc
 #[macro_export]
 macro_rules! gpu_test_main {
     () => {
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+
+        #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::infra::MainResult {
             $crate::infra::main()
         }
+        #[cfg(target_arch = "wasm32")]
+        fn main() {}
     };
 }
