@@ -1326,6 +1326,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
 
+            if bind_group_layout.device_id.value.0 != device_id {
+                break DeviceError::WrongDevice.into();
+            }
+
             let mut layout_id = id::Valid(desc.layout);
             if let Some(id) = bind_group_layout.as_duplicate() {
                 layout_id = id;

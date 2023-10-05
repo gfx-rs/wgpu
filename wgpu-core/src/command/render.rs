@@ -10,7 +10,7 @@ use crate::{
         RenderCommand, RenderCommandError, StateChange,
     },
     device::{
-        AttachmentData, Device, MissingDownlevelFlags, MissingFeatures,
+        AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
         RenderPassCompatibilityCheckType, RenderPassCompatibilityError, RenderPassContext,
     },
     error::{ErrorFormatter, PrettyError},
@@ -18,7 +18,6 @@ use crate::{
     hal_api::HalApi,
     hub::Token,
     id,
-    id::DeviceId,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
@@ -521,11 +520,11 @@ pub enum ColorAttachmentError {
 #[derive(Clone, Debug, Error)]
 pub enum RenderPassErrorInner {
     #[error(transparent)]
+    Device(DeviceError),
+    #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
     Encoder(#[from] CommandEncoderError),
-    #[error("Device {0:?} is invalid")]
-    InvalidDevice(DeviceId),
     #[error("Attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
     #[error("The format of the depth-stencil attachment ({0:?}) is not a depth-stencil format")]
@@ -655,6 +654,12 @@ impl From<MissingBufferUsageError> for RenderPassErrorInner {
 impl From<MissingTextureUsageError> for RenderPassErrorInner {
     fn from(error: MissingTextureUsageError) -> Self {
         Self::RenderCommand(error.into())
+    }
+}
+
+impl From<DeviceError> for RenderPassErrorInner {
+    fn from(error: DeviceError) -> Self {
+        Self::Device(error)
     }
 }
 
@@ -1351,12 +1356,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
             }
 
-            let device = &device_guard[cmd_buf.device_id.value];
+            let device_id = cmd_buf.device_id.value;
+
+            let device = &device_guard[device_id];
             if !device.is_valid() {
-                return Err(RenderPassErrorInner::InvalidDevice(
-                    cmd_buf.device_id.value.0,
-                ))
-                .map_pass_err(init_scope);
+                return Err(DeviceError::Invalid).map_pass_err(init_scope);
             }
             cmd_buf.encoder.open_pass(base.label);
 
@@ -1451,6 +1455,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .add_single(&*bind_group_guard, bind_group_id)
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
+
+                        if bind_group.device_id.value != device_id {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
+
                         bind_group
                             .validate_dynamic_bindings(index, &temp_offsets, &cmd_buf.limits)
                             .map_pass_err(scope)?;
@@ -1517,6 +1526,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .add_single(&*render_pipeline_guard, pipeline_id)
                             .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
+
+                        if pipeline.device_id.value != device_id {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
 
                         info.context
                             .check_compatible(
@@ -1635,6 +1648,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
+
+                        if buffer.device_id.value != device_id {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
+
                         check_buffer_usage(buffer.usage, BufferUsages::INDEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
@@ -1683,6 +1701,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
+
+                        if buffer.device_id.value != device_id {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
+
                         check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
@@ -2264,6 +2287,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .add_single(&*bundle_guard, bundle_id)
                             .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
+
+                        if bundle.device_id.value != device_id {
+                            return Err(DeviceError::WrongDevice).map_pass_err(scope);
+                        }
 
                         info.context
                             .check_compatible(

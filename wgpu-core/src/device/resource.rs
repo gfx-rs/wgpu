@@ -1670,6 +1670,7 @@ impl<A: HalApi> Device<A> {
     }
 
     fn create_buffer_binding<'a>(
+        device_id: id::DeviceId,
         bb: &binding_model::BufferBinding,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
@@ -1727,6 +1728,11 @@ impl<A: HalApi> Device<A> {
             .buffers
             .add_single(storage, bb.buffer_id, internal_use)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
+
+        if buffer.device_id.value.0 != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         check_buffer_usage(buffer.usage, pub_usage)?;
         let raw_buffer = buffer
             .raw
@@ -1797,6 +1803,7 @@ impl<A: HalApi> Device<A> {
     }
 
     fn create_texture_binding(
+        device_id: id::DeviceId,
         view: &resource::TextureView<A>,
         texture_guard: &Storage<resource::Texture<A>, id::TextureId>,
         internal_use: hal::TextureUses,
@@ -1818,6 +1825,11 @@ impl<A: HalApi> Device<A> {
             .ok_or(binding_model::CreateBindGroupError::InvalidTexture(
                 view.parent_id.value.0,
             ))?;
+
+        if texture.device_id.value.0 != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         check_texture_usage(texture.desc.usage, pub_usage)?;
 
         used_texture_ranges.push(TextureInitTrackerAction {
@@ -1889,6 +1901,7 @@ impl<A: HalApi> Device<A> {
             let (res_index, count) = match entry.resource {
                 Br::Buffer(ref bb) => {
                     let bb = Self::create_buffer_binding(
+                        self_id,
                         bb,
                         binding,
                         decl,
@@ -1911,6 +1924,7 @@ impl<A: HalApi> Device<A> {
                     let res_index = hal_buffers.len();
                     for bb in bindings_array.iter() {
                         let bb = Self::create_buffer_binding(
+                            self_id,
                             bb,
                             binding,
                             decl,
@@ -1932,6 +1946,10 @@ impl<A: HalApi> Device<A> {
                                 .samplers
                                 .add_single(&*sampler_guard, id)
                                 .ok_or(Error::InvalidSampler(id))?;
+
+                            if sampler.device_id.value.0 != self_id {
+                                return Err(DeviceError::WrongDevice.into());
+                            }
 
                             // Allowed sampler values for filtering and comparison
                             let (allowed_filtering, allowed_comparison) = match ty {
@@ -1981,6 +1999,11 @@ impl<A: HalApi> Device<A> {
                             .samplers
                             .add_single(&*sampler_guard, id)
                             .ok_or(Error::InvalidSampler(id))?;
+
+                        if sampler.device_id.value.0 != self_id {
+                            return Err(DeviceError::WrongDevice.into());
+                        }
+
                         hal_samplers.push(&sampler.raw);
                     }
 
@@ -1998,6 +2021,7 @@ impl<A: HalApi> Device<A> {
                         "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture",
                     )?;
                     Self::create_texture_binding(
+                        self_id,
                         view,
                         &texture_guard,
                         internal_use,
@@ -2026,6 +2050,7 @@ impl<A: HalApi> Device<A> {
                             Self::texture_use_parameters(binding, decl, view,
                                                          "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;
                         Self::create_texture_binding(
+                            self_id,
                             view,
                             &texture_guard,
                             internal_use,
@@ -2324,6 +2349,11 @@ impl<A: HalApi> Device<A> {
             let Some(bind_group_layout) = try_get_bind_group_layout(bgl_guard, id) else {
                 return Err(Error::InvalidBindGroupLayout(id));
             };
+
+            if bind_group_layout.device_id.value.0 != self_id {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             count_validator.merge(&bind_group_layout.assume_deduplicated().count_validator);
         }
         count_validator
@@ -2457,6 +2487,10 @@ impl<A: HalApi> Device<A> {
             .get(desc.stage.module)
             .map_err(|_| validation::StageError::InvalidModule)?;
 
+        if shader_module.device_id.value.0 != self_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         {
             let flag = wgt::ShaderStages::COMPUTE;
             let provided_layouts = match desc.layout {
@@ -2499,6 +2533,10 @@ impl<A: HalApi> Device<A> {
         let layout = pipeline_layout_guard
             .get(pipeline_layout_id)
             .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
+
+        if layout.device_id.value.0 != self_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         let late_sized_buffer_groups =
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout, &*bgl_guard);
@@ -2843,11 +2881,20 @@ impl<A: HalApi> Device<A> {
                 }
             })?;
 
+            if shader_module.device_id.value.0 != self_id {
+                return Err(DeviceError::WrongDevice.into());
+            }
+
             let provided_layouts = match desc.layout {
                 Some(pipeline_layout_id) => {
                     let pipeline_layout = pipeline_layout_guard
                         .get(pipeline_layout_id)
                         .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+
+                    if pipeline_layout.device_id.value.0 != self_id {
+                        return Err(DeviceError::WrongDevice.into());
+                    }
+
                     Some(Device::get_introspection_bind_group_layouts(
                         pipeline_layout,
                         &*bgl_guard,
