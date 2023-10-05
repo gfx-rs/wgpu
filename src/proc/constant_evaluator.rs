@@ -1027,7 +1027,7 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Subtract => a - b,
                             BinaryOperator::Multiply => a * b,
                             BinaryOperator::Divide => a / b,
-                            BinaryOperator::Modulo => a - b * (a / b).floor(),
+                            BinaryOperator::Modulo => a % b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
