@@ -488,6 +488,14 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        let bgra8u = vk::Format::B8G8R8A8_UNORM;
+        let storage_flag = vk::FormatFeatureFlags::STORAGE_IMAGE;
+        features.set(
+            F::BGRA8UNORM_STORAGE,
+            supports_format(instance, phd, bgra8u, vk::ImageTiling::OPTIMAL, storage_flag)
+            && supports_format(instance, phd, bgra8u, vk::ImageTiling::LINEAR, storage_flag)
+        );
+
         let supports_depth_format = |format| {
             supports_format(
                 instance,

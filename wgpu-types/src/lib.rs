@@ -309,13 +309,15 @@ bitflags::bitflags! {
         //
         // ? const FORMATS_TIER_1 = 1 << 14; (https://github.com/gpuweb/gpuweb/issues/3837)
         // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << 15; (https://github.com/gpuweb/gpuweb/issues/3838)
-        // TODO const BGRA8UNORM_STORAGE = 1 << 16;
         // ? const NORM16_FILTERABLE = 1 << 17; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const NORM16_RESOLVE = 1 << 18; (https://github.com/gpuweb/gpuweb/issues/3839)
         // TODO const FLOAT32_FILTERABLE = 1 << 19;
         // ? const FLOAT32_BLENDABLE = 1 << 20; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << 21; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << 22; (https://github.com/gpuweb/gpuweb/issues/3844)
+
+        /// Allows [`TextureUsages::STORAGE_BINDING`] on textures with [`TextureFormat::Bgra8unorm`].
+        const BGRA8UNORM_STORAGE = 1 << 16;
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Float`] as a render target
         ///
