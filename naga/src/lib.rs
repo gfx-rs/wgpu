@@ -1897,34 +1897,17 @@ pub enum Statement {
         result: Handle<Expression>,
     },
 
-    // subgroupBroadcast(value, lane) -> value
-    // subgroupBroadcastFirst(value) -> value
     SubgroupBroadcast {
         /// Specifies which thread to broadcast from
         mode: BroadcastMode,
         /// The value to broadcast over
         argument: Handle<Expression>,
-        /// The [`SubgroupBroadcastResult`] expression representing this load's result.
+        /// The [`SubgroupOperationResult`] expression representing this load's result.
         ///
-        /// [`SubgroupBroadcastResult`]: Expression::SubgroupBroadcastResult
+        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
     },
 
-    // Reduction on bool
-    // subgroupAll(bool) -> bool
-    // subgroupAny(bool) -> bool
-    // Reduction on float, int
-    // subgroupMin(value) -> value
-    // subgroupMax(value) -> value
-    // subgroupAdd(value) -> value
-    // subgroupMul(value) -> value
-    // Reduction on int
-    // subgroupAnd(value) -> value
-    // subgroupOr(value) -> value
-    // subgroupXor(value) -> value
-    // Scan on float, int
-    // subgroupPrefixAdd(value) -> value
-    // subgroupPrefixMul(value) -> value
     /// Compute a collective operation across all active threads in th subgroup
     SubgroupCollectiveOperation {
         /// What operation to compute
