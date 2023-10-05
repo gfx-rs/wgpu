@@ -1,14 +1,22 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use wgt::{WasmNotSend, WasmNotSync};
-
 use crate::{TestParameters, TestingContext};
 
-#[cfg(not(target_arch = "wasm32"))]
-pub type RunTestAsync =
-    Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>;
-#[cfg(target_arch = "wasm32")]
-pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()>>>>;
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()>>>>;
+
+        // We can't use WasmNonSend and WasmNonSync here, as we need these to not require Send/Sync
+        // even with the `fragile-send-sync-non-atomic-wasm` enabled.
+        pub trait RunTestSendSync {}
+        impl<T> RunTestSendSync for T {}
+    } else {
+        pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>;
+
+        pub trait RunTestSendSync: Send + Sync {}
+        impl<T> RunTestSendSync for T where T: Send + Sync {}
+    }
+}
 
 #[derive(Clone)]
 pub struct GpuTestConfiguration {
@@ -73,7 +81,7 @@ impl GpuTestConfiguration {
 
     pub fn run_sync(
         self,
-        test: impl Fn(TestingContext) + Copy + WasmNotSend + WasmNotSync + 'static,
+        test: impl Fn(TestingContext) + Copy + RunTestSendSync + 'static,
     ) -> Self {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(async move { test(ctx) }))),
@@ -83,8 +91,8 @@ impl GpuTestConfiguration {
 
     pub fn run_async<F, R>(self, test: F) -> Self
     where
-        F: Fn(TestingContext) -> R + WasmNotSend + WasmNotSync + 'static,
-        R: Future<Output = ()> + WasmNotSend + WasmNotSync + 'static,
+        F: Fn(TestingContext) -> R + RunTestSendSync + 'static,
+        R: Future<Output = ()> + RunTestSendSync + 'static,
     {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(test(ctx)))),

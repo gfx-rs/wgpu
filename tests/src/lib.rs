@@ -16,10 +16,7 @@ pub use self::image::ComparisonType;
 pub use ctor::ctor;
 pub use wgpu_macros::gpu_test;
 
-#[cfg(all(
-    target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
-))]
+#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 const CANVAS_ID: &str = "test-canvas";
 
 async fn initialize_device(
@@ -346,7 +343,7 @@ pub async fn initialize_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (adapter, _surface_guard) = initialize_adapter(adapter_index);
+    let (adapter, _surface_guard) = initialize_adapter(adapter_index).await;
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -388,8 +385,11 @@ pub async fn initialize_test(
     cfg_if::cfg_if!(
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
             let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
-        } else {
+        } else if #[cfg(all(target_arch = "wasm32", feature = "webgl"))] {
             let canary_set = _surface_guard.unwrap().check_for_unreported_errors();
+        } else {
+            // TODO: WebGPU
+            let canary_set = false;
         }
     );
 
@@ -424,7 +424,7 @@ pub async fn initialize_test(
     }
 }
 
-pub fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
+pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     #[allow(unused_variables)]
     let _surface: wgpu::Surface;
@@ -474,11 +474,18 @@ pub fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard
         surface_guard = Some(SurfaceGuard { canvas });
     }
 
-    let adapter_iter = instance.enumerate_adapters(wgpu::Backends::all());
-    let adapter_count = adapter_iter.len();
-    let adapter = adapter_iter.into_iter()
-        .nth(adapter_index)
-        .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?"));
+    cfg_if::cfg_if! {
+        if #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))] {
+            let adapter_iter = instance.enumerate_adapters(wgpu::Backends::all());
+            let adapter_count = adapter_iter.len();
+            let adapter = adapter_iter.into_iter()
+                .nth(adapter_index)
+                .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?"));
+        } else {
+            assert_eq!(adapter_index, 0);
+            let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default()).await.unwrap();
+        }
+    }
 
     log::info!("Testing using adapter: {:#?}", adapter.get_info());
 
