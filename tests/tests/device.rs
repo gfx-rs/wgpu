@@ -164,6 +164,18 @@ fn device_destroy_then_more() {
                 usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
+            let buffer_for_map = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 256,
+                usage: wgpu::BufferUsages::MAP_WRITE,
+                mapped_at_creation: false,
+            });
+            let buffer_for_unmap = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 256,
+                usage: wgpu::BufferUsages::MAP_WRITE,
+                mapped_at_creation: true,
+            });
 
             // Create a bind group layout.
             let bind_group_layout =
@@ -224,7 +236,6 @@ fn device_destroy_then_more() {
             // * Validate a surface configuration
             // * Start capture
             // * Stop capture
-            // * Buffer map
 
             // TODO: figure out how to structure a test around these operations which panic when
             // the device is invalid:
@@ -438,6 +449,18 @@ fn device_destroy_then_more() {
                         module: &shader_module,
                         entry_point: "",
                     });
+            });
+
+            // Buffer map should fail.
+            fail(&ctx.device, || {
+                buffer_for_map
+                .slice(..)
+                .map_async(wgpu::MapMode::Write, |_| ());
+            });
+
+            // Buffer unmap should fail.
+            fail(&ctx.device, || {
+                buffer_for_unmap.unmap();
             });
         },
     )

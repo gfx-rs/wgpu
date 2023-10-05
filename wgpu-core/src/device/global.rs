@@ -379,6 +379,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.valid {
+            return Err(DeviceError::Invalid.into());
+        }
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
@@ -436,6 +439,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.valid {
+            return Err(DeviceError::Invalid.into());
+        }
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
@@ -2400,6 +2406,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
         device.lock_life(&mut token).triage_suspected(
             hub,
             &device.trackers,
@@ -2711,7 +2720,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[buffer.device_id.value];
             if !device.valid {
-                return Err((op, BufferAccessError::Invalid));
+                return Err((op, DeviceError::Invalid.into()));
             }
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
@@ -2766,6 +2775,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &device_guard[device_id];
+        // Validity of device was confirmed in the code block that set device_id.
         device
             .lock_life(&mut token)
             .map(id::Valid(buffer_id), ref_count);
@@ -2955,6 +2965,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get_mut(buffer_id)
                 .map_err(|_| BufferAccessError::Invalid)?;
             let device = &mut device_guard[buffer.device_id.value];
+            if !device.valid {
+                return Err(DeviceError::Invalid.into());
+            }
 
             closure = self.buffer_unmap_inner(buffer_id, buffer, device)
         }
