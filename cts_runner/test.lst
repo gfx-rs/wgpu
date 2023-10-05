@@ -1,11 +1,10 @@
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
 webgpu:api,operation,compute,basic:*
-//FAIL: webgpu:api,validation,queue,copyToTexture,ImageBitmap:destination_texture,format:format="stencil8";*'
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
-//HANG: webgpu:api,operation,rendering,basic:large_draw:*
+//FAIL: webgpu:api,operation,rendering,basic:large_draw:*
 webgpu:api,operation,rendering,blending:*
 webgpu:api,operation,rendering,blending:GPUBlendComponent:*
-//FAIL: webgpu:api,operation,rendering,depth:*
-//FAIL: webgpu:api,operation,rendering,draw:*
+webgpu:api,operation,rendering,depth:*
+webgpu:api,operation,rendering,draw:*

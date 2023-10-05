@@ -343,6 +343,18 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> web_sys::GpuPrimitive
     //TODO:
     //mapped.unclipped_depth(primitive.unclipped_depth);
 
+    match primitive.polygon_mode {
+        wgt::PolygonMode::Fill => {}
+        wgt::PolygonMode::Line => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_LINE
+        ),
+        wgt::PolygonMode::Point => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_POINT
+        ),
+    }
+
     mapped
 }
 
