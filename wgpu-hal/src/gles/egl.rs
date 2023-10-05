@@ -796,12 +796,9 @@ impl crate::Instance<super::Api> for Instance {
                         khronos_egl::DEFAULT_DISPLAY,
                         &display_attributes,
                     )
-                    .unwrap();
-                (
-                    display,
-                    Some(Rc::new(library)),
-                    WindowKind::Wayland,
-                )
+                }
+                .unwrap();
+                (display, Some(Rc::new(library)), WindowKind::Wayland)
             } else if let (Some(display_owner), Some(egl)) = (x11_display_library, egl1_5) {
                 log::info!("Using X11 platform");
                 let display_attributes = [khronos_egl::ATTRIB_NONE];
@@ -811,12 +808,9 @@ impl crate::Instance<super::Api> for Instance {
                         display_owner.display.as_ptr(),
                         &display_attributes,
                     )
-                    .unwrap();
-                (
-                    display,
-                    Some(Rc::new(display_owner)),
-                    WindowKind::X11,
-                )
+                }
+                .unwrap();
+                (display, Some(Rc::new(display_owner)), WindowKind::X11)
             } else if let (Some(display_owner), Some(egl)) = (angle_x11_display_library, egl1_5) {
                 log::info!("Using Angle platform with X11");
                 let display_attributes = [
@@ -832,12 +826,9 @@ impl crate::Instance<super::Api> for Instance {
                         display_owner.display.as_ptr(),
                         &display_attributes,
                     )
-                    .unwrap();
-                (
-                    display,
-                    Some(Rc::new(display_owner)),
-                    WindowKind::AngleX11,
-                )
+                }
+                .unwrap();
+                (display, Some(Rc::new(display_owner)), WindowKind::AngleX11)
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
                 log::info!("No windowing system present. Using surfaceless platform");
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
@@ -849,6 +840,7 @@ impl crate::Instance<super::Api> for Instance {
                     )
                 }
                 .unwrap();
+
                 (display, None, WindowKind::Unknown)
             } else {
                 log::info!("EGL_MESA_platform_surfaceless not available. Using default platform");
@@ -1320,7 +1312,7 @@ impl crate::Surface<super::Api> for Surface {
         };
 
         if let Some(window) = wl_window {
-            let library = &self.wsi.display_owner.as_ref().unwrap().library ;
+            let library = &self.wsi.display_owner.as_ref().unwrap().library;
             let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
                 unsafe { library.get(b"wl_egl_window_resize") }.unwrap();
             unsafe {
