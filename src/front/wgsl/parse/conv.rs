@@ -180,7 +180,6 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "pow" => Mf::Pow,
         // geometry
         "dot" => Mf::Dot,
-        "outerProduct" => Mf::Outer,
         "cross" => Mf::Cross,
         "distance" => Mf::Distance,
         "length" => Mf::Length,

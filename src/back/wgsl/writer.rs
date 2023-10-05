@@ -1529,7 +1529,6 @@ impl<W: Write> Writer<W> {
                     Mf::Pow => Function::Regular("pow"),
                     // geometry
                     Mf::Dot => Function::Regular("dot"),
-                    Mf::Outer => Function::Regular("outerProduct"),
                     Mf::Cross => Function::Regular("cross"),
                     Mf::Distance => Function::Regular("distance"),
                     Mf::Length => Function::Regular("length"),
@@ -1568,7 +1567,7 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack2x16snorm => Function::Regular("unpack2x16snorm"),
                     Mf::Unpack2x16unorm => Function::Regular("unpack2x16unorm"),
                     Mf::Unpack2x16float => Function::Regular("unpack2x16float"),
-                    Mf::Inverse => {
+                    Mf::Inverse | Mf::Outer => {
                         return Err(Error::UnsupportedMathFunction(fun));
                     }
                 };

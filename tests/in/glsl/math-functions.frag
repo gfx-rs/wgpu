@@ -44,7 +44,8 @@ void main() {
     vec4 minOut = min(a, b);
     vec4 reflectOut = reflect(a, b);
     vec3 crossOut = cross(a.xyz, b.xyz);
-    mat4 outerProductOut = outerProduct(a, b);
+    // TODO: support outerProduct function in wgsl output
+    // mat4 outerProductOut = outerProduct(a, b);
     float distanceOut = distance(a, b);
     vec4 stepOut = step(a, b);
     // TODO: support out params in wgsl output
