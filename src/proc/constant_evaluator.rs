@@ -136,6 +136,14 @@ pub enum ConstantEvaluatorError {
     SubexpressionsAreNotConstant,
     #[error("Not implemented as constant expression: {0}")]
     NotImplemented(String),
+    #[error("{0} operation overflowed")]
+    Overflow(String),
+    #[error("Division by zero")]
+    DivisionByZero,
+    #[error("Remainder by zero")]
+    RemainderByZero,
+    #[error("RHS of shift operation is greater than or equal to 32")]
+    ShiftedMoreThan32Bits,
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -994,32 +1002,68 @@ impl<'a> ConstantEvaluator<'a> {
 
                     _ => match (left_value, right_value) {
                         (Literal::I32(a), Literal::I32(b)) => Literal::I32(match op {
-                            BinaryOperator::Add => a.wrapping_add(b),
-                            BinaryOperator::Subtract => a.wrapping_sub(b),
-                            BinaryOperator::Multiply => a.wrapping_mul(b),
-                            BinaryOperator::Divide => a.checked_div(b).unwrap_or(0),
-                            BinaryOperator::Modulo => a.checked_rem(b).unwrap_or(0),
+                            BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
+                                ConstantEvaluatorError::Overflow("addition".into())
+                            })?,
+                            BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
+                                ConstantEvaluatorError::Overflow("subtraction".into())
+                            })?,
+                            BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
+                                ConstantEvaluatorError::Overflow("multiplication".into())
+                            })?,
+                            BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                                if b == 0 {
+                                    ConstantEvaluatorError::DivisionByZero
+                                } else {
+                                    ConstantEvaluatorError::Overflow("division".into())
+                                }
+                            })?,
+                            BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                                if b == 0 {
+                                    ConstantEvaluatorError::RemainderByZero
+                                } else {
+                                    ConstantEvaluatorError::Overflow("remainder".into())
+                                }
+                            })?,
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::I32(a), Literal::U32(b)) => Literal::I32(match op {
-                            BinaryOperator::ShiftLeft => a.wrapping_shl(b),
-                            BinaryOperator::ShiftRight => a.wrapping_shr(b),
+                            BinaryOperator::ShiftLeft => a
+                                .checked_shl(b)
+                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                            BinaryOperator::ShiftRight => a
+                                .checked_shr(b)
+                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::U32(a), Literal::U32(b)) => Literal::U32(match op {
-                            BinaryOperator::Add => a.wrapping_add(b),
-                            BinaryOperator::Subtract => a.wrapping_sub(b),
-                            BinaryOperator::Multiply => a.wrapping_mul(b),
-                            BinaryOperator::Divide => a.checked_div(b).unwrap_or(0),
-                            BinaryOperator::Modulo => a.checked_rem(b).unwrap_or(0),
+                            BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
+                                ConstantEvaluatorError::Overflow("addition".into())
+                            })?,
+                            BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
+                                ConstantEvaluatorError::Overflow("subtraction".into())
+                            })?,
+                            BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
+                                ConstantEvaluatorError::Overflow("multiplication".into())
+                            })?,
+                            BinaryOperator::Divide => a
+                                .checked_div(b)
+                                .ok_or(ConstantEvaluatorError::DivisionByZero)?,
+                            BinaryOperator::Modulo => a
+                                .checked_rem(b)
+                                .ok_or(ConstantEvaluatorError::RemainderByZero)?,
                             BinaryOperator::And => a & b,
                             BinaryOperator::ExclusiveOr => a ^ b,
                             BinaryOperator::InclusiveOr => a | b,
-                            BinaryOperator::ShiftLeft => a.wrapping_shl(b),
-                            BinaryOperator::ShiftRight => a.wrapping_shr(b),
+                            BinaryOperator::ShiftLeft => a
+                                .checked_shl(b)
+                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
+                            BinaryOperator::ShiftRight => a
+                                .checked_shr(b)
+                                .ok_or(ConstantEvaluatorError::ShiftedMoreThan32Bits)?,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::F32(a), Literal::F32(b)) => Literal::F32(match op {
