@@ -1,32 +1,29 @@
-@group(0) @binding(0) var<storage, read_write> out: vec4<i32>;
-@group(0) @binding(1) var<storage, read_write> out2: i32;
-
 const TWO: u32 = 2u;
 const THREE: i32 = 3i;
 
 @compute @workgroup_size(TWO, THREE, TWO - 1u)
 fn main() {
-   swizzle_of_compose();
-   index_of_compose();
-   compose_three_deep();
-   non_constant_initializers();
-   splat_of_constant();
-   compose_of_constant();
+    swizzle_of_compose();
+    index_of_compose();
+    compose_three_deep();
+    non_constant_initializers();
+    splat_of_constant();
+    compose_of_constant();
 }
 
 // Swizzle the value of nested Compose expressions.
 fn swizzle_of_compose() {
-   out = vec4(vec2(1, 2), vec2(3, 4)).wzyx; // should assign vec4(4, 3, 2, 1);
+    var out = vec4(vec2(1, 2), vec2(3, 4)).wzyx; // should assign vec4(4, 3, 2, 1);
 }
 
 // Index the value of nested Compose expressions.
 fn index_of_compose() {
-   out2 += vec4(vec2(1, 2), vec2(3, 4))[1]; // should assign 2
+    var out = vec4(vec2(1, 2), vec2(3, 4))[1]; // should assign 2
 }
 
 // Index the value of Compose expressions nested three deep
 fn compose_three_deep() {
-   out2 += vec4(vec3(vec2(6, 7), 8), 9)[0]; // should assign 6
+    var out = vec4(vec3(vec2(6, 7), 8), 9)[0]; // should assign 6
 }
 
 // While WGSL allows local variables to be declared anywhere in the function,
@@ -40,12 +37,12 @@ fn compose_three_deep() {
 // initializers that are constants as Naga locals with initializers. This test
 // checks that Naga local variable initializers are only used when safe.
 fn non_constant_initializers() {
-   var w = 10 + 20;
-   var x = w;
-   var y = x;
-   var z = 30 + 40;
+    var w = 10 + 20;
+    var x = w;
+    var y = x;
+    var z = 30 + 40;
 
-   out += vec4(w, x, y, z);
+    var out = vec4(w, x, y, z);
 }
 
 // Constant evaluation should be able to see through constants to
@@ -58,11 +55,11 @@ const TEST_CONSTANT_ADDITION: i32 = FOUR + FOUR;
 const TEST_CONSTANT_ALIAS_ADDITION: i32 = FOUR_ALIAS + FOUR_ALIAS;
 
 fn splat_of_constant() {
-    out = -vec4(FOUR);
+    var out = -vec4(FOUR);
 }
 
 fn compose_of_constant() {
-    out = -vec4(FOUR, FOUR, FOUR, FOUR);
+    var out = -vec4(FOUR, FOUR, FOUR, FOUR);
 }
 
 const PI: f32 = 3.141;

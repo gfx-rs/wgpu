@@ -11,26 +11,19 @@ const TEXTURE_KIND_REGULAR: i32 = 0;
 const TEXTURE_KIND_WARP: i32 = 1;
 const TEXTURE_KIND_SKY: i32 = 2;
 
-@group(0) @binding(0) 
-var<storage, read_write> out: vec4<i32>;
-@group(0) @binding(1) 
-var<storage, read_write> out2_: i32;
-
 fn swizzle_of_compose() {
-    out = vec4<i32>(4, 3, 2, 1);
-    return;
+    var out: vec4<i32> = vec4<i32>(4, 3, 2, 1);
+
 }
 
 fn index_of_compose() {
-    let _e2 = out2_;
-    out2_ = (_e2 + 2);
-    return;
+    var out_1: i32 = 2;
+
 }
 
 fn compose_three_deep() {
-    let _e2 = out2_;
-    out2_ = (_e2 + 6);
-    return;
+    var out_2: i32 = 6;
+
 }
 
 fn non_constant_initializers() {
@@ -38,28 +31,28 @@ fn non_constant_initializers() {
     var x: i32;
     var y: i32;
     var z: i32 = 70;
+    var out_3: vec4<i32>;
 
     let _e2 = w;
     x = _e2;
     let _e4 = x;
     y = _e4;
-    let _e9 = w;
-    let _e10 = x;
-    let _e11 = y;
-    let _e12 = z;
-    let _e14 = out;
-    out = (_e14 + vec4<i32>(_e9, _e10, _e11, _e12));
+    let _e8 = w;
+    let _e9 = x;
+    let _e10 = y;
+    let _e11 = z;
+    out_3 = vec4<i32>(_e8, _e9, _e10, _e11);
     return;
 }
 
 fn splat_of_constant() {
-    out = vec4<i32>(-4, -4, -4, -4);
-    return;
+    var out_4: vec4<i32> = vec4<i32>(-4, -4, -4, -4);
+
 }
 
 fn compose_of_constant() {
-    out = vec4<i32>(-4, -4, -4, -4);
-    return;
+    var out_5: vec4<i32> = vec4<i32>(-4, -4, -4, -4);
+
 }
 
 fn map_texture_kind(texture_kind: i32) -> u32 {

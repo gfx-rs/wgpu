@@ -18,60 +18,47 @@ constant int TEXTURE_KIND_WARP = 1;
 constant int TEXTURE_KIND_SKY = 2;
 
 void swizzle_of_compose(
-    device metal::int4& out
 ) {
-    out = metal::int4(4, 3, 2, 1);
-    return;
+    metal::int4 out = metal::int4(4, 3, 2, 1);
 }
 
 void index_of_compose(
-    device int& out2_
 ) {
-    int _e2 = out2_;
-    out2_ = _e2 + 2;
-    return;
+    int out_1 = 2;
 }
 
 void compose_three_deep(
-    device int& out2_
 ) {
-    int _e2 = out2_;
-    out2_ = _e2 + 6;
-    return;
+    int out_2 = 6;
 }
 
 void non_constant_initializers(
-    device metal::int4& out
 ) {
     int w = 30;
     int x = {};
     int y = {};
     int z = 70;
+    metal::int4 out_3 = {};
     int _e2 = w;
     x = _e2;
     int _e4 = x;
     y = _e4;
-    int _e9 = w;
-    int _e10 = x;
-    int _e11 = y;
-    int _e12 = z;
-    metal::int4 _e14 = out;
-    out = _e14 + metal::int4(_e9, _e10, _e11, _e12);
+    int _e8 = w;
+    int _e9 = x;
+    int _e10 = y;
+    int _e11 = z;
+    out_3 = metal::int4(_e8, _e9, _e10, _e11);
     return;
 }
 
 void splat_of_constant(
-    device metal::int4& out
 ) {
-    out = metal::int4(-4, -4, -4, -4);
-    return;
+    metal::int4 out_4 = metal::int4(-4, -4, -4, -4);
 }
 
 void compose_of_constant(
-    device metal::int4& out
 ) {
-    out = metal::int4(-4, -4, -4, -4);
-    return;
+    metal::int4 out_5 = metal::int4(-4, -4, -4, -4);
 }
 
 uint map_texture_kind(
@@ -94,14 +81,12 @@ uint map_texture_kind(
 }
 
 kernel void main_(
-  device metal::int4& out [[user(fake0)]]
-, device int& out2_ [[user(fake0)]]
 ) {
-    swizzle_of_compose(out);
-    index_of_compose(out2_);
-    compose_three_deep(out2_);
-    non_constant_initializers(out);
-    splat_of_constant(out);
-    compose_of_constant(out);
+    swizzle_of_compose();
+    index_of_compose();
+    compose_three_deep();
+    non_constant_initializers();
+    splat_of_constant();
+    compose_of_constant();
     return;
 }

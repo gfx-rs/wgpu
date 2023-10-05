@@ -18,26 +18,17 @@ const int TEXTURE_KIND_REGULAR = 0;
 const int TEXTURE_KIND_WARP = 1;
 const int TEXTURE_KIND_SKY = 2;
 
-layout(std430) buffer type_block_0Compute { ivec4 _group_0_binding_0_cs; };
-
-layout(std430) buffer type_1_block_1Compute { int _group_0_binding_1_cs; };
-
 
 void swizzle_of_compose() {
-    _group_0_binding_0_cs = ivec4(4, 3, 2, 1);
-    return;
+    ivec4 out_ = ivec4(4, 3, 2, 1);
 }
 
 void index_of_compose() {
-    int _e2 = _group_0_binding_1_cs;
-    _group_0_binding_1_cs = (_e2 + 2);
-    return;
+    int out_1 = 2;
 }
 
 void compose_three_deep() {
-    int _e2 = _group_0_binding_1_cs;
-    _group_0_binding_1_cs = (_e2 + 6);
-    return;
+    int out_2 = 6;
 }
 
 void non_constant_initializers() {
@@ -45,27 +36,25 @@ void non_constant_initializers() {
     int x = 0;
     int y = 0;
     int z = 70;
+    ivec4 out_3 = ivec4(0);
     int _e2 = w;
     x = _e2;
     int _e4 = x;
     y = _e4;
-    int _e9 = w;
-    int _e10 = x;
-    int _e11 = y;
-    int _e12 = z;
-    ivec4 _e14 = _group_0_binding_0_cs;
-    _group_0_binding_0_cs = (_e14 + ivec4(_e9, _e10, _e11, _e12));
+    int _e8 = w;
+    int _e9 = x;
+    int _e10 = y;
+    int _e11 = z;
+    out_3 = ivec4(_e8, _e9, _e10, _e11);
     return;
 }
 
 void splat_of_constant() {
-    _group_0_binding_0_cs = ivec4(-4, -4, -4, -4);
-    return;
+    ivec4 out_4 = ivec4(-4, -4, -4, -4);
 }
 
 void compose_of_constant() {
-    _group_0_binding_0_cs = ivec4(-4, -4, -4, -4);
-    return;
+    ivec4 out_5 = ivec4(-4, -4, -4, -4);
 }
 
 uint map_texture_kind(int texture_kind) {
