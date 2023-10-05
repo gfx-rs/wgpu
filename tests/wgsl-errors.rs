@@ -107,25 +107,6 @@ fn unknown_identifier() {
     );
 }
 
-// #[test]
-// fn negative_index() {
-//     check(
-//         r#"
-//             fn main() -> f32 {
-//                 let a = array<f32, 3>(0., 1., 2.);
-//                 return a[-1];
-//             }
-//         "#,
-//         r#"error: expected unsigned integer constant expression, found `-1`
-//   ┌─ wgsl:4:26
-//   │
-// 4 │                 return a[-1];
-//   │                          ^^ expected unsigned integer
-
-// "#,
-//     );
-// }
-
 #[test]
 fn bad_texture() {
     check(
@@ -919,6 +900,26 @@ fn invalid_arrays() {
             source: naga::valid::TypeError::InvalidArrayBaseType(_),
             ..
         })
+    }
+
+    check_validation! {
+        r#"
+            fn main() -> f32 {
+                let a = array<f32, 3>(0., 1., 2.);
+                return a[-1];
+            }
+        "#:
+        Err(
+            naga::valid::ValidationError::Function {
+                name,
+                source: naga::valid::FunctionError::Expression {
+                    source: naga::valid::ExpressionError::NegativeIndex(_),
+                    ..
+                },
+                ..
+            }
+        )
+            if name == "main"
     }
 
     check(
