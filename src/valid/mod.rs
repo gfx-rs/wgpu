@@ -24,7 +24,7 @@ use std::ops;
 use crate::span::{AddSpan as _, WithSpan};
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
-pub use expression::ExpressionError;
+pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, TypeError, TypeFlags};
@@ -178,16 +178,6 @@ pub struct Validator {
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: BitSet,
-}
-
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum ConstExpressionError {
-    #[error("The expression is not a constant expression")]
-    NonConst,
-    #[error(transparent)]
-    Compose(#[from] ComposeError),
-    #[error("Type resolution failed")]
-    Type(#[from] crate::proc::ResolveError),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
