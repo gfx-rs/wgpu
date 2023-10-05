@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::*;
 use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
 
@@ -55,6 +53,7 @@ static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
         }
     });
 
+#[cfg(not(target_arch = "wasm32"))]
 #[gpu_test]
 static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -73,7 +72,7 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
             .skip(FailureCase::molten_vk()),
     )
     .run_sync(|ctx| {
-        use std::{sync::mpsc, thread, time::Duration};
+        use std::{sync::mpsc, sync::Arc, thread, time::Duration};
 
         let ctx = Arc::new(ctx);
 

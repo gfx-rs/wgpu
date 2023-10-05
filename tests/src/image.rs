@@ -41,11 +41,6 @@ async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec
     Some(buffer)
 }
 
-#[cfg(target_arch = "wasm32")]
-async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
-    unimplemented!("")
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 async fn write_png(
     path: impl AsRef<Path>,
@@ -65,20 +60,11 @@ async fn write_png(
     writer.write_image_data(data).unwrap();
 }
 
-#[cfg(target_arch = "wasm32")]
-async fn write_png(
-    path: impl AsRef<Path>,
-    width: u32,
-    height: u32,
-    data: &[u8],
-    compression: png::Compression,
-) {
-}
-
 pub fn calc_difference(lhs: u8, rhs: u8) -> u8 {
     (lhs as i16 - rhs as i16).unsigned_abs() as u8
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 fn add_alpha(input: &[u8]) -> Vec<u8> {
     input
         .chunks_exact(3)
@@ -86,6 +72,7 @@ fn add_alpha(input: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 fn remove_alpha(input: &[u8]) -> Vec<u8> {
     input
         .chunks_exact(4)
@@ -267,7 +254,7 @@ pub async fn compare_image_output(
 #[cfg(target_arch = "wasm32")]
 pub async fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
-    backend: wgpu::Backend,
+    adapter_info: &wgt::AdapterInfo,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],
@@ -275,10 +262,11 @@ pub async fn compare_image_output(
 ) {
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = (path, width, height, test_with_alpha, checks);
+        let _ = (path, adapter_info, width, height, test_with_alpha, checks);
     }
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 fn sanitize_for_path(s: &str) -> String {
     s.chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })

@@ -97,6 +97,7 @@ impl TestInfo {
     }
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 pub struct SingleTest {
     name: String,
     future: SingleTestFuture,

@@ -11,6 +11,7 @@ pub struct GpuReport {
 }
 
 impl GpuReport {
+    #[cfg_attr(target_arch = "wasm32", allow(unused))]
     pub fn from_json(file: &str) -> serde_json::Result<Self> {
         serde_json::from_str(file)
     }

@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
+use wgpu::{WasmNotSend, WasmNotSync};
 use wgpu_test::infra::GpuTestConfiguration;
 use winit::{
     event::{self, WindowEvent},
@@ -508,7 +509,7 @@ pub struct ExampleTestParams<E> {
     pub _phantom: std::marker::PhantomData<E>,
 }
 
-impl<E: Example + Send + Sync> From<ExampleTestParams<E>> for GpuTestConfiguration {
+impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuTestConfiguration {
     fn from(params: ExampleTestParams<E>) -> Self {
         GpuTestConfiguration::new()
             .name(params.name)

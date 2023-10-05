@@ -427,7 +427,7 @@ pub async fn initialize_test(
 pub fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     #[allow(unused_variables)]
-    let surface: wgpu::Surface;
+    let _surface: wgpu::Surface;
     let surface_guard: Option<SurfaceGuard>;
 
     // Create a canvas iff we need a WebGL2RenderingContext to have a working device.
@@ -465,7 +465,7 @@ pub fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard
             }
         }
 
-        surface = unsafe {
+        _surface = unsafe {
             instance
                 .create_surface(&WindowHandle)
                 .expect("could not create surface from canvas")

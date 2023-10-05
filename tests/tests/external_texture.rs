@@ -2,7 +2,7 @@
 
 use wasm_bindgen::JsCast;
 use wgpu::ExternalImageSource;
-use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration, initialize_test};
+use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration};
 
 #[gpu_test]
 static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =

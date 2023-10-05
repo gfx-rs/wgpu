@@ -1,7 +1,7 @@
-use anyhow::Context;
+#[cfg(not(target_arch = "wasm32"))]
+use parking_lot::Mutex;
 
 pub use params::{GpuTestConfiguration, RunTestAsync};
-use parking_lot::Mutex;
 pub use report::AdapterReport;
 pub use single::{SingleTest, TestInfo};
 
@@ -16,6 +16,8 @@ pub type MainResult = anyhow::Result<()>;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn main() -> MainResult {
+    use anyhow::Context;
+
     let config_text =
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
             .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?;
