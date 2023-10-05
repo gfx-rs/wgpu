@@ -1,7 +1,7 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard};
 
-use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
+use std::{ffi, os::raw, ptr, rc::Rc, sync::Arc, time::Duration};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
@@ -683,10 +683,7 @@ enum WindowKind {
 
 #[derive(Clone, Debug)]
 struct WindowSystemInterface {
-    // Mutex: Because `Sync` is not implemented for `DisplayOwner`.
-    // See: https://rust-lang.github.io/rust-clippy/master/index.html#arc_with_non_send_sync
-    // for more information
-    display_owner: Option<Arc<Mutex<DisplayOwner>>>,
+    display_owner: Option<Rc<DisplayOwner>>,
     kind: WindowKind,
 }
 
@@ -802,7 +799,7 @@ impl crate::Instance<super::Api> for Instance {
                     .unwrap();
                 (
                     display,
-                    Some(Arc::new(Mutex::new(library))),
+                    Some(Rc::new(library)),
                     WindowKind::Wayland,
                 )
             } else if let (Some(display_owner), Some(egl)) = (x11_display_library, egl1_5) {
@@ -817,7 +814,7 @@ impl crate::Instance<super::Api> for Instance {
                     .unwrap();
                 (
                     display,
-                    Some(Arc::new(Mutex::new(display_owner))),
+                    Some(Rc::new(display_owner)),
                     WindowKind::X11,
                 )
             } else if let (Some(display_owner), Some(egl)) = (angle_x11_display_library, egl1_5) {
@@ -838,7 +835,7 @@ impl crate::Instance<super::Api> for Instance {
                     .unwrap();
                 (
                     display,
-                    Some(Arc::new(Mutex::new(display_owner))),
+                    Some(Rc::new(display_owner)),
                     WindowKind::AngleX11,
                 )
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
@@ -1215,7 +1212,7 @@ impl crate::Surface<super::Api> for Surface {
                     }
                     (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => handle.a_native_window,
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
-                        let library = { &self.wsi.display_owner.as_ref().unwrap().lock().library };
+                        let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
                         let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) };
@@ -1318,7 +1315,7 @@ impl crate::Surface<super::Api> for Surface {
         };
 
         if let Some(window) = wl_window {
-            let library = { &self.wsi.display_owner.as_ref().unwrap().lock().library };
+            let library = &self.wsi.display_owner.as_ref().unwrap().library ;
             let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
                 unsafe { library.get(b"wl_egl_window_resize") }.unwrap();
             unsafe {
@@ -1384,15 +1381,12 @@ impl crate::Surface<super::Api> for Surface {
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
             if let Some(window) = wl_window {
-                let library = {
-                    &self
-                        .wsi
-                        .display_owner
-                        .as_ref()
-                        .expect("unsupported window")
-                        .lock()
-                        .library
-                };
+                let library = &self
+                    .wsi
+                    .display_owner
+                    .as_ref()
+                    .expect("unsupported window")
+                    .library;
                 let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> =
                     unsafe { library.get(b"wl_egl_window_destroy") }.unwrap();
                 unsafe { wl_egl_window_destroy(window) };
