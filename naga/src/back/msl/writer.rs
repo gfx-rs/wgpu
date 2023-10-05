@@ -3012,12 +3012,19 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
-                crate::Statement::SubgroupBallot { result } => {
+                crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "{NAMESPACE}::simd_active_threads_mask();")?;
+                    write!(self.out, "{NAMESPACE}::simd_ballot(;")?;
+                    match predicate {
+                        Some(predicate) => {
+                            self.put_expression(predicate, &context.expression, true)?
+                        }
+                        None => write!(self.out, "true")?,
+                    }
+                    writeln!(self.out, ");")?;
                 }
                 crate::Statement::SubgroupCollectiveOperation {
                     ref op,

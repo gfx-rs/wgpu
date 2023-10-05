@@ -1026,7 +1026,26 @@ impl super::Validator {
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }
-                S::SubgroupBallot { result } => {
+                S::SubgroupBallot { result, predicate } => {
+                    if let Some(predicate) = predicate {
+                        let predicate_inner =
+                            context.resolve_type(predicate, &self.valid_expression_set)?;
+                        match predicate_inner {
+                            crate::TypeInner::Scalar {
+                                kind: crate::ScalarKind::Bool,
+                                ..
+                            } => {}
+                            _ => {
+                                log::error!(
+                                    "Subgroup ballot predicate type {:?} expected bool",
+                                    predicate_inner
+                                );
+                                return Err(SubgroupError::InvalidOperand(predicate)
+                                    .with_span_handle(predicate, context.expressions)
+                                    .into_other());
+                            }
+                        }
+                    }
                     self.emit_expression(result, context)?;
                 }
                 S::SubgroupCollectiveOperation {

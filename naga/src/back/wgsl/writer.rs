@@ -921,13 +921,17 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::SubgroupBallot { result } => {
+            Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
-                writeln!(self.out, "subgroupBallot();")?;
+                writeln!(self.out, "subgroupBallot(")?;
+                if let Some(predicate) = predicate {
+                    self.write_expr(module, predicate, func_ctx)?;
+                }
+                writeln!(self.out, ");")?;
             }
             Statement::SubgroupCollectiveOperation {
                 ref op,

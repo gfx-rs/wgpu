@@ -2004,14 +2004,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, "{level}}}")?
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::SubgroupBallot { result } => {
+            Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
 
                 let name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 write!(self.out, "const uint4 {name} = ")?;
                 self.named_expressions.insert(result, name);
 
-                writeln!(self.out, "WaveActiveBallot(true);")?;
+                write!(self.out, "WaveActiveBallot(")?;
+                match predicate {
+                    Some(predicate) => self.write_expr(module, predicate, func_ctx)?,
+                    None => write!(self.out, "true")?,
+                }
+                writeln!(self.out, ");")?;
             }
             Statement::SubgroupCollectiveOperation {
                 ref op,

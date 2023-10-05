@@ -279,7 +279,10 @@ impl StatementGraph {
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
                 }
-                S::SubgroupBallot { result } => {
+                S::SubgroupBallot { result, predicate } => {
+                    if let Some(predicate) = predicate {
+                        self.dependencies.push((id, predicate, "predicate"));
+                    }
                     self.emits.push((id, result));
                     "SubgroupBallot"
                 }

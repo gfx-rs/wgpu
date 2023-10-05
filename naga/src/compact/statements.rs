@@ -95,7 +95,10 @@ impl FunctionTracer<'_> {
                         self.trace_expression(query);
                         self.trace_ray_query_function(fun);
                     }
-                    St::SubgroupBallot { result } => {
+                    St::SubgroupBallot { result, predicate } => {
+                        if let Some(predicate) = predicate {
+                            self.trace_expression(predicate);
+                        }
                         self.trace_expression(result);
                     }
                     St::SubgroupCollectiveOperation {
@@ -267,7 +270,15 @@ impl FunctionMap {
                         adjust(query);
                         self.adjust_ray_query_function(fun);
                     }
-                    St::SubgroupBallot { ref mut result } => adjust(result),
+                    St::SubgroupBallot {
+                        ref mut result,
+                        ref mut predicate,
+                    } => {
+                        if let Some(ref mut predicate) = predicate {
+                            adjust(predicate);
+                        }
+                        adjust(result);
+                    }
                     St::SubgroupCollectiveOperation {
                         ref mut op,
                         ref mut collective_op,

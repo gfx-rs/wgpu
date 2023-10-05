@@ -991,14 +991,22 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
-                S::SubgroupBallot { result: _ } => FunctionUniformity::new(),
+                S::SubgroupBallot {
+                    result: _,
+                    predicate,
+                } => {
+                    if let Some(predicate) = predicate {
+                        let _ = self.add_ref(predicate);
+                    }
+                    FunctionUniformity::new()
+                }
                 S::SubgroupCollectiveOperation {
                     ref op,
                     ref collective_op,
                     argument,
                     result: _,
                 } => {
-                    let _ = self.add_ref(argument);
+                    let _ = self.add_ref(argument); // FIXME
                     FunctionUniformity::new()
                 }
                 S::SubgroupBroadcast {

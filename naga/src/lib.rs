@@ -1895,6 +1895,8 @@ pub enum Statement {
         ///
         /// [`SubgroupBallotResult`]: Expression::SubgroupBallotResult
         result: Handle<Expression>,
+        /// The value from this thread to store in the ballot
+        predicate: Option<Handle<Expression>>,
     },
 
     SubgroupBroadcast {

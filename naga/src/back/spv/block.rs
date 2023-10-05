@@ -2340,7 +2340,7 @@ impl<'w> BlockContext<'w> {
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
                 }
-                crate::Statement::SubgroupBallot { result } => {
+                crate::Statement::SubgroupBallot { result, predicate } => {
                     self.writer.require_any(
                         "GroupNonUniformBallot",
                         &[spirv::Capability::GroupNonUniformBallot],
@@ -2352,7 +2352,10 @@ impl<'w> BlockContext<'w> {
                         pointer_space: None,
                     }));
                     let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
-                    let predicate = self.writer.get_constant_scalar(crate::Literal::Bool(true));
+                    let predicate = match predicate {
+                        Some(predicate) => self.cached[predicate],
+                        None => self.writer.get_constant_scalar(crate::Literal::Bool(true)),
+                    };
                     let id = self.gen_id();
                     block.body.push(Instruction::group_non_uniform_ballot(
                         vec4_u32_type_id,

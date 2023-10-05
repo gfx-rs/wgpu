@@ -541,7 +541,8 @@ impl super::Validator {
                 }
                 Ok(())
             }
-            crate::Statement::SubgroupBallot { result } => {
+            crate::Statement::SubgroupBallot { result, predicate } => {
+                validate_expr_opt(predicate)?;
                 validate_expr(result)?;
                 Ok(())
             }

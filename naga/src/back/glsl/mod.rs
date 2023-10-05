@@ -2294,7 +2294,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::SubgroupBallot { result } => {
+            Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
@@ -2302,7 +2302,12 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, " {res_name} = ")?;
                 self.named_expressions.insert(result, res_name);
 
-                writeln!(self.out, "subgroupBallot(true);")?;
+                write!(self.out, "subgroupBallot(")?;
+                match predicate {
+                    Some(predicate) => self.write_expr(predicate, ctx)?,
+                    None => write!(self.out, "true")?,
+                }
+                write!(self.out, ");")?;
             }
             Statement::SubgroupCollectiveOperation {
                 ref op,

@@ -2252,13 +2252,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             return Ok(Some(handle));
                         }
                         "subgroupBallot" => {
-                            ctx.prepare_args(arguments, 0, span).finish()?;
+                            let mut args = ctx.prepare_args(arguments, 0, span);
+                            let predicate = if arguments.len() == 1 {
+                                Some(self.expression(args.next()?, ctx)?)
+                            } else {
+                                None
+                            };
+                            args.finish()?;
 
                             let result = ctx
                                 .interrupt_emitter(crate::Expression::SubgroupBallotResult, span)?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(crate::Statement::SubgroupBallot { result }, span);
+                                .push(crate::Statement::SubgroupBallot { result, predicate }, span);
                             return Ok(Some(result));
                         }
                         "subgroupBroadcast" => {
