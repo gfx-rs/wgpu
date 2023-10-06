@@ -295,6 +295,7 @@ fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::Storag
         Tf::Rgba8Snorm => Sf::Rgba8Snorm,
         Tf::Rgba8Uint => Sf::Rgba8Uint,
         Tf::Rgba8Sint => Sf::Rgba8Sint,
+        Tf::Bgra8Unorm => Sf::Bgra8Unorm,
 
         Tf::Rgb10a2Uint => Sf::Rgb10a2Uint,
         Tf::Rgb10a2Unorm => Sf::Rgb10a2Unorm,

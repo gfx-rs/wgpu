@@ -1271,6 +1271,9 @@ impl super::Adapter {
             ) {
                 capabilities.push(spv::Capability::ShaderNonUniform);
             }
+            if features.contains(wgt::Features::BGRA8UNORM_STORAGE) {
+                capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
+            }
 
             let mut flags = spv::WriterFlags::empty();
             flags.set(
