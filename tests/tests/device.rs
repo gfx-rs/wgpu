@@ -227,15 +227,14 @@ fn device_destroy_then_more() {
             ctx.device.destroy();
 
             // TODO: verify the following operations will return an invalid device error:
-            // * Run a compute pass
-            // * Run a render pass
+            // * Run a compute or render pass
             // * Finish a render bundle encoder
             // * Create a texture from HAL
             // * Create a buffer from HAL
             // * Create a sampler
             // * Validate a surface configuration
-            // * Start capture
-            // * Stop capture
+            // * Start or stop capture
+            // * Get or set buffer sub data
 
             // TODO: figure out how to structure a test around these operations which panic when
             // the device is invalid:
