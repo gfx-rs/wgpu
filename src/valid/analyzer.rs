@@ -421,8 +421,25 @@ impl FunctionInfo {
         })
     }
 
-    /// Computes the expression info and stores it in `self.expressions`.
-    /// Also, bumps the reference counts on dependent expressions.
+    /// Compute the [`ExpressionInfo`] for `handle`.
+    ///
+    /// Replace the dummy entry in [`self.expressions`] for `handle`
+    /// with a real `ExpressionInfo` value describing that expression.
+    ///
+    /// This function is called as part of a forward sweep through the
+    /// arena, so we can assume that all earlier expressions in the
+    /// arena already have valid info. Since expressions only depend
+    /// on earlier expressions, this includes all our subexpressions.
+    ///
+    /// Adjust the reference counts on all expressions we use.
+    ///
+    /// Also populate the [`sampling_set`], [`sampling`] and
+    /// [`global_uses`] fields of `self`.
+    ///
+    /// [`self.expressions`]: FunctionInfo::expressions
+    /// [`sampling_set`]: FunctionInfo::sampling_set
+    /// [`sampling`]: FunctionInfo::sampling
+    /// [`global_uses`]: FunctionInfo::global_uses
     #[allow(clippy::or_fun_call)]
     fn process_expression(
         &mut self,
