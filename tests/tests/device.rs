@@ -453,8 +453,8 @@ fn device_destroy_then_more() {
             // Buffer map should fail.
             fail(&ctx.device, || {
                 buffer_for_map
-                .slice(..)
-                .map_async(wgpu::MapMode::Write, |_| ());
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Write, |_| ());
             });
 
             // Buffer unmap should fail.
