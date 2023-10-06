@@ -427,7 +427,6 @@ impl FunctionInfo {
     fn process_expression(
         &mut self,
         handle: Handle<crate::Expression>,
-        expression: &crate::Expression,
         expression_arena: &Arena<crate::Expression>,
         other_functions: &[FunctionInfo],
         resolve_context: &ResolveContext,
@@ -435,6 +434,7 @@ impl FunctionInfo {
     ) -> Result<(), ExpressionError> {
         use crate::{Expression as E, SampleLevel as Sl};
 
+        let expression = &expression_arena[handle];
         let mut assignable_global = None;
         let uniformity = match *expression {
             E::Access { base, index } => {
@@ -1011,10 +1011,9 @@ impl ModuleInfo {
         let resolve_context =
             ResolveContext::with_locals(module, &fun.local_variables, &fun.arguments);
 
-        for (handle, expr) in fun.expressions.iter() {
+        for (handle, _) in fun.expressions.iter() {
             if let Err(source) = info.process_expression(
                 handle,
-                expr,
                 &fun.expressions,
                 &self.functions,
                 &resolve_context,
@@ -1127,10 +1126,9 @@ fn uniform_control_flow() {
         functions: &Arena::new(),
         arguments: &[],
     };
-    for (handle, expression) in expressions.iter() {
+    for (handle, _) in expressions.iter() {
         info.process_expression(
             handle,
-            expression,
             &expressions,
             &[],
             &resolve_context,
