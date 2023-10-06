@@ -2,16 +2,16 @@ use super::handle_set_map::HandleSet;
 use super::{FunctionMap, ModuleMap};
 use crate::arena::Handle;
 
-pub(super) struct FunctionTracer<'a> {
-    pub(super) module: &'a crate::Module,
-    pub(super) function: &'a crate::Function,
+pub struct FunctionTracer<'a> {
+    pub module: &'a crate::Module,
+    pub function: &'a crate::Function,
 
-    pub(super) types_used: &'a mut HandleSet<crate::Type>,
-    pub(super) constants_used: &'a mut HandleSet<crate::Constant>,
-    pub(super) const_expressions_used: &'a mut HandleSet<crate::Expression>,
+    pub types_used: &'a mut HandleSet<crate::Type>,
+    pub constants_used: &'a mut HandleSet<crate::Constant>,
+    pub const_expressions_used: &'a mut HandleSet<crate::Expression>,
 
     /// Function-local expressions used.
-    pub(super) expressions_used: HandleSet<crate::Expression>,
+    pub expressions_used: HandleSet<crate::Expression>,
 }
 
 impl<'a> FunctionTracer<'a> {
@@ -27,7 +27,6 @@ impl<'a> FunctionTracer<'a> {
         for (_, local) in self.function.local_variables.iter() {
             self.trace_type(local.ty);
             if let Some(init) = local.init {
-                // TEST: try changing this to trace_expression
                 self.trace_const_expression(init);
             }
         }
@@ -54,12 +53,6 @@ impl<'a> FunctionTracer<'a> {
             .as_const_expression()
             .trace_expression(expr);
     }
-
-    /*
-        pub fn trace_const_expression(&mut self, const_expr: Handle<crate::Expression>) {
-            self.as_expression().as_const_expression().trace_expression(const_expr);
-    }
-        */
 
     fn as_type(&mut self) -> super::types::TypeTracer {
         super::types::TypeTracer {
