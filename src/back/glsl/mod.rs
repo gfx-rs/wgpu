@@ -766,7 +766,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             write!(self.out, "binding = {binding}")?;
                         }
                         if let Some((format, _)) = storage_format_access {
-                            let format_str = glsl_storage_format(format);
+                            let format_str = glsl_storage_format(format)?;
                             let separator = match layout_binding {
                                 Some(_) => ",",
                                 None => "",
@@ -1491,7 +1491,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         ..
                     } = this.module.types[arg.ty].inner
                     {
-                        write!(this.out, "layout({}) ", glsl_storage_format(format))?;
+                        write!(this.out, "layout({}) ", glsl_storage_format(format)?)?;
                     }
 
                     // write the type
@@ -4213,10 +4213,10 @@ const fn glsl_dimension(dim: crate::ImageDimension) -> &'static str {
 }
 
 /// Helper function that returns the glsl storage format string of [`StorageFormat`](crate::StorageFormat)
-const fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
+fn glsl_storage_format(format: crate::StorageFormat) -> Result<&'static str, Error> {
     use crate::StorageFormat as Sf;
 
-    match format {
+    Ok(match format {
         Sf::R8Unorm => "r8",
         Sf::R8Snorm => "r8_snorm",
         Sf::R8Uint => "r8ui",
@@ -4256,7 +4256,13 @@ const fn glsl_storage_format(format: crate::StorageFormat) -> &'static str {
         Sf::Rg16Snorm => "rg16_snorm",
         Sf::Rgba16Unorm => "rgba16",
         Sf::Rgba16Snorm => "rgba16_snorm",
-    }
+
+        Sf::Bgra8Unorm => {
+            return Err(Error::Custom(
+                "Support format BGRA8 is not implemented".into(),
+            ))
+        }
+    })
 }
 
 fn is_value_init_supported(module: &crate::Module, ty: Handle<crate::Type>) -> bool {

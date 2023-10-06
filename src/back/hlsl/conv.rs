@@ -122,7 +122,9 @@ impl crate::StorageFormat {
             Self::Rg11b10Float => "float3",
 
             Self::Rgba16Float | Self::R32Float | Self::Rg32Float | Self::Rgba32Float => "float4",
-            Self::Rgba8Unorm | Self::Rgba16Unorm | Self::Rgb10a2Unorm => "unorm float4",
+            Self::Rgba8Unorm | Self::Bgra8Unorm | Self::Rgba16Unorm | Self::Rgb10a2Unorm => {
+                "unorm float4"
+            }
             Self::Rgba8Snorm | Self::Rgba16Snorm => "snorm float4",
 
             Self::Rgba8Uint

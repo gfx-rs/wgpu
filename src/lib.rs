@@ -599,6 +599,7 @@ pub enum StorageFormat {
     Rgba8Snorm,
     Rgba8Uint,
     Rgba8Sint,
+    Bgra8Unorm,
 
     // Packed 32-bit formats
     Rgb10a2Uint,

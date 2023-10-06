@@ -1170,6 +1170,21 @@ impl<'w> BlockContext<'w> {
 
         let write = Store { image_id, value_id };
 
+        match *self.fun_info[image].ty.inner_with(&self.ir_module.types) {
+            crate::TypeInner::Image {
+                class:
+                    crate::ImageClass::Storage {
+                        format: crate::StorageFormat::Bgra8Unorm,
+                        ..
+                    },
+                ..
+            } => self.writer.require_any(
+                "Bgra8Unorm storage write",
+                &[spirv::Capability::StorageImageWriteWithoutFormat],
+            )?,
+            _ => {}
+        }
+
         match self.writer.bounds_check_policies.image_store {
             crate::proc::BoundsCheckPolicy::Restrict => {
                 let (coords, _, _) =
