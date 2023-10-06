@@ -167,13 +167,13 @@ fn device_destroy_then_more() {
             let buffer_for_map = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: 256,
-                usage: wgpu::BufferUsages::MAP_WRITE,
+                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
             let buffer_for_unmap = ctx.device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: 256,
-                usage: wgpu::BufferUsages::MAP_WRITE,
+                usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: true,
             });
 
