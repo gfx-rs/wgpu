@@ -33,7 +33,7 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
     log::info!("PNG file written to disc as \"{}\".", path);
 }
 
-/// Effectively a version of [`output_image_native`] but meant for web browser contexts.
+/// Effectively a version of `output_image_native` but meant for web browser contexts.
 ///
 /// This is achieved via in `img` element on the page. If the target image element does
 /// not exist, this function creates one. If it does, the image data is overridden.
