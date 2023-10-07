@@ -1,4 +1,4 @@
-use crate::arena::{Arena, Handle, UniqueArena};
+use crate::arena::{Arena, Handle, Range, UniqueArena};
 
 type Index = std::num::NonZeroU32;
 
@@ -121,5 +121,38 @@ impl<T: 'static> HandleMap<T> {
         if let Some(ref mut handle) = *handle {
             self.adjust(handle);
         }
+    }
+
+    /// Shrink `range` to include only used handles.
+    ///
+    /// Fortunately, compaction doesn't arbitrarily scramble the expressions
+    /// in the arena, but instead preserves the order of the elements while
+    /// squeezing out unused ones. That means that a contiguous range in the
+    /// pre-compacted arena always maps to a contiguous range in the
+    /// post-compacted arena. So we just need to adjust the endpoints.
+    ///
+    /// Compaction may have eliminated the endpoints themselves.
+    ///
+    /// Use `compacted_arena` to bounds-check the result.
+    pub fn adjust_range(&self, range: &mut Range<T>, compacted_arena: &Arena<T>) {
+        let mut index_range = range.zero_based_index_range();
+        let compacted;
+        // Remember that the indices we retrieve from `new_index` are 1-based
+        // compacted indices, but the index range we're computing is zero-based
+        // compacted indices.
+        if let Some(first1) = index_range.find_map(|i| self.new_index[i as usize]) {
+            // The first call to `find_map` mutated `index_range` to hold the
+            // remainder of original range, which is exactly the range we need
+            // to search for the new last handle.
+            if let Some(last1) = index_range.rev().find_map(|i| self.new_index[i as usize]) {
+                // Build a zero-based end-exclusive range, given one-based handle indices.
+                compacted = first1.get() - 1..last1.get();
+            } else {
+                compacted = first1.get() - 1..first1.get();
+            }
+        } else {
+            compacted = 0..0;
+        };
+        *range = Range::from_zero_based_index_range(compacted, compacted_arena);
     }
 }

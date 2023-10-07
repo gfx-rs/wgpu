@@ -122,6 +122,6 @@ impl FunctionMap {
         assert!(reuse.is_empty());
 
         // Adjust statements.
-        self.adjust_block(&mut function.body);
+        self.adjust_body(function);
     }
 }

@@ -199,7 +199,7 @@ impl<T> Range<T> {
         }
     }
 
-    /// Return the first and last handles included in `self`.
+    /// return the first and last handles included in `self`.
     ///
     /// If `self` is an empty range, there are no handles included, so
     /// return `None`.
@@ -214,6 +214,24 @@ impl<T> Range<T> {
             ))
         } else {
             None
+        }
+    }
+
+    /// Return the zero-based index range covered by `self`.
+    pub fn zero_based_index_range(&self) -> ops::Range<u32> {
+        self.inner.clone()
+    }
+
+    /// Construct a `Range` that covers the zero-based indices in `inner`.
+    pub fn from_zero_based_index_range(inner: ops::Range<u32>, arena: &Arena<T>) -> Self {
+        // Since `inner` is a `Range<u32>`, we only need to check that
+        // the start and end are well-ordered, and that the end fits
+        // within `arena`.
+        assert!(inner.start <= inner.end);
+        assert!(inner.end as usize <= arena.len());
+        Self {
+            inner,
+            marker: Default::default(),
         }
     }
 }
@@ -387,18 +405,26 @@ impl<T> Arena<T> {
 
     /// Assert that `range` is valid for this arena.
     pub fn check_contains_range(&self, range: &Range<T>) -> Result<(), BadRangeError> {
-        // Since `range.inner` is a `Range<u32>`, we only need to
-        // check that the start precedes the end, and that the end is
-        // in range.
-        if range.inner.start > range.inner.end
-            || self
-                .check_contains_handle(Handle::new(range.inner.end.try_into().unwrap()))
-                .is_err()
-        {
-            Err(BadRangeError::new(range.clone()))
-        } else {
-            Ok(())
+        // Since `range.inner` is a `Range<u32>`, we only need to check that the
+        // start precedes the end, and that the end is in range.
+        if range.inner.start > range.inner.end {
+            return Err(BadRangeError::new(range.clone()));
         }
+
+        // Empty ranges are tolerated: they can be produced by compaction.
+        if range.inner.start == range.inner.end {
+            return Ok(());
+        }
+
+        // `range.inner` is zero-based, but end-exclusive, so `range.inner.end`
+        // is actually the right one-based index for the last handle within the
+        // range.
+        let last_handle = Handle::new(range.inner.end.try_into().unwrap());
+        if self.check_contains_handle(last_handle).is_err() {
+            return Err(BadRangeError::new(range.clone()));
+        }
+
+        Ok(())
     }
 
     #[cfg(feature = "compact")]
