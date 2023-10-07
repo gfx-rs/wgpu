@@ -44,7 +44,7 @@ use std::{
 /// its latest submission index and label.
 ///
 /// A resource may need to be retained for any of several reasons:
-/// and any lifetime logic will be handled by Arc<Resource> refcount
+/// and any lifetime logic will be handled by `Arc<Resource>` refcount
 ///
 /// - The user may hold a reference to it (via a `wgpu::Buffer`, say).
 ///
