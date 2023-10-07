@@ -2,7 +2,7 @@
 
 use super::WebGpuResult;
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -51,10 +51,11 @@ pub struct SurfaceConfigureArgs {
     view_formats: Vec<wgpu_types::TextureFormat>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_surface_configure(
     state: &mut OpState,
-    args: SurfaceConfigureArgs,
+    #[serde] args: SurfaceConfigureArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -81,11 +82,12 @@ pub fn op_webgpu_surface_configure(
     Ok(WebGpuResult::maybe_err(err))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_surface_get_current_texture(
     state: &mut OpState,
-    device_rid: ResourceId,
-    surface_rid: ResourceId,
+    #[smi] device_rid: ResourceId,
+    #[smi] surface_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -111,11 +113,11 @@ pub fn op_webgpu_surface_get_current_texture(
     }
 }
 
-#[op]
+#[op2(fast)]
 pub fn op_webgpu_surface_present(
     state: &mut OpState,
-    device_rid: ResourceId,
-    surface_rid: ResourceId,
+    #[smi] device_rid: ResourceId,
+    #[smi] surface_rid: ResourceId,
 ) -> Result<(), AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state

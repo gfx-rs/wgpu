@@ -790,24 +790,26 @@ impl crate::Instance<super::Api> for Instance {
             if let (Some(library), Some(egl)) = (wayland_library, egl1_5) {
                 log::info!("Using Wayland platform");
                 let display_attributes = [khronos_egl::ATTRIB_NONE];
-                let display = egl
-                    .get_platform_display(
+                let display = unsafe {
+                    egl.get_platform_display(
                         EGL_PLATFORM_WAYLAND_KHR,
                         khronos_egl::DEFAULT_DISPLAY,
                         &display_attributes,
                     )
-                    .unwrap();
+                }
+                .unwrap();
                 (display, Some(Arc::new(library)), WindowKind::Wayland)
             } else if let (Some(display_owner), Some(egl)) = (x11_display_library, egl1_5) {
                 log::info!("Using X11 platform");
                 let display_attributes = [khronos_egl::ATTRIB_NONE];
-                let display = egl
-                    .get_platform_display(
+                let display = unsafe {
+                    egl.get_platform_display(
                         EGL_PLATFORM_X11_KHR,
                         display_owner.display.as_ptr(),
                         &display_attributes,
                     )
-                    .unwrap();
+                }
+                .unwrap();
                 (display, Some(Arc::new(display_owner)), WindowKind::X11)
             } else if let (Some(display_owner), Some(egl)) = (angle_x11_display_library, egl1_5) {
                 log::info!("Using Angle platform with X11");
@@ -818,28 +820,30 @@ impl crate::Instance<super::Api> for Instance {
                     usize::from(desc.flags.contains(crate::InstanceFlags::VALIDATION)),
                     khronos_egl::ATTRIB_NONE,
                 ];
-                let display = egl
-                    .get_platform_display(
+                let display = unsafe {
+                    egl.get_platform_display(
                         EGL_PLATFORM_ANGLE_ANGLE,
                         display_owner.display.as_ptr(),
                         &display_attributes,
                     )
-                    .unwrap();
+                }
+                .unwrap();
                 (display, Some(Arc::new(display_owner)), WindowKind::AngleX11)
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
                 log::warn!("No windowing system present. Using surfaceless platform");
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
-                let display = egl
-                    .get_platform_display(
+                let display = unsafe {
+                    egl.get_platform_display(
                         EGL_PLATFORM_SURFACELESS_MESA,
                         std::ptr::null_mut(),
                         &[khronos_egl::ATTRIB_NONE],
                     )
-                    .unwrap();
+                }
+                .unwrap();
                 (display, None, WindowKind::Unknown)
             } else {
                 log::warn!("EGL_MESA_platform_surfaceless not available. Using default platform");
-                let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
+                let display = unsafe { egl.get_display(khronos_egl::DEFAULT_DISPLAY) }.unwrap();
                 (display, None, WindowKind::Unknown)
             };
 
@@ -936,17 +940,19 @@ impl crate::Instance<super::Api> for Instance {
                     use std::ops::DerefMut;
                     let display_attributes = [khronos_egl::ATTRIB_NONE];
 
-                    let display = inner
-                        .egl
-                        .instance
-                        .upcast::<khronos_egl::EGL1_5>()
-                        .unwrap()
-                        .get_platform_display(
-                            EGL_PLATFORM_WAYLAND_KHR,
-                            display_handle.display,
-                            &display_attributes,
-                        )
-                        .unwrap();
+                    let display = unsafe {
+                        inner
+                            .egl
+                            .instance
+                            .upcast::<khronos_egl::EGL1_5>()
+                            .unwrap()
+                            .get_platform_display(
+                                EGL_PLATFORM_WAYLAND_KHR,
+                                display_handle.display,
+                                &display_attributes,
+                            )
+                    }
+                    .unwrap();
 
                     let new_inner = Inner::create(
                         self.flags,
@@ -1277,12 +1283,14 @@ impl crate::Surface<super::Api> for Surface {
                             .into_iter()
                             .map(|v| v as usize)
                             .collect::<Vec<_>>();
-                        egl.create_platform_window_surface(
-                            self.egl.display,
-                            self.config,
-                            native_window_ptr,
-                            &attributes_usize,
-                        )
+                        unsafe {
+                            egl.create_platform_window_surface(
+                                self.egl.display,
+                                self.config,
+                                native_window_ptr,
+                                &attributes_usize,
+                            )
+                        }
                     }
                     _ => unsafe {
                         self.egl.instance.create_window_surface(

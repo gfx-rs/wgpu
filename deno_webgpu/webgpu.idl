@@ -3,7 +3,7 @@ interface mixin GPUObjectBase {
 };
 
 dictionary GPUObjectDescriptorBase {
-    USVString label;
+    USVString label = "";
 };
 
 [Exposed=(Window, DedicatedWorker), SecureContext]
@@ -563,7 +563,8 @@ interface GPUPipelineLayout {
 };
 GPUPipelineLayout includes GPUObjectBase;
 
-dictionary GPUPipelineLayoutDescriptor : GPUObjectDescriptorBase {
+dictionary GPUPipelineLayoutDescriptor
+         : GPUObjectDescriptorBase {
     required sequence<GPUBindGroupLayout> bindGroupLayouts;
 };
 
@@ -572,7 +573,8 @@ interface GPUShaderModule {
 };
 GPUShaderModule includes GPUObjectBase;
 
-dictionary GPUShaderModuleDescriptor : GPUObjectDescriptorBase {
+dictionary GPUShaderModuleDescriptor
+         : GPUObjectDescriptorBase {
     required USVString code;
 };
 
@@ -935,11 +937,6 @@ interface GPUComputePassEncoder {
     undefined dispatchWorkgroups(GPUSize32 workgroupCountX, optional GPUSize32 workgroupCountY = 1, optional GPUSize32 workgroupCountZ = 1);
     undefined dispatchWorkgroupsIndirect(GPUBuffer indirectBuffer, GPUSize64 indirectOffset);
 
-    undefined beginPipelineStatisticsQuery(GPUQuerySet querySet, GPUSize32 queryIndex);
-    undefined endPipelineStatisticsQuery();
-
-    undefined writeTimestamp(GPUQuerySet querySet, GPUSize32 queryIndex);
-
     undefined end();
 };
 GPUComputePassEncoder includes GPUObjectBase;
@@ -947,8 +944,15 @@ GPUComputePassEncoder includes GPUCommandsMixin;
 GPUComputePassEncoder includes GPUDebugCommandsMixin;
 GPUComputePassEncoder includes GPUBindingCommandsMixin;
 
+dictionary GPUComputePassTimestampWrites {
+    required GPUQuerySet querySet;
+    GPUSize32 beginningOfPassWriteIndex;
+    GPUSize32 endOfPassWriteIndex;
+};
+
 dictionary GPUComputePassDescriptor
          : GPUObjectDescriptorBase {
+    GPUComputePassTimestampWrites timestampWrites;
 };
 
 [Exposed=(Window, DedicatedWorker), SecureContext]
@@ -963,10 +967,8 @@ interface GPURenderPassEncoder {
     undefined setBlendConstant(GPUColor color);
     undefined setStencilReference(GPUStencilValue reference);
 
-    undefined beginPipelineStatisticsQuery(GPUQuerySet querySet, GPUSize32 queryIndex);
-    undefined endPipelineStatisticsQuery();
-
-    undefined writeTimestamp(GPUQuerySet querySet, GPUSize32 queryIndex);
+    undefined beginOcclusionQuery(GPUSize32 queryIndex);
+    undefined endOcclusionQuery();
 
     undefined executeBundles(sequence<GPURenderBundle> bundles);
     undefined end();
@@ -977,11 +979,18 @@ GPURenderPassEncoder includes GPUDebugCommandsMixin;
 GPURenderPassEncoder includes GPUBindingCommandsMixin;
 GPURenderPassEncoder includes GPURenderCommandsMixin;
 
+dictionary GPURenderPassTimestampWrites {
+    required GPUQuerySet querySet;
+    GPUSize32 beginningOfPassWriteIndex;
+    GPUSize32 endOfPassWriteIndex;
+};
+
 dictionary GPURenderPassDescriptor
          : GPUObjectDescriptorBase {
     required sequence<GPURenderPassColorAttachment?> colorAttachments;
     GPURenderPassDepthStencilAttachment depthStencilAttachment;
     GPUQuerySet occlusionQuerySet;
+    GPURenderPassTimestampWrites timestampWrites;
 };
 
 dictionary GPURenderPassColorAttachment {
@@ -1100,21 +1109,11 @@ dictionary GPUQuerySetDescriptor
          : GPUObjectDescriptorBase {
     required GPUQueryType type;
     required GPUSize32 count;
-    sequence<GPUPipelineStatisticName> pipelineStatistics = [];
 };
 
 enum GPUQueryType {
     "occlusion",
-    "pipeline-statistics",
     "timestamp",
-};
-
-enum GPUPipelineStatisticName {
-    "vertex-shader-invocations",
-    "clipper-invocations",
-    "clipper-primitives-out",
-    "fragment-shader-invocations",
-    "compute-shader-invocations",
 };
 
 [Exposed=(Window, DedicatedWorker), SecureContext]

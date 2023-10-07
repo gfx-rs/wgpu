@@ -35,6 +35,11 @@ impl super::AdapterShared {
             Tf::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE), //TODO?
             Tf::Rgba8Uint => (glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
             Tf::Rgba8Sint => (glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE),
+            Tf::Rgb10a2Uint => (
+                glow::RGB10_A2UI,
+                glow::RGBA_INTEGER,
+                glow::UNSIGNED_INT_2_10_10_10_REV,
+            ),
             Tf::Rgb10a2Unorm => (
                 glow::RGB10_A2,
                 glow::RGBA,

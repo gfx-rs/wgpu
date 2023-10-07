@@ -2148,6 +2148,8 @@ pub enum TextureFormat {
     // Packed 32 bit formats
     /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
     Rgb9e5Ufloat,
+    /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. Unsigned in shader.
+    Rgb10a2Uint,
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
@@ -2408,6 +2410,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgba8sint" => TextureFormat::Rgba8Sint,
                     "bgra8unorm" => TextureFormat::Bgra8Unorm,
                     "bgra8unorm-srgb" => TextureFormat::Bgra8UnormSrgb,
+                    "rgb10a2uint" => TextureFormat::Rgb10a2Uint,
                     "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
                     "rg11b10ufloat" => TextureFormat::Rg11b10Float,
                     "rg32uint" => TextureFormat::Rg32Uint,
@@ -2534,6 +2537,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgba8Sint => "rgba8sint",
             TextureFormat::Bgra8Unorm => "bgra8unorm",
             TextureFormat::Bgra8UnormSrgb => "bgra8unorm-srgb",
+            TextureFormat::Rgb10a2Uint => "rgb10a2uint",
             TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
             TextureFormat::Rg11b10Float => "rg11b10ufloat",
             TextureFormat::Rg32Uint => "rg32uint",
@@ -2724,6 +2728,7 @@ impl TextureFormat {
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
             | Self::Rgb9e5Ufloat
+            | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float
             | Self::Rg32Uint
@@ -2822,6 +2827,7 @@ impl TextureFormat {
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
             | Self::Rgb9e5Ufloat
+            | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float
             | Self::Rg32Uint
@@ -2931,6 +2937,7 @@ impl TextureFormat {
             Self::Rgba8Sint =>            (        msaa,  all_flags),
             Self::Bgra8Unorm =>           (msaa_resolve, attachment),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
+            Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Float =>         (        msaa,   rg11b10f),
             Self::Rg32Uint =>             (        noaa,  all_flags),
@@ -3036,7 +3043,8 @@ impl TextureFormat {
             | Self::Rgba16Uint
             | Self::R32Uint
             | Self::Rg32Uint
-            | Self::Rgba32Uint => Some(uint),
+            | Self::Rgba32Uint
+            | Self::Rgb10a2Uint => Some(uint),
 
             Self::R8Sint
             | Self::Rg8Sint
@@ -3124,7 +3132,9 @@ impl TextureFormat {
             | Self::Rg16Sint
             | Self::Rg16Float => Some(4),
             Self::R32Uint | Self::R32Sint | Self::R32Float => Some(4),
-            Self::Rgb9e5Ufloat | Self::Rgb10a2Unorm | Self::Rg11b10Float => Some(4),
+            Self::Rgb9e5Ufloat | Self::Rgb10a2Uint | Self::Rgb10a2Unorm | Self::Rg11b10Float => {
+                Some(4)
+            }
 
             Self::Rgba16Unorm
             | Self::Rgba16Snorm
@@ -3232,7 +3242,7 @@ impl TextureFormat {
             | Self::Rgba32Float => 4,
 
             Self::Rgb9e5Ufloat | Self::Rg11b10Float => 3,
-            Self::Rgb10a2Unorm => 4,
+            Self::Rgb10a2Uint | Self::Rgb10a2Unorm => 4,
 
             Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
 
@@ -3430,6 +3440,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Bgra8UnormSrgb).unwrap(),
         "\"bgra8unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgb10a2Uint).unwrap(),
+        "\"rgb10a2uint\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rgb10a2Unorm).unwrap(),
@@ -3722,6 +3736,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bgra8unorm-srgb\"").unwrap(),
         TextureFormat::Bgra8UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgb10a2uint\"").unwrap(),
+        TextureFormat::Rgb10a2Uint
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rgb10a2unorm\"").unwrap(),
@@ -6129,6 +6147,7 @@ impl<T: Copy> ImageCopyTextureTagged<T> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ImageSubresourceRange {
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`][TAA].
     ///

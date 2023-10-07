@@ -774,9 +774,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if let Some(ref mut t) = *trace {
                     t.add(trace::Action::DestroyBindGroupLayout(*bind_group_layout_id));
                 }
-
+                if let Some(inner) = lay.into_inner() {
                 self.free_resources
-                    .insert(*bind_group_layout_id, bind_group_layout.clone());
+                    .insert(*bind_group_layout_id, inner.raw.clone());
+                }
                 false
             });
         self

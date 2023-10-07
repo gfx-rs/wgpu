@@ -306,6 +306,8 @@ pub enum DeviceError {
     ResourceCreationFailed,
     #[error("QueueId is invalid")]
     InvalidQueueId,
+    #[error("Attempt to use a resource with a different device from the one that created it")]
+    WrongDevice,
 }
 
 impl From<hal::DeviceError> for DeviceError {

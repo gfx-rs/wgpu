@@ -104,7 +104,9 @@ impl From<DeviceError> for WebGpuError {
         match err {
             DeviceError::Lost => WebGpuError::Lost,
             DeviceError::OutOfMemory => WebGpuError::OutOfMemory,
-            _ => WebGpuError::Validation(fmt_err(&err)),
+            DeviceError::ResourceCreationFailed
+            | DeviceError::Invalid
+            | DeviceError::WrongDevice => WebGpuError::Validation(fmt_err(&err)),
         }
     }
 }

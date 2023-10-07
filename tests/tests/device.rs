@@ -11,7 +11,6 @@ fn device_initialization() {
 }
 
 #[test]
-#[ignore]
 fn device_mismatch() {
     initialize_test(
         // https://github.com/gfx-rs/wgpu/issues/3927

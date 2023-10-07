@@ -431,6 +431,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let result = self.queue_write_staging_buffer_impl(
+            queue_id,
             device,
             pending_writes,
             &staging_buffer,
@@ -505,6 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let result = self.queue_write_staging_buffer_impl(
+            queue_id,
             device,
             pending_writes,
             &staging_buffer,
@@ -593,6 +595,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
+        if dst.device_id.value.0 != device_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
+
         let src_buffer_size = staging_buffer.size;
         self.queue_validate_write_buffer_impl(&dst, buffer_id, buffer_offset, src_buffer_size)?;
 
@@ -672,6 +678,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
+
+        if dst.device_id.value.0 != queue_id {
+            return Err(DeviceError::WrongDevice.into());
+        }
 
         if !dst.desc.usage.contains(wgt::TextureUsages::COPY_DST) {
             return Err(
@@ -1154,6 +1164,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             Some(cmdbuf) => cmdbuf,
                             None => continue,
                         };
+
+                        if cmdbuf.device_id.value.0 != queue_id {
+                            return Err(DeviceError::WrongDevice.into());
+                        }
+
                         #[cfg(feature = "trace")]
                         if let Some(ref mut trace) = *device.trace.lock() {
                             trace.add(Action::Submit(

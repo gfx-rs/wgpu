@@ -24,6 +24,7 @@ static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Rgba8Sint,
     wgpu::TextureFormat::Bgra8Unorm,
     wgpu::TextureFormat::Bgra8UnormSrgb,
+    wgpu::TextureFormat::Rgb10a2Uint,
     wgpu::TextureFormat::Rgb10a2Unorm,
     wgpu::TextureFormat::Rg11b10Float,
     wgpu::TextureFormat::Rg32Uint,

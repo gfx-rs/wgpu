@@ -34,6 +34,7 @@ impl super::PrivateCapabilities {
             Tf::Bgra8Unorm => F::B8G8R8A8_UNORM,
             Tf::Rgba8Uint => F::R8G8B8A8_UINT,
             Tf::Rgba8Sint => F::R8G8B8A8_SINT,
+            Tf::Rgb10a2Uint => F::A2B10G10R10_UINT_PACK32,
             Tf::Rgb10a2Unorm => F::A2B10G10R10_UNORM_PACK32,
             Tf::Rg11b10Float => F::B10G11R11_UFLOAT_PACK32,
             Tf::Rg32Uint => F::R32G32_UINT,

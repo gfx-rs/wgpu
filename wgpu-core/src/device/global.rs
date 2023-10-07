@@ -1,7 +1,8 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model, command, conv,
+    binding_model::{self, BindGroupLayout},
+    command, conv,
     device::{life::WaitIdleError, map_buffer, queue, Device, DeviceError, HostMap},
     global::Global,
     hal_api::HalApi,
@@ -549,7 +550,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let (id, resource) = fid.assign(texture);
             log::info!("Created Texture {:?} with {:?}", id, desc);
-
+          
             device.trackers.lock().textures.insert_single(
                 id,
                 resource,
@@ -959,24 +960,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mut compatible_layout = None;
-            {
+            let layout = {
                 let bgl_guard = hub.bind_group_layouts.read();
                 if let Some((_id, layout)) =
                     Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
                 {
                     compatible_layout = Some(layout.clone());
                 }
-            }
 
-            let mut layout =
-                match device.create_bind_group_layout(desc.label.borrow_option(), entry_map) {
-                    Ok(layout) => layout,
-                    Err(e) => break e,
-                };
-            layout.compatible_layout = compatible_layout;
+                if let Some(original_layout) = compatible_layout {
+                    BindGroupLayout {
+                        device: original_layout.device.clone(),
+                        inner: crate::binding_model::BglOrDuplicate::Duplicate(original_layout.clone()),
+                    }
+                } else {
+                    match device.create_bind_group_layout(
+                        desc.label.borrow_option(),
+                        entry_map,
+                    ) {
+                        Ok(layout) => layout,
+                        Err(e) => break e,
+                    }
+                }
+            };
 
             let (id, layout) = fid.assign(layout);
-            if let Some(dupe) = layout.compatible_layout.as_ref() {
+
+            if let Some(dupe) = compatible_layout {
                 log::info!(
                     "Created BindGroupLayout (duplicate of {dupe:?}) -> {:?}",
                     id
@@ -1113,8 +1123,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
 
-            if let Some(layout) = bind_group_layout.compatible_layout.as_ref() {
-                bind_group_layout = layout;
+            if bind_group_layout.device.as_info().id() != device.as_info().id() {
+                break DeviceError::WrongDevice.into();
+            }
+
+            let mut layout_id = id::Valid(desc.layout);
+            if let Some(id) = bind_group_layout.as_duplicate() {
+                layout_id = id;
+                bind_group_layout = &bind_group_layout_guard[id];
             }
 
             let bind_group = match device.create_bind_group(bind_group_layout, desc, hub) {
@@ -1610,6 +1626,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .assign_existing(bg),
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
+
+            let layout = &bgl_guard[*id];
+            layout.multi_ref_count.inc();
+
+            if G::ids_are_generated_in_wgpu() {
+                return (id.0, None);
+            }
+
+            // The ID is provided externally, so we must create a new bind group layout
+            // with the given ID as a duplicate of the existing one.
+            let new_layout = BindGroupLayout {
+                device_id: layout.device_id.clone(),
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(*id),
+                multi_ref_count: crate::MultiRefCount::new(),
+            };
+
+            let fid = hub.bind_group_layouts.prepare(id_in);
+            let id = fid.assign(new_layout, &mut Token::root());
 
             return (id, None);
         };
