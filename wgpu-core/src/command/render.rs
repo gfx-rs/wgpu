@@ -1458,7 +1458,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bind_group,
                             &temp_offsets,
                         );
-                        if !entries.is_empty() {
+                        if !entries.is_empty() && pipeline_layout.is_some() {
                             let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {
                                 let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
@@ -2355,8 +2355,7 @@ pub mod render_ffi {
         }
 
         pass.base
-            .commands
-            .push(RenderCommand::SetPipeline(pipeline_id));
+            .commands.push(RenderCommand::SetPipeline(pipeline_id));
     }
 
     #[no_mangle]

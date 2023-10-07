@@ -533,16 +533,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .extend(texture_memory_actions.register_init_action(action));
                     }
 
-                    let pipeline_layout = &state.binder.pipeline_layout;
-                    let pipeline_layout = pipeline_layout.as_ref().unwrap().clone();
+                    let pipeline_layout = state.binder.pipeline_layout.clone();
                     let entries = state.binder.assign_group(
                         index as usize,
                         bind_group_id,
                         bind_group,
                         &temp_offsets,
                     );
-                    if !entries.is_empty() {
-                        let pipeline_layout = pipeline_layout.raw();
+                    if !entries.is_empty() && pipeline_layout.is_some() {
+                        let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
                             let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
                             unsafe {
@@ -906,8 +905,7 @@ pub mod compute_ffi {
         }
 
         pass.base
-            .commands
-            .push(ComputeCommand::SetPipeline(pipeline_id));
+            .commands.push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
     /// # Safety
