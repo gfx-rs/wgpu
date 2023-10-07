@@ -54,11 +54,10 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
     {
-        let mut compute_pass =
-            command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
+        let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
         compute_pass.set_pipeline(&context.pipeline);
         compute_pass.set_bind_group(0, &context.bind_group, &[]);
         compute_pass.dispatch_workgroups(local_buffer.len() as u32, 1, 1);
