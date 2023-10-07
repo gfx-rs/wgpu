@@ -29,7 +29,7 @@ use parking_lot::Mutex;
 use thiserror::Error;
 use wgt::{WasmNotSend, WasmNotSync};
 
-use std::{any::Any, collections::HashMap, sync::Arc};
+use std::{any::Any, sync::Arc};
 
 pub(crate) trait ResourceMap: Any + WasmNotSend + WasmNotSync {
     fn as_any(&self) -> &dyn Any;
@@ -38,7 +38,7 @@ pub(crate) trait ResourceMap: Any + WasmNotSend + WasmNotSync {
     fn extend_map(&mut self, maps: &mut ResourceMaps);
 }
 
-impl<Id, R> ResourceMap for HashMap<Id, Arc<R>>
+impl<Id, R> ResourceMap for FastHashMap<Id, Arc<R>>
 where
     Id: id::TypedId,
     R: Resource<Id>,
@@ -73,21 +73,21 @@ impl ResourceMaps {
         Id: id::TypedId,
         R: Resource<Id>,
     {
-        let map = HashMap::<Id, Arc<R>>::default();
+        let map = FastHashMap::<Id, Arc<R>>::default();
         self.maps.insert(R::TYPE, Box::new(map));
         self
     }
-    fn map<Id, R>(&self) -> &HashMap<Id, Arc<R>>
+    fn map<Id, R>(&self) -> &FastHashMap<Id, Arc<R>>
     where
         Id: id::TypedId,
         R: Resource<Id>,
     {
         let map = self.maps.get(R::TYPE).unwrap();
         let any_map = map.as_ref().as_any();
-        let map = any_map.downcast_ref::<HashMap<Id, Arc<R>>>().unwrap();
+        let map = any_map.downcast_ref::<FastHashMap<Id, Arc<R>>>().unwrap();
         map
     }
-    fn map_mut<Id, R>(&mut self) -> &mut HashMap<Id, Arc<R>>
+    fn map_mut<Id, R>(&mut self) -> &mut FastHashMap<Id, Arc<R>>
     where
         Id: id::TypedId,
         R: Resource<Id>,
@@ -95,9 +95,9 @@ impl ResourceMaps {
         let map = self
             .maps
             .entry(R::TYPE)
-            .or_insert_with(|| Box::<HashMap<Id, Arc<R>>>::new(HashMap::default()));
+            .or_insert_with(|| Box::<FastHashMap<Id, Arc<R>>>::default());
         let any_map = map.as_mut().as_any_mut();
-        let map = any_map.downcast_mut::<HashMap<Id, Arc<R>>>().unwrap();
+        let map = any_map.downcast_mut::<FastHashMap<Id, Arc<R>>>().unwrap();
         map
     }
     pub(crate) fn new<A: HalApi>() -> Self {
@@ -419,7 +419,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
 impl<A: HalApi> LifetimeTracker<A> {
     fn triage_resources<Id, R, F, T>(
-        resources_map: &mut HashMap<Id, Arc<R>>,
+        resources_map: &mut FastHashMap<Id, Arc<R>>,
         active: &mut [ActiveSubmission<A>],
         free_resources: &mut ResourceMaps,
         trackers: &mut impl ResourceTracker<Id, R>,
@@ -774,10 +774,8 @@ impl<A: HalApi> LifetimeTracker<A> {
                 if let Some(ref mut t) = *trace {
                     t.add(trace::Action::DestroyBindGroupLayout(*bind_group_layout_id));
                 }
-                if let Some(inner) = lay.into_inner() {
                 self.free_resources
-                    .insert(*bind_group_layout_id, inner.raw.clone());
-                }
+                    .insert(*bind_group_layout_id, bind_group_layout.clone());
                 false
             });
         self

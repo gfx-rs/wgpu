@@ -418,7 +418,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
-        let stage_fid = hub.staging_buffers.request::<G>();
+        let stage_fid = hub.staging_buffers.request();
         let staging_buffer = stage_fid.init(staging_buffer);
 
         if let Err(flush_error) = unsafe {
@@ -431,7 +431,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let result = self.queue_write_staging_buffer_impl(
-            queue_id,
             device,
             pending_writes,
             &staging_buffer,
@@ -506,7 +505,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let result = self.queue_write_staging_buffer_impl(
-            queue_id,
             device,
             pending_writes,
             &staging_buffer,
@@ -595,7 +593,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_ref()
             .ok_or(TransferError::InvalidBuffer(buffer_id))?;
 
-        if dst.device_id.value.0 != device_id {
+        if dst.device.as_info().id() != device.as_info().id() {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -679,7 +677,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(destination.texture)
             .map_err(|_| TransferError::InvalidTexture(destination.texture))?;
 
-        if dst.device_id.value.0 != queue_id {
+        if dst.device.as_info().id() != queue_id {
             return Err(DeviceError::WrongDevice.into());
         }
 
@@ -820,7 +818,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(device, stage_size)?;
 
-        let stage_fid = hub.staging_buffers.request::<G>();
+        let stage_fid = hub.staging_buffers.request();
         let staging_buffer = stage_fid.init(staging_buffer);
 
         if stage_bytes_per_row == bytes_per_row {
@@ -1165,7 +1163,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             None => continue,
                         };
 
-                        if cmdbuf.device_id.value.0 != queue_id {
+                        if cmdbuf.device.as_info().id() != queue_id {
                             return Err(DeviceError::WrongDevice.into());
                         }
 

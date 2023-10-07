@@ -1422,13 +1422,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         dynamic_offset_count += num_dynamic_offsets as usize;
 
-                        let bind_group: &crate::binding_model::BindGroup<A> = tracker
+                        let bind_group = tracker
                             .bind_groups
                             .add_single(&*bind_group_guard, bind_group_id)
                             .ok_or(RenderCommandError::InvalidBindGroup(bind_group_id))
                             .map_pass_err(scope)?;
 
-                        if bind_group.device_id.value != device_id {
+                        if bind_group.device.as_info().id() != device.as_info().id() {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
@@ -1464,23 +1464,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         let pipeline_layout = state.binder.pipeline_layout.clone();
-                        let entries = state.binder.assign_group(
-                            index as usize,
-                            bind_group_id,
-                            bind_group,
-                            &temp_offsets,
-                        );
+                        let entries =
+                            state
+                                .binder
+                                .assign_group(index as usize, bind_group, &temp_offsets);
                         if !entries.is_empty() && pipeline_layout.is_some() {
                             let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {
-                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
-                                unsafe {
-                                    raw.set_bind_group(
-                                        pipeline_layout,
-                                        index + i as u32,
-                                        raw_bg,
-                                        &e.dynamic_offsets,
-                                    );
+                                if let Some(group) = e.group.as_ref() {
+                                    let raw_bg = group.raw();
+                                    unsafe {
+                                        raw.set_bind_group(
+                                            pipeline_layout,
+                                            index + i as u32,
+                                            raw_bg,
+                                            &e.dynamic_offsets,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -1497,7 +1497,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::InvalidPipeline(pipeline_id))
                             .map_pass_err(scope)?;
 
-                        if pipeline.device_id.value != device_id {
+                        if pipeline.device.as_info().id() != device.as_info().id() {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
@@ -1549,15 +1549,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                             if !entries.is_empty() {
                                 for (i, e) in entries.iter().enumerate() {
-                                    let raw_bg =
-                                        bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
-                                    unsafe {
-                                        raw.set_bind_group(
-                                            pipeline.layout.raw(),
-                                            start_index as u32 + i as u32,
-                                            raw_bg,
-                                            &e.dynamic_offsets,
-                                        );
+                                    if let Some(group) = e.group.as_ref() {
+                                        let raw_bg = group.raw();
+                                        unsafe {
+                                            raw.set_bind_group(
+                                                pipeline.layout.raw(),
+                                                start_index as u32 + i as u32,
+                                                raw_bg,
+                                                &e.dynamic_offsets,
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -1622,7 +1623,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::INDEX)
                             .map_pass_err(scope)?;
 
-                        if buffer.device_id.value != device_id {
+                        if buffer.device.as_info().id() != device.as_info().id() {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
@@ -1675,7 +1676,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .merge_single(&*buffer_guard, buffer_id, hal::BufferUses::VERTEX)
                             .map_pass_err(scope)?;
 
-                        if buffer.device_id.value != device_id {
+                        if buffer.device.as_info().id() != device.as_info().id() {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
@@ -2254,7 +2255,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .ok_or(RenderCommandError::InvalidRenderBundle(bundle_id))
                             .map_pass_err(scope)?;
 
-                        if bundle.device_id.value != device_id {
+                        if bundle.device.as_info().id() != device.as_info().id() {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
@@ -2421,7 +2422,8 @@ pub mod render_ffi {
         }
 
         pass.base
-            .commands.push(RenderCommand::SetPipeline(pipeline_id));
+            .commands
+            .push(RenderCommand::SetPipeline(pipeline_id));
     }
 
     #[no_mangle]

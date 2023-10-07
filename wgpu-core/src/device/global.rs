@@ -1,9 +1,8 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{self, BindGroupLayout},
-    command, conv,
-    device::{life::WaitIdleError, map_buffer, queue, Device, DeviceError, HostMap},
+    binding_model, command, conv,
+    device::{life::WaitIdleError, map_buffer, queue, DeviceError, HostMap},
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -177,7 +176,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.add(trace::Action::CreateBuffer(fid.id(), desc));
         }
 
-        let buffer = match device.create_buffer(device_id, desc, false) {
+        let buffer = match device.create_buffer(desc, false) {
             Ok(buffer) => buffer,
             Err(e) => {
                 let id = fid.assign_error(desc.label.borrow_or_default());
@@ -225,7 +224,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             };
-            let stage = match device.create_buffer(device_id, &stage_desc, true) {
+            let stage = match device.create_buffer(&stage_desc, true) {
                 Ok(stage) => stage,
                 Err(e) => {
                     device
@@ -236,7 +235,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     return (id, Some(e));
                 }
             };
-            let stage_fid = hub.buffers.request::<G>();
+            let stage_fid = hub.buffers.request();
             let stage = stage_fid.init(stage);
 
             let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
@@ -543,14 +542,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
             }
 
-            let texture = match device.create_texture(device_id, &device.adapter, desc) {
+            let texture = match device.create_texture(&device.adapter, desc) {
                 Ok(texture) => texture,
                 Err(error) => break error,
             };
 
             let (id, resource) = fid.assign(texture);
             log::info!("Created Texture {:?} with {:?}", id, desc);
-          
+
             device.trackers.lock().textures.insert_single(
                 id,
                 resource,
@@ -609,7 +608,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut texture = device.create_texture_from_hal(
                 hal_texture,
                 conv::map_texture_usage(desc.usage, desc.format.into()),
-                device_id,
                 desc,
                 format_features,
                 resource::TextureClearMode::None,
@@ -671,7 +669,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
             }
 
-            let buffer = device.create_buffer_from_hal(hal_buffer, device_id, desc);
+            let buffer = device.create_buffer_from_hal(hal_buffer, desc);
 
             let (id, buffer) = fid.assign(buffer);
             log::info!("Created buffer {:?} with {:?}", id, desc);
@@ -959,45 +957,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            let mut compatible_layout = None;
-            let layout = {
+            if let Some((id, layout)) = {
                 let bgl_guard = hub.bind_group_layouts.read();
-                if let Some((_id, layout)) =
-                    Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
-                {
-                    compatible_layout = Some(layout.clone());
-                }
-
-                if let Some(original_layout) = compatible_layout {
-                    BindGroupLayout {
-                        device: original_layout.device.clone(),
-                        inner: crate::binding_model::BglOrDuplicate::Duplicate(original_layout.clone()),
-                    }
-                } else {
-                    match device.create_bind_group_layout(
-                        desc.label.borrow_option(),
-                        entry_map,
-                    ) {
-                        Ok(layout) => layout,
-                        Err(e) => break e,
-                    }
-                }
-            };
-
-            let (id, layout) = fid.assign(layout);
-
-            if let Some(dupe) = compatible_layout {
-                log::info!(
-                    "Created BindGroupLayout (duplicate of {dupe:?}) -> {:?}",
-                    id
-                );
-            } else {
-                log::info!("Created BindGroupLayout {:?}", id);
+                device.deduplicate_bind_group_layout(&entry_map, &*bgl_guard)
+            } {
+                log::info!("Reusing BindGroupLayout {layout:?} -> {:?}", id);
+                let id = fid.assign_existing(&layout);
+                return (id, None);
             }
 
+            let layout =
+                match device.create_bind_group_layout(desc.label.borrow_option(), entry_map) {
+                    Ok(layout) => layout,
+                    Err(e) => break e,
+                };
+
+            let (id, _layout) = fid.assign(layout);
+            log::info!("Created BindGroupLayout {:?}", id);
             return (id, None);
         };
 
+        let fid = hub.bind_group_layouts.prepare::<G>(id_in);
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -1118,19 +1098,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let bind_group_layout_guard = hub.bind_group_layouts.read();
-            let mut bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
+            let bind_group_layout = match bind_group_layout_guard.get(desc.layout) {
                 Ok(layout) => layout,
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
 
             if bind_group_layout.device.as_info().id() != device.as_info().id() {
                 break DeviceError::WrongDevice.into();
-            }
-
-            let mut layout_id = id::Valid(desc.layout);
-            if let Some(id) = bind_group_layout.as_duplicate() {
-                layout_id = id;
-                bind_group_layout = &bind_group_layout_guard[id];
             }
 
             let bind_group = match device.create_bind_group(bind_group_layout, desc, hub) {
@@ -1626,25 +1600,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .assign_existing(bg),
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
-
-            let layout = &bgl_guard[*id];
-            layout.multi_ref_count.inc();
-
-            if G::ids_are_generated_in_wgpu() {
-                return (id.0, None);
-            }
-
-            // The ID is provided externally, so we must create a new bind group layout
-            // with the given ID as a duplicate of the existing one.
-            let new_layout = BindGroupLayout {
-                device_id: layout.device_id.clone(),
-                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(*id),
-                multi_ref_count: crate::MultiRefCount::new(),
-            };
-
-            let fid = hub.bind_group_layouts.prepare(id_in);
-            let id = fid.assign(new_layout, &mut Token::root());
-
             return (id, None);
         };
 
@@ -1969,7 +1924,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if !caps.formats.contains(&config.format) {
                     break 'outer E::UnsupportedFormat {
                         requested: config.format,
-                        available: caps.formats.clone(),
+                        available: caps.formats,
                     };
                 }
                 if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {

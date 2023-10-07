@@ -113,10 +113,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
             data: &self.storage,
         }
     }
-    pub(crate) fn request<F>(&self) -> FutureId<I, T>
-    where
-        F: IdentityHandlerFactory<I>,
-    {
+    pub(crate) fn request(&self) -> FutureId<I, T> {
         FutureId {
             id: self.identity.process(self.backend),
             identity: self.identity.clone(),

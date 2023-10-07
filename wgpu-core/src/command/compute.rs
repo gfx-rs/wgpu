@@ -505,7 +505,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     dynamic_offset_count += num_dynamic_offsets as usize;
 
-                    let bind_group: &BindGroup<A> = tracker
+                    let bind_group = tracker
                         .bind_groups
                         .add_single(&*bind_group_guard, bind_group_id)
                         .ok_or(ComputePassErrorInner::InvalidBindGroup(bind_group_id))
@@ -534,23 +534,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     let pipeline_layout = state.binder.pipeline_layout.clone();
-                    let entries = state.binder.assign_group(
-                        index as usize,
-                        bind_group_id,
-                        bind_group,
-                        &temp_offsets,
-                    );
+                    let entries =
+                        state
+                            .binder
+                            .assign_group(index as usize, bind_group, &temp_offsets);
                     if !entries.is_empty() && pipeline_layout.is_some() {
                         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                         for (i, e) in entries.iter().enumerate() {
-                            let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
-                            unsafe {
-                                raw.set_bind_group(
-                                    pipeline_layout,
-                                    index + i as u32,
-                                    raw_bg,
-                                    &e.dynamic_offsets,
-                                );
+                            if let Some(group) = e.group.as_ref() {
+                                let raw_bg = group.raw();
+                                unsafe {
+                                    raw.set_bind_group(
+                                        pipeline_layout,
+                                        index + i as u32,
+                                        raw_bg,
+                                        &e.dynamic_offsets,
+                                    );
+                                }
                             }
                         }
                     }
@@ -585,14 +585,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         if !entries.is_empty() {
                             for (i, e) in entries.iter().enumerate() {
-                                let raw_bg = bind_group_guard[*e.group_id.as_ref().unwrap()].raw();
-                                unsafe {
-                                    raw.set_bind_group(
-                                        pipeline.layout.raw(),
-                                        start_index as u32 + i as u32,
-                                        raw_bg,
-                                        &e.dynamic_offsets,
-                                    );
+                                if let Some(group) = e.group.as_ref() {
+                                    let raw_bg = group.raw();
+                                    unsafe {
+                                        raw.set_bind_group(
+                                            pipeline.layout.raw(),
+                                            start_index as u32 + i as u32,
+                                            raw_bg,
+                                            &e.dynamic_offsets,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -905,7 +907,8 @@ pub mod compute_ffi {
         }
 
         pass.base
-            .commands.push(ComputeCommand::SetPipeline(pipeline_id));
+            .commands
+            .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
     /// # Safety

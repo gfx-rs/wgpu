@@ -3,9 +3,9 @@ use wgt::Backend;
 
 use crate::{
     id::{self},
-    Epoch, Index,
+    Epoch, FastHashMap, Index,
 };
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 /// A simple structure to allocate [`Id`] identifiers.
 ///
@@ -38,7 +38,7 @@ use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
     //sorted by Index
-    used: HashMap<Epoch, Vec<Index>>,
+    used: FastHashMap<Epoch, Vec<Index>>,
     count: usize,
 }
 

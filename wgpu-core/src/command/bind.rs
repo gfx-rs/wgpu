@@ -6,6 +6,7 @@ use crate::{
     hal_api::HalApi,
     id::BindGroupId,
     pipeline::LateSizedBufferGroup,
+    resource::Resource,
 };
 
 use arrayvec::ArrayVec;
@@ -41,9 +42,6 @@ mod compat {
                     if expected_bgl.is_equal(assigned_bgl) {
                         return true;
                     }
-                    if let Some(compatible_bgl) = assigned_bgl.compatible_layout.as_ref() {
-                        return compatible_bgl.is_equal(expected_bgl);
-                    }
                 }
                 return false;
             }
@@ -51,12 +49,7 @@ mod compat {
         }
 
         fn is_incompatible(&self) -> bool {
-            if let Some(expected_bgl) = self.expected.as_ref() {
-                if let Some(assigned_bgl) = self.assigned.as_ref() {
-                    return !assigned_bgl.is_equal(expected_bgl);
-                }
-            }
-            true
+            !self.is_valid()
         }
     }
 
@@ -135,9 +128,9 @@ struct LateBufferBinding {
     bound_size: wgt::BufferAddress,
 }
 
-#[derive(Debug, Default)]
-pub(super) struct EntryPayload {
-    pub(super) group_id: Option<BindGroupId>,
+#[derive(Debug)]
+pub(super) struct EntryPayload<A: HalApi> {
+    pub(super) group: Option<Arc<BindGroup<A>>>,
     pub(super) dynamic_offsets: Vec<wgt::DynamicOffset>,
     late_buffer_bindings: Vec<LateBufferBinding>,
     /// Since `LateBufferBinding` may contain information about the bindings
@@ -145,9 +138,20 @@ pub(super) struct EntryPayload {
     pub(super) late_bindings_effective_count: usize,
 }
 
-impl EntryPayload {
+impl<A: HalApi> Default for EntryPayload<A> {
+    fn default() -> Self {
+        Self {
+            group: None,
+            dynamic_offsets: Default::default(),
+            late_buffer_bindings: Default::default(),
+            late_bindings_effective_count: Default::default(),
+        }
+    }
+}
+
+impl<A: HalApi> EntryPayload<A> {
     fn reset(&mut self) {
-        self.group_id = None;
+        self.group = None;
         self.dynamic_offsets.clear();
         self.late_buffer_bindings.clear();
         self.late_bindings_effective_count = 0;
@@ -158,7 +162,7 @@ impl EntryPayload {
 pub(super) struct Binder<A: HalApi> {
     pub(super) pipeline_layout: Option<Arc<PipelineLayout<A>>>,
     manager: compat::BoundBindGroupLayouts<A>,
-    payloads: [EntryPayload; hal::MAX_BIND_GROUPS],
+    payloads: [EntryPayload<A>; hal::MAX_BIND_GROUPS],
 }
 
 impl<A: HalApi> Binder<A> {
@@ -181,7 +185,7 @@ impl<A: HalApi> Binder<A> {
         &'a mut self,
         new: &Arc<PipelineLayout<A>>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
-    ) -> (usize, &'a [EntryPayload]) {
+    ) -> (usize, &'a [EntryPayload<A>]) {
         let old_id_opt = self.pipeline_layout.replace(new.clone());
 
         let mut bind_range = self.manager.update_expectations(&new.bind_group_layouts);
@@ -221,15 +225,15 @@ impl<A: HalApi> Binder<A> {
     pub(super) fn assign_group<'a>(
         &'a mut self,
         index: usize,
-        bind_group_id: BindGroupId,
-        bind_group: &BindGroup<A>,
+        bind_group: &Arc<BindGroup<A>>,
         offsets: &[wgt::DynamicOffset],
-    ) -> &'a [EntryPayload] {
+    ) -> &'a [EntryPayload<A>] {
+        let bind_group_id = bind_group.as_info().id();
         log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         debug_assert_eq!(A::VARIANT, bind_group_id.backend());
 
         let payload = &mut self.payloads[index];
-        payload.group_id = Some(bind_group_id);
+        payload.group = Some(bind_group.clone());
         payload.dynamic_offsets.clear();
         payload.dynamic_offsets.extend_from_slice(offsets);
 
@@ -261,7 +265,7 @@ impl<A: HalApi> Binder<A> {
         let payloads = &self.payloads;
         self.manager
             .list_active()
-            .map(move |index| *payloads[index].group_id.as_ref().unwrap())
+            .map(move |index| payloads[index].group.as_ref().unwrap().as_info().id())
     }
 
     pub(super) fn invalid_mask(&self) -> BindGroupMask {
