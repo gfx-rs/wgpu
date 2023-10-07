@@ -281,7 +281,7 @@ impl wgpu_example::framework::Example for Example {
         let terrain_vertex_size = mem::size_of::<point_gen::TerrainVertexAttributes>();
 
         // Noise generation
-        let terrain_noise = noise::OpenSimplex::new();
+        let terrain_noise = noise::OpenSimplex::default();
 
         // Random colouration
         let mut terrain_random = WyRand::new_seed(42);
@@ -739,7 +739,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(back_color),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 // We still need to use the depth buffer here
@@ -748,10 +748,12 @@ impl wgpu_example::framework::Example for Example {
                     view: &self.depth_buffer,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.execute_bundles([&self.terrain_bundle]);
@@ -766,17 +768,19 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(back_color),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_buffer,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
             rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
@@ -793,7 +797,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -801,6 +805,8 @@ impl wgpu_example::framework::Example for Example {
                     depth_ops: None,
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_pipeline(&self.water_pipeline);

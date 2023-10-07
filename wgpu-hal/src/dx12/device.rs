@@ -16,6 +16,7 @@ impl super::Device {
     pub(super) fn new(
         raw: d3d12::Device,
         present_queue: d3d12::CommandQueue,
+        limits: &wgt::Limits,
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
         dx12_shader_compiler: wgt::Dx12Compiler,
@@ -92,7 +93,7 @@ impl super::Device {
         };
 
         // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
-        let capacity_views = 1_000_000;
+        let capacity_views = limits.max_non_sampler_bindings as u64;
         let capacity_samplers = 2_048;
 
         let shared = super::DeviceShared {
@@ -124,23 +125,23 @@ impl super::Device {
                     .into_device_result("Command (dispatch) signature creation")?,
             },
             heap_views: descriptor::GeneralHeap::new(
-                raw,
+                raw.clone(),
                 d3d12::DescriptorHeapType::CbvSrvUav,
                 capacity_views,
             )?,
             heap_samplers: descriptor::GeneralHeap::new(
-                raw,
+                raw.clone(),
                 d3d12::DescriptorHeapType::Sampler,
                 capacity_samplers,
             )?,
         };
 
-        let mut rtv_pool = descriptor::CpuPool::new(raw, d3d12::DescriptorHeapType::Rtv);
+        let mut rtv_pool = descriptor::CpuPool::new(raw.clone(), d3d12::DescriptorHeapType::Rtv);
         let null_rtv_handle = rtv_pool.alloc_handle();
         // A null pResource is used to initialize a null descriptor,
         // which guarantees D3D11-like null binding behavior (reading 0s, writes are discarded)
         raw.create_render_target_view(
-            d3d12::WeakPtr::null(),
+            d3d12::ComPtr::null(),
             &d3d12::RenderTargetViewDesc::texture_2d(
                 winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM,
                 0,
@@ -150,7 +151,7 @@ impl super::Device {
         );
 
         Ok(super::Device {
-            raw,
+            raw: raw.clone(),
             present_queue,
             idler: super::Idler {
                 fence: idle_fence,
@@ -160,11 +161,11 @@ impl super::Device {
             shared: Arc::new(shared),
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
-                raw,
+                raw.clone(),
                 d3d12::DescriptorHeapType::Dsv,
             )),
             srv_uav_pool: Mutex::new(descriptor::CpuPool::new(
-                raw,
+                raw.clone(),
                 d3d12::DescriptorHeapType::CbvSrvUav,
             )),
             sampler_pool: Mutex::new(descriptor::CpuPool::new(
@@ -180,7 +181,10 @@ impl super::Device {
         })
     }
 
-    pub(super) unsafe fn wait_idle(&self) -> Result<(), crate::DeviceError> {
+    // Blocks until the dedicated present queue is finished with all of its work.
+    //
+    // Once this method completes, the surface is able to be resized or deleted.
+    pub(super) unsafe fn wait_for_present_queue_idle(&self) -> Result<(), crate::DeviceError> {
         let cur_value = self.idler.fence.get_value();
         if cur_value == !0 {
             return Err(crate::DeviceError::Lost);
@@ -188,7 +192,7 @@ impl super::Device {
 
         let value = cur_value + 1;
         log::info!("Waiting for idle with value {}", value);
-        self.present_queue.signal(self.idler.fence, value);
+        self.present_queue.signal(&self.idler.fence, value);
         let hr = self
             .idler
             .fence
@@ -299,19 +303,23 @@ impl super::Device {
             allocation: None,
         }
     }
+
+    pub unsafe fn buffer_from_raw(
+        resource: d3d12::Resource,
+        size: wgt::BufferAddress,
+    ) -> super::Buffer {
+        super::Buffer {
+            resource,
+            size,
+            allocation: None,
+        }
+    }
 }
 
 impl crate::Device<super::Api> for super::Device {
-    unsafe fn exit(mut self, queue: super::Queue) {
+    unsafe fn exit(mut self, _queue: super::Queue) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
-        unsafe { self.rtv_pool.into_inner().destroy() };
-        unsafe { self.dsv_pool.into_inner().destroy() };
-        unsafe { self.srv_uav_pool.into_inner().destroy() };
-        unsafe { self.sampler_pool.into_inner().destroy() };
-        unsafe { self.shared.destroy() };
-        unsafe { self.idler.destroy() };
         self.mem_allocator = None;
-        unsafe { queue.raw.destroy() };
     }
 
     unsafe fn create_buffer(
@@ -358,7 +366,6 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
-        unsafe { buffer.resource.destroy() };
         // Only happens when it's using the windows_rs feature and there's an allocation
         if let Some(alloc) = buffer.allocation.take() {
             super::suballocation::free_buffer_allocation(
@@ -444,7 +451,6 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn destroy_texture(&self, mut texture: super::Texture) {
-        unsafe { texture.resource.destroy() };
         if let Some(alloc) = texture.allocation.take() {
             super::suballocation::free_texture_allocation(
                 alloc,
@@ -465,7 +471,7 @@ impl crate::Device<super::Api> for super::Device {
             raw_format: view_desc.rtv_dsv_format,
             aspects: view_desc.aspects,
             target_base: (
-                texture.resource,
+                texture.resource.clone(),
                 texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
@@ -635,24 +641,20 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::CommandEncoder {
             allocator,
-            device: self.raw,
+            device: self.raw.clone(),
             shared: Arc::clone(&self.shared),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),
             pass: super::PassState::new(),
             temp: super::Temp::default(),
+            end_of_pass_timer_query: None,
         })
     }
     unsafe fn destroy_command_encoder(&self, encoder: super::CommandEncoder) {
         if let Some(list) = encoder.list {
             list.close();
-            unsafe { list.destroy() };
         }
-        for list in encoder.free_lists {
-            unsafe { list.destroy() };
-        }
-        unsafe { encoder.allocator.destroy() };
     }
 
     unsafe fn create_bind_group_layout(
@@ -680,7 +682,7 @@ impl crate::Device<super::Api> for super::Device {
             entries: desc.entries.to_vec(),
             cpu_heap_views: if num_views != 0 {
                 let heap = descriptor::CpuHeap::new(
-                    self.raw,
+                    self.raw.clone(),
                     d3d12::DescriptorHeapType::CbvSrvUav,
                     num_views,
                 )?;
@@ -690,7 +692,7 @@ impl crate::Device<super::Api> for super::Device {
             },
             cpu_heap_samplers: if num_samplers != 0 {
                 let heap = descriptor::CpuHeap::new(
-                    self.raw,
+                    self.raw.clone(),
                     d3d12::DescriptorHeapType::Sampler,
                     num_samplers,
                 )?;
@@ -701,14 +703,7 @@ impl crate::Device<super::Api> for super::Device {
             copy_counts: vec![1; num_views.max(num_samplers) as usize],
         })
     }
-    unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
-        if let Some(cpu_heap) = bg_layout.cpu_heap_views {
-            unsafe { cpu_heap.destroy() };
-        }
-        if let Some(cpu_heap) = bg_layout.cpu_heap_samplers {
-            unsafe { cpu_heap.destroy() };
-        }
-    }
+    unsafe fn destroy_bind_group_layout(&self, _bg_layout: super::BindGroupLayout) {}
 
     unsafe fn create_pipeline_layout(
         &self,
@@ -1032,7 +1027,6 @@ impl crate::Device<super::Api> for super::Device {
                 "Root signature serialization error: {:?}",
                 unsafe { error.as_c_str() }.to_str().unwrap()
             );
-            unsafe { error.destroy() };
             return Err(crate::DeviceError::Lost);
         }
 
@@ -1040,7 +1034,6 @@ impl crate::Device<super::Api> for super::Device {
             .raw
             .create_root_signature(blob, 0)
             .into_device_result("Root signature creation")?;
-        unsafe { blob.destroy() };
 
         log::debug!("\traw = {:?}", raw);
 
@@ -1072,9 +1065,7 @@ impl crate::Device<super::Api> for super::Device {
             },
         })
     }
-    unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
-        unsafe { pipeline_layout.shared.signature.destroy() };
-    }
+    unsafe fn destroy_pipeline_layout(&self, _pipeline_layout: super::PipelineLayout) {}
 
     unsafe fn create_bind_group(
         &self,
@@ -1211,7 +1202,7 @@ impl crate::Device<super::Api> for super::Device {
             Some(inner) => {
                 let dual = unsafe {
                     descriptor::upload(
-                        self.raw,
+                        self.raw.clone(),
                         &inner,
                         &self.shared.heap_views,
                         &desc.layout.copy_counts,
@@ -1225,7 +1216,7 @@ impl crate::Device<super::Api> for super::Device {
             Some(inner) => {
                 let dual = unsafe {
                     descriptor::upload(
-                        self.raw,
+                        self.raw.clone(),
                         &inner,
                         &self.shared.heap_samplers,
                         &desc.layout.copy_counts,
@@ -1451,9 +1442,7 @@ impl crate::Device<super::Api> for super::Device {
             vertex_strides,
         })
     }
-    unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
-        unsafe { pipeline.raw.destroy() };
-    }
+    unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {}
 
     unsafe fn create_compute_pipeline(
         &self,
@@ -1464,7 +1453,7 @@ impl crate::Device<super::Api> for super::Device {
         let pair = {
             profiling::scope!("ID3D12Device::CreateComputePipelineState");
             self.raw.create_compute_pipeline_state(
-                desc.layout.shared.signature,
+                &desc.layout.shared.signature,
                 blob_cs.create_native_shader(),
                 0,
                 d3d12::CachedPSO::null(),
@@ -1488,9 +1477,7 @@ impl crate::Device<super::Api> for super::Device {
             layout: desc.layout.shared.clone(),
         })
     }
-    unsafe fn destroy_compute_pipeline(&self, pipeline: super::ComputePipeline) {
-        unsafe { pipeline.raw.destroy() };
-    }
+    unsafe fn destroy_compute_pipeline(&self, _pipeline: super::ComputePipeline) {}
 
     unsafe fn create_query_set(
         &self,
@@ -1523,9 +1510,7 @@ impl crate::Device<super::Api> for super::Device {
 
         Ok(super::QuerySet { raw, raw_ty })
     }
-    unsafe fn destroy_query_set(&self, set: super::QuerySet) {
-        unsafe { set.raw.destroy() };
-    }
+    unsafe fn destroy_query_set(&self, _set: super::QuerySet) {}
 
     unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         let mut raw = d3d12::Fence::null();
@@ -1540,9 +1525,7 @@ impl crate::Device<super::Api> for super::Device {
         hr.into_device_result("Fence creation")?;
         Ok(super::Fence { raw })
     }
-    unsafe fn destroy_fence(&self, fence: super::Fence) {
-        unsafe { fence.raw.destroy() };
-    }
+    unsafe fn destroy_fence(&self, _fence: super::Fence) {}
     unsafe fn get_fence_value(
         &self,
         fence: &super::Fence,

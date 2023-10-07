@@ -95,6 +95,10 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> hal::BufferUses {
         hal::BufferUses::INDIRECT,
         usage.contains(wgt::BufferUsages::INDIRECT),
     );
+    u.set(
+        hal::BufferUses::QUERY_RESOLVE,
+        usage.contains(wgt::BufferUsages::QUERY_RESOLVE),
+    );
     u
 }
 
@@ -127,6 +131,31 @@ pub fn map_texture_usage(
     u.set(
         hal::TextureUses::DEPTH_STENCIL_READ | hal::TextureUses::DEPTH_STENCIL_WRITE,
         usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && !is_color,
+    );
+    u
+}
+
+pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages {
+    let mut u = wgt::TextureUsages::empty();
+    u.set(
+        wgt::TextureUsages::COPY_SRC,
+        uses.contains(hal::TextureUses::COPY_SRC),
+    );
+    u.set(
+        wgt::TextureUsages::COPY_DST,
+        uses.contains(hal::TextureUses::COPY_DST),
+    );
+    u.set(
+        wgt::TextureUsages::TEXTURE_BINDING,
+        uses.contains(hal::TextureUses::RESOURCE),
+    );
+    u.set(
+        wgt::TextureUsages::STORAGE_BINDING,
+        uses.contains(hal::TextureUses::STORAGE_READ | hal::TextureUses::STORAGE_READ_WRITE),
+    );
+    u.set(
+        wgt::TextureUsages::RENDER_ATTACHMENT,
+        uses.contains(hal::TextureUses::COLOR_TARGET),
     );
     u
 }

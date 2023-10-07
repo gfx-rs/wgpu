@@ -773,10 +773,12 @@ impl wgpu_example::framework::Example for Example {
                         view: &light.target_view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }),
                         stencil_ops: None,
                     }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
                 });
                 pass.set_pipeline(&self.shadow_pass.pipeline);
                 pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
@@ -808,17 +810,19 @@ impl wgpu_example::framework::Example for Example {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.forward_depth,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: false,
+                        store: wgpu::StoreOp::Discard,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
             pass.set_pipeline(&self.forward_pass.pipeline);
             pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);
@@ -853,9 +857,15 @@ fn shadow() {
         base_test_parameters: wgpu_test::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPARISON_SAMPLERS)
             // rpi4 on VK doesn't work: https://gitlab.freedesktop.org/mesa/mesa/-/issues/3916
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("V3D"), false)
+            .expect_fail(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "V3D",
+            ))
             // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
-            .specific_failure(Some(wgpu::Backends::VULKAN), None, Some("llvmpipe"), true),
+            .skip(wgpu_test::FailureCase::backend_adapter(
+                wgpu::Backends::VULKAN,
+                "llvmpipe",
+            )),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     });
 }

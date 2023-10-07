@@ -140,10 +140,12 @@ fn pass_reset_vertex_buffer() {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
-                    store: false,
+                    store: StoreOp::Discard,
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         double_rpass.set_pipeline(&double_pipeline);
@@ -173,10 +175,12 @@ fn pass_reset_vertex_buffer() {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
-                    store: false,
+                    store: StoreOp::Discard,
                 },
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         single_rpass.set_pipeline(&single_pipeline);

@@ -2,11 +2,10 @@
 
 use deno_core::error::type_error;
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
-use deno_core::ZeroCopyBuf;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -32,10 +31,11 @@ pub struct RenderPassSetViewportArgs {
     max_depth: f32,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_viewport(
     state: &mut OpState,
-    args: RenderPassSetViewportArgs,
+    #[serde] args: RenderPassSetViewportArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
@@ -54,10 +54,11 @@ pub fn op_webgpu_render_pass_set_viewport(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_scissor_rect(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     x: u32,
     y: u32,
     width: u32,
@@ -78,11 +79,12 @@ pub fn op_webgpu_render_pass_set_scissor_rect(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_blend_constant(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
-    color: wgpu_types::Color,
+    #[smi] render_pass_rid: ResourceId,
+    #[serde] color: wgpu_types::Color,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
@@ -96,10 +98,11 @@ pub fn op_webgpu_render_pass_set_blend_constant(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_stencil_reference(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     reference: u32,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
@@ -114,73 +117,48 @@ pub fn op_webgpu_render_pass_set_stencil_reference(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
-pub fn op_webgpu_render_pass_begin_pipeline_statistics_query(
+#[op2]
+#[serde]
+pub fn op_webgpu_render_pass_begin_occlusion_query(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
-    query_set: u32,
+    #[smi] render_pass_rid: ResourceId,
     query_index: u32,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
-    let query_set_resource = state
-        .resource_table
-        .get::<super::WebGpuQuerySet>(query_set)?;
 
-    wgpu_core::command::render_ffi::wgpu_render_pass_begin_pipeline_statistics_query(
+    wgpu_core::command::render_ffi::wgpu_render_pass_begin_occlusion_query(
         &mut render_pass_resource.0.borrow_mut(),
-        query_set_resource.1,
         query_index,
     );
 
     Ok(WebGpuResult::empty())
 }
 
-#[op]
-pub fn op_webgpu_render_pass_end_pipeline_statistics_query(
+#[op2]
+#[serde]
+pub fn op_webgpu_render_pass_end_occlusion_query(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
 
-    wgpu_core::command::render_ffi::wgpu_render_pass_end_pipeline_statistics_query(
+    wgpu_core::command::render_ffi::wgpu_render_pass_end_occlusion_query(
         &mut render_pass_resource.0.borrow_mut(),
     );
 
     Ok(WebGpuResult::empty())
 }
 
-#[op]
-pub fn op_webgpu_render_pass_write_timestamp(
-    state: &mut OpState,
-    render_pass_rid: ResourceId,
-    query_set: u32,
-    query_index: u32,
-) -> Result<WebGpuResult, AnyError> {
-    let render_pass_resource = state
-        .resource_table
-        .get::<WebGpuRenderPass>(render_pass_rid)?;
-    let query_set_resource = state
-        .resource_table
-        .get::<super::WebGpuQuerySet>(query_set)?;
-
-    wgpu_core::command::render_ffi::wgpu_render_pass_write_timestamp(
-        &mut render_pass_resource.0.borrow_mut(),
-        query_set_resource.1,
-        query_index,
-    );
-
-    Ok(WebGpuResult::empty())
-}
-
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_execute_bundles(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
-    bundles: Vec<u32>,
+    #[smi] render_pass_rid: ResourceId,
+    #[serde] bundles: Vec<u32>,
 ) -> Result<WebGpuResult, AnyError> {
     let bundles = bundles
         .iter()
@@ -209,11 +187,12 @@ pub fn op_webgpu_render_pass_execute_bundles(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_end(
     state: &mut OpState,
-    command_encoder_rid: ResourceId,
-    render_pass_rid: ResourceId,
+    #[smi] command_encoder_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let command_encoder_resource =
         state
@@ -229,15 +208,16 @@ pub fn op_webgpu_render_pass_end(
     gfx_ok!(command_encoder => instance.command_encoder_run_render_pass(command_encoder, render_pass))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_bind_group(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     index: u32,
     bind_group: u32,
-    dynamic_offsets_data: ZeroCopyBuf,
-    dynamic_offsets_data_start: usize,
-    dynamic_offsets_data_length: usize,
+    #[buffer] dynamic_offsets_data: &[u32],
+    #[number] dynamic_offsets_data_start: usize,
+    #[number] dynamic_offsets_data_length: usize,
 ) -> Result<WebGpuResult, AnyError> {
     let bind_group_resource = state
         .resource_table
@@ -245,14 +225,6 @@ pub fn op_webgpu_render_pass_set_bind_group(
     let render_pass_resource = state
         .resource_table
         .get::<WebGpuRenderPass>(render_pass_rid)?;
-
-    // Align the data
-    assert_eq!(dynamic_offsets_data_start % std::mem::size_of::<u32>(), 0);
-    // SAFETY: A u8 to u32 cast is safe because we asserted that the length is a
-    // multiple of 4.
-    let (prefix, dynamic_offsets_data, suffix) = unsafe { dynamic_offsets_data.align_to::<u32>() };
-    assert!(prefix.is_empty());
-    assert!(suffix.is_empty());
 
     let start = dynamic_offsets_data_start;
     let len = dynamic_offsets_data_length;
@@ -278,11 +250,12 @@ pub fn op_webgpu_render_pass_set_bind_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_push_debug_group(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
-    group_label: String,
+    #[smi] render_pass_rid: ResourceId,
+    #[string] group_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
@@ -302,10 +275,11 @@ pub fn op_webgpu_render_pass_push_debug_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_pop_debug_group(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
@@ -318,11 +292,12 @@ pub fn op_webgpu_render_pass_pop_debug_group(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_insert_debug_marker(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
-    marker_label: String,
+    #[smi] render_pass_rid: ResourceId,
+    #[string] marker_label: &str,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pass_resource = state
         .resource_table
@@ -342,10 +317,11 @@ pub fn op_webgpu_render_pass_insert_debug_marker(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_pipeline(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     pipeline: u32,
 ) -> Result<WebGpuResult, AnyError> {
     let render_pipeline_resource = state
@@ -363,14 +339,15 @@ pub fn op_webgpu_render_pass_set_pipeline(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_index_buffer(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     buffer: u32,
-    index_format: wgpu_types::IndexFormat,
-    offset: u64,
-    size: Option<u64>,
+    #[serde] index_format: wgpu_types::IndexFormat,
+    #[number] offset: u64,
+    #[number] size: Option<u64>,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -398,14 +375,15 @@ pub fn op_webgpu_render_pass_set_index_buffer(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_set_vertex_buffer(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     slot: u32,
     buffer: u32,
-    offset: u64,
-    size: Option<u64>,
+    #[number] offset: u64,
+    #[number] size: Option<u64>,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -434,10 +412,11 @@ pub fn op_webgpu_render_pass_set_vertex_buffer(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_draw(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     vertex_count: u32,
     instance_count: u32,
     first_vertex: u32,
@@ -458,10 +437,11 @@ pub fn op_webgpu_render_pass_draw(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_draw_indexed(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     index_count: u32,
     instance_count: u32,
     first_index: u32,
@@ -484,12 +464,13 @@ pub fn op_webgpu_render_pass_draw_indexed(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_draw_indirect(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     indirect_buffer: u32,
-    indirect_offset: u64,
+    #[number] indirect_offset: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table
@@ -507,12 +488,13 @@ pub fn op_webgpu_render_pass_draw_indirect(
     Ok(WebGpuResult::empty())
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pass_draw_indexed_indirect(
     state: &mut OpState,
-    render_pass_rid: ResourceId,
+    #[smi] render_pass_rid: ResourceId,
     indirect_buffer: u32,
-    indirect_offset: u64,
+    #[number] indirect_offset: u64,
 ) -> Result<WebGpuResult, AnyError> {
     let buffer_resource = state
         .resource_table

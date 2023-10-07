@@ -3,7 +3,7 @@
 #![warn(unsafe_op_in_unsafe_fn)]
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -12,7 +12,6 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::convert::TryFrom;
 use std::rc::Rc;
 pub use wgpu_core;
 pub use wgpu_types;
@@ -181,9 +180,8 @@ deno_core::extension!(
         render_pass::op_webgpu_render_pass_set_scissor_rect,
         render_pass::op_webgpu_render_pass_set_blend_constant,
         render_pass::op_webgpu_render_pass_set_stencil_reference,
-        render_pass::op_webgpu_render_pass_begin_pipeline_statistics_query,
-        render_pass::op_webgpu_render_pass_end_pipeline_statistics_query,
-        render_pass::op_webgpu_render_pass_write_timestamp,
+        render_pass::op_webgpu_render_pass_begin_occlusion_query,
+        render_pass::op_webgpu_render_pass_end_occlusion_query,
         render_pass::op_webgpu_render_pass_execute_bundles,
         render_pass::op_webgpu_render_pass_end,
         render_pass::op_webgpu_render_pass_set_bind_group,
@@ -200,9 +198,6 @@ deno_core::extension!(
         compute_pass::op_webgpu_compute_pass_set_pipeline,
         compute_pass::op_webgpu_compute_pass_dispatch_workgroups,
         compute_pass::op_webgpu_compute_pass_dispatch_workgroups_indirect,
-        compute_pass::op_webgpu_compute_pass_begin_pipeline_statistics_query,
-        compute_pass::op_webgpu_compute_pass_end_pipeline_statistics_query,
-        compute_pass::op_webgpu_compute_pass_write_timestamp,
         compute_pass::op_webgpu_compute_pass_end,
         compute_pass::op_webgpu_compute_pass_set_bind_group,
         compute_pass::op_webgpu_compute_pass_push_debug_group,
@@ -365,6 +360,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
         return_features.push("shader-early-depth-test");
     }
+    if features.contains(wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT) {
+        return_features.push("shader-unused-vertex-output");
+    }
 
     return_features
 }
@@ -385,10 +383,11 @@ pub struct GpuAdapterDevice {
     is_software: bool,
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_request_adapter(
     state: Rc<RefCell<OpState>>,
-    power_preference: Option<wgpu_types::PowerPreference>,
+    #[serde] power_preference: Option<wgpu_types::PowerPreference>,
     force_fallback_adapter: bool,
 ) -> Result<GpuAdapterDeviceOrErr, AnyError> {
     let mut state = state.borrow_mut();
@@ -406,6 +405,7 @@ pub async fn op_webgpu_request_adapter(
             wgpu_types::InstanceDescriptor {
                 backends,
                 dx12_shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+                gles_minor_version: wgpu_types::Gles3MinorVersion::default(),
             },
         )));
         state.borrow::<Instance>()
@@ -624,18 +624,23 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::SHADER_EARLY_DEPTH_TEST,
             required_features.0.contains("shader-early-depth-test"),
         );
+        features.set(
+            wgpu_types::Features::SHADER_UNUSED_VERTEX_OUTPUT,
+            required_features.0.contains("shader-unused-vertex-output"),
+        );
 
         features
     }
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_request_device(
     state: Rc<RefCell<OpState>>,
-    adapter_rid: ResourceId,
-    label: Option<String>,
-    required_features: GpuRequiredFeatures,
-    required_limits: Option<wgpu_types::Limits>,
+    #[smi] adapter_rid: ResourceId,
+    #[string] label: String,
+    #[serde] required_features: GpuRequiredFeatures,
+    #[serde] required_limits: Option<wgpu_types::Limits>,
 ) -> Result<GpuAdapterDevice, AnyError> {
     let mut state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
@@ -643,7 +648,7 @@ pub async fn op_webgpu_request_device(
     let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::DeviceDescriptor {
-        label: label.map(Cow::from),
+        label: Some(Cow::Owned(label)),
         features: required_features.into(),
         limits: required_limits.unwrap_or_default(),
     };
@@ -683,10 +688,11 @@ pub struct GPUAdapterInfo {
     description: String,
 }
 
-#[op]
+#[op2(async)]
+#[serde]
 pub async fn op_webgpu_request_adapter_info(
     state: Rc<RefCell<OpState>>,
-    adapter_rid: ResourceId,
+    #[smi] adapter_rid: ResourceId,
 ) -> Result<GPUAdapterInfo, AnyError> {
     let state = state.borrow_mut();
     let adapter_resource = state.resource_table.get::<WebGpuAdapter>(adapter_rid)?;
@@ -707,7 +713,7 @@ pub async fn op_webgpu_request_adapter_info(
 #[serde(rename_all = "camelCase")]
 pub struct CreateQuerySetArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     #[serde(flatten)]
     r#type: GpuQueryType,
     count: u32,
@@ -717,10 +723,6 @@ pub struct CreateQuerySetArgs {
 #[serde(rename_all = "kebab-case", tag = "type")]
 enum GpuQueryType {
     Occlusion,
-    #[serde(rename_all = "camelCase")]
-    PipelineStatistics {
-        pipeline_statistics: HashSet<String>,
-    },
     Timestamp,
 }
 
@@ -728,47 +730,23 @@ impl From<GpuQueryType> for wgpu_types::QueryType {
     fn from(query_type: GpuQueryType) -> Self {
         match query_type {
             GpuQueryType::Occlusion => wgpu_types::QueryType::Occlusion,
-            GpuQueryType::PipelineStatistics {
-                pipeline_statistics,
-            } => {
-                use wgpu_types::PipelineStatisticsTypes;
-
-                let mut types = PipelineStatisticsTypes::empty();
-
-                if pipeline_statistics.contains("vertex-shader-invocations") {
-                    types.set(PipelineStatisticsTypes::VERTEX_SHADER_INVOCATIONS, true);
-                }
-                if pipeline_statistics.contains("clipper-invocations") {
-                    types.set(PipelineStatisticsTypes::CLIPPER_INVOCATIONS, true);
-                }
-                if pipeline_statistics.contains("clipper-primitives-out") {
-                    types.set(PipelineStatisticsTypes::CLIPPER_PRIMITIVES_OUT, true);
-                }
-                if pipeline_statistics.contains("fragment-shader-invocations") {
-                    types.set(PipelineStatisticsTypes::FRAGMENT_SHADER_INVOCATIONS, true);
-                }
-                if pipeline_statistics.contains("compute-shader-invocations") {
-                    types.set(PipelineStatisticsTypes::COMPUTE_SHADER_INVOCATIONS, true);
-                }
-
-                wgpu_types::QueryType::PipelineStatistics(types)
-            }
             GpuQueryType::Timestamp => wgpu_types::QueryType::Timestamp,
         }
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_query_set(
     state: &mut OpState,
-    args: CreateQuerySetArgs,
+    #[serde] args: CreateQuerySetArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let device_resource = state.resource_table.get::<WebGpuDevice>(args.device_rid)?;
     let device = device_resource.1;
     let instance = state.borrow::<Instance>();
 
     let descriptor = wgpu_types::QuerySetDescriptor {
-        label: args.label.map(Cow::from),
+        label: Some(Cow::Owned(args.label)),
         ty: args.r#type.into(),
         count: args.count,
     };

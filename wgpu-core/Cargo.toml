@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU core logic on wgpu-hal"
@@ -8,6 +8,12 @@ homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
+
+# Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
+# copy the crates it actually uses out of the workspace, so it's meaningful for
+# them to have less restrictive MSRVs individually than the workspace as a
+# whole, if their code permits. See `../README.md` for details.
+rust-version = "1.65"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -22,7 +28,7 @@ targets = [
 [lib]
 
 [features]
-default = []
+default = ["link"]
 
 # Backends, passed through to wgpu-hal
 metal = ["hal/metal"]
@@ -31,6 +37,9 @@ gles = ["hal/gles"]
 dx11 = ["hal/dx11"]
 dx12 = ["hal/dx12"]
 
+# Use static linking for libraries. Disale to manually link. Enabled by default.
+link = ["hal/link"]
+
 # Support the Renderdoc graphics debugger:
 # https://renderdoc.org/
 renderdoc = ["hal/renderdoc"]
@@ -38,7 +47,6 @@ renderdoc = ["hal/renderdoc"]
 # Apply run-time checks, even in release builds. These are in addition
 # to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgt/strict_asserts"]
-angle = ["hal/gles"]
 # Enable API tracing
 trace = ["ron", "serde", "wgt/trace", "arrayvec/serde", "naga/serialize"]
 # Enable API replaying
@@ -48,6 +56,8 @@ serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 id32 = []
 # Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
+# Implement `Send` and `Sync` on Wasm.
+fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "wgt/fragile-send-sync-non-atomic-wasm"]
 
 [dependencies]
 arrayvec = "0.7"
@@ -67,19 +77,20 @@ thiserror = "1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "76003dc0035d53a474d366dcdf49d2e4d12e921f"
-version = "0.12.0"
+rev = "6668d0694cc51ee66c71c2ca3a1ab1081956299b"
+version = "0.13.0"
 features = ["clone", "span", "validate"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 path = "../wgpu-types"
-version = "0.16"
+version = "0.17"
 
 [dependencies.hal]
 package = "wgpu-hal"
 path = "../wgpu-hal"
-version = "0.16"
+version = "0.17"
+default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.60", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
+web-sys = { version = "0.3.64", features = ["HtmlCanvasElement", "OffscreenCanvas"] }

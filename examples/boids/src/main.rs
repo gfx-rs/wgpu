@@ -276,13 +276,15 @@ impl wgpu_example::framework::Example for Example {
                 // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
                 // Users should avoid loading uninitialized memory since this can cause additional overhead.
                 load: wgpu::LoadOp::Load,
-                store: true,
+                store: wgpu::StoreOp::Store,
             },
         })];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &color_attachments,
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         };
 
         // get command encoder
@@ -292,8 +294,10 @@ impl wgpu_example::framework::Example for Example {
         command_encoder.push_debug_group("compute boid movement");
         {
             // compute pass
-            let mut cpass =
-                command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);
@@ -339,7 +343,9 @@ fn boids() {
         optional_features: wgpu::Features::default(),
         base_test_parameters: wgpu_test::TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-            .limits(wgpu::Limits::downlevel_defaults()),
+            .limits(wgpu::Limits::downlevel_defaults())
+            // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
+            .expect_fail(wgpu_test::FailureCase::molten_vk()),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     });
 }

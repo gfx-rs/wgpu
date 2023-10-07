@@ -1,6 +1,5 @@
 use crate::{
     binding_model,
-    device::life::WaitIdleError,
     hal_api::HalApi,
     hub::Hub,
     id,
@@ -24,7 +23,7 @@ pub mod queue;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
-pub use resource::Device;
+pub use {life::WaitIdleError, resource::Device};
 
 pub const SHADER_STAGE_COUNT: usize = 3;
 // Should be large enough for the largest possible texture row. This
@@ -181,6 +180,9 @@ impl UserClosures {
     fn fire(self) {
         // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
+
+        // Mappings _must_ be fired before submissions, as the spec requires all mapping callbacks that are registered before
+        // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (operation, status) in self.mappings {
             operation.callback.call(status);
         }
@@ -290,19 +292,24 @@ pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("Parent device is invalid")]
+    #[error("Parent device is invalid.")]
     Invalid,
     #[error("Parent device is lost")]
     Lost,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left.")]
     OutOfMemory,
+    #[error("Creation of a resource failed for a reason other than running out of memory.")]
+    ResourceCreationFailed,
+    #[error("Attempt to use a resource with a different device from the one that created it")]
+    WrongDevice,
 }
 
 impl From<hal::DeviceError> for DeviceError {
     fn from(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Lost,
+            hal::DeviceError::Lost => DeviceError::Invalid,
             hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
         }
     }
 }

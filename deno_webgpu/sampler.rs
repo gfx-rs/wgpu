@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -30,7 +30,7 @@ impl Resource for WebGpuSampler {
 #[serde(rename_all = "camelCase")]
 pub struct CreateSamplerArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     address_mode_u: wgpu_types::AddressMode,
     address_mode_v: wgpu_types::AddressMode,
     address_mode_w: wgpu_types::AddressMode,
@@ -43,10 +43,11 @@ pub struct CreateSamplerArgs {
     max_anisotropy: u16,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_sampler(
     state: &mut OpState,
-    args: CreateSamplerArgs,
+    #[serde] args: CreateSamplerArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -55,7 +56,7 @@ pub fn op_webgpu_create_sampler(
     let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::SamplerDescriptor {
-        label: args.label.map(Cow::from),
+        label: Some(Cow::Owned(args.label)),
         address_modes: [
             args.address_mode_u,
             args.address_mode_v,

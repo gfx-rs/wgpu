@@ -11,8 +11,7 @@ fn hello_synchronization_test_results() {
         // Taken from hello-compute tests.
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-            .limits(wgpu::Limits::downlevel_defaults())
-            .specific_failure(None, None, Some("V3D"), true),
+            .limits(wgpu::Limits::downlevel_defaults()),
         |ctx| {
             let ExecuteResults {
                 patient_workgroup_results,

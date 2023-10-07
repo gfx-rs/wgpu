@@ -8,7 +8,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hub::Token,
-    id::{BufferId, CommandEncoderId, TextureId, Valid},
+    id::{BufferId, CommandEncoderId, DeviceId, TextureId, Valid},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
@@ -40,6 +40,8 @@ pub enum CopySide {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TransferError {
+    #[error("Device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("Buffer {0:?} is invalid or destroyed")]
     InvalidBuffer(BufferId),
     #[error("Texture {0:?} is invalid or destroyed")]
@@ -569,6 +571,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -714,6 +719,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -858,6 +866,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -1020,6 +1031,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(TransferError::InvalidDevice(cmd_buf.device_id.value.0).into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {

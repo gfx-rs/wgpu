@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -25,12 +25,13 @@ impl Resource for WebGpuShaderModule {
     }
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_shader_module(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    code: String,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Cow<str>,
+    #[string] code: Cow<str>,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -38,10 +39,10 @@ pub fn op_webgpu_create_shader_module(
         .get::<super::WebGpuDevice>(device_rid)?;
     let device = device_resource.1;
 
-    let source = wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::from(code));
+    let source = wgpu_core::pipeline::ShaderModuleSource::Wgsl(code);
 
     let descriptor = wgpu_core::pipeline::ShaderModuleDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         shader_bound_checks: wgpu_types::ShaderBoundChecks::default(),
     };
 

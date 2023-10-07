@@ -1,10 +1,10 @@
 use crate::{
     context::{ObjectId, Unused},
     AdapterInfo, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BufferBinding,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
@@ -23,6 +23,7 @@ use std::{
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::id::TypedId;
+use wgt::{WasmNotSend, WasmNotSync};
 
 const LABEL: &str = "label";
 
@@ -153,6 +154,38 @@ impl Context {
         }
     }
 
+    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_buffer: A::Buffer,
+        device: &Device,
+        desc: &BufferDescriptor,
+    ) -> (wgc::id::BufferId, Buffer) {
+        let global = &self.0;
+        let (id, error) = unsafe {
+            global.create_buffer_from_hal::<A>(
+                hal_buffer,
+                device.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                (),
+            )
+        };
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                desc.label,
+                "Device::create_buffer_from_hal",
+            );
+        }
+        (
+            id,
+            Buffer {
+                error_sink: Arc::clone(&device.error_sink),
+            },
+        )
+    }
+
     pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
         &self,
         device: &Device,
@@ -211,10 +244,7 @@ impl Context {
         &self,
         canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -226,10 +256,7 @@ impl Context {
         &self,
         canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_offscreen_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -263,7 +290,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -297,7 +324,7 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
@@ -306,7 +333,7 @@ impl Context {
     #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + Send + Sync + 'static,
+        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
         operation: &'static str,
     ) -> ! {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));
@@ -365,6 +392,13 @@ fn map_texture_tagged_copy_view(
     }
 }
 
+fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
+    match op {
+        StoreOp::Store => wgc::command::StoreOp::Store,
+        StoreOp::Discard => wgc::command::StoreOp::Discard,
+    }
+}
+
 fn map_pass_channel<V: Copy + Default>(
     ops: Option<&Operations<V>>,
 ) -> wgc::command::PassChannel<V> {
@@ -374,11 +408,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Clear,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value,
             read_only: false,
         },
@@ -387,11 +417,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Load,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value: V::default(),
             read_only: false,
         },
@@ -595,8 +621,7 @@ impl crate::Context for Context {
             ()
         ));
         if let Some(err) = error {
-            log::error!("Error in Adapter::request_device: {}", err);
-            return ready(Err(crate::RequestDeviceError));
+            return ready(Err(err.into()));
         }
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
@@ -1414,6 +1439,15 @@ impl crate::Context for Context {
 
         wgc::gfx_select!(device => global.device_drop(*device));
     }
+    fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_destroy(*device));
+    }
+    fn device_lose(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        // TODO: accept a reason, and pass it to device_lose.
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_lose(*device, None));
+    }
     fn device_poll(
         &self,
         device: &Self::DeviceId,
@@ -1467,7 +1501,7 @@ impl crate::Context for Context {
         buffer_data: &Self::BufferData,
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
-        callback: Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + Send + 'static>,
+        callback: crate::context::BufferMapCallback,
     ) {
         let operation = wgc::resource::BufferMapOperation {
             host: match mode {
@@ -1816,12 +1850,21 @@ impl crate::Context for Context {
         _encoder_data: &Self::CommandEncoderData,
         desc: &ComputePassDescriptor,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
+        let timestamp_writes =
+            desc.timestamp_writes
+                .as_ref()
+                .map(|tw| wgc::command::ComputePassTimestampWrites {
+                    query_set: tw.query_set.id.into(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                });
         (
             Unused,
             wgc::command::ComputePass::new(
                 *encoder,
                 &wgc::command::ComputePassDescriptor {
                     label: desc.label.map(Borrowed),
+                    timestamp_writes: timestamp_writes.as_ref(),
                 },
             ),
         )
@@ -1885,6 +1928,15 @@ impl crate::Context for Context {
             }
         });
 
+        let timestamp_writes =
+            desc.timestamp_writes
+                .as_ref()
+                .map(|tw| wgc::command::RenderPassTimestampWrites {
+                    query_set: tw.query_set.id.into(),
+                    beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                    end_of_pass_write_index: tw.end_of_pass_write_index,
+                });
+
         (
             Unused,
             wgc::command::RenderPass::new(
@@ -1893,6 +1945,10 @@ impl crate::Context for Context {
                     label: desc.label.map(Borrowed),
                     color_attachments: Borrowed(&colors),
                     depth_stencil_attachment: depth_stencil.as_ref(),
+                    timestamp_writes: timestamp_writes.as_ref(),
+                    occlusion_query_set: desc
+                        .occlusion_query_set
+                        .map(|query_set| query_set.id.into()),
                 },
             ),
         )
@@ -2279,7 +2335,7 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
-        callback: Box<dyn FnOnce() + Send + 'static>,
+        callback: crate::context::SubmittedWorkDoneCallback,
     ) {
         let closure = wgc::device::queue::SubmittedWorkDoneClosure::from_rust(callback);
 
@@ -2907,6 +2963,23 @@ impl crate::Context for Context {
         wgpu_render_pass_write_timestamp(pass_data, *query_set, query_index)
     }
 
+    fn render_pass_begin_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+        query_index: u32,
+    ) {
+        wgpu_render_pass_begin_occlusion_query(pass_data, query_index)
+    }
+
+    fn render_pass_end_occlusion_query(
+        &self,
+        _pass: &mut Self::RenderPassId,
+        pass_data: &mut Self::RenderPassData,
+    ) {
+        wgpu_render_pass_end_occlusion_query(pass_data)
+    }
+
     fn render_pass_begin_pipeline_statistics_query(
         &self,
         _pass: &mut Self::RenderPassId,
@@ -3051,7 +3124,21 @@ pub struct BufferMappedRange {
     size: usize,
 }
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Send for BufferMappedRange {}
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 unsafe impl Sync for BufferMappedRange {}
 
 impl crate::context::BufferMappedRange for BufferMappedRange {

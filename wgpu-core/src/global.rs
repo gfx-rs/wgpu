@@ -155,7 +155,16 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    any(
+        not(target_arch = "wasm32"),
+        all(
+            feature = "fragile-send-sync-non-atomic-wasm",
+            not(target_feature = "atomics")
+        )
+    )
+))]
 fn _test_send_sync(global: &Global<crate::identity::IdentityManagerFactory>) {
     fn test_internal<T: Send + Sync>(_: T) {}
     test_internal(global)

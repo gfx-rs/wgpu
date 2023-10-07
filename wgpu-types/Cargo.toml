@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-types"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["wgpu developers"]
 edition = "2021"
 description = "WebGPU types"
@@ -8,6 +8,12 @@ homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
+
+# Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
+# copy the crates it actually uses out of the workspace, so it's meaningful for
+# them to have less restrictive MSRVs individually than the workspace as a
+# whole, if their code permits. See `../README.md` for details.
+rust-version = "1.65"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -25,14 +31,15 @@ targets = [
 trace = ["serde"]
 replay = ["serde"]
 strict_asserts = []
+fragile-send-sync-non-atomic-wasm = []
 
 [dependencies]
 bitflags = "2"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.63"
-web-sys = { version = "0.3.60", features = [
+js-sys = "0.3.64"
+web-sys = { version = "0.3.64", features = [
     "ImageBitmap",
     "HtmlVideoElement",
     "HtmlCanvasElement",
@@ -41,4 +48,4 @@ web-sys = { version = "0.3.60", features = [
 
 [dev-dependencies]
 serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0.96"
+serde_json = "1.0.107"

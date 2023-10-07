@@ -12,7 +12,11 @@ env:
   CARGO_TERM_COLOR: always
   RUST_LOG: info
   RUST_BACKTRACE: full
-  MSRV: 1.65
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.70"
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # to ensure that they can be used with firefox.
+  CORE_MSRV: "1.65"
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -32,7 +36,7 @@ env:
 # It adds overhead to the build and another point of failure.
 
 jobs:
-  check-msrv:
+  check:
     strategy:
       fail-fast: false
       matrix:
@@ -93,12 +97,13 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install MSRV toolchain
+      - name: Install Repo MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -138,6 +143,7 @@ jobs:
           set -e
 
           # build for WebGPU
+          cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo clippy --target ${{ matrix.target }} --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} --no-deps --features glsl,spirv
 
@@ -154,11 +160,7 @@ jobs:
           # build for Emscripten
           cargo clippy --target ${{ matrix.target }} -p wgpu -p wgpu-hal --no-default-features
 
-          # build cube example
-          cargo clippy --target ${{ matrix.target }} --bin cube
-
-          # build raw-gles example
-          cargo clippy --target ${{ matrix.target }} --example raw-gles
+          # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
 
           # all features
           cargo clippy --target ${{ matrix.target }} -p wgpu-hal --all-features
@@ -179,12 +181,76 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} --all-features --no-deps
 
+  # We run minimal checks on the MSRV of the core crates, ensuring that
+  # its dependency tree does not cause issues for firefox.
+  #
+  # We don't test all platforms, just ones with different dependency stacks.
+  check-core-msrv:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+          # MacOS
+          - name: MacOS x86_64
+            os: macos-12
+            target: x86_64-apple-darwin
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    name: MSRV Check ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Core MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup override set ${{ env.CORE_MSRV }}
+          cargo -V
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+
+      - name: check native
+        shell: bash
+        run: |
+          set -e
+
+          # check wgpu-core with all features. This will also get wgpu-hal and wgpu-types.
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
+
   wasm-test:
     name: Test WebAssembly
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target wasm32-unknown-unknown
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@v2
@@ -209,20 +275,19 @@ jobs:
           # Mac
           - name: Mac aarch64
             os: [self-hosted, macOS]
-            backends: metal
+            backends: vulkan metal
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
             backends: vulkan gl
 
-
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -274,7 +339,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report
+          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report --features vulkan-portability
 
       - name: run tests
         shell: bash
@@ -283,10 +348,11 @@ jobs:
 
           for backend in ${{ matrix.backends }}; do
             echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report
+            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report --features vulkan-portability
           done
 
       - uses: actions/upload-artifact@v3
+        if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images
           path: |
@@ -311,7 +377,13 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -324,7 +396,7 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+          key: doctests-${{ env.CACHE_SUFFIX }}
 
       - name: run doctests
         shell: bash
@@ -338,23 +410,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: run rustfmt
         run: |
           cargo fmt -- --check
 
-  check-msrv-cts_runner:
+  check-cts-runner:
     name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -367,36 +446,39 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: cts_runner-${{ env.CACHE_SUFFIX }}
+          key: cts-runner-${{ env.CACHE_SUFFIX }}
 
       - name: build Deno
         run: |
           cargo clippy --manifest-path cts_runner/Cargo.toml
 
+  # Separate job so that new advisories don't block CI.
+  #
+  # This job is not required to pass for PRs to be merged.
   cargo-deny-check-advisories:
-    name: "Run `cargo deny check advisories`"
+    name: "cargo-deny advisories"
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
           command: check advisories
           arguments: --all-features --workspace
-          rust-version: ${{ env.MSRV }}
+          rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
-    name: "Run `cargo deny check`"
+    name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
-          rust-version: ${{ env.MSRV }}
+          rust-version: ${{ env.REPO_MSRV }}

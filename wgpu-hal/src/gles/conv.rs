@@ -35,6 +35,11 @@ impl super::AdapterShared {
             Tf::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE), //TODO?
             Tf::Rgba8Uint => (glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
             Tf::Rgba8Sint => (glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE),
+            Tf::Rgb10a2Uint => (
+                glow::RGB10_A2UI,
+                glow::RGBA_INTEGER,
+                glow::UNSIGNED_INT_2_10_10_10_REV,
+            ),
             Tf::Rgb10a2Unorm => (
                 glow::RGB10_A2,
                 glow::RGBA,
@@ -279,8 +284,18 @@ pub fn map_primitive_topology(topology: wgt::PrimitiveTopology) -> u32 {
 }
 
 pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::PrimitiveState {
-    //Note: state.polygon_mode is not supported, see `Features::POLYGON_MODE_LINE` and
-    //`Features::POLYGON_MODE_POINT`
+    match state.polygon_mode {
+        wgt::PolygonMode::Fill => {}
+        wgt::PolygonMode::Line => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_LINE
+        ),
+        wgt::PolygonMode::Point => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_POINT
+        ),
+    }
+
     super::PrimitiveState {
         //Note: we are flipping the front face, so that
         // the Y-flip in the generated GLSL keeps the same visibility.
@@ -366,6 +381,10 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> u32 {
         Bf::Constant => glow::CONSTANT_COLOR,
         Bf::OneMinusConstant => glow::ONE_MINUS_CONSTANT_COLOR,
         Bf::SrcAlphaSaturated => glow::SRC_ALPHA_SATURATE,
+        Bf::Src1 => glow::SRC1_COLOR,
+        Bf::OneMinusSrc1 => glow::ONE_MINUS_SRC1_COLOR,
+        Bf::Src1Alpha => glow::SRC1_ALPHA,
+        Bf::OneMinusSrc1Alpha => glow::ONE_MINUS_SRC1_ALPHA,
     }
 }
 

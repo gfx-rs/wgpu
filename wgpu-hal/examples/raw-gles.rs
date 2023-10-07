@@ -72,7 +72,7 @@ fn main() {
 
     println!("Initializing external GL context");
     let egl = khronos_egl::Instance::new(khronos_egl::Static);
-    let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
+    let display = unsafe { egl.get_display(khronos_egl::DEFAULT_DISPLAY) }.unwrap();
     egl.initialize(display)
         .expect("unable to initialize display");
 
@@ -175,6 +175,8 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         })],
         depth_stencil_attachment: None,
         multiview: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
     };
     unsafe {
         encoder.begin_encoding(None).unwrap();

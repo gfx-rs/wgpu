@@ -118,7 +118,10 @@ async fn run() {
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     {
         let mut compute_pass =
-            command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
         /* Note that since each workgroup will cover both arrays, we only need to

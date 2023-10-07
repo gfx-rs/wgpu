@@ -82,9 +82,24 @@ impl Instance {
                     name: "wgpu",
                     flags,
                     dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
+                    gles_minor_version: instance_desc.gles_minor_version,
                 };
-                unsafe { hal::Instance::init(&hal_desc).ok() }
+                match unsafe { hal::Instance::init(&hal_desc) } {
+                    Ok(instance) => {
+                        log::debug!("Instance::new: created {:?} backend", A::VARIANT);
+                        Some(instance)
+                    }
+                    Err(err) => {
+                        log::debug!(
+                            "Instance::new: failed to create {:?} backend: {:?}",
+                            A::VARIANT,
+                            err
+                        );
+                        None
+                    }
+                }
             } else {
+                log::trace!("Instance::new: backend {:?} not requested", A::VARIANT);
                 None
             }
         }
@@ -287,6 +302,8 @@ impl<A: HalApi> Adapter<A> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
+        log::trace!("Adapter::create_device");
+
         let caps = &self.raw.capabilities;
         Device::new(
             open,
@@ -352,6 +369,7 @@ impl<A: HalApi> Adapter<A> {
             |err| match err {
                 hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
                 hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+                hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
             },
         )?;
 
@@ -640,6 +658,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("Surface::drop");
+        log::trace!("Surface::drop {id:?}");
+
         let mut token = Token::root();
         let (surface, _) = self.surfaces.unregister(id, &mut token);
         let mut surface = surface.unwrap();
@@ -706,6 +726,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
+        log::trace!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
 
@@ -763,6 +784,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("Instance::pick_adapter");
+        log::trace!("Instance::pick_adapter");
 
         fn gather<A: HalApi, I: Clone>(
             _: A,
@@ -896,6 +918,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // hardware GPU (integrated or discrete).
             PowerPreference::LowPower => integrated.or(discrete).or(other).or(virt).or(cpu),
             PowerPreference::HighPerformance => discrete.or(integrated).or(other).or(virt).or(cpu),
+            PowerPreference::None => {
+                let option_min = |a: Option<usize>, b: Option<usize>| {
+                    if let (Some(a), Some(b)) = (a, b) {
+                        Some(a.min(b))
+                    } else {
+                        a.or(b)
+                    }
+                };
+                // Pick the lowest id of these types
+                option_min(option_min(discrete, integrated), other)
+            }
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
@@ -1033,6 +1066,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
+        log::trace!("Adapter::drop {adapter_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1058,6 +1092,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         id_in: Input<G, DeviceId>,
     ) -> (DeviceId, Option<RequestDeviceError>) {
         profiling::scope!("Adapter::request_device");
+        log::trace!("Adapter::request_device");
 
         let hub = A::hub(self);
         let mut token = Token::root();

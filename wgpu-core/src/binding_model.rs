@@ -436,6 +436,8 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
+pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindGroupLayoutId>;
+
 /// Bind group layout.
 ///
 /// The lifetime of BGLs is a bit special. They are only referenced on CPU
@@ -444,17 +446,58 @@ pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 ///  - produced bind groups
 ///  - produced pipeline layouts
 ///  - pipelines with implicit layouts
-#[derive(Debug)]
 pub struct BindGroupLayout<A: hal::Api> {
-    pub(crate) raw: A::BindGroupLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) multi_ref_count: MultiRefCount,
+    // When a layout created and there already exists a compatible layout the new layout
+    // keeps a reference to the older compatible one. In some places we substitute the
+    // bind group layout id with its compatible sibling.
+    // Since this substitution can come at a cost, it is skipped when wgpu-core generates
+    // its own resource IDs.
+    pub(crate) inner: BglOrDuplicate<A>,
+}
+
+pub(crate) enum BglOrDuplicate<A: hal::Api> {
+    Inner(BindGroupLayoutInner<A>),
+    Duplicate(Valid<BindGroupLayoutId>),
+}
+
+pub struct BindGroupLayoutInner<A: hal::Api> {
+    pub(crate) raw: A::BindGroupLayout,
     pub(crate) entries: BindEntryMap,
     #[allow(unused)]
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
+}
+
+impl<A: hal::Api> BindGroupLayout<A> {
+    #[track_caller]
+    pub(crate) fn assume_deduplicated(&self) -> &BindGroupLayoutInner<A> {
+        self.as_inner().unwrap()
+    }
+
+    pub(crate) fn as_inner(&self) -> Option<&BindGroupLayoutInner<A>> {
+        match self.inner {
+            BglOrDuplicate::Inner(ref inner) => Some(inner),
+            BglOrDuplicate::Duplicate(_) => None,
+        }
+    }
+
+    pub(crate) fn into_inner(self) -> Option<BindGroupLayoutInner<A>> {
+        match self.inner {
+            BglOrDuplicate::Inner(inner) => Some(inner),
+            BglOrDuplicate::Duplicate(_) => None,
+        }
+    }
+
+    pub(crate) fn as_duplicate(&self) -> Option<Valid<BindGroupLayoutId>> {
+        match self.inner {
+            BglOrDuplicate::Duplicate(id) => Some(id),
+            BglOrDuplicate::Inner(_) => None,
+        }
+    }
 }
 
 impl<A: hal::Api> Resource for BindGroupLayout<A> {
@@ -466,10 +509,33 @@ impl<A: hal::Api> Resource for BindGroupLayout<A> {
 
     fn label(&self) -> &str {
         #[cfg(debug_assertions)]
-        return &self.label;
+        return self.as_inner().map_or("", |inner| &inner.label);
         #[cfg(not(debug_assertions))]
         return "";
     }
+}
+
+// If a bindgroup needs to be substitued with its compatible equivalent, return the latter.
+pub(crate) fn try_get_bind_group_layout<A: HalApi>(
+    layouts: &BindGroupLayouts<A>,
+    id: BindGroupLayoutId,
+) -> Option<&BindGroupLayout<A>> {
+    let layout = layouts.get(id).ok()?;
+    if let BglOrDuplicate::Duplicate(original_id) = layout.inner {
+        return Some(&layouts[original_id]);
+    }
+
+    Some(layout)
+}
+
+pub(crate) fn get_bind_group_layout<A: HalApi>(
+    layouts: &BindGroupLayouts<A>,
+    id: Valid<BindGroupLayoutId>,
+) -> (Valid<BindGroupLayoutId>, &BindGroupLayout<A>) {
+    let layout = &layouts[id];
+    layout
+        .as_duplicate()
+        .map_or((id, layout), |deduped| (deduped, &layouts[deduped]))
 }
 
 #[derive(Clone, Debug, Error)]

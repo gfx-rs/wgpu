@@ -88,10 +88,12 @@ async fn run(_path: Option<String>) {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
         });
         render_pass.set_pipeline(&pipeline);
         render_pass.draw(0..3, 0..1);

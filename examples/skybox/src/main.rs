@@ -428,17 +428,19 @@ impl wgpu_example::framework::Example for Skybox {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: false,
+                        store: wgpu::StoreOp::Discard,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             rpass.set_bind_group(0, &self.bind_group, &[]);
@@ -473,11 +475,8 @@ fn skybox() {
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default().specific_failure(
-            Some(wgpu::Backends::GL),
-            None,
-            Some("ANGLE"),
-            false,
+        base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
+            wgpu_test::FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"),
         ),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
     });
