@@ -541,9 +541,8 @@ impl super::Validator {
 
                 (TypeFlags::empty(), true)
             }
-            crate::AddressSpace::Private | crate::AddressSpace::WorkGroup => {
-                (TypeFlags::DATA | TypeFlags::SIZED, false)
-            }
+            crate::AddressSpace::Private => (TypeFlags::CONSTRUCTIBLE, false),
+            crate::AddressSpace::WorkGroup => (TypeFlags::DATA | TypeFlags::SIZED, false),
             crate::AddressSpace::PushConstant => {
                 if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
                     return Err(GlobalVariableError::UnsupportedCapability(

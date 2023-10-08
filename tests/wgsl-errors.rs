@@ -1342,6 +1342,23 @@ fn invalid_local_vars() {
         })
         if local_var_name == "not_okay"
     }
+
+    check_validation! {
+        "
+        fn f() {
+            var x: atomic<u32>;
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::LocalVariable {
+                name: local_var_name,
+                source: naga::valid::LocalVariableError::InvalidType(_),
+                ..
+            },
+            ..
+        })
+        if local_var_name == "x"
+    }
 }
 
 #[test]

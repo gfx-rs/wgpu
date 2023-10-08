@@ -948,10 +948,7 @@ impl super::Validator {
             .types
             .get(var.ty.index())
             .ok_or(LocalVariableError::InvalidType(var.ty))?;
-        if !type_info
-            .flags
-            .contains(super::TypeFlags::DATA | super::TypeFlags::SIZED)
-        {
+        if !type_info.flags.contains(super::TypeFlags::CONSTRUCTIBLE) {
             return Err(LocalVariableError::InvalidType(var.ty));
         }
 

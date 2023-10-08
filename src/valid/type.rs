@@ -566,7 +566,10 @@ impl super::Validator {
             }
             Ti::RayQuery => {
                 self.require_type_capability(Capabilities::RAY_QUERY)?;
-                TypeInfo::new(TypeFlags::DATA | TypeFlags::SIZED, Alignment::ONE)
+                TypeInfo::new(
+                    TypeFlags::DATA | TypeFlags::CONSTRUCTIBLE | TypeFlags::SIZED,
+                    Alignment::ONE,
+                )
             }
             Ti::BindingArray { base, size } => {
                 if base >= handle {
