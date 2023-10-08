@@ -672,7 +672,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: unsafe { inst.create_surface_from_swap_chain_panel(swap_chain_panel) },
+                raw: unsafe { inst.create_surface_from_swap_chain_panel(swap_chain_panel as _) },
             }),
             dx11: None,
             #[cfg(feature = "gles")]

@@ -2039,7 +2039,7 @@ impl Instance {
                 .as_any()
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
-                .create_surface_from_visual(visual)
+                .create_surface_from_swap_chain_panel(swap_chain_panel)
         };
         Surface {
             context: Arc::clone(&self.context),

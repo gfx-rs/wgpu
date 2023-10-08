@@ -127,7 +127,7 @@ impl Instance {
 
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
-        swap_chain_panel: *mut ISwapChainPanelNative,
+        swap_chain_panel: *mut types::ISwapChainPanelNative,
     ) -> Surface {
         Surface {
             factory: self.factory.clone(),
@@ -158,7 +158,7 @@ enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(d3d12::ComPtr<dcomp::IDCompositionVisual>),
     SurfaceHandle(winnt::HANDLE),
-    SwapChainPanel(d3d12::ComPtr<ISwapChainPanelNative>),
+    SwapChainPanel(d3d12::ComPtr<types::ISwapChainPanelNative>),
 }
 
 pub struct Surface {
@@ -740,7 +740,7 @@ impl crate::Surface<Api> for Surface {
                     }
                     &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {
                         if let Err(err) =
-                        unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_unknown()) }.into_result()
+                        unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }.into_result()
                         {
                             log::error!("Unable to SetSwapChain: {}", err);
                             return Err(crate::SurfaceError::Other(
