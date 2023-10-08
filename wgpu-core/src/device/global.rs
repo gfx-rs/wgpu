@@ -372,6 +372,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+      
+        if !device.is_valid() {
+            return Err(DeviceError::Invalid.into());
+        }
+      
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -427,6 +432,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.is_valid() {
+            return Err(DeviceError::Invalid.into());
+        }
+      
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -2021,6 +2030,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         let device = hub.devices.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.is_valid() {
+            return Err(InvalidDevice);
+        }
         device.lock_life().triage_suspected(
             hub,
             &device.trackers,
