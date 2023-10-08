@@ -372,11 +372,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .devices
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
-      
+
         if !device.is_valid() {
             return Err(DeviceError::Invalid.into());
         }
-      
+
         let buffer = hub
             .buffers
             .get(buffer_id)
@@ -435,7 +435,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !device.is_valid() {
             return Err(DeviceError::Invalid.into());
         }
-      
+
         let buffer = hub
             .buffers
             .get(buffer_id)
