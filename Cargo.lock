@@ -434,6 +434,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_panic"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6051f239ecec86fde3410901ab7860d458d160371533842974fc61f96d15879b"
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -820,6 +826,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 
 [[package]]
+name = "encase"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fce2eeef77fd4a293a54b62aa00ac9daebfbcda4bf8998c5a815635b004aa1c"
+dependencies = [
+ "const_panic",
+ "encase_derive",
+ "glam",
+ "thiserror",
+]
+
+[[package]]
+name = "encase_derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e520cde08cbf4f7cc097f61573ec06ce467019803de8ae82fb2823fa1554a0e"
+dependencies = [
+ "encase_derive_impl",
+]
+
+[[package]]
+name = "encase_derive_impl"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fe2568f851fd6144a45fa91cfed8fe5ca8fc0b56ba6797bfc1ed2771b90e37c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1142,8 +1180,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3230,24 +3270,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-capture-example"
-version = "0.17.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "png",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "winit 0.28.7",
-]
-
-[[package]]
 name = "wgpu-conservative-raster-example"
 version = "0.17.0"
 dependencies = [
@@ -3392,6 +3414,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-hello-synchronization-example"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "pollster",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
 name = "wgpu-hello-triangle-example"
 version = "0.17.0"
 dependencies = [
@@ -3416,6 +3457,23 @@ dependencies = [
  "pollster",
  "wgpu",
  "winit 0.28.7",
+]
+
+[[package]]
+name = "wgpu-hello-workgroups-example"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "pollster",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "wgpu-example",
 ]
 
 [[package]]
@@ -3460,6 +3518,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-render-to-texture-example"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "png",
+ "pollster",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "wgpu-example",
+ "winit 0.28.7",
+]
+
+[[package]]
+name = "wgpu-repeated-compute-example"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "getrandom 0.2.10",
+ "log",
+ "pollster",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+]
+
+[[package]]
 name = "wgpu-shadow-example"
 version = "0.17.0"
 dependencies = [
@@ -3498,6 +3596,27 @@ dependencies = [
  "wgpu-example",
  "wgpu-test",
  "winit 0.28.7",
+]
+
+[[package]]
+name = "wgpu-storage-texture-example"
+version = "0.17.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "console_log",
+ "env_logger",
+ "futures-intrusive",
+ "log",
+ "png",
+ "pollster",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
 ]
 
 [[package]]
@@ -3565,6 +3684,23 @@ dependencies = [
  "serde",
  "serde_json",
  "web-sys",
+]
+
+[[package]]
+name = "wgpu-uniform-values-example"
+version = "0.17.0"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "encase",
+ "env_logger",
+ "glam",
+ "png",
+ "pollster",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "winit 0.28.7",
 ]
 
 [[package]]

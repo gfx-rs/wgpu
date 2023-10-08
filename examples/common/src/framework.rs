@@ -4,6 +4,8 @@ use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
     event::{self, WindowEvent},
@@ -122,7 +124,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let mut offscreen_canvas_setup: Option<OffscreenCanvasSetup> = None;
     #[cfg(target_arch = "wasm32")]
     {
-        use wasm_bindgen::JsCast;
         use winit::platform::web::WindowExtWebSys;
 
         let query_string = web_sys::window().unwrap().location().search().unwrap();
@@ -444,8 +445,6 @@ pub fn run<E: Example>(title: &str) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn run<E: Example>(title: &str) {
-    use wasm_bindgen::prelude::*;
-
     let title = title.to_owned();
     wasm_bindgen_futures::spawn_local(async move {
         let setup = setup::<E>(&title).await;
