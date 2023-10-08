@@ -52,7 +52,8 @@ impl Writer {
         capabilities_used.insert(spirv::Capability::Shader);
 
         let mut id_gen = IdGenerator::default();
-        let gl450_ext_inst_id = id_gen.next();
+        let mut ext_inst_ids = crate::FastHashMap::default();
+        ext_inst_ids.insert("GLSL.std.450", id_gen.next());
         let void_type = id_gen.next();
 
         Ok(Writer {
@@ -76,7 +77,7 @@ impl Writer {
             global_variables: Vec::new(),
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
-            gl450_ext_inst_id,
+            ext_inst_ids,
             temp_list: Vec::new(),
         })
     }
@@ -95,7 +96,8 @@ impl Writer {
         use std::mem::take;
 
         let mut id_gen = IdGenerator::default();
-        let gl450_ext_inst_id = id_gen.next();
+        let mut ext_inst_ids = take(&mut self.ext_inst_ids).recycle();
+        ext_inst_ids.insert("GLSL.std.450", id_gen.next());
         let void_type = id_gen.next();
 
         // Every field of the old writer that is not determined by the `Options`
@@ -111,7 +113,6 @@ impl Writer {
             // Initialized afresh:
             id_gen,
             void_type,
-            gl450_ext_inst_id,
 
             // Recycled:
             capabilities_used: take(&mut self.capabilities_used).recycle(),
@@ -127,6 +128,7 @@ impl Writer {
             cached_constants: take(&mut self.cached_constants).recycle(),
             global_variables: take(&mut self.global_variables).recycle(),
             saved_cached: take(&mut self.saved_cached).recycle(),
+            ext_inst_ids,
             temp_list: take(&mut self.temp_list).recycle(),
         };
 
@@ -179,6 +181,13 @@ impl Writer {
     /// Indicate that the code uses the given extension.
     pub(super) fn use_extension(&mut self, extension: &'static str) {
         self.extensions_used.insert(extension);
+    }
+
+    pub(super) fn extension_inst_import(&mut self, extension: &'static str) -> Word {
+        *self
+            .ext_inst_ids
+            .entry(extension)
+            .or_insert_with(|| self.id_gen.next())
     }
 
     pub(super) fn get_type_id(&mut self, lookup_ty: LookupType) -> Word {
@@ -1872,8 +1881,6 @@ impl Writer {
                 .to_words(&mut self.logical_layout.extensions)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
-        Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
-            .to_words(&mut self.logical_layout.ext_inst_imports);
 
         let mut debug_info_inner = None;
         if self.flags.contains(WriterFlags::DEBUG) {
@@ -1983,6 +1990,12 @@ impl Writer {
         for extension in self.extensions_used.iter() {
             Instruction::extension(extension).to_words(&mut self.logical_layout.extensions);
         }
+
+        for (ext, id) in self.ext_inst_ids.iter() {
+            Instruction::ext_inst_import(*id, ext)
+                .to_words(&mut self.logical_layout.ext_inst_imports);
+        }
+
         if ir_module.entry_points.is_empty() {
             // SPIR-V doesn't like modules without entry points
             Instruction::capability(spirv::Capability::Linkage)

@@ -29,6 +29,7 @@ This value then gets used instead of `OpLoad` result later on.
 
 mod convert;
 mod error;
+mod ext_inst;
 mod function;
 mod image;
 mod null;
@@ -559,7 +560,7 @@ pub struct Frontend<I> {
     state: ModuleState,
     layouter: Layouter,
     temp_bytes: Vec<u8>,
-    ext_glsl_id: Option<spirv::Word>,
+    ext_inst_imports: FastHashMap<spirv::Word, &'static str>,
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
@@ -612,7 +613,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             state: ModuleState::Empty,
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
-            ext_glsl_id: None,
+            ext_inst_imports: FastHashMap::default(),
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
@@ -2900,139 +2901,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     emitter.start(ctx.expressions);
                 }
                 Op::ExtInst => {
-                    use crate::MathFunction as Mf;
-                    use spirv::GLOp as Glo;
-
-                    let base_wc = 5;
-                    inst.expect_at_least(base_wc)?;
-
-                    let result_type_id = self.next()?;
-                    let result_id = self.next()?;
-                    let set_id = self.next()?;
-                    if Some(set_id) != self.ext_glsl_id {
-                        return Err(Error::UnsupportedExtInstSet(set_id));
-                    }
-                    let inst_id = self.next()?;
-                    let gl_op = Glo::from_u32(inst_id).ok_or(Error::UnsupportedExtInst(inst_id))?;
-
-                    let fun = match gl_op {
-                        Glo::Round => Mf::Round,
-                        Glo::RoundEven => Mf::Round,
-                        Glo::Trunc => Mf::Trunc,
-                        Glo::FAbs | Glo::SAbs => Mf::Abs,
-                        Glo::FSign | Glo::SSign => Mf::Sign,
-                        Glo::Floor => Mf::Floor,
-                        Glo::Ceil => Mf::Ceil,
-                        Glo::Fract => Mf::Fract,
-                        Glo::Sin => Mf::Sin,
-                        Glo::Cos => Mf::Cos,
-                        Glo::Tan => Mf::Tan,
-                        Glo::Asin => Mf::Asin,
-                        Glo::Acos => Mf::Acos,
-                        Glo::Atan => Mf::Atan,
-                        Glo::Sinh => Mf::Sinh,
-                        Glo::Cosh => Mf::Cosh,
-                        Glo::Tanh => Mf::Tanh,
-                        Glo::Atan2 => Mf::Atan2,
-                        Glo::Asinh => Mf::Asinh,
-                        Glo::Acosh => Mf::Acosh,
-                        Glo::Atanh => Mf::Atanh,
-                        Glo::Radians => Mf::Radians,
-                        Glo::Degrees => Mf::Degrees,
-                        Glo::Pow => Mf::Pow,
-                        Glo::Exp => Mf::Exp,
-                        Glo::Log => Mf::Log,
-                        Glo::Exp2 => Mf::Exp2,
-                        Glo::Log2 => Mf::Log2,
-                        Glo::Sqrt => Mf::Sqrt,
-                        Glo::InverseSqrt => Mf::InverseSqrt,
-                        Glo::MatrixInverse => Mf::Inverse,
-                        Glo::Determinant => Mf::Determinant,
-                        Glo::ModfStruct => Mf::Modf,
-                        Glo::FMin | Glo::UMin | Glo::SMin | Glo::NMin => Mf::Min,
-                        Glo::FMax | Glo::UMax | Glo::SMax | Glo::NMax => Mf::Max,
-                        Glo::FClamp | Glo::UClamp | Glo::SClamp | Glo::NClamp => Mf::Clamp,
-                        Glo::FMix => Mf::Mix,
-                        Glo::Step => Mf::Step,
-                        Glo::SmoothStep => Mf::SmoothStep,
-                        Glo::Fma => Mf::Fma,
-                        Glo::FrexpStruct => Mf::Frexp,
-                        Glo::Ldexp => Mf::Ldexp,
-                        Glo::Length => Mf::Length,
-                        Glo::Distance => Mf::Distance,
-                        Glo::Cross => Mf::Cross,
-                        Glo::Normalize => Mf::Normalize,
-                        Glo::FaceForward => Mf::FaceForward,
-                        Glo::Reflect => Mf::Reflect,
-                        Glo::Refract => Mf::Refract,
-                        Glo::PackUnorm4x8 => Mf::Pack4x8unorm,
-                        Glo::PackSnorm4x8 => Mf::Pack4x8snorm,
-                        Glo::PackHalf2x16 => Mf::Pack2x16float,
-                        Glo::PackUnorm2x16 => Mf::Pack2x16unorm,
-                        Glo::PackSnorm2x16 => Mf::Pack2x16snorm,
-                        Glo::UnpackUnorm4x8 => Mf::Unpack4x8unorm,
-                        Glo::UnpackSnorm4x8 => Mf::Unpack4x8snorm,
-                        Glo::UnpackHalf2x16 => Mf::Unpack2x16float,
-                        Glo::UnpackUnorm2x16 => Mf::Unpack2x16unorm,
-                        Glo::UnpackSnorm2x16 => Mf::Unpack2x16snorm,
-                        Glo::FindILsb => Mf::FindLsb,
-                        Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
-                        // TODO: https://github.com/gfx-rs/naga/issues/2526
-                        Glo::Modf | Glo::Frexp => return Err(Error::UnsupportedExtInst(inst_id)),
-                        Glo::IMix
-                        | Glo::PackDouble2x32
-                        | Glo::UnpackDouble2x32
-                        | Glo::InterpolateAtCentroid
-                        | Glo::InterpolateAtSample
-                        | Glo::InterpolateAtOffset => {
-                            return Err(Error::UnsupportedExtInst(inst_id))
-                        }
-                    };
-
-                    let arg_count = fun.argument_count();
-                    inst.expect(base_wc + arg_count as u16)?;
-                    let arg = {
-                        let arg_id = self.next()?;
-                        let lexp = self.lookup_expression.lookup(arg_id)?;
-                        get_expr_handle!(arg_id, lexp)
-                    };
-                    let arg1 = if arg_count > 1 {
-                        let arg_id = self.next()?;
-                        let lexp = self.lookup_expression.lookup(arg_id)?;
-                        Some(get_expr_handle!(arg_id, lexp))
-                    } else {
-                        None
-                    };
-                    let arg2 = if arg_count > 2 {
-                        let arg_id = self.next()?;
-                        let lexp = self.lookup_expression.lookup(arg_id)?;
-                        Some(get_expr_handle!(arg_id, lexp))
-                    } else {
-                        None
-                    };
-                    let arg3 = if arg_count > 3 {
-                        let arg_id = self.next()?;
-                        let lexp = self.lookup_expression.lookup(arg_id)?;
-                        Some(get_expr_handle!(arg_id, lexp))
-                    } else {
-                        None
-                    };
-
-                    let expr = crate::Expression::Math {
-                        fun,
-                        arg,
-                        arg1,
-                        arg2,
-                        arg3,
-                    };
-                    self.lookup_expression.insert(
-                        result_id,
-                        LookupExpression {
-                            handle: ctx.expressions.append(expr, span),
-                            type_id: result_type_id,
-                            block_id,
-                        },
-                    );
+                    self.parse_ext_inst(
+                        inst,
+                        span,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                    )?;
                 }
                 // Relational and Logical Instructions
                 Op::LogicalNot => {
@@ -4044,10 +3921,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         if left != 0 {
             return Err(Error::InvalidOperand);
         }
-        if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
+        if let Some(ext) = SUPPORTED_EXT_SETS.iter().find(|ext| **ext == name.as_str()) {
+            self.ext_inst_imports.insert(result_id, ext);
+        } else {
             return Err(Error::UnsupportedExtSet(name));
         }
-        self.ext_glsl_id = Some(result_id);
         Ok(())
     }
 

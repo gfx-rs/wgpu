@@ -453,7 +453,7 @@ impl<'w> BlockContext<'w> {
         // `input_id` get treated as very large positive values.
         let restricted_id = self.gen_id();
         block.body.push(Instruction::ext_inst(
-            self.writer.gl450_ext_inst_id,
+            self.writer.extension_inst_import("GLSL.std.450"),
             spirv::GLOp::UMin,
             type_id,
             restricted_id,
@@ -591,7 +591,7 @@ impl<'w> BlockContext<'w> {
         // `coordinates` get treated as very large positive values.
         let restricted_coordinates_id = self.gen_id();
         block.body.push(Instruction::ext_inst(
-            self.writer.gl450_ext_inst_id,
+            self.writer.extension_inst_import("GLSL.std.450"),
             spirv::GLOp::UMin,
             coordinates.type_id,
             restricted_coordinates_id,

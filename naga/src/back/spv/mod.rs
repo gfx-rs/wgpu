@@ -623,7 +623,7 @@ pub struct Writer {
     // retain the table here between functions to save heap allocations.
     saved_cached: CachedExpressions,
 
-    gl450_ext_inst_id: Word,
+    ext_inst_ids: crate::FastHashMap<&'static str, Word>,
 
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,

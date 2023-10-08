@@ -133,8 +133,9 @@ impl Writer {
         ));
 
         let clamp_id = self.id_gen.next();
+
         body.push(Instruction::ext_inst(
-            self.gl450_ext_inst_id,
+            self.extension_inst_import("GLSL.std.450"),
             spirv::GLOp::FClamp,
             float_type_id,
             clamp_id,
@@ -766,7 +767,7 @@ impl<'w> BlockContext<'w> {
                         }
 
                         MathOp::Custom(Instruction::ext_inst(
-                            self.writer.gl450_ext_inst_id,
+                            self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::FClamp,
                             result_type_id,
                             id,
@@ -885,7 +886,7 @@ impl<'w> BlockContext<'w> {
                                 ));
 
                                 MathOp::Custom(Instruction::ext_inst(
-                                    self.writer.gl450_ext_inst_id,
+                                    self.writer.extension_inst_import("GLSL.std.450"),
                                     spirv::GLOp::FMix,
                                     result_type_id,
                                     id,
@@ -941,7 +942,7 @@ impl<'w> BlockContext<'w> {
 
                         let lsb_id = self.gen_id();
                         block.body.push(Instruction::ext_inst(
-                            self.writer.gl450_ext_inst_id,
+                            self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::FindILsb,
                             result_type_id,
                             lsb_id,
@@ -949,7 +950,7 @@ impl<'w> BlockContext<'w> {
                         ));
 
                         MathOp::Custom(Instruction::ext_inst(
-                            self.writer.gl450_ext_inst_id,
+                            self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::UMin,
                             result_type_id,
                             id,
@@ -994,7 +995,7 @@ impl<'w> BlockContext<'w> {
 
                         let msb_id = self.gen_id();
                         block.body.push(Instruction::ext_inst(
-                            self.writer.gl450_ext_inst_id,
+                            self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::FindUMsb,
                             int_type_id,
                             msb_id,
@@ -1059,7 +1060,7 @@ impl<'w> BlockContext<'w> {
 
                 block.body.push(match math_op {
                     MathOp::Ext(op) => Instruction::ext_inst(
-                        self.writer.gl450_ext_inst_id,
+                        self.writer.extension_inst_import("GLSL.std.450"),
                         op,
                         result_type_id,
                         id,
