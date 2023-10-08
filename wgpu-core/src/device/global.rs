@@ -1828,7 +1828,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unreachable!("Fallback system failed to choose present mode. This is a bug. Mode: {:?}, Options: {:?}", config.present_mode, &caps.present_modes);
                 };
 
-                log::warn!(
+                log::info!(
                     "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
                     config.present_mode
                 );
@@ -1872,7 +1872,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                 };
 
-                log::warn!(
+                log::info!(
                     "Automatically choosing alpha mode by rule {:?}. Chose {new_alpha_mode:?}",
                     config.composite_alpha_mode
                 );
@@ -2453,7 +2453,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .buffers
                 .get(buffer_id)
                 .map_err(|_| BufferAccessError::Invalid)?;
-
+            if !buffer.device.is_valid() {
+                return Err(DeviceError::Invalid.into());
+            }
             closure = buffer.buffer_unmap_inner()
         }
 
