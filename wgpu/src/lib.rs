@@ -2033,7 +2033,10 @@ impl Instance {
     ///
     /// - visual must be a valid SwapChainPanel to create a surface upon.
     #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_swap_chain_panel(&self, swap_chain_panel: *mut std::ffi::c_void) -> Surface {
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Surface {
         let surface = unsafe {
             self.context
                 .as_any()

@@ -580,7 +580,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                         None
                     }
                 }
-                SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) | SurfaceTarget::SwapChainPanel(_)=> None,
+                SurfaceTarget::Visual(_)
+                | SurfaceTarget::SurfaceHandle(_)
+                | SurfaceTarget::SwapChainPanel(_) => None,
             }
         };
 

@@ -132,7 +132,9 @@ impl Instance {
         Surface {
             factory: self.factory.clone(),
             factory_media: self.factory_media.clone(),
-            target: SurfaceTarget::SwapChainPanel(unsafe { d3d12::ComPtr::from_raw(swap_chain_panel) }),
+            target: SurfaceTarget::SwapChainPanel(unsafe {
+                d3d12::ComPtr::from_raw(swap_chain_panel)
+            }),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: None,
         }
@@ -740,7 +742,8 @@ impl crate::Surface<Api> for Surface {
                     }
                     &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {
                         if let Err(err) =
-                        unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }.into_result()
+                            unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }
+                                .into_result()
                         {
                             log::error!("Unable to SetSwapChain: {}", err);
                             return Err(crate::SurfaceError::Other(
@@ -772,7 +775,9 @@ impl crate::Surface<Api> for Surface {
                     )
                 };
             }
-            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) | SurfaceTarget::SwapChainPanel(_) => {} 
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };
