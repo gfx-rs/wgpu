@@ -41,215 +41,242 @@ fn bool_cast(x: vec3<f32>) -> vec3<f32> {
 }
 
 fn logical() {
+    let t = true;
+    let f = false;
+
     // unary
-    let neg0 = !true;
-    let neg1 = !vec2(true);
+    let neg0 = !t;
+    let neg1 = !vec2(t);
 
     // binary
-    let or = true || false;
-    let and = true && false;
-    let bitwise_or0 = true | false;
-    let bitwise_or1 = vec3(true) | vec3(false);
-    let bitwise_and0 = true & false;
-    let bitwise_and1 = vec4(true) & vec4(false);
+    let or = t || f;
+    let and = t && f;
+    let bitwise_or0 = t | f;
+    let bitwise_or1 = vec3(t) | vec3(f);
+    let bitwise_and0 = t & f;
+    let bitwise_and1 = vec4(t) & vec4(f);
 }
 
 fn arithmetic() {
+    let one_i = 1i;
+    let one_u = 1u;
+    let one_f = 1.0;
+    let two_i = 2i;
+    let two_u = 2u;
+    let two_f = 2.0;
+
     // unary
-    let neg0 = -1.0;
-    let neg1 = -vec2(1);
-    let neg2 = -vec2(1.0);
+    let neg0 = -one_f;
+    let neg1 = -vec2(one_i);
+    let neg2 = -vec2(one_f);
 
     // binary
     // Addition
-    let add0 = 2 + 1;
-    let add1 = 2u + 1u;
-    let add2 = 2.0 + 1.0;
-    let add3 = vec2(2) + vec2(1);
-    let add4 = vec3(2u) + vec3(1u);
-    let add5 = vec4(2.0) + vec4(1.0);
+    let add0 = two_i + one_i;
+    let add1 = two_u + one_u;
+    let add2 = two_f + one_f;
+    let add3 = vec2(two_i) + vec2(one_i);
+    let add4 = vec3(two_u) + vec3(one_u);
+    let add5 = vec4(two_f) + vec4(one_f);
 
     // Subtraction
-    let sub0 = 2 - 1;
-    let sub1 = 2u - 1u;
-    let sub2 = 2.0 - 1.0;
-    let sub3 = vec2(2) - vec2(1);
-    let sub4 = vec3(2u) - vec3(1u);
-    let sub5 = vec4(2.0) - vec4(1.0);
+    let sub0 = two_i - one_i;
+    let sub1 = two_u - one_u;
+    let sub2 = two_f - one_f;
+    let sub3 = vec2(two_i) - vec2(one_i);
+    let sub4 = vec3(two_u) - vec3(one_u);
+    let sub5 = vec4(two_f) - vec4(one_f);
 
     // Multiplication
-    let mul0 = 2 * 1;
-    let mul1 = 2u * 1u;
-    let mul2 = 2.0 * 1.0;
-    let mul3 = vec2(2) * vec2(1);
-    let mul4 = vec3(2u) * vec3(1u);
-    let mul5 = vec4(2.0) * vec4(1.0);
+    let mul0 = two_i * one_i;
+    let mul1 = two_u * one_u;
+    let mul2 = two_f * one_f;
+    let mul3 = vec2(two_i) * vec2(one_i);
+    let mul4 = vec3(two_u) * vec3(one_u);
+    let mul5 = vec4(two_f) * vec4(one_f);
 
     // Division
-    let div0 = 2 / 1;
-    let div1 = 2u / 1u;
-    let div2 = 2.0 / 1.0;
-    let div3 = vec2(2) / vec2(1);
-    let div4 = vec3(2u) / vec3(1u);
-    let div5 = vec4(2.0) / vec4(1.0);
+    let div0 = two_i / one_i;
+    let div1 = two_u / one_u;
+    let div2 = two_f / one_f;
+    let div3 = vec2(two_i) / vec2(one_i);
+    let div4 = vec3(two_u) / vec3(one_u);
+    let div5 = vec4(two_f) / vec4(one_f);
 
     // Remainder
-    let rem0 = 2 % 1;
-    let rem1 = 2u % 1u;
-    let rem2 = 2.0 % 1.0;
-    let rem3 = vec2(2) % vec2(1);
-    let rem4 = vec3(2u) % vec3(1u);
-    let rem5 = vec4(2.0) % vec4(1.0);
+    let rem0 = two_i % one_i;
+    let rem1 = two_u % one_u;
+    let rem2 = two_f % one_f;
+    let rem3 = vec2(two_i) % vec2(one_i);
+    let rem4 = vec3(two_u) % vec3(one_u);
+    let rem5 = vec4(two_f) % vec4(one_f);
 
     // Binary arithmetic expressions with mixed scalar and vector operands
     {
-        let add0 = vec2(2) + 1;
-        let add1 = 2 + vec2(1);
-        let add2 = vec2(2u) + 1u;
-        let add3 = 2u + vec2(1u);
-        let add4 = vec2(2.0) + 1.0;
-        let add5 = 2.0 + vec2(1.0);
+        let add0 = vec2(two_i) + one_i;
+        let add1 = two_i + vec2(one_i);
+        let add2 = vec2(two_u) + one_u;
+        let add3 = two_u + vec2(one_u);
+        let add4 = vec2(two_f) + one_f;
+        let add5 = two_f + vec2(one_f);
 
-        let sub0 = vec2(2) - 1;
-        let sub1 = 2 - vec2(1);
-        let sub2 = vec2(2u) - 1u;
-        let sub3 = 2u - vec2(1u);
-        let sub4 = vec2(2.0) - 1.0;
-        let sub5 = 2.0 - vec2(1.0);
+        let sub0 = vec2(two_i) - one_i;
+        let sub1 = two_i - vec2(one_i);
+        let sub2 = vec2(two_u) - one_u;
+        let sub3 = two_u - vec2(one_u);
+        let sub4 = vec2(two_f) - one_f;
+        let sub5 = two_f - vec2(one_f);
 
-        let mul0 = vec2(2) * 1;
-        let mul1 = 2 * vec2(1);
-        let mul2 = vec2(2u) * 1u;
-        let mul3 = 2u * vec2(1u);
-        let mul4 = vec2(2.0) * 1.0;
-        let mul5 = 2.0 * vec2(1.0);
+        let mul0 = vec2(two_i) * one_i;
+        let mul1 = two_i * vec2(one_i);
+        let mul2 = vec2(two_u) * one_u;
+        let mul3 = two_u * vec2(one_u);
+        let mul4 = vec2(two_f) * one_f;
+        let mul5 = two_f * vec2(one_f);
 
-        let div0 = vec2(2) / 1;
-        let div1 = 2 / vec2(1);
-        let div2 = vec2(2u) / 1u;
-        let div3 = 2u / vec2(1u);
-        let div4 = vec2(2.0) / 1.0;
-        let div5 = 2.0 / vec2(1.0);
+        let div0 = vec2(two_i) / one_i;
+        let div1 = two_i / vec2(one_i);
+        let div2 = vec2(two_u) / one_u;
+        let div3 = two_u / vec2(one_u);
+        let div4 = vec2(two_f) / one_f;
+        let div5 = two_f / vec2(one_f);
 
-        let rem0 = vec2(2) % 1;
-        let rem1 = 2 % vec2(1);
-        let rem2 = vec2(2u) % 1u;
-        let rem3 = 2u % vec2(1u);
-        let rem4 = vec2(2.0) % 1.0;
-        let rem5 = 2.0 % vec2(1.0);
+        let rem0 = vec2(two_i) % one_i;
+        let rem1 = two_i % vec2(one_i);
+        let rem2 = vec2(two_u) % one_u;
+        let rem3 = two_u % vec2(one_u);
+        let rem4 = vec2(two_f) % one_f;
+        let rem5 = two_f % vec2(one_f);
     }
 
     // Matrix arithmetic
     let add = mat3x3<f32>() + mat3x3<f32>();
     let sub = mat3x3<f32>() - mat3x3<f32>();
 
-    let mul_scalar0 = mat3x3<f32>() * 1.0;
-    let mul_scalar1 = 2.0 * mat3x3<f32>();
+    let mul_scalar0 = mat3x3<f32>() * one_f;
+    let mul_scalar1 = two_f * mat3x3<f32>();
 
-    let mul_vector0 = mat4x3<f32>() * vec4(1.0);
-    let mul_vector1 = vec3f(2.0) * mat4x3f();
+    let mul_vector0 = mat4x3<f32>() * vec4(one_f);
+    let mul_vector1 = vec3f(two_f) * mat4x3f();
 
     let mul = mat4x3<f32>() * mat3x4<f32>();
 }
 
 fn bit() {
+    let one_i = 1i;
+    let one_u = 1u;
+    let two_i = 2i;
+    let two_u = 2u;
+
     // unary
-    let flip0 = ~1;
-    let flip1 = ~1u;
-    let flip2 = ~vec2(1);
-    let flip3 = ~vec3(1u);
+    let flip0 = ~one_i;
+    let flip1 = ~one_u;
+    let flip2 = ~vec2(one_i);
+    let flip3 = ~vec3(one_u);
 
     // binary
-    let or0 = 2 | 1;
-    let or1 = 2u | 1u;
-    let or2 = vec2(2) | vec2(1);
-    let or3 = vec3(2u) | vec3(1u);
+    let or0 = two_i | one_i;
+    let or1 = two_u | one_u;
+    let or2 = vec2(two_i) | vec2(one_i);
+    let or3 = vec3(two_u) | vec3(one_u);
 
-    let and0 = 2 & 1;
-    let and1 = 2u & 1u;
-    let and2 = vec2(2) & vec2(1);
-    let and3 = vec3(2u) & vec3(1u);
+    let and0 = two_i & one_i;
+    let and1 = two_u & one_u;
+    let and2 = vec2(two_i) & vec2(one_i);
+    let and3 = vec3(two_u) & vec3(one_u);
 
-    let xor0 = 2 ^ 1;
-    let xor1 = 2u ^ 1u;
-    let xor2 = vec2(2) ^ vec2(1);
-    let xor3 = vec3(2u) ^ vec3(1u);
+    let xor0 = two_i ^ one_i;
+    let xor1 = two_u ^ one_u;
+    let xor2 = vec2(two_i) ^ vec2(one_i);
+    let xor3 = vec3(two_u) ^ vec3(one_u);
 
-    let shl0 = 2 << 1u;
-    let shl1 = 2u << 1u;
-    let shl2 = vec2(2) << vec2(1u);
-    let shl3 = vec3(2u) << vec3(1u);
+    let shl0 = two_i << one_u;
+    let shl1 = two_u << one_u;
+    let shl2 = vec2(two_i) << vec2(one_u);
+    let shl3 = vec3(two_u) << vec3(one_u);
 
-    let shr0 = 2 >> 1u;
-    let shr1 = 2u >> 1u;
-    let shr2 = vec2(2) >> vec2(1u);
-    let shr3 = vec3(2u) >> vec3(1u);
+    let shr0 = two_i >> one_u;
+    let shr1 = two_u >> one_u;
+    let shr2 = vec2(two_i) >> vec2(one_u);
+    let shr3 = vec3(two_u) >> vec3(one_u);
 }
 
 fn comparison() {
-    let eq0 = 2 == 1;
-    let eq1 = 2u == 1u;
-    let eq2 = 2.0 == 1.0;
-    let eq3 = vec2(2) == vec2(1);
-    let eq4 = vec3(2u) == vec3(1u);
-    let eq5 = vec4(2.0) == vec4(1.0);
+    let one_i = 1i;
+    let one_u = 1u;
+    let one_f = 1.0;
+    let two_i = 2i;
+    let two_u = 2u;
+    let two_f = 2.0;
 
-    let neq0 = 2 != 1;
-    let neq1 = 2u != 1u;
-    let neq2 = 2.0 != 1.0;
-    let neq3 = vec2(2) != vec2(1);
-    let neq4 = vec3(2u) != vec3(1u);
-    let neq5 = vec4(2.0) != vec4(1.0);
+    let eq0 = two_i == one_i;
+    let eq1 = two_u == one_u;
+    let eq2 = two_f == one_f;
+    let eq3 = vec2(two_i) == vec2(one_i);
+    let eq4 = vec3(two_u) == vec3(one_u);
+    let eq5 = vec4(two_f) == vec4(one_f);
 
-    let lt0 = 2 < 1;
-    let lt1 = 2u < 1u;
-    let lt2 = 2.0 < 1.0;
-    let lt3 = vec2(2) < vec2(1);
-    let lt4 = vec3(2u) < vec3(1u);
-    let lt5 = vec4(2.0) < vec4(1.0);
+    let neq0 = two_i != one_i;
+    let neq1 = two_u != one_u;
+    let neq2 = two_f != one_f;
+    let neq3 = vec2(two_i) != vec2(one_i);
+    let neq4 = vec3(two_u) != vec3(one_u);
+    let neq5 = vec4(two_f) != vec4(one_f);
 
-    let lte0 = 2 <= 1;
-    let lte1 = 2u <= 1u;
-    let lte2 = 2.0 <= 1.0;
-    let lte3 = vec2(2) <= vec2(1);
-    let lte4 = vec3(2u) <= vec3(1u);
-    let lte5 = vec4(2.0) <= vec4(1.0);
+    let lt0 = two_i < one_i;
+    let lt1 = two_u < one_u;
+    let lt2 = two_f < one_f;
+    let lt3 = vec2(two_i) < vec2(one_i);
+    let lt4 = vec3(two_u) < vec3(one_u);
+    let lt5 = vec4(two_f) < vec4(one_f);
 
-    let gt0 = 2 > 1;
-    let gt1 = 2u > 1u;
-    let gt2 = 2.0 > 1.0;
-    let gt3 = vec2(2) > vec2(1);
-    let gt4 = vec3(2u) > vec3(1u);
-    let gt5 = vec4(2.0) > vec4(1.0);
+    let lte0 = two_i <= one_i;
+    let lte1 = two_u <= one_u;
+    let lte2 = two_f <= one_f;
+    let lte3 = vec2(two_i) <= vec2(one_i);
+    let lte4 = vec3(two_u) <= vec3(one_u);
+    let lte5 = vec4(two_f) <= vec4(one_f);
 
-    let gte0 = 2 >= 1;
-    let gte1 = 2u >= 1u;
-    let gte2 = 2.0 >= 1.0;
-    let gte3 = vec2(2) >= vec2(1);
-    let gte4 = vec3(2u) >= vec3(1u);
-    let gte5 = vec4(2.0) >= vec4(1.0);
+    let gt0 = two_i > one_i;
+    let gt1 = two_u > one_u;
+    let gt2 = two_f > one_f;
+    let gt3 = vec2(two_i) > vec2(one_i);
+    let gt4 = vec3(two_u) > vec3(one_u);
+    let gt5 = vec4(two_f) > vec4(one_f);
+
+    let gte0 = two_i >= one_i;
+    let gte1 = two_u >= one_u;
+    let gte2 = two_f >= one_f;
+    let gte3 = vec2(two_i) >= vec2(one_i);
+    let gte4 = vec3(two_u) >= vec3(one_u);
+    let gte5 = vec4(two_f) >= vec4(one_f);
 }
 
 fn assignment() {
-    var a = 1;
+    let zero_i = 0i;
+    let one_i = 1i;
+    let one_u = 1u;
+    let two_u = 2u;
 
-    a += 1;
-    a -= 1;
+    var a = one_i;
+
+    a += one_i;
+    a -= one_i;
     a *= a;
     a /= a;
-    a %= 1;
-    a &= 0;
-    a |= 0;
-    a ^= 0;
-    a <<= 2u;
-    a >>= 1u;
+    a %= one_i;
+    a &= zero_i;
+    a |= zero_i;
+    a ^= zero_i;
+    a <<= two_u;
+    a >>= one_u;
 
     a++;
     a--;
 
     var vec0: vec3<i32> = vec3<i32>();
-    vec0[1]++;
-    vec0[1]--;
+    vec0[one_i]++;
+    vec0[one_i]--;
 }
 
 @compute @workgroup_size(1)
@@ -266,12 +293,13 @@ fn main() {
 }
 
 fn negation_avoids_prefix_decrement() {
-    let p0 = -1;
-    let p1 = - -2;
-    let p2 = -(-3);
-    let p3 = -(- 4);
-    let p4 = - - -5;
-    let p5 = - - - - 6;
-    let p6 = - - -(- -7);
-    let p7 = (- - - - -8);
+    let x = 1;
+    let p0 = -x;
+    let p1 = - -x;
+    let p2 = -(-x);
+    let p3 = -(- x);
+    let p4 = - - -x;
+    let p5 = - - - - x;
+    let p6 = - - -(- -x);
+    let p7 = (- - - - -x);
 }

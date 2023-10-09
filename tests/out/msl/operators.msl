@@ -51,7 +51,10 @@ metal::float3 bool_cast(
 
 void logical(
 ) {
-    metal::bool2 neg1_ = metal::bool2(false, false);
+    bool neg0_ = !(true);
+    metal::bool2 neg1_ = !(metal::bool2(true));
+    bool or_ = true || false;
+    bool and_ = true && false;
     bool bitwise_or0_ = true | false;
     metal::bool3 bitwise_or1_ = metal::bool3(true) | metal::bool3(false);
     bool bitwise_and0_ = true & false;
@@ -60,59 +63,75 @@ void logical(
 
 void arithmetic(
 ) {
-    metal::int2 neg1_1 = metal::int2(-1, -1);
-    metal::float2 neg2_ = metal::float2(-1.0, -1.0);
+    float neg0_1 = -(1.0);
+    metal::int2 neg1_1 = -(metal::int2(1));
+    metal::float2 neg2_ = -(metal::float2(1.0));
+    int add0_ = 2 + 1;
+    uint add1_ = 2u + 1u;
+    float add2_ = 2.0 + 1.0;
     metal::int2 add3_ = metal::int2(2) + metal::int2(1);
     metal::uint3 add4_ = metal::uint3(2u) + metal::uint3(1u);
     metal::float4 add5_ = metal::float4(2.0) + metal::float4(1.0);
+    int sub0_ = 2 - 1;
+    uint sub1_ = 2u - 1u;
+    float sub2_ = 2.0 - 1.0;
     metal::int2 sub3_ = metal::int2(2) - metal::int2(1);
     metal::uint3 sub4_ = metal::uint3(2u) - metal::uint3(1u);
     metal::float4 sub5_ = metal::float4(2.0) - metal::float4(1.0);
+    int mul0_ = 2 * 1;
+    uint mul1_ = 2u * 1u;
+    float mul2_ = 2.0 * 1.0;
     metal::int2 mul3_ = metal::int2(2) * metal::int2(1);
     metal::uint3 mul4_ = metal::uint3(2u) * metal::uint3(1u);
     metal::float4 mul5_ = metal::float4(2.0) * metal::float4(1.0);
+    int div0_ = 2 / 1;
+    uint div1_ = 2u / 1u;
+    float div2_ = 2.0 / 1.0;
     metal::int2 div3_ = metal::int2(2) / metal::int2(1);
     metal::uint3 div4_ = metal::uint3(2u) / metal::uint3(1u);
     metal::float4 div5_ = metal::float4(2.0) / metal::float4(1.0);
+    int rem0_ = 2 % 1;
+    uint rem1_ = 2u % 1u;
+    float rem2_ = metal::fmod(2.0, 1.0);
     metal::int2 rem3_ = metal::int2(2) % metal::int2(1);
     metal::uint3 rem4_ = metal::uint3(2u) % metal::uint3(1u);
     metal::float4 rem5_ = metal::fmod(metal::float4(2.0), metal::float4(1.0));
     {
-        metal::int2 add0_ = metal::int2(2) + metal::int2(1);
-        metal::int2 add1_ = metal::int2(2) + metal::int2(1);
-        metal::uint2 add2_ = metal::uint2(2u) + metal::uint2(1u);
+        metal::int2 add0_1 = metal::int2(2) + metal::int2(1);
+        metal::int2 add1_1 = metal::int2(2) + metal::int2(1);
+        metal::uint2 add2_1 = metal::uint2(2u) + metal::uint2(1u);
         metal::uint2 add3_1 = metal::uint2(2u) + metal::uint2(1u);
         metal::float2 add4_1 = metal::float2(2.0) + metal::float2(1.0);
         metal::float2 add5_1 = metal::float2(2.0) + metal::float2(1.0);
-        metal::int2 sub0_ = metal::int2(2) - metal::int2(1);
-        metal::int2 sub1_ = metal::int2(2) - metal::int2(1);
-        metal::uint2 sub2_ = metal::uint2(2u) - metal::uint2(1u);
+        metal::int2 sub0_1 = metal::int2(2) - metal::int2(1);
+        metal::int2 sub1_1 = metal::int2(2) - metal::int2(1);
+        metal::uint2 sub2_1 = metal::uint2(2u) - metal::uint2(1u);
         metal::uint2 sub3_1 = metal::uint2(2u) - metal::uint2(1u);
         metal::float2 sub4_1 = metal::float2(2.0) - metal::float2(1.0);
         metal::float2 sub5_1 = metal::float2(2.0) - metal::float2(1.0);
-        metal::int2 mul0_ = metal::int2(2, 2);
-        metal::int2 mul1_ = metal::int2(2, 2);
-        metal::uint2 mul2_ = metal::uint2(2u, 2u);
-        metal::uint2 mul3_1 = metal::uint2(2u, 2u);
-        metal::float2 mul4_1 = metal::float2(2.0, 2.0);
-        metal::float2 mul5_1 = metal::float2(2.0, 2.0);
-        metal::int2 div0_ = metal::int2(2) / metal::int2(1);
-        metal::int2 div1_ = metal::int2(2) / metal::int2(1);
-        metal::uint2 div2_ = metal::uint2(2u) / metal::uint2(1u);
+        metal::int2 mul0_1 = metal::int2(2) * 1;
+        metal::int2 mul1_1 = 2 * metal::int2(1);
+        metal::uint2 mul2_1 = metal::uint2(2u) * 1u;
+        metal::uint2 mul3_1 = 2u * metal::uint2(1u);
+        metal::float2 mul4_1 = metal::float2(2.0) * 1.0;
+        metal::float2 mul5_1 = 2.0 * metal::float2(1.0);
+        metal::int2 div0_1 = metal::int2(2) / metal::int2(1);
+        metal::int2 div1_1 = metal::int2(2) / metal::int2(1);
+        metal::uint2 div2_1 = metal::uint2(2u) / metal::uint2(1u);
         metal::uint2 div3_1 = metal::uint2(2u) / metal::uint2(1u);
         metal::float2 div4_1 = metal::float2(2.0) / metal::float2(1.0);
         metal::float2 div5_1 = metal::float2(2.0) / metal::float2(1.0);
-        metal::int2 rem0_ = metal::int2(2) % metal::int2(1);
-        metal::int2 rem1_ = metal::int2(2) % metal::int2(1);
-        metal::uint2 rem2_ = metal::uint2(2u) % metal::uint2(1u);
+        metal::int2 rem0_1 = metal::int2(2) % metal::int2(1);
+        metal::int2 rem1_1 = metal::int2(2) % metal::int2(1);
+        metal::uint2 rem2_1 = metal::uint2(2u) % metal::uint2(1u);
         metal::uint2 rem3_1 = metal::uint2(2u) % metal::uint2(1u);
         metal::float2 rem4_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
         metal::float2 rem5_1 = metal::fmod(metal::float2(2.0), metal::float2(1.0));
     }
     metal::float3x3 add = metal::float3x3 {} + metal::float3x3 {};
     metal::float3x3 sub = metal::float3x3 {} - metal::float3x3 {};
-    metal::float3x3 mul_scalar0_ = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
-    metal::float3x3 mul_scalar1_ = metal::float3x3(metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0), metal::float3(0.0, 0.0, 0.0));
+    metal::float3x3 mul_scalar0_ = metal::float3x3 {} * 1.0;
+    metal::float3x3 mul_scalar1_ = 2.0 * metal::float3x3 {};
     metal::float3 mul_vector0_ = metal::float4x3 {} * metal::float4(1.0);
     metal::float4 mul_vector1_ = metal::float3(2.0) * metal::float4x3 {};
     metal::float3x3 mul = metal::float4x3 {} * metal::float3x4 {};
@@ -120,37 +139,67 @@ void arithmetic(
 
 void bit(
 ) {
-    metal::int2 flip2_ = metal::int2(-2, -2);
-    metal::uint3 flip3_ = metal::uint3(4294967294u, 4294967294u, 4294967294u);
+    int flip0_ = ~(1);
+    uint flip1_ = ~(1u);
+    metal::int2 flip2_ = ~(metal::int2(1));
+    metal::uint3 flip3_ = ~(metal::uint3(1u));
+    int or0_ = 2 | 1;
+    uint or1_ = 2u | 1u;
     metal::int2 or2_ = metal::int2(2) | metal::int2(1);
     metal::uint3 or3_ = metal::uint3(2u) | metal::uint3(1u);
+    int and0_ = 2 & 1;
+    uint and1_ = 2u & 1u;
     metal::int2 and2_ = metal::int2(2) & metal::int2(1);
     metal::uint3 and3_ = metal::uint3(2u) & metal::uint3(1u);
+    int xor0_ = 2 ^ 1;
+    uint xor1_ = 2u ^ 1u;
     metal::int2 xor2_ = metal::int2(2) ^ metal::int2(1);
     metal::uint3 xor3_ = metal::uint3(2u) ^ metal::uint3(1u);
+    int shl0_ = 2 << 1u;
+    uint shl1_ = 2u << 1u;
     metal::int2 shl2_ = metal::int2(2) << metal::uint2(1u);
     metal::uint3 shl3_ = metal::uint3(2u) << metal::uint3(1u);
+    int shr0_ = 2 >> 1u;
+    uint shr1_ = 2u >> 1u;
     metal::int2 shr2_ = metal::int2(2) >> metal::uint2(1u);
     metal::uint3 shr3_ = metal::uint3(2u) >> metal::uint3(1u);
 }
 
 void comparison(
 ) {
+    bool eq0_ = 2 == 1;
+    bool eq1_ = 2u == 1u;
+    bool eq2_ = 2.0 == 1.0;
     metal::bool2 eq3_ = metal::int2(2) == metal::int2(1);
     metal::bool3 eq4_ = metal::uint3(2u) == metal::uint3(1u);
     metal::bool4 eq5_ = metal::float4(2.0) == metal::float4(1.0);
+    bool neq0_ = 2 != 1;
+    bool neq1_ = 2u != 1u;
+    bool neq2_ = 2.0 != 1.0;
     metal::bool2 neq3_ = metal::int2(2) != metal::int2(1);
     metal::bool3 neq4_ = metal::uint3(2u) != metal::uint3(1u);
     metal::bool4 neq5_ = metal::float4(2.0) != metal::float4(1.0);
+    bool lt0_ = 2 < 1;
+    bool lt1_ = 2u < 1u;
+    bool lt2_ = 2.0 < 1.0;
     metal::bool2 lt3_ = metal::int2(2) < metal::int2(1);
     metal::bool3 lt4_ = metal::uint3(2u) < metal::uint3(1u);
     metal::bool4 lt5_ = metal::float4(2.0) < metal::float4(1.0);
+    bool lte0_ = 2 <= 1;
+    bool lte1_ = 2u <= 1u;
+    bool lte2_ = 2.0 <= 1.0;
     metal::bool2 lte3_ = metal::int2(2) <= metal::int2(1);
     metal::bool3 lte4_ = metal::uint3(2u) <= metal::uint3(1u);
     metal::bool4 lte5_ = metal::float4(2.0) <= metal::float4(1.0);
+    bool gt0_ = 2 > 1;
+    bool gt1_ = 2u > 1u;
+    bool gt2_ = 2.0 > 1.0;
     metal::bool2 gt3_ = metal::int2(2) > metal::int2(1);
     metal::bool3 gt4_ = metal::uint3(2u) > metal::uint3(1u);
     metal::bool4 gt5_ = metal::float4(2.0) > metal::float4(1.0);
+    bool gte0_ = 2 >= 1;
+    bool gte1_ = 2u >= 1u;
+    bool gte2_ = 2.0 >= 1.0;
     metal::bool2 gte3_ = metal::int2(2) >= metal::int2(1);
     metal::bool3 gte4_ = metal::uint3(2u) >= metal::uint3(1u);
     metal::bool4 gte5_ = metal::float4(2.0) >= metal::float4(1.0);
@@ -158,44 +207,52 @@ void comparison(
 
 void assignment(
 ) {
-    int a_1 = 1;
+    int a_1 = {};
     metal::int3 vec0_ = metal::int3 {};
-    int _e3 = a_1;
-    a_1 = _e3 + 1;
-    int _e6 = a_1;
-    a_1 = _e6 - 1;
-    int _e8 = a_1;
+    a_1 = 1;
+    int _e5 = a_1;
+    a_1 = _e5 + 1;
+    int _e7 = a_1;
+    a_1 = _e7 - 1;
     int _e9 = a_1;
-    a_1 = _e9 * _e8;
-    int _e11 = a_1;
+    int _e10 = a_1;
+    a_1 = _e10 * _e9;
     int _e12 = a_1;
-    a_1 = _e12 / _e11;
+    int _e13 = a_1;
+    a_1 = _e13 / _e12;
     int _e15 = a_1;
     a_1 = _e15 % 1;
-    int _e18 = a_1;
-    a_1 = _e18 & 0;
+    int _e17 = a_1;
+    a_1 = _e17 & 0;
+    int _e19 = a_1;
+    a_1 = _e19 | 0;
     int _e21 = a_1;
-    a_1 = _e21 | 0;
-    int _e24 = a_1;
-    a_1 = _e24 ^ 0;
-    int _e27 = a_1;
-    a_1 = _e27 << 2u;
-    int _e30 = a_1;
-    a_1 = _e30 >> 1u;
-    int _e33 = a_1;
-    a_1 = _e33 + 1;
-    int _e36 = a_1;
-    a_1 = _e36 - 1;
-    int _e42 = vec0_.y;
-    vec0_.y = _e42 + 1;
-    int _e46 = vec0_.y;
-    vec0_.y = _e46 - 1;
+    a_1 = _e21 ^ 0;
+    int _e23 = a_1;
+    a_1 = _e23 << 2u;
+    int _e25 = a_1;
+    a_1 = _e25 >> 1u;
+    int _e28 = a_1;
+    a_1 = _e28 + 1;
+    int _e31 = a_1;
+    a_1 = _e31 - 1;
+    int _e37 = vec0_[1];
+    vec0_[1] = _e37 + 1;
+    int _e41 = vec0_[1];
+    vec0_[1] = _e41 - 1;
     return;
 }
 
 void negation_avoids_prefix_decrement(
 ) {
-    return;
+    int p0_ = -(1);
+    int p1_ = -(-(1));
+    int p2_ = -(-(1));
+    int p3_ = -(-(1));
+    int p4_ = -(-(-(1)));
+    int p5_ = -(-(-(-(1))));
+    int p6_ = -(-(-(-(-(1)))));
+    int p7_ = -(-(-(-(-(1)))));
 }
 
 kernel void main_(
