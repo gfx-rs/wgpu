@@ -1892,7 +1892,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         // User callbacks must not be called while we are holding locks.
         let mut user_callbacks = None;
-      
+
         let surface_guard = self.surfaces.read();
         let device_guard = hub.devices.read();
 
