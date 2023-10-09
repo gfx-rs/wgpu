@@ -350,6 +350,7 @@ fn map_storage_format_from_naga(format: naga::StorageFormat) -> wgt::TextureForm
         Sf::Rgba8Snorm => Tf::Rgba8Snorm,
         Sf::Rgba8Uint => Tf::Rgba8Uint,
         Sf::Rgba8Sint => Tf::Rgba8Sint,
+        Sf::Bgra8Unorm => Tf::Bgra8Unorm,
 
         Sf::Rgb10a2Uint => Tf::Rgb10a2Uint,
         Sf::Rgb10a2Unorm => Tf::Rgb10a2Unorm,
