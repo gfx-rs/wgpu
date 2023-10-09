@@ -494,28 +494,39 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn set_bind_group(
         &mut self,
-        layout: &super::PipelineLayout,
+        _layout: &super::PipelineLayout,
         group_index: u32,
         group: &super::BindGroup,
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
-        let bg_info = &layout.bind_group_infos[group_index as usize];
-
         // TODO iterate through shader stages
         if let Some(ref encoder) = self.state.render {
-            for entry in &group.bindings {
-                for (stage, stage_info) in [
-                    (wgt::ShaderStages::VERTEX, &self.state.stage_infos.vs),
-                    (wgt::ShaderStages::FRAGMENT, &self.state.stage_infos.fs),
-                ] {
-                    if entry.visibility.contains(stage) {
-                        // TODO: It *should* be impossible to have bindings but no argument buffer.
-                        let Some(ref argument_buffer) =
-                            stage_info.argument_buffer.as_ref() else {
-                                log::warn!("Attempted to set bind group but no argument buffer found for vertex stage!");
-                                continue;
-                            };
+            for (stage, stage_info) in [
+                (wgt::ShaderStages::VERTEX, &self.state.stage_infos.vs),
+                (wgt::ShaderStages::FRAGMENT, &self.state.stage_infos.fs),
+            ] {
+                // TODO: It *should* be impossible to have bindings but no argument buffer.
+                let Some(ref argument_buffer) =
+                    stage_info.argument_buffer.as_ref() else {
+                        log::warn!("Attempted to set bind group but no argument buffer found for {stage:?}!");
+                        continue;
+                    };
 
+                match stage {
+                    wgt::ShaderStages::VERTEX => {
+                        encoder.set_vertex_buffer(0, Some(&argument_buffer.buffer), 0);
+                    }
+                    wgt::ShaderStages::FRAGMENT => {
+                        encoder.set_fragment_buffer(0, Some(&argument_buffer.buffer), 0);
+                    }
+                    wgt::ShaderStages::COMPUTE => {
+                        todo!("Support argument buffers on compute");
+                    }
+                    _ => unreachable!(),
+                }
+
+                for entry in &group.bindings {
+                    if entry.visibility.contains(stage) {
                         let index = argument_buffer.entries[&naga::ResourceBinding {
                             group: group_index,
                             binding: entry.binding,
@@ -525,20 +536,23 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             super::MetalBindGroupResource::Buffer(buffers) => {
                                 for (buffer_index, buffer) in buffers.iter().enumerate() {
                                     let mut offset = buffer.offset;
+                                    let index = index as usize + buffer_index;
                                     if let Some(dyn_index) = buffer.dynamic_index {
-                                        offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+                                        offset += dynamic_offsets[dyn_index as usize]
+                                            as wgt::BufferAddress;
+                                        log::trace!(
+                                            "index {index}, dyn_index {dyn_index}, offset {offset}"
+                                        );
                                     }
                                     let native = buffer.ptr.as_native();
+                                    // TODO: use resource_at
                                     encoder.use_resource(native, MTLResourceUsage::Read);
-                                    argument_buffer.encoder.set_buffer(
-                                        (index as usize + buffer_index) as _,
-                                        native,
-                                        offset,
-                                    )
+                                    argument_buffer
+                                        .encoder
+                                        .set_buffer(index as _, native, offset)
                                 }
                             }
                             super::MetalBindGroupResource::Texture(textures) => {
-                                // PERF: potentially needless vec allocation?
                                 for (texture_index, texture) in textures.iter().enumerate() {
                                     encoder
                                         .use_resource(texture.as_native(), MTLResourceUsage::Read);
@@ -550,8 +564,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             }
                             super::MetalBindGroupResource::Sampler(samplers) => {
                                 for (sampler_index, sampler) in samplers.iter().enumerate() {
-                                    // encoder
-                                    //     .use_resource(sampler.as_native(), MTLResourceUsage::Read);
                                     argument_buffer.encoder.set_sampler_state(
                                         (index as usize + sampler_index) as _,
                                         sampler.as_native(),
@@ -822,15 +834,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     sizes.as_ptr() as _,
                 );
             }
-        }
-
-        if let Some(ref vs_argument_buffer) = self.state.stage_infos.vs.argument_buffer {
-            // TODO this is probably overriding the buffer with, you know. The vertices.
-            encoder.set_vertex_buffer(0, Some(&vs_argument_buffer.buffer), 0);
-        }
-
-        if let Some(ref fs_argument_buffer) = self.state.stage_infos.fs.argument_buffer {
-            encoder.set_fragment_buffer(0, Some(&fs_argument_buffer.buffer), 0);
         }
     }
 

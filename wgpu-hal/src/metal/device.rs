@@ -288,13 +288,7 @@ impl super::Device {
         if argument_buffer_entries.is_empty() {
             return None;
         }
-        // How many bind groups does this entry point use?
-        // if shader.argument_buffers_used.is_empty() {
-        //     return Vec::new();
-        // }
 
-        // let mut buffers = Vec::new();
-        // for id in shader.argument_buffers_used.iter().copied() {
         let encoder = function.new_argument_encoder(0);
 
         let size = encoder.encoded_length();
@@ -310,8 +304,7 @@ impl super::Device {
             .device
             .lock()
             .new_buffer(size, metal::MTLResourceOptions::empty());
-        // TODO (KR): more meaningful label
-        buffer.set_label(&format!("ArgumentBufferGroup{id}"));
+        buffer.set_label(&format!("{} Argument Buffer", function.name()));
         log::info!("Created argument buffer: {:?}", buffer);
         encoder.set_argument_buffer(&buffer, 0);
         Some(Arc::new(ArgumentBuffer {
@@ -320,7 +313,6 @@ impl super::Device {
             buffer,
             entries: argument_buffer_entries,
         }))
-        // }
     }
 }
 
@@ -898,16 +890,23 @@ impl crate::Device<super::Api> for super::Device {
                     naga::ShaderStage::Vertex,
                 )?;
 
+                descriptor.set_vertex_function(Some(&vs.function));
                 let argument_buffer =
                     self.create_argument_buffer(vs.argument_buffer_entries, &vs.function);
 
-                descriptor.set_vertex_function(Some(&vs.function));
-                if self.shared.private_caps.supports_mutability {
-                    Self::set_buffers_mutability(
-                        descriptor.vertex_buffers().unwrap(),
-                        vs.immutable_buffer_mask,
-                    );
-                }
+                descriptor
+                    .vertex_buffers()
+                    .unwrap()
+                    .object_at(0)
+                    .unwrap()
+                    .set_mutability(metal::MTLMutability::Mutable);
+
+                // if self.shared.private_caps.supports_mutability {
+                //     Self::set_buffers_mutability(
+                //         descriptor.vertex_buffers().unwrap(),
+                //         vs.immutable_buffer_mask,
+                //     );
+                // }
 
                 let info = super::PipelineStageInfo {
                     push_constants: desc.layout.push_constants_infos.vs,
@@ -931,14 +930,20 @@ impl crate::Device<super::Api> for super::Device {
 
                     let argument_buffer =
                         self.create_argument_buffer(fs.argument_buffer_entries, &fs.function);
+                    descriptor
+                        .vertex_buffers()
+                        .unwrap()
+                        .object_at(0)
+                        .unwrap()
+                        .set_mutability(metal::MTLMutability::Mutable);
 
                     descriptor.set_fragment_function(Some(&fs.function));
-                    if self.shared.private_caps.supports_mutability {
-                        Self::set_buffers_mutability(
-                            descriptor.fragment_buffers().unwrap(),
-                            fs.immutable_buffer_mask,
-                        );
-                    }
+                    // if self.shared.private_caps.supports_mutability {
+                    //     Self::set_buffers_mutability(
+                    //         descriptor.fragment_buffers().unwrap(),
+                    //         fs.immutable_buffer_mask,
+                    //     );
+                    // }
 
                     let info = super::PipelineStageInfo {
                         push_constants: desc.layout.push_constants_infos.fs,
