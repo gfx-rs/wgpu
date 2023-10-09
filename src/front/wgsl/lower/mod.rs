@@ -106,7 +106,16 @@ pub struct StatementContext<'source, 'temp, 'out> {
     named_expressions: &'out mut FastIndexMap<Handle<crate::Expression>, (String, Span)>,
     arguments: &'out [crate::FunctionArgument],
     module: &'out mut crate::Module,
-    /// Tracks the constness of `Expression`s residing in `self.naga_expressions`
+
+    /// Which `Expression`s in `self.naga_expressions` are const expressions, in
+    /// the WGSL sense.
+    ///
+    /// According to the WGSL spec, a const expression must not refer to any
+    /// `let` declarations, even if those declarations' initializers are
+    /// themselves const expressions. So this tracker is not simply concerned
+    /// with the form of the expressions; it is also tracking whether WGSL says
+    /// we should consider them to be const. See the use of `force_non_const` in
+    /// the code for lowering `let` bindings.
     expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
 }
 
@@ -192,7 +201,11 @@ pub struct RuntimeExpressionContext<'temp, 'out> {
     block: &'temp mut crate::Block,
     emitter: &'temp mut Emitter,
     typifier: &'temp mut Typifier,
-    /// Tracks the constness of `Expression`s residing in `self.naga_expressions`
+
+    /// Which `Expression`s in `self.naga_expressions` are const expressions, in
+    /// the WGSL sense.
+    ///
+    /// See [`StatementContext::expression_constness`] for details.
     expression_constness: &'temp mut crate::proc::ExpressionConstnessTracker,
 }
 
@@ -1087,6 +1100,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     emitter.start(ctx.naga_expressions);
 
                     let value = self.expression(l.init, ctx.as_expression(block, &mut emitter))?;
+
+                    // The WGSL spec says that any expression that refers to a
+                    // `let`-bound variable is not a const expression. This
+                    // affects when errors must be reported, so we can't even
+                    // treat suitable `let` bindings as constant as an
+                    // optimization.
                     ctx.expression_constness.force_non_const(value);
 
                     let explicit_ty =
