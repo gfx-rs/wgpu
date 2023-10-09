@@ -1888,21 +1888,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         log::debug!("configuring surface with {:?}", config);
-        let hub = A::hub(self);
 
         // User callbacks must not be called while we are holding locks.
         let mut user_callbacks = None;
 
-        let surface_guard = self.surfaces.read();
-        let device_guard = hub.devices.read();
-
         let error = 'outer: loop {
             let hub = A::hub(self);
-            let mut token = Token::root();
-
-            let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-            let (device_guard, mut token) = hub.devices.read(&mut token);
+            let surface_guard = self.surfaces.read();
+            let device_guard = hub.devices.read();
 
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
