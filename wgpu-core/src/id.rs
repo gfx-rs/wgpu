@@ -145,7 +145,7 @@ where
     T: 'static + WasmNotSend + WasmNotSync,
 {
     fn clone(&self) -> Self {
-        Self(self.0, PhantomData)
+        *self
     }
 }
 

@@ -1,7 +1,7 @@
 use glow::HasContext;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 
-use std::{ffi, os::raw, ptr, sync::Arc, time::Duration};
+use std::{ffi, os::raw, ptr, rc::Rc, sync::Arc, time::Duration};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
@@ -683,7 +683,7 @@ enum WindowKind {
 
 #[derive(Clone, Debug)]
 struct WindowSystemInterface {
-    display_owner: Option<Arc<DisplayOwner>>,
+    display_owner: Option<Rc<DisplayOwner>>,
     kind: WindowKind,
 }
 
@@ -798,7 +798,7 @@ impl crate::Instance<super::Api> for Instance {
                     )
                 }
                 .unwrap();
-                (display, Some(Arc::new(library)), WindowKind::Wayland)
+                (display, Some(Rc::new(library)), WindowKind::Wayland)
             } else if let (Some(display_owner), Some(egl)) = (x11_display_library, egl1_5) {
                 log::info!("Using X11 platform");
                 let display_attributes = [khronos_egl::ATTRIB_NONE];
@@ -810,7 +810,7 @@ impl crate::Instance<super::Api> for Instance {
                     )
                 }
                 .unwrap();
-                (display, Some(Arc::new(display_owner)), WindowKind::X11)
+                (display, Some(Rc::new(display_owner)), WindowKind::X11)
             } else if let (Some(display_owner), Some(egl)) = (angle_x11_display_library, egl1_5) {
                 log::info!("Using Angle platform with X11");
                 let display_attributes = [
@@ -828,7 +828,7 @@ impl crate::Instance<super::Api> for Instance {
                     )
                 }
                 .unwrap();
-                (display, Some(Arc::new(display_owner)), WindowKind::AngleX11)
+                (display, Some(Rc::new(display_owner)), WindowKind::AngleX11)
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
                 log::warn!("No windowing system present. Using surfaceless platform");
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
@@ -840,6 +840,7 @@ impl crate::Instance<super::Api> for Instance {
                     )
                 }
                 .unwrap();
+
                 (display, None, WindowKind::Unknown)
             } else {
                 log::warn!("EGL_MESA_platform_surfaceless not available. Using default platform");
@@ -1210,8 +1211,7 @@ impl crate::Surface<super::Api> for Surface {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
-                        let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) }
-                            as *mut _ as *mut std::ffi::c_void;
+                        let window = unsafe { wl_egl_window_create(handle.surface, 640, 480) };
                         wl_window = Some(window);
                         window
                     }
