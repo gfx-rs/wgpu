@@ -128,8 +128,8 @@ fn arithmetic() {
 fn bit() {
     let flip0_ = ~(1);
     let flip1_ = ~(1u);
-    let flip2_ = !(vec2(1));
-    let flip3_ = !(vec3(1u));
+    let flip2_ = ~(vec2(1));
+    let flip3_ = ~(vec3(1u));
     let or0_ = (2 | 1);
     let or1_ = (2u | 1u);
     let or2_ = (vec2(2) | vec2(1));

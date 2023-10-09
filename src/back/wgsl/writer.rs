@@ -1600,13 +1600,10 @@ impl<W: Write> Writer<W> {
                 let unary = match op {
                     crate::UnaryOperator::Negate => "-",
                     crate::UnaryOperator::Not => {
-                        match *func_ctx.resolve_type(expr, &module.types) {
-                            TypeInner::Scalar {
-                                kind: crate::ScalarKind::Bool,
-                                ..
-                            }
-                            | TypeInner::Vector { .. } => "!",
-                            _ => "~",
+                        match func_ctx.resolve_type(expr, &module.types).scalar_kind() {
+                            Some(crate::ScalarKind::Sint) | Some(crate::ScalarKind::Uint) => "~",
+                            Some(crate::ScalarKind::Bool) => "!",
+                            _ => return Err(Error::Custom("validation failure".to_string())),
                         }
                     }
                 };
