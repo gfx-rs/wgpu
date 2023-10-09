@@ -2104,15 +2104,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Ok(())
         }
 
-        log::info!("configuring surface with {:?}", config);
-        let hub = A::hub(self);
-        let mut token = Token::root();
+        // User callbacks must not be called while we are holding locks.
+        let mut user_callbacks = None;
 
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        log::info!("configuring surface with {:?}", config);
 
         let error = 'outer: loop {
+            let hub = A::hub(self);
+            let mut token = Token::root();
+
+            let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+            let (device_guard, mut token) = hub.devices.read(&mut token);
+
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -2184,8 +2188,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             // Wait for all work to finish before configuring the surface.
-            if let Err(e) = device.maintain(hub, wgt::Maintain::Wait, &mut token) {
-                break e.into();
+            match device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+                Ok((closures, _)) => {
+                    user_callbacks = Some(closures);
+                }
+                Err(e) => {
+                    break e.into();
+                }
             }
 
             // All textures must be destroyed before the surface can be re-configured.
@@ -2232,6 +2241,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             return None;
         };
+
+        if let Some(callbacks) = user_callbacks {
+            callbacks.fire();
+        }
 
         Some(error)
     }
