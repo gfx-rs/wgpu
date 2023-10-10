@@ -9,7 +9,7 @@ mod device;
 mod instance;
 mod library;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {

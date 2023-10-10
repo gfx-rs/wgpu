@@ -189,7 +189,7 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
