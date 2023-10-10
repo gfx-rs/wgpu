@@ -474,6 +474,7 @@ pub struct Fence {
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
+#[derive(Debug)]
 pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,

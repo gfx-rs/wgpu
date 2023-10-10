@@ -368,6 +368,7 @@ pub struct Sampler {
     raw: glow::Sampler,
 }
 
+#[derive(Debug)]
 pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
