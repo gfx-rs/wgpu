@@ -524,14 +524,11 @@ impl PhysicalDeviceFeatures {
         features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
         features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
-        let bgra8unorm_storage = supports_format(
-            instance,
-            phd,
-            vk::Format::B8G8R8A8_UNORM,
-            vk::ImageTiling::OPTIMAL,
-            vk::FormatFeatureFlags::STORAGE_IMAGE,
+        features.set(
+            F::BGRA8UNORM_STORAGE,
+            supports_bgra8unorm_storage(instance, phd, caps.effective_api_version),
         );
-        features.set(F::BGRA8UNORM_STORAGE, bgra8unorm_storage);
+
         (features, dl_flags)
     }
 
@@ -1757,5 +1754,55 @@ fn supports_format(
         vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
         vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
         _ => false,
+    }
+}
+
+fn supports_bgra8unorm_storage(
+    instance: &ash::Instance,
+    phd: vk::PhysicalDevice,
+    api_version: u32,
+) -> bool {
+    // See https://github.com/KhronosGroup/Vulkan-Docs/issues/2027#issuecomment-1380608011
+
+    // We must query via FormatProperties3 only for vk 1.3 or later.
+    if api_version < vk::API_VERSION_1_3 {
+        // Note we might be able to get away with not checking `STORAGE_WRITE_WITHOUT_FORMAT_KHR`
+        // on older drivers, but for now we rely on it.
+        return false;
+    }
+
+    unsafe {
+        let mut properties3 = vk::FormatProperties3 {
+            s_type: vk::StructureType::FORMAT_PROPERTIES_3,
+            p_next: std::ptr::null_mut(),
+            linear_tiling_features: vk::FormatFeatureFlags2::empty(),
+            optimal_tiling_features: vk::FormatFeatureFlags2::empty(),
+            buffer_features: vk::FormatFeatureFlags2::empty(),
+        };
+
+        let mut properties2 = vk::FormatProperties2 {
+            s_type: vk::StructureType::FORMAT_PROPERTIES_2,
+            p_next: &mut properties3 as *mut ash::vk::FormatProperties3 as *mut _,
+            format_properties: vk::FormatProperties {
+                linear_tiling_features: FormatFeatureFlags::empty(),
+                optimal_tiling_features: FormatFeatureFlags::empty(),
+                buffer_features: FormatFeatureFlags::empty(),
+            },
+        };
+
+        instance.get_physical_device_format_properties2(
+            phd,
+            vk::Format::B8G8R8A8_UNORM,
+            &mut properties2,
+        );
+
+        let features2 = properties2.format_properties.optimal_tiling_features;
+        let features3 = properties3.optimal_tiling_features;
+
+        let base_requirements = features2.contains(vk::FormatFeatureFlags::STORAGE_IMAGE);
+        let vk_1_3_reequirements =
+            features3.contains(vk::FormatFeatureFlags2::STORAGE_WRITE_WITHOUT_FORMAT_KHR);
+
+        base_requirements && vk_1_3_reequirements
     }
 }
