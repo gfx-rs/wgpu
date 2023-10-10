@@ -1780,13 +1780,14 @@ fn supports_bgra8unorm_storage(
             buffer_features: vk::FormatFeatureFlags2::empty(),
         };
 
+        let p_next: *mut ash::vk::FormatProperties3 = &mut properties3;
         let mut properties2 = vk::FormatProperties2 {
             s_type: vk::StructureType::FORMAT_PROPERTIES_2,
-            p_next: &mut properties3 as *mut ash::vk::FormatProperties3 as *mut _,
+            p_next: p_next as *mut _,
             format_properties: vk::FormatProperties {
-                linear_tiling_features: FormatFeatureFlags::empty(),
-                optimal_tiling_features: FormatFeatureFlags::empty(),
-                buffer_features: FormatFeatureFlags::empty(),
+                linear_tiling_features: vk::FormatFeatureFlags::empty(),
+                optimal_tiling_features: vk::FormatFeatureFlags::empty(),
+                buffer_features: vk::FormatFeatureFlags::empty(),
             },
         };
 
