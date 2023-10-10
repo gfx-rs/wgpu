@@ -10,11 +10,40 @@ enum Behavior {
     Glsl,
 }
 
+/// A context for evaluating constant expressions.
+///
+/// A `ConstantEvaluator` points at an expression arena to which it can append
+/// newly evaluated expressions: you pass [`try_eval_and_append`] whatever kind
+/// of Naga [`Expression`] you like, and if its value can be computed at compile
+/// time, `try_eval_and_append` appends an expression representing the computed
+/// value - a tree of [`Literal`], [`Compose`], [`ZeroValue`], and [`Swizzle`]
+/// expressions - to the arena. See the [`try_eval_and_append`] method for details.
+///
+/// A `ConstantEvaluator` also holds whatever information we need to carry out
+/// that evaluation: types, other constants, and so on.
+///
+/// [`try_eval_and_append`]: ConstantEvaluator::try_eval_and_append
+/// [`Compose`]: Expression::Compose
+/// [`ZeroValue`]: Expression::ZeroValue
+/// [`Literal`]: Expression::Literal
+/// [`Swizzle`]: Expression::Swizzle
 #[derive(Debug)]
 pub struct ConstantEvaluator<'a> {
+    /// Which language's evaluation rules we should follow.
     behavior: Behavior,
+
+    /// The module's type arena.
+    ///
+    /// Because expressions like [`Splat`] contain type handles, we need to be
+    /// able to add new types to produce those expressions.
+    ///
+    /// [`Splat`]: Expression::Splat
     types: &'a mut UniqueArena<Type>,
+
+    /// The module's constant arena.
     constants: &'a Arena<Constant>,
+
+    /// The arena to which we are contributing expressions.
     expressions: &'a mut Arena<Expression>,
 
     /// When `self.expressions` refers to a function's local expression
@@ -149,10 +178,18 @@ pub enum ConstantEvaluatorError {
 }
 
 impl<'a> ConstantEvaluator<'a> {
+    /// Return a [`ConstantEvaluator`] that will add expressions to `module`'s
+    /// constant expression arena.
+    ///
+    /// Report errors according to WGSL's rules for constant evaluation.
     pub fn for_wgsl_module(module: &'a mut crate::Module) -> Self {
         Self::for_module(Behavior::Wgsl, module)
     }
 
+    /// Return a [`ConstantEvaluator`] that will add expressions to `module`'s
+    /// constant expression arena.
+    ///
+    /// Report errors according to GLSL's rules for constant evaluation.
     pub fn for_glsl_module(module: &'a mut crate::Module) -> Self {
         Self::for_module(Behavior::Glsl, module)
     }
@@ -167,6 +204,10 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    /// Return a [`ConstantEvaluator`] that will add expressions to `function`'s
+    /// expression arena.
+    ///
+    /// Report errors according to WGSL's rules for constant evaluation.
     pub fn for_wgsl_function(
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
@@ -184,6 +225,10 @@ impl<'a> ConstantEvaluator<'a> {
         )
     }
 
+    /// Return a [`ConstantEvaluator`] that will add expressions to `function`'s
+    /// expression arena.
+    ///
+    /// Report errors according to GLSL's rules for constant evaluation.
     pub fn for_glsl_function(
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
@@ -259,6 +304,27 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    /// Try to evaluate `expr` at compile time.
+    ///
+    /// The `expr` argument can be any sort of Naga [`Expression`] you like. If
+    /// we can determine its value at compile time, we append an expression
+    /// representing its value - a tree of [`Literal`], [`Compose`],
+    /// [`ZeroValue`], and [`Swizzle`] expressions - to the expression arena
+    /// `self` contributes to.
+    ///
+    /// If `expr`'s value cannot be determined at compile time, return a an
+    /// error. If it's acceptable to evaluate `expr` at runtime, this error can
+    /// be ignored, and the caller can append `expr` to the arena itself.
+    ///
+    /// We only consider `expr` itself, without recursing into its operands. Its
+    /// operands must all have been produced by prior calls to
+    /// `try_eval_and_append`, to ensure that they have already been reduced to
+    /// an evaluated form if possible.
+    ///
+    /// [`Literal`]: Expression::Literal
+    /// [`Compose`]: Expression::Compose
+    /// [`ZeroValue`]: Expression::ZeroValue
+    /// [`Swizzle`]: Expression::Swizzle
     pub fn try_eval_and_append(
         &mut self,
         expr: &Expression,
