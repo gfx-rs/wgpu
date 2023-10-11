@@ -16,9 +16,6 @@ pub use self::image::ComparisonType;
 pub use ctor::ctor;
 pub use wgpu_macros::gpu_test;
 
-#[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-const CANVAS_ID: &str = "test-canvas";
-
 async fn initialize_device(
     adapter: &Adapter,
     features: Features,
@@ -446,28 +443,9 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
 
-        // We use raw_window_handle here, as create_surface_from_canvas is not implemented on emscripten.
-        struct WindowHandle;
-        unsafe impl raw_window_handle::HasRawWindowHandle for WindowHandle {
-            fn raw_window_handle(&self) -> raw_window_handle::RawWindowHandle {
-                raw_window_handle::RawWindowHandle::Web({
-                    let mut handle = raw_window_handle::WebWindowHandle::empty();
-                    handle.id = 1;
-                    handle
-                })
-            }
-        }
-        unsafe impl raw_window_handle::HasRawDisplayHandle for WindowHandle {
-            fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
-                raw_window_handle::RawDisplayHandle::Web(
-                    raw_window_handle::WebDisplayHandle::empty(),
-                )
-            }
-        }
-
         _surface = unsafe {
             instance
-                .create_surface(&WindowHandle)
+                .create_surface_from_canvas(&canvas)
                 .expect("could not create surface from canvas")
         };
 
@@ -545,26 +523,10 @@ pub fn create_html_canvas() -> web_sys::HtmlCanvasElement {
     web_sys::window()
         .and_then(|win| win.document())
         .and_then(|doc| {
-            let body = doc.body().unwrap();
             let canvas = doc.create_element("Canvas").unwrap();
-            canvas.set_attribute("data-raw-handle", "1").unwrap();
-            canvas.set_id(CANVAS_ID);
-            body.append_child(&canvas).unwrap();
             canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok()
         })
-        .expect("couldn't append canvas to document body")
-}
-
-#[cfg(all(
-    target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
-))]
-fn delete_html_canvas() {
-    if let Some(document) = web_sys::window().and_then(|win| win.document()) {
-        if let Some(element) = document.get_element_by_id(CANVAS_ID) {
-            element.remove();
-        }
-    };
+        .expect("couldn't create canvas")
 }
 
 // Run some code in an error scope and assert that validation fails.
