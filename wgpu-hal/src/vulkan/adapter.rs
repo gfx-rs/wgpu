@@ -1772,24 +1772,8 @@ fn supports_bgra8unorm_storage(
     }
 
     unsafe {
-        let mut properties3 = vk::FormatProperties3 {
-            s_type: vk::StructureType::FORMAT_PROPERTIES_3,
-            p_next: std::ptr::null_mut(),
-            linear_tiling_features: vk::FormatFeatureFlags2::empty(),
-            optimal_tiling_features: vk::FormatFeatureFlags2::empty(),
-            buffer_features: vk::FormatFeatureFlags2::empty(),
-        };
-
-        let p_next: *mut ash::vk::FormatProperties3 = &mut properties3;
-        let mut properties2 = vk::FormatProperties2 {
-            s_type: vk::StructureType::FORMAT_PROPERTIES_2,
-            p_next: p_next as *mut _,
-            format_properties: vk::FormatProperties {
-                linear_tiling_features: vk::FormatFeatureFlags::empty(),
-                optimal_tiling_features: vk::FormatFeatureFlags::empty(),
-                buffer_features: vk::FormatFeatureFlags::empty(),
-            },
-        };
+        let mut properties3 = vk::FormatProperties3::default();
+        let mut properties2 = vk::FormatProperties2::builder().push_next(&mut properties3);
 
         instance.get_physical_device_format_properties2(
             phd,
