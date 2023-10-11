@@ -978,7 +978,13 @@ pub struct LocalVariable {
     pub name: Option<String>,
     /// The type of this variable.
     pub ty: Handle<Type>,
-    /// Initial value for this variable. Must be a const-expression.
+    /// Initial value for this variable.
+    ///
+    /// This handle refers to this `LocalVariable`'s function's
+    /// [`expressions`] arena, but it is required to be an evaluated
+    /// constant expression.
+    ///
+    /// [`expressions`]: Function::expressions
     pub init: Option<Handle<Expression>>,
 }
 
