@@ -2262,151 +2262,152 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Ok(())
         }
 
-        // User callbacks must not be called while we are holding locks.
-        let mut user_callbacks = None;
-
         log::info!("configuring surface with {:?}", config);
 
         let error = 'outer: loop {
             let hub = A::hub(self);
             let mut token = Token::root();
 
-            let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-            let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-            let (device_guard, mut token) = hub.devices.read(&mut token);
+            // User callbacks must not be called while we are holding locks.
+            let user_callbacks;
+            {
+                let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+                let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+                let (device_guard, mut token) = hub.devices.read(&mut token);
 
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
-            };
-            if !device.valid {
-                break DeviceError::Invalid.into();
-            }
-
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
-            }
-
-            let surface = match surface_guard.get_mut(surface_id) {
-                Ok(surface) => surface,
-                Err(_) => break E::InvalidSurface,
-            };
-
-            let caps = unsafe {
-                let suf = A::get_surface(surface);
-                let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
-                    Some(caps) => caps,
-                    None => break E::UnsupportedQueueFamily,
+                let device = match device_guard.get(device_id) {
+                    Ok(device) => device,
+                    Err(_) => break DeviceError::Invalid.into(),
+                };
+                if !device.valid {
+                    break DeviceError::Invalid.into();
                 }
-            };
 
-            let mut hal_view_formats = vec![];
-            for format in config.view_formats.iter() {
-                if *format == config.format {
-                    continue;
+                #[cfg(feature = "trace")]
+                if let Some(ref trace) = device.trace {
+                    trace
+                        .lock()
+                        .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
                 }
-                if !caps.formats.contains(&config.format) {
-                    break 'outer E::UnsupportedFormat {
-                        requested: config.format,
-                        available: caps.formats,
-                    };
+
+                let surface = match surface_guard.get_mut(surface_id) {
+                    Ok(surface) => surface,
+                    Err(_) => break E::InvalidSurface,
+                };
+
+                let caps = unsafe {
+                    let suf = A::get_surface(surface);
+                    let adapter = &adapter_guard[device.adapter_id.value];
+                    match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
+                        Some(caps) => caps,
+                        None => break E::UnsupportedQueueFamily,
+                    }
+                };
+
+                let mut hal_view_formats = vec![];
+                for format in config.view_formats.iter() {
+                    if *format == config.format {
+                        continue;
+                    }
+                    if !caps.formats.contains(&config.format) {
+                        break 'outer E::UnsupportedFormat {
+                            requested: config.format,
+                            available: caps.formats,
+                        };
+                    }
+                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                        break 'outer E::InvalidViewFormat(*format, config.format);
+                    }
+                    hal_view_formats.push(*format);
                 }
-                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    break 'outer E::InvalidViewFormat(*format, config.format);
+
+                if !hal_view_formats.is_empty() {
+                    if let Err(missing_flag) =
+                        device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                    {
+                        break 'outer E::MissingDownlevelFlags(missing_flag);
+                    }
                 }
-                hal_view_formats.push(*format);
-            }
 
-            if !hal_view_formats.is_empty() {
-                if let Err(missing_flag) =
-                    device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
-                {
-                    break 'outer E::MissingDownlevelFlags(missing_flag);
+                let num_frames = present::DESIRED_NUM_FRAMES
+                    .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
+                let mut hal_config = hal::SurfaceConfiguration {
+                    swap_chain_size: num_frames,
+                    present_mode: config.present_mode,
+                    composite_alpha_mode: config.alpha_mode,
+                    format: config.format,
+                    extent: wgt::Extent3d {
+                        width: config.width,
+                        height: config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                    view_formats: hal_view_formats,
+                };
+
+                if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
+                    break error;
                 }
-            }
 
-            let num_frames = present::DESIRED_NUM_FRAMES
-                .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
-            let mut hal_config = hal::SurfaceConfiguration {
-                swap_chain_size: num_frames,
-                present_mode: config.present_mode,
-                composite_alpha_mode: config.alpha_mode,
-                format: config.format,
-                extent: wgt::Extent3d {
-                    width: config.width,
-                    height: config.height,
-                    depth_or_array_layers: 1,
-                },
-                usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
-                view_formats: hal_view_formats,
-            };
-
-            if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
-                break error;
-            }
-
-            // Wait for all work to finish before configuring the surface.
-            match device.maintain(hub, wgt::Maintain::Wait, &mut token) {
-                Ok((closures, _)) => {
-                    user_callbacks = Some(closures);
+                // Wait for all work to finish before configuring the surface.
+                match device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+                    Ok((closures, _)) => {
+                        user_callbacks = closures;
+                    }
+                    Err(e) => {
+                        break e.into();
+                    }
                 }
-                Err(e) => {
-                    break e.into();
+
+                // All textures must be destroyed before the surface can be re-configured.
+                if let Some(present) = surface.presentation.take() {
+                    if present.acquired_texture.is_some() {
+                        break E::PreviousOutputExists;
+                    }
                 }
-            }
 
-            // All textures must be destroyed before the surface can be re-configured.
-            if let Some(present) = surface.presentation.take() {
-                if present.acquired_texture.is_some() {
-                    break E::PreviousOutputExists;
-                }
-            }
+                // TODO: Texture views may still be alive that point to the texture.
+                // this will allow the user to render to the surface texture, long after
+                // it has been removed.
+                //
+                // https://github.com/gfx-rs/wgpu/issues/4105
 
-            // TODO: Texture views may still be alive that point to the texture.
-            // this will allow the user to render to the surface texture, long after
-            // it has been removed.
-            //
-            // https://github.com/gfx-rs/wgpu/issues/4105
-
-            match unsafe {
-                A::get_surface_mut(surface)
-                    .unwrap()
-                    .raw
-                    .configure(&device.raw, &hal_config)
-            } {
-                Ok(()) => (),
-                Err(error) => {
-                    break match error {
-                        hal::SurfaceError::Outdated | hal::SurfaceError::Lost => E::InvalidSurface,
-                        hal::SurfaceError::Device(error) => E::Device(error.into()),
-                        hal::SurfaceError::Other(message) => {
-                            log::error!("surface configuration failed: {}", message);
-                            E::InvalidSurface
+                match unsafe {
+                    A::get_surface_mut(surface)
+                        .unwrap()
+                        .raw
+                        .configure(&device.raw, &hal_config)
+                } {
+                    Ok(()) => (),
+                    Err(error) => {
+                        break match error {
+                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
+                                E::InvalidSurface
+                            }
+                            hal::SurfaceError::Device(error) => E::Device(error.into()),
+                            hal::SurfaceError::Other(message) => {
+                                log::error!("surface configuration failed: {}", message);
+                                E::InvalidSurface
+                            }
                         }
                     }
                 }
+
+                surface.presentation = Some(present::Presentation {
+                    device_id: Stored {
+                        value: id::Valid(device_id),
+                        ref_count: device.life_guard.add_ref(),
+                    },
+                    config: config.clone(),
+                    num_frames,
+                    acquired_texture: None,
+                });
             }
 
-            surface.presentation = Some(present::Presentation {
-                device_id: Stored {
-                    value: id::Valid(device_id),
-                    ref_count: device.life_guard.add_ref(),
-                },
-                config: config.clone(),
-                num_frames,
-                acquired_texture: None,
-            });
+            user_callbacks.fire();
 
             return None;
         };
-
-        if let Some(callbacks) = user_callbacks {
-            callbacks.fire();
-        }
 
         Some(error)
     }
