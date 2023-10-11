@@ -806,6 +806,7 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
+        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         features
     }

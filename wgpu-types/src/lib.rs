@@ -730,7 +730,16 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 53;
 
-        // 54..59 available
+        /// Allows vertex shaders to have outputs which are not consumed
+        /// by the fragment shader.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
+
+        // 55..59 available
 
         // Shader:
 
