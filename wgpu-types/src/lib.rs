@@ -832,6 +832,24 @@ bitflags::bitflags! {
     }
 }
 
+impl InstanceFlags {
+    /// Enable debugging and validation flags.
+    pub fn debugging() -> Self {
+        InstanceFlags::default() | InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+    }
+
+    /// Infer good defaults from the build type
+    ///
+    /// Returns the default flags and add debugging flags if the build configuration has `debug_assertions`.
+    pub fn from_build_type() -> Self {
+        if cfg!(debug_assertions) {
+            return InstanceFlags::debugging();
+        }
+
+        InstanceFlags::default()
+    }
+}
+
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide three different defaults.
@@ -6510,6 +6528,8 @@ pub enum Gles3MinorVersion {
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
     pub backends: Backends,
+    /// Flags to tune the behavior of the instance.
+    pub flags: InstanceFlags,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
     /// Which OpenGL ES 3 minor version to request.
@@ -6520,6 +6540,7 @@ impl Default for InstanceDescriptor {
     fn default() -> Self {
         Self {
             backends: Backends::all(),
+            flags: InstanceFlags::default(),
             dx12_shader_compiler: Dx12Compiler::default(),
             gles_minor_version: Gles3MinorVersion::default(),
         }
