@@ -958,7 +958,7 @@ checksum = "3fe2568f851fd6144a45fa91cfed8fe5ca8fc0b56ba6797bfc1ed2771b90e37c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.28",
+ "syn 2.0.38",
 ]
 
 [[package]]
@@ -3584,7 +3584,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "env_logger",
- "futures-intrusive",
+ "flume",
  "log",
  "pollster",
  "wasm-bindgen-futures",

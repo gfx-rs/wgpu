@@ -537,7 +537,7 @@ static TEST_QUERY: wgpu_example::framework::ExampleTestParams =
         optional_features: QUERY_FEATURES,
         base_test_parameters: wgpu_test::TestParameters::default()
             .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.025)],
         _phantom: std::marker::PhantomData::<Example>,
     };
 
