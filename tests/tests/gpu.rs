@@ -27,6 +27,7 @@ mod scissor_tests;
 mod shader;
 mod shader_primitive_index;
 mod shader_view_format;
+mod subgroup_operations;
 mod texture_bounds;
 mod transfer;
 mod vertex_indices;
