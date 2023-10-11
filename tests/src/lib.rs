@@ -16,7 +16,7 @@ pub use self::image::ComparisonType;
 pub use config::GpuTestConfiguration;
 #[doc(hidden)]
 pub use ctor::ctor;
-pub use init::{initialize_instance, initialize_adapter, initialize_device};
+pub use init::{initialize_adapter, initialize_device, initialize_instance};
 pub use params::{FailureCase, FailureReasons, TestParameters};
 pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;

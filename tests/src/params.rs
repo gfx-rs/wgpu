@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
-use wgt::{DownlevelCapabilities, Features, Limits, DownlevelFlags};
+use wgt::{DownlevelCapabilities, DownlevelFlags, Features, Limits};
 
-use crate::{GpuTestConfiguration, report::AdapterReport};
+use crate::{report::AdapterReport, GpuTestConfiguration};
 
 /// Conditions under which a test should fail or be skipped.
 ///
