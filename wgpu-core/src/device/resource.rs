@@ -558,14 +558,6 @@ impl<A: HalApi> Device<A> {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
         }
 
-        // Check for for the bgra8unorml-storage feature.
-        if desc.format == wgt::TextureFormat::Bgra8Unorm
-            && desc.usage.contains(wgt::TextureUsages::STORAGE_BINDING)
-            && !self.features.contains(wgt::Features::BGRA8UNORM_STORAGE)
-        {
-            return Err(CreateTextureError::InvalidUsage(desc.usage));
-        }
-
         conv::check_texture_dimension_size(
             desc.dimension,
             desc.size,
