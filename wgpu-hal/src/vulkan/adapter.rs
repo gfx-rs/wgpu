@@ -1764,10 +1764,10 @@ fn supports_bgra8unorm_storage(
 ) -> bool {
     // See https://github.com/KhronosGroup/Vulkan-Docs/issues/2027#issuecomment-1380608011
 
-    // We must query via FormatProperties3 only for vk 1.3 or later.
+    // This check gates the function call and structures used below.
+    // TODO: check for (`VK_KHR_get_physical_device_properties2` or VK1.1) and (`VK_KHR_format_feature_flags2` or VK1.3).
+    // Right now we only check for VK1.3.
     if api_version < vk::API_VERSION_1_3 {
-        // Note we might be able to get away with not checking `STORAGE_WRITE_WITHOUT_FORMAT_KHR`
-        // on older drivers, but for now we rely on it.
         return false;
     }
 
