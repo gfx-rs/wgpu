@@ -1,6 +1,6 @@
 use std::{num::NonZeroU64, ops::Range};
 
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
 
 fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {

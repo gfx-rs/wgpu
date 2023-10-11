@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfiguration::new()

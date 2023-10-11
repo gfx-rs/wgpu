@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, image, infra::GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestingContext};
 
 struct Rect {
     x: u32,

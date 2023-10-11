@@ -2,9 +2,7 @@ use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt;
 
-use wgpu_test::{
-    gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters, TestingContext,
-};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
 fn pulling_common(
     ctx: TestingContext,

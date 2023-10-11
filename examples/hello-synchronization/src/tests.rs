@@ -1,5 +1,5 @@
 use super::*;
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static SYNC: GpuTestConfiguration = GpuTestConfiguration::new()

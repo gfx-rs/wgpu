@@ -20,9 +20,9 @@ cfg_if::cfg_if! {
 
 #[derive(Clone)]
 pub struct GpuTestConfiguration {
-    pub name: String,
-    pub params: TestParameters,
-    pub test: Option<RunTestAsync>,
+    pub(crate) name: String,
+    pub(crate) params: TestParameters,
+    pub(crate) test: Option<RunTestAsync>,
 }
 
 impl GpuTestConfiguration {

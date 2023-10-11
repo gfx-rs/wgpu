@@ -419,7 +419,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use wgpu_test::{gpu_test, infra::GpuTestConfiguration};
+    use wgpu_test::{gpu_test, GpuTestConfiguration};
 
     use crate::{submit_render_and_compute_pass_with_queries, QueryResults};
 

@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()

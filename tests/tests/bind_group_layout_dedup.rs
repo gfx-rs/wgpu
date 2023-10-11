@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
 static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()

@@ -1,4 +1,4 @@
-use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
+use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()

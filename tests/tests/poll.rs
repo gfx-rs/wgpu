@@ -7,7 +7,7 @@ use wgpu::{
     Maintain, ShaderStages,
 };
 
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
 
 struct DummyWorkData {
     _buffer: Buffer,

@@ -1,6 +1,6 @@
 //! Tests for buffer copy validation.
 
-use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
 static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =

@@ -1,4 +1,4 @@
-use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
 static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

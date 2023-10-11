@@ -2,7 +2,7 @@
 
 use wgt::BufferAddress;
 
-use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
 
 fn try_copy(
     ctx: &wgpu_test::TestingContext,

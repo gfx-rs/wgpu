@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use wgpu::{WasmNotSend, WasmNotSync};
-use wgpu_test::infra::GpuTestConfiguration;
+use wgpu_test::GpuTestConfiguration;
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},

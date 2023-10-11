@@ -20,9 +20,9 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
         fn #register_test_name() {
             struct S;
 
-            ::wgpu_test::infra::TEST_LIST.lock().push(
+            ::wgpu_test::native::TEST_LIST.lock().push(
                 // Allow any type that can be converted to a GpuTestConfiguration
-                ::wgpu_test::infra::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower)
+                ::wgpu_test::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower)
             )
         }
 
@@ -32,9 +32,9 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
             struct S;
 
             // Allow any type that can be converted to a GpuTestConfiguration
-            let test_config = ::wgpu_test::infra::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower);
+            let test_config = ::wgpu_test::GpuTestConfiguration::from(#expr).name_from_init_function_typename::<S>(#ident_lower);
 
-            ::wgpu_test::initialize_test(test_config, None, 0).await;
+            ::wgpu_test::execute_test(test_config, None, 0).await;
         }
     }
     .into()

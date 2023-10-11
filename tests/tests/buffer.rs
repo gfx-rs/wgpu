@@ -1,6 +1,4 @@
-use wgpu_test::{
-    gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters, TestingContext,
-};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
 fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) {
     let r = wgpu::BufferUsages::MAP_READ;

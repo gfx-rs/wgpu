@@ -1,6 +1,6 @@
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, infra::GpuTestConfiguration, FailureCase, TestParameters,
+    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
     TestingContext,
 };
 

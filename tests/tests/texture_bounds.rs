@@ -1,6 +1,6 @@
 //! Tests for texture copy bounds checks.
 
-use wgpu_test::{fail_if, gpu_test, infra::GpuTestConfiguration};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
 static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

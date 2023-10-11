@@ -1,4 +1,4 @@
-use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration, valid};
+use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration};
 
 #[gpu_test]
 static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

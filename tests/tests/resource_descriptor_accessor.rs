@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
 static BUFFER_SIZE_AND_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

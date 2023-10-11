@@ -1,5 +1,5 @@
 use super::*;
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()

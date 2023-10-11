@@ -1,6 +1,6 @@
 //! Tests for texture copy
 
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration = GpuTestConfiguration::new()

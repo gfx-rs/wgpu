@@ -1,4 +1,4 @@
-use wgpu_test::{fail, gpu_test, infra::GpuTestConfiguration, FailureCase, TestParameters};
+use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 // Create an invalid shader and a compute pipeline that uses it
 // with a default bindgroup layout, and then ask for that layout.

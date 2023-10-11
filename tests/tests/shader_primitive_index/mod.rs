@@ -1,5 +1,5 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, infra::GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 //
 // These tests render two triangles to a 2x2 render target. The first triangle

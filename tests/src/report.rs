@@ -6,28 +6,30 @@ use wgpu::{
 };
 
 #[derive(Deserialize)]
-pub struct GpuReport {
+pub(crate) struct GpuReport {
+    #[cfg_attr(target_arch = "wasm32", allow(unused))]
     pub devices: Vec<AdapterReport>,
 }
 
 impl GpuReport {
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
-    pub fn from_json(file: &str) -> serde_json::Result<Self> {
+    pub(crate) fn from_json(file: &str) -> serde_json::Result<Self> {
         serde_json::from_str(file)
     }
 }
 
 #[derive(Deserialize)]
-pub struct AdapterReport {
+pub(crate) struct AdapterReport {
     pub info: AdapterInfo,
     pub features: Features,
     pub limits: Limits,
     pub downlevel_caps: DownlevelCapabilities,
+    #[allow(unused)]
     pub texture_format_features: HashMap<TextureFormat, TextureFormatFeatures>,
 }
 
 impl AdapterReport {
-    pub fn from_adapter(adapter: &wgpu::Adapter) -> Self {
+    pub(crate) fn from_adapter(adapter: &wgpu::Adapter) -> Self {
         let info = adapter.get_info();
         let features = adapter.features();
         let limits = adapter.limits();

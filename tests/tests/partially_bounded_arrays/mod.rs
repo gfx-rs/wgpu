@@ -1,6 +1,6 @@
 use std::{borrow::Cow, num::NonZeroU32};
 
-use wgpu_test::{gpu_test, image::ReadbackBuffers, infra::GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, image::ReadbackBuffers, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new()

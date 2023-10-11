@@ -1,6 +1,6 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
 use wgpu_test::{
-    gpu_test, image::calc_difference, infra::GpuTestConfiguration, FailureCase, TestParameters,
+    gpu_test, image::calc_difference, FailureCase, GpuTestConfiguration, TestParameters,
     TestingContext,
 };
 
