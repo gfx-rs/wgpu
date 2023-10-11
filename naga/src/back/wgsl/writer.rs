@@ -941,7 +941,7 @@ impl<W: Write> Writer<W> {
             } => {
                 unimplemented!() // FIXME
             }
-            Statement::SubgroupBroadcast {
+            Statement::SubgroupGather {
                 ref mode,
                 argument,
                 result,

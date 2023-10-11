@@ -3034,7 +3034,7 @@ impl<W: Write> Writer<W> {
                 } => {
                     unimplemented!(); // FIXME
                 }
-                crate::Statement::SubgroupBroadcast {
+                crate::Statement::SubgroupGather {
                     ref mode,
                     argument,
                     result,

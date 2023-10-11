@@ -547,8 +547,8 @@ impl super::Validator {
                 Ok(())
             }
             crate::Statement::SubgroupCollectiveOperation {
-                op,
-                collective_op,
+                op: _,
+                collective_op: _,
                 argument,
                 result,
             } => {
@@ -556,13 +556,15 @@ impl super::Validator {
                 validate_expr(result)?;
                 Ok(())
             }
-            crate::Statement::SubgroupBroadcast {
+            crate::Statement::SubgroupGather {
                 mode,
                 argument,
                 result,
             } => {
-                if let crate::BroadcastMode::Index(expr) = mode {
-                    validate_expr(expr)?;
+                validate_expr(argument)?;
+                match mode {
+                    crate::GatherMode::BroadcastFirst => {}
+                    crate::GatherMode::Broadcast(index) => validate_expr(index)?,
                 }
                 validate_expr(result)?;
                 Ok(())

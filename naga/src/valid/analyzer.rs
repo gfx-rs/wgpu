@@ -1009,13 +1009,13 @@ impl FunctionInfo {
                     let _ = self.add_ref(argument); // FIXME
                     FunctionUniformity::new()
                 }
-                S::SubgroupBroadcast {
+                S::SubgroupGather {
                     ref mode,
                     argument,
                     result,
                 } => {
                     let _ = self.add_ref(argument);
-                    if let crate::BroadcastMode::Index(expr) = *mode {
+                    if let crate::GatherMode::Broadcast(expr) = *mode {
                         let _ = self.add_ref(expr);
                     }
                     FunctionUniformity::new()

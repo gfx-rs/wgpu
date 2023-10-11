@@ -3844,7 +3844,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
                 S::SubgroupBallot { .. } => unreachable!(), // FIXME??
                 S::SubgroupCollectiveOperation { .. } => unreachable!(),
-                S::SubgroupBroadcast { .. } => unreachable!(),
+                S::SubgroupGather { .. } => unreachable!(),
             }
             i += 1;
         }

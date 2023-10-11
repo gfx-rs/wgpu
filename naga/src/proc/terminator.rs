@@ -39,7 +39,7 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             | S::WorkGroupUniformLoad { .. }
             | S::SubgroupBallot { .. }
             | S::SubgroupCollectiveOperation { .. }
-            | S::SubgroupBroadcast { .. }
+            | S::SubgroupGather { .. }
             | S::Barrier(_)),
         )
         | None => block.push(S::Return { value: None }, Default::default()),

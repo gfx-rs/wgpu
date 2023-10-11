@@ -94,7 +94,7 @@ impl<'w> BlockContext<'w> {
     }
     pub(super) fn write_subgroup_broadcast(
         &mut self,
-        mode: &crate::BroadcastMode,
+        mode: &crate::GatherMode,
         argument: Handle<crate::Expression>,
         result: Handle<crate::Expression>,
         block: &mut Block,
@@ -112,7 +112,7 @@ impl<'w> BlockContext<'w> {
 
         let arg_id = self.cached[argument];
         match mode {
-            crate::BroadcastMode::Index(index) => {
+            crate::GatherMode::Broadcast(index) => {
                 let index_id = self.cached[*index];
                 block.body.push(Instruction::group_non_uniform_broadcast(
                     result_type_id,
@@ -122,7 +122,7 @@ impl<'w> BlockContext<'w> {
                     index_id,
                 ));
             }
-            crate::BroadcastMode::First => {
+            crate::GatherMode::BroadcastFirst => {
                 block
                     .body
                     .push(Instruction::group_non_uniform_broadcast_first(

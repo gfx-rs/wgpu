@@ -436,8 +436,8 @@ pub enum BuiltIn {
     WorkGroupSize,
     NumWorkGroups,
     // subgroup
-    SubgroupInvocationId,
     SubgroupSize,
+    SubgroupInvocationId,
 }
 
 /// Number of bytes per scalar.
@@ -1265,9 +1265,9 @@ pub enum SwizzleComponent {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum BroadcastMode {
-    First,
-    Index(Handle<Expression>),
+pub enum GatherMode {
+    BroadcastFirst,
+    Broadcast(Handle<Expression>),
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -1899,9 +1899,9 @@ pub enum Statement {
         predicate: Option<Handle<Expression>>,
     },
 
-    SubgroupBroadcast {
-        /// Specifies which thread to broadcast from
-        mode: BroadcastMode,
+    SubgroupGather {
+        /// Specifies which thread to gather from
+        mode: GatherMode,
         /// The value to broadcast over
         argument: Handle<Expression>,
         /// The [`SubgroupOperationResult`] expression representing this load's result.

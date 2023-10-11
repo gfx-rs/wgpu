@@ -473,12 +473,12 @@ impl super::Validator {
     #[cfg(feature = "validate")]
     fn validate_subgroup_broadcast(
         &mut self,
-        mode: &crate::BroadcastMode,
+        mode: &crate::GatherMode,
         argument: Handle<crate::Expression>,
         result: Handle<crate::Expression>,
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
-        if let crate::BroadcastMode::Index(expr) = *mode {
+        if let crate::GatherMode::Broadcast(expr) = *mode {
             let index_ty = context.resolve_type(expr, &self.valid_expression_set)?;
             match index_ty {
                 crate::TypeInner::Scalar {
@@ -1056,7 +1056,7 @@ impl super::Validator {
                 } => {
                     self.validate_subgroup_operation(op, collective_op, argument, result, context)?;
                 }
-                S::SubgroupBroadcast {
+                S::SubgroupGather {
                     ref mode,
                     argument,
                     result,

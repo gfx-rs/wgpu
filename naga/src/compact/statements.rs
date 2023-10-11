@@ -110,12 +110,12 @@ impl FunctionTracer<'_> {
                         self.trace_expression(argument);
                         self.trace_expression(result);
                     }
-                    St::SubgroupBroadcast {
+                    St::SubgroupGather {
                         ref mode,
                         argument,
                         result,
                     } => {
-                        if let crate::BroadcastMode::Index(expr) = *mode {
+                        if let crate::GatherMode::Broadcast(expr) = *mode {
                             self.trace_expression(expr);
                         }
                         self.trace_expression(argument);
@@ -288,12 +288,12 @@ impl FunctionMap {
                         adjust(argument);
                         adjust(result);
                     }
-                    St::SubgroupBroadcast {
+                    St::SubgroupGather {
                         ref mut mode,
                         ref mut argument,
                         ref mut result,
                     } => {
-                        if let crate::BroadcastMode::Index(expr) = mode {
+                        if let crate::GatherMode::Broadcast(expr) = mode {
                             adjust(expr);
                         }
                         adjust(argument);

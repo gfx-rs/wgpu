@@ -296,14 +296,14 @@ impl StatementGraph {
                     self.emits.push((id, result));
                     "SubgroupCollectiveOperation" // FIXME
                 }
-                S::SubgroupBroadcast {
+                S::SubgroupGather {
                     ref mode,
                     argument,
                     result,
                 } => {
                     self.dependencies.push((id, argument, "arg"));
                     self.emits.push((id, result));
-                    "SubgroupBroadcast" // FIXME
+                    "SubgroupGather" // FIXME
                 }
             };
             // Set the last node to the merge node

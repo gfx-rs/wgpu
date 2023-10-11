@@ -2373,7 +2373,7 @@ impl<'w> BlockContext<'w> {
                 } => {
                     self.write_subgroup_operation(op, collective_op, argument, result, &mut block)?;
                 }
-                crate::Statement::SubgroupBroadcast {
+                crate::Statement::SubgroupGather {
                     ref mode,
                     argument,
                     result,
