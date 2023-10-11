@@ -822,8 +822,10 @@ bitflags::bitflags! {
     /// Instance debugging flags.
     ///
     /// These are not part of the webgpu standard.
+    ///
+    /// Defaults to enabling debugging-related flags if the build configuration has `debug_assertions`.
     #[repr(transparent)]
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct InstanceFlags: u32 {
         /// Generate debug information in shaders and objects.
         const DEBUG = 1 << 0;
@@ -832,10 +834,16 @@ bitflags::bitflags! {
     }
 }
 
+impl Default for InstanceFlags {
+    fn default() -> Self {
+        Self::from_build_config()
+    }
+}
+
 impl InstanceFlags {
     /// Enable debugging and validation flags.
     pub fn debugging() -> Self {
-        InstanceFlags::default() | InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
     }
 
     /// Infer good defaults from the build type
@@ -846,7 +854,7 @@ impl InstanceFlags {
             return InstanceFlags::debugging();
         }
 
-        InstanceFlags::default()
+        InstanceFlags::empty()
     }
 
     /// Returns this set of flags, affected by environment variables.
