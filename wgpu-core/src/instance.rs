@@ -73,14 +73,9 @@ impl Instance {
     pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
         fn init<A: HalApi>(_: A, instance_desc: &wgt::InstanceDescriptor) -> Option<A::Instance> {
             if instance_desc.backends.contains(A::VARIANT.into()) {
-                let mut flags = hal::InstanceFlags::empty();
-                if cfg!(debug_assertions) {
-                    flags |= hal::InstanceFlags::VALIDATION;
-                    flags |= hal::InstanceFlags::DEBUG;
-                }
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
-                    flags,
+                    flags: instance_desc.flags,
                     dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
                     gles_minor_version: instance_desc.gles_minor_version,
                 };

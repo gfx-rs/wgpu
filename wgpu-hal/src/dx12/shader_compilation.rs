@@ -28,7 +28,7 @@ pub(super) fn compile_fxc(
     if device
         .private_caps
         .instance_flags
-        .contains(crate::InstanceFlags::DEBUG)
+        .contains(wgt::InstanceFlags::DEBUG)
     {
         compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG | d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
@@ -148,7 +148,7 @@ mod dxc {
         if device
             .private_caps
             .instance_flags
-            .contains(crate::InstanceFlags::DEBUG)
+            .contains(wgt::InstanceFlags::DEBUG)
         {
             compile_flags.push("-Zi"); // d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION
             compile_flags.push("-Od"); // d3dcompiler::D3DCOMPILE_DEBUG
