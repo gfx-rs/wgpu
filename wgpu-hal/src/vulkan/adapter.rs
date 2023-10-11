@@ -1784,10 +1784,7 @@ fn supports_bgra8unorm_storage(
         let features2 = properties2.format_properties.optimal_tiling_features;
         let features3 = properties3.optimal_tiling_features;
 
-        let base_requirements = features2.contains(vk::FormatFeatureFlags::STORAGE_IMAGE);
-        let vk_1_3_reequirements =
-            features3.contains(vk::FormatFeatureFlags2::STORAGE_WRITE_WITHOUT_FORMAT_KHR);
-
-        base_requirements && vk_1_3_reequirements
+        features2.contains(vk::FormatFeatureFlags::STORAGE_IMAGE)
+            && features3.contains(vk::FormatFeatureFlags2::STORAGE_WRITE_WITHOUT_FORMAT)
     }
 }
