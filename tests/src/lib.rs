@@ -443,11 +443,9 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
         // On wasm, append a canvas to the document body for initializing the adapter
         let canvas = create_html_canvas();
 
-        _surface = unsafe {
-            instance
-                .create_surface_from_canvas(&canvas)
-                .expect("could not create surface from canvas")
-        };
+        _surface = instance
+            .create_surface_from_canvas(canvas.clone())
+            .expect("could not create surface from canvas");
 
         surface_guard = Some(SurfaceGuard { canvas });
     }
@@ -504,16 +502,6 @@ impl SurfaceGuard {
             .unwrap()
             .get_error()
             != web_sys::WebGl2RenderingContext::NO_ERROR
-    }
-}
-
-#[cfg(all(
-    target_arch = "wasm32",
-    any(target_os = "emscripten", feature = "webgl")
-))]
-impl Drop for SurfaceGuard {
-    fn drop(&mut self) {
-        delete_html_canvas();
     }
 }
 
