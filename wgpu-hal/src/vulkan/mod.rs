@@ -106,7 +106,7 @@ pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
     entry: ash::Entry,

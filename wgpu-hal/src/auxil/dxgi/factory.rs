@@ -94,7 +94,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
 /// created.
 pub fn create_factory(
     required_factory_type: DxgiFactoryType,
-    instance_flags: crate::InstanceFlags,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(d3d12::DxgiLib, d3d12::DxgiFactory), crate::InstanceError> {
     let lib_dxgi = d3d12::DxgiLib::new().map_err(|e| {
         crate::InstanceError::with_source(String::from("failed to load dxgi.dll"), e)
@@ -102,7 +102,7 @@ pub fn create_factory(
 
     let mut factory_flags = d3d12::FactoryCreationFlags::empty();
 
-    if instance_flags.contains(crate::InstanceFlags::VALIDATION) {
+    if instance_flags.contains(wgt::InstanceFlags::VALIDATION) {
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.

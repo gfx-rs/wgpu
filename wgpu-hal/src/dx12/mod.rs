@@ -94,7 +94,7 @@ pub struct Instance {
     library: Arc<d3d12::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: d3d12::DxgiLib,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
@@ -169,7 +169,7 @@ enum MemoryArchitecture {
 
 #[derive(Debug, Clone, Copy)]
 struct PrivateCapabilities {
-    instance_flags: crate::InstanceFlags,
+    instance_flags: wgt::InstanceFlags,
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,

@@ -90,9 +90,9 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: if cfg!(debug_assertions) {
-                hal::InstanceFlags::all()
+                wgt::InstanceFlags::all()
             } else {
-                hal::InstanceFlags::empty()
+                wgt::InstanceFlags::empty()
             },
             // Can't rely on having DXC available, so use FXC instead
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,

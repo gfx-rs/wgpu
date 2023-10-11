@@ -818,6 +818,20 @@ impl Features {
     }
 }
 
+bitflags::bitflags! {
+    /// Instance debugging flags.
+    ///
+    /// These are not part of the webgpu standard.
+    #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+    pub struct InstanceFlags: u32 {
+        /// Generate debug information in shaders and objects.
+        const DEBUG = 1 << 0;
+        /// Enable validation, if possible.
+        const VALIDATION = 1 << 1;
+    }
+}
+
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide three different defaults.

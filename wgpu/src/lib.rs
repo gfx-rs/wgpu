@@ -34,7 +34,7 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
-    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits,
+    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, Limits,
     MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
     PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,

@@ -493,7 +493,7 @@ struct Inner {
 
 impl Inner {
     fn create(
-        flags: crate::InstanceFlags,
+        flags: wgt::InstanceFlags,
         egl: Arc<EglInstance>,
         display: khronos_egl::Display,
         force_gles_minor_version: wgt::Gles3MinorVersion,
@@ -567,7 +567,7 @@ impl Inner {
             });
         }
 
-        if flags.contains(crate::InstanceFlags::DEBUG) {
+        if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
                 log::info!("\tEGL context: +debug");
                 context_attributes.push(khronos_egl::CONTEXT_OPENGL_DEBUG);
@@ -689,7 +689,7 @@ struct WindowSystemInterface {
 
 pub struct Instance {
     wsi: WindowSystemInterface,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     inner: Mutex<Inner>,
 }
 
@@ -817,7 +817,7 @@ impl crate::Instance<super::Api> for Instance {
                     EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE as khronos_egl::Attrib,
                     EGL_PLATFORM_X11_KHR as khronos_egl::Attrib,
                     EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED as khronos_egl::Attrib,
-                    usize::from(desc.flags.contains(crate::InstanceFlags::VALIDATION)),
+                    usize::from(desc.flags.contains(wgt::InstanceFlags::VALIDATION)),
                     khronos_egl::ATTRIB_NONE,
                 ];
                 let display = unsafe {
@@ -848,7 +848,7 @@ impl crate::Instance<super::Api> for Instance {
                 (display, None, WindowKind::Unknown)
             };
 
-        if desc.flags.contains(crate::InstanceFlags::VALIDATION)
+        if desc.flags.contains(wgt::InstanceFlags::VALIDATION)
             && client_ext_str.contains("EGL_KHR_debug")
         {
             log::info!("Enabling EGL debug output");
@@ -1005,13 +1005,13 @@ impl crate::Instance<super::Api> for Instance {
             })
         };
 
-        if self.flags.contains(crate::InstanceFlags::DEBUG) && gl.supports_debug() {
+        if self.flags.contains(wgt::InstanceFlags::DEBUG) && gl.supports_debug() {
             log::info!("Max label length: {}", unsafe {
                 gl.get_parameter_i32(glow::MAX_LABEL_LENGTH)
             });
         }
 
-        if self.flags.contains(crate::InstanceFlags::VALIDATION) && gl.supports_debug() {
+        if self.flags.contains(wgt::InstanceFlags::VALIDATION) && gl.supports_debug() {
             log::info!("Enabling GLES debug output");
             unsafe { gl.enable(glow::DEBUG_OUTPUT) };
             unsafe { gl.debug_message_callback(gl_debug_message_callback) };
