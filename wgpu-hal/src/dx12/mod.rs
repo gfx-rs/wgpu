@@ -55,7 +55,7 @@ use winapi::{
     Interface as _,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
@@ -94,7 +94,7 @@ pub struct Instance {
     library: Arc<d3d12::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: d3d12::DxgiLib,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
@@ -124,6 +124,21 @@ impl Instance {
             swap_chain: None,
         }
     }
+
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut types::ISwapChainPanelNative,
+    ) -> Surface {
+        Surface {
+            factory: self.factory.clone(),
+            factory_media: self.factory_media.clone(),
+            target: SurfaceTarget::SwapChainPanel(unsafe {
+                d3d12::ComPtr::from_raw(swap_chain_panel)
+            }),
+            supports_allow_tearing: self.supports_allow_tearing,
+            swap_chain: None,
+        }
+    }
 }
 
 unsafe impl Send for Instance {}
@@ -145,6 +160,7 @@ enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(d3d12::ComPtr<dcomp::IDCompositionVisual>),
     SurfaceHandle(winnt::HANDLE),
+    SwapChainPanel(d3d12::ComPtr<types::ISwapChainPanelNative>),
 }
 
 pub struct Surface {
@@ -169,7 +185,7 @@ enum MemoryArchitecture {
 
 #[derive(Debug, Clone, Copy)]
 struct PrivateCapabilities {
-    instance_flags: crate::InstanceFlags,
+    instance_flags: wgt::InstanceFlags,
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
@@ -474,6 +490,7 @@ pub struct Fence {
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
+#[derive(Debug)]
 pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
@@ -666,7 +683,7 @@ impl crate::Surface<Api> for Surface {
                     flags,
                 };
                 let swap_chain1 = match self.target {
-                    SurfaceTarget::Visual(_) => {
+                    SurfaceTarget::Visual(_) | SurfaceTarget::SwapChainPanel(_) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
                         self.factory
                             .unwrap_factory2()
@@ -724,6 +741,17 @@ impl crate::Surface<Api> for Surface {
                             ));
                         }
                     }
+                    &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {
+                        if let Err(err) =
+                            unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }
+                                .into_result()
+                        {
+                            log::error!("Unable to SetSwapChain: {}", err);
+                            return Err(crate::SurfaceError::Other(
+                                "ISwapChainPanelNative::SetSwapChain",
+                            ));
+                        }
+                    }
                 }
 
                 match unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() }.into_result() {
@@ -748,7 +776,9 @@ impl crate::Surface<Api> for Surface {
                     )
                 };
             }
-            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => {}
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };

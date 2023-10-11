@@ -151,6 +151,18 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let buffer_for_map = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let buffer_for_unmap = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: true,
+        });
 
         // Create a bind group layout.
         let bind_group_layout =
@@ -202,16 +214,14 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         ctx.device.destroy();
 
         // TODO: verify the following operations will return an invalid device error:
-        // * Run a compute pass
-        // * Run a render pass
+        // * Run a compute or render pass
         // * Finish a render bundle encoder
         // * Create a texture from HAL
         // * Create a buffer from HAL
         // * Create a sampler
         // * Validate a surface configuration
-        // * Start capture
-        // * Stop capture
-        // * Buffer map
+        // * Start or stop capture
+        // * Get or set buffer sub data
 
         // TODO: figure out how to structure a test around these operations which panic when
         // the device is invalid:
@@ -425,5 +435,17 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                     module: &shader_module,
                     entry_point: "",
                 });
+        });
+
+        // Buffer map should fail.
+        fail(&ctx.device, || {
+            buffer_for_map
+                .slice(..)
+                .map_async(wgpu::MapMode::Write, |_| ());
+        });
+
+        // Buffer unmap should fail.
+        fail(&ctx.device, || {
+            buffer_for_unmap.unmap();
         });
     });

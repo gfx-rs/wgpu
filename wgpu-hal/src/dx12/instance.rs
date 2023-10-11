@@ -16,7 +16,7 @@ impl crate::Instance<super::Api> for super::Instance {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
         })?;
 
-        if desc.flags.contains(crate::InstanceFlags::VALIDATION) {
+        if desc.flags.contains(wgt::InstanceFlags::VALIDATION) {
             // Enable debug layer
             match lib_main.get_debug_interface() {
                 Ok(pair) => match pair.into_result() {

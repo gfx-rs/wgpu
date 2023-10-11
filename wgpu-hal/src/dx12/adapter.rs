@@ -15,7 +15,7 @@ impl Drop for super::Adapter {
             && self
                 .private_caps
                 .instance_flags
-                .contains(crate::InstanceFlags::VALIDATION)
+                .contains(wgt::InstanceFlags::VALIDATION)
         {
             unsafe {
                 self.report_live_objects();
@@ -47,7 +47,7 @@ impl super::Adapter {
     pub(super) fn expose(
         adapter: d3d12::DxgiAdapter,
         library: &Arc<d3d12::D3D12Lib>,
-        instance_flags: crate::InstanceFlags,
+        instance_flags: wgt::InstanceFlags,
         dx12_shader_compiler: &wgt::Dx12Compiler,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
@@ -580,7 +580,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                         None
                     }
                 }
-                SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => None,
+                SurfaceTarget::Visual(_)
+                | SurfaceTarget::SurfaceHandle(_)
+                | SurfaceTarget::SwapChainPanel(_) => None,
             }
         };
 
