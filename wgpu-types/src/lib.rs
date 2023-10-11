@@ -312,8 +312,6 @@ bitflags::bitflags! {
 
         /// Allows the [`wgpu::TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8unorm`]
         ///
-        /// Note: this is not supported in naga yet.
-        ///
         /// Supported Platforms:
         /// - Vulkan
         /// - DX12
