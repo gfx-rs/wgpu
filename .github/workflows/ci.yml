@@ -291,6 +291,11 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          cargo -V
+
       - name: install swiftshader
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
