@@ -841,12 +841,42 @@ impl InstanceFlags {
     /// Infer good defaults from the build type
     ///
     /// Returns the default flags and add debugging flags if the build configuration has `debug_assertions`.
-    pub fn from_build_type() -> Self {
+    pub fn from_build_config() -> Self {
         if cfg!(debug_assertions) {
             return InstanceFlags::debugging();
         }
 
         InstanceFlags::default()
+    }
+
+    /// Returns this set of flags, affected by environment variables.
+    ///
+    /// The presence of an environment variable implies that the corresponding flag should be set
+    /// unless the value is "0" in which case the flag is unset. If the environment variable is
+    /// not present, then the flag is unaffected.
+    ///
+    /// For example `let flags = InstanceFlags::debuggin().with_env();` with `WGPU_VALIDATION=0`
+    /// does not contain `InstanceFlags::VALIDATION`.
+    ///
+    /// The environment variables are named after the flags prefixed with "WGPU_". For example:
+    /// - WGPU_DEBUG
+    /// - WGPU_VALIDATION
+    pub fn with_env(mut self) -> Self {
+        fn env(key: &str) -> Option<bool> {
+            std::env::var(key).ok().map(|s| match s.as_str() {
+                "0" => false,
+                _ => true,
+            })
+        }
+
+        if let Some(bit) = env("WGPU_VALIDATION") {
+            self.set(Self::VALIDATION, bit);
+        }
+        if let Some(bit) = env("WGPU_DEBUG") {
+            self.set(Self::DEBUG, bit);
+        }
+
+        self
     }
 }
 

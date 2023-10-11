@@ -5,7 +5,7 @@ use wasm_bindgen_test::*;
 fn initialize() {
     let _ = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
-        flags: wgpu::InstanceFlags::debugging(),
+        flags: wgpu::InstanceFlags::debugging().with_env(),
         dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
         gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
     });
@@ -14,7 +14,7 @@ fn initialize() {
 fn request_adapter_inner(power: wgt::PowerPreference) {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all),
-        flags: wgpu::InstanceFlags::debugging(),
+        flags: wgpu::InstanceFlags::debugging().with_env(),
         dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
         gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
     });
