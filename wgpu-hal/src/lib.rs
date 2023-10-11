@@ -189,7 +189,7 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
@@ -207,7 +207,7 @@ pub trait Api: Clone + Sized {
     type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
     type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
 
-    type BindGroupLayout: WasmNotSend + WasmNotSync;
+    type BindGroupLayout: fmt::Debug + WasmNotSend + WasmNotSync;
     type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
     type PipelineLayout: WasmNotSend + WasmNotSync;
     type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;

@@ -91,7 +91,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::{fmt, ops::Range, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 //Note: we can support more samplers if not every one of them is used at a time,
@@ -368,6 +368,7 @@ pub struct Sampler {
     raw: glow::Sampler,
 }
 
+#[derive(Debug)]
 pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
