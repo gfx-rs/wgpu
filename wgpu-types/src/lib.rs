@@ -863,7 +863,7 @@ impl InstanceFlags {
     /// unless the value is "0" in which case the flag is unset. If the environment variable is
     /// not present, then the flag is unaffected.
     ///
-    /// For example `let flags = InstanceFlags::debuggin().with_env();` with `WGPU_VALIDATION=0`
+    /// For example `let flags = InstanceFlags::debugging().with_env();` with `WGPU_VALIDATION=0`
     /// does not contain `InstanceFlags::VALIDATION`.
     ///
     /// The environment variables are named after the flags prefixed with "WGPU_". For example:
