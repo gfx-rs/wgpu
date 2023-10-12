@@ -89,11 +89,7 @@ impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
-            flags: if cfg!(debug_assertions) {
-                hal::InstanceFlags::all()
-            } else {
-                hal::InstanceFlags::empty()
-            },
+            flags: wgt::InstanceFlags::from_build_config().with_env(),
             // Can't rely on having DXC available, so use FXC instead
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
             gles_minor_version: wgt::Gles3MinorVersion::default(),

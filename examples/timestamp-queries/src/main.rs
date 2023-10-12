@@ -179,6 +179,7 @@ async fn run() {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
+        flags: wgpu::InstanceFlags::from_build_config().with_env(),
         dx12_shader_compiler: wgpu::Dx12Compiler::default(),
         gles_minor_version: wgpu::Gles3MinorVersion::default(),
     });

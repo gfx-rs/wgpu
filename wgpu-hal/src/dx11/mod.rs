@@ -99,8 +99,8 @@ pub struct Sampler {}
 pub struct QuerySet {}
 #[derive(Debug)]
 pub struct Fence {}
-#[derive(Debug)]
 
+#[derive(Debug)]
 pub struct BindGroupLayout {}
 #[derive(Debug)]
 pub struct BindGroup {}

@@ -34,7 +34,7 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
     DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
-    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits,
+    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, Limits,
     MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
     PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
@@ -2026,6 +2026,31 @@ impl Instance {
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
                 .create_surface_from_surface_handle(surface_handle)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
+        }
+    }
+
+    /// Creates a surface from `SwapChainPanel`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid SwapChainPanel to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_surface_from_swap_chain_panel(swap_chain_panel)
         };
         Surface {
             context: Arc::clone(&self.context),
