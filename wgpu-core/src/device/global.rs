@@ -1,7 +1,8 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model, command, conv,
+    binding_model::{self, BindGroupLayout},
+    command, conv,
     device::{life::WaitIdleError, map_buffer, queue, Device, DeviceError, HostMap},
     global::Global,
     hal_api::HalApi,
@@ -378,6 +379,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.valid {
+            return Err(DeviceError::Invalid.into());
+        }
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
@@ -435,6 +439,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.valid {
+            return Err(DeviceError::Invalid.into());
+        }
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
@@ -1115,7 +1122,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mut compatible_layout = None;
-            {
+            let layout = {
                 let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
                 if let Some(id) =
                     Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
@@ -1134,18 +1141,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     compatible_layout = Some(id::Valid(id));
                 }
-            }
 
-            let mut layout = match device.create_bind_group_layout(
-                device_id,
-                desc.label.borrow_option(),
-                entry_map,
-            ) {
-                Ok(layout) => layout,
-                Err(e) => break e,
+                if let Some(original_id) = compatible_layout {
+                    let original = &bgl_guard[original_id];
+                    BindGroupLayout {
+                        device_id: original.device_id.clone(),
+                        inner: crate::binding_model::BglOrDuplicate::Duplicate(original_id),
+                        multi_ref_count: crate::MultiRefCount::new(),
+                    }
+                } else {
+                    match device.create_bind_group_layout(
+                        device_id,
+                        desc.label.borrow_option(),
+                        entry_map,
+                    ) {
+                        Ok(layout) => layout,
+                        Err(e) => break e,
+                    }
+                }
             };
-
-            layout.compatible_layout = compatible_layout;
 
             let id = fid.assign(layout, &mut token);
 
@@ -1318,8 +1332,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
 
+            if bind_group_layout.device_id.value.0 != device_id {
+                break DeviceError::WrongDevice.into();
+            }
+
             let mut layout_id = id::Valid(desc.layout);
-            if let Some(id) = bind_group_layout.compatible_layout {
+            if let Some(id) = bind_group_layout.as_duplicate() {
                 layout_id = id;
                 bind_group_layout = &bind_group_layout_guard[id];
             }
@@ -1916,7 +1934,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
             };
 
-            bgl_guard[*id].multi_ref_count.inc();
+            let layout = &bgl_guard[*id];
+            layout.multi_ref_count.inc();
+
+            if G::ids_are_generated_in_wgpu() {
+                return (id.0, None);
+            }
+
+            // The ID is provided externally, so we must create a new bind group layout
+            // with the given ID as a duplicate of the existing one.
+            let new_layout = BindGroupLayout {
+                device_id: layout.device_id.clone(),
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(*id),
+                multi_ref_count: crate::MultiRefCount::new(),
+            };
+
+            let fid = hub.bind_group_layouts.prepare(id_in);
+            let id = fid.assign(new_layout, &mut Token::root());
+
             return (id.0, None);
         };
 
@@ -2228,134 +2263,148 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         log::info!("configuring surface with {:?}", config);
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let error = 'outer: loop {
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
-            };
-            if !device.valid {
-                break DeviceError::Invalid.into();
-            }
+            let hub = A::hub(self);
+            let mut token = Token::root();
 
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
-            }
+            // User callbacks must not be called while we are holding locks.
+            let user_callbacks;
+            {
+                let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+                let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+                let (device_guard, mut token) = hub.devices.read(&mut token);
 
-            let surface = match surface_guard.get_mut(surface_id) {
-                Ok(surface) => surface,
-                Err(_) => break E::InvalidSurface,
-            };
-
-            let caps = unsafe {
-                let suf = A::get_surface(surface);
-                let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
-                    Some(caps) => caps,
-                    None => break E::UnsupportedQueueFamily,
+                let device = match device_guard.get(device_id) {
+                    Ok(device) => device,
+                    Err(_) => break DeviceError::Invalid.into(),
+                };
+                if !device.valid {
+                    break DeviceError::Invalid.into();
                 }
-            };
 
-            let mut hal_view_formats = vec![];
-            for format in config.view_formats.iter() {
-                if *format == config.format {
-                    continue;
+                #[cfg(feature = "trace")]
+                if let Some(ref trace) = device.trace {
+                    trace
+                        .lock()
+                        .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
                 }
-                if !caps.formats.contains(&config.format) {
-                    break 'outer E::UnsupportedFormat {
-                        requested: config.format,
-                        available: caps.formats,
-                    };
+
+                let surface = match surface_guard.get_mut(surface_id) {
+                    Ok(surface) => surface,
+                    Err(_) => break E::InvalidSurface,
+                };
+
+                let caps = unsafe {
+                    let suf = A::get_surface(surface);
+                    let adapter = &adapter_guard[device.adapter_id.value];
+                    match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
+                        Some(caps) => caps,
+                        None => break E::UnsupportedQueueFamily,
+                    }
+                };
+
+                let mut hal_view_formats = vec![];
+                for format in config.view_formats.iter() {
+                    if *format == config.format {
+                        continue;
+                    }
+                    if !caps.formats.contains(&config.format) {
+                        break 'outer E::UnsupportedFormat {
+                            requested: config.format,
+                            available: caps.formats,
+                        };
+                    }
+                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                        break 'outer E::InvalidViewFormat(*format, config.format);
+                    }
+                    hal_view_formats.push(*format);
                 }
-                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    break 'outer E::InvalidViewFormat(*format, config.format);
+
+                if !hal_view_formats.is_empty() {
+                    if let Err(missing_flag) =
+                        device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                    {
+                        break 'outer E::MissingDownlevelFlags(missing_flag);
+                    }
                 }
-                hal_view_formats.push(*format);
-            }
 
-            if !hal_view_formats.is_empty() {
-                if let Err(missing_flag) =
-                    device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
-                {
-                    break 'outer E::MissingDownlevelFlags(missing_flag);
+                let num_frames = present::DESIRED_NUM_FRAMES
+                    .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
+                let mut hal_config = hal::SurfaceConfiguration {
+                    swap_chain_size: num_frames,
+                    present_mode: config.present_mode,
+                    composite_alpha_mode: config.alpha_mode,
+                    format: config.format,
+                    extent: wgt::Extent3d {
+                        width: config.width,
+                        height: config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                    view_formats: hal_view_formats,
+                };
+
+                if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
+                    break error;
                 }
-            }
 
-            let num_frames = present::DESIRED_NUM_FRAMES
-                .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
-            let mut hal_config = hal::SurfaceConfiguration {
-                swap_chain_size: num_frames,
-                present_mode: config.present_mode,
-                composite_alpha_mode: config.alpha_mode,
-                format: config.format,
-                extent: wgt::Extent3d {
-                    width: config.width,
-                    height: config.height,
-                    depth_or_array_layers: 1,
-                },
-                usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
-                view_formats: hal_view_formats,
-            };
-
-            if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
-                break error;
-            }
-
-            // Wait for all work to finish before configuring the surface.
-            if let Err(e) = device.maintain(hub, wgt::Maintain::Wait, &mut token) {
-                break e.into();
-            }
-
-            // All textures must be destroyed before the surface can be re-configured.
-            if let Some(present) = surface.presentation.take() {
-                if present.acquired_texture.is_some() {
-                    break E::PreviousOutputExists;
+                // Wait for all work to finish before configuring the surface.
+                match device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+                    Ok((closures, _)) => {
+                        user_callbacks = closures;
+                    }
+                    Err(e) => {
+                        break e.into();
+                    }
                 }
-            }
 
-            // TODO: Texture views may still be alive that point to the texture.
-            // this will allow the user to render to the surface texture, long after
-            // it has been removed.
-            //
-            // https://github.com/gfx-rs/wgpu/issues/4105
+                // All textures must be destroyed before the surface can be re-configured.
+                if let Some(present) = surface.presentation.take() {
+                    if present.acquired_texture.is_some() {
+                        break E::PreviousOutputExists;
+                    }
+                }
 
-            match unsafe {
-                A::get_surface_mut(surface)
-                    .unwrap()
-                    .raw
-                    .configure(&device.raw, &hal_config)
-            } {
-                Ok(()) => (),
-                Err(error) => {
-                    break match error {
-                        hal::SurfaceError::Outdated | hal::SurfaceError::Lost => E::InvalidSurface,
-                        hal::SurfaceError::Device(error) => E::Device(error.into()),
-                        hal::SurfaceError::Other(message) => {
-                            log::error!("surface configuration failed: {}", message);
-                            E::InvalidSurface
+                // TODO: Texture views may still be alive that point to the texture.
+                // this will allow the user to render to the surface texture, long after
+                // it has been removed.
+                //
+                // https://github.com/gfx-rs/wgpu/issues/4105
+
+                match unsafe {
+                    A::get_surface_mut(surface)
+                        .unwrap()
+                        .raw
+                        .configure(&device.raw, &hal_config)
+                } {
+                    Ok(()) => (),
+                    Err(error) => {
+                        break match error {
+                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
+                                E::InvalidSurface
+                            }
+                            hal::SurfaceError::Device(error) => E::Device(error.into()),
+                            hal::SurfaceError::Other(message) => {
+                                log::error!("surface configuration failed: {}", message);
+                                E::InvalidSurface
+                            }
                         }
                     }
                 }
+
+                surface.presentation = Some(present::Presentation {
+                    device_id: Stored {
+                        value: id::Valid(device_id),
+                        ref_count: device.life_guard.add_ref(),
+                    },
+                    config: config.clone(),
+                    num_frames,
+                    acquired_texture: None,
+                });
             }
 
-            surface.presentation = Some(present::Presentation {
-                device_id: Stored {
-                    value: id::Valid(device_id),
-                    ref_count: device.life_guard.add_ref(),
-                },
-                config: config.clone(),
-                num_frames,
-                acquired_texture: None,
-            });
+            user_callbacks.fire();
 
             return None;
         };
@@ -2371,6 +2420,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
         device.lock_life(&mut token).triage_suspected(
             hub,
             &device.trackers,
@@ -2682,7 +2734,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[buffer.device_id.value];
             if !device.valid {
-                return Err((op, BufferAccessError::Invalid));
+                return Err((op, DeviceError::Invalid.into()));
             }
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
@@ -2737,6 +2789,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &device_guard[device_id];
+        // Validity of device was confirmed in the code block that set device_id.
         device
             .lock_life(&mut token)
             .map(id::Valid(buffer_id), ref_count);
@@ -2926,6 +2979,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get_mut(buffer_id)
                 .map_err(|_| BufferAccessError::Invalid)?;
             let device = &mut device_guard[buffer.device_id.value];
+            if !device.valid {
+                return Err(DeviceError::Invalid.into());
+            }
 
             closure = self.buffer_unmap_inner(buffer_id, buffer, device)
         }

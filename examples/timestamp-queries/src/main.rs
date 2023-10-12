@@ -141,7 +141,7 @@ impl Queries {
         encoder.resolve_query_set(
             &self.set,
             // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Musn't be larger than the number valid queries in the set.
-            0..self.next_unused_query as u32,
+            0..self.next_unused_query,
             &self.resolve_buffer,
             0,
         );
@@ -179,6 +179,7 @@ async fn run() {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
+        flags: wgpu::InstanceFlags::from_build_config().with_env(),
         dx12_shader_compiler: wgpu::Dx12Compiler::default(),
         gles_minor_version: wgpu::Gles3MinorVersion::default(),
     });

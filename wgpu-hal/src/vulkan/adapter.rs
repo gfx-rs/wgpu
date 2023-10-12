@@ -1267,7 +1267,7 @@ impl super::Adapter {
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
-                self.instance.flags.contains(crate::InstanceFlags::DEBUG),
+                self.instance.flags.contains(wgt::InstanceFlags::DEBUG),
             );
             flags.set(
                 spv::WriterFlags::LABEL_VARYINGS,

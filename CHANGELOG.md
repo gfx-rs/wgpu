@@ -42,6 +42,8 @@ Bottom level categories:
 
 ### Major changes
 
+- Update Naga to 9eb3a1dc (2023-10-12), which includes support for WGSL constant expressions. By @jimblandy in [#4233](https://github.com/gfx-rs/wgpu/pull/4233)
+
 #### Pass timestamp queries
 
 Addition of `TimestampWrites` to compute and render passes to allow profiling.
@@ -96,21 +98,23 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 - Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
 - Re-export Naga. By @exrook in [#4172](https://github.com/gfx-rs/wgpu/pull/4172)
+- Add WinUI 3 SwapChainPanel support. By @ddrboxman in [#4191](https://github.com/gfx-rs/wgpu/pull/4191)
 
 ### Changes
 
 #### General
 
-- Update Naga to df8107b7 (2023-9-15). By @jimblandy in [#4149](https://github.com/gfx-rs/wgpu/pull/4149)
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
 - Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 - Add validation in accordance with WebGPU `setViewport` valid usage for `x`, `y` and `this.[[attachment_size]]`. By @James2022-rgb in [#4058](https://github.com/gfx-rs/wgpu/pull/4058)
 - `wgpu::CreateSurfaceError` and `wgpu::RequestDeviceError` now give details of the failure, but no longer implement `PartialEq` and cannot be constructed. By @kpreid in [#4066](https://github.com/gfx-rs/wgpu/pull/4066) and [#4145](https://github.com/gfx-rs/wgpu/pull/4145)
 - Make `WGPU_POWER_PREF=none` a valid value. By @fornwall in [4076](https://github.com/gfx-rs/wgpu/pull/4076)
 - Support dual source blending in OpenGL ES, Metal, Vulkan & DX12. By @freqmod in [4022](https://github.com/gfx-rs/wgpu/pull/4022)
-- Add stub support for device destroy and device validity. By @bradwerth in [4163](https://github.com/gfx-rs/wgpu/pull/4163)
+- Add stub support for device destroy and device validity. By @bradwerth in [4163](https://github.com/gfx-rs/wgpu/pull/4163) and in [4212](https://github.com/gfx-rs/wgpu/pull/4212)
 - Add trace-level logging for most entry points in wgpu-core By @nical in [4183](https://github.com/gfx-rs/wgpu/pull/4183)
 - Add `Rgb10a2Uint` format. By @teoxoy in [4199](https://github.com/gfx-rs/wgpu/pull/4199)
+- Validate that resources are used on the right device. By @nical in [4207](https://github.com/gfx-rs/wgpu/pull/4207)
+- Expose instance flags. By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
 
 #### Vulkan
 
@@ -139,6 +143,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - `Queue::on_submitted_work_done` callbacks will now always be called after all previous `BufferSlice::map_async` callbacks, even when there are no active submissions. By @cwfitzgerald in [#4036](https://github.com/gfx-rs/wgpu/pull/4036).
 - Fix `clear` texture views being leaked when `wgpu::SurfaceTexture` is dropped before it is presented. By @rajveermalviya in [#4057](https://github.com/gfx-rs/wgpu/pull/4057).
 - Add `Feature::SHADER_UNUSED_VERTEX_OUTPUT` to allow unused vertex shader outputs. By @Aaron1011 in [#4116](https://github.com/gfx-rs/wgpu/pull/4116).
+- Fix a panic in `surface_configure`. By @nical in [#4220](https://github.com/gfx-rs/wgpu/pull/4220) and [#4227](https://github.com/gfx-rs/wgpu/pull/4227)
 
 #### Vulkan
 - Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
@@ -161,6 +166,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 #### WebGPU
 
 - Ensure that limit requests and reporting is done correctly. By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)
+- Validate usage of polygon mode. By @teoxoy in [#4196](https://github.com/gfx-rs/wgpu/pull/4196)
 
 #### Testing
 
@@ -169,6 +175,18 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 ### Documentation
 
 - Add an overview of `RenderPass` and how render state works. By @kpreid in [#4055](https://github.com/gfx-rs/wgpu/pull/4055)
+
+### Examples
+
+- Added the following examples: By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
+  - repeated-compute
+  - storage-texture
+  - render-to-texture
+  - uniform-values
+  - hello-workgroups
+  - hello-synchronization
+- Created `wgpu-example::utils` module to contain misc functions and such that are common code but aren't part of the example framework. Add to it the functions `output_image_wasm` and `output_image_native`, both for outputting `Vec<u8>` RGBA images either to the disc or the web page. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
+- Removed `capture` example as it had issues (did not run on wasm) and has been replaced by `render-to-texture` (see above). By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 
 ## v0.17.2 (2023-10-03)
 
@@ -244,6 +262,8 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 - Work around [Vulkan-ValidationLayers#5671](https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671) by ignoring reports of violations of [VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-01912). By @jimblandy in [#3809](https://github.com/gfx-rs/wgpu/pull/3809).
 
 ### Added/New Features
+
+#### General
 
 - Empty scissor rects are allowed now, matching the specification. by @PJB3005 in [#3863](https://github.com/gfx-rs/wgpu/pull/3863).
 - Add back components info to `TextureFormat`s. By @teoxoy in [#3843](https://github.com/gfx-rs/wgpu/pull/3843).
@@ -846,6 +866,7 @@ By @jimblandy in [#3254](https://github.com/gfx-rs/wgpu/pull/3254).
 - Move `ResourceMetadata` into its own module. By @jimblandy in [#3213](https://github.com/gfx-rs/wgpu/pull/3213)
 - Add WebAssembly testing infrastructure. By @haraldreingruber in [#3238](https://github.com/gfx-rs/wgpu/pull/3238)
 - Error message when you forget to use cargo-nextest. By @cwfitzgerald in [#3293](https://github.com/gfx-rs/wgpu/pull/3293)
+- Fix all suggestions from `cargo clippy`
 
 ## wgpu-0.14.2 (2022-11-28)
 

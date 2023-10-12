@@ -189,7 +189,7 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
@@ -207,7 +207,7 @@ pub trait Api: Clone + Sized {
     type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
     type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
 
-    type BindGroupLayout: WasmNotSend + WasmNotSync;
+    type BindGroupLayout: fmt::Debug + WasmNotSend + WasmNotSync;
     type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
     type PipelineLayout: WasmNotSend + WasmNotSync;
     type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
@@ -609,17 +609,6 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
 }
 
 bitflags!(
-    /// Instance initialization flags.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct InstanceFlags: u32 {
-        /// Generate debug information in shaders and objects.
-        const DEBUG = 1 << 0;
-        /// Enable validation, if possible.
-        const VALIDATION = 1 << 1;
-    }
-);
-
-bitflags!(
     /// Pipeline layout creation flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
@@ -834,7 +823,7 @@ bitflags::bitflags! {
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
-    pub flags: InstanceFlags,
+    pub flags: wgt::InstanceFlags,
     pub dx12_shader_compiler: wgt::Dx12Compiler,
     pub gles_minor_version: wgt::Gles3MinorVersion,
 }

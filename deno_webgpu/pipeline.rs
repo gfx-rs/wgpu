@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -81,13 +81,14 @@ pub struct GpuProgrammableStage {
     // constants: HashMap<String, GPUPipelineConstantValue>
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_compute_pipeline(
     state: &mut OpState,
-    device_rid: ResourceId,
-    label: Option<String>,
-    layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
-    compute: GpuProgrammableStage,
+    #[smi] device_rid: ResourceId,
+    #[string] label: Cow<str>,
+    #[serde] layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
+    #[serde] compute: GpuProgrammableStage,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -108,7 +109,7 @@ pub fn op_webgpu_create_compute_pipeline(
         .get::<super::shader::WebGpuShaderModule>(compute.module)?;
 
     let descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
-        label: label.map(Cow::from),
+        label: Some(label),
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.1,
@@ -148,10 +149,11 @@ pub struct PipelineLayout {
     err: Option<WebGpuError>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_compute_pipeline_get_bind_group_layout(
     state: &mut OpState,
-    compute_pipeline_rid: ResourceId,
+    #[smi] compute_pipeline_rid: ResourceId,
     index: u32,
 ) -> Result<PipelineLayout, AnyError> {
     let instance = state.borrow::<super::Instance>();
@@ -314,7 +316,7 @@ struct GpuFragmentState {
 #[serde(rename_all = "camelCase")]
 pub struct CreateRenderPipelineArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
     vertex: GpuVertexState,
     primitive: GpuPrimitiveState,
@@ -323,10 +325,11 @@ pub struct CreateRenderPipelineArgs {
     fragment: Option<GpuFragmentState>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_render_pipeline(
     state: &mut OpState,
-    args: CreateRenderPipelineArgs,
+    #[serde] args: CreateRenderPipelineArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -372,7 +375,7 @@ pub fn op_webgpu_create_render_pipeline(
         .collect();
 
     let descriptor = wgpu_core::pipeline::RenderPipelineDescriptor {
-        label: args.label.map(Cow::Owned),
+        label: Some(Cow::Owned(args.label)),
         layout,
         vertex: wgpu_core::pipeline::VertexState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
@@ -412,10 +415,11 @@ pub fn op_webgpu_create_render_pipeline(
     Ok(WebGpuResult::rid_err(rid, maybe_err))
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_render_pipeline_get_bind_group_layout(
     state: &mut OpState,
-    render_pipeline_rid: ResourceId,
+    #[smi] render_pipeline_rid: ResourceId,
     index: u32,
 ) -> Result<PipelineLayout, AnyError> {
     let instance = state.borrow::<super::Instance>();

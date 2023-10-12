@@ -72,7 +72,7 @@ fn main() {
 
     println!("Initializing external GL context");
     let egl = khronos_egl::Instance::new(khronos_egl::Static);
-    let display = egl.get_display(khronos_egl::DEFAULT_DISPLAY).unwrap();
+    let display = unsafe { egl.get_display(khronos_egl::DEFAULT_DISPLAY) }.unwrap();
     egl.initialize(display)
         .expect("unable to initialize display");
 

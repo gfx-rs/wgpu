@@ -73,14 +73,9 @@ impl Instance {
     pub fn new(name: &str, instance_desc: wgt::InstanceDescriptor) -> Self {
         fn init<A: HalApi>(_: A, instance_desc: &wgt::InstanceDescriptor) -> Option<A::Instance> {
             if instance_desc.backends.contains(A::VARIANT.into()) {
-                let mut flags = hal::InstanceFlags::empty();
-                if cfg!(debug_assertions) {
-                    flags |= hal::InstanceFlags::VALIDATION;
-                    flags |= hal::InstanceFlags::DEBUG;
-                }
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
-                    flags,
+                    flags: instance_desc.flags,
                     dx12_shader_compiler: instance_desc.dx12_shader_compiler.clone(),
                     gles_minor_version: instance_desc.gles_minor_version,
                 };
@@ -645,6 +640,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             vulkan: None,
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
                 raw: unsafe { inst.create_surface_from_surface_handle(surface_handle) },
+            }),
+            dx11: None,
+            #[cfg(feature = "gles")]
+            gl: None,
+        };
+
+        let mut token = Token::root();
+        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
+        id.0
+    }
+
+    #[cfg(all(feature = "dx12", windows))]
+    /// # Safety
+    ///
+    /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
+    pub unsafe fn instance_create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
+
+        let surface = Surface {
+            presentation: None,
+            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            vulkan: None,
+            dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
+                raw: unsafe { inst.create_surface_from_swap_chain_panel(swap_chain_panel as _) },
             }),
             dx11: None,
             #[cfg(feature = "gles")]

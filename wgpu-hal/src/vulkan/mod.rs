@@ -43,7 +43,7 @@ use parking_lot::Mutex;
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
@@ -106,7 +106,7 @@ pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
     entry: ash::Entry,
