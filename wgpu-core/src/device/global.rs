@@ -1889,7 +1889,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         log::debug!("configuring surface with {:?}", config);
 
-        let error = 'outer: loop {          
+        let error = 'outer: loop {
             // User callbacks must not be called while we are holding locks.
             let user_callbacks;
             {
@@ -1972,7 +1972,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
                     break error;
                 }
-              
+
                 // Wait for all work to finish before configuring the surface.
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
@@ -2007,7 +2007,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Ok(()) => (),
                     Err(error) => {
                         break match error {
-                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => E::InvalidSurface,
+                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
+                                E::InvalidSurface
+                            }
                             hal::SurfaceError::Device(error) => E::Device(error.into()),
                             hal::SurfaceError::Other(message) => {
                                 log::error!("surface configuration failed: {}", message);
@@ -2024,10 +2026,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_frames,
                     acquired_texture: None,
                 });
-          }
-            
-          user_callbacks.fire();
-          return None;
+            }
+
+            user_callbacks.fire();
+            return None;
         };
 
         Some(error)
