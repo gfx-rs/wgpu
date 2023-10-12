@@ -457,10 +457,6 @@ impl super::Adapter {
             !cfg!(target_arch = "wasm32"),
         );
         private_caps.set(
-            super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER,
-            !cfg!(target_arch = "wasm32"),
-        );
-        private_caps.set(
             super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
             cfg!(target_arch = "wasm32"),
         );
