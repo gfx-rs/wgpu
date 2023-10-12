@@ -1181,10 +1181,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let (const_initializer, initializer) = {
                         match initializer {
-                            Some(init) if ctx.expression_constness.is_const(init) => {
-                                (Some(init), is_inside_loop.then_some(init))
+                            Some(init) => {
+                                // It's not correct to hoist the initializer up
+                                // to the top of the function if:
+                                // - the initialization is inside a loop, and should
+                                //   take place on every iteration, or
+                                // - the initialization is not a constant
+                                //   expression, so its value depends on the
+                                //   state at the point of initialization.
+                                if is_inside_loop || !ctx.expression_constness.is_const(init) {
+                                    (None, Some(init))
+                                } else {
+                                    (Some(init), None)
+                                }
                             }
-                            Some(init) => (None, Some(init)),
                             None => (None, None),
                         }
                     };

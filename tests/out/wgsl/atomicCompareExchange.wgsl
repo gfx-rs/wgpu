@@ -9,7 +9,7 @@ var<storage, read_write> arr_u32_: array<atomic<u32>, 128>;
 fn test_atomic_compare_exchange_i32_() {
     var i: u32 = 0u;
     var old: i32;
-    var exchanged: bool = false;
+    var exchanged: bool;
 
     loop {
         let _e2 = i;
@@ -51,7 +51,7 @@ fn test_atomic_compare_exchange_i32_() {
 fn test_atomic_compare_exchange_u32_() {
     var i_1: u32 = 0u;
     var old_1: u32;
-    var exchanged_1: bool = false;
+    var exchanged_1: bool;
 
     loop {
         let _e2 = i_1;
