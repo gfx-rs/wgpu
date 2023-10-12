@@ -168,6 +168,10 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Ensure that limit requests and reporting is done correctly. By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)
 - Validate usage of polygon mode. By @teoxoy in [#4196](https://github.com/gfx-rs/wgpu/pull/4196)
 
+#### GLES
+
+- enable/disable blending per attachment only when available (on ES 3.2 or higher). By @teoxoy in [#4234](https://github.com/gfx-rs/wgpu/pull/4234)
+
 #### Testing
 
 - Skip `test_multithreaded_compute` on MoltenVK. By @jimblandy in [#4096](https://github.com/gfx-rs/wgpu/pull/4096).
