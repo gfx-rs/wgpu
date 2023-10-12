@@ -136,7 +136,7 @@ impl Instance {
                 d3d12::ComPtr::from_raw(swap_chain_panel)
             }),
             supports_allow_tearing: self.supports_allow_tearing,
-            swap_chain: None,
+            swap_chain: RwLock::new(None),
         }
     }
 }
