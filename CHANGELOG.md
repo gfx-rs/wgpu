@@ -42,6 +42,8 @@ Bottom level categories:
 
 ### Major changes
 
+- Update Naga to 9eb3a1dc (2023-10-12), which includes support for WGSL constant expressions. By @jimblandy in [#4233](https://github.com/gfx-rs/wgpu/pull/4233)
+
 #### Pass timestamp queries
 
 Addition of `TimestampWrites` to compute and render passes to allow profiling.
@@ -102,7 +104,6 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 #### General
 
-- Update Naga to df8107b7 (2023-9-15). By @jimblandy in [#4149](https://github.com/gfx-rs/wgpu/pull/4149)
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
 - Validate `DownlevelFlags::READ_ONLY_DEPTH_STENCIL`. By @teoxoy in [#4031](https://github.com/gfx-rs/wgpu/pull/4031)
 - Add validation in accordance with WebGPU `setViewport` valid usage for `x`, `y` and `this.[[attachment_size]]`. By @James2022-rgb in [#4058](https://github.com/gfx-rs/wgpu/pull/4058)
