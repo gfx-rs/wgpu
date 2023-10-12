@@ -736,9 +736,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .dx12
                     .as_ref()
                     .map(|inst| HalSurface {
-                        raw: unsafe {
+                        raw: Arc::new(unsafe {
                             inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
-                        },
+                        }),
                     })
                     .unwrap();
                 AnySurface::new(hal_surface)
