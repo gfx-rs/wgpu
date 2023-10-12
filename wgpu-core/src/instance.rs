@@ -728,20 +728,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
 
         let surface = Surface {
-            presentation: None,
-            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-            vulkan: None,
-            dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
-                raw: unsafe { inst.create_surface_from_swap_chain_panel(swap_chain_panel as _) },
-            }),
-            dx11: None,
-            #[cfg(feature = "gles")]
-            gl: None,
+            presentation: Mutex::new(None),
+            info: ResourceInfo::new("<Surface>"),
+            raw: {
+                let hal_surface: HalSurface<hal::api::Dx12> = self
+                    .instance
+                    .dx12
+                    .as_ref()
+                    .map(|inst| HalSurface {
+                        raw: unsafe {
+                            inst.create_surface_from_swap_chain_panel(swap_chain_panel as _)
+                        },
+                    })
+                    .unwrap();
+                AnySurface::new(hal_surface)
+            },
         };
 
-        let mut token = Token::root();
-        let id = self.surfaces.prepare(id_in).assign(surface, &mut token);
-        id.0
+        let (id, _) = self.surfaces.prepare::<G>(id_in).assign(surface);
+        id
     }
 
     pub fn surface_drop(&self, id: SurfaceId) {

@@ -1978,7 +1978,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let fence = fence.as_ref().unwrap();
                 match device.maintain(hub, fence, wgt::Maintain::Wait) {
                     Ok((closures, _)) => {
-                        user_callbacks = Some(closures);
+                        user_callbacks = closures;
                     }
                     Err(e) => {
                         break e.into();
