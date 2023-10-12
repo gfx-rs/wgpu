@@ -1,3 +1,5 @@
+//! Image comparison utilities
+
 use std::{borrow::Cow, ffi::OsStr, path::Path};
 
 use wgpu::util::{align_to, DeviceExt};
@@ -58,10 +60,6 @@ async fn write_png(
     let mut writer = encoder.write_header().unwrap();
 
     writer.write_image_data(data).unwrap();
-}
-
-pub fn calc_difference(lhs: u8, rhs: u8) -> u8 {
-    (lhs as i16 - rhs as i16).unsigned_abs() as u8
 }
 
 #[cfg_attr(target_arch = "wasm32", allow(unused))]

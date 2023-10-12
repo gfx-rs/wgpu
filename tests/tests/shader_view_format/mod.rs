@@ -1,8 +1,5 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
-use wgpu_test::{
-    gpu_test, image::calc_difference, FailureCase, GpuTestConfiguration, TestParameters,
-    TestingContext,
-};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
 #[gpu_test]
 static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -195,10 +192,10 @@ fn reinterpret(
             let expect = expect_data[(h * size.width + w) as usize];
             let tolerance = tolerance_data[(h * size.width + w) as usize];
             let index = (w * 4 + offset) as usize;
-            if calc_difference(expect[0], data[index]) > tolerance[0]
-                || calc_difference(expect[1], data[index + 1]) > tolerance[1]
-                || calc_difference(expect[2], data[index + 2]) > tolerance[2]
-                || calc_difference(expect[3], data[index + 3]) > tolerance[3]
+            if expect[0].abs_diff(data[index]) > tolerance[0]
+                || expect[1].abs_diff(data[index + 1]) > tolerance[1]
+                || expect[2].abs_diff(data[index + 2]) > tolerance[2]
+                || expect[3].abs_diff(data[index + 3]) > tolerance[3]
             {
                 panic!(
                     "Reinterpret {:?} as {:?} mismatch! expect {:?} get [{}, {}, {}, {}]",

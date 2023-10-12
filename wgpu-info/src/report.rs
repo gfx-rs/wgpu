@@ -7,6 +7,9 @@ use wgpu::{
 
 use crate::texture;
 
+/// Report specifying the capabilities of the GPUs on the system.
+///
+/// Must be synchronized with the definition on tests/src/report.rs.
 #[derive(Deserialize, Serialize)]
 pub struct GpuReport {
     pub devices: Vec<AdapterReport>,
@@ -48,6 +51,9 @@ impl GpuReport {
     }
 }
 
+/// A single report of the capabilities of an Adapter.
+///
+/// Must be synchronized with the definition on tests/src/report.rs.
 #[derive(Deserialize, Serialize)]
 pub struct AdapterReport {
     pub info: AdapterInfo,

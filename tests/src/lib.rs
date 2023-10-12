@@ -1,4 +1,4 @@
-//! This module contains common test-only code that needs to be shared between the examples and the tests.
+//! Test utilities for the wgpu repository.
 
 mod config;
 pub mod image;
@@ -21,7 +21,7 @@ pub use params::{FailureCase, FailureReasons, TestParameters};
 pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 
-// Run some code in an error scope and assert that validation fails.
+/// Run some code in an error scope and assert that validation fails.
 pub fn fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
@@ -30,7 +30,7 @@ pub fn fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
     result
 }
 
-// Run some code in an error scope and assert that validation succeeds.
+/// Run some code in an error scope and assert that validation succeeds.
 pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
@@ -39,8 +39,8 @@ pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
     result
 }
 
-// Run some code in an error scope and assert that validation succeeds or fails depending on the
-// provided `should_fail` boolean.
+/// Run some code in an error scope and assert that validation succeeds or fails depending on the
+/// provided `should_fail` boolean.
 pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnce() -> T) -> T {
     if should_fail {
         fail(device, callback)
@@ -49,6 +49,7 @@ pub fn fail_if<T>(device: &wgpu::Device, should_fail: bool, callback: impl FnOnc
     }
 }
 
+/// Adds the necissary main function for our gpu test harness.
 #[macro_export]
 macro_rules! gpu_test_main {
     () => {

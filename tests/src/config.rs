@@ -18,6 +18,7 @@ cfg_if::cfg_if! {
     }
 }
 
+/// Configuration for a GPU test.
 #[derive(Clone)]
 pub struct GpuTestConfiguration {
     pub(crate) name: String,
@@ -34,6 +35,7 @@ impl GpuTestConfiguration {
         }
     }
 
+    /// Set the name of the test. Must be unique across all tests in the binary.
     pub fn name(self, name: &str) -> Self {
         Self {
             name: String::from(name),
@@ -72,6 +74,7 @@ impl GpuTestConfiguration {
         Self { name: full, ..self }
     }
 
+    /// Set the parameters that the test needs to succeed.
     pub fn parameters(self, parameters: TestParameters) -> Self {
         Self {
             params: parameters,
@@ -79,6 +82,7 @@ impl GpuTestConfiguration {
         }
     }
 
+    /// Make the test function an synchronous function.
     pub fn run_sync(
         self,
         test: impl Fn(TestingContext) + Copy + RunTestSendSync + 'static,
@@ -89,6 +93,7 @@ impl GpuTestConfiguration {
         }
     }
 
+    /// Make the test function an asynchronous function/future.
     pub fn run_async<F, R>(self, test: F) -> Self
     where
         F: Fn(TestingContext) -> R + RunTestSendSync + 'static,

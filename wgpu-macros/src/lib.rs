@@ -3,6 +3,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::Ident;
 
+/// Creates a test that will run on all gpus on a given system.
+///
+/// Apply this macro to a static variable with a type that can be converted to a `GpuTestConfiguration`.
 #[proc_macro_attribute]
 pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_static = syn::parse_macro_input!(item as syn::ItemStatic);

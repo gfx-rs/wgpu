@@ -200,7 +200,7 @@ const LOWEST_DOWNLEVEL_PROPERTIES: wgpu::DownlevelCapabilities = DownlevelCapabi
     shader_model: wgt::ShaderModel::Sm2,
 };
 
-// This information determines if a test should run.
+/// This information determines if a test should run.
 #[derive(Clone)]
 pub struct TestParameters {
     pub required_features: Features,
@@ -227,6 +227,7 @@ impl Default for TestParameters {
 }
 
 bitflags::bitflags! {
+    /// Ways that a given test can be expected to fail.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct FailureReasons: u8 {
         const BACKEND = 1 << 0;
@@ -275,6 +276,7 @@ impl TestParameters {
     }
 }
 
+/// Information about a test, including if if it should be skipped.
 pub struct TestInfo {
     pub skip: bool,
     pub expected_failure_reason: Option<FailureReasons>,

@@ -1,4 +1,7 @@
 #![cfg(not(target_arch = "wasm32"))]
+//! Infrastructure for the native, `cargo-nextest` based harness.
+//!
+//! This is largly used by [`gpu_test_main`](crate::gpu_test_main) and [`gpu_test`](crate::gpu_test).
 
 use std::{future::Future, pin::Pin};
 
@@ -47,10 +50,13 @@ impl NativeTest {
     }
 }
 
+#[doc(hidden)]
 pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(Vec::new());
 
+/// Return value for the main function.
 pub type MainResult = anyhow::Result<()>;
 
+/// Main function that runs every gpu function once for every adapter on the system.
 pub fn main() -> MainResult {
     use anyhow::Context;
 

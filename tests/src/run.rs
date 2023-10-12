@@ -11,16 +11,21 @@ use crate::{
     GpuTestConfiguration,
 };
 
+/// Parameters and resources hadned to the test function.
 pub struct TestingContext {
     pub adapter: Adapter,
-    pub adapter_info: wgt::AdapterInfo,
-    pub adapter_downlevel_capabilities: wgt::DownlevelCapabilities,
+    pub adapter_info: wgpu::AdapterInfo,
+    pub adapter_downlevel_capabilities: wgpu::DownlevelCapabilities,
     pub device: Device,
-    pub device_features: wgt::Features,
-    pub device_limits: wgt::Limits,
+    pub device_features: wgpu::Features,
+    pub device_limits: wgpu::Limits,
     pub queue: Queue,
 }
 
+/// Execute the given test configuration with the given adapter index.
+///
+/// If test_info is specified, will use the information whether to skip the test.
+/// If it is not, we'll create the test info from the adapter itself.
 pub async fn execute_test(
     config: GpuTestConfiguration,
     test_info: Option<TestInfo>,

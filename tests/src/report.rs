@@ -5,6 +5,9 @@ use wgpu::{
     AdapterInfo, DownlevelCapabilities, Features, Limits, TextureFormat, TextureFormatFeatures,
 };
 
+/// Report specifying the capabilities of the GPUs on the system.
+///
+/// Must be synchronized with the definition on wgpu-info/src/report.rs.
 #[derive(Deserialize)]
 pub(crate) struct GpuReport {
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
@@ -18,6 +21,9 @@ impl GpuReport {
     }
 }
 
+/// A single report of the capabilities of an Adapter.
+///
+/// Must be synchronized with the definition on wgpu-info/src/report.rs.
 #[derive(Deserialize)]
 pub(crate) struct AdapterReport {
     pub info: AdapterInfo,

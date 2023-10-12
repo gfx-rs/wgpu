@@ -1,6 +1,7 @@
 use wgpu::{Adapter, Device, Instance, Queue};
 use wgt::{Backends, Features, Limits};
 
+/// Initialize a wgpu instance with the options from the environment.
 pub fn initialize_instance() -> Instance {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
@@ -13,6 +14,7 @@ pub fn initialize_instance() -> Instance {
     })
 }
 
+/// Initialize a wgpu adapter, taking the `n`th adapter from the instance.
 pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     #[allow(unused_variables)]
@@ -60,6 +62,7 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
     (adapter, surface_guard)
 }
 
+/// Initialize a wgpu device from a given adapter.
 pub async fn initialize_device(
     adapter: &Adapter,
     features: Features,
@@ -82,6 +85,7 @@ pub async fn initialize_device(
     }
 }
 
+/// Create a canvas for testing.
 #[cfg(target_arch = "wasm32")]
 pub fn initialize_html_canvas() -> web_sys::HtmlCanvasElement {
     use wasm_bindgen::JsCast;
