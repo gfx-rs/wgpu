@@ -844,7 +844,7 @@ fn inject_standard_builtins(
                 let fun = match name {
                     "all" => MacroCall::Relational(RelationalFunction::All),
                     "any" => MacroCall::Relational(RelationalFunction::Any),
-                    "not" => MacroCall::Unary(UnaryOperator::Not),
+                    "not" => MacroCall::Unary(UnaryOperator::LogicalNot),
                     _ => unreachable!(),
                 };
 

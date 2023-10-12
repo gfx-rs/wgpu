@@ -1019,10 +1019,13 @@ impl<'a> ConstantEvaluator<'a> {
                     Literal::F32(v) => Literal::F32(-v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
-                UnaryOperator::Not => match value {
+                UnaryOperator::LogicalNot => match value {
+                    Literal::Bool(v) => Literal::Bool(!v),
+                    _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
+                },
+                UnaryOperator::BitwiseNot => match value {
                     Literal::I32(v) => Literal::I32(!v),
                     Literal::U32(v) => Literal::U32(!v),
-                    Literal::Bool(v) => Literal::Bool(!v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
                 },
             }),
@@ -1344,12 +1347,12 @@ mod tests {
         };
 
         let expr3 = Expression::Unary {
-            op: UnaryOperator::Not,
+            op: UnaryOperator::BitwiseNot,
             expr,
         };
 
         let expr4 = Expression::Unary {
-            op: UnaryOperator::Not,
+            op: UnaryOperator::BitwiseNot,
             expr: expr1,
         };
 

@@ -2566,23 +2566,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Expression::Unary { op, expr } => {
-                use crate::{ScalarKind as Sk, UnaryOperator as Uo};
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
                 let op_str = match op {
-                    Uo::Negate => "-",
-                    Uo::Not => match func_ctx.info[expr]
-                        .ty
-                        .inner_with(&module.types)
-                        .scalar_kind()
-                    {
-                        Some(Sk::Sint) | Some(Sk::Uint) => "~",
-                        Some(Sk::Bool) => "!",
-                        ref other => {
-                            return Err(Error::Custom(format!(
-                                "Cannot apply not to type {other:?}"
-                            )))
-                        }
-                    },
+                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::LogicalNot => "!",
+                    crate::UnaryOperator::BitwiseNot => "~",
                 };
                 write!(self.out, "{op_str}(")?;
                 self.write_expr(module, expr, func_ctx)?;

@@ -741,11 +741,21 @@ impl Parser {
                 let span = self.peek_rule_span(lexer);
                 ctx.expressions.append(expr, span)
             }
-            Token::Operation('!' | '~') => {
+            Token::Operation('!') => {
                 let _ = lexer.next();
                 let expr = self.unary_expression(lexer, ctx.reborrow())?;
                 let expr = ast::Expression::Unary {
-                    op: crate::UnaryOperator::Not,
+                    op: crate::UnaryOperator::LogicalNot,
+                    expr,
+                };
+                let span = self.peek_rule_span(lexer);
+                ctx.expressions.append(expr, span)
+            }
+            Token::Operation('~') => {
+                let _ = lexer.next();
+                let expr = self.unary_expression(lexer, ctx.reborrow())?;
+                let expr = ast::Expression::Unary {
+                    op: crate::UnaryOperator::BitwiseNot,
                     expr,
                 };
                 let span = self.peek_rule_span(lexer);

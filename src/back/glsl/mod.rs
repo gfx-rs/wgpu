@@ -2762,38 +2762,18 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 write!(self.out, ")")?;
             }
-            // `Unary` is pretty straightforward
-            // "-" - for `Negate`
-            // "~" - for `Not` if it's an integer
-            // "!" - for `Not` if it's a boolean
-            //
-            // We also wrap the everything in parentheses to avoid precedence issues
             Expression::Unary { op, expr } => {
-                use crate::{ScalarKind as Sk, UnaryOperator as Uo};
-
-                let ty = ctx.info[expr].ty.inner_with(&self.module.types);
-
-                match *ty {
-                    TypeInner::Vector { kind: Sk::Bool, .. } => {
-                        write!(self.out, "not(")?;
+                let operator_or_fn = match op {
+                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::LogicalNot => {
+                        match *ctx.info[expr].ty.inner_with(&self.module.types) {
+                            TypeInner::Vector { .. } => "not",
+                            _ => "!",
+                        }
                     }
-                    _ => {
-                        let operator = match op {
-                            Uo::Negate => "-",
-                            Uo::Not => match ty.scalar_kind() {
-                                Some(Sk::Sint) | Some(Sk::Uint) => "~",
-                                Some(Sk::Bool) => "!",
-                                ref other => {
-                                    return Err(Error::Custom(format!(
-                                        "Cannot apply not to type {other:?}"
-                                    )))
-                                }
-                            },
-                        };
-
-                        write!(self.out, "{operator}(")?;
-                    }
-                }
+                    crate::UnaryOperator::BitwiseNot => "~",
+                };
+                write!(self.out, "{operator_or_fn}(")?;
 
                 self.write_expr(expr, ctx)?;
 

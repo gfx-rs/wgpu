@@ -995,7 +995,8 @@ pub struct LocalVariable {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum UnaryOperator {
     Negate,
-    Not,
+    LogicalNot,
+    BitwiseNot,
 }
 
 /// Operation that can be applied on two values.

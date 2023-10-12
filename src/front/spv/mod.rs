@@ -2559,7 +2559,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         &mut block,
                         block_id,
                         body_idx,
-                        crate::UnaryOperator::Not,
+                        crate::UnaryOperator::BitwiseNot,
                     )?;
                 }
                 Op::ShiftRightLogical => {
@@ -3033,7 +3033,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 // Relational and Logical Instructions
                 Op::LogicalNot => {
                     inst.expect(4)?;
-                    parse_expr_op!(crate::UnaryOperator::Not, UNARY)?;
+                    parse_expr_op!(crate::UnaryOperator::LogicalNot, UNARY)?;
                 }
                 Op::LogicalOr => {
                     inst.expect(5)?;
@@ -3249,7 +3249,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                 } else {
                                     ctx.expressions.append(
                                         crate::Expression::Unary {
-                                            op: crate::UnaryOperator::Not,
+                                            op: crate::UnaryOperator::LogicalNot,
                                             expr: condition,
                                         },
                                         span,

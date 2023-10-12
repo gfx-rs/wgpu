@@ -296,8 +296,12 @@ impl<'source> ParsingContext<'source> {
                         op: UnaryOperator::Negate,
                         expr,
                     },
-                    TokenValue::Bang | TokenValue::Tilde => HirExprKind::Unary {
-                        op: UnaryOperator::Not,
+                    TokenValue::Bang => HirExprKind::Unary {
+                        op: UnaryOperator::LogicalNot,
+                        expr,
+                    },
+                    TokenValue::Tilde => HirExprKind::Unary {
+                        op: UnaryOperator::BitwiseNot,
                         expr,
                     },
                     _ => return Ok(expr),
