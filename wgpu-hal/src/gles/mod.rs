@@ -309,7 +309,6 @@ pub struct Texture {
     #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
-    pub is_cubemap: bool,
 }
 
 impl Texture {
@@ -330,24 +329,23 @@ impl Texture {
                 height: 0,
                 depth: 0,
             },
-            is_cubemap: false,
         }
     }
 
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
-    fn get_info_from_desc(desc: &TextureDescriptor) -> (u32, bool, bool) {
+    fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
         match desc.dimension {
-            wgt::TextureDimension::D1 => (glow::TEXTURE_2D, false, false),
+            wgt::TextureDimension::D1 => glow::TEXTURE_2D,
             wgt::TextureDimension::D2 => {
                 // HACK: detect a cube map; forces cube compatible textures to be cube textures
                 match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
-                    (false, 1) => (glow::TEXTURE_2D, false, false),
-                    (false, _) => (glow::TEXTURE_2D_ARRAY, true, false),
-                    (true, 6) => (glow::TEXTURE_CUBE_MAP, false, true),
-                    (true, _) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
+                    (false, 1) => glow::TEXTURE_2D,
+                    (false, _) => glow::TEXTURE_2D_ARRAY,
+                    (true, 6) => glow::TEXTURE_CUBE_MAP,
+                    (true, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
                 }
             }
-            wgt::TextureDimension::D3 => (glow::TEXTURE_3D, true, false),
+            wgt::TextureDimension::D3 => glow::TEXTURE_3D,
         }
     }
 }
@@ -747,7 +745,6 @@ enum Command {
         dst: glow::Texture,
         dst_target: BindTarget,
         copy: crate::TextureCopy,
-        dst_is_cubemap: bool,
     },
     CopyBufferToTexture {
         src: Buffer,
