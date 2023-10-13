@@ -521,7 +521,8 @@ pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
 
 pub(super) fn is_layered_target(target: u32) -> bool {
     match target {
+        glow::TEXTURE_2D | glow::TEXTURE_CUBE_MAP => false,
         glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY | glow::TEXTURE_3D => true,
-        _ => false,
+        _ => unreachable!(),
     }
 }
