@@ -55,10 +55,6 @@ impl super::Queue {
                 .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
             unsafe { gl.draw_buffers(&indices) };
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        for draw_buffer in 0..self.draw_buffer_count as u32 {
-            unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
-        }
     }
 
     unsafe fn reset_state(&mut self, gl: &glow::Context) {
@@ -970,16 +966,6 @@ impl super::Queue {
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
                 unsafe { gl.draw_buffers(&indices) };
-
-                if self
-                    .shared
-                    .private_caps
-                    .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
-                {
-                    for draw_buffer in 0..count as u32 {
-                        unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
-                    }
-                }
             }
             C::ClearColorF {
                 draw_buffer,
@@ -1249,7 +1235,7 @@ impl super::Queue {
                         )
                     };
                     if let Some(ref blend) = *blend {
-                        unsafe { gl.enable_draw_buffer(index, glow::BLEND) };
+                        unsafe { gl.enable_draw_buffer(glow::BLEND, index) };
                         if blend.color != blend.alpha {
                             unsafe {
                                 gl.blend_equation_separate_draw_buffer(
@@ -1273,12 +1259,8 @@ impl super::Queue {
                                 gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst)
                             };
                         }
-                    } else if self
-                        .shared
-                        .private_caps
-                        .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
-                    {
-                        unsafe { gl.disable_draw_buffer(index, glow::BLEND) };
+                    } else {
+                        unsafe { gl.disable_draw_buffer(glow::BLEND, index) };
                     }
                 } else {
                     unsafe {

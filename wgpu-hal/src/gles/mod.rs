@@ -146,8 +146,6 @@ bitflags::bitflags! {
         /// Indicates that buffers used as `GL_ELEMENT_ARRAY_BUFFER` may be created / initialized / used
         /// as other targets, if not present they must not be mixed with other targets.
         const INDEX_BUFFER_ROLE_CHANGE = 1 << 5;
-        /// Indicates that the device supports disabling draw buffers
-        const CAN_DISABLE_DRAW_BUFFER = 1 << 6;
         /// Supports `glGetBufferSubData`
         const GET_BUFFER_SUB_DATA = 1 << 7;
         /// Supports `f16` color buffers
