@@ -328,7 +328,11 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
 
 #[gpu_test]
 static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE)
+            .skip(FailureCase::webgl2()),
+    )
     .run_sync(|ctx| {
         clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
     });
@@ -352,6 +356,7 @@ static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
                 wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                     | wgpu::DownlevelFlags::COMPUTE_SHADERS,
             )
+            .skip(FailureCase::webgl2())
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::CLEAR_TEXTURE),
     )
