@@ -61,15 +61,7 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::TIMESTAMP_QUERY)
-            .skip(FailureCase::adapter("V3D"))
-            // https://github.com/gfx-rs/wgpu/issues/3944
-            .skip(FailureCase::backend_adapter(
-                wgpu::Backends::VULKAN,
-                "swiftshader",
-            ))
-            // https://github.com/gfx-rs/wgpu/issues/3250
-            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe"))
-            .skip(FailureCase::molten_vk()),
+            .skip(FailureCase::adapter("V3D")),
     )
     .run_sync(|ctx| {
         use std::{sync::mpsc, sync::Arc, thread, time::Duration};

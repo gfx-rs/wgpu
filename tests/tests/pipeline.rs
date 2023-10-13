@@ -7,7 +7,6 @@ use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameter
 static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .skip(FailureCase::webgl2())
             // https://github.com/gfx-rs/wgpu/issues/4167
             .expect_fail(FailureCase::always()),
     )

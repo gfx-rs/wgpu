@@ -8,7 +8,7 @@ use wgpu_test::{
 #[gpu_test]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
     GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().skip(FailureCase::webgl2()))
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
     .run_sync(|mut ctx| {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
@@ -25,7 +25,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
 #[gpu_test]
 static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
     GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().skip(FailureCase::webgl2()))
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
     .run_sync(|mut ctx| {
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();

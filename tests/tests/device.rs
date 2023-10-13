@@ -92,7 +92,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
     .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE)
-            .skip(FailureCase::backend(wgpu::Backends::DX12)),
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX12)),
     )
     .run_sync(|ctx| {
         // Create some resources on the device that we will attempt to use *after* losing

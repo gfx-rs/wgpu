@@ -6,11 +6,7 @@ static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
-            .limits(Limits::downlevel_defaults())
-            .skip(FailureCase {
-                backends: Some(wgpu::Backends::GL),
-                ..FailureCase::default()
-            }),
+            .limits(Limits::downlevel_defaults()),
     )
     .run_sync(|ctx| {
         let unorm_data: [[u8; 4]; 4] = [

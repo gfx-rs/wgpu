@@ -43,11 +43,14 @@ pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
 
     log::info!("Running cargo tests");
 
-    xshell::cmd!(shell, "cargo {llvm_cov_nextest_flags...} --no-fail-fast --retries 2")
-        .args(args.finish())
-        .quiet()
-        .run()
-        .context("Tests failed")?;
+    xshell::cmd!(
+        shell,
+        "cargo {llvm_cov_nextest_flags...} --no-fail-fast --retries 2"
+    )
+    .args(args.finish())
+    .quiet()
+    .run()
+    .context("Tests failed")?;
 
     log::info!("Finished tests");
 

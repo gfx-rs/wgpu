@@ -860,11 +860,6 @@ static TEST: wgpu_example::framework::ExampleTestParams =
             .expect_fail(wgpu_test::FailureCase::backend_adapter(
                 wgpu::Backends::VULKAN,
                 "V3D",
-            ))
-            // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
-            .skip(wgpu_test::FailureCase::backend_adapter(
-                wgpu::Backends::VULKAN,
-                "llvmpipe",
             )),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
         _phantom: std::marker::PhantomData::<Example>,
