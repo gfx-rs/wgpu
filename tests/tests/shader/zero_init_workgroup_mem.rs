@@ -1,21 +1,28 @@
 use std::num::NonZeroU64;
 
 use wgpu::{
-    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBinding, BufferBindingType,
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
     ComputePipelineDescriptor, DownlevelFlags, Limits, Maintain, MapMode, PipelineLayoutDescriptor,
     ShaderStages,
 };
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            // remove once we get to https://github.com/gfx-rs/wgpu/issues/3193
+            .skip(FailureCase {
+                backends: Some(Backends::DX12),
+                vendor: Some(5140),
+                adapter: Some("Microsoft Basic Render Driver"),
+                ..FailureCase::default()
+            }),
     )
     .run_sync(|ctx| {
         let bgl = ctx
