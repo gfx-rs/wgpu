@@ -1,4 +1,4 @@
-use super::Command as C;
+use super::{conv::is_layered_target, Command as C};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{mem, slice, sync::Arc};
@@ -18,13 +18,6 @@ const CUBEMAP_FACES: [u32; 6] = [
 #[cfg(not(target_arch = "wasm32"))]
 fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
-}
-
-fn is_layered_target(target: super::BindTarget) -> bool {
-    match target {
-        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D | glow::TEXTURE_CUBE_MAP_ARRAY => true,
-        _ => false,
-    }
 }
 
 impl super::Queue {
@@ -509,7 +502,6 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
-                dst_is_cubemap,
                 ref copy,
             } => {
                 //TODO: handle 3D copies
@@ -538,7 +530,7 @@ impl super::Queue {
                 }
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
-                if dst_is_cubemap {
+                if dst_target == glow::TEXTURE_CUBE_MAP {
                     unsafe {
                         gl.copy_tex_sub_image_2d(
                             CUBEMAP_FACES[copy.dst_base.array_layer as usize],
