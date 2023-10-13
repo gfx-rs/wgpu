@@ -28,6 +28,14 @@ fn get_2d_target(target: u32, array_layer: u32) -> u32 {
     }
 }
 
+fn get_z_offset(target: u32, base: &crate::TextureCopyBase) -> u32 {
+    match target {
+        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY => base.array_layer,
+        glow::TEXTURE_3D => base.origin.z,
+        _ => unreachable!(),
+    }
+}
+
 impl super::Queue {
     /// Performs a manual shader clear, used as a workaround for a clearing bug on mesa
     unsafe fn perform_shader_clear(&self, gl: &glow::Context, draw_buffer: u32, color: [f32; 4]) {
@@ -380,12 +388,7 @@ impl super::Queue {
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
-                    let z_offset =
-                        if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY = dst_target {
-                            copy.dst_base.array_layer as i32
-                        } else {
-                            copy.dst_base.origin.z as i32
-                        };
+                    let z_offset = get_z_offset(dst_target, &copy.dst_base);
 
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
@@ -394,7 +397,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -409,7 +412,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -424,7 +427,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -531,13 +534,7 @@ impl super::Queue {
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                dst_target
-                            {
-                                copy.dst_base.array_layer as i32
-                            } else {
-                                copy.dst_base.origin.z as i32
-                            },
+                            get_z_offset(dst_target, &copy.dst_base) as i32,
                             copy.src_base.origin.x as i32,
                             copy.src_base.origin.y as i32,
                             copy.size.width as i32,
@@ -605,13 +602,7 @@ impl super::Queue {
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
-                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                    dst_target
-                                {
-                                    copy.texture_base.array_layer as i32
-                                } else {
-                                    copy.texture_base.origin.z as i32
-                                },
+                                get_z_offset(dst_target, &copy.texture_base) as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -677,13 +668,7 @@ impl super::Queue {
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
-                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                    dst_target
-                                {
-                                    copy.texture_base.array_layer as i32
-                                } else {
-                                    copy.texture_base.origin.z as i32
-                                },
+                                get_z_offset(dst_target, &copy.texture_base) as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
