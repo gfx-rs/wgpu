@@ -1,5 +1,5 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 #[gpu_test]
 static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
