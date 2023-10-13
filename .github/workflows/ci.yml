@@ -296,17 +296,6 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
           cargo -V
 
-      - name: install swiftshader
-        if: matrix.os == 'ubuntu-22.04'
-        shell: bash
-        run: |
-          set -e
-
-          # mkdir -p swiftshader
-          # curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
-
-          # echo "VK_ICD_FILENAMES=$PWD/swiftshader/vk_swiftshader_icd.json" >> $GITHUB_ENV
-
       - name: install llvmpipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
@@ -319,8 +308,10 @@ jobs:
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
 
+          sudo add-apt-repository ppa:kisak/kisak-mesa
+
           sudo apt-get update
-          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk mesa-vulkan-drivers
 
       - name: disable debug
         shell: bash
