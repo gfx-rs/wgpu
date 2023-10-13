@@ -434,6 +434,8 @@ impl super::Adapter {
             );
         }
 
+        // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
+
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
             super::PrivateCapabilities::BUFFER_ALLOCATION,

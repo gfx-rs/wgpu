@@ -825,7 +825,8 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
-            | F::MULTI_DRAW_INDIRECT;
+            | F::MULTI_DRAW_INDIRECT
+            | F::BGRA8UNORM_STORAGE;
 
         features.set(
             F::TIMESTAMP_QUERY,
