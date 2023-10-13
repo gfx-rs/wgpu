@@ -4,6 +4,7 @@ mod regression {
     mod issue_4122;
 }
 
+mod bgra8unorm_storage;
 mod bind_group_layout_dedup;
 mod buffer;
 mod buffer_copy;
