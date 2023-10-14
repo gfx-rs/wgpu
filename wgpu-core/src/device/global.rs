@@ -159,7 +159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             if desc.usage.is_empty() {
@@ -380,7 +380,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
         if !device.valid {
-            return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Lost.into());
         }
         let buffer = buffer_guard
             .get_mut(buffer_id)
@@ -440,7 +440,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
         if !device.valid {
-            return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Lost.into());
         }
         let buffer = buffer_guard
             .get_mut(buffer_id)
@@ -606,7 +606,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
@@ -664,7 +664,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             // NB: Any change done through the raw texture handle will not be
@@ -743,7 +743,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             // NB: Any change done through the raw buffer handle will not be
@@ -1012,7 +1012,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1096,7 +1096,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1231,7 +1231,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1317,7 +1317,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1428,7 +1428,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1500,7 +1500,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1574,7 +1574,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid,
             };
             if !device.valid {
-                break DeviceError::Invalid;
+                break DeviceError::Lost;
             }
 
             let dev_stored = Stored {
@@ -1764,7 +1764,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1860,7 +1860,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             let adapter = &adapter_guard[device.adapter_id.value];
@@ -2024,7 +2024,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -2280,7 +2280,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(_) => break DeviceError::Invalid.into(),
                 };
                 if !device.valid {
-                    break DeviceError::Invalid.into();
+                    break DeviceError::Lost.into();
                 }
 
                 #[cfg(feature = "trace")]
@@ -2734,7 +2734,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[buffer.device_id.value];
             if !device.valid {
-                return Err((op, DeviceError::Invalid.into()));
+                return Err((op, DeviceError::Lost.into()));
             }
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
@@ -2980,7 +2980,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| BufferAccessError::Invalid)?;
             let device = &mut device_guard[buffer.device_id.value];
             if !device.valid {
-                return Err(DeviceError::Invalid.into());
+                return Err(DeviceError::Lost.into());
             }
 
             closure = self.buffer_unmap_inner(buffer_id, buffer, device)

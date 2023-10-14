@@ -115,7 +115,8 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add `Rgb10a2Uint` format. By @teoxoy in [4199](https://github.com/gfx-rs/wgpu/pull/4199)
 - Validate that resources are used on the right device. By @nical in [4207](https://github.com/gfx-rs/wgpu/pull/4207)
 - Expose instance flags. By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
-- Add support for the bgra8unorm-storage feature. By @jinleili and @nical in [https://github.com/gfx-rs/wgpu/pull/4228](4228)
+- Add support for the bgra8unorm-storage feature. By @jinleili and @nical in [#4228](https://github.com/gfx-rs/wgpu/pull/4228)
+- Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
 
 #### Vulkan
 
