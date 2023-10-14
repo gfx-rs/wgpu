@@ -53,6 +53,15 @@ pub enum AtomicError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
+pub enum SubgroupError {
+    #[error("Operand {0:?} has invalid type.")]
+    InvalidOperand(Handle<crate::Expression>),
+    #[error("Result type for {0:?} doesn't match the statement")]
+    ResultTypeMismatch(Handle<crate::Expression>),
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum LocalVariableError {
     #[error("Local variable has a type {0:?} that can't be stored in a local variable.")]
     InvalidType(Handle<crate::Type>),
@@ -159,6 +168,8 @@ pub enum FunctionError {
     WorkgroupUniformLoadExpressionMismatch(Handle<crate::Expression>),
     #[error("The expression {0:?} is not valid as a WorkGroupUniformLoad argument. It should be a Pointer in Workgroup address space")]
     WorkgroupUniformLoadInvalidPointer(Handle<crate::Expression>),
+    #[error("Subgroup operation is invalid")]
+    InvalidSubgroup(#[from] SubgroupError),
 }
 
 bitflags::bitflags! {
@@ -407,6 +418,102 @@ impl super::Validator {
                 } => {}
             _ => {
                 return Err(AtomicError::ResultTypeMismatch(result)
+                    .with_span_handle(result, context.expressions)
+                    .into_other())
+            }
+        }
+        Ok(())
+    }
+    #[cfg(feature = "validate")]
+    fn validate_subgroup_operation(
+        &mut self,
+        op: &crate::SubgroupOperation,
+        _collective_op: &crate::CollectiveOperation,
+        argument: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        self.emit_expression(argument, context)?;
+        let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
+
+        let (is_scalar, kind) = match argument_inner {
+            crate::TypeInner::Scalar { kind, .. } => (true, kind),
+            crate::TypeInner::Vector { kind, .. } => (false, kind),
+            _ => unimplemented!(),
+        };
+
+        use crate::ScalarKind as sk;
+        use crate::SubgroupOperation as sg;
+        match (kind, op) {
+            (sk::Bool, sg::All | sg::Any) if is_scalar => {}
+            (sk::Sint | sk::Uint | sk::Float, sg::Add | sg::Mul | sg::Min | sg::Max) => {}
+            (sk::Sint | sk::Uint | sk::Bool, sg::And | sg::Or | sg::Xor) => {}
+
+            (_, sg::All | sg::Any)
+            | (sk::Bool, sg::Add | sg::Mul | sg::Min | sg::Max)
+            | (sk::Float, sg::And | sg::Or | sg::Xor) => {
+                log::error!("Subgroup operand type {:?}", argument_inner);
+                return Err(SubgroupError::InvalidOperand(argument)
+                    .with_span_handle(argument, context.expressions)
+                    .into_other());
+            }
+        };
+
+        self.emit_expression(result, context)?;
+        match context.expressions[result] {
+            crate::Expression::SubgroupOperationResult { ty }
+                if { &context.types[ty].inner == argument_inner } => {}
+            _ => {
+                return Err(SubgroupError::ResultTypeMismatch(result)
+                    .with_span_handle(result, context.expressions)
+                    .into_other())
+            }
+        }
+        Ok(())
+    }
+    #[cfg(feature = "validate")]
+    fn validate_subgroup_broadcast(
+        &mut self,
+        mode: &crate::BroadcastMode,
+        argument: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        context: &BlockContext,
+    ) -> Result<(), WithSpan<FunctionError>> {
+        if let crate::BroadcastMode::Index(expr) = *mode {
+            self.emit_expression(expr, context)?;
+            let index_ty = context.resolve_type(expr, &self.valid_expression_set)?;
+            match index_ty {
+                crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..
+                } => {}
+                _ => {
+                    log::error!("Subgroup broadcast index type {:?}", index_ty);
+                    return Err(SubgroupError::InvalidOperand(argument)
+                        .with_span_handle(argument, context.expressions)
+                        .into_other());
+                }
+            }
+        }
+        self.emit_expression(argument, context)?;
+        let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
+
+        match argument_inner {
+            crate::TypeInner::Scalar { .. } | crate::TypeInner::Vector { .. } => {}
+            _ => {
+                log::error!("Subgroup operand type {:?}", argument_inner);
+                return Err(SubgroupError::InvalidOperand(argument)
+                    .with_span_handle(argument, context.expressions)
+                    .into_other());
+            }
+        }
+
+        self.emit_expression(result, context)?;
+        match context.expressions[result] {
+            crate::Expression::SubgroupOperationResult { ty }
+                if { &context.types[ty].inner == argument_inner } => {}
+            _ => {
+                return Err(SubgroupError::ResultTypeMismatch(result)
                     .with_span_handle(result, context.expressions)
                     .into_other())
             }
@@ -921,6 +1028,21 @@ impl super::Validator {
                 }
                 S::SubgroupBallot { result } => {
                     self.emit_expression(result, context)?;
+                }
+                S::SubgroupCollectiveOperation {
+                    ref op,
+                    ref collective_op,
+                    argument,
+                    result,
+                } => {
+                    self.validate_subgroup_operation(op, collective_op, argument, result, context)?;
+                }
+                S::SubgroupBroadcast {
+                    ref mode,
+                    argument,
+                    result,
+                } => {
+                    self.validate_subgroup_broadcast(mode, argument, result, context)?;
                 }
             }
         }

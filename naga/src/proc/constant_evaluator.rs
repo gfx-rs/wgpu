@@ -441,7 +441,9 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
                 Err(ConstantEvaluatorError::RayQueryExpression)
             }
-            Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupOperation),
+            Expression::SubgroupBallotResult | Expression::SubgroupOperationResult { .. } => {
+                Err(ConstantEvaluatorError::SubgroupOperation)
+            }
         }
     }
 

@@ -157,6 +157,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                 Ex::AtomicResult { ty, comparison: _ } => self.trace_type(ty),
                 Ex::WorkGroupUniformLoadResult { ty } => self.trace_type(ty),
                 Ex::ArrayLength(expr) => work_list.push(expr),
+                Ex::SubgroupOperationResult { ty } => self.trace_type(ty),
                 Ex::RayQueryGetIntersection {
                     query,
                     committed: _,
@@ -351,6 +352,7 @@ impl ModuleMap {
                 comparison: _,
             } => self.types.adjust(ty),
             Ex::WorkGroupUniformLoadResult { ref mut ty } => self.types.adjust(ty),
+            Ex::SubgroupOperationResult { ref mut ty } => self.types.adjust(ty),
             Ex::ArrayLength(ref mut expr) => adjust(expr),
             Ex::RayQueryGetIntersection {
                 ref mut query,

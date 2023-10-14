@@ -929,6 +929,21 @@ impl<W: Write> Writer<W> {
 
                 writeln!(self.out, "subgroupBallot();")?;
             }
+            Statement::SubgroupCollectiveOperation {
+                ref op,
+                ref collective_op,
+                argument,
+                result,
+            } => {
+                unimplemented!() // FIXME
+            }
+            Statement::SubgroupBroadcast {
+                ref mode,
+                argument,
+                result,
+            } => {
+                unimplemented!() // FIXME
+            }
         }
 
         Ok(())
@@ -1668,6 +1683,7 @@ impl<W: Write> Writer<W> {
             | Expression::AtomicResult { .. }
             | Expression::RayQueryProceedResult
             | Expression::SubgroupBallotResult
+            | Expression::SubgroupOperationResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. } => {}
         }
 

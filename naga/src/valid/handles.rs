@@ -395,6 +395,7 @@ impl super::Validator {
             crate::Expression::AtomicResult { .. }
             | crate::Expression::RayQueryProceedResult
             | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. } => (),
             crate::Expression::ArrayLength(array) => {
                 handle.check_dep(array)?;
@@ -541,6 +542,27 @@ impl super::Validator {
                 Ok(())
             }
             crate::Statement::SubgroupBallot { result } => {
+                validate_expr(result)?;
+                Ok(())
+            }
+            crate::Statement::SubgroupCollectiveOperation {
+                op,
+                collective_op,
+                argument,
+                result,
+            } => {
+                validate_expr(argument)?;
+                validate_expr(result)?;
+                Ok(())
+            }
+            crate::Statement::SubgroupBroadcast {
+                mode,
+                argument,
+                result,
+            } => {
+                if let crate::BroadcastMode::Index(expr) = mode {
+                    validate_expr(expr)?;
+                }
                 validate_expr(result)?;
                 Ok(())
             }

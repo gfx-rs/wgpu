@@ -98,6 +98,26 @@ impl FunctionTracer<'_> {
                     St::SubgroupBallot { result } => {
                         self.trace_expression(result);
                     }
+                    St::SubgroupCollectiveOperation {
+                        ref op,
+                        ref collective_op,
+                        argument,
+                        result,
+                    } => {
+                        self.trace_expression(argument);
+                        self.trace_expression(result);
+                    }
+                    St::SubgroupBroadcast {
+                        ref mode,
+                        argument,
+                        result,
+                    } => {
+                        if let crate::BroadcastMode::Index(expr) = *mode {
+                            self.trace_expression(expr);
+                        }
+                        self.trace_expression(argument);
+                        self.trace_expression(result);
+                    }
 
                     // Trivial statements.
                     St::Break
@@ -248,6 +268,26 @@ impl FunctionMap {
                         self.adjust_ray_query_function(fun);
                     }
                     St::SubgroupBallot { ref mut result } => adjust(result),
+                    St::SubgroupCollectiveOperation {
+                        ref mut op,
+                        ref mut collective_op,
+                        ref mut argument,
+                        ref mut result,
+                    } => {
+                        adjust(argument);
+                        adjust(result);
+                    }
+                    St::SubgroupBroadcast {
+                        ref mut mode,
+                        ref mut argument,
+                        ref mut result,
+                    } => {
+                        if let crate::BroadcastMode::Index(expr) = mode {
+                            adjust(expr);
+                        }
+                        adjust(argument);
+                        adjust(result);
+                    }
 
                     // Trivial statements.
                     St::Break

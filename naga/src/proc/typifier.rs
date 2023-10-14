@@ -638,6 +638,7 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::ShiftRight => past(left)?.clone(),
             },
             crate::Expression::AtomicResult { ty, .. } => TypeResolution::Handle(ty),
+            crate::Expression::SubgroupOperationResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::WorkGroupUniformLoadResult { ty } => TypeResolution::Handle(ty),
             crate::Expression::Select { accept, .. } => past(accept)?.clone(),
             crate::Expression::Derivative { expr, .. } => past(expr)?.clone(),

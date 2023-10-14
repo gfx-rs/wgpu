@@ -1261,6 +1261,42 @@ pub enum SwizzleComponent {
     W = 3,
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum BroadcastMode {
+    First,
+    Index(Handle<Expression>),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum SubgroupOperation {
+    All = 0,
+    Any = 1,
+    Add = 2,
+    Mul = 3,
+    Min = 4,
+    Max = 5,
+    And = 6,
+    Or = 7,
+    Xor = 8,
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CollectiveOperation {
+    Reduce = 0,
+    InclusiveScan = 1,
+    ExclusiveScan = 2,
+}
+
 bitflags::bitflags! {
     /// Memory barrier flags.
     #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -1578,6 +1614,9 @@ pub enum Expression {
         committed: bool,
     },
     SubgroupBallotResult,
+    SubgroupOperationResult {
+        ty: Handle<Type>,
+    },
 }
 
 pub use block::Block;
@@ -1850,10 +1889,53 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
+    // subgroupBallot(bool) -> vec4<u32>
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
         ///
         /// [`SubgroupBallotResult`]: Expression::SubgroupBallotResult
+        result: Handle<Expression>,
+    },
+
+    // subgroupBroadcast(value, lane) -> value
+    // subgroupBroadcastFirst(value) -> value
+    SubgroupBroadcast {
+        /// Specifies which thread to broadcast from
+        mode: BroadcastMode,
+        /// The value to broadcast over
+        argument: Handle<Expression>,
+        /// The [`SubgroupBroadcastResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupBroadcastResult`]: Expression::SubgroupBroadcastResult
+        result: Handle<Expression>,
+    },
+
+    // Reduction on bool
+    // subgroupAll(bool) -> bool
+    // subgroupAny(bool) -> bool
+    // Reduction on float, int
+    // subgroupMin(value) -> value
+    // subgroupMax(value) -> value
+    // subgroupAdd(value) -> value
+    // subgroupMul(value) -> value
+    // Reduction on int
+    // subgroupAnd(value) -> value
+    // subgroupOr(value) -> value
+    // subgroupXor(value) -> value
+    // Scan on float, int
+    // subgroupPrefixAdd(value) -> value
+    // subgroupPrefixMul(value) -> value
+    /// Compute a collective operation across all active threads in th subgroup
+    SubgroupCollectiveOperation {
+        /// What operation to compute
+        op: SubgroupOperation,
+        /// How to combine the results
+        collective_op: CollectiveOperation,
+        /// The value to compute over
+        argument: Handle<Expression>,
+        /// The [`SubgroupOperationResult`] expression representing this load's result.
+        ///
+        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
     },
 }

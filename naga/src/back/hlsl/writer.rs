@@ -2013,6 +2013,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 writeln!(self.out, "WaveActiveBallot(true);")?;
             }
+            Statement::SubgroupCollectiveOperation {
+                ref op,
+                ref collective_op,
+                argument,
+                result,
+            } => {
+                unimplemented!(); // FIXME
+            }
+            Statement::SubgroupBroadcast {
+                ref mode,
+                argument,
+                result,
+            } => {
+                unimplemented!(); // FIXME
+            }
         }
 
         Ok(())
@@ -3162,7 +3177,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             | Expression::AtomicResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. }
             | Expression::RayQueryProceedResult
-            | Expression::SubgroupBallotResult => {}
+            | Expression::SubgroupBallotResult
+            | Expression::SubgroupOperationResult { .. } => {}
         }
 
         if !closing_bracket.is_empty() {

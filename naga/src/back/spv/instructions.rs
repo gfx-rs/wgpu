@@ -1054,6 +1054,23 @@ impl super::Instruction {
 
         instruction
     }
+    pub(super) fn group_non_uniform_arithmetic(
+        op: Op,
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        group_op: spirv::GroupOperation,
+        value: Word,
+    ) -> Self {
+        let mut instruction = Self::new(op);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(group_op as u32);
+        instruction.add_operand(value);
+
+        instruction
+    }
 }
 
 impl From<crate::StorageFormat> for spirv::ImageFormat {

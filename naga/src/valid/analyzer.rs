@@ -741,7 +741,11 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             E::SubgroupBallotResult => Uniformity {
-                non_uniform_result: None,
+                non_uniform_result: None, // FIXME
+                requirements: UniformityRequirements::empty(),
+            },
+            E::SubgroupOperationResult { ty } => Uniformity {
+                non_uniform_result: None, // FIXME
                 requirements: UniformityRequirements::empty(),
             },
         };
@@ -988,6 +992,26 @@ impl FunctionInfo {
                     FunctionUniformity::new()
                 }
                 S::SubgroupBallot { result: _ } => FunctionUniformity::new(),
+                S::SubgroupCollectiveOperation {
+                    ref op,
+                    ref collective_op,
+                    argument,
+                    result: _,
+                } => {
+                    let _ = self.add_ref(argument);
+                    FunctionUniformity::new()
+                }
+                S::SubgroupBroadcast {
+                    ref mode,
+                    argument,
+                    result,
+                } => {
+                    let _ = self.add_ref(argument);
+                    if let crate::BroadcastMode::Index(expr) = *mode {
+                        let _ = self.add_ref(expr);
+                    }
+                    FunctionUniformity::new()
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

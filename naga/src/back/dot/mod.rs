@@ -283,6 +283,25 @@ impl StatementGraph {
                     self.emits.push((id, result));
                     "SubgroupBallot"
                 }
+                S::SubgroupCollectiveOperation {
+                    ref op,
+                    ref collective_op,
+                    argument,
+                    result,
+                } => {
+                    self.dependencies.push((id, argument, "arg"));
+                    self.emits.push((id, result));
+                    "SubgroupCollectiveOperation" // FIXME
+                }
+                S::SubgroupBroadcast {
+                    ref mode,
+                    argument,
+                    result,
+                } => {
+                    self.dependencies.push((id, argument, "arg"));
+                    self.emits.push((id, result));
+                    "SubgroupBroadcast" // FIXME
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -591,6 +610,7 @@ fn write_function_expressions(
                 (format!("rayQueryGet{}Intersection", ty).into(), 4)
             }
             E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
+            E::SubgroupOperationResult { .. } => ("SubgroupOperationResult".into(), 4),
         };
 
         // give uniform expressions an outline

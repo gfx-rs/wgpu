@@ -2259,6 +2259,45 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::SubgroupBallot { result }, span);
                             return Ok(Some(result));
                         }
+                        "subgroupBroadcast" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupBroadcastFirst" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupAll" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupAny" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupAdd" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupMul" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupMin" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupMax" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupAnd" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupOr" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupXor" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupPrefixAdd" => {
+                            unimplemented!(); // FIXME
+                        }
+                        "subgroupPrefixMul" => {
+                            unimplemented!(); // FIXME
+                        }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }
                 };

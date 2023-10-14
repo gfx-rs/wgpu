@@ -1936,6 +1936,7 @@ impl<W: Write> Writer<W> {
             | crate::Expression::AtomicResult { .. }
             | crate::Expression::WorkGroupUniformLoadResult { .. }
             | crate::Expression::SubgroupBallotResult
+            | crate::Expression::SubgroupOperationResult { .. }
             | crate::Expression::RayQueryProceedResult => {
                 unreachable!()
             }
@@ -3017,6 +3018,21 @@ impl<W: Write> Writer<W> {
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
                     write!(self.out, "{NAMESPACE}::simd_active_threads_mask();")?;
+                }
+                crate::Statement::SubgroupCollectiveOperation {
+                    ref op,
+                    ref collective_op,
+                    argument,
+                    result,
+                } => {
+                    unimplemented!(); // FIXME
+                }
+                crate::Statement::SubgroupBroadcast {
+                    ref mode,
+                    argument,
+                    result,
+                } => {
+                    unimplemented!(); // FIXME
                 }
             }
         }
