@@ -3,7 +3,11 @@ use wgt::{Backends, Features, Limits};
 
 /// Initialize a wgpu instance with the options from the environment.
 pub fn initialize_instance() -> Instance {
-    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(Backends::all);
+    // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
+    //
+    // We can potentially work support back into the test runner in the future, but as the adapters are matched up
+    // based on adapter index, removing some backends messes up the indexes in annoying ways.
+    let backends = Backends::all();
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
