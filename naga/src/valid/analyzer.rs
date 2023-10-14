@@ -1015,8 +1015,15 @@ impl FunctionInfo {
                     result: _,
                 } => {
                     let _ = self.add_ref(argument);
-                    if let crate::GatherMode::Broadcast(expr) = mode {
-                        let _ = self.add_ref(expr);
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            let _ = self.add_ref(index);
+                        }
                     }
                     FunctionUniformity::new()
                 }

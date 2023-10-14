@@ -132,6 +132,10 @@ impl<'w> BlockContext<'w> {
                         arg_id,
                     ));
             }
+            crate::GatherMode::Shuffle(index)
+            | crate::GatherMode::ShuffleDown(index)
+            | crate::GatherMode::ShuffleUp(index)
+            | crate::GatherMode::ShuffleXor(index) => todo!(),
         }
         self.cached[result] = id;
         Ok(())

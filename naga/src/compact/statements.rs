@@ -117,7 +117,11 @@ impl FunctionTracer<'_> {
                     } => {
                         match mode {
                             crate::GatherMode::BroadcastFirst => {}
-                            crate::GatherMode::Broadcast(index) => self.trace_expression(index),
+                            crate::GatherMode::Broadcast(index)
+                            | crate::GatherMode::Shuffle(index)
+                            | crate::GatherMode::ShuffleDown(index)
+                            | crate::GatherMode::ShuffleUp(index)
+                            | crate::GatherMode::ShuffleXor(index) => self.trace_expression(index),
                         }
                         self.trace_expression(argument);
                         self.trace_expression(result);
@@ -296,7 +300,11 @@ impl FunctionMap {
                     } => {
                         match *mode {
                             crate::GatherMode::BroadcastFirst => {}
-                            crate::GatherMode::Broadcast(ref mut index) => adjust(index),
+                            crate::GatherMode::Broadcast(ref mut index)
+                            | crate::GatherMode::Shuffle(ref mut index)
+                            | crate::GatherMode::ShuffleDown(ref mut index)
+                            | crate::GatherMode::ShuffleUp(ref mut index)
+                            | crate::GatherMode::ShuffleXor(ref mut index) => adjust(index),
                         }
                         adjust(argument);
                         adjust(result);

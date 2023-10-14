@@ -485,7 +485,11 @@ impl super::Validator {
     ) -> Result<(), WithSpan<FunctionError>> {
         match *mode {
             crate::GatherMode::BroadcastFirst => {}
-            crate::GatherMode::Broadcast(index) => {
+            crate::GatherMode::Broadcast(index)
+            | crate::GatherMode::Shuffle(index)
+            | crate::GatherMode::ShuffleDown(index)
+            | crate::GatherMode::ShuffleUp(index)
+            | crate::GatherMode::ShuffleXor(index) => {
                 let index_ty = context.resolve_type(index, &self.valid_expression_set)?;
                 match *index_ty {
                     crate::TypeInner::Scalar {

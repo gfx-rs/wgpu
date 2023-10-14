@@ -564,7 +564,11 @@ impl super::Validator {
                 validate_expr(argument)?;
                 match mode {
                     crate::GatherMode::BroadcastFirst => {}
-                    crate::GatherMode::Broadcast(index) => validate_expr(index)?,
+                    crate::GatherMode::Broadcast(index)
+                    | crate::GatherMode::Shuffle(index)
+                    | crate::GatherMode::ShuffleDown(index)
+                    | crate::GatherMode::ShuffleUp(index)
+                    | crate::GatherMode::ShuffleXor(index) => validate_expr(index)?,
                 }
                 validate_expr(result)?;
                 Ok(())

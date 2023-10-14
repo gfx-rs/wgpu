@@ -1270,6 +1270,10 @@ pub enum SwizzleComponent {
 pub enum GatherMode {
     BroadcastFirst,
     Broadcast(Handle<Expression>),
+    Shuffle(Handle<Expression>),
+    ShuffleDown(Handle<Expression>),
+    ShuffleUp(Handle<Expression>),
+    ShuffleXor(Handle<Expression>),
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
