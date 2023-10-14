@@ -1594,15 +1594,31 @@ impl Writer {
                     Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
                     Bi::NumWorkGroups => BuiltIn::NumWorkgroups,
                     // Subgroup
-                    Bi::NumSubgroups | Bi::SubgroupId => todo!(),
-                    Bi::SubgroupInvocationId => {
+                    Bi::NumSubgroups => {
                         self.require_any(
-                            "`subgroup_invocation_id` built-in",
+                            "`num_subgroups` built-in",
                             &[spirv::Capability::GroupNonUniform],
                         )?;
-                        BuiltIn::SubgroupLocalInvocationId
+                        BuiltIn::NumSubgroups
+                    }
+                    Bi::SubgroupId => {
+                        self.require_any(
+                            "`subgroup_id` built-in",
+                            &[spirv::Capability::GroupNonUniform],
+                        )?;
+                        BuiltIn::SubgroupId
                     }
                     Bi::SubgroupSize => {
+                        self.require_any(
+                            "`subgroup_size` built-in",
+                            &[
+                                spirv::Capability::GroupNonUniform,
+                                spirv::Capability::SubgroupBallotKHR,
+                            ],
+                        )?;
+                        BuiltIn::SubgroupSize
+                    }
+                    Bi::SubgroupInvocationId => {
                         self.require_any(
                             "`subgroup_invocation_id` built-in",
                             &[
@@ -1610,7 +1626,7 @@ impl Writer {
                                 spirv::Capability::SubgroupBallotKHR,
                             ],
                         )?;
-                        BuiltIn::SubgroupSize
+                        BuiltIn::SubgroupLocalInvocationId
                     }
                 };
 

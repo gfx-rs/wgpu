@@ -54,6 +54,8 @@ pub enum Error {
     UnknownBinaryOperator(spirv::Op),
     #[error("unknown relational function {0:?}")]
     UnknownRelationalFunction(spirv::Op),
+    #[error("unsupported group opeation %{0}")]
+    UnsupportedGroupOperation(spirv::Word),
     #[error("invalid parameter {0:?}")]
     InvalidParameter(spirv::Op),
     #[error("invalid operand count {1} for {0:?}")]
@@ -116,8 +118,8 @@ pub enum Error {
     FunctionCallCycle(spirv::Word),
     #[error("invalid array size {0:?}")]
     InvalidArraySize(Handle<crate::Constant>),
-    #[error("invalid barrier scope %{0}")]
-    InvalidBarrierScope(spirv::Word),
+    #[error("invalid execution scope %{0}")]
+    InvalidExecutionScope(spirv::Word),
     #[error("invalid barrier memory semantics %{0}")]
     InvalidBarrierMemorySemantics(spirv::Word),
     #[error(

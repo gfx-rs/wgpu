@@ -1,7 +1,43 @@
 use super::{Block, BlockContext, Error, Instruction};
-use crate::{arena::Handle, TypeInner};
+use crate::{
+    arena::Handle,
+    back::spv::{LocalType, LookupType},
+    TypeInner,
+};
 
 impl<'w> BlockContext<'w> {
+    pub(super) fn write_subgroup_ballot(
+        &mut self,
+        predicate: &Option<Handle<crate::Expression>>,
+        result: Handle<crate::Expression>,
+        block: &mut Block,
+    ) -> Result<(), Error> {
+        self.writer.require_any(
+            "GroupNonUniformBallot",
+            &[spirv::Capability::GroupNonUniformBallot],
+        )?;
+        let vec4_u32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
+            vector_size: Some(crate::VectorSize::Quad),
+            kind: crate::ScalarKind::Uint,
+            width: 4,
+            pointer_space: None,
+        }));
+        let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+        let predicate = if let Some(predicate) = *predicate {
+            self.cached[predicate]
+        } else {
+            self.writer.get_constant_scalar(crate::Literal::Bool(true))
+        };
+        let id = self.gen_id();
+        block.body.push(Instruction::group_non_uniform_ballot(
+            vec4_u32_type_id,
+            id,
+            exec_scope_id,
+            predicate,
+        ));
+        self.cached[result] = id;
+        Ok(())
+    }
     pub(super) fn write_subgroup_operation(
         &mut self,
         op: &crate::SubgroupOperation,
@@ -11,7 +47,7 @@ impl<'w> BlockContext<'w> {
         block: &mut Block,
     ) -> Result<(), Error> {
         use crate::SubgroupOperation as sg;
-        match op {
+        match *op {
             sg::All | sg::Any => {
                 self.writer.require_any(
                     "GroupNonUniformVote",
@@ -21,11 +57,7 @@ impl<'w> BlockContext<'w> {
             _ => {
                 self.writer.require_any(
                     "GroupNonUniformArithmetic",
-                    &[
-                        spirv::Capability::GroupNonUniformArithmetic,
-                        spirv::Capability::GroupNonUniformClustered,
-                        spirv::Capability::GroupNonUniformPartitionedNV,
-                    ],
+                    &[spirv::Capability::GroupNonUniformArithmetic],
                 )?;
             }
         }
@@ -35,14 +67,14 @@ impl<'w> BlockContext<'w> {
         let result_type_id = self.get_expression_type_id(result_ty);
         let result_ty_inner = result_ty.inner_with(&self.ir_module.types);
 
-        let (is_scalar, kind) = match result_ty_inner {
+        let (is_scalar, kind) = match *result_ty_inner {
             TypeInner::Scalar { kind, .. } => (true, kind),
             TypeInner::Vector { kind, .. } => (false, kind),
             _ => unimplemented!(),
         };
 
         use crate::ScalarKind as sk;
-        let spirv_op = match (kind, op) {
+        let spirv_op = match (kind, *op) {
             (sk::Bool, sg::All) if is_scalar => spirv::Op::GroupNonUniformAll,
             (sk::Bool, sg::Any) if is_scalar => spirv::Op::GroupNonUniformAny,
             (_, sg::All | sg::Any) => unimplemented!(),
@@ -71,9 +103,9 @@ impl<'w> BlockContext<'w> {
         let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
 
         use crate::CollectiveOperation as c;
-        let group_op = match op {
+        let group_op = match *op {
             sg::All | sg::Any => None,
-            _ => Some(match collective_op {
+            _ => Some(match *collective_op {
                 c::Reduce => spirv::GroupOperation::Reduce,
                 c::InclusiveScan => spirv::GroupOperation::InclusiveScan,
                 c::ExclusiveScan => spirv::GroupOperation::ExclusiveScan,
@@ -92,7 +124,7 @@ impl<'w> BlockContext<'w> {
         self.cached[result] = id;
         Ok(())
     }
-    pub(super) fn write_subgroup_broadcast(
+    pub(super) fn write_subgroup_gather(
         &mut self,
         mode: &crate::GatherMode,
         argument: Handle<crate::Expression>,
@@ -103,6 +135,26 @@ impl<'w> BlockContext<'w> {
             "GroupNonUniformBallot",
             &[spirv::Capability::GroupNonUniformBallot],
         )?;
+        match *mode {
+            crate::GatherMode::BroadcastFirst | crate::GatherMode::Broadcast(_) => {
+                self.writer.require_any(
+                    "GroupNonUniformBallot",
+                    &[spirv::Capability::GroupNonUniformBallot],
+                )?;
+            }
+            crate::GatherMode::Shuffle(_) | crate::GatherMode::ShuffleXor(_) => {
+                self.writer.require_any(
+                    "GroupNonUniformShuffle",
+                    &[spirv::Capability::GroupNonUniformShuffle],
+                )?;
+            }
+            crate::GatherMode::ShuffleDown(_) | crate::GatherMode::ShuffleUp(_) => {
+                self.writer.require_any(
+                    "GroupNonUniformShuffleRelative",
+                    &[spirv::Capability::GroupNonUniformShuffleRelative],
+                )?;
+            }
+        }
 
         let id = self.gen_id();
         let result_ty = &self.fun_info[result].ty;
@@ -111,17 +163,7 @@ impl<'w> BlockContext<'w> {
         let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
 
         let arg_id = self.cached[argument];
-        match mode {
-            crate::GatherMode::Broadcast(index) => {
-                let index_id = self.cached[*index];
-                block.body.push(Instruction::group_non_uniform_broadcast(
-                    result_type_id,
-                    id,
-                    exec_scope_id,
-                    arg_id,
-                    index_id,
-                ));
-            }
+        match *mode {
             crate::GatherMode::BroadcastFirst => {
                 block
                     .body
@@ -132,10 +174,29 @@ impl<'w> BlockContext<'w> {
                         arg_id,
                     ));
             }
-            crate::GatherMode::Shuffle(index)
+            crate::GatherMode::Broadcast(index)
+            | crate::GatherMode::Shuffle(index)
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
-            | crate::GatherMode::ShuffleXor(index) => todo!(),
+            | crate::GatherMode::ShuffleXor(index) => {
+                let index_id = self.cached[index];
+                let op = match *mode {
+                    crate::GatherMode::BroadcastFirst => unreachable!(),
+                    crate::GatherMode::Broadcast(_) => spirv::Op::GroupNonUniformBroadcast,
+                    crate::GatherMode::Shuffle(_) => spirv::Op::GroupNonUniformShuffle,
+                    crate::GatherMode::ShuffleDown(_) => spirv::Op::GroupNonUniformShuffleDown,
+                    crate::GatherMode::ShuffleUp(_) => spirv::Op::GroupNonUniformShuffleUp,
+                    crate::GatherMode::ShuffleXor(_) => spirv::Op::GroupNonUniformShuffleXor,
+                };
+                block.body.push(Instruction::group_non_uniform_gather(
+                    op,
+                    result_type_id,
+                    id,
+                    exec_scope_id,
+                    arg_id,
+                    index_id,
+                ));
+            }
         }
         self.cached[result] = id;
         Ok(())

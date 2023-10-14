@@ -294,16 +294,78 @@ impl StatementGraph {
                 } => {
                     self.dependencies.push((id, argument, "arg"));
                     self.emits.push((id, result));
-                    "SubgroupCollectiveOperation" // FIXME
+                    match (collective_op, op) {
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                            "SubgroupAll"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                            "SubgroupAny"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                            "SubgroupAdd"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                            "SubgroupMul"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                            "SubgroupMax"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                            "SubgroupMin"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                            "SubgroupAnd"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                            "SubgroupOr"
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                            "SubgroupXor"
+                        }
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => "SubgroupPrefixExclusiveAdd",
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => "SubgroupPrefixExclusiveMul",
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => "SubgroupPrefixInclusiveAdd",
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => "SubgroupPrefixInclusiveMul",
+                        _ => unimplemented!(),
+                    }
                 }
                 S::SubgroupGather {
                     mode,
                     argument,
                     result,
                 } => {
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            self.dependencies.push((id, index, "index"))
+                        }
+                    }
                     self.dependencies.push((id, argument, "arg"));
                     self.emits.push((id, result));
-                    "SubgroupGather" // FIXME
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => "SubgroupBroadcastFirst",
+                        crate::GatherMode::Broadcast(_) => "SubgroupBroadcast",
+                        crate::GatherMode::Shuffle(_) => "SubgroupShuffle",
+                        crate::GatherMode::ShuffleDown(_) => "SubgroupShuffleDown",
+                        crate::GatherMode::ShuffleUp(_) => "SubgroupShuffleUp",
+                        crate::GatherMode::ShuffleXor(_) => "SubgroupShuffleXor",
+                    }
                 }
             };
             // Set the last node to the merge node

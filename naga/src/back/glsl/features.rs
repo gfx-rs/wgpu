@@ -43,6 +43,8 @@ bitflags::bitflags! {
         const IMAGE_SIZE = 1 << 20;
         /// Dual source blending
         const DUAL_SOURCE_BLENDING = 1 << 21;
+        /// Subgroup operations
+        const SUBGROUP_OPERATIONS = 1 << 22;
     }
 }
 
@@ -105,6 +107,7 @@ impl FeaturesManager {
         check_feature!(SAMPLE_VARIABLES, 400, 300);
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
+        check_feature!(SUBGROUP_OPERATIONS, 430, 310);
         match version {
             Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
             _ => check_feature!(MULTI_VIEW, 140, 310),
@@ -232,6 +235,22 @@ impl FeaturesManager {
         if self.0.contains(Features::DUAL_SOURCE_BLENDING) && version.is_es() {
             // https://registry.khronos.org/OpenGL/extensions/EXT/EXT_blend_func_extended.txt
             writeln!(out, "#extension GL_EXT_blend_func_extended : require")?;
+        }
+
+        if self.0.contains(Features::SUBGROUP_OPERATIONS) {
+            // https://registry.khronos.org/OpenGL/extensions/KHR/KHR_shader_subgroup.txt
+            writeln!(out, "#extension GL_KHR_shader_subgroup_basic : require")?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_vote : require")?;
+            writeln!(
+                out,
+                "#extension GL_KHR_shader_subgroup_arithmetic : require"
+            )?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_ballot : require")?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_shuffle : require")?;
+            writeln!(
+                out,
+                "#extension GL_KHR_shader_subgroup_shuffle_relative : require"
+            )?;
         }
 
         Ok(())
@@ -453,6 +472,10 @@ impl<'a, W> Writer<'a, W> {
                             features.request(Features::TEXTURE_LEVELS)
                         }
                     }
+                }
+                Expression::SubgroupBallotResult |
+                Expression::SubgroupOperationResult { .. } => {
+                    features.request(Features::SUBGROUP_OPERATIONS)
                 }
                 _ => {}
             }

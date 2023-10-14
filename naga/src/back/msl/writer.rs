@@ -3017,14 +3017,13 @@ impl<W: Write> Writer<W> {
                     let name = self.namer.call("");
                     self.start_baking_expression(result, &context.expression, &name)?;
                     self.named_expressions.insert(result, name);
-                    write!(self.out, "{NAMESPACE}::simd_ballot(;")?;
-                    match predicate {
-                        Some(predicate) => {
-                            self.put_expression(predicate, &context.expression, true)?
-                        }
-                        None => write!(self.out, "true")?,
+                    write!(self.out, "uint4((uint64_t){NAMESPACE}::simd_ballot(")?;
+                    if let Some(predicate) = predicate {
+                        self.put_expression(predicate, &context.expression, true)?;
+                    } else {
+                        write!(self.out, "true")?;
                     }
-                    writeln!(self.out, ");")?;
+                    writeln!(self.out, "), 0, 0, 0);")?;
                 }
                 crate::Statement::SubgroupCollectiveOperation {
                     op,
@@ -3032,14 +3031,101 @@ impl<W: Write> Writer<W> {
                     argument,
                     result,
                 } => {
-                    unimplemented!(); // FIXME
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    match (collective_op, op) {
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                            write!(self.out, "{NAMESPACE}::simd_all(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                            write!(self.out, "{NAMESPACE}::simd_any(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                            write!(self.out, "{NAMESPACE}::simd_sum(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                            write!(self.out, "{NAMESPACE}::simd_product(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                            write!(self.out, "{NAMESPACE}::simd_max(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                            write!(self.out, "{NAMESPACE}::simd_min(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                            write!(self.out, "{NAMESPACE}::simd_and(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                            write!(self.out, "{NAMESPACE}::simd_or(")?
+                        }
+                        (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                            write!(self.out, "{NAMESPACE}::simd_xor(")?
+                        }
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_exclusive_sum(")?,
+                        (
+                            crate::CollectiveOperation::ExclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_exclusive_product(")?,
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Add,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_inclusive_sum(")?,
+                        (
+                            crate::CollectiveOperation::InclusiveScan,
+                            crate::SubgroupOperation::Mul,
+                        ) => write!(self.out, "{NAMESPACE}::simd_prefix_inclusive_product(")?,
+                        _ => unimplemented!(),
+                    }
+                    self.put_expression(argument, &context.expression, true)?;
+                    writeln!(self.out, ");")?;
                 }
                 crate::Statement::SubgroupGather {
                     mode,
                     argument,
                     result,
                 } => {
-                    unimplemented!(); // FIXME
+                    write!(self.out, "{level}")?;
+                    let name = self.namer.call("");
+                    self.start_baking_expression(result, &context.expression, &name)?;
+                    self.named_expressions.insert(result, name);
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {
+                            write!(self.out, "{NAMESPACE}::simd_broadcast_first(")?;
+                        }
+                        crate::GatherMode::Broadcast(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_broadcast(")?;
+                        }
+                        crate::GatherMode::Shuffle(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle(")?;
+                        }
+                        crate::GatherMode::ShuffleDown(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_down(")?;
+                        }
+                        crate::GatherMode::ShuffleUp(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_up(")?;
+                        }
+                        crate::GatherMode::ShuffleXor(_) => {
+                            write!(self.out, "{NAMESPACE}::simd_shuffle_xor(")?;
+                        }
+                    }
+                    self.put_expression(argument, &context.expression, true)?;
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => {}
+                        crate::GatherMode::Broadcast(index)
+                        | crate::GatherMode::Shuffle(index)
+                        | crate::GatherMode::ShuffleDown(index)
+                        | crate::GatherMode::ShuffleUp(index)
+                        | crate::GatherMode::ShuffleXor(index) => {
+                            write!(self.out, ", ")?;
+                            self.put_expression(index, &context.expression, true)?;
+                        }
+                    }
+                    writeln!(self.out, ");")?;
                 }
             }
         }
@@ -4378,7 +4464,10 @@ impl<W: Write> Writer<W> {
             )?;
         }
         if flags.contains(crate::Barrier::SUB_GROUP) {
-            unimplemented!(); // FIXME
+            writeln!(
+                self.out,
+                "{level}{NAMESPACE}::simdgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
+            )?;
         }
         Ok(())
     }

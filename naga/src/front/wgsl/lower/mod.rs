@@ -1867,7 +1867,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
                 } else if let Some((op, cop)) = conv::map_subgroup_operation(function.name) {
-                    return Ok(Some(self.subgroup_helper(span, op, cop, arguments, ctx)?));
+                    return Ok(Some(
+                        self.subgroup_operation_helper(span, op, cop, arguments, ctx)?,
+                    ));
+                } else if let Some(mode) = conv::map_subgroup_gather(function.name) {
+                    return Ok(Some(
+                        self.subgroup_gather_helper(span, mode, arguments, ctx)?,
+                    ));
                 } else {
                     match function.name {
                         "select" => {
@@ -2267,53 +2273,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::SubgroupBallot { result, predicate }, span);
                             return Ok(Some(result));
                         }
-                        "subgroupBroadcast" => {
-                            let mut args = ctx.prepare_args(arguments, 2, span);
-
-                            let index = self.expression(args.next()?, ctx)?;
-                            let argument = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let ty = ctx.register_type(argument)?;
-
-                            let result = ctx.interrupt_emitter(
-                                crate::Expression::SubgroupOperationResult { ty },
-                                span,
-                            )?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                crate::Statement::SubgroupGather {
-                                    mode: crate::GatherMode::Broadcast(index),
-                                    argument,
-                                    result,
-                                },
-                                span,
-                            );
-                            return Ok(Some(result));
-                        }
-                        "subgroupBroadcastFirst" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-
-                            let argument = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let ty = ctx.register_type(argument)?;
-
-                            let result = ctx.interrupt_emitter(
-                                crate::Expression::SubgroupOperationResult { ty },
-                                span,
-                            )?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                crate::Statement::SubgroupGather {
-                                    mode: crate::GatherMode::BroadcastFirst,
-                                    argument,
-                                    result,
-                                },
-                                span,
-                            );
-                            return Ok(Some(result));
-                        }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }
                 };
@@ -2504,7 +2463,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             depth_ref,
         })
     }
-    fn subgroup_helper(
+
+    fn subgroup_operation_helper(
         &mut self,
         span: Span,
         op: crate::SubgroupOperation,
@@ -2526,6 +2486,46 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             crate::Statement::SubgroupCollectiveOperation {
                 op,
                 collective_op,
+                argument,
+                result,
+            },
+            span,
+        );
+        Ok(result)
+    }
+
+    fn subgroup_gather_helper(
+        &mut self,
+        span: Span,
+        mode: crate::GatherMode,
+        arguments: &[Handle<ast::Expression<'source>>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        let mut args = ctx.prepare_args(arguments, 2, span);
+
+        let argument = self.expression(args.next()?, ctx)?;
+        let index = if let crate::GatherMode::BroadcastFirst = mode {
+            Handle::new(NonZeroU32::new(u32::MAX).unwrap())
+        } else {
+            self.expression(args.next()?, ctx)?
+        };
+        args.finish()?;
+
+        let ty = ctx.register_type(argument)?;
+
+        let result =
+            ctx.interrupt_emitter(crate::Expression::SubgroupOperationResult { ty }, span)?;
+        let rctx = ctx.runtime_expression_ctx(span)?;
+        rctx.block.push(
+            crate::Statement::SubgroupGather {
+                mode: match mode {
+                    crate::GatherMode::BroadcastFirst => crate::GatherMode::BroadcastFirst,
+                    crate::GatherMode::Broadcast(_) => crate::GatherMode::Broadcast(index),
+                    crate::GatherMode::Shuffle(_) => crate::GatherMode::Shuffle(index),
+                    crate::GatherMode::ShuffleDown(_) => crate::GatherMode::ShuffleDown(index),
+                    crate::GatherMode::ShuffleUp(_) => crate::GatherMode::ShuffleUp(index),
+                    crate::GatherMode::ShuffleXor(_) => crate::GatherMode::ShuffleXor(index),
+                },
                 argument,
                 result,
             },

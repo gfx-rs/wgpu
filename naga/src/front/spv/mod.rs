@@ -3650,7 +3650,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let semantics_const = self.lookup_constant.lookup(semantics_id)?;
 
                     let exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
-                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
                     let semantics = resolve_constant(ctx.gctx(), semantics_const.handle)
                         .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
 
@@ -3689,6 +3689,209 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             type_id: result_type_id,
                             block_id,
                         },
+                    );
+                }
+                Op::GroupNonUniformBallot => {
+                    inst.expect(4)?;
+                    let _result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let predicate_id = self.next()?;
+
+                    let result_lookup = self.lookup_expression.lookup(result_id)?;
+                    let result_handle = get_expr_handle!(result_id, result_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
+
+                    let predicate = if self
+                        .lookup_constant
+                        .lookup(predicate_id)
+                        .ok()
+                        .filter(|predicate_const| {
+                            matches!(
+                                ctx.gctx().const_expressions
+                                    [ctx.gctx().constants[predicate_const.handle].init],
+                                crate::Expression::Literal(crate::Literal::Bool(true))
+                            )
+                        })
+                        .is_some()
+                    {
+                        None
+                    } else {
+                        let predicate_lookup = self.lookup_expression.lookup(predicate_id)?;
+                        let predicate_handle = get_expr_handle!(predicate_id, predicate_lookup);
+                        Some(predicate_handle)
+                    };
+
+                    block.push(
+                        crate::Statement::SubgroupBallot {
+                            result: result_handle,
+                            predicate,
+                        },
+                        span,
+                    );
+                }
+                spirv::Op::GroupNonUniformAll
+                | spirv::Op::GroupNonUniformAny
+                | spirv::Op::GroupNonUniformIAdd
+                | spirv::Op::GroupNonUniformFAdd
+                | spirv::Op::GroupNonUniformIMul
+                | spirv::Op::GroupNonUniformFMul
+                | spirv::Op::GroupNonUniformSMax
+                | spirv::Op::GroupNonUniformUMax
+                | spirv::Op::GroupNonUniformFMax
+                | spirv::Op::GroupNonUniformSMin
+                | spirv::Op::GroupNonUniformUMin
+                | spirv::Op::GroupNonUniformFMin
+                | spirv::Op::GroupNonUniformBitwiseAnd
+                | spirv::Op::GroupNonUniformBitwiseOr
+                | spirv::Op::GroupNonUniformBitwiseXor
+                | spirv::Op::GroupNonUniformLogicalAnd
+                | spirv::Op::GroupNonUniformLogicalOr
+                | spirv::Op::GroupNonUniformLogicalXor => {
+                    inst.expect(
+                        if matches!(
+                            inst.op,
+                            spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny
+                        ) {
+                            4
+                        } else {
+                            5
+                        },
+                    )?;
+                    let _result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let collective_op_id = match inst.op {
+                        spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny => {
+                            crate::CollectiveOperation::Reduce
+                        }
+                        _ => {
+                            let group_op_id = self.next()?;
+                            match spirv::GroupOperation::from_u32(group_op_id) {
+                                Some(spirv::GroupOperation::Reduce) => {
+                                    crate::CollectiveOperation::Reduce
+                                }
+                                Some(spirv::GroupOperation::InclusiveScan) => {
+                                    crate::CollectiveOperation::InclusiveScan
+                                }
+                                Some(spirv::GroupOperation::ExclusiveScan) => {
+                                    crate::CollectiveOperation::ExclusiveScan
+                                }
+                                _ => return Err(Error::UnsupportedGroupOperation(group_op_id)),
+                            }
+                        }
+                    };
+                    let argument_id = self.next()?;
+
+                    let result_lookup = self.lookup_expression.lookup(result_id)?;
+                    let result_handle = get_expr_handle!(result_id, result_lookup);
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
+
+                    let op_id = match inst.op {
+                        spirv::Op::GroupNonUniformAll => crate::SubgroupOperation::All,
+                        spirv::Op::GroupNonUniformAny => crate::SubgroupOperation::Any,
+                        spirv::Op::GroupNonUniformIAdd | spirv::Op::GroupNonUniformFAdd => {
+                            crate::SubgroupOperation::Add
+                        }
+                        spirv::Op::GroupNonUniformIMul | spirv::Op::GroupNonUniformFMul => {
+                            crate::SubgroupOperation::Mul
+                        }
+                        spirv::Op::GroupNonUniformSMax
+                        | spirv::Op::GroupNonUniformUMax
+                        | spirv::Op::GroupNonUniformFMax => crate::SubgroupOperation::Max,
+                        spirv::Op::GroupNonUniformSMin
+                        | spirv::Op::GroupNonUniformUMin
+                        | spirv::Op::GroupNonUniformFMin => crate::SubgroupOperation::Min,
+                        spirv::Op::GroupNonUniformBitwiseAnd
+                        | spirv::Op::GroupNonUniformLogicalAnd => crate::SubgroupOperation::And,
+                        spirv::Op::GroupNonUniformBitwiseOr
+                        | spirv::Op::GroupNonUniformLogicalOr => crate::SubgroupOperation::Or,
+                        spirv::Op::GroupNonUniformBitwiseXor
+                        | spirv::Op::GroupNonUniformLogicalXor => crate::SubgroupOperation::Xor,
+                        _ => unreachable!(),
+                    };
+
+                    block.push(
+                        crate::Statement::SubgroupCollectiveOperation {
+                            result: result_handle,
+                            op: op_id,
+                            collective_op: collective_op_id,
+                            argument: argument_handle,
+                        },
+                        span,
+                    );
+                }
+                Op::GroupNonUniformBroadcastFirst
+                | Op::GroupNonUniformBroadcast
+                | Op::GroupNonUniformShuffle
+                | Op::GroupNonUniformShuffleDown
+                | Op::GroupNonUniformShuffleUp
+                | Op::GroupNonUniformShuffleXor => {
+                    inst.expect(
+                        if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
+                            4
+                        } else {
+                            5
+                        },
+                    )?;
+                    let _result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let argument_id = self.next()?;
+
+                    let result_lookup = self.lookup_expression.lookup(result_id)?;
+                    let result_handle = get_expr_handle!(result_id, result_lookup);
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidExecutionScope(exec_scope_id))?;
+
+                    let mode = if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
+                        crate::GatherMode::BroadcastFirst
+                    } else {
+                        let index_id = self.next()?;
+                        let index_lookup = self.lookup_expression.lookup(index_id)?;
+                        let index_handle = get_expr_handle!(index_id, index_lookup);
+                        match inst.op {
+                            spirv::Op::GroupNonUniformBroadcast => {
+                                crate::GatherMode::Broadcast(index_handle)
+                            }
+                            spirv::Op::GroupNonUniformShuffle => {
+                                crate::GatherMode::Shuffle(index_handle)
+                            }
+                            spirv::Op::GroupNonUniformShuffleDown => {
+                                crate::GatherMode::ShuffleDown(index_handle)
+                            }
+                            spirv::Op::GroupNonUniformShuffleUp => {
+                                crate::GatherMode::ShuffleUp(index_handle)
+                            }
+                            spirv::Op::GroupNonUniformShuffleXor => {
+                                crate::GatherMode::ShuffleXor(index_handle)
+                            }
+                            _ => unreachable!(),
+                        }
+                    };
+
+                    block.push(
+                        crate::Statement::SubgroupGather {
+                            result: result_handle,
+                            mode,
+                            argument: argument_handle,
+                        },
+                        span,
                     );
                 }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
@@ -3811,7 +4014,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Store { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
-                | S::RayQuery { .. } => {}
+                | S::RayQuery { .. }
+                | S::SubgroupBallot { .. }
+                | S::SubgroupCollectiveOperation { .. }
+                | S::SubgroupGather { .. } => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,
@@ -3842,9 +4048,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     }
                 }
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
-                S::SubgroupBallot { .. } => unreachable!(), // FIXME??
-                S::SubgroupCollectiveOperation { .. } => unreachable!(),
-                S::SubgroupGather { .. } => unreachable!(),
             }
             i += 1;
         }

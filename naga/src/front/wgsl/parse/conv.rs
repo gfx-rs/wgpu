@@ -35,8 +35,10 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
         "workgroup_id" => crate::BuiltIn::WorkGroupId,
         "num_workgroups" => crate::BuiltIn::NumWorkGroups,
         // subgroup
-        "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
+        "num_subgroups" => crate::BuiltIn::NumSubgroups,
+        "subgroup_id" => crate::BuiltIn::SubgroupId,
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
+        "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         _ => return Err(Error::UnknownBuiltin(span)),
     })
 }
@@ -254,8 +256,25 @@ pub fn map_subgroup_operation(
         "subgroupAnd" => (sg::And, co::Reduce),
         "subgroupOr" => (sg::Or, co::Reduce),
         "subgroupXor" => (sg::Xor, co::Reduce),
-        "subgroupPrefixAdd" => (sg::Add, co::InclusiveScan),
-        "subgroupPrefixMul" => (sg::Mul, co::InclusiveScan),
+        "subgroupPrefixExclusiveAdd" => (sg::Add, co::ExclusiveScan),
+        "subgroupPrefixExclusiveMul" => (sg::Mul, co::ExclusiveScan),
+        "subgroupPrefixInclusiveAdd" => (sg::Add, co::InclusiveScan),
+        "subgroupPrefixInclusiveMul" => (sg::Mul, co::InclusiveScan),
+        _ => return None,
+    })
+}
+
+pub fn map_subgroup_gather(word: &str) -> Option<crate::GatherMode> {
+    use crate::GatherMode as gm;
+    use crate::Handle;
+    use std::num::NonZeroU32;
+    Some(match word {
+        "subgroupBroadcastFirst" => gm::BroadcastFirst,
+        "subgroupBroadcast" => gm::Broadcast(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
+        "subgroupShuffle" => gm::Shuffle(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
+        "subgroupShuffleDown" => gm::ShuffleDown(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
+        "subgroupShuffleUp" => gm::ShuffleUp(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
+        "subgroupShuffleXor" => gm::ShuffleXor(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
         _ => return None,
     })
 }

@@ -1130,7 +1130,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         write!(self.out, " {name}(")?;
 
         let need_workgroup_variables_initialization =
-            self.need_workgroup_variables_initialization(func_ctx, module);
+            self.need_workgroup_variables_initialization(func, func_ctx, module);
 
         // Write function arguments for non entry point functions
         match func_ctx.ty {
@@ -1166,7 +1166,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name,)?;
                 } else {
                     let stage = module.entry_points[ep_index as usize].stage;
+                    let mut arg_num = 0;
                     for (index, arg) in func.arguments.iter().enumerate() {
+                        if matches!(
+                            arg.binding,
+                            Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupSize))
+                                | Some(crate::Binding::BuiltIn(
+                                    crate::BuiltIn::SubgroupInvocationId
+                                ))
+                                | Some(crate::Binding::BuiltIn(crate::BuiltIn::NumSubgroups))
+                                | Some(crate::Binding::BuiltIn(crate::BuiltIn::SubgroupId))
+                        ) {
+                            continue;
+                        }
+                        arg_num += 1;
+
                         if index != 0 {
                             write!(self.out, ", ")?;
                         }
@@ -1186,7 +1200,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     if need_workgroup_variables_initialization {
-                        if !func.arguments.is_empty() {
+                        if arg_num > 0 {
                             write!(self.out, ", ")?;
                         }
                         write!(self.out, "uint3 __local_invocation_id : SV_GroupThreadID")?;
@@ -1215,6 +1229,53 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if need_workgroup_variables_initialization {
             self.write_workgroup_variables_initialization(func_ctx, module)?;
+        }
+
+        if let back::FunctionType::EntryPoint(ep_index) = func_ctx.ty {
+            let ep = &module.entry_points[ep_index as usize];
+            for (index, arg) in func.arguments.iter().enumerate() {
+                if let Some(crate::Binding::BuiltIn(builtin)) = arg.binding {
+                    if matches!(
+                        builtin,
+                        crate::BuiltIn::SubgroupSize
+                            | crate::BuiltIn::SubgroupInvocationId
+                            | crate::BuiltIn::NumSubgroups
+                            | crate::BuiltIn::SubgroupId
+                    ) {
+                        let level = back::Level(1);
+                        write!(self.out, "{level}const ")?;
+
+                        self.write_type(module, arg.ty)?;
+
+                        let argument_name =
+                            &self.names[&NameKey::EntryPointArgument(ep_index, index as u32)];
+                        write!(self.out, " {argument_name} = ")?;
+
+                        match builtin {
+                            crate::BuiltIn::SubgroupSize => {
+                                writeln!(self.out, "WaveGetLaneCount();")?
+                            }
+                            crate::BuiltIn::SubgroupInvocationId => {
+                                writeln!(self.out, "WaveGetLaneIndex();")?
+                            }
+                            crate::BuiltIn::NumSubgroups => writeln!(
+                                self.out,
+                                "({}u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();",
+                                ep.workgroup_size[0] * ep.workgroup_size[1] * ep.workgroup_size[2]
+                            )?,
+                            crate::BuiltIn::SubgroupId => {
+                                writeln!(
+                                    self.out,
+                                    "(__local_invocation_id.x * {}u + __local_invocation_id.y * {}u + __local_invocation_id.z) / WaveGetLaneCount();",
+                                    ep.workgroup_size[0] * ep.workgroup_size[1],
+                                    ep.workgroup_size[1],
+                                )?;
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                }
+            }
         }
 
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
@@ -1267,14 +1328,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
     fn need_workgroup_variables_initialization(
         &mut self,
+        func: &crate::Function,
         func_ctx: &back::FunctionCtx,
         module: &Module,
     ) -> bool {
-        self.options.zero_initialize_workgroup_memory
+        func.arguments.iter().any(|arg| {
+            matches!(
+                arg.binding,
+                Some(crate::Binding::BuiltIn(crate::BuiltIn::NumSubgroups))
+            )
+        }) || (self.options.zero_initialize_workgroup_memory
             && func_ctx.ty.is_compute_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            })
+            }))
     }
 
     fn write_workgroup_variables_initialization(
@@ -2006,7 +2073,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Statement::RayQuery { .. } => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
-
                 let name = format!("{}{}", back::BAKE_PREFIX, result.index());
                 write!(self.out, "const uint4 {name} = ")?;
                 self.named_expressions.insert(result, name);
@@ -2024,14 +2090,109 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 argument,
                 result,
             } => {
-                unimplemented!(); // FIXME
+                write!(self.out, "{level}")?;
+                write!(self.out, "const ")?;
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                match func_ctx.info[result].ty {
+                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    proc::TypeResolution::Value(ref value) => {
+                        self.write_value_type(module, value)?
+                    }
+                };
+                write!(self.out, " {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                match (collective_op, op) {
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::All) => {
+                        write!(self.out, "WaveActiveAllTrue(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Any) => {
+                        write!(self.out, "WaveActiveAnyTrue(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "WaveActiveSum(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "WaveActiveProduct(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Max) => {
+                        write!(self.out, "WaveActiveMax(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Min) => {
+                        write!(self.out, "WaveActiveMin(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::And) => {
+                        write!(self.out, "WaveActiveBitAnd(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Or) => {
+                        write!(self.out, "WaveActiveBitOr(")?
+                    }
+                    (crate::CollectiveOperation::Reduce, crate::SubgroupOperation::Xor) => {
+                        write!(self.out, "WaveActiveBitXor(")?
+                    }
+                    (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Add) => {
+                        write!(self.out, "WavePrefixSum(")?
+                    }
+                    (crate::CollectiveOperation::ExclusiveScan, crate::SubgroupOperation::Mul) => {
+                        write!(self.out, "WavePrefixProduct(")?
+                    }
+                    (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Add) => {
+                        self.write_expr(module, argument, func_ctx)?;
+                        write!(self.out, " + WavePrefixSum(")?;
+                    }
+                    (crate::CollectiveOperation::InclusiveScan, crate::SubgroupOperation::Mul) => {
+                        self.write_expr(module, argument, func_ctx)?;
+                        write!(self.out, " * WavePrefixProduct(")?;
+                    }
+                    _ => unimplemented!(),
+                }
+                self.write_expr(module, argument, func_ctx)?;
+                writeln!(self.out, ");")?;
             }
             Statement::SubgroupGather {
                 mode,
                 argument,
                 result,
             } => {
-                unimplemented!(); // FIXME
+                write!(self.out, "{level}")?;
+                write!(self.out, "const ")?;
+                let name = format!("{}{}", back::BAKE_PREFIX, result.index());
+                match func_ctx.info[result].ty {
+                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    proc::TypeResolution::Value(ref value) => {
+                        self.write_value_type(module, value)?
+                    }
+                };
+                write!(self.out, " {name} = ")?;
+                self.named_expressions.insert(result, name);
+
+                if matches!(mode, crate::GatherMode::BroadcastFirst) {
+                    write!(self.out, "WaveReadLaneFirst(")?;
+                    self.write_expr(module, argument, func_ctx)?;
+                } else {
+                    write!(self.out, "WaveReadLaneAt(")?;
+                    self.write_expr(module, argument, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    match mode {
+                        crate::GatherMode::BroadcastFirst => unreachable!(),
+                        crate::GatherMode::Broadcast(index) | crate::GatherMode::Shuffle(index) => {
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                        crate::GatherMode::ShuffleDown(index) => {
+                            write!(self.out, "WaveGetLaneIndex() + ")?;
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                        crate::GatherMode::ShuffleUp(index) => {
+                            write!(self.out, "WaveGetLaneIndex() - ")?;
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                        crate::GatherMode::ShuffleXor(index) => {
+                            write!(self.out, "WaveGetLaneIndex() ^ ")?;
+                            self.write_expr(module, index, func_ctx)?;
+                        }
+                    }
+                }
+                writeln!(self.out, ");")?;
             }
         }
 
@@ -3251,7 +3412,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out, "{level}GroupMemoryBarrierWithGroupSync();")?;
         }
         if barrier.contains(crate::Barrier::SUB_GROUP) {
-            unimplemented!() // FIXME
+            // Does not exist in DirectX
         }
         Ok(())
     }

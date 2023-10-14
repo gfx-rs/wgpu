@@ -2340,30 +2340,11 @@ impl<'w> BlockContext<'w> {
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
                 }
-                crate::Statement::SubgroupBallot { result, predicate } => {
-                    self.writer.require_any(
-                        "GroupNonUniformBallot",
-                        &[spirv::Capability::GroupNonUniformBallot],
-                    )?;
-                    let vec4_u32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
-                        vector_size: Some(crate::VectorSize::Quad),
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                        pointer_space: None,
-                    }));
-                    let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
-                    let predicate = match predicate {
-                        Some(predicate) => self.cached[predicate],
-                        None => self.writer.get_constant_scalar(crate::Literal::Bool(true)),
-                    };
-                    let id = self.gen_id();
-                    block.body.push(Instruction::group_non_uniform_ballot(
-                        vec4_u32_type_id,
-                        id,
-                        exec_scope_id,
-                        predicate,
-                    ));
-                    self.cached[result] = id;
+                crate::Statement::SubgroupBallot {
+                    result,
+                    ref predicate,
+                } => {
+                    self.write_subgroup_ballot(predicate, result, &mut block)?;
                 }
                 crate::Statement::SubgroupCollectiveOperation {
                     ref op,
@@ -2378,7 +2359,7 @@ impl<'w> BlockContext<'w> {
                     argument,
                     result,
                 } => {
-                    self.write_subgroup_broadcast(mode, argument, result, &mut block)?;
+                    self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
             }
         }
