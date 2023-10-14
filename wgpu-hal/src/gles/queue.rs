@@ -60,12 +60,17 @@ impl super::Queue {
         unsafe { gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]) };
         unsafe { gl.draw_arrays(glow::TRIANGLES, 0, 3) };
 
-        if self.draw_buffer_count != 0 {
+        let draw_buffer_count = self.draw_buffer_count.load(Ordering::Relaxed);
+        if draw_buffer_count != 0 {
             // Reset the draw buffers to what they were before the clear
-            let indices = (0..self.draw_buffer_count as u32)
+            let indices = (0..draw_buffer_count as u32)
                 .map(|i| glow::COLOR_ATTACHMENT0 + i)
                 .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
             unsafe { gl.draw_buffers(&indices) };
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        for draw_buffer in 0..draw_buffer_count as u32 {
+            unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
         }
     }
 

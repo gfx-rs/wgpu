@@ -2323,7 +2323,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &buffer.device;
             if !device.is_valid() {
-                return Err((op, DeviceError::Lost));
+                return Err((op, DeviceError::Lost.into()));
             }
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
