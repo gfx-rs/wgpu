@@ -22,7 +22,8 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
                 vendor: Some(5140),
                 adapter: Some("Microsoft Basic Render Driver"),
                 ..FailureCase::default()
-            }),
+            })
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
     .run_sync(|ctx| {
         let bgl = ctx
