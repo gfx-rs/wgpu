@@ -299,7 +299,17 @@ bitflags::bitflags! {
         /// This is a web and native feature.
         const SHADER_F16 = 1 << 8;
 
-        // 9..14 available
+        /// Allows shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const SUBGROUP_OPERATIONS = 1 << 9;
+
+        // 10..14 available
 
         // Texture Formats:
 

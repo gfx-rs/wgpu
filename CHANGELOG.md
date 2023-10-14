@@ -40,6 +40,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added/New Features
+
+- Add `SUBGROUP_OPERATIONS` feature. By @exrook and @lichtso in [#4240](https://github.com/gfx-rs/wgpu/pull/4240)
+
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
 ## v0.18.0 (2023-10-25)
