@@ -123,13 +123,17 @@ impl ShaderTest {
         false
     }
 
-    fn new<I: bytemuck::Pod, O: bytemuck::Pod + Debug + PartialEq>(
+    fn new<I, O>(
         name: String,
         custom_struct_members: String,
         body: String,
         input_values: &[I],
         output_values: &[O],
-    ) -> Self {
+    ) -> Self
+    where
+        I: bytemuck::Pod,
+        O: bytemuck::Pod + Debug + PartialEq,
+    {
         Self {
             name,
             custom_struct_members,
