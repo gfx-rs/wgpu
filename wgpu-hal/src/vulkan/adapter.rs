@@ -528,6 +528,11 @@ impl PhysicalDeviceFeatures {
         features.set(F::RG11B10UFLOAT_RENDERABLE, rg11b10ufloat_renderable);
         features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
+        features.set(
+            F::BGRA8UNORM_STORAGE,
+            supports_bgra8unorm_storage(instance, phd, caps.effective_api_version),
+        );
+
         (features, dl_flags)
     }
 
@@ -1267,6 +1272,9 @@ impl super::Adapter {
             ) {
                 capabilities.push(spv::Capability::ShaderNonUniform);
             }
+            if features.contains(wgt::Features::BGRA8UNORM_STORAGE) {
+                capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
+            }
 
             let mut flags = spv::WriterFlags::empty();
             flags.set(
@@ -1750,5 +1758,37 @@ fn supports_format(
         vk::ImageTiling::LINEAR => properties.linear_tiling_features.contains(features),
         vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
         _ => false,
+    }
+}
+
+fn supports_bgra8unorm_storage(
+    instance: &ash::Instance,
+    phd: vk::PhysicalDevice,
+    api_version: u32,
+) -> bool {
+    // See https://github.com/KhronosGroup/Vulkan-Docs/issues/2027#issuecomment-1380608011
+
+    // This check gates the function call and structures used below.
+    // TODO: check for (`VK_KHR_get_physical_device_properties2` or VK1.1) and (`VK_KHR_format_feature_flags2` or VK1.3).
+    // Right now we only check for VK1.3.
+    if api_version < vk::API_VERSION_1_3 {
+        return false;
+    }
+
+    unsafe {
+        let mut properties3 = vk::FormatProperties3::default();
+        let mut properties2 = vk::FormatProperties2::builder().push_next(&mut properties3);
+
+        instance.get_physical_device_format_properties2(
+            phd,
+            vk::Format::B8G8R8A8_UNORM,
+            &mut properties2,
+        );
+
+        let features2 = properties2.format_properties.optimal_tiling_features;
+        let features3 = properties3.optimal_tiling_features;
+
+        features2.contains(vk::FormatFeatureFlags::STORAGE_IMAGE)
+            && features3.contains(vk::FormatFeatureFlags2::STORAGE_WRITE_WITHOUT_FORMAT)
     }
 }

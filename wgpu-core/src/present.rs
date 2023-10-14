@@ -137,7 +137,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             match present.device.downcast_clone::<A>() {
                 Some(device) => {
                     if !device.is_valid() {
-                        return Err(DeviceError::Invalid.into());
+                        return Err(DeviceError::Lost.into());
                     }
                     (device, present.config.clone())
                 }
@@ -289,7 +289,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = present.device.downcast_ref::<A>().unwrap();
         if !device.is_valid() {
-            return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Lost.into());
         }
         let queue_id = device.queue_id.read().unwrap();
         let queue = hub.queues.get(queue_id).unwrap();
@@ -385,7 +385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let device = present.device.downcast_ref::<A>().unwrap();
         if !device.is_valid() {
-            return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Lost.into());
         }
 
         #[cfg(feature = "trace")]

@@ -1318,7 +1318,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &cmd_buf.device;
             if !device.is_valid() {
-                return Err(DeviceError::Invalid).map_pass_err(init_scope);
+                return Err(DeviceError::Lost).map_pass_err(init_scope);
             }
 
             let encoder = &mut cmd_buf_data.encoder;

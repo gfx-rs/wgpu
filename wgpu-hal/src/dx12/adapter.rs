@@ -5,7 +5,9 @@ use crate::{
 use parking_lot::Mutex;
 use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
-    shared::{dxgi, dxgi1_2, minwindef::DWORD, windef, winerror},
+    shared::{
+        dxgi, dxgi1_2, dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM, minwindef::DWORD, windef, winerror,
+    },
     um::{d3d12 as d3d12_ty, d3d12sdklayers, winuser},
 };
 
@@ -275,6 +277,25 @@ impl super::Adapter {
                 | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_5_1,
+        );
+
+        let bgra8unorm_storage_supported = {
+            let mut bgra8unorm_info: d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT =
+                unsafe { mem::zeroed() };
+            bgra8unorm_info.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    d3d12_ty::D3D12_FEATURE_FORMAT_SUPPORT,
+                    &mut bgra8unorm_info as *mut _ as *mut _,
+                    mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                )
+            };
+            hr == 0
+                && (bgra8unorm_info.Support2 & d3d12_ty::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0)
+        };
+        features.set(
+            wgt::Features::BGRA8UNORM_STORAGE,
+            bgra8unorm_storage_supported,
         );
 
         // TODO: Determine if IPresentationManager is supported

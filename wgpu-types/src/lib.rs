@@ -309,7 +309,17 @@ bitflags::bitflags! {
         //
         // ? const FORMATS_TIER_1 = 1 << 14; (https://github.com/gpuweb/gpuweb/issues/3837)
         // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << 15; (https://github.com/gpuweb/gpuweb/issues/3838)
-        // TODO const BGRA8UNORM_STORAGE = 1 << 16;
+
+        /// Allows the [`wgpu::TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8unorm`]
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const BGRA8UNORM_STORAGE = 1 << 16;
+
         // ? const NORM16_FILTERABLE = 1 << 17; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const NORM16_RESOLVE = 1 << 18; (https://github.com/gpuweb/gpuweb/issues/3839)
         // TODO const FLOAT32_FILTERABLE = 1 << 19;
@@ -2977,6 +2987,11 @@ impl TextureFormat {
         } else {
             basic
         };
+        let bgra8unorm = if device_features.contains(Features::BGRA8UNORM_STORAGE) {
+            attachment | TextureUsages::STORAGE_BINDING
+        } else {
+            attachment
+        };
 
         #[rustfmt::skip] // lets make a nice table
         let (
@@ -3005,7 +3020,7 @@ impl TextureFormat {
             Self::Rgba8Snorm =>           (        noaa,    storage),
             Self::Rgba8Uint =>            (        msaa,  all_flags),
             Self::Rgba8Sint =>            (        msaa,  all_flags),
-            Self::Bgra8Unorm =>           (msaa_resolve, attachment),
+            Self::Bgra8Unorm =>           (msaa_resolve, bgra8unorm),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),

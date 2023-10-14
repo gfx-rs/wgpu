@@ -435,6 +435,8 @@ impl super::Adapter {
             );
         }
 
+        // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
+
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
             super::PrivateCapabilities::BUFFER_ALLOCATION,
@@ -455,10 +457,6 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
-            !cfg!(target_arch = "wasm32"),
-        );
-        private_caps.set(
-            super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER,
             !cfg!(target_arch = "wasm32"),
         );
         private_caps.set(

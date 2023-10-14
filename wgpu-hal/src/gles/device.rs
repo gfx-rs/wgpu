@@ -101,12 +101,10 @@ impl super::Device {
         desc: &crate::TextureDescriptor,
         drop_guard: Option<crate::DropGuard>,
     ) -> super::Texture {
-        let (target, _, is_cubemap) = super::Texture::get_info_from_desc(desc);
-
         super::Texture {
             inner: super::TextureInner::Texture {
                 raw: glow::NativeTexture(name),
-                target,
+                target: super::Texture::get_info_from_desc(desc),
             },
             drop_guard,
             mip_level_count: desc.mip_level_count,
@@ -114,7 +112,6 @@ impl super::Device {
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
             copy_size: desc.copy_extent(),
-            is_cubemap,
         }
     }
 
@@ -142,7 +139,6 @@ impl super::Device {
             format: desc.format,
             format_desc: self.shared.describe_texture_format(desc.format),
             copy_size: desc.copy_extent(),
-            is_cubemap: false,
         }
     }
 
@@ -668,7 +664,7 @@ impl crate::Device<super::Api> for super::Device {
             | crate::TextureUses::DEPTH_STENCIL_READ;
         let format_desc = self.shared.describe_texture_format(desc.format);
 
-        let (inner, is_cubemap) = if render_usage.contains(desc.usage)
+        let inner = if render_usage.contains(desc.usage)
             && desc.dimension == wgt::TextureDimension::D2
             && desc.size.depth_or_array_layers == 1
         {
@@ -704,10 +700,10 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             unsafe { gl.bind_renderbuffer(glow::RENDERBUFFER, None) };
-            (super::TextureInner::Renderbuffer { raw }, false)
+            super::TextureInner::Renderbuffer { raw }
         } else {
             let raw = unsafe { gl.create_texture().unwrap() };
-            let (target, is_3d, is_cubemap) = super::Texture::get_info_from_desc(desc);
+            let target = super::Texture::get_info_from_desc(desc);
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
@@ -728,7 +724,7 @@ impl crate::Device<super::Api> for super::Device {
                 _ => {}
             }
 
-            if is_3d {
+            if conv::is_layered_target(target) {
                 unsafe {
                     gl.tex_storage_3d(
                         target,
@@ -771,7 +767,7 @@ impl crate::Device<super::Api> for super::Device {
             }
 
             unsafe { gl.bind_texture(target, None) };
-            (super::TextureInner::Texture { raw, target }, is_cubemap)
+            super::TextureInner::Texture { raw, target }
         };
 
         Ok(super::Texture {
@@ -782,7 +778,6 @@ impl crate::Device<super::Api> for super::Device {
             format: desc.format,
             format_desc,
             copy_size: desc.copy_extent(),
-            is_cubemap,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {

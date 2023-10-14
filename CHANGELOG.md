@@ -117,6 +117,8 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add `Rgb10a2Uint` format. By @teoxoy in [4199](https://github.com/gfx-rs/wgpu/pull/4199)
 - Validate that resources are used on the right device. By @nical in [4207](https://github.com/gfx-rs/wgpu/pull/4207)
 - Expose instance flags. By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
+- Add support for the bgra8unorm-storage feature. By @jinleili and @nical in [#4228](https://github.com/gfx-rs/wgpu/pull/4228)
+- Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
 
 #### Vulkan
 
@@ -169,6 +171,10 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 - Ensure that limit requests and reporting is done correctly. By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)
 - Validate usage of polygon mode. By @teoxoy in [#4196](https://github.com/gfx-rs/wgpu/pull/4196)
+
+#### GLES
+
+- enable/disable blending per attachment only when available (on ES 3.2 or higher). By @teoxoy in [#4234](https://github.com/gfx-rs/wgpu/pull/4234)
 
 #### Testing
 
