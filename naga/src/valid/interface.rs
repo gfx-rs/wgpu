@@ -299,7 +299,7 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
-                    Bi::SubgroupInvocationId => (
+                    Bi::NumSubgroups | Bi::SubgroupId => (
                         self.stage == St::Compute && !self.output,
                         *ty_inner
                             == Ti::Scalar {
@@ -307,7 +307,7 @@ impl VaryingContext<'_> {
                                 width,
                             },
                     ),
-                    Bi::SubgroupSize => (
+                    Bi::SubgroupSize | Bi::SubgroupInvocationId => (
                         match self.stage {
                             St::Compute | St::Fragment => !self.output,
                             St::Vertex => false,

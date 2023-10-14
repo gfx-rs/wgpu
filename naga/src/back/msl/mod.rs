@@ -438,6 +438,7 @@ impl ResolvedBinding {
                     Bi::WorkGroupSize => "dispatch_threads_per_threadgroup",
                     Bi::NumWorkGroups => "threadgroups_per_grid",
                     // subgroup
+                    Bi::NumSubgroups | Bi::SubgroupId => todo!(),
                     Bi::SubgroupInvocationId => "simdgroup_index_in_threadgroup",
                     Bi::SubgroupSize => "simdgroups_per_threadgroup",
                     Bi::CullDistance | Bi::ViewIndex => {

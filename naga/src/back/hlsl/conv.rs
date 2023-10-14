@@ -167,6 +167,7 @@ impl crate::BuiltIn {
             // in `Writer::write_expr`.
             Self::NumWorkGroups => "SV_GroupID",
 
+            Self::NumSubgroups | Self::SubgroupId => todo!(),
             Self::SubgroupInvocationId
             | Self::SubgroupSize
             | Self::BaseInstance

@@ -1594,6 +1594,7 @@ impl Writer {
                     Bi::WorkGroupSize => BuiltIn::WorkgroupSize,
                     Bi::NumWorkGroups => BuiltIn::NumWorkgroups,
                     // Subgroup
+                    Bi::NumSubgroups | Bi::SubgroupId => todo!(),
                     Bi::SubgroupInvocationId => {
                         self.require_any(
                             "`subgroup_invocation_id` built-in",

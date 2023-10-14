@@ -436,6 +436,8 @@ pub enum BuiltIn {
     WorkGroupSize,
     NumWorkGroups,
     // subgroup
+    NumSubgroups,
+    SubgroupId,
     SubgroupSize,
     SubgroupInvocationId,
 }
