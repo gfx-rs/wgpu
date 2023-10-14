@@ -292,6 +292,12 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
+        features.set(
+            wgt::Features::SUBGROUP_OPERATIONS,
+            shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_6_0
+                && matches!(dx12_shader_compiler, &wgt::Dx12Compiler::Dxc { .. }),
+        );
+
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
