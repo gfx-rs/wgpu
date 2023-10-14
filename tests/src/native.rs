@@ -24,7 +24,7 @@ impl NativeTest {
         adapter: &AdapterReport,
         adapter_index: usize,
     ) -> Self {
-        let backend = &adapter.info.backend;
+        let backend = adapter.info.backend;
         let device_name = &adapter.info.name;
 
         let test_info = TestInfo::from_configuration(&config, adapter);
@@ -37,6 +37,21 @@ impl NativeTest {
         Self {
             name: full_name,
             future: Box::pin(async move {
+                // Enable metal validation layers if we're running on metal.
+                //
+                // This is a process-wide setting as it's via environment variable, but all
+                // tests are run in separate processes.
+                //
+                // We don't do this in the instance initializer as we don't want to enable
+                // validation layers for the entire process, or other instances.
+                //
+                // We do not enable metal validation when running on moltenvk.
+                let metal_validation = backend == wgpu::Backend::Metal;
+
+                let env_value = if metal_validation { "1" } else { "0" };
+                std::env::set_var("MTL_DEBUG_LAYER", env_value);
+                std::env::set_var("MTL_SHADER_VALIDATION", env_value);
+
                 execute_test(config, Some(test_info), adapter_index).await;
             }),
         }
