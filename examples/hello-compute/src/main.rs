@@ -56,12 +56,6 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .await
         .unwrap();
 
-    let info = adapter.get_info();
-    // skip this on LavaPipe temporarily
-    if info.vendor == 0x10005 {
-        return None;
-    }
-
     execute_gpu_inner(&device, &queue, numbers).await
 }
 
