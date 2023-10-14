@@ -68,10 +68,6 @@ impl super::Queue {
                 .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
             unsafe { gl.draw_buffers(&indices) };
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        for draw_buffer in 0..draw_buffer_count as u32 {
-            unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
-        }
     }
 
     unsafe fn reset_state(&self, gl: &glow::Context) {
