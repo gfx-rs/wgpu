@@ -3027,15 +3027,15 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, ");")?;
                 }
                 crate::Statement::SubgroupCollectiveOperation {
-                    ref op,
-                    ref collective_op,
+                    op,
+                    collective_op,
                     argument,
                     result,
                 } => {
                     unimplemented!(); // FIXME
                 }
                 crate::Statement::SubgroupGather {
-                    ref mode,
+                    mode,
                     argument,
                     result,
                 } => {

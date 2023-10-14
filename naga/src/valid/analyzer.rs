@@ -744,7 +744,7 @@ impl FunctionInfo {
                 non_uniform_result: None, // FIXME
                 requirements: UniformityRequirements::empty(),
             },
-            E::SubgroupOperationResult { ty } => Uniformity {
+            E::SubgroupOperationResult { .. } => Uniformity {
                 non_uniform_result: None, // FIXME
                 requirements: UniformityRequirements::empty(),
             },
@@ -1001,21 +1001,21 @@ impl FunctionInfo {
                     FunctionUniformity::new()
                 }
                 S::SubgroupCollectiveOperation {
-                    ref op,
-                    ref collective_op,
+                    op: _,
+                    collective_op: _,
                     argument,
                     result: _,
                 } => {
-                    let _ = self.add_ref(argument); // FIXME
+                    let _ = self.add_ref(argument);
                     FunctionUniformity::new()
                 }
                 S::SubgroupGather {
-                    ref mode,
+                    mode,
                     argument,
-                    result,
+                    result: _,
                 } => {
                     let _ = self.add_ref(argument);
-                    if let crate::GatherMode::Broadcast(expr) = *mode {
+                    if let crate::GatherMode::Broadcast(expr) = mode {
                         let _ = self.add_ref(expr);
                     }
                     FunctionUniformity::new()

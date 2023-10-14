@@ -287,8 +287,8 @@ impl StatementGraph {
                     "SubgroupBallot"
                 }
                 S::SubgroupCollectiveOperation {
-                    ref op,
-                    ref collective_op,
+                    op,
+                    collective_op,
                     argument,
                     result,
                 } => {
@@ -297,7 +297,7 @@ impl StatementGraph {
                     "SubgroupCollectiveOperation" // FIXME
                 }
                 S::SubgroupGather {
-                    ref mode,
+                    mode,
                     argument,
                     result,
                 } => {

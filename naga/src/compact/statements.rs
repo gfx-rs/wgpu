@@ -102,8 +102,8 @@ impl FunctionTracer<'_> {
                         self.trace_expression(result);
                     }
                     St::SubgroupCollectiveOperation {
-                        ref op,
-                        ref collective_op,
+                        op: _,
+                        collective_op: _,
                         argument,
                         result,
                     } => {
@@ -111,12 +111,13 @@ impl FunctionTracer<'_> {
                         self.trace_expression(result);
                     }
                     St::SubgroupGather {
-                        ref mode,
+                        mode,
                         argument,
                         result,
                     } => {
-                        if let crate::GatherMode::Broadcast(expr) = *mode {
-                            self.trace_expression(expr);
+                        match mode {
+                            crate::GatherMode::BroadcastFirst => {}
+                            crate::GatherMode::Broadcast(index) => self.trace_expression(index),
                         }
                         self.trace_expression(argument);
                         self.trace_expression(result);
@@ -274,14 +275,14 @@ impl FunctionMap {
                         ref mut result,
                         ref mut predicate,
                     } => {
-                        if let Some(ref mut predicate) = predicate {
+                        if let Some(ref mut predicate) = *predicate {
                             adjust(predicate);
                         }
                         adjust(result);
                     }
                     St::SubgroupCollectiveOperation {
-                        ref mut op,
-                        ref mut collective_op,
+                        op: _,
+                        collective_op: _,
                         ref mut argument,
                         ref mut result,
                     } => {
@@ -293,8 +294,9 @@ impl FunctionMap {
                         ref mut argument,
                         ref mut result,
                     } => {
-                        if let crate::GatherMode::Broadcast(expr) = mode {
-                            adjust(expr);
+                        match *mode {
+                            crate::GatherMode::BroadcastFirst => {}
+                            crate::GatherMode::Broadcast(ref mut index) => adjust(index),
                         }
                         adjust(argument);
                         adjust(result);

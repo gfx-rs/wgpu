@@ -435,15 +435,20 @@ impl super::Validator {
     ) -> Result<(), WithSpan<FunctionError>> {
         let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
 
-        let (is_scalar, kind) = match argument_inner {
+        let (is_scalar, kind) = match *argument_inner {
             crate::TypeInner::Scalar { kind, .. } => (true, kind),
             crate::TypeInner::Vector { kind, .. } => (false, kind),
-            _ => unimplemented!(),
+            _ => {
+                log::error!("Subgroup operand type {:?}", argument_inner);
+                return Err(SubgroupError::InvalidOperand(argument)
+                    .with_span_handle(argument, context.expressions)
+                    .into_other());
+            }
         };
 
         use crate::ScalarKind as sk;
         use crate::SubgroupOperation as sg;
-        match (kind, op) {
+        match (kind, *op) {
             (sk::Bool, sg::All | sg::Any) if is_scalar => {}
             (sk::Sint | sk::Uint | sk::Float, sg::Add | sg::Mul | sg::Min | sg::Max) => {}
             (sk::Sint | sk::Uint | sk::Bool, sg::And | sg::Or | sg::Xor) => {}
@@ -478,34 +483,36 @@ impl super::Validator {
         result: Handle<crate::Expression>,
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
-        if let crate::GatherMode::Broadcast(expr) = *mode {
-            let index_ty = context.resolve_type(expr, &self.valid_expression_set)?;
-            match index_ty {
-                crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    ..
-                } => {}
-                _ => {
-                    log::error!(
-                        "Subgroup broadcast index type {:?}, expected unsigned int",
-                        index_ty
-                    );
-                    return Err(SubgroupError::InvalidOperand(argument)
-                        .with_span_handle(expr, context.expressions)
-                        .into_other());
+        match *mode {
+            crate::GatherMode::BroadcastFirst => {}
+            crate::GatherMode::Broadcast(index) => {
+                let index_ty = context.resolve_type(index, &self.valid_expression_set)?;
+                match *index_ty {
+                    crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Uint,
+                        ..
+                    } => {}
+                    _ => {
+                        log::error!(
+                            "Subgroup gather index type {:?}, expected unsigned int",
+                            index_ty
+                        );
+                        return Err(SubgroupError::InvalidOperand(argument)
+                            .with_span_handle(index, context.expressions)
+                            .into_other());
+                    }
                 }
             }
         }
         let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
-
-        match argument_inner {
-            crate::TypeInner::Scalar { .. } | crate::TypeInner::Vector { .. } => {}
-            _ => {
-                log::error!("Subgroup broadcast operand type {:?}", argument_inner);
-                return Err(SubgroupError::InvalidOperand(argument)
-                    .with_span_handle(argument, context.expressions)
-                    .into_other());
-            }
+        if !matches!(*argument_inner,
+            crate::TypeInner::Scalar { kind, .. } | crate::TypeInner::Vector { kind, .. }
+            if matches!(kind, crate::ScalarKind::Uint | crate::ScalarKind::Sint | crate::ScalarKind::Float)
+        ) {
+            log::error!("Subgroup gather operand type {:?}", argument_inner);
+            return Err(SubgroupError::InvalidOperand(argument)
+                .with_span_handle(argument, context.expressions)
+                .into_other());
         }
 
         self.emit_expression(result, context)?;
@@ -1030,20 +1037,20 @@ impl super::Validator {
                     if let Some(predicate) = predicate {
                         let predicate_inner =
                             context.resolve_type(predicate, &self.valid_expression_set)?;
-                        match predicate_inner {
+                        if !matches!(
+                            *predicate_inner,
                             crate::TypeInner::Scalar {
                                 kind: crate::ScalarKind::Bool,
                                 ..
-                            } => {}
-                            _ => {
-                                log::error!(
-                                    "Subgroup ballot predicate type {:?} expected bool",
-                                    predicate_inner
-                                );
-                                return Err(SubgroupError::InvalidOperand(predicate)
-                                    .with_span_handle(predicate, context.expressions)
-                                    .into_other());
                             }
+                        ) {
+                            log::error!(
+                                "Subgroup ballot predicate type {:?} expected bool",
+                                predicate_inner
+                            );
+                            return Err(SubgroupError::InvalidOperand(predicate)
+                                .with_span_handle(predicate, context.expressions)
+                                .into_other());
                         }
                     }
                     self.emit_expression(result, context)?;
