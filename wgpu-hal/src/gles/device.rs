@@ -272,10 +272,6 @@ impl super::Device {
                 entry_point: stage.entry_point.to_owned(),
             });
         }
-        let glsl_version = match self.shared.shading_language_version {
-            naga::back::glsl::Version::Embedded { version, .. } => version,
-            naga::back::glsl::Version::Desktop(_) => unreachable!(),
-        };
         let mut guard = self
             .shared
             .program_cache
@@ -295,7 +291,7 @@ impl super::Device {
                     layout,
                     label,
                     multiview,
-                    glsl_version,
+                    self.shared.shading_language_version,
                     self.shared.private_caps,
                 )
             })
@@ -311,9 +307,13 @@ impl super::Device {
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
-        glsl_version: u16,
+        glsl_version: naga::back::glsl::Version,
         private_caps: super::PrivateCapabilities,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
+        let glsl_version = match glsl_version {
+            naga::back::glsl::Version::Embedded { version, .. } => format!("{version} es"),
+            naga::back::glsl::Version::Desktop(version) => format!("{version}"),
+        };
         let program = unsafe { gl.create_program() }.unwrap();
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(label) = label {
@@ -343,7 +343,7 @@ impl super::Device {
 
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
-            let shader_src = format!("#version {glsl_version} es \n void main(void) {{}}",);
+            let shader_src = format!("#version {glsl_version}\n void main(void) {{}}",);
             log::info!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
@@ -1304,7 +1304,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
-        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+        #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
         return unsafe {
             self.render_doc
                 .start_frame_capture(self.shared.context.raw_context(), ptr::null_mut())
@@ -1313,7 +1313,7 @@ impl crate::Device<super::Api> for super::Device {
         false
     }
     unsafe fn stop_capture(&self) {
-        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+        #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
         unsafe {
             self.render_doc
                 .end_frame_capture(ptr::null_mut(), ptr::null_mut())

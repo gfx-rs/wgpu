@@ -1233,7 +1233,7 @@ dependencies = [
  "glutin_egl_sys",
  "glutin_gles2_sys",
  "glutin_glx_sys",
- "glutin_wgl_sys",
+ "glutin_wgl_sys 0.1.5",
  "libloading 0.7.4",
  "log",
  "objc",
@@ -1282,6 +1282,15 @@ name = "glutin_wgl_sys"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3da5951a1569dbab865c6f2a863efafff193a93caf05538d193e9e3816d21696"
+dependencies = [
+ "gl_generator",
+]
+
+[[package]]
+name = "glutin_wgl_sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef89398e90033fc6bc65e9bd42fd29bbbfd483bda5b56dc5562f455550618165"
 dependencies = [
  "gl_generator",
 ]
@@ -3353,6 +3362,7 @@ dependencies = [
  "env_logger",
  "glow",
  "glutin",
+ "glutin_wgl_sys 0.4.0",
  "gpu-alloc",
  "gpu-allocator",
  "gpu-descriptor",

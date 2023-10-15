@@ -10,18 +10,6 @@ const GL_UNMASKED_VENDOR_WEBGL: u32 = 0x9245;
 const GL_UNMASKED_RENDERER_WEBGL: u32 = 0x9246;
 
 impl super::Adapter {
-    /// According to the OpenGL specification, the version information is
-    /// expected to follow the following syntax:
-    ///
-    /// ~~~bnf
-    /// <major>       ::= <number>
-    /// <minor>       ::= <number>
-    /// <revision>    ::= <number>
-    /// <vendor-info> ::= <string>
-    /// <release>     ::= <major> "." <minor> ["." <release>]
-    /// <version>     ::= <release> [" " <vendor-info>]
-    /// ~~~
-    ///
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
@@ -59,6 +47,35 @@ impl super::Adapter {
             None => false,
         };
 
+        Self::parse_full_version(src).map(|(major, minor)| {
+            (
+                // Return WebGL 2.0 version as OpenGL ES 3.0
+                if is_webgl && !is_glsl {
+                    major + 1
+                } else {
+                    major
+                },
+                minor,
+            )
+        })
+    }
+
+    /// According to the OpenGL specification, the version information is
+    /// expected to follow the following syntax:
+    ///
+    /// ~~~bnf
+    /// <major>       ::= <number>
+    /// <minor>       ::= <number>
+    /// <revision>    ::= <number>
+    /// <vendor-info> ::= <string>
+    /// <release>     ::= <major> "." <minor> ["." <release>]
+    /// <version>     ::= <release> [" " <vendor-info>]
+    /// ~~~
+    ///
+    /// Note that this function is intentionally lenient in regards to parsing,
+    /// and will try to recover at least the first two version numbers without
+    /// resulting in an `Err`.
+    pub(super) fn parse_full_version(src: &str) -> Result<(u8, u8), crate::InstanceError> {
         let (version, _vendor_info) = match src.find(' ') {
             Some(i) => (&src[..i], src[i + 1..].to_string()),
             None => (src, String::new()),
@@ -78,15 +95,7 @@ impl super::Adapter {
         });
 
         match (major, minor) {
-            (Some(major), Some(minor)) => Ok((
-                // Return WebGL 2.0 version as OpenGL ES 3.0
-                if is_webgl && !is_glsl {
-                    major + 1
-                } else {
-                    major
-                },
-                minor,
-            )),
+            (Some(major), Some(minor)) => Ok((major, minor)),
             _ => Err(crate::InstanceError::new(format!(
                 "unable to extract OpenGL version from {version:?}"
             ))),
@@ -212,29 +221,73 @@ impl super::Adapter {
         log::info!("Renderer: {}", renderer);
         log::info!("Version: {}", version);
 
-        log::debug!("Extensions: {:#?}", extensions);
+        let full_ver = Self::parse_full_version(&version).ok();
+        let ver = full_ver
+            .is_none()
+            .then_some(())
+            .and_then(|_| Self::parse_version(&version).ok());
 
-        let ver = Self::parse_version(&version).ok()?;
-        if ver < (3, 0) {
-            log::warn!(
-                "Returned GLES context is {}.{}, when 3.0+ was requested",
-                ver.0,
-                ver.1
-            );
+        if ver.is_none() && full_ver.is_none() {
+            log::warn!("Unable to parse OpenGL version");
             return None;
         }
 
-        let supports_storage = ver >= (3, 1);
-        let supports_work_group_params = ver >= (3, 1);
+        if let Some(ver) = ver {
+            if ver < (3, 0) {
+                log::warn!(
+                    "Returned GLES context is {}.{}, when 3.0+ was requested",
+                    ver.0,
+                    ver.1
+                );
+                return None;
+            }
+        }
+
+        if let Some(full_ver) = full_ver {
+            if full_ver < (3, 2) {
+                log::warn!(
+                    "Returned GL context is {}.{}, when 3.2+ was requested",
+                    full_ver.0,
+                    full_ver.1
+                );
+                return None;
+            }
+        }
+
+        let supported = |(req_es_major, req_es_minor), req_full_ver: Option<(u8, u8)>| {
+            let es_supported = ver
+                .map(|ver| ver >= (req_es_major, req_es_minor))
+                .unwrap_or_default();
+
+            let full_supported = full_ver
+                .and_then(|full_ver| req_full_ver.map(|req_full_ver| full_ver >= req_full_ver))
+                .unwrap_or_default();
+
+            es_supported || full_supported
+        };
+
+        // Assume 3.0 for Desktop GL
+        let ver = ver.unwrap_or((3, 0));
+
+        let supports_storage = supported((3, 1), Some((4, 3)));
+        let supports_compute =
+            supported((3, 1), Some((4, 6))) || extensions.contains("GL_ARB_compute_shader");
+        let supports_work_group_params = supports_compute;
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
             log::info!("SL version: {}", &sl_version);
-            let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
-            let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
-            naga::back::glsl::Version::Embedded {
-                version: value,
-                is_webgl: cfg!(target_arch = "wasm32"),
+            if full_ver.is_some() {
+                let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
+                let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
+                naga::back::glsl::Version::Desktop(value)
+            } else {
+                let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
+                let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
+                naga::back::glsl::Version::Embedded {
+                    version: value,
+                    is_webgl: cfg!(target_arch = "wasm32"),
+                }
             }
         };
 
@@ -295,12 +348,15 @@ impl super::Adapter {
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
-        downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, ver >= (3, 1));
+        downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
             max_storage_block_size != 0,
         );
-        downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, ver >= (3, 1));
+        downlevel_flags.set(
+            wgt::DownlevelFlags::INDIRECT_EXECUTION,
+            supported((3, 1), None) || extensions.contains("GL_ARB_multi_draw_indirect"),
+        );
         //TODO: we can actually support positive `base_vertex` in the same way
         // as we emulate the `start_instance`. But we can't deal with negatives...
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, ver >= (3, 2));
@@ -371,7 +427,10 @@ impl super::Adapter {
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
         );
-        features.set(wgt::Features::SHADER_EARLY_DEPTH_TEST, ver >= (3, 1));
+        features.set(
+            wgt::Features::SHADER_EARLY_DEPTH_TEST,
+            supported((3, 1), None),
+        );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
@@ -443,16 +502,19 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
-            ver >= (3, 1),
+            supports_compute,
         );
         private_caps.set(
             super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD,
             extensions.contains("GL_EXT_texture_shadow_lod"),
         );
-        private_caps.set(super::PrivateCapabilities::MEMORY_BARRIERS, ver >= (3, 1));
+        private_caps.set(
+            super::PrivateCapabilities::MEMORY_BARRIERS,
+            supported((3, 1), Some((4, 2))),
+        );
         private_caps.set(
             super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT,
-            ver >= (3, 1),
+            supported((3, 1), None),
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
@@ -483,7 +545,7 @@ impl super::Adapter {
 
         let min_uniform_buffer_offset_alignment =
             (unsafe { gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT) } as u32);
-        let min_storage_buffer_offset_alignment = if ver >= (3, 1) {
+        let min_storage_buffer_offset_alignment = if supported((3, 1), None) {
             (unsafe { gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) } as u32)
         } else {
             256
@@ -521,7 +583,9 @@ impl super::Adapter {
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
-            max_storage_buffer_binding_size: if ver >= (3, 1) {
+            max_storage_buffer_binding_size: if supported((3, 1), None)
+                || extensions.contains("GL_ARB_shader_storage_buffer_object")
+            {
                 unsafe { gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) }
             } else {
                 0
@@ -695,7 +759,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 main_vao,
-                #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
+                #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
                 render_doc: Default::default(),
             },
             queue: super::Queue {
@@ -909,7 +973,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
             Some(crate::SurfaceCapabilities {
                 formats,
-                present_modes: vec![wgt::PresentMode::Fifo], //TODO
+                present_modes: if cfg!(windows) {
+                    vec![wgt::PresentMode::Fifo, wgt::PresentMode::Mailbox]
+                } else {
+                    vec![wgt::PresentMode::Fifo] //TODO
+                },
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,
                 current_extent: None,
