@@ -83,15 +83,14 @@ fn discarding_either_depth_or_stencil_aspect() {
             .limits(Limits::downlevel_defaults()),
         |mut ctx| {
             let mut case = TestCase::new(&mut ctx, TextureFormat::Depth24PlusStencil8);
+
             case.create_command_encoder();
             case.discard_depth();
-            case.submit_command_encoder();
-
-            case.create_command_encoder();
             case.discard_stencil();
-            case.submit_command_encoder();
-
-            case.create_command_encoder();
+            //When splitting it in subsequent submits of different command encoders
+            //it seems that texture tracker is not able anymore to get that the texture has been left in DEPTH_STENCIL_WRITE
+            //and it assume that it could find it uninitialized and set it in RESOURCE as not owning it
+            //When using a unique submit instead the tracker is able to follow all resource barriers and everything is smooth
             case.copy_texture_to_buffer();
             case.submit_command_encoder();
 
