@@ -1224,6 +1224,14 @@ impl crate::Device<super::Api> for super::Device {
             if gl.supports_debug() {
                 use std::fmt::Write;
 
+                // Initialize the query so we can label it
+                match desc.ty {
+                    wgt::QueryType::Timestamp => unsafe {
+                        gl.query_counter(query, glow::TIMESTAMP)
+                    },
+                    _ => (),
+                }
+
                 if let Some(label) = desc.label {
                     temp_string.clear();
                     let _ = write!(temp_string, "{label}[{i}]");
@@ -1238,6 +1246,7 @@ impl crate::Device<super::Api> for super::Device {
             queries: queries.into_boxed_slice(),
             target: match desc.ty {
                 wgt::QueryType::Occlusion => glow::ANY_SAMPLES_PASSED_CONSERVATIVE,
+                wgt::QueryType::Timestamp => glow::TIMESTAMP,
                 _ => unimplemented!(),
             },
         })

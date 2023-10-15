@@ -450,6 +450,12 @@ impl super::Adapter {
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
+        let query_buffers = extensions.contains("GL_ARB_query_buffer_object")
+            || extensions.contains("GL_AMD_query_buffer_object");
+        if extensions.contains("GL_ARB_timer_query") && query_buffers {
+            features.set(wgt::Features::TIMESTAMP_QUERY, true);
+            features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES, true);
+        }
         let gl_bcn_exts = [
             "GL_EXT_texture_compression_s3tc",
             "GL_EXT_texture_compression_rgtc",
@@ -574,6 +580,7 @@ impl super::Adapter {
                 extensions.contains("OES_texture_float_linear")
             },
         );
+        private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;

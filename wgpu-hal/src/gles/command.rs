@@ -31,6 +31,7 @@ pub(super) struct State {
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
     push_offset_to_uniform: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANTS }>,
+    end_of_pass_timestamp: Option<glow::Query>,
 }
 
 impl super::CommandBuffer {
@@ -409,8 +410,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     unsafe fn end_query(&mut self, set: &super::QuerySet, _index: u32) {
         self.cmd_buffer.commands.push(C::EndQuery(set.target));
     }
-    unsafe fn write_timestamp(&mut self, _set: &super::QuerySet, _index: u32) {
-        unimplemented!()
+    unsafe fn write_timestamp(&mut self, set: &super::QuerySet, index: u32) {
+        let query = set.queries[index as usize];
+        self.cmd_buffer.commands.push(C::TimestampQuery(query));
     }
     unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {
         //TODO: what do we do here?
@@ -439,6 +441,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
+        debug_assert!(self.state.end_of_pass_timestamp.is_none());
+        if let Some(ref t) = desc.timestamp_writes {
+            if let Some(index) = t.beginning_of_pass_write_index {
+                unsafe { self.write_timestamp(t.query_set, index) }
+            }
+            self.state.end_of_pass_timestamp = t
+                .end_of_pass_write_index
+                .map(|index| t.query_set.queries[index as usize]);
+        }
+
         self.state.render_size = desc.extent;
         self.state.resolve_attachments.clear();
         self.state.invalidate_attachments.clear();
@@ -623,6 +635,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         }
         self.state.vertex_attributes.clear();
         self.state.primitive = super::PrimitiveState::default();
+
+        if let Some(query) = self.state.end_of_pass_timestamp.take() {
+            self.cmd_buffer.commands.push(C::TimestampQuery(query));
+        }
     }
 
     unsafe fn set_bind_group(
@@ -1030,6 +1046,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
     // compute
 
     unsafe fn begin_compute_pass(&mut self, desc: &crate::ComputePassDescriptor<super::Api>) {
+        debug_assert!(self.state.end_of_pass_timestamp.is_none());
+        if let Some(ref t) = desc.timestamp_writes {
+            if let Some(index) = t.beginning_of_pass_write_index {
+                unsafe { self.write_timestamp(t.query_set, index) }
+            }
+            self.state.end_of_pass_timestamp = t
+                .end_of_pass_write_index
+                .map(|index| t.query_set.queries[index as usize]);
+        }
+
         if let Some(label) = desc.label {
             let range = self.cmd_buffer.add_marker(label);
             self.cmd_buffer.commands.push(C::PushDebugGroup(range));
@@ -1040,6 +1066,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         if self.state.has_pass_label {
             self.cmd_buffer.commands.push(C::PopDebugGroup);
             self.state.has_pass_label = false;
+        }
+
+        if let Some(query) = self.state.end_of_pass_timestamp.take() {
+            self.cmd_buffer.commands.push(C::TimestampQuery(query));
         }
     }
 
