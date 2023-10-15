@@ -1,4 +1,7 @@
+use std::ops::Range;
+
 use wgpu::{DownlevelFlags, Limits};
+use wgt::math::f32_next;
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
@@ -19,19 +22,15 @@ fn create_clamp_builtin_test() -> Vec<ShaderTest> {
         (    3.0,  2.0,  1.0,   &[1.0, 2.0]),
     ];
 
-    for &(input, low, high, output) in clamp_values {
-        let mut test = ShaderTest::new(
-            format!("clamp({input}, 0.0, 10.0) == {output:?})"),
+    for &(input, low, high, outputs) in clamp_values {
+        let nested_outputs: Vec<_> = outputs.iter().map(|v| std::slice::from_ref(v)).collect();
+        tests.push(ShaderTest::new(
+            format!("clamp({input}, 0.0, 10.0) == {outputs:?})"),
             String::from("value: f32, low: f32, high: f32"),
             String::from("output[0] = bitcast<u32>(clamp(input.value, input.low, input.high));"),
             &[input, low, high],
-            &[output[0]],
-        );
-        for &extra in &output[1..] {
-            test = test.extra_output_values(&[extra]);
-        }
-
-        tests.push(test);
+            &nested_outputs,
+        ));
     }
 
     tests
@@ -48,6 +47,7 @@ static CLAMP_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(ctx, InputStorageType::Storage, create_clamp_builtin_test());
     });
 
+#[allow(clippy::excessive_precision)]
 fn create_pack_builtin_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();
 
@@ -178,18 +178,15 @@ fn create_pack_builtin_test() -> Vec<ShaderTest> {
             Function::Pack4x8Unorm => "output[0] = pack4x8unorm(input.value);",
         };
 
-        let mut test = ShaderTest::new(
+        let outputs: Vec<_> = outputs.iter().map(|v| std::slice::from_ref(v)).collect();
+
+        tests.push(ShaderTest::new(
             name,
             String::from(members),
             String::from(body),
             inputs,
-            &[outputs[0]],
-        );
-
-        for &output in &outputs[1..] {
-            test = test.extra_output_values(&[output]);
-        }
-        tests.push(test);
+            &outputs,
+        ));
     }
 
     tests
@@ -204,4 +201,182 @@ static PACKING_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
     )
     .run_sync(|ctx| {
         shader_input_output_test(ctx, InputStorageType::Storage, create_pack_builtin_test());
+    });
+
+#[allow(clippy::excessive_precision)]
+fn create_unpack_builtin_test() -> Vec<ShaderTest> {
+    let mut tests = Vec::new();
+
+    // Magic numbers from the spec
+    // https://github.com/gpuweb/cts/blob/main/src/unittests/floating_point.spec.ts
+
+    pub const ZERO_BOUNDS: Range<f32> = f32::MIN_POSITIVE * -1.0..f32::MIN_POSITIVE;
+
+    pub const ONE_BOUNDS_SNORM: Range<f32> = 0.999999821186065673828125..1.0000002384185791015625;
+
+    pub const ONE_BOUNDS_UNORM: Range<f32> =
+        0.9999998509883880615234375..1.0000001490116119384765625;
+
+    pub const NEG_ONE_BOUNDS_SNORM: Range<f32> = -1.0 - f32::EPSILON..-0.999999821186065673828125;
+
+    pub const HALF_BOUNDS_2X16_SNORM: Range<f32> =
+        0.500015079975128173828125..0.5000154972076416015625;
+
+    pub const NEG_HALF_BOUNDS_2X16_SNORM: Range<f32> =
+        -0.4999848306179046630859375..-0.49998462200164794921875;
+
+    pub const HALF_BOUNDS_2X16_UNORM: Range<f32> =
+        0.5000074803829193115234375..0.5000078380107879638671875;
+
+    pub const HALF_BOUNDS_4X8_SNORM: Range<f32> =
+        0.503936827182769775390625..0.503937244415283203125;
+
+    pub const NEG_HALF_BOUNDS_4X8_SNORM: Range<f32> =
+        -0.4960630834102630615234375..-0.49606287479400634765625;
+
+    pub const HALF_BOUNDS_4X8_UNORM: Range<f32> =
+        0.5019606053829193115234375..0.5019609630107879638671875;
+
+    fn range(value: f32) -> Range<f32> {
+        value..f32_next(value)
+    }
+
+    #[derive(Clone, Copy)]
+    enum Function {
+        Unpack2x16Float,
+        Unpack2x16Unorm,
+        Unpack2x16Snorm,
+        Unpack4x8Snorm,
+        Unpack4x8Unorm,
+    }
+
+    #[rustfmt::skip]
+    let values: &[(Function, u32, &[Range<f32>])] = &[
+        (Function::Unpack2x16Snorm, 0x00000000, &[ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack2x16Snorm, 0x00007fff, &[ONE_BOUNDS_SNORM, ZERO_BOUNDS]),
+        (Function::Unpack2x16Snorm, 0x7fff0000, &[ZERO_BOUNDS, ONE_BOUNDS_SNORM]),
+        (Function::Unpack2x16Snorm, 0x7fff7fff, &[ONE_BOUNDS_SNORM, ONE_BOUNDS_SNORM]),
+        (Function::Unpack2x16Snorm, 0x80018001, &[NEG_ONE_BOUNDS_SNORM, NEG_ONE_BOUNDS_SNORM]),
+        (Function::Unpack2x16Snorm, 0x40004000, &[HALF_BOUNDS_2X16_SNORM, HALF_BOUNDS_2X16_SNORM]),
+        (Function::Unpack2x16Snorm, 0xc001c001, &[NEG_HALF_BOUNDS_2X16_SNORM, NEG_HALF_BOUNDS_2X16_SNORM]),
+        (Function::Unpack2x16Snorm, 0x0000c001, &[NEG_HALF_BOUNDS_2X16_SNORM, ZERO_BOUNDS]),
+        (Function::Unpack2x16Snorm, 0xc0010000, &[ZERO_BOUNDS, NEG_HALF_BOUNDS_2X16_SNORM]),
+
+        (Function::Unpack2x16Unorm, 0x00000000, &[ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack2x16Unorm, 0x0000ffff, &[ONE_BOUNDS_UNORM, ZERO_BOUNDS]),
+        (Function::Unpack2x16Unorm, 0xffff0000, &[ZERO_BOUNDS, ONE_BOUNDS_UNORM]),
+        (Function::Unpack2x16Unorm, 0xffffffff, &[ONE_BOUNDS_UNORM, ONE_BOUNDS_UNORM]),
+        (Function::Unpack2x16Unorm, 0x80008000, &[HALF_BOUNDS_2X16_UNORM, HALF_BOUNDS_2X16_UNORM]),
+
+        (Function::Unpack4x8Snorm, 0x00000000, &[ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Snorm, 0x0000007f, &[ONE_BOUNDS_SNORM, ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Snorm, 0x00007f00, &[ZERO_BOUNDS, ONE_BOUNDS_SNORM, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Snorm, 0x007f0000, &[ZERO_BOUNDS, ZERO_BOUNDS, ONE_BOUNDS_SNORM, ZERO_BOUNDS]),
+        (Function::Unpack4x8Snorm, 0x7f000000, &[ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS, ONE_BOUNDS_SNORM]),
+        (Function::Unpack4x8Snorm, 0x00007f7f, &[ONE_BOUNDS_SNORM, ONE_BOUNDS_SNORM, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Snorm, 0x7f7f0000, &[ZERO_BOUNDS, ZERO_BOUNDS, ONE_BOUNDS_SNORM, ONE_BOUNDS_SNORM]),
+        (Function::Unpack4x8Snorm, 0x7f007f00, &[ZERO_BOUNDS, ONE_BOUNDS_SNORM, ZERO_BOUNDS, ONE_BOUNDS_SNORM]),
+        (Function::Unpack4x8Snorm, 0x007f007f, &[ONE_BOUNDS_SNORM, ZERO_BOUNDS, ONE_BOUNDS_SNORM, ZERO_BOUNDS]),
+        (Function::Unpack4x8Snorm, 0x7f7f7f7f, &[ONE_BOUNDS_SNORM, ONE_BOUNDS_SNORM, ONE_BOUNDS_SNORM, ONE_BOUNDS_SNORM]),
+        (Function::Unpack4x8Snorm, 0x81818181, &[NEG_ONE_BOUNDS_SNORM, NEG_ONE_BOUNDS_SNORM, NEG_ONE_BOUNDS_SNORM, NEG_ONE_BOUNDS_SNORM]),
+        (Function::Unpack4x8Snorm, 0x40404040, &[HALF_BOUNDS_4X8_SNORM, HALF_BOUNDS_4X8_SNORM, HALF_BOUNDS_4X8_SNORM, HALF_BOUNDS_4X8_SNORM]),
+        (Function::Unpack4x8Snorm, 0xc1c1c1c1, &[NEG_HALF_BOUNDS_4X8_SNORM, NEG_HALF_BOUNDS_4X8_SNORM, NEG_HALF_BOUNDS_4X8_SNORM, NEG_HALF_BOUNDS_4X8_SNORM]),
+
+        (Function::Unpack4x8Unorm, 0x00000000, &[ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Unorm, 0x000000ff, &[ONE_BOUNDS_UNORM, ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Unorm, 0x0000ff00, &[ZERO_BOUNDS, ONE_BOUNDS_UNORM, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Unorm, 0x00ff0000, &[ZERO_BOUNDS, ZERO_BOUNDS, ONE_BOUNDS_UNORM, ZERO_BOUNDS]),
+        (Function::Unpack4x8Unorm, 0xff000000, &[ZERO_BOUNDS, ZERO_BOUNDS, ZERO_BOUNDS, ONE_BOUNDS_UNORM]),
+        (Function::Unpack4x8Unorm, 0x0000ffff, &[ONE_BOUNDS_UNORM, ONE_BOUNDS_UNORM, ZERO_BOUNDS, ZERO_BOUNDS]),
+        (Function::Unpack4x8Unorm, 0xffff0000, &[ZERO_BOUNDS, ZERO_BOUNDS, ONE_BOUNDS_UNORM, ONE_BOUNDS_UNORM]),
+        (Function::Unpack4x8Unorm, 0xff00ff00, &[ZERO_BOUNDS, ONE_BOUNDS_UNORM, ZERO_BOUNDS, ONE_BOUNDS_UNORM]),
+        (Function::Unpack4x8Unorm, 0x00ff00ff, &[ONE_BOUNDS_UNORM, ZERO_BOUNDS, ONE_BOUNDS_UNORM, ZERO_BOUNDS]),
+        (Function::Unpack4x8Unorm, 0xffffffff, &[ONE_BOUNDS_UNORM, ONE_BOUNDS_UNORM, ONE_BOUNDS_UNORM, ONE_BOUNDS_UNORM]),
+        (Function::Unpack4x8Unorm, 0x80808080, &[HALF_BOUNDS_4X8_UNORM, HALF_BOUNDS_4X8_UNORM, HALF_BOUNDS_4X8_UNORM, HALF_BOUNDS_4X8_UNORM]),
+
+
+        (Function::Unpack2x16Float, 0x00000000, &[range(0.0), range(0.0)]),
+        (Function::Unpack2x16Float, 0x80000000, &[range(0.0), range(0.0)]),
+        (Function::Unpack2x16Float, 0x00008000, &[range(0.0), range(0.0)]),
+        (Function::Unpack2x16Float, 0x80008000, &[range(0.0), range(0.0)]),
+        (Function::Unpack2x16Float, 0x00003c00, &[range(1.0), range(0.0)]),
+        (Function::Unpack2x16Float, 0x3c000000, &[range(0.0), range(1.0)]),
+        (Function::Unpack2x16Float, 0x3c003c00, &[range(1.0), range(1.0)]),
+        (Function::Unpack2x16Float, 0xbc00bc00, &[range(-1.0), range(-1.0)]),
+        (Function::Unpack2x16Float, 0x49004900, &[range(10.0), range(10.0)]),
+        (Function::Unpack2x16Float, 0xc900c900, &[range(-10.0), range(-10.0)]),
+    ];
+
+    for &(function, input, outputs) in values {
+        let name = match function {
+            Function::Unpack2x16Float => format!("unpack2x16float({input:#x?}) == {outputs:?}"),
+            Function::Unpack2x16Unorm => format!("unpack2x16unorm({input:#x?}) == {outputs:?}"),
+            Function::Unpack2x16Snorm => format!("unpack2x16snorm({input:#x?}) == {outputs:?}"),
+            Function::Unpack4x8Snorm => format!("unpack4x8snorm({input:#x?}) == {outputs:?}"),
+            Function::Unpack4x8Unorm => format!("unpack4x8unorm({input:#x?}) == {outputs:?}"),
+        };
+
+        let body = match function {
+            Function::Unpack2x16Float => {
+                "
+                let value = unpack2x16float(input.value);
+                output[0] = bitcast<u32>(value.x);
+                output[1] = bitcast<u32>(value.y);
+            "
+            }
+            Function::Unpack2x16Unorm => {
+                "
+                let value = unpack2x16unorm(input.value);
+                output[0] = bitcast<u32>(value.x);
+                output[1] = bitcast<u32>(value.y);
+            "
+            }
+            Function::Unpack2x16Snorm => {
+                "
+                let value = unpack2x16snorm(input.value);
+                output[0] = bitcast<u32>(value.x);
+                output[1] = bitcast<u32>(value.y);
+            "
+            }
+            Function::Unpack4x8Snorm => {
+                "
+                let value = unpack4x8snorm(input.value);
+                output[0] = bitcast<u32>(value.x);
+                output[1] = bitcast<u32>(value.y);
+                output[2] = bitcast<u32>(value.z);
+                output[3] = bitcast<u32>(value.w);
+            "
+            }
+            Function::Unpack4x8Unorm => {
+                "
+                let value = unpack4x8unorm(input.value);
+                output[0] = bitcast<u32>(value.x);
+                output[1] = bitcast<u32>(value.y);
+                output[2] = bitcast<u32>(value.z);
+                output[3] = bitcast<u32>(value.w);
+            "
+            }
+        };
+
+        tests.push(ShaderTest::new(
+            name,
+            String::from("value: u32"),
+            String::from(body),
+            &[input],
+            &[outputs],
+        ));
+    }
+
+    tests
+}
+
+#[gpu_test]
+static UNPACKING_BUILTINS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_sync(|ctx| {
+        shader_input_output_test(ctx, InputStorageType::Storage, create_unpack_builtin_test());
     });

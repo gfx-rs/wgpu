@@ -32,12 +32,13 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 writeln!(loaded, "output[{idx}] = bitcast<u32>(loaded.{component});").unwrap();
             }
 
+            let output_values = (0..components as u32).collect::<Vec<_>>();
             tests.push(ShaderTest::new(
                 format!("vec{components}<{ty}> - direct"),
                 input_members.clone(),
                 direct,
                 &input_values,
-                &(0..components as u32).collect::<Vec<_>>(),
+                &[&output_values],
             ));
 
             tests.push(ShaderTest::new(
@@ -45,7 +46,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 input_members.clone(),
                 loaded,
                 &input_values,
-                &(0..components as u32).collect::<Vec<_>>(),
+                &[&output_values],
             ));
         }
     }
@@ -112,7 +113,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                     input_members.clone(),
                     direct,
                     &input_values,
-                    &output_values,
+                    &[&output_values],
                 )
                 .failures(failures),
             );
@@ -123,7 +124,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                     input_members.clone(),
                     vector_loaded,
                     &input_values,
-                    &output_values,
+                    &[&output_values],
                 )
                 .failures(failures),
             );
@@ -134,7 +135,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                     input_members.clone(),
                     fully_loaded,
                     &input_values,
-                    &output_values,
+                    &[&output_values],
                 )
                 .failures(failures),
             );
@@ -151,7 +152,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             members,
             direct,
             &input_values,
-            &[3],
+            &[&[3]],
         ));
     }
 
@@ -166,7 +167,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 members,
                 direct,
                 &input_values,
-                &[columns * 4],
+                &[&[columns * 4]],
             ));
         }
     }

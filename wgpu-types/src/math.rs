@@ -29,3 +29,28 @@ where
         value + alignment - remainder
     }
 }
+
+/// Returns the next representable f32 value after `value`.
+///
+/// Copied from the unstable https://doc.rust-lang.org/src/core/num/f32.rs.html#710-730
+pub fn f32_next(value: f32) -> f32 {
+    // We must use strictly integer arithmetic to prevent denormals from
+    // flushing to zero after an arithmetic operation on some platforms.
+    const TINY_BITS: u32 = 0x1; // Smallest positive f32.
+    const CLEAR_SIGN_MASK: u32 = 0x7fff_ffff;
+
+    let bits = value.to_bits();
+    if value.is_nan() || bits == f32::INFINITY.to_bits() {
+        return value;
+    }
+
+    let abs = bits & CLEAR_SIGN_MASK;
+    let next_bits = if abs == 0 {
+        TINY_BITS
+    } else if bits == abs {
+        bits + 1
+    } else {
+        bits - 1
+    };
+    f32::from_bits(next_bits)
+}
