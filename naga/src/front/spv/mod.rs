@@ -76,8 +76,9 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_KHR_storage_buffer_storage_class",
     "SPV_KHR_vulkan_memory_model",
     "SPV_KHR_multiview",
+    "SPV_KHR_non_semantic_info",
 ];
-pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
+pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450", "NonSemantic.DebugPrintf"];
 
 #[derive(Copy, Clone)]
 pub struct Instruction {
@@ -561,6 +562,7 @@ pub struct Frontend<I> {
     layouter: Layouter,
     temp_bytes: Vec<u8>,
     ext_inst_imports: FastHashMap<spirv::Word, &'static str>,
+    strings: FastHashMap<spirv::Word, String>,
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
@@ -614,6 +616,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
             ext_inst_imports: FastHashMap::default(),
+            strings: FastHashMap::default(),
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
@@ -4020,8 +4023,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
     fn parse_string(&mut self, inst: Instruction) -> Result<(), Error> {
         self.switch(ModuleState::Source, inst.op)?;
         inst.expect_at_least(3)?;
-        let _id = self.next()?;
-        let (_name, _) = self.next_string(inst.wc - 2)?;
+        let id = self.next()?;
+        let (name, _) = self.next_string(inst.wc - 2)?;
+        self.strings.entry(id).or_insert(name);
         Ok(())
     }
 

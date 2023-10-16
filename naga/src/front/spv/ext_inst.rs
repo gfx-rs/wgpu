@@ -8,6 +8,7 @@ struct ExtInst {
 }
 
 impl<I: Iterator<Item = u32>> super::Frontend<I> {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn parse_ext_inst(
         &mut self,
         inst: super::Instruction,
@@ -30,20 +31,53 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let ext_name = if let Some(name) = self.ext_inst_imports.get(&ext_inst.set_id) {
             name
         } else {
-            return Err(Error::UnsupportedExtInstSet(ext_inst.set_id));
+            // We get here only if the set_id doesn't point to an earlier OpExtInstImport.
+            // If the earlier ExtInstSet was unsupported we would have emitted an error then.
+            return Err(Error::InvalidExtInst(ext_inst.set_id));
         };
 
         match *ext_name {
             "GLSL.std.450" => self.parse_ext_inst_glsl_std(
-                inst, ext_inst, span, ctx, emitter, block, block_id, body_idx,
+                ext_name, inst, ext_inst, span, ctx, emitter, block, block_id, body_idx,
             ),
-            _ => {
-                return Err(Error::UnsupportedExtInstSet(ext_inst.set_id));
+            "NonSemantic.DebugPrintf" if ext_inst.inst_id == 1 => {
+                self.parse_ext_inst_debug_printf(inst, span, ctx, emitter, block, body_idx)
             }
+            _ => Err(Error::UnsupportedExtInst(ext_inst.inst_id, ext_name)),
         }
     }
+    fn parse_ext_inst_debug_printf(
+        &mut self,
+        inst: super::Instruction,
+        span: crate::Span,
+        ctx: &mut super::BlockContext,
+        emitter: &mut crate::proc::Emitter,
+        block: &mut crate::Block,
+        body_idx: usize,
+    ) -> Result<(), Error> {
+        let base_wc = 5;
+        inst.expect_at_least(base_wc + 1)?;
+        let format_id = self.next()?;
+        let format = self.strings.lookup(format_id)?.clone();
+
+        block.extend(emitter.finish(ctx.expressions));
+
+        let mut arguments = Vec::with_capacity(inst.wc as usize - (base_wc as usize + 1));
+        for _ in 0..arguments.capacity() {
+            let arg_id = self.next()?;
+            let lexp = self.lookup_expression.lookup(arg_id)?;
+            arguments.push(self.get_expr_handle(arg_id, lexp, ctx, emitter, block, body_idx));
+        }
+
+        block.push(crate::Statement::DebugPrintf { format, arguments }, span);
+        emitter.start(ctx.expressions);
+
+        Ok(())
+    }
+    #[allow(clippy::too_many_arguments)]
     fn parse_ext_inst_glsl_std(
         &mut self,
+        set_name: &'static str,
         inst: super::Instruction,
         ext_inst: ExtInst,
         span: crate::Span,
@@ -58,8 +92,8 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
         let base_wc = 5;
 
-        let gl_op =
-            Glo::from_u32(ext_inst.inst_id).ok_or(Error::UnsupportedExtInst(ext_inst.inst_id))?;
+        let gl_op = Glo::from_u32(ext_inst.inst_id)
+            .ok_or(Error::UnsupportedExtInst(ext_inst.inst_id, set_name))?;
 
         let fun = match gl_op {
             Glo::Round => Mf::Round,
@@ -124,13 +158,17 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             Glo::FindILsb => Mf::FindLsb,
             Glo::FindUMsb | Glo::FindSMsb => Mf::FindMsb,
             // TODO: https://github.com/gfx-rs/naga/issues/2526
-            Glo::Modf | Glo::Frexp => return Err(Error::UnsupportedExtInst(ext_inst.inst_id)),
+            Glo::Modf | Glo::Frexp => {
+                return Err(Error::UnsupportedExtInst(ext_inst.inst_id, set_name))
+            }
             Glo::IMix
             | Glo::PackDouble2x32
             | Glo::UnpackDouble2x32
             | Glo::InterpolateAtCentroid
             | Glo::InterpolateAtSample
-            | Glo::InterpolateAtOffset => return Err(Error::UnsupportedExtInst(ext_inst.inst_id)),
+            | Glo::InterpolateAtOffset => {
+                return Err(Error::UnsupportedExtInst(ext_inst.inst_id, set_name))
+            }
         };
 
         let arg_count = fun.argument_count();
