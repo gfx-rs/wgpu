@@ -841,6 +841,8 @@ bitflags::bitflags! {
         const DEBUG = 1 << 0;
         /// Enable validation, if possible.
         const VALIDATION = 1 << 1;
+        /// Don't pass labels to wgpu-hal.
+        const DISCARD_HAL_LABELS = 1 << 2;
     }
 }
 

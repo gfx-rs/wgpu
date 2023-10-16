@@ -18,6 +18,7 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_api::HalApi,
+    hal_label,
     hub::Token,
     id::{DeviceId, SurfaceId, TextureId, Valid},
     identity::{GlobalIdentityHandlerFactory, Input},
@@ -166,7 +167,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         } {
             Ok(Some(ast)) => {
                 let clear_view_desc = hal::TextureViewDescriptor {
-                    label: Some("(wgpu internal) clear surface texture view"),
+                    label: hal_label(
+                        Some("(wgpu internal) clear surface texture view"),
+                        self.instance.flags,
+                    ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,

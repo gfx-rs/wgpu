@@ -127,14 +127,14 @@ impl<A: HalApi> CommandBuffer<A> {
         _downlevel: wgt::DownlevelCapabilities,
         features: wgt::Features,
         #[cfg(feature = "trace")] enable_tracing: bool,
-        label: &Label,
+        label: Option<String>,
     ) -> Self {
         CommandBuffer {
             encoder: CommandEncoder {
                 raw: encoder,
                 is_open: false,
                 list: Vec::new(),
-                label: crate::LabelHelpers::borrow_option(label).map(|s| s.to_string()),
+                label,
             },
             status: CommandEncoderStatus::Recording,
             device_id,

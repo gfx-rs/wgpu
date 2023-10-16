@@ -10,6 +10,7 @@ use crate::{
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
+    hal_label,
     hub::Token,
     id,
     identity::{GlobalIdentityHandlerFactory, Input},
@@ -275,10 +276,11 @@ impl<A: hal::Api> PendingWrites<A> {
 fn prepare_staging_buffer<A: HalApi>(
     device: &mut A::Device,
     size: wgt::BufferAddress,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
     profiling::scope!("prepare_staging_buffer");
     let stage_desc = hal::BufferDescriptor {
-        label: Some("(wgpu internal) Staging"),
+        label: hal_label(Some("(wgpu internal) Staging"), instance_flags),
         size,
         usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
         memory_flags: hal::MemoryFlags::TRANSIENT,
@@ -385,7 +387,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&mut device.raw, data_size)?;
+            prepare_staging_buffer(&mut device.raw, data_size, device.instance_flags)?;
 
         if let Err(flush_error) = unsafe {
             profiling::scope!("copy");
@@ -425,7 +427,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
 
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&mut device.raw, buffer_size.get())?;
+            prepare_staging_buffer(&mut device.raw, buffer_size.get(), device.instance_flags)?;
 
         let fid = hub.staging_buffers.prepare(id_in);
         let id = fid.assign(staging_buffer, device_token);
@@ -779,7 +781,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(&mut device.raw, stage_size)?;
+            prepare_staging_buffer(&mut device.raw, stage_size, device.instance_flags)?;
 
         if stage_bytes_per_row == bytes_per_row {
             profiling::scope!("copy aligned");
@@ -1248,7 +1250,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         unsafe {
                             baked
                                 .encoder
-                                .begin_encoding(Some("(wgpu internal) Transit"))
+                                .begin_encoding(hal_label(
+                                    Some("(wgpu internal) Transit"),
+                                    device.instance_flags,
+                                ))
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
@@ -1278,7 +1283,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe {
                                 baked
                                     .encoder
-                                    .begin_encoding(Some("(wgpu internal) Present"))
+                                    .begin_encoding(hal_label(
+                                        Some("(wgpu internal) Present"),
+                                        device.instance_flags,
+                                    ))
                                     .map_err(DeviceError::from)?
                             };
                             trackers
