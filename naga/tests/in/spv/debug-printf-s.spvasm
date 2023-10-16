@@ -1,0 +1,28 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 18
+OpCapability Shader
+OpCapability Linkage
+OpExtension "SPV_KHR_non_semantic_info"
+%1 = OpExtInstImport "GLSL.std.450"
+%15 = OpExtInstImport "NonSemantic.DebugPrintf"
+OpMemoryModel Logical GLSL450
+%13 = OpString "%d"
+%16 = OpString "%v4f"
+%2 = OpTypeVoid
+%5 = OpTypeFunction %2
+%6 = OpTypeInt 32 1
+%7 = OpConstant  %6  42
+%8 = OpTypeFloat 32
+%9 = OpConstant  %8  3.3
+%10 = OpTypeVector %8 4
+%11 = OpConstantComposite  %10  %9 %9 %9 %9
+%4 = OpFunction  %2  None %5
+%3 = OpLabel
+OpBranch %12
+%12 = OpLabel
+%14 = OpExtInst  %2  %15 1 %13 %7
+%17 = OpExtInst  %2  %15 1 %16 %11
+OpReturn
+OpFunctionEnd

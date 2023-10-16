@@ -802,6 +802,10 @@ fn convert_wgsl() {
             "abstract-types-operators",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "debug-printf",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -880,6 +884,11 @@ fn convert_spv_all() {
         "do-while",
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    convert_spv(
+        "debug-printf-s",
+        false,
+        Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
 }
 
