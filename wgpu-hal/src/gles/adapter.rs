@@ -222,22 +222,22 @@ impl super::Adapter {
         log::info!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
-        let ver = full_ver
+        let es_ver = full_ver
             .is_none()
             .then_some(())
             .and_then(|_| Self::parse_version(&version).ok());
 
-        if ver.is_none() && full_ver.is_none() {
+        if es_ver.is_none() && full_ver.is_none() {
             log::warn!("Unable to parse OpenGL version");
             return None;
         }
 
-        if let Some(ver) = ver {
-            if ver < (3, 0) {
+        if let Some(es_ver) = es_ver {
+            if es_ver < (3, 0) {
                 log::warn!(
                     "Returned GLES context is {}.{}, when 3.0+ was requested",
-                    ver.0,
-                    ver.1
+                    es_ver.0,
+                    es_ver.1
                 );
                 return None;
             }
@@ -254,24 +254,22 @@ impl super::Adapter {
             }
         }
 
-        let supported = |(req_es_major, req_es_minor), req_full_ver: Option<(u8, u8)>| {
-            let es_supported = ver
-                .map(|ver| ver >= (req_es_major, req_es_minor))
+        let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
+            let es_supported = es_ver
+                .map(|es_ver| es_ver >= (req_es_major, req_es_minor))
                 .unwrap_or_default();
 
             let full_supported = full_ver
-                .and_then(|full_ver| req_full_ver.map(|req_full_ver| full_ver >= req_full_ver))
+                .map(|full_ver| full_ver >= (req_full_major, req_full_minor))
                 .unwrap_or_default();
 
             es_supported || full_supported
         };
 
-        // Assume 3.0 for Desktop GL
-        let ver = ver.unwrap_or((3, 0));
-
-        let supports_storage = supported((3, 1), Some((4, 3)));
+        let supports_storage =
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
         let supports_compute =
-            supported((3, 1), Some((4, 6))) || extensions.contains("GL_ARB_compute_shader");
+            supported((3, 1), (4, 6)) || extensions.contains("GL_ARB_compute_shader");
         let supports_work_group_params = supports_compute;
 
         let shading_language_version = {
@@ -295,7 +293,19 @@ impl super::Adapter {
         let is_angle = renderer.contains("ANGLE");
 
         let vertex_shader_storage_blocks = if supports_storage {
-            (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) } as u32)
+            let value =
+                (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_SHADER_STORAGE_BLOCKS) } as u32);
+
+            if value == 0 && extensions.contains("GL_ARB_shader_storage_buffer_object") {
+                // The driver for AMD Radeon HD 5870 returns zero here, so assume the value matches the compute shader storage block count.
+                // Windows doesn't recognize `GL_MAX_VERTEX_ATTRIB_STRIDE`.
+                let new = (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_SHADER_STORAGE_BLOCKS) }
+                    as u32);
+                log::warn!("Max vertex shader storage blocks is zero, but GL_ARB_shader_storage_buffer_object is specified. Assuming the compute value {new}");
+                new
+            } else {
+                value
+            }
         } else {
             0
         };
@@ -355,14 +365,14 @@ impl super::Adapter {
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::INDIRECT_EXECUTION,
-            supported((3, 1), None) || extensions.contains("GL_ARB_multi_draw_indirect"),
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
         );
         //TODO: we can actually support positive `base_vertex` in the same way
         // as we emulate the `start_instance`. But we can't deal with negatives...
-        downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, ver >= (3, 2));
+        downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, supported((3, 2), (3, 2)));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLEND,
-            ver >= (3, 2) || extensions.contains("GL_EXT_draw_buffers_indexed"),
+            supported((3, 2), (4, 0)) || extensions.contains("GL_EXT_draw_buffers_indexed"),
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::VERTEX_STORAGE,
@@ -395,7 +405,7 @@ impl super::Adapter {
         );
         downlevel_flags.set(
             wgt::DownlevelFlags::MULTISAMPLED_SHADING,
-            ver >= (3, 2) || extensions.contains("OES_sample_variables"),
+            supported((3, 2), (4, 0)) || extensions.contains("OES_sample_variables"),
         );
 
         let mut features = wgt::Features::empty()
@@ -425,11 +435,13 @@ impl super::Adapter {
         );
         features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
-            ver >= (3, 2) || extensions.contains("OES_geometry_shader"),
+            supported((3, 2), (4, 6))
+                || extensions.contains("OES_geometry_shader")
+                || extensions.contains("GL_ARB_geometry_shader4"),
         );
         features.set(
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
-            supported((3, 1), None),
+            supported((3, 1), (4, 6)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         let gles_bcn_exts = [
@@ -510,11 +522,11 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::MEMORY_BARRIERS,
-            supported((3, 1), Some((4, 2))),
+            supported((3, 1), (4, 2)),
         );
         private_caps.set(
             super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT,
-            supported((3, 1), None),
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_vertex_attrib_binding"),
         );
         private_caps.set(
             super::PrivateCapabilities::INDEX_BUFFER_ROLE_CHANGE,
@@ -545,7 +557,7 @@ impl super::Adapter {
 
         let min_uniform_buffer_offset_alignment =
             (unsafe { gl.get_parameter_i32(glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT) } as u32);
-        let min_storage_buffer_offset_alignment = if supported((3, 1), None) {
+        let min_storage_buffer_offset_alignment = if supports_storage {
             (unsafe { gl.get_parameter_i32(glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT) } as u32)
         } else {
             256
@@ -583,7 +595,7 @@ impl super::Adapter {
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
-            max_storage_buffer_binding_size: if supported((3, 1), None)
+            max_storage_buffer_binding_size: if supported((3, 1), (4, 3))
                 || extensions.contains("GL_ARB_shader_storage_buffer_object")
             {
                 unsafe { gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) }
@@ -603,7 +615,29 @@ impl super::Adapter {
             max_vertex_buffer_array_stride: if private_caps
                 .contains(super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT)
             {
-                (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE) } as u32)
+                if let Some(full_ver) = full_ver {
+                    if full_ver >= (4, 4) {
+                        // We can query `GL_MAX_VERTEX_ATTRIB_STRIDE` in OpenGL 4.4+
+                        let value =
+                            (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE) })
+                                as u32;
+
+                        if value == 0 {
+                            // This should be at least 2048, but the driver for AMD Radeon HD 5870 on
+                            // Windows doesn't recognize `GL_MAX_VERTEX_ATTRIB_STRIDE`.
+
+                            log::warn!("Max vertex attribute stride is 0. Assuming it is 2048");
+                            2048
+                        } else {
+                            value
+                        }
+                    } else {
+                        log::warn!("Max vertex attribute stride unknown. Assuming it is 2048");
+                        2048
+                    }
+                } else {
+                    (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_STRIDE) }) as u32
+                }
             } else {
                 !0
             },
