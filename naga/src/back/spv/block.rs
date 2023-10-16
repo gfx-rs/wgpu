@@ -134,7 +134,7 @@ impl Writer {
 
         let clamp_id = self.id_gen.next();
 
-        body.push(Instruction::ext_inst(
+        body.push(Instruction::ext_inst_glsl_std(
             self.extension_inst_import("GLSL.std.450"),
             spirv::GLOp::FClamp,
             float_type_id,
@@ -766,7 +766,7 @@ impl<'w> BlockContext<'w> {
                             arg2_id = self.writer.get_constant_composite(ty, &self.temp_list);
                         }
 
-                        MathOp::Custom(Instruction::ext_inst(
+                        MathOp::Custom(Instruction::ext_inst_glsl_std(
                             self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::FClamp,
                             result_type_id,
@@ -885,7 +885,7 @@ impl<'w> BlockContext<'w> {
                                     &self.temp_list,
                                 ));
 
-                                MathOp::Custom(Instruction::ext_inst(
+                                MathOp::Custom(Instruction::ext_inst_glsl_std(
                                     self.writer.extension_inst_import("GLSL.std.450"),
                                     spirv::GLOp::FMix,
                                     result_type_id,
@@ -941,7 +941,7 @@ impl<'w> BlockContext<'w> {
                         };
 
                         let lsb_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_glsl_std(
                             self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::FindILsb,
                             result_type_id,
@@ -949,7 +949,7 @@ impl<'w> BlockContext<'w> {
                             &[arg0_id],
                         ));
 
-                        MathOp::Custom(Instruction::ext_inst(
+                        MathOp::Custom(Instruction::ext_inst_glsl_std(
                             self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::UMin,
                             result_type_id,
@@ -994,7 +994,7 @@ impl<'w> BlockContext<'w> {
                         };
 
                         let msb_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_glsl_std(
                             self.writer.extension_inst_import("GLSL.std.450"),
                             spirv::GLOp::FindUMsb,
                             int_type_id,
@@ -1059,7 +1059,7 @@ impl<'w> BlockContext<'w> {
                 };
 
                 block.body.push(match math_op {
-                    MathOp::Ext(op) => Instruction::ext_inst(
+                    MathOp::Ext(op) => Instruction::ext_inst_glsl_std(
                         self.writer.extension_inst_import("GLSL.std.450"),
                         op,
                         result_type_id,
@@ -2333,6 +2333,32 @@ impl<'w> BlockContext<'w> {
                 }
                 crate::Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
+                }
+                crate::Statement::DebugPrintf {
+                    ref format,
+                    ref arguments,
+                } => {
+                    self.writer.use_extension("SPV_KHR_non_semantic_info");
+                    let format_id = self.gen_id();
+                    self.writer
+                        .strings
+                        .push(Instruction::string(format, format_id));
+                    let id = self.gen_id();
+
+                    self.temp_list.clear();
+                    self.temp_list.push(format_id);
+                    for &argument in arguments {
+                        self.temp_list.push(self.cached[argument]);
+                    }
+
+                    let set_id = self.writer.extension_inst_import("NonSemantic.DebugPrintf");
+                    block.body.push(Instruction::ext_inst(
+                        set_id,
+                        1,
+                        self.writer.void_type,
+                        id,
+                        &self.temp_list,
+                    ));
                 }
             }
         }

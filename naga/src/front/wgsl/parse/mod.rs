@@ -633,6 +633,10 @@ impl Parser {
                 let num = res.map_err(|err| Error::BadNumber(span, err))?;
                 ast::Expression::Literal(ast::Literal::Number(num))
             }
+            (Token::String(string), _) => {
+                let _ = lexer.next();
+                ast::Expression::Literal(ast::Literal::String(string))
+            }
             (Token::Word("RAY_FLAG_NONE"), _) => {
                 let _ = lexer.next();
                 ast::Expression::Literal(ast::Literal::Number(Number::U32(0)))

@@ -1536,6 +1536,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         crate::Literal::AbstractFloat(f)
                     }
                     ast::Literal::Bool(b) => crate::Literal::Bool(b),
+                    ast::Literal::String(_) => {
+                        return Err(Error::UnexpectedStringLiteral(span));
+                    }
                 };
                 let handle = ctx.interrupt_emitter(crate::Expression::Literal(literal), span)?;
                 return Ok(Typed::Plain(handle));
@@ -2308,6 +2311,36 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 ctx,
                             )?;
                             return Ok(Some(handle));
+                        }
+                        "debugPrintf" => {
+                            let format = arguments.first().ok_or(Error::WrongArgumentCount {
+                                span,
+                                expected: 1..16,
+                                found: 0,
+                            })?;
+
+                            let format = match ctx.ast_expressions[*format] {
+                                ast::Expression::Literal(ast::Literal::String(format)) => {
+                                    format.to_string()
+                                }
+                                _ => return Err(Error::Internal("Expected format string")),
+                            };
+
+                            let arguments = arguments
+                                .iter()
+                                .skip(1)
+                                .map(|&arg| self.expression(arg, ctx))
+                                .collect::<Result<Vec<_>, _>>()?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+
+                            rctx.block
+                                .extend(rctx.emitter.finish(&rctx.function.expressions));
+
+                            rctx.emitter.start(&rctx.function.expressions);
+                            rctx.block
+                                .push(crate::Statement::DebugPrintf { format, arguments }, span);
+
+                            return Ok(None);
                         }
                         _ => return Err(Error::UnknownIdent(function.span, function.name)),
                     }

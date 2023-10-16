@@ -63,6 +63,7 @@ impl Writer {
             capabilities_available: options.capabilities.clone(),
             capabilities_used,
             extensions_used: crate::FastIndexSet::default(),
+            strings: vec![],
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -119,6 +120,7 @@ impl Writer {
             extensions_used: take(&mut self.extensions_used).recycle(),
             physical_layout: self.physical_layout.clone().recycle(),
             logical_layout: take(&mut self.logical_layout).recycle(),
+            strings: take(&mut self.strings).recycle(),
             debugs: take(&mut self.debugs).recycle(),
             annotations: take(&mut self.annotations).recycle(),
             lookup_type: take(&mut self.lookup_type).recycle(),
@@ -2009,6 +2011,11 @@ impl Writer {
 
         Instruction::memory_model(addressing_model, memory_model)
             .to_words(&mut self.logical_layout.memory_model);
+
+        // Strings come before other debug instructions
+        for string in self.strings.iter() {
+            string.to_words(&mut self.logical_layout.debugs);
+        }
 
         if self.flags.contains(WriterFlags::DEBUG) {
             for debug in self.debugs.iter() {

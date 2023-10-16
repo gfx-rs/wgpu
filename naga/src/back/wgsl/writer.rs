@@ -919,6 +919,20 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::DebugPrintf {
+                ref format,
+                ref arguments,
+            } => {
+                write!(self.out, "{level}")?;
+                write!(self.out, "debugPrintf(\"{format}\",")?;
+                for (index, &argument) in arguments.iter().enumerate() {
+                    if index != 0 {
+                        write!(self.out, ", ")?;
+                    }
+                    self.write_expr(module, argument, func_ctx)?;
+                }
+                writeln!(self.out, ");")?
+            }
         }
 
         Ok(())

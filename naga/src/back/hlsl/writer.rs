@@ -2000,6 +2000,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, "{level}}}")?
             }
             Statement::RayQuery { .. } => unreachable!(),
+            Statement::DebugPrintf { .. } => {
+                return Err(Error::Unimplemented("debug printf".to_string()));
+            }
         }
 
         Ok(())

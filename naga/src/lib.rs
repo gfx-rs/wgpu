@@ -1865,6 +1865,10 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
+    DebugPrintf {
+        format: String,
+        arguments: Vec<Handle<Expression>>,
+    },
 }
 
 /// A function argument.
