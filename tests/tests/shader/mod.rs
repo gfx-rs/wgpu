@@ -373,7 +373,7 @@ fn shader_input_output_test(
 
         // -- Check results --
 
-        let failure = !test.default_comparison_function(&test_name, typed);
+        let failure = !test.default_comparison_function(test_name, typed);
         // We don't immediately panic to let all tests execute
         if failure
             != test

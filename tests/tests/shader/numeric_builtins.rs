@@ -23,7 +23,7 @@ fn create_clamp_builtin_test() -> Vec<ShaderTest> {
     ];
 
     for &(input, low, high, outputs) in clamp_values {
-        let nested_outputs: Vec<_> = outputs.iter().map(|v| std::slice::from_ref(v)).collect();
+        let nested_outputs: Vec<_> = outputs.iter().map(std::slice::from_ref).collect();
         tests.push(ShaderTest::new(
             format!("clamp({input}, 0.0, 10.0) == {outputs:?})"),
             String::from("value: f32, low: f32, high: f32"),
@@ -178,7 +178,7 @@ fn create_pack_builtin_test() -> Vec<ShaderTest> {
             Function::Pack4x8Unorm => "output[0] = pack4x8unorm(input.value);",
         };
 
-        let outputs: Vec<_> = outputs.iter().map(|v| std::slice::from_ref(v)).collect();
+        let outputs: Vec<_> = outputs.iter().map(std::slice::from_ref).collect();
 
         tests.push(ShaderTest::new(
             name,
