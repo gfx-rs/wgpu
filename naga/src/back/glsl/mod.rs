@@ -2379,8 +2379,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::DebugPrintf { .. } => {
-                return Err(Error::Custom("debugPrintf is not implemented".to_string()));
+            Statement::DebugPrintf {
+                ref format,
+                ref arguments,
+            } => {
+                write!(self.out, "{level}")?;
+                write!(self.out, "debugPrintfEXT(\"{format}\",")?;
+                self.write_slice(arguments, |this, _, arg| this.write_expr(*arg, ctx))?;
+                writeln!(self.out, ");")?
             }
         }
 
