@@ -174,7 +174,7 @@ pub struct Validator {
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
     location_mask: BitSet,
-    bind_group_masks: Vec<BitSet>,
+    ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
     #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
@@ -290,7 +290,7 @@ impl Validator {
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),
-            bind_group_masks: Vec::new(),
+            ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
@@ -302,7 +302,7 @@ impl Validator {
         self.types.clear();
         self.layouter.clear();
         self.location_mask.clear();
-        self.bind_group_masks.clear();
+        self.ep_resource_bindings.clear();
         self.switch_values.clear();
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();

@@ -707,10 +707,6 @@ impl super::Validator {
             return Err(EntryPointError::MissingVertexOutputPosition.with_span());
         }
 
-        for bg in self.bind_group_masks.iter_mut() {
-            bg.clear();
-        }
-
         #[cfg(feature = "validate")]
         {
             let used_push_constants = module
@@ -728,6 +724,7 @@ impl super::Validator {
             }
         }
 
+        self.ep_resource_bindings.clear();
         #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
             let usage = info[var_handle];
@@ -768,10 +765,7 @@ impl super::Validator {
             }
 
             if let Some(ref bind) = var.binding {
-                while self.bind_group_masks.len() <= bind.group as usize {
-                    self.bind_group_masks.push(BitSet::new());
-                }
-                if !self.bind_group_masks[bind.group as usize].insert(bind.binding as usize) {
+                if !self.ep_resource_bindings.insert(bind.clone()) {
                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                         return Err(EntryPointError::BindingCollision(var_handle)
                             .with_span_handle(var_handle, &module.global_variables));
