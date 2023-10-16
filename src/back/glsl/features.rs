@@ -64,8 +64,7 @@ impl FeaturesManager {
     }
 
     /// Checks that all required [`Features`] are available for the specified
-    /// [`Version`](super::Version) otherwise returns an
-    /// [`Error::MissingFeatures`](super::Error::MissingFeatures)
+    /// [`Version`] otherwise returns an [`Error::MissingFeatures`].
     pub fn check_availability(&self, version: Version) -> BackendResult {
         // Will store all the features that are unavailable
         let mut missing = Features::empty();
@@ -245,7 +244,7 @@ impl<'a, W> Writer<'a, W> {
     ///
     /// # Errors
     /// If the version doesn't support any of the needed [`Features`] a
-    /// [`Error::MissingFeatures`](super::Error::MissingFeatures) will be returned
+    /// [`Error::MissingFeatures`] will be returned
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
         let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
 

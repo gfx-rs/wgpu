@@ -327,7 +327,7 @@ impl IdGenerator {
 /// Helper wrapper used to get a name for a varying
 ///
 /// Varying have different naming schemes depending on their binding:
-/// - Varyings with builtin bindings get the from [`glsl_built_in`](glsl_built_in).
+/// - Varyings with builtin bindings get the from [`glsl_built_in`].
 /// - Varyings with location bindings are named `_S_location_X` where `S` is a
 ///   prefix identifying which pipeline stage the varying connects, and `X` is
 ///   the location.
@@ -4050,7 +4050,7 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 }
 
-/// Structure returned by [`glsl_scalar`](glsl_scalar)
+/// Structure returned by [`glsl_scalar`]
 ///
 /// It contains both a prefix used in other types and the full type name
 struct ScalarString<'a> {
@@ -4062,7 +4062,7 @@ struct ScalarString<'a> {
 
 /// Helper function that returns scalar related strings
 ///
-/// Check [`ScalarString`](ScalarString) for the information provided
+/// Check [`ScalarString`] for the information provided
 ///
 /// # Errors
 /// If a [`Float`](crate::ScalarKind::Float) with an width that isn't 4 or 8

@@ -396,20 +396,21 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
-    /// Returns a [`StmtContext`](StmtContext) to be used in parsing and lowering
+    /// Returns a [`StmtContext`] to be used in parsing and lowering
     ///
     /// # Panics
-    /// - If more than one [`StmtContext`](StmtContext) are active at the same
-    /// time or if the previous call didn't use it in lowering.
+    ///
+    /// - If more than one [`StmtContext`] are active at the same time or if the
+    /// previous call didn't use it in lowering.
     #[must_use]
     pub fn stmt_ctx(&mut self) -> StmtContext {
         self.stmt_ctx.take().unwrap()
     }
 
-    /// Lowers a [`HirExpr`](HirExpr) which might produce a [`Expression`](Expression).
+    /// Lowers a [`HirExpr`] which might produce a [`Expression`].
     ///
-    /// consumes a [`StmtContext`](StmtContext) returning it to the context so
-    /// that it can be used again later.
+    /// consumes a [`StmtContext`] returning it to the context so that it can be
+    /// used again later.
     pub fn lower(
         &mut self,
         mut stmt: StmtContext,
@@ -426,10 +427,10 @@ impl<'a> Context<'a> {
     }
 
     /// Similar to [`lower`](Self::lower) but returns an error if the expression
-    /// returns void (ie. doesn't produce a [`Expression`](Expression)).
+    /// returns void (ie. doesn't produce a [`Expression`]).
     ///
-    /// consumes a [`StmtContext`](StmtContext) returning it to the context so
-    /// that it can be used again later.
+    /// consumes a [`StmtContext`] returning it to the context so that it can be
+    /// used again later.
     pub fn lower_expect(
         &mut self,
         mut stmt: StmtContext,
@@ -1518,7 +1519,7 @@ impl Index<Handle<Expression>> for Context<'_> {
 #[derive(Debug)]
 pub struct StmtContext {
     /// A arena of high level expressions which can be lowered through a
-    /// [`Context`](Context) to naga's [`Expression`](crate::Expression)s
+    /// [`Context`] to Naga's [`Expression`]s
     pub hir_exprs: Arena<HirExpr>,
 }
 

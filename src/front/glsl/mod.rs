@@ -38,8 +38,9 @@ type Result<T> = std::result::Result<T, Error>;
 
 /// Per-shader options passed to [`parse`](Frontend::parse).
 ///
-/// The [`From`](From) trait is implemented for [`ShaderStage`](ShaderStage) to
-/// provide a quick way to create a Options instance.
+/// The [`From`] trait is implemented for [`ShaderStage`] to provide a quick way
+/// to create an `Options` instance.
+///
 /// ```rust
 /// # use naga::ShaderStage;
 /// # use naga::front::glsl::Options;
@@ -69,7 +70,7 @@ impl From<ShaderStage> for Options {
 /// Additional information about the GLSL shader.
 ///
 /// Stores additional information about the GLSL shader which might not be
-/// stored in the shader [`Module`](Module).
+/// stored in the shader [`Module`].
 #[derive(Debug)]
 pub struct ShaderMetadata {
     /// The GLSL version specified in the shader through the use of the
@@ -79,7 +80,7 @@ pub struct ShaderMetadata {
     /// `#version` preprocessor directive.
     pub profile: Profile,
     /// The shader stage in the pipeline, passed to the [`parse`](Frontend::parse)
-    /// method via the [`Options`](Options) struct.
+    /// method via the [`Options`] struct.
     pub stage: ShaderStage,
 
     /// The workgroup size for compute shaders, defaults to `[1; 3]` for
@@ -125,17 +126,17 @@ impl Default for ShaderMetadata {
 
 /// The `Frontend` is the central structure of the GLSL frontend.
 ///
-/// To instantiate a new `Frontend` the [`Default`](Default) trait is used, so a
+/// To instantiate a new `Frontend` the [`Default`] trait is used, so a
 /// call to the associated function [`Frontend::default`](Frontend::default) will
 /// return a new `Frontend` instance.
 ///
 /// To parse a shader simply call the [`parse`](Frontend::parse) method with a
-/// [`Options`](Options) struct and a [`&str`](str) holding the glsl code.
+/// [`Options`] struct and a [`&str`](str) holding the glsl code.
 ///
 /// The `Frontend` also provides the [`metadata`](Frontend::metadata) to get some
 /// further information about the previously parsed shader, like version and
 /// extensions used (see the documentation for
-/// [`ShaderMetadata`](ShaderMetadata) to see all the returned information)
+/// [`ShaderMetadata`] to see all the returned information)
 ///
 /// # Example usage
 /// ```rust
@@ -187,8 +188,8 @@ impl Frontend {
         self.layouter.clear();
     }
 
-    /// Parses a shader either outputting a shader [`Module`](Module) or a list
-    /// of [`Error`](Error)s.
+    /// Parses a shader either outputting a shader [`Module`] or a list of
+    /// [`Error`]s.
     ///
     /// Multiple calls using the same `Frontend` and different shaders are supported.
     pub fn parse(
@@ -216,10 +217,9 @@ impl Frontend {
         }
     }
 
-    /// Returns additional information about the parsed shader which might not be
-    /// stored in the [`Module`](Module), see the documentation for
-    /// [`ShaderMetadata`](ShaderMetadata) for more information about the
-    /// returned data.
+    /// Returns additional information about the parsed shader which might not
+    /// be stored in the [`Module`], see the documentation for
+    /// [`ShaderMetadata`] for more information about the returned data.
     ///
     /// # Notes
     ///

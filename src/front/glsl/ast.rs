@@ -377,7 +377,7 @@ impl ParameterQualifier {
         }
     }
 
-    /// Converts from a parameter qualifier into a [`ExprPos`](ExprPos)
+    /// Converts from a parameter qualifier into a [`ExprPos`]
     pub const fn as_pos(&self) -> ExprPos {
         match *self {
             ParameterQualifier::Out | ParameterQualifier::InOut => ExprPos::Lhs,

@@ -20,12 +20,12 @@ use crate::{proc::Alignment, Handle, Type, TypeInner, UniqueArena};
 
 /// Struct with information needed for defining a struct member.
 ///
-/// Returned by [`calculate_offset`](calculate_offset)
+/// Returned by [`calculate_offset`].
 #[derive(Debug)]
 pub struct TypeAlignSpan {
     /// The handle to the type, this might be the same handle passed to
-    /// [`calculate_offset`](calculate_offset) or a new such a new array type
-    /// with a different stride set.
+    /// [`calculate_offset`] or a new such a new array type with a different
+    /// stride set.
     pub ty: Handle<Type>,
     /// The alignment required by the type.
     pub align: Alignment,
@@ -33,11 +33,11 @@ pub struct TypeAlignSpan {
     pub span: u32,
 }
 
-/// Returns the type, alignment and span of a struct member according to a [`StructLayout`](StructLayout).
+/// Returns the type, alignment and span of a struct member according to a [`StructLayout`].
 ///
-/// The functions returns a [`TypeAlignSpan`](TypeAlignSpan) which has a `ty` member
-/// this should be used as the struct member type because for example arrays may have to
-/// change the stride and as such need to have a different type.
+/// The functions returns a [`TypeAlignSpan`] which has a `ty` member this
+/// should be used as the struct member type because for example arrays may have
+/// to change the stride and as such need to have a different type.
 pub fn calculate_offset(
     mut ty: Handle<Type>,
     meta: Span,
