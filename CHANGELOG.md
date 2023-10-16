@@ -44,6 +44,12 @@ Bottom level categories:
 
 - Update Naga to 9eb3a1dc (2023-10-12), which includes support for WGSL constant expressions. By @jimblandy in [#4233](https://github.com/gfx-rs/wgpu/pull/4233)
 
+#### Support desktop OpenGL via WGL on Windows
+
+Added creating of full OpenGL contexts to the GLES backend using WGL to support older devices.
+
+By @Zoxc in [#4248](https://github.com/gfx-rs/wgpu/pull/4248)
+
 #### Pass timestamp queries
 
 Addition of `TimestampWrites` to compute and render passes to allow profiling.
