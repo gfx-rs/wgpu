@@ -792,13 +792,13 @@ impl super::InstanceShared {
                 self.get_physical_device_properties
             {
                 // Get these now to avoid borrowing conflicts later
-                let supports_descriptor_indexing = self.driver_api_version >= vk::API_VERSION_1_2
+                let supports_descriptor_indexing = self.instance_api_version >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
-                let supports_driver_properties = self.driver_api_version >= vk::API_VERSION_1_2
+                let supports_driver_properties = self.instance_api_version >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
-                if self.driver_api_version >= vk::API_VERSION_1_1
+                if self.instance_api_version >= vk::API_VERSION_1_1
                     || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
                 {
                     capabilities.maintenance_3 =
@@ -831,7 +831,7 @@ impl super::InstanceShared {
 
             // Set the effective api version
             capabilities.effective_api_version = self
-                .driver_api_version
+                .instance_api_version
                 .min(capabilities.properties.api_version);
             capabilities
         };

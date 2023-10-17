@@ -112,7 +112,7 @@ pub struct InstanceShared {
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,
-    driver_api_version: u32,
+    instance_api_version: u32,
 }
 
 pub struct Instance {
