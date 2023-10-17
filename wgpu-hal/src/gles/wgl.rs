@@ -18,18 +18,20 @@ use std::{
 use wgt::InstanceFlags;
 use winapi::{
     shared::{
-        minwindef::{FALSE, HMODULE, UINT},
-        windef::{HDC, HGLRC},
+        minwindef::{FALSE, HMODULE, LPARAM, LRESULT, UINT, WPARAM},
+        windef::{HDC, HGLRC, HWND},
     },
     um::{
-        libloaderapi::{GetProcAddress, LoadLibraryA},
+        libloaderapi::{GetModuleHandleA, GetProcAddress, LoadLibraryA},
         wingdi::{
             wglCreateContext, wglDeleteContext, wglGetCurrentContext, wglGetProcAddress,
-            wglMakeCurrent, wglShareLists, ChoosePixelFormat, CreateCompatibleDC, DeleteDC,
-            DescribePixelFormat, GetPixelFormat, SetPixelFormat, SwapBuffers, PFD_DOUBLEBUFFER,
-            PFD_DRAW_TO_WINDOW, PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR,
+            wglMakeCurrent, wglShareLists, ChoosePixelFormat, DescribePixelFormat, GetPixelFormat,
+            SetPixelFormat, SwapBuffers, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_SUPPORT_OPENGL,
+            PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR,
         },
-        winuser::GetDC,
+        winuser::{
+            CreateWindowExA, DefWindowProcA, GetDC, RegisterClassExA, CS_OWNDC, WNDCLASSEXA,
+        },
     },
 };
 
@@ -133,8 +135,6 @@ unsafe impl Sync for WglContext {}
 struct Inner {
     opengl_module: HMODULE,
     gl: glow::Context,
-    /// Keep this alive as it's referenced by `context.device`.
-    _memory_device: DeviceContext,
     context: WglContext,
 }
 
@@ -145,20 +145,6 @@ pub struct Instance {
 
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
-
-struct DeviceContext {
-    dc: HDC,
-}
-
-impl Drop for DeviceContext {
-    fn drop(&mut self) {
-        unsafe {
-            if DeleteDC(self.dc) == FALSE {
-                log::error!("failed to delete device context {}", Error::last_os_error());
-            }
-        };
-    }
-}
 
 fn load_gl_func(name: &str, module: Option<HMODULE>) -> *const c_void {
     let addr = CString::new(name.as_bytes()).unwrap();
@@ -186,10 +172,11 @@ fn extensions(extra: &Wgl, dc: HDC) -> HashSet<String> {
 
 unsafe fn setup_pixel_format(dc: HDC) -> Result<(), crate::InstanceError> {
     let mut format: PIXELFORMATDESCRIPTOR = unsafe { mem::zeroed() };
+    format.nVersion = 1;
     format.nSize = mem::size_of_val(&format) as u16;
     format.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
     format.iPixelType = PFD_TYPE_RGBA;
-    format.cColorBits = 32;
+    format.cColorBits = 8;
 
     let index = unsafe { ChoosePixelFormat(dc, &format) };
     if index == 0 {
@@ -198,7 +185,10 @@ unsafe fn setup_pixel_format(dc: HDC) -> Result<(), crate::InstanceError> {
             Error::last_os_error(),
         ));
     }
-    if unsafe { SetPixelFormat(dc, index, &format) } == FALSE {
+
+    let current = unsafe { GetPixelFormat(dc) };
+
+    if index != current && unsafe { SetPixelFormat(dc, index, &format) } == FALSE {
         return Err(crate::InstanceError::with_source(
             String::from("unable to set pixel format"),
             Error::last_os_error(),
@@ -229,6 +219,107 @@ unsafe fn setup_pixel_format(dc: HDC) -> Result<(), crate::InstanceError> {
     Ok(())
 }
 
+fn create_global_device_context() -> Result<HDC, crate::InstanceError> {
+    let instance = unsafe { GetModuleHandleA(ptr::null()) };
+    if instance.is_null() {
+        return Err(crate::InstanceError::with_source(
+            String::from("unable to get executable instance"),
+            Error::last_os_error(),
+        ));
+    }
+
+    // Use the address of `UNIQUE` as part of the window class name to ensure different
+    // `wgpu` versions use different names.
+    static UNIQUE: Mutex<u8> = Mutex::new(0);
+    let class_addr: *const _ = &UNIQUE;
+    let name = format!("wgpu Device Class {:x}\0", class_addr as usize);
+    let name = CString::from_vec_with_nul(name.into_bytes()).unwrap();
+
+    unsafe extern "system" fn wnd_proc(
+        window: HWND,
+        msg: UINT,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        unsafe { DefWindowProcA(window, msg, wparam, lparam) }
+    }
+
+    let window_class = WNDCLASSEXA {
+        cbSize: mem::size_of::<WNDCLASSEXA>() as u32,
+        style: CS_OWNDC,
+        lpfnWndProc: Some(wnd_proc),
+        cbClsExtra: 0,
+        cbWndExtra: 0,
+        hInstance: instance,
+        hIcon: ptr::null_mut(),
+        hCursor: ptr::null_mut(),
+        hbrBackground: ptr::null_mut(),
+        lpszMenuName: ptr::null_mut(),
+        lpszClassName: name.as_ptr(),
+        hIconSm: ptr::null_mut(),
+    };
+
+    let atom = unsafe { RegisterClassExA(&window_class) };
+
+    if atom == 0 {
+        return Err(crate::InstanceError::with_source(
+            String::from("unable to register window class"),
+            Error::last_os_error(),
+        ));
+    }
+
+    let window = unsafe {
+        CreateWindowExA(
+            0,
+            name.as_ptr(),
+            name.as_ptr(),
+            0,
+            0,
+            0,
+            1,
+            1,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            instance,
+            ptr::null_mut(),
+        )
+    };
+    if window.is_null() {
+        return Err(crate::InstanceError::with_source(
+            String::from("unable to create hidden instance window"),
+            Error::last_os_error(),
+        ));
+    }
+    let dc = unsafe { GetDC(window) };
+    if dc.is_null() {
+        return Err(crate::InstanceError::with_source(
+            String::from("unable to create memory device"),
+            Error::last_os_error(),
+        ));
+    }
+    unsafe { setup_pixel_format(dc)? };
+
+    // We intentionally leak the window class, window and device context handle to avoid
+    // spawning a thread to destroy them. We cannot use `DestroyWindow` and `ReleaseDC` on
+    // different threads.
+
+    Ok(dc)
+}
+
+fn get_global_device_context() -> Result<HDC, crate::InstanceError> {
+    #[derive(Clone, Copy)]
+    struct SendDc(HDC);
+    unsafe impl Sync for SendDc {}
+    unsafe impl Send for SendDc {}
+
+    static GLOBAL: Mutex<Option<Result<SendDc, crate::InstanceError>>> = Mutex::new(None);
+    let mut guard = GLOBAL.lock();
+    if guard.is_none() {
+        *guard = Some(create_global_device_context().map(SendDc));
+    }
+    guard.clone().unwrap().map(|dc| dc.0)
+}
+
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         let opengl_module = unsafe { LoadLibraryA("opengl32.dll\0".as_ptr() as *const _) };
@@ -239,20 +330,9 @@ impl crate::Instance<super::Api> for Instance {
             ));
         }
 
-        // TODO: Try using EnumDisplayDevices to look for multiple GPUs.
+        let dc = get_global_device_context()?;
 
-        let dc = unsafe { CreateCompatibleDC(ptr::null_mut()) };
-        if dc.is_null() {
-            return Err(crate::InstanceError::with_source(
-                String::from("unable to create memory device"),
-                Error::last_os_error(),
-            ));
-        }
-        let dc = DeviceContext { dc };
-
-        unsafe { setup_pixel_format(dc.dc)? };
-
-        let context = unsafe { wglCreateContext(dc.dc) };
+        let context = unsafe { wglCreateContext(dc) };
         if context.is_null() {
             return Err(crate::InstanceError::with_source(
                 String::from("unable to create initial OpenGL context"),
@@ -261,7 +341,7 @@ impl crate::Instance<super::Api> for Instance {
         }
         let context = WglContext {
             context,
-            device: dc.dc,
+            device: dc,
         };
         context.make_current().map_err(|e| {
             crate::InstanceError::with_source(
@@ -271,43 +351,42 @@ impl crate::Instance<super::Api> for Instance {
         })?;
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc.dc);
+        let extentions = extensions(&extra, dc);
 
-        if !extentions.contains("WGL_ARB_create_context_profile")
-            || !extra.CreateContextAttribsARB.is_loaded()
-        {
-            return Err(crate::InstanceError::new(String::from(
-                "WGL_ARB_create_context_profile unsupported",
-            )));
-        }
+        let can_use_profile = extentions.contains("WGL_ARB_create_context_profile")
+            && extra.CreateContextAttribsARB.is_loaded();
 
-        let context = unsafe {
-            extra.CreateContextAttribsARB(
-                dc.dc as *const _,
-                ptr::null(),
-                [
-                    CONTEXT_PROFILE_MASK_ARB as c_int,
-                    CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
-                    CONTEXT_FLAGS_ARB as c_int,
-                    if desc.flags.contains(InstanceFlags::DEBUG) {
-                        CONTEXT_DEBUG_BIT_ARB as c_int
-                    } else {
-                        0
-                    },
-                    0, // End of list
-                ]
-                .as_ptr(),
-            )
-        };
-        if context.is_null() {
-            return Err(crate::InstanceError::with_source(
-                String::from("unable to create OpenGL context"),
-                Error::last_os_error(),
-            ));
-        }
-        let context = WglContext {
-            context: context as *mut _,
-            device: dc.dc,
+        let context = if can_use_profile {
+            let context = unsafe {
+                extra.CreateContextAttribsARB(
+                    dc as *const _,
+                    ptr::null(),
+                    [
+                        CONTEXT_PROFILE_MASK_ARB as c_int,
+                        CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                        CONTEXT_FLAGS_ARB as c_int,
+                        if desc.flags.contains(InstanceFlags::DEBUG) {
+                            CONTEXT_DEBUG_BIT_ARB as c_int
+                        } else {
+                            0
+                        },
+                        0, // End of list
+                    ]
+                    .as_ptr(),
+                )
+            };
+            if context.is_null() {
+                return Err(crate::InstanceError::with_source(
+                    String::from("unable to create OpenGL context"),
+                    Error::last_os_error(),
+                ));
+            }
+            WglContext {
+                context: context as *mut _,
+                device: dc,
+            }
+        } else {
+            context
         };
 
         context.make_current().map_err(|e| {
@@ -322,10 +401,13 @@ impl crate::Instance<super::Api> for Instance {
         };
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, dc.dc);
+        let extentions = extensions(&extra, dc);
 
-        let srgb_capable = extentions.contains("GL_ARB_framebuffer_sRGB")
-            || extentions.contains("WGL_EXT_framebuffer_sRGB");
+        let srgb_capable = extentions.contains("WGL_EXT_framebuffer_sRGB")
+            || extentions.contains("WGL_ARB_framebuffer_sRGB")
+            || gl
+                .supported_extensions()
+                .contains("GL_ARB_framebuffer_sRGB");
 
         if desc.flags.contains(InstanceFlags::VALIDATION) && gl.supports_debug() {
             log::info!("Enabling GL debug output");
@@ -345,7 +427,6 @@ impl crate::Instance<super::Api> for Instance {
                 opengl_module,
                 gl,
                 context,
-                _memory_device: dc,
             })),
             srgb_capable,
         })

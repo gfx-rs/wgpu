@@ -211,6 +211,7 @@ struct AdapterShared {
     max_texture_size: u32,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
+    es: bool,
 }
 
 pub struct Adapter {

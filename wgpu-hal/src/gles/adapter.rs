@@ -244,9 +244,9 @@ impl super::Adapter {
         }
 
         if let Some(full_ver) = full_ver {
-            if full_ver < (3, 2) {
+            if full_ver < (3, 3) {
                 log::warn!(
-                    "Returned GL context is {}.{}, when 3.2+ was requested",
+                    "Returned GL context is {}.{}, when 3.3+ is needed",
                     full_ver.0,
                     full_ver.1
                 );
@@ -722,6 +722,7 @@ impl super::Adapter {
                     max_texture_size,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
+                    es: es_ver.is_some(),
                 }),
             },
             info: Self::make_info(vendor, renderer),
@@ -741,27 +742,73 @@ impl super::Adapter {
         })
     }
 
+    unsafe fn compile_shader(
+        source: &str,
+        gl: &glow::Context,
+        shader_type: u32,
+        es: bool,
+    ) -> Option<glow::Shader> {
+        let source = if es {
+            format!("#version 300 es\nprecision lowp float;\n{source}")
+        } else {
+            format!("#version 130\n{source}")
+        };
+        let shader = unsafe { gl.create_shader(shader_type) }.expect("Could not create shader");
+        unsafe { gl.shader_source(shader, &source) };
+        unsafe { gl.compile_shader(shader) };
+
+        if !unsafe { gl.get_shader_compile_status(shader) } {
+            let msg = unsafe { gl.get_shader_info_log(shader) };
+            if !msg.is_empty() {
+                log::error!("\tShader compile error: {}", msg);
+            }
+            unsafe { gl.delete_shader(shader) };
+            None
+        } else {
+            Some(shader)
+        }
+    }
+
     unsafe fn create_shader_clear_program(
         gl: &glow::Context,
-    ) -> (glow::Program, glow::UniformLocation) {
+        es: bool,
+    ) -> Option<(glow::Program, glow::UniformLocation)> {
         let program = unsafe { gl.create_program() }.expect("Could not create shader program");
-        let vertex =
-            unsafe { gl.create_shader(glow::VERTEX_SHADER) }.expect("Could not create shader");
-        unsafe { gl.shader_source(vertex, include_str!("./shaders/clear.vert")) };
-        unsafe { gl.compile_shader(vertex) };
-        let fragment =
-            unsafe { gl.create_shader(glow::FRAGMENT_SHADER) }.expect("Could not create shader");
-        unsafe { gl.shader_source(fragment, include_str!("./shaders/clear.frag")) };
-        unsafe { gl.compile_shader(fragment) };
+        let vertex = unsafe {
+            Self::compile_shader(
+                include_str!("./shaders/clear.vert"),
+                gl,
+                glow::VERTEX_SHADER,
+                es,
+            )?
+        };
+        let fragment = unsafe {
+            Self::compile_shader(
+                include_str!("./shaders/clear.frag"),
+                gl,
+                glow::FRAGMENT_SHADER,
+                es,
+            )?
+        };
         unsafe { gl.attach_shader(program, vertex) };
         unsafe { gl.attach_shader(program, fragment) };
         unsafe { gl.link_program(program) };
+
+        let linked_ok = unsafe { gl.get_program_link_status(program) };
+        let msg = unsafe { gl.get_program_info_log(program) };
+        if !msg.is_empty() {
+            log::warn!("Shader link error: {}", msg);
+        }
+        if !linked_ok {
+            return None;
+        }
+
         let color_uniform_location = unsafe { gl.get_uniform_location(program, "color") }
             .expect("Could not find color uniform in shader clear shader");
         unsafe { gl.delete_shader(vertex) };
         unsafe { gl.delete_shader(fragment) };
 
-        (program, color_uniform_location)
+        Some((program, color_uniform_location))
     }
 }
 
@@ -786,8 +833,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
 
         // Compile the shader program we use for doing manual clears to work around Mesa fastclear
         // bug.
-        let (shader_clear_program, shader_clear_program_color_uniform_location) =
-            unsafe { Self::create_shader_clear_program(gl) };
+
+        let (shader_clear_program, shader_clear_program_color_uniform_location) = unsafe {
+            Self::create_shader_clear_program(gl, self.shared.es)
+                .ok_or(crate::DeviceError::ResourceCreationFailed)?
+        };
 
         Ok(crate::OpenDevice {
             device: super::Device {
