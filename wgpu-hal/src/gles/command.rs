@@ -474,6 +474,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             panic!("Multiple render attachments with external framebuffers are not supported.");
         }
 
+        // `COLOR_ATTACHMENT0` to `COLOR_ATTACHMENT31` gives 32 possible color attachments.
+        assert!(desc.color_attachments.len() <= 32);
+
         match desc
             .color_attachments
             .first()
