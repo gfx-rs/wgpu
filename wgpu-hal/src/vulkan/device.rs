@@ -970,11 +970,7 @@ impl crate::Device<super::Api> for super::Device {
             wgt_view_formats = desc.view_formats.clone();
             wgt_view_formats.push(desc.format);
 
-            if self.shared_instance().instance_api_version >= vk::API_VERSION_1_2
-                || self
-                    .enabled_device_extensions()
-                    .contains(&vk::KhrImageFormatListFn::name())
-            {
+            if self.shared.private_caps.image_format_list {
                 vk_view_formats = desc
                     .view_formats
                     .iter()
