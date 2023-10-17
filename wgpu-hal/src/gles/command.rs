@@ -535,13 +535,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             .push(glow::STENCIL_ATTACHMENT);
                     }
                 }
-
-                if !rendering_to_external_framebuffer {
-                    // set the draw buffers and states
-                    self.cmd_buffer
-                        .commands
-                        .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
-                }
             }
         }
 
@@ -586,6 +579,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 );
             }
         }
+
+        if !rendering_to_external_framebuffer {
+            // set the draw buffers and states
+            self.cmd_buffer
+                .commands
+                .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+        }
+
         if let Some(ref dsat) = desc.depth_stencil_attachment {
             let clear_depth = !dsat.depth_ops.contains(crate::AttachmentOps::LOAD);
             let clear_stencil = !dsat.stencil_ops.contains(crate::AttachmentOps::LOAD);
