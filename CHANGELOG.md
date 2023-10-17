@@ -123,6 +123,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Rename `wgpu_hal::vulkan::Instance::required_extensions` to `desired_extensions`. By @jimblandy in [#4115](https://github.com/gfx-rs/wgpu/pull/4115)
 
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
+- Ensure entries to PhysicalDeviceCapabilities use effective api version. By @i509VCB in [#4249](https://github.com/gfx-rs/wgpu/pull/4249)
 
 #### DX12
 

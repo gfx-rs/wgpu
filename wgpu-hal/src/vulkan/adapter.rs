@@ -788,17 +788,25 @@ impl super::InstanceShared {
             let mut capabilities = PhysicalDeviceCapabilities::default();
             capabilities.supported_extensions =
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
+
+            // Set the effective api version before we test for extension support
+            capabilities.effective_api_version = self
+                .driver_api_version
+                .min(capabilities.properties.api_version);
+
             capabilities.properties = if let Some(ref get_device_properties) =
                 self.get_physical_device_properties
             {
                 // Get these now to avoid borrowing conflicts later
-                let supports_descriptor_indexing = self.driver_api_version >= vk::API_VERSION_1_2
+                let supports_descriptor_indexing = capabilities.effective_api_version
+                    >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::ExtDescriptorIndexingFn::name());
-                let supports_driver_properties = self.driver_api_version >= vk::API_VERSION_1_2
+                let supports_driver_properties = capabilities.effective_api_version
+                    >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
-                if self.driver_api_version >= vk::API_VERSION_1_1
+                if capabilities.effective_api_version >= vk::API_VERSION_1_1
                     || capabilities.supports_extension(vk::KhrMaintenance3Fn::name())
                 {
                     capabilities.maintenance_3 =
@@ -829,10 +837,6 @@ impl super::InstanceShared {
                 unsafe { self.raw.get_physical_device_properties(phd) }
             };
 
-            // Set the effective api version
-            capabilities.effective_api_version = self
-                .driver_api_version
-                .min(capabilities.properties.api_version);
             capabilities
         };
 
