@@ -606,7 +606,7 @@ impl crate::Instance<super::Api> for super::Instance {
                     //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
                     //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
                     //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
-                    vk::HEADER_VERSION_COMPLETE
+                    vk::API_VERSION_1_3
                 },
             );
 
