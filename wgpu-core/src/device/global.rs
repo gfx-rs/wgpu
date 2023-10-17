@@ -2084,26 +2084,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
         let error = loop {
-            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let (_, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+            let device_id;
+            let id;
 
-            let pipeline = match pipeline_guard.get(pipeline_id) {
-                Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
-            };
-            let id = match pipeline_layout_guard[pipeline.layout_id.value]
-                .bind_group_layout_ids
-                .get(index as usize)
             {
-                Some(id) => id,
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+
+                let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+                let (_, mut token) = hub.bind_groups.read(&mut token);
+                let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+
+                let pipeline = match pipeline_guard.get(pipeline_id) {
+                    Ok(pipeline) => pipeline,
+                    Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                };
+                id = match pipeline_layout_guard[pipeline.layout_id.value]
+                    .bind_group_layout_ids
+                    .get(index as usize)
+                {
+                    Some(id) => *id,
+                    None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                };
+
+                let layout = &bgl_guard[id];
+                layout.multi_ref_count.inc();
+
+                if G::ids_are_generated_in_wgpu() {
+                    return (id.0, None);
+                }
+
+                device_id = layout.device_id.clone();
+            }
+
+            // The ID is provided externally, so we must create a new bind group layout
+            // with the given ID as a duplicate of the existing one.
+            let new_layout = BindGroupLayout {
+                device_id,
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(id),
+                multi_ref_count: crate::MultiRefCount::new(),
             };
 
-            bgl_guard[*id].multi_ref_count.inc();
+            let fid = hub.bind_group_layouts.prepare(id_in);
+            let id = fid.assign(new_layout, &mut token);
+
             return (id.0, None);
         };
 
