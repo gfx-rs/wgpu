@@ -177,8 +177,8 @@ impl super::InstanceShared {
         &self.raw
     }
 
-    pub fn driver_api_version(&self) -> u32 {
-        self.driver_api_version
+    pub fn instance_api_version(&self) -> u32 {
+        self.instance_api_version
     }
 
     pub fn extensions(&self) -> &[&'static CStr] {
@@ -196,7 +196,7 @@ impl super::Instance {
     /// Return a vector of the names of instance extensions actually available
     /// on `entry` that wgpu would like to enable.
     ///
-    /// The `driver_api_version` argument should be the instance's Vulkan API
+    /// The `instance_api_version` argument should be the instance's Vulkan API
     /// version, as obtained from `vkEnumerateInstanceVersion`. This is the same
     /// space of values as the `VK_API_VERSION` constants.
     ///
@@ -206,7 +206,7 @@ impl super::Instance {
     /// assumes that it has been enabled.
     pub fn desired_extensions(
         entry: &ash::Entry,
-        _driver_api_version: u32,
+        _instance_api_version: u32,
         flags: wgt::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
         let instance_extensions = entry
@@ -282,9 +282,9 @@ impl super::Instance {
     /// # Safety
     ///
     /// - `raw_instance` must be created from `entry`
-    /// - `raw_instance` must be created respecting `driver_api_version`, `extensions` and `flags`
+    /// - `raw_instance` must be created respecting `instance_api_version`, `extensions` and `flags`
     /// - `extensions` must be a superset of `desired_extensions()` and must be created from the
-    ///   same entry, driver_api_version and flags.
+    ///   same entry, `instance_api_version`` and flags.
     /// - `android_sdk_version` is ignored and can be `0` for all platforms besides Android
     ///
     /// If `debug_utils_user_data` is `Some`, then the validation layer is
@@ -293,7 +293,7 @@ impl super::Instance {
     pub unsafe fn from_raw(
         entry: ash::Entry,
         raw_instance: ash::Instance,
-        driver_api_version: u32,
+        instance_api_version: u32,
         android_sdk_version: u32,
         debug_utils_user_data: Option<super::DebugUtilsMessengerUserData>,
         extensions: Vec<&'static CStr>,
@@ -301,7 +301,7 @@ impl super::Instance {
         has_nv_optimus: bool,
         drop_guard: Option<crate::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
-        log::info!("Instance version: 0x{:x}", driver_api_version);
+        log::info!("Instance version: 0x{:x}", instance_api_version);
 
         let debug_utils = if let Some(debug_callback_user_data) = debug_utils_user_data {
             if extensions.contains(&ext::DebugUtils::name()) {
@@ -373,7 +373,7 @@ impl super::Instance {
                 get_physical_device_properties,
                 entry,
                 has_nv_optimus,
-                driver_api_version,
+                instance_api_version,
                 android_sdk_version,
             }),
         })
@@ -575,7 +575,7 @@ impl crate::Instance<super::Api> for super::Instance {
         let entry = unsafe { ash::Entry::load() }.map_err(|err| {
             crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)
         })?;
-        let driver_api_version = match entry.try_enumerate_instance_version() {
+        let instance_api_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
             Ok(Some(version)) => version,
             Ok(None) => vk::API_VERSION_1_0,
@@ -595,7 +595,7 @@ impl crate::Instance<super::Api> for super::Instance {
             .engine_version(2)
             .api_version(
                 // Vulkan 1.0 doesn't like anything but 1.0 passed in here...
-                if driver_api_version < vk::API_VERSION_1_1 {
+                if instance_api_version < vk::API_VERSION_1_1 {
                     vk::API_VERSION_1_0
                 } else {
                     // This is the max Vulkan API version supported by `wgpu-hal`.
@@ -606,11 +606,11 @@ impl crate::Instance<super::Api> for super::Instance {
                     //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
                     //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
                     //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
-                    vk::HEADER_VERSION_COMPLETE
+                    vk::API_VERSION_1_3
                 },
             );
 
-        let extensions = Self::desired_extensions(&entry, driver_api_version, desc.flags)?;
+        let extensions = Self::desired_extensions(&entry, instance_api_version, desc.flags)?;
 
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
@@ -720,7 +720,7 @@ impl crate::Instance<super::Api> for super::Instance {
             Self::from_raw(
                 entry,
                 vk_instance,
-                driver_api_version,
+                instance_api_version,
                 android_sdk_version,
                 debug_callback_user_data,
                 extensions,
