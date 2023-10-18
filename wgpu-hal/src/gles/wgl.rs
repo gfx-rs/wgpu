@@ -413,6 +413,10 @@ impl crate::Instance<super::Api> for Instance {
                 .supported_extensions()
                 .contains("GL_ARB_framebuffer_sRGB");
 
+        if srgb_capable {
+            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
+        }
+
         if desc.flags.contains(InstanceFlags::VALIDATION) && gl.supports_debug() {
             log::info!("Enabling GL debug output");
             unsafe { gl.enable(glow::DEBUG_OUTPUT) };
@@ -579,25 +583,6 @@ impl crate::Surface<super::Api> for Surface {
                 config.extent.height as _,
             )
         };
-        let framebuffer = unsafe { gl.create_framebuffer() }.map_err(|error| {
-            log::error!("Internal swapchain framebuffer creation failed: {error}");
-            crate::DeviceError::OutOfMemory
-        })?;
-        unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
-        unsafe {
-            gl.framebuffer_renderbuffer(
-                glow::READ_FRAMEBUFFER,
-                glow::COLOR_ATTACHMENT0,
-                glow::RENDERBUFFER,
-                Some(renderbuffer),
-            )
-        };
-        unsafe { gl.bind_renderbuffer(glow::RENDERBUFFER, None) };
-        unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
-
-        if self.srgb_capable && config.format.is_srgb() {
-            unsafe { gl.enable(glow::FRAMEBUFFER_SRGB) };
-        }
 
         // Create the swap chain OpenGL context
 
@@ -692,6 +677,22 @@ impl crate::Surface<super::Api> for Surface {
                 ));
             }
         }
+
+        let framebuffer = unsafe { surface_gl.create_framebuffer() }.map_err(|error| {
+            log::error!("Internal swapchain framebuffer creation failed: {error}");
+            crate::DeviceError::OutOfMemory
+        })?;
+        unsafe { surface_gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
+        unsafe {
+            surface_gl.framebuffer_renderbuffer(
+                glow::READ_FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::RENDERBUFFER,
+                Some(renderbuffer),
+            )
+        };
+        unsafe { surface_gl.bind_renderbuffer(glow::RENDERBUFFER, None) };
+        unsafe { surface_gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
 
         unsafe { surface_gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
         unsafe { surface_gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
