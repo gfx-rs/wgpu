@@ -2163,14 +2163,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::PushDebugGroup { color: _, len } => {
                         state.debug_scope_depth += 1;
-                        if !discard_hal_labels {
-                            let label = str::from_utf8(
-                                &base.string_data[string_offset..string_offset + len],
-                            )
-                            .unwrap();
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
 
-                            log::trace!("RenderPass::push_debug_group {label:?}");
-                            string_offset += len;
+                        log::trace!("RenderPass::push_debug_group {label:?}");
+                        string_offset += len;
+                        if !discard_hal_labels {
                             unsafe {
                                 raw.begin_debug_marker(label);
                             }
@@ -2192,13 +2191,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::InsertDebugMarker { color: _, len } => {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        log::trace!("RenderPass::insert_debug_marker {label:?}");
+                        string_offset += len;
                         if !discard_hal_labels {
-                            let label = str::from_utf8(
-                                &base.string_data[string_offset..string_offset + len],
-                            )
-                            .unwrap();
-                            log::trace!("RenderPass::insert_debug_marker {label:?}");
-                            string_offset += len;
                             unsafe {
                                 raw.insert_debug_marker(label);
                             }

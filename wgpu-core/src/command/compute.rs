@@ -776,11 +776,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::PushDebugGroup { color: _, len } => {
                     state.debug_scope_depth += 1;
+                    let label =
+                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                            .unwrap();
+                    string_offset += len;
                     if !discard_hal_labels {
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-                        string_offset += len;
                         unsafe {
                             raw.begin_debug_marker(label);
                         }
@@ -801,11 +801,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::InsertDebugMarker { color: _, len } => {
+                    let label =
+                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                            .unwrap();
+                    string_offset += len;
                     if !discard_hal_labels {
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-                        string_offset += len;
                         unsafe { raw.insert_debug_marker(label) }
                     }
                 }
