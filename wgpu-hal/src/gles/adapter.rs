@@ -277,7 +277,11 @@ impl super::Adapter {
             log::info!("SL version: {}", &sl_version);
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
-                let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
+                let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
+                // Naga doesn't think it supports GL 460+, so we cap it at 450
+                if value > 450 {
+                    value = 450;
+                }
                 naga::back::glsl::Version::Desktop(value)
             } else {
                 let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
