@@ -776,15 +776,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::PushDebugGroup { color: _, len } => {
                     state.debug_scope_depth += 1;
-                    let label =
-                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                            .unwrap();
-                    string_offset += len;
                     if !discard_hal_labels {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
                         unsafe {
                             raw.begin_debug_marker(label);
                         }
                     }
+                    string_offset += len;
                 }
                 ComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
@@ -801,13 +801,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::InsertDebugMarker { color: _, len } => {
-                    let label =
-                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                            .unwrap();
-                    string_offset += len;
                     if !discard_hal_labels {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
                         unsafe { raw.insert_debug_marker(label) }
                     }
+                    string_offset += len;
                 }
                 ComputeCommand::WriteTimestamp {
                     query_set_id,

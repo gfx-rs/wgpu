@@ -2163,17 +2163,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::PushDebugGroup { color: _, len } => {
                         state.debug_scope_depth += 1;
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-
-                        log::trace!("RenderPass::push_debug_group {label:?}");
-                        string_offset += len;
                         if !discard_hal_labels {
+                            let label = str::from_utf8(
+                                &base.string_data[string_offset..string_offset + len],
+                            )
+                            .unwrap();
+
+                            log::trace!("RenderPass::push_debug_group {label:?}");
                             unsafe {
                                 raw.begin_debug_marker(label);
                             }
                         }
+                        string_offset += len;
                     }
                     RenderCommand::PopDebugGroup => {
                         log::trace!("RenderPass::pop_debug_group");
@@ -2191,16 +2192,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::InsertDebugMarker { color: _, len } => {
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-                        log::trace!("RenderPass::insert_debug_marker {label:?}");
-                        string_offset += len;
                         if !discard_hal_labels {
+                            let label = str::from_utf8(
+                                &base.string_data[string_offset..string_offset + len],
+                            )
+                            .unwrap();
+                            log::trace!("RenderPass::insert_debug_marker {label:?}");
                             unsafe {
                                 raw.insert_debug_marker(label);
                             }
                         }
+                        string_offset += len;
                     }
                     RenderCommand::WriteTimestamp {
                         query_set_id,
