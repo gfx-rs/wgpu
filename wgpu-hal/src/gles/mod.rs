@@ -221,7 +221,7 @@ pub struct Adapter {
 pub struct Device {
     shared: Arc<AdapterShared>,
     main_vao: glow::VertexArray,
-    #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
     render_doc: crate::auxil::renderdoc::RenderDoc,
 }
 

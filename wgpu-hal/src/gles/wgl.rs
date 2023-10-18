@@ -52,6 +52,10 @@ impl AdapterContext {
         true
     }
 
+    pub fn raw_context(&self) -> *mut c_void {
+        self.inner.lock().context.context as *mut _
+    }
+
     /// Obtain a lock to the WGL context and get handle to the [`glow::Context`] that can be used to
     /// do rendering.
     #[track_caller]

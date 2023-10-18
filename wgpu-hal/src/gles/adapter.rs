@@ -843,7 +843,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 main_vao,
-                #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
+                #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
                 render_doc: Default::default(),
             },
             queue: super::Queue {

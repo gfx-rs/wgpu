@@ -1304,7 +1304,7 @@ impl crate::Device<super::Api> for super::Device {
     }
 
     unsafe fn start_capture(&self) -> bool {
-        #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
         return unsafe {
             self.render_doc
                 .start_frame_capture(self.shared.context.raw_context(), ptr::null_mut())
@@ -1313,7 +1313,7 @@ impl crate::Device<super::Api> for super::Device {
         false
     }
     unsafe fn stop_capture(&self) {
-        #[cfg(all(not(any(target_arch = "wasm32", windows)), feature = "renderdoc"))]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "renderdoc"))]
         unsafe {
             self.render_doc
                 .end_frame_capture(ptr::null_mut(), ptr::null_mut())
