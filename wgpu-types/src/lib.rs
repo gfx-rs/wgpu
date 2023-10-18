@@ -498,11 +498,16 @@ bitflags::bitflags! {
         /// may also create uniform arrays of storage textures.
         ///
         /// ex.
-        /// - `var textures: array<texture_storage_2d<f32, write>, 10>` (WGSL)
+        /// - `var textures: binding_array<texture_storage_2d<f32, write>, 10>` (WGSL)
         /// - `uniform image2D textures[10]` (GLSL)
         ///
         /// This capability allows them to exist and to be indexed by dynamically uniform
         /// values.
+        ///
+        /// Corresponding limits for read + write:
+        /// let mut limits = wgpu::Limits::default();
+        /// limits.max_sampled_textures_per_shader_stage = 64;
+        /// limits.max_storage_textures_per_shader_stage = 64;
         ///
         /// Supported platforms:
         /// - DX12
