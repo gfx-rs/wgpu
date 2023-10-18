@@ -466,7 +466,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 }
             };
 
-            let parent = match *func_ctx.info[next_expr].ty.inner_with(&module.types) {
+            let parent = match *func_ctx.resolve_type(next_expr, &module.types) {
                 crate::TypeInner::Pointer { base, .. } => match module.types[base].inner {
                     crate::TypeInner::Struct { ref members, .. } => Parent::Struct(members),
                     crate::TypeInner::Array { stride, .. } => Parent::Array { stride },

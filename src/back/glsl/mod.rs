@@ -1828,8 +1828,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // This is where we can generate intermediate constants for some expression types.
             Statement::Emit(ref range) => {
                 for handle in range.clone() {
-                    let info = &ctx.info[handle];
-                    let ptr_class = info.ty.inner_with(&self.module.types).pointer_space();
+                    let ptr_class = ctx.resolve_type(handle, &self.module.types).pointer_space();
                     let expr_name = if ptr_class.is_some() {
                         // GLSL can't save a pointer-valued expression in a variable,
                         // but we shouldn't ever need to: they should never be named expressions,
@@ -1859,7 +1858,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         if let TypeInner::Image {
                             class: crate::ImageClass::Sampled { .. },
                             ..
-                        } = *ctx.info[image].ty.inner_with(&self.module.types)
+                        } = *ctx.resolve_type(image, &self.module.types)
                         {
                             if let proc::BoundsCheckPolicy::Restrict = self.policies.image_load {
                                 write!(self.out, "{level}")?;
@@ -2225,7 +2224,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } => {
                 write!(self.out, "{level}")?;
                 let res_name = format!("{}{}", back::BAKE_PREFIX, result.index());
-                let res_ty = ctx.info[result].ty.inner_with(&self.module.types);
+                let res_ty = ctx.resolve_type(result, &self.module.types);
                 self.write_value_type(res_ty)?;
                 write!(self.out, " {res_name} = ")?;
                 self.named_expressions.insert(result, res_name);
@@ -2484,7 +2483,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 level,
                 depth_ref,
             } => {
-                let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
+                let dim = match *ctx.resolve_type(image, &self.module.types) {
                     TypeInner::Image { dim, .. } => dim,
                     _ => unreachable!(),
                 };
@@ -2545,7 +2544,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // We need to get the coordinates vector size to later build a vector that's `size + 1`
                 // if `depth_ref` is some, if it isn't a vector we panic as that's not a valid expression
-                let mut coord_dim = match *ctx.info[coordinate].ty.inner_with(&self.module.types) {
+                let mut coord_dim = match *ctx.resolve_type(coordinate, &self.module.types) {
                     TypeInner::Vector { size, .. } => size as u8,
                     TypeInner::Scalar { .. } => 1,
                     _ => unreachable!(),
@@ -2672,7 +2671,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 use crate::ImageClass;
 
                 // This will only panic if the module is invalid
-                let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
+                let (dim, class) = match *ctx.resolve_type(image, &self.module.types) {
                     TypeInner::Image {
                         dim,
                         arrayed: _,
@@ -2704,7 +2703,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 self.write_expr(image, ctx)?;
                                 if let Some(expr) = level {
                                     let cast_to_int = matches!(
-                                        *ctx.info[expr].ty.inner_with(&self.module.types),
+                                        *ctx.resolve_type(expr, &self.module.types),
                                         crate::TypeInner::Scalar {
                                             kind: crate::ScalarKind::Uint,
                                             ..
@@ -2779,7 +2778,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 let operator_or_fn = match op {
                     crate::UnaryOperator::Negate => "-",
                     crate::UnaryOperator::LogicalNot => {
-                        match *ctx.info[expr].ty.inner_with(&self.module.types) {
+                        match *ctx.resolve_type(expr, &self.module.types) {
                             TypeInner::Vector { .. } => "not",
                             _ => "!",
                         }
@@ -2805,8 +2804,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 // implemented as a function call
                 use crate::{BinaryOperator as Bo, ScalarKind as Sk, TypeInner as Ti};
 
-                let left_inner = ctx.info[left].ty.inner_with(&self.module.types);
-                let right_inner = ctx.info[right].ty.inner_with(&self.module.types);
+                let left_inner = ctx.resolve_type(left, &self.module.types);
+                let right_inner = ctx.resolve_type(right, &self.module.types);
 
                 let function = match (left_inner, right_inner) {
                     (&Ti::Vector { kind, .. }, &Ti::Vector { .. }) => match op {
@@ -2935,7 +2934,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 accept,
                 reject,
             } => {
-                let cond_ty = ctx.info[condition].ty.inner_with(&self.module.types);
+                let cond_ty = ctx.resolve_type(condition, &self.module.types);
                 let vec_select = if let TypeInner::Vector { .. } = *cond_ty {
                     true
                 } else {
@@ -3025,7 +3024,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         self.write_expr(arg, ctx)?;
 
-                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                        match *ctx.resolve_type(arg, &self.module.types) {
                             crate::TypeInner::Vector { size, .. } => write!(
                                 self.out,
                                 ", vec{}(0.0), vec{0}(1.0)",
@@ -3072,7 +3071,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Log2 => "log2",
                     Mf::Pow => "pow",
                     // geometry
-                    Mf::Dot => match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                    Mf::Dot => match *ctx.resolve_type(arg, &self.module.types) {
                         crate::TypeInner::Vector {
                             kind: crate::ScalarKind::Float,
                             ..
@@ -3128,7 +3127,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Determinant => "determinant",
                     // bits
                     Mf::CountTrailingZeros => {
-                        match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                        match *ctx.resolve_type(arg, &self.module.types) {
                             crate::TypeInner::Vector { size, kind, .. } => {
                                 let s = back::vector_size_str(size);
                                 if let crate::ScalarKind::Uint = kind {
@@ -3158,7 +3157,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     Mf::CountLeadingZeros => {
                         if self.options.version.supports_integer_functions() {
-                            match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            match *ctx.resolve_type(arg, &self.module.types) {
                                 crate::TypeInner::Vector { size, kind, .. } => {
                                     let s = back::vector_size_str(size);
 
@@ -3189,7 +3188,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 _ => unreachable!(),
                             };
                         } else {
-                            match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                            match *ctx.resolve_type(arg, &self.module.types) {
                                 crate::TypeInner::Vector { size, kind, .. } => {
                                     let s = back::vector_size_str(size);
 
@@ -3262,7 +3261,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // Check if the argument is an unsigned integer and return the vector size
                 // in case it's a vector
-                let maybe_uint_size = match *ctx.info[arg].ty.inner_with(&self.module.types) {
+                let maybe_uint_size = match *ctx.resolve_type(arg, &self.module.types) {
                     crate::TypeInner::Scalar {
                         kind: crate::ScalarKind::Uint,
                         ..
@@ -3349,7 +3348,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 kind: target_kind,
                 convert,
             } => {
-                let inner = ctx.info[expr].ty.inner_with(&self.module.types);
+                let inner = ctx.resolve_type(expr, &self.module.types);
                 match convert {
                     Some(width) => {
                         // this is similar to `write_type`, but with the target kind
@@ -3515,7 +3514,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
             // Otherwise write just the expression (and the 1D hack if needed)
             None => {
-                let uvec_size = match *ctx.info[coordinate].ty.inner_with(&self.module.types) {
+                let uvec_size = match *ctx.resolve_type(coordinate, &self.module.types) {
                     TypeInner::Scalar {
                         kind: crate::ScalarKind::Uint,
                         ..
@@ -3563,7 +3562,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // so we don't need to generate bounds checks (OpenGL 4.2 Core §3.9.20)
 
         // This will only panic if the module is invalid
-        let dim = match *ctx.info[image].ty.inner_with(&self.module.types) {
+        let dim = match *ctx.resolve_type(image, &self.module.types) {
             TypeInner::Image { dim, .. } => dim,
             _ => unreachable!(),
         };
@@ -3626,7 +3625,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // in bounds (`ReadZeroSkipWrite`) or make them a valid texel (`Restrict`).
 
         // This will only panic if the module is invalid
-        let (dim, class) = match *ctx.info[image].ty.inner_with(&self.module.types) {
+        let (dim, class) = match *ctx.resolve_type(image, &self.module.types) {
             TypeInner::Image {
                 dim,
                 arrayed: _,
@@ -3891,8 +3890,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let base_ty_res = &ctx.info[named].ty;
-        let resolved = base_ty_res.inner_with(&self.module.types);
+        let resolved = ctx.resolve_type(named, &self.module.types);
 
         write!(self.out, " {name}")?;
         if let TypeInner::Array { base, size, .. } = *resolved {

@@ -2624,11 +2624,7 @@ impl<W: Write> Writer<W> {
                             )?;
                         }
 
-                        let info = &context.expression.info[handle];
-                        let ptr_class = info
-                            .ty
-                            .inner_with(&context.expression.module.types)
-                            .pointer_space();
+                        let ptr_class = context.expression.resolve_type(handle).pointer_space();
                         let expr_name = if ptr_class.is_some() {
                             None // don't bake pointer expressions (just yet)
                         } else if let Some(name) =

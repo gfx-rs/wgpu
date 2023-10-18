@@ -135,7 +135,7 @@ impl FunctionCtx<'_> {
                     };
                 }
                 crate::Expression::AccessIndex { base, index } => {
-                    match *self.info[base].ty.inner_with(&module.types) {
+                    match *self.resolve_type(base, &module.types) {
                         crate::TypeInner::Struct { ref members, .. } => {
                             if let Some(crate::Binding::BuiltIn(bi)) =
                                 members[index as usize].binding
