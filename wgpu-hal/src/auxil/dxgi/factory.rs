@@ -14,7 +14,7 @@ pub enum DxgiFactoryType {
     Factory6,
 }
 
-fn filter_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
+fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
     let mut desc = unsafe { std::mem::zeroed() };
     unsafe { adapter.GetDesc1(&mut desc) };
 
@@ -58,7 +58,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                 break;
             }
 
-            if !filter_adapter(&adapter4) {
+            if !should_keep_adapter(&adapter4) {
                 continue;
             }
 
@@ -78,7 +78,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
             break;
         }
 
-        if !filter_adapter(&adapter1) {
+        if !should_keep_adapter(&adapter1) {
             continue;
         }
 
