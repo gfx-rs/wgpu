@@ -55,7 +55,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
             break;
         }
 
-        let mut desc = dxgi::DXGI_ADAPTER_DESC1::default();
+        let mut desc = unsafe { std::mem::zeroed() };
         unsafe { adapter1.GetDesc1(&mut desc) };
 
         // If run completely headless, windows will show two different WARP adapters, one
