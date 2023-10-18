@@ -599,9 +599,7 @@ impl super::Adapter {
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
-            max_storage_buffer_binding_size: if supported((3, 1), (4, 3))
-                || extensions.contains("GL_ARB_shader_storage_buffer_object")
-            {
+            max_storage_buffer_binding_size: if supports_storage {
                 unsafe { gl.get_parameter_i32(glow::MAX_SHADER_STORAGE_BLOCK_SIZE) }
             } else {
                 0
