@@ -1178,7 +1178,7 @@ impl Limits {
     ///     max_push_constant_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
+    ///     max_inter_stage_shader_components: 31,
     ///     max_compute_workgroup_storage_size: 0, // +
     ///     max_compute_invocations_per_workgroup: 0, // +
     ///     max_compute_workgroup_size_x: 0, // +
@@ -1203,6 +1203,9 @@ impl Limits {
             max_compute_workgroup_size_y: 0,
             max_compute_workgroup_size_z: 0,
             max_compute_workgroups_per_dimension: 0,
+
+            // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
+            max_inter_stage_shader_components: 31,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
