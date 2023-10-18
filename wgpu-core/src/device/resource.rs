@@ -1310,6 +1310,12 @@ impl<A: HalApi> Device<A> {
             Caps::DUAL_SOURCE_BLENDING,
             self.features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
         );
+        caps.set(
+            Caps::CUBE_ARRAY_TEXTURES,
+            self.downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
