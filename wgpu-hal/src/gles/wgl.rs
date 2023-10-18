@@ -30,7 +30,8 @@ use winapi::{
             PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR,
         },
         winuser::{
-            CreateWindowExA, DefWindowProcA, GetDC, RegisterClassExA, CS_OWNDC, WNDCLASSEXA,
+            CreateWindowExA, DefWindowProcA, GetDC, RegisterClassExA, ReleaseDC, CS_OWNDC,
+            WNDCLASSEXA,
         },
     },
 };
@@ -67,7 +68,7 @@ impl AdapterContext {
             .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
             .expect("Could not lock adapter context. This is most-likely a deadlock.");
 
-        inner.context.make_current().unwrap();
+        inner.context.make_current(inner.device).unwrap();
 
         AdapterContextLock { inner }
     }
@@ -93,13 +94,12 @@ impl<'a> Drop for AdapterContextLock<'a> {
 }
 
 struct WglContext {
-    device: HDC,
     context: HGLRC,
 }
 
 impl WglContext {
-    fn make_current(&self) -> Result<(), Error> {
-        if unsafe { wglMakeCurrent(self.device, self.context) } == FALSE {
+    fn make_current(&self, device: HDC) -> Result<(), Error> {
+        if unsafe { wglMakeCurrent(device, self.context) } == FALSE {
             Err(Error::last_os_error())
         } else {
             Ok(())
@@ -121,11 +121,6 @@ impl WglContext {
 impl Drop for WglContext {
     fn drop(&mut self) {
         unsafe {
-            if let Err(err) = self.unmake_current() {
-                log::error!("failed to unset the current WGL context {}", err);
-                return;
-            }
-
             if wglDeleteContext(self.context) == FALSE {
                 log::error!("failed to delete WGL context {}", Error::last_os_error());
             }
@@ -139,6 +134,7 @@ unsafe impl Sync for WglContext {}
 struct Inner {
     opengl_module: HMODULE,
     gl: glow::Context,
+    device: HDC,
     context: WglContext,
 }
 
@@ -345,11 +341,8 @@ impl crate::Instance<super::Api> for Instance {
                 Error::last_os_error(),
             ));
         }
-        let context = WglContext {
-            context,
-            device: dc,
-        };
-        context.make_current().map_err(|e| {
+        let context = WglContext { context };
+        context.make_current(dc).map_err(|e| {
             crate::InstanceError::with_source(
                 String::from("unable to set initial OpenGL context as current"),
                 e,
@@ -385,13 +378,12 @@ impl crate::Instance<super::Api> for Instance {
             }
             WglContext {
                 context: context as *mut _,
-                device: dc,
             }
         } else {
             context
         };
 
-        context.make_current().map_err(|e| {
+        context.make_current(dc).map_err(|e| {
             crate::InstanceError::with_source(
                 String::from("unable to set OpenGL context as current"),
                 e,
@@ -430,6 +422,7 @@ impl crate::Instance<super::Api> for Instance {
 
         Ok(Instance {
             inner: Arc::new(Mutex::new(Inner {
+                device: dc,
                 opengl_module,
                 gl,
                 context,
@@ -451,15 +444,8 @@ impl crate::Instance<super::Api> for Instance {
                 "unsupported window: {window_handle:?}"
             )));
         };
-        let dc = unsafe { GetDC(window.hwnd as *mut _) };
-        if dc.is_null() {
-            return Err(crate::InstanceError::with_source(
-                String::from("unable to get the device context from window"),
-                Error::last_os_error(),
-            ));
-        }
         Ok(Surface {
-            dc,
+            window: window.hwnd as *mut _,
             presentable: true,
             swapchain: None,
             srgb_capable: self.srgb_capable,
@@ -478,6 +464,19 @@ impl crate::Instance<super::Api> for Instance {
     }
 }
 
+struct DeviceContextHandle {
+    device: HDC,
+    window: HWND,
+}
+
+impl Drop for DeviceContextHandle {
+    fn drop(&mut self) {
+        unsafe {
+            ReleaseDC(self.window, self.device);
+        };
+    }
+}
+
 pub struct Swapchain {
     surface_context: WglContext,
     surface_gl: glow::Context,
@@ -492,8 +491,7 @@ pub struct Swapchain {
 }
 
 pub struct Surface {
-    // FIXME: Find a way to call ReleaseDC on the same thread as GetDC.
-    dc: HDC,
+    window: HWND,
     pub(super) presentable: bool,
     swapchain: Option<Swapchain>,
     srgb_capable: bool,
@@ -509,10 +507,25 @@ impl Surface {
         context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
         let sc = self.swapchain.as_ref().unwrap();
+        let dc = unsafe { GetDC(self.window) };
+        if dc.is_null() {
+            log::error!(
+                "unable to get the device context from window: {}",
+                Error::last_os_error()
+            );
+            return Err(crate::SurfaceError::Other(
+                "unable to get the device context from window",
+            ));
+        }
+        let dc = DeviceContextHandle {
+            device: dc,
+            window: self.window,
+        };
+
         // Hold the lock for the shared context as we're using resources from there.
         let _inner = context.inner.lock();
 
-        if let Err(e) = sc.surface_context.make_current() {
+        if let Err(e) = sc.surface_context.make_current(dc.device) {
             log::error!("unable to make the surface OpenGL context current: {e}",);
             return Err(crate::SurfaceError::Other(
                 "unable to make the surface OpenGL context current",
@@ -539,8 +552,9 @@ impl Surface {
             )
         };
 
-        if unsafe { SwapBuffers(self.dc) } == FALSE {
+        if unsafe { SwapBuffers(dc.device) } == FALSE {
             log::error!("unable to swap buffers: {}", Error::last_os_error());
+            return Err(crate::SurfaceError::Other("unable to swap buffers"));
         }
 
         Ok(())
@@ -560,7 +574,7 @@ impl crate::Surface<super::Api> for Surface {
         let format_desc = device.shared.describe_texture_format(config.format);
         let inner = &device.shared.context.inner.lock();
 
-        if let Err(e) = inner.context.make_current() {
+        if let Err(e) = inner.context.make_current(inner.device) {
             log::error!("unable to make the shared OpenGL context current: {e}",);
             return Err(crate::SurfaceError::Other(
                 "unable to make the shared OpenGL context current",
@@ -584,14 +598,29 @@ impl crate::Surface<super::Api> for Surface {
 
         // Create the swap chain OpenGL context
 
-        if let Err(e) = unsafe { setup_pixel_format(self.dc) } {
+        let dc = unsafe { GetDC(self.window) };
+        if dc.is_null() {
+            log::error!(
+                "unable to get the device context from window: {}",
+                Error::last_os_error()
+            );
+            return Err(crate::SurfaceError::Other(
+                "unable to get the device context from window",
+            ));
+        }
+        let dc = DeviceContextHandle {
+            device: dc,
+            window: self.window,
+        };
+
+        if let Err(e) = unsafe { setup_pixel_format(dc.device) } {
             log::error!("unable to setup surface pixel format: {e}",);
             return Err(crate::SurfaceError::Other(
                 "unable to setup surface pixel format",
             ));
         }
 
-        let context = unsafe { wglCreateContext(self.dc) };
+        let context = unsafe { wglCreateContext(dc.device) };
         if context.is_null() {
             log::error!(
                 "unable to create surface OpenGL context: {}",
@@ -601,10 +630,7 @@ impl crate::Surface<super::Api> for Surface {
                 "unable to create surface OpenGL context",
             ));
         }
-        let surface_context = WglContext {
-            context,
-            device: self.dc,
-        };
+        let surface_context = WglContext { context };
 
         if unsafe { wglShareLists(inner.context.context, surface_context.context) } == FALSE {
             log::error!(
@@ -616,7 +642,7 @@ impl crate::Surface<super::Api> for Surface {
             ));
         }
 
-        if let Err(e) = surface_context.make_current() {
+        if let Err(e) = surface_context.make_current(dc.device) {
             log::error!("unable to make the surface OpengL context current: {e}",);
             return Err(crate::SurfaceError::Other(
                 "unable to make the surface OpengL context current",
@@ -624,7 +650,7 @@ impl crate::Surface<super::Api> for Surface {
         }
 
         let extra = Wgl::load_with(|name| load_gl_func(name, None));
-        let extentions = extensions(&extra, self.dc);
+        let extentions = extensions(&extra, dc.device);
         if !(extentions.contains("WGL_EXT_swap_control") && extra.SwapIntervalEXT.is_loaded()) {
             log::error!("WGL_EXT_swap_control is unsupported");
             return Err(crate::SurfaceError::Other(
