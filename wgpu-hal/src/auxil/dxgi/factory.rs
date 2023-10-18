@@ -55,6 +55,21 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
             break;
         }
 
+        let mut desc = dxgi::DXGI_ADAPTER_DESC1::default();
+        unsafe { adapter1.GetDesc1(&mut desc) };
+
+        // If run completely headless, windows will show two different WARP adapters, one
+        // which is lying about being an integrated card. This is so that programs
+        // that ignore software adapters will actually run on headless/gpu-less machines.
+        //
+        // We don't want that and discorage that kind of filtering anyway, so we skip the integrated WARP.
+        if desc.VendorId == 5140 && desc.Flags != dxgi::DXGI_ADAPTER_FLAG_SOFTWARE {
+            let adapter_name = super::conv::map_adapter_name(desc.Description);
+            if adapter_name.contains("Microsoft Basic Render Driver") {
+                continue;
+            }
+        }
+
         // Do the most aggressive casts first, skipping Adpater4 as we definitely don't have dxgi1_6.
 
         // Adapter1 -> Adapter3
