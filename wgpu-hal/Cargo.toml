@@ -59,6 +59,7 @@ parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
 thiserror = "1"
+once_cell = "1.18.0"
 
 # backends common
 arrayvec = "0.7"

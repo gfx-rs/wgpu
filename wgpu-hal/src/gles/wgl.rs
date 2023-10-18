@@ -3,6 +3,7 @@ use glutin_wgl_sys::wgl_extra::{
     Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
     CONTEXT_PROFILE_MASK_ARB,
 };
+use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use std::{
@@ -314,12 +315,9 @@ fn get_global_device_context() -> Result<HDC, crate::InstanceError> {
     unsafe impl Sync for SendDc {}
     unsafe impl Send for SendDc {}
 
-    static GLOBAL: Mutex<Option<Result<SendDc, crate::InstanceError>>> = Mutex::new(None);
-    let mut guard = GLOBAL.lock();
-    if guard.is_none() {
-        *guard = Some(create_global_device_context().map(SendDc));
-    }
-    guard.clone().unwrap().map(|dc| dc.0)
+    static GLOBAL: Lazy<Result<SendDc, crate::InstanceError>> =
+        Lazy::new(|| create_global_device_context().map(SendDc));
+    GLOBAL.clone().map(|dc| dc.0)
 }
 
 impl crate::Instance<super::Api> for Instance {
