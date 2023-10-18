@@ -76,8 +76,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 | Metal       |                                |                    | :white_check_mark:        |                           |
 | DX12        | :white_check_mark: (W10+ only) |                    |                           |                           |
 | DX11        | :hammer_and_wrench:            |                    |                           |                           |
-| GLES3       |                                | :ok:               | :ok: (angle; macOS only)  | :ok: (WebGL2 Only)        |
-| OpenGL 3.3+ | :ok:                           |                    |                           |                           |
+| OpenGL      |  :ok: (Desktop GL 3.3+)        | :ok: (GL ES 3.0+)  | :ok: (angle; GL ES 3.0+)  | :ok: (WebGL2)             |
 | WebGPU      |                                |                    |                           | :white_check_mark:        |
 
 :white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
