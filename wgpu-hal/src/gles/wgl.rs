@@ -239,6 +239,7 @@ fn create_global_device_context() -> Result<HDC, crate::InstanceError> {
     let name = format!("wgpu Device Class {:x}\0", class_addr as usize);
     let name = CString::from_vec_with_nul(name.into_bytes()).unwrap();
 
+    // Use a wrapper function for compatibility with `windows-rs`.
     unsafe extern "system" fn wnd_proc(
         window: HWND,
         msg: UINT,
@@ -272,6 +273,7 @@ fn create_global_device_context() -> Result<HDC, crate::InstanceError> {
         ));
     }
 
+    // Create a hidden window since we don't pass `WS_VISIBLE`.
     let window = unsafe {
         CreateWindowExA(
             0,
@@ -361,23 +363,19 @@ impl crate::Instance<super::Api> for Instance {
             && extra.CreateContextAttribsARB.is_loaded();
 
         let context = if can_use_profile {
+            let attributes = [
+                CONTEXT_PROFILE_MASK_ARB as c_int,
+                CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                CONTEXT_FLAGS_ARB as c_int,
+                if desc.flags.contains(InstanceFlags::DEBUG) {
+                    CONTEXT_DEBUG_BIT_ARB as c_int
+                } else {
+                    0
+                },
+                0, // End of list
+            ];
             let context = unsafe {
-                extra.CreateContextAttribsARB(
-                    dc as *const _,
-                    ptr::null(),
-                    [
-                        CONTEXT_PROFILE_MASK_ARB as c_int,
-                        CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
-                        CONTEXT_FLAGS_ARB as c_int,
-                        if desc.flags.contains(InstanceFlags::DEBUG) {
-                            CONTEXT_DEBUG_BIT_ARB as c_int
-                        } else {
-                            0
-                        },
-                        0, // End of list
-                    ]
-                    .as_ptr(),
-                )
+                extra.CreateContextAttribsARB(dc as *const _, ptr::null(), attributes.as_ptr())
             };
             if context.is_null() {
                 return Err(crate::InstanceError::with_source(
@@ -563,9 +561,9 @@ impl crate::Surface<super::Api> for Surface {
         let inner = &device.shared.context.inner.lock();
 
         if let Err(e) = inner.context.make_current() {
-            log::error!("unable to make the shared OpengL context current: {e}",);
+            log::error!("unable to make the shared OpenGL context current: {e}",);
             return Err(crate::SurfaceError::Other(
-                "unable to make the shared OpengL context current",
+                "unable to make the shared OpenGL context current",
             ));
         }
 

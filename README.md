@@ -70,14 +70,15 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-| API       | Windows                        | Linux & Android    | macOS & iOS               | Web (wasm)                |
-| --------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
-| Vulkan    | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |                           |
-| Metal     |                                |                    | :white_check_mark:        |                           |
-| DX12      | :white_check_mark: (W10+ only) |                    |                           |                           |
-| DX11      | :hammer_and_wrench:            |                    |                           |                           |
-| GLES3     | :ok: (angle)                   | :ok:               | :ok: (angle; macOS only)  | :ok: (WebGL2 Only)        |
-| WebGPU    |                                |                    |                           | :white_check_mark:        |
+| API         | Windows                        | Linux & Android    | macOS & iOS               | Web (wasm)                |
+| ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
+| Vulkan      | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |                           |
+| Metal       |                                |                    | :white_check_mark:        |                           |
+| DX12        | :white_check_mark: (W10+ only) |                    |                           |                           |
+| DX11        | :hammer_and_wrench:            |                    |                           |                           |
+| GLES3       |                                | :ok:               | :ok: (angle; macOS only)  | :ok: (WebGL2 Only)        |
+| OpenGL 3.3+ | :ok:                           |                    |                           |                           |
+| WebGPU      |                                |                    |                           | :white_check_mark:        |
 
 :white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
 
@@ -148,6 +149,7 @@ We have multiple methods of testing, each of which tests different qualities abo
 | DX11/Windows 10  | :construction:     | —                  | using WARP                            |
 | Metal/MacOS      | :heavy_check_mark: | —                  | using hardware runner                 |
 | Vulkan/Linux     | :heavy_check_mark: | -                  | using swiftshader                     |
+| GL/Windows       |                    | —                  |                                       |
 | GLES/Linux       | :heavy_check_mark: | —                  | using llvmpipe                        |
 | WebGL/Chrome     | :heavy_check_mark: | —                  | using swiftshader                     |
 
