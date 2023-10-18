@@ -78,7 +78,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
             break;
         }
 
-        if !filter_adapter(&adapter4) {
+        if !filter_adapter(&adapter1) {
             continue;
         }
 
