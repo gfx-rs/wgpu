@@ -102,12 +102,7 @@ impl super::Adapter {
             adapter.unwrap_adapter2().GetDesc2(&mut desc);
         }
 
-        let device_name = {
-            use std::{ffi::OsString, os::windows::ffi::OsStringExt};
-            let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-            let name = OsString::from_wide(&desc.Description[..len]);
-            name.to_string_lossy().into_owned()
-        };
+        let device_name = auxil::dxgi::conv::map_adapter_name(desc.Description);
 
         let mut features_architecture: d3d12_ty::D3D12_FEATURE_DATA_ARCHITECTURE =
             unsafe { mem::zeroed() };
