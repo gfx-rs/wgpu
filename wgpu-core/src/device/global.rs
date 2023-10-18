@@ -1150,11 +1150,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         multi_ref_count: crate::MultiRefCount::new(),
                     }
                 } else {
-                    match device.create_bind_group_layout(
-                        device_id,
-                        desc.label.borrow_option(),
-                        entry_map,
-                    ) {
+                    match device.create_bind_group_layout(device_id, &desc.label, entry_map) {
                         Ok(layout) => layout,
                         Err(e) => break e,
                     }
@@ -1597,7 +1593,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
-                &desc.label,
+                desc.label
+                    .to_hal(device.instance_flags)
+                    .map(|s| s.to_string()),
             );
 
             let id = fid.assign(command_buffer, &mut token);
