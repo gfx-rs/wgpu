@@ -571,6 +571,9 @@ impl crate::Surface<super::Api> for Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
+        // Remove the old configuration.
+        unsafe { self.unconfigure(device) };
+
         let format_desc = device.shared.describe_texture_format(config.format);
         let inner = &device.shared.context.inner.lock();
 
