@@ -269,7 +269,7 @@ impl super::Adapter {
         let supports_storage =
             supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
         let supports_compute =
-            supported((3, 1), (4, 6)) || extensions.contains("GL_ARB_compute_shader");
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
         let supports_work_group_params = supports_compute;
 
         let shading_language_version = {
@@ -439,13 +439,13 @@ impl super::Adapter {
         );
         features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
-            supported((3, 2), (4, 6))
+            supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
                 || extensions.contains("GL_ARB_geometry_shader4"),
         );
         features.set(
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
-            supported((3, 1), (4, 6)) || extensions.contains("GL_ARB_shader_image_load_store"),
+            supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
         let gles_bcn_exts = [
