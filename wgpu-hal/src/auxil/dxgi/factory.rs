@@ -63,7 +63,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         // that ignore software adapters will actually run on headless/gpu-less machines.
         //
         // We don't want that and discorage that kind of filtering anyway, so we skip the integrated WARP.
-        if desc.VendorId == 5140 && desc.Flags != dxgi::DXGI_ADAPTER_FLAG_SOFTWARE {
+        if desc.VendorId == 5140 && (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) == 0 {
             let adapter_name = super::conv::map_adapter_name(desc.Description);
             if adapter_name.contains("Microsoft Basic Render Driver") {
                 continue;
