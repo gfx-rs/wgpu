@@ -159,7 +159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             if desc.usage.is_empty() {
@@ -380,7 +380,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
         if !device.valid {
-            return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Lost.into());
         }
         let buffer = buffer_guard
             .get_mut(buffer_id)
@@ -440,7 +440,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
         if !device.valid {
-            return Err(DeviceError::Invalid.into());
+            return Err(DeviceError::Lost.into());
         }
         let buffer = buffer_guard
             .get_mut(buffer_id)
@@ -606,7 +606,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
@@ -664,7 +664,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             // NB: Any change done through the raw texture handle will not be
@@ -743,7 +743,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             // NB: Any change done through the raw buffer handle will not be
@@ -1012,7 +1012,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1096,7 +1096,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1150,11 +1150,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         multi_ref_count: crate::MultiRefCount::new(),
                     }
                 } else {
-                    match device.create_bind_group_layout(
-                        device_id,
-                        desc.label.borrow_option(),
-                        entry_map,
-                    ) {
+                    match device.create_bind_group_layout(device_id, &desc.label, entry_map) {
                         Ok(layout) => layout,
                         Err(e) => break e,
                     }
@@ -1231,7 +1227,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1317,7 +1313,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1428,7 +1424,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1500,7 +1496,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1574,7 +1570,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid,
             };
             if !device.valid {
-                break DeviceError::Invalid;
+                break DeviceError::Lost;
             }
 
             let dev_stored = Stored {
@@ -1597,7 +1593,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
-                &desc.label,
+                desc.label
+                    .to_hal(device.instance_flags)
+                    .map(|s| s.to_string()),
             );
 
             let id = fid.assign(command_buffer, &mut token);
@@ -1764,7 +1762,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -1860,7 +1858,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             let adapter = &adapter_guard[device.adapter_id.value];
@@ -1915,42 +1913,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
         let error = loop {
-            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let (_, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
+            let device_id;
+            let id;
 
-            let pipeline = match pipeline_guard.get(pipeline_id) {
-                Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
-            };
-            let id = match pipeline_layout_guard[pipeline.layout_id.value]
-                .bind_group_layout_ids
-                .get(index as usize)
             {
-                Some(id) => id,
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
-            };
+                let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
-            let layout = &bgl_guard[*id];
-            layout.multi_ref_count.inc();
+                let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+                let (_, mut token) = hub.bind_groups.read(&mut token);
+                let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
 
-            if G::ids_are_generated_in_wgpu() {
-                return (id.0, None);
+                let pipeline = match pipeline_guard.get(pipeline_id) {
+                    Ok(pipeline) => pipeline,
+                    Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                };
+                id = match pipeline_layout_guard[pipeline.layout_id.value]
+                    .bind_group_layout_ids
+                    .get(index as usize)
+                {
+                    Some(id) => *id,
+                    None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                };
+
+                let layout = &bgl_guard[id];
+                layout.multi_ref_count.inc();
+
+                if G::ids_are_generated_in_wgpu() {
+                    return (id.0, None);
+                }
+
+                device_id = layout.device_id.clone();
             }
 
             // The ID is provided externally, so we must create a new bind group layout
             // with the given ID as a duplicate of the existing one.
             let new_layout = BindGroupLayout {
-                device_id: layout.device_id.clone(),
-                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(*id),
+                device_id,
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(id),
                 multi_ref_count: crate::MultiRefCount::new(),
             };
 
             let fid = hub.bind_group_layouts.prepare(id_in);
-            let id = fid.assign(new_layout, &mut Token::root());
+            let id = fid.assign(new_layout, &mut token);
 
             return (id.0, None);
         };
@@ -2024,7 +2030,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(_) => break DeviceError::Invalid.into(),
             };
             if !device.valid {
-                break DeviceError::Invalid.into();
+                break DeviceError::Lost.into();
             }
 
             #[cfg(feature = "trace")]
@@ -2076,26 +2082,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
         let error = loop {
-            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let (_, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+            let device_id;
+            let id;
 
-            let pipeline = match pipeline_guard.get(pipeline_id) {
-                Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
-            };
-            let id = match pipeline_layout_guard[pipeline.layout_id.value]
-                .bind_group_layout_ids
-                .get(index as usize)
             {
-                Some(id) => id,
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+
+                let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+                let (_, mut token) = hub.bind_groups.read(&mut token);
+                let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+
+                let pipeline = match pipeline_guard.get(pipeline_id) {
+                    Ok(pipeline) => pipeline,
+                    Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                };
+                id = match pipeline_layout_guard[pipeline.layout_id.value]
+                    .bind_group_layout_ids
+                    .get(index as usize)
+                {
+                    Some(id) => *id,
+                    None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                };
+
+                let layout = &bgl_guard[id];
+                layout.multi_ref_count.inc();
+
+                if G::ids_are_generated_in_wgpu() {
+                    return (id.0, None);
+                }
+
+                device_id = layout.device_id.clone();
+            }
+
+            // The ID is provided externally, so we must create a new bind group layout
+            // with the given ID as a duplicate of the existing one.
+            let new_layout = BindGroupLayout {
+                device_id,
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(id),
+                multi_ref_count: crate::MultiRefCount::new(),
             };
 
-            bgl_guard[*id].multi_ref_count.inc();
+            let fid = hub.bind_group_layouts.prepare(id_in);
+            let id = fid.assign(new_layout, &mut token);
+
             return (id.0, None);
         };
 
@@ -2280,7 +2311,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(_) => break DeviceError::Invalid.into(),
                 };
                 if !device.valid {
-                    break DeviceError::Invalid.into();
+                    break DeviceError::Lost.into();
                 }
 
                 #[cfg(feature = "trace")]
@@ -2734,7 +2765,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &device_guard[buffer.device_id.value];
             if !device.valid {
-                return Err((op, DeviceError::Invalid.into()));
+                return Err((op, DeviceError::Lost.into()));
             }
 
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
@@ -2980,7 +3011,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| BufferAccessError::Invalid)?;
             let device = &mut device_guard[buffer.device_id.value];
             if !device.valid {
-                return Err(DeviceError::Invalid.into());
+                return Err(DeviceError::Lost.into());
             }
 
             closure = self.buffer_unmap_inner(buffer_id, buffer, device)

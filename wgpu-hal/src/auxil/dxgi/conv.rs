@@ -1,4 +1,12 @@
+use std::{ffi::OsString, os::windows::ffi::OsStringExt};
 use winapi::shared::dxgiformat;
+
+// Helper to convert DXGI adapter name to a normal string
+pub fn map_adapter_name(name: [u16; 128]) -> String {
+    let len = name.iter().take_while(|&&c| c != 0).count();
+    let name = OsString::from_wide(&name[..len]);
+    name.to_string_lossy().into_owned()
+}
 
 pub fn map_texture_format_failable(format: wgt::TextureFormat) -> Option<dxgiformat::DXGI_FORMAT> {
     use wgt::TextureFormat as Tf;

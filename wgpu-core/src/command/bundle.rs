@@ -668,6 +668,9 @@ impl RenderBundleEncoder {
             texture_memory_init_actions,
             context: self.context,
             life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            discard_hal_labels: device
+                .instance_flags
+                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS),
         })
     }
 
@@ -746,6 +749,7 @@ pub struct RenderBundle<A: HalApi> {
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
     pub(super) context: RenderPassContext,
     pub(crate) life_guard: LifeGuard,
+    discard_hal_labels: bool,
 }
 
 #[cfg(any(
@@ -788,8 +792,10 @@ impl<A: HalApi> RenderBundle<A> {
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
-        if let Some(ref label) = self.base.label {
-            unsafe { raw.begin_debug_marker(label) };
+        if !self.discard_hal_labels {
+            if let Some(ref label) = self.base.label {
+                unsafe { raw.begin_debug_marker(label) };
+            }
         }
 
         for command in self.base.commands.iter() {
@@ -966,8 +972,10 @@ impl<A: HalApi> RenderBundle<A> {
             }
         }
 
-        if let Some(_) = self.base.label {
-            unsafe { raw.end_debug_marker() };
+        if !self.discard_hal_labels {
+            if let Some(_) = self.base.label {
+                unsafe { raw.end_debug_marker() };
+            }
         }
 
         Ok(())

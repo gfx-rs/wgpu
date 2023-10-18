@@ -307,7 +307,7 @@ pub enum DeviceError {
 impl From<hal::DeviceError> for DeviceError {
     fn from(error: hal::DeviceError) -> Self {
         match error {
-            hal::DeviceError::Lost => DeviceError::Invalid,
+            hal::DeviceError::Lost => DeviceError::Lost,
             hal::DeviceError::OutOfMemory => DeviceError::OutOfMemory,
             hal::DeviceError::ResourceCreationFailed => DeviceError::ResourceCreationFailed,
         }
