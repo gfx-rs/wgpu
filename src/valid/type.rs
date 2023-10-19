@@ -129,6 +129,7 @@ pub enum TypeError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum WidthError {
     #[error("The {0:?} scalar width {1} is not supported")]
     Invalid(crate::ScalarKind, crate::Bytes),
