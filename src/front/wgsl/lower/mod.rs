@@ -346,31 +346,36 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
+    fn as_const_evaluator(&mut self) -> ConstantEvaluator {
+        match self.expr_type {
+            ExpressionContextType::Runtime(ref mut rctx) => ConstantEvaluator::for_wgsl_function(
+                self.module,
+                rctx.naga_expressions,
+                rctx.expression_constness,
+                rctx.emitter,
+                rctx.block,
+            ),
+            ExpressionContextType::Constant => ConstantEvaluator::for_wgsl_module(self.module),
+        }
+    }
+
     fn append_expression(
         &mut self,
         expr: crate::Expression,
         span: Span,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
-        match self.expr_type {
-            ExpressionContextType::Runtime(ref mut rctx) => {
-                let mut eval = ConstantEvaluator::for_wgsl_function(
-                    self.module,
-                    rctx.naga_expressions,
-                    rctx.expression_constness,
-                    rctx.emitter,
-                    rctx.block,
-                );
+        let mut eval = self.as_const_evaluator();
+        match eval.try_eval_and_append(&expr, span) {
+            Ok(expr) => Ok(expr),
 
-                match eval.try_eval_and_append(&expr, span) {
-                    Ok(expr) => Ok(expr),
-                    Err(_) => Ok(rctx.naga_expressions.append(expr, span)),
+            // `expr` is not a constant expression. This is fine as
+            // long as we're not building `Module::const_expressions`.
+            Err(err) => match self.expr_type {
+                ExpressionContextType::Runtime(ref mut rctx) => {
+                    Ok(rctx.naga_expressions.append(expr, span))
                 }
-            }
-            ExpressionContextType::Constant => {
-                let mut eval = ConstantEvaluator::for_wgsl_module(self.module);
-                eval.try_eval_and_append(&expr, span)
-                    .map_err(|e| Error::ConstantEvaluatorError(e, span))
-            }
+                ExpressionContextType::Constant => Err(Error::ConstantEvaluatorError(err, span)),
+            },
         }
     }
 
