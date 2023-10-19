@@ -188,7 +188,7 @@ impl super::Validator {
 
         match gctx.const_expressions[handle] {
             E::Literal(literal) => {
-                validate_literal(literal)?;
+                check_literal_value(literal)?;
             }
             E::Constant(_) | E::ZeroValue(_) => {}
             E::Compose { ref components, ty } => {
@@ -343,7 +343,7 @@ impl super::Validator {
                 ShaderStages::all()
             }
             E::Literal(literal) => {
-                validate_literal(literal)?;
+                check_literal_value(literal)?;
                 ShaderStages::all()
             }
             E::Constant(_) | E::ZeroValue(_) => ShaderStages::all(),
@@ -1565,7 +1565,7 @@ impl super::Validator {
     }
 }
 
-pub fn validate_literal(literal: crate::Literal) -> Result<(), LiteralError> {
+pub fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> {
     let is_nan = match literal {
         crate::Literal::F64(v) => v.is_nan(),
         crate::Literal::F32(v) => v.is_nan(),

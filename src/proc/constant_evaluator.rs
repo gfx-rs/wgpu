@@ -1231,7 +1231,7 @@ impl<'a> ConstantEvaluator<'a> {
         // expression at a time, `Compose` expressions can only refer to other
         // expressions, and `ZeroValue` expressions are always okay.
         if let Expression::Literal(literal) = expr {
-            crate::valid::validate_literal(literal)?;
+            crate::valid::check_literal_value(literal)?;
         }
 
         if let Some(FunctionLocalData {
