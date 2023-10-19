@@ -152,8 +152,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             [component] => {
                 let span = ctx.ast_expressions.get_span(component);
                 let component = self.expression(component, ctx.reborrow())?;
-                ctx.grow_types(component)?;
-                let ty = &ctx.typifier()[component];
+                let ty = super::resolve!(ctx, component);
 
                 ComponentsHandle::One {
                     component,
@@ -178,8 +177,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     )
                     .collect();
 
-                ctx.grow_types(component)?;
-                let ty = &ctx.typifier()[component];
+                let ty = super::resolve!(ctx, component);
 
                 ComponentsHandle::Many {
                     components,
