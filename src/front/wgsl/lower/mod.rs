@@ -1707,6 +1707,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     crate::TypeInner::Scalar { kind, .. } => kind,
                     crate::TypeInner::Vector { kind, .. } => kind,
                     _ => {
+                        ctx.grow_types(expr)?;
                         let ty = &ctx.typifier()[expr];
                         return Err(Error::BadTypeCast {
                             from_type: ctx.format_type_resolution(ty),
