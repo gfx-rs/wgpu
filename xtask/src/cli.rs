@@ -13,8 +13,9 @@ Options:
   -h, --help  Print help
 ";
 
-pub(crate) struct Args {
-    pub(crate) subcommand: Subcommand,
+pub struct Args {
+    pub subcommand: Subcommand,
+    pub command_args: Arguments,
 }
 
 impl Args {
@@ -28,8 +29,11 @@ impl Args {
             let cargo_like_exit_code = 101;
             exit(cargo_like_exit_code);
         }
-        match Subcommand::parse(args).map(|subcommand| Self { subcommand }) {
-            Ok(this) => this,
+        match Subcommand::parse(&mut args) {
+            Ok(subcommand) => Self {
+                subcommand,
+                command_args: args,
+            },
             Err(e) => {
                 eprintln!("{:?}", anyhow!(e));
                 exit(1)
@@ -38,18 +42,41 @@ impl Args {
     }
 }
 
-pub(crate) enum Subcommand {
-    RunWasm { args: Arguments },
+pub enum Subcommand {
+    RunWasm,
 }
 
 impl Subcommand {
-    fn parse(mut args: Arguments) -> anyhow::Result<Subcommand> {
+    /// Returns the name of the subcommand as a string.
+    ///
+    /// Opposite of [`Self::parse`].
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Self::RunWasm => "run-wasm",
+        }
+    }
+
+    /// Returns true if all required features are enabled for this subcommand.
+    pub fn required_features_enabled(&self) -> bool {
+        match self {
+            Self::RunWasm => cfg!(feature = "run-wasm"),
+        }
+    }
+
+    /// Comma separated list of features required by this subcommand.
+    pub fn features(&self) -> &'static str {
+        match self {
+            Self::RunWasm => "run-wasm",
+        }
+    }
+
+    fn parse(args: &mut Arguments) -> anyhow::Result<Subcommand> {
         let subcmd = args
             .subcommand()
             .context("failed to parse subcommand")?
             .context("no subcommand specified; see `--help` for more details")?;
         match &*subcmd {
-            "run-wasm" => Ok(Self::RunWasm { args }),
+            "run-wasm" => Ok(Self::RunWasm),
             other => {
                 bail!("unrecognized subcommand {other:?}; see `--help` for more details")
             }
