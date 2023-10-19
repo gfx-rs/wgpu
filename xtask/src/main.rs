@@ -5,6 +5,7 @@ use cli::{Args, Subcommand};
 use pico_args::Arguments;
 
 mod cli;
+mod test;
 
 fn main() -> ExitCode {
     env_logger::builder()
@@ -29,7 +30,8 @@ fn run(args: Args) -> anyhow::Result<()> {
     match subcommand {
         Subcommand::RunWasm { mut args } => {
             // Use top-level Cargo.toml instead of xtask/Cargo.toml by default
-            let manifest_path = args.value_from_str("--manifest-path")
+            let manifest_path = args
+                .value_from_str("--manifest-path")
                 .unwrap_or_else(|_| "../Cargo.toml".to_string());
             let mut arg_vec = args.finish();
             arg_vec.push("--manifest-path".into());
@@ -44,5 +46,6 @@ fn run(args: Args) -> anyhow::Result<()> {
             );
             Ok(())
         }
+        Subcommand::Test { args } => test::run_tests(args),
     }
 }

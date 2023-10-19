@@ -160,7 +160,7 @@ To install it, run `cargo install cargo-nextest`.
 To run the test suite:
 
 ```
-cargo nextest run --no-fail-fast
+cargo xtask test
 ```
 
 To run the test suite on WebGL (currently incomplete):

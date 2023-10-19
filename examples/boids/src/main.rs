@@ -326,16 +326,16 @@ impl wgpu_example::framework::Example for Example {
 }
 
 /// run example
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("boids");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn boids() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "boids",
         // Generated on 1080ti on Vk/Windows
         image_path: "examples/boids/screenshot.png",
         width: 1024,
@@ -347,5 +347,8 @@ fn boids() {
             // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
             .expect_fail(wgpu_test::FailureCase::molten_vk()),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

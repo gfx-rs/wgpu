@@ -1,8 +1,8 @@
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration};
 
-#[test]
-fn bind_group_layout_deduplication() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .run_sync(|ctx| {
         let entries_1 = &[];
 
         let entries_2 = &[wgpu::BindGroupLayoutEntry {
@@ -135,8 +135,7 @@ fn bind_group_layout_deduplication() {
         }
 
         ctx.queue.submit(Some(encoder.finish()));
-    })
-}
+    });
 
 const SHADER_SRC: &str = "
 @vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(1.0); }

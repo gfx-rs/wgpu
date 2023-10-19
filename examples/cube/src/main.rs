@@ -405,16 +405,16 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("cube");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "cube",
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot.png",
         width: 1024,
@@ -424,13 +424,14 @@ fn cube() {
         comparisons: &[
             wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube_lines() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_LINES: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "cube-lines",
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot-lines.png",
         width: 1024,
@@ -445,5 +446,8 @@ fn cube_lines() {
                 threshold: 0.36,
             }, // Bounded by 1080ti on DX12
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

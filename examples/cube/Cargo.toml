@@ -9,6 +9,7 @@ publish = false
 [[bin]]
 name = "cube"
 path = "src/main.rs"
+harness = false
 
 [dependencies]
 bytemuck.workspace = true

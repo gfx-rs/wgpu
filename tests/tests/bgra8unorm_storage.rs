@@ -2,8 +2,7 @@
 
 use std::borrow::Cow;
 
-use wasm_bindgen_test::*;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0) var tex: texture_storage_2d<bgra8unorm, write>;
@@ -14,17 +13,17 @@ fn main(@builtin(workgroup_id) wgid: vec3<u32>) {
 }
 ";
 
-#[test]
-#[wasm_bindgen_test]
-fn bgra8unorm_storage() {
-    let parameters = TestParameters::default()
-        .limits(wgpu::Limits {
-            max_storage_textures_per_shader_stage: 1,
-            ..Default::default()
-        })
-        .features(wgpu::Features::BGRA8UNORM_STORAGE);
-
-    initialize_test(parameters, |ctx| {
+#[gpu_test]
+static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits {
+                max_storage_textures_per_shader_stage: 1,
+                ..Default::default()
+            })
+            .features(wgpu::Features::BGRA8UNORM_STORAGE),
+    )
+    .run_sync(|ctx| {
         let device = &ctx.device;
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -155,4 +154,3 @@ fn bgra8unorm_storage() {
 
         readback_buffer.unmap();
     });
-}
