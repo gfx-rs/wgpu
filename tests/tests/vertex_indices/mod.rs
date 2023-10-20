@@ -29,12 +29,18 @@ fn pulling_common(
             }],
         });
 
-    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+    let buffer_size = 4 * expected.len() as u64;
+    let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: 4 * expected.len() as u64,
-        usage: wgpu::BufferUsages::COPY_SRC
-            | wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::MAP_READ,
+        size: buffer_size,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: buffer_size,
+        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
     });
 
@@ -43,7 +49,7 @@ fn pulling_common(
         layout: &bgl,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
-            resource: buffer.as_entire_binding(),
+            resource: gpu_buffer.as_entire_binding(),
         }],
     });
 
@@ -124,8 +130,10 @@ fn pulling_common(
 
     drop(rpass);
 
+    encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+
     ctx.queue.submit(Some(encoder.finish()));
-    let slice = buffer.slice(..);
+    let slice = cpu_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
     ctx.device.poll(wgpu::Maintain::Wait);
     let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
@@ -135,7 +143,11 @@ fn pulling_common(
 
 #[gpu_test]
 static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..6, 0..1);
@@ -144,7 +156,11 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
 
 #[gpu_test]
 static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..1);
@@ -157,6 +173,7 @@ static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
             .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
     )
     .run_sync(|ctx| {
@@ -170,6 +187,7 @@ static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
             .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
     )
     .run_sync(|ctx| {
