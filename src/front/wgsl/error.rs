@@ -233,7 +233,7 @@ pub enum Error<'a> {
     },
     FunctionReturnsVoid(Span),
     InvalidWorkGroupUniformLoad(Span),
-    Other,
+    Internal(&'static str),
     ExpectedConstExprConcreteIntegerScalar(Span),
     ExpectedNonNegative(Span),
     ExpectedPositiveArrayLength(Span),
@@ -667,10 +667,10 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "".into())],
                 notes: vec!["passed type must be a workgroup pointer".into()],
             },
-            Error::Other => ParseError {
-                message: "other error".to_string(),
+            Error::Internal(message) => ParseError {
+                message: "internal WGSL front end error".to_string(),
                 labels: vec![],
-                notes: vec![],
+                notes: vec![message.into()],
             },
             Error::ExpectedConstExprConcreteIntegerScalar(span) => ParseError {
                 message: "must be a const-expression that resolves to a concrete integer scalar (u32 or i32)".to_string(),

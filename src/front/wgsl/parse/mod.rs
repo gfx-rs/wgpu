@@ -2290,13 +2290,12 @@ impl Parser {
         if !self.rules.is_empty() {
             log::error!("Reached the end of global decl, but rule stack is not empty");
             log::error!("Rules: {:?}", self.rules);
-            return Err(Error::Other);
+            return Err(Error::Internal("rule stack is not empty"));
         };
 
         match binding {
             None => Ok(()),
-            // we had the attribute but no var?
-            Some(_) => Err(Error::Other),
+            Some(_) => Err(Error::Internal("we had the attribute but no var?")),
         }
     }
 
