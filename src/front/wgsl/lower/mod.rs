@@ -163,23 +163,6 @@ pub struct StatementContext<'source, 'temp, 'out> {
 }
 
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
-    fn reborrow(&mut self) -> StatementContext<'a, '_, '_> {
-        StatementContext {
-            local_table: self.local_table,
-            globals: self.globals,
-            types: self.types,
-            ast_expressions: self.ast_expressions,
-            const_typifier: self.const_typifier,
-            typifier: self.typifier,
-            variables: self.variables,
-            naga_expressions: self.naga_expressions,
-            named_expressions: self.named_expressions,
-            arguments: self.arguments,
-            module: self.module,
-            expression_constness: self.expression_constness,
-        }
-    }
-
     fn as_expression<'t>(
         &'t mut self,
         block: &'t mut crate::Block,
@@ -1044,24 +1027,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .transpose()?;
 
         let mut typifier = Typifier::default();
-        let mut body = self.block(
-            &f.body,
-            false,
-            StatementContext {
-                local_table: &mut local_table,
-                globals: ctx.globals,
-                ast_expressions: ctx.ast_expressions,
-                const_typifier: ctx.const_typifier,
-                typifier: &mut typifier,
-                variables: &mut local_variables,
-                naga_expressions: &mut expressions,
-                named_expressions: &mut named_expressions,
-                types: ctx.types,
-                module: ctx.module,
-                arguments: &arguments,
-                expression_constness: &mut crate::proc::ExpressionConstnessTracker::new(),
-            },
-        )?;
+        let mut stmt_ctx = StatementContext {
+            local_table: &mut local_table,
+            globals: ctx.globals,
+            ast_expressions: ctx.ast_expressions,
+            const_typifier: ctx.const_typifier,
+            typifier: &mut typifier,
+            variables: &mut local_variables,
+            naga_expressions: &mut expressions,
+            named_expressions: &mut named_expressions,
+            types: ctx.types,
+            module: ctx.module,
+            arguments: &arguments,
+            expression_constness: &mut crate::proc::ExpressionConstnessTracker::new(),
+        };
+        let mut body = self.block(&f.body, false, &mut stmt_ctx)?;
         ensure_block_returns(&mut body);
 
         let function = crate::Function {
@@ -1109,12 +1089,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         b: &ast::Block<'source>,
         is_inside_loop: bool,
-        mut ctx: StatementContext<'source, '_, '_>,
+        ctx: &mut StatementContext<'source, '_, '_>,
     ) -> Result<crate::Block, Error<'source>> {
         let mut block = crate::Block::default();
 
         for stmt in b.stmts.iter() {
-            self.statement(stmt, &mut block, is_inside_loop, ctx.reborrow())?;
+            self.statement(stmt, &mut block, is_inside_loop, ctx)?;
         }
 
         Ok(block)
@@ -1125,11 +1105,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         stmt: &ast::Statement<'source>,
         block: &mut crate::Block,
         is_inside_loop: bool,
-        mut ctx: StatementContext<'source, '_, '_>,
+        ctx: &mut StatementContext<'source, '_, '_>,
     ) -> Result<(), Error<'source>> {
         let out = match stmt.kind {
             ast::StatementKind::Block(ref block) => {
-                let block = self.block(block, is_inside_loop, ctx.reborrow())?;
+                let block = self.block(block, is_inside_loop, ctx)?;
                 crate::Statement::Block(block)
             }
             ast::StatementKind::LocalDecl(ref decl) => match *decl {
@@ -1276,8 +1256,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     self.expression(condition, ctx.as_expression(block, &mut emitter))?;
                 block.extend(emitter.finish(ctx.naga_expressions));
 
-                let accept = self.block(accept, is_inside_loop, ctx.reborrow())?;
-                let reject = self.block(reject, is_inside_loop, ctx.reborrow())?;
+                let accept = self.block(accept, is_inside_loop, ctx)?;
+                let reject = self.block(reject, is_inside_loop, ctx)?;
 
                 crate::Statement::If {
                     condition,
@@ -1321,7 +1301,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 }
                                 ast::SwitchValue::Default => crate::SwitchValue::Default,
                             },
-                            body: self.block(&case.body, is_inside_loop, ctx.reborrow())?,
+                            body: self.block(&case.body, is_inside_loop, ctx)?,
                             fall_through: case.fall_through,
                         })
                     })
@@ -1334,8 +1314,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ref continuing,
                 break_if,
             } => {
-                let body = self.block(body, true, ctx.reborrow())?;
-                let mut continuing = self.block(continuing, true, ctx.reborrow())?;
+                let body = self.block(body, true, ctx)?;
+                let mut continuing = self.block(continuing, true, ctx)?;
 
                 let mut emitter = Emitter::default();
                 emitter.start(ctx.naga_expressions);
