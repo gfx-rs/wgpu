@@ -14,6 +14,25 @@ pub enum DxgiFactoryType {
     Factory6,
 }
 
+fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
+    let mut desc = unsafe { std::mem::zeroed() };
+    unsafe { adapter.GetDesc1(&mut desc) };
+
+    // If run completely headless, windows will show two different WARP adapters, one
+    // which is lying about being an integrated card. This is so that programs
+    // that ignore software adapters will actually run on headless/gpu-less machines.
+    //
+    // We don't want that and discorage that kind of filtering anyway, so we skip the integrated WARP.
+    if desc.VendorId == 5140 && (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) == 0 {
+        let adapter_name = super::conv::map_adapter_name(desc.Description);
+        if adapter_name.contains("Microsoft Basic Render Driver") {
+            return false;
+        }
+    }
+
+    true
+}
+
 pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 
@@ -39,6 +58,10 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                 break;
             }
 
+            if !should_keep_adapter(&adapter4) {
+                continue;
+            }
+
             adapters.push(d3d12::DxgiAdapter::Adapter4(adapter4));
             continue;
         }
@@ -53,6 +76,10 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         if let Err(err) = hr.into_result() {
             log::error!("Failed enumerating adapters: {}", err);
             break;
+        }
+
+        if !should_keep_adapter(&adapter1) {
+            continue;
         }
 
         // Do the most aggressive casts first, skipping Adpater4 as we definitely don't have dxgi1_6.
@@ -94,13 +121,15 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
 /// created.
 pub fn create_factory(
     required_factory_type: DxgiFactoryType,
-    instance_flags: crate::InstanceFlags,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(d3d12::DxgiLib, d3d12::DxgiFactory), crate::InstanceError> {
-    let lib_dxgi = d3d12::DxgiLib::new().map_err(|_| crate::InstanceError)?;
+    let lib_dxgi = d3d12::DxgiLib::new().map_err(|e| {
+        crate::InstanceError::with_source(String::from("failed to load dxgi.dll"), e)
+    })?;
 
     let mut factory_flags = d3d12::FactoryCreationFlags::empty();
 
-    if instance_flags.contains(crate::InstanceFlags::VALIDATION) {
+    if instance_flags.contains(wgt::InstanceFlags::VALIDATION) {
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.
@@ -128,18 +157,22 @@ pub fn create_factory(
             Ok(factory) => Some(factory),
             // We hard error here as we _should have_ been able to make a factory4 but couldn't.
             Err(err) => {
-                log::error!("Failed to create IDXGIFactory4: {}", err);
-                return Err(crate::InstanceError);
+                // err is a Cow<str>, not an Error implementor
+                return Err(crate::InstanceError::new(format!(
+                    "failed to create IDXGIFactory4: {err:?}"
+                )));
             }
         },
         // If we require factory4, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory4 => {
-            log::error!("IDXGIFactory1 creation function not found: {:?}", err);
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::with_source(
+                String::from("IDXGIFactory1 creation function not found"),
+                err,
+            ));
         }
         // If we don't print it to info as all win7 will hit this case.
         Err(err) => {
-            log::info!("IDXGIFactory1 creation function not found: {:?}", err);
+            log::info!("IDXGIFactory1 creation function not found: {err:?}");
             None
         }
     };
@@ -153,8 +186,10 @@ pub fn create_factory(
             }
             // If we require factory6, hard error.
             Err(err) if required_factory_type == DxgiFactoryType::Factory6 => {
-                log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
-                return Err(crate::InstanceError);
+                // err is a Cow<str>, not an Error implementor
+                return Err(crate::InstanceError::new(format!(
+                    "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
+                )));
             }
             // If we don't print it to info.
             Err(err) => {
@@ -169,14 +204,18 @@ pub fn create_factory(
         Ok(pair) => match pair.into_result() {
             Ok(factory) => factory,
             Err(err) => {
-                log::error!("Failed to create IDXGIFactory1: {}", err);
-                return Err(crate::InstanceError);
+                // err is a Cow<str>, not an Error implementor
+                return Err(crate::InstanceError::new(format!(
+                    "failed to create IDXGIFactory1: {err:?}"
+                )));
             }
         },
         // We always require at least factory1, so hard error
         Err(err) => {
-            log::error!("IDXGIFactory1 creation function not found: {:?}", err);
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::with_source(
+                String::from("IDXGIFactory1 creation function not found"),
+                err,
+            ));
         }
     };
 
@@ -188,8 +227,10 @@ pub fn create_factory(
         }
         // If we require factory2, hard error.
         Err(err) if required_factory_type == DxgiFactoryType::Factory2 => {
-            log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
-            return Err(crate::InstanceError);
+            // err is a Cow<str>, not an Error implementor
+            return Err(crate::InstanceError::new(format!(
+                "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
+            )));
         }
         // If we don't print it to info.
         Err(err) => {

@@ -1,9 +1,8 @@
 use std::num::NonZeroU64;
 
-use wasm_bindgen_test::*;
 use wgpu::util::DeviceExt;
 
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
 fn pulling_common(
     ctx: TestingContext,
@@ -134,54 +133,48 @@ fn pulling_common(
     assert_eq!(data, expected);
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn draw() {
-    initialize_test(TestParameters::default().test_features_limits(), |ctx| {
+#[gpu_test]
+static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..6, 0..1);
         })
-    })
-}
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_vertex_offset() {
-    initialize_test(
+#[gpu_test]
+static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().test_features_limits())
+    .run_sync(|ctx| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+            cmb.draw(0..3, 0..1);
+            cmb.draw(3..6, 0..1);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .test_features_limits()
-            .backend_failure(wgpu::Backends::DX11),
-        |ctx| {
-            pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
-                cmb.draw(0..3, 0..1);
-                cmb.draw(3..6, 0..1);
-            })
-        },
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
     )
-}
-
-#[test]
-#[wasm_bindgen_test]
-fn draw_instanced() {
-    initialize_test(TestParameters::default().test_features_limits(), |ctx| {
+    .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
             cmb.draw(0..3, 0..2);
         })
-    })
-}
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_instanced_offset() {
-    initialize_test(
+#[gpu_test]
+static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .test_features_limits()
-            .backend_failure(wgpu::Backends::DX11),
-        |ctx| {
-            pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
-                cmb.draw(0..3, 0..1);
-                cmb.draw(0..3, 1..2);
-            })
-        },
+            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
     )
-}
+    .run_sync(|ctx| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+            cmb.draw(0..3, 0..1);
+            cmb.draw(0..3, 1..2);
+        })
+    });

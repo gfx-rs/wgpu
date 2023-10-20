@@ -270,7 +270,7 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Vulkan
         /// - DX12
-        /// - Metal - TODO: Not yet supported on command encoder.
+        /// - Metal
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
@@ -309,7 +309,17 @@ bitflags::bitflags! {
         //
         // ? const FORMATS_TIER_1 = 1 << 14; (https://github.com/gpuweb/gpuweb/issues/3837)
         // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << 15; (https://github.com/gpuweb/gpuweb/issues/3838)
-        // TODO const BGRA8UNORM_STORAGE = 1 << 16;
+
+        /// Allows the [`wgpu::TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8unorm`]
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a web and native feature.
+        const BGRA8UNORM_STORAGE = 1 << 16;
+
         // ? const NORM16_FILTERABLE = 1 << 17; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const NORM16_RESOLVE = 1 << 18; (https://github.com/gpuweb/gpuweb/issues/3839)
         // TODO const FLOAT32_FILTERABLE = 1 << 19;
@@ -371,7 +381,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with Unorm/UnormSrgb channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -409,7 +419,7 @@ bitflags::bitflags! {
         /// Compressed textures sacrifice some quality in exchange for significantly reduced
         /// bandwidth usage.
         ///
-        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for BCn formats.
+        /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with the HDR channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
         /// Supported Platforms:
@@ -458,10 +468,9 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - Vulkan
         /// - DX12
+        /// - Metal (AMD & Intel, not Apple GPUs)
         ///
-        /// This is currently unimplemented on Metal.
-        /// When implemented, it will be supported on Metal on AMD and Intel GPUs, but not Apple GPUs.
-        /// (This is a common limitation of tile-based rasterization GPUs)
+        /// This is generally not available on tile-based rasterization GPUs.
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 33;
@@ -679,7 +688,6 @@ bitflags::bitflags! {
         /// This allows only drawing the vertices of polygons/triangles instead of filled
         ///
         /// Supported platforms:
-        /// - DX12
         /// - Vulkan
         ///
         /// This is a native only feature.
@@ -739,6 +747,15 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 53;
 
+        /// Allows vertex shaders to have outputs which are not consumed
+        /// by the fragment shader.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
+
         // 54..59 available
 
         // Shader:
@@ -783,7 +800,17 @@ bitflags::bitflags! {
         /// This is a native only feature.
         const SHADER_EARLY_DEPTH_TEST = 1 << 62;
 
-        // 62..64 available
+        /// Allows two outputs from a shader to be used for blending.
+        /// Note that dual-source blending doesn't support multiple render targets.
+        ///
+        /// For more info see the OpenGL ES extension GL_EXT_blend_func_extended.
+        ///
+        /// Supported platforms:
+        /// - OpenGL ES (with GL_EXT_blend_func_extended)
+        /// - Metal (with MSL 1.2+)
+        /// - Vulkan (with dualSrcBlend)
+        /// - DX12
+        const DUAL_SOURCE_BLENDING = 1 << 63;
     }
 }
 
@@ -798,6 +825,78 @@ impl Features {
     /// Mask of all features that are only available when targeting native (not web).
     pub const fn all_native_mask() -> Self {
         Self::from_bits_truncate(0xFFFF_FFFF_FFFF_0000)
+    }
+}
+
+bitflags::bitflags! {
+    /// Instance debugging flags.
+    ///
+    /// These are not part of the webgpu standard.
+    ///
+    /// Defaults to enabling debugging-related flags if the build configuration has `debug_assertions`.
+    #[repr(transparent)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct InstanceFlags: u32 {
+        /// Generate debug information in shaders and objects.
+        const DEBUG = 1 << 0;
+        /// Enable validation, if possible.
+        const VALIDATION = 1 << 1;
+        /// Don't pass labels to wgpu-hal.
+        const DISCARD_HAL_LABELS = 1 << 2;
+    }
+}
+
+impl Default for InstanceFlags {
+    fn default() -> Self {
+        Self::from_build_config()
+    }
+}
+
+impl InstanceFlags {
+    /// Enable debugging and validation flags.
+    pub fn debugging() -> Self {
+        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+    }
+
+    /// Infer good defaults from the build type
+    ///
+    /// Returns the default flags and add debugging flags if the build configuration has `debug_assertions`.
+    pub fn from_build_config() -> Self {
+        if cfg!(debug_assertions) {
+            return InstanceFlags::debugging();
+        }
+
+        InstanceFlags::empty()
+    }
+
+    /// Returns this set of flags, affected by environment variables.
+    ///
+    /// The presence of an environment variable implies that the corresponding flag should be set
+    /// unless the value is "0" in which case the flag is unset. If the environment variable is
+    /// not present, then the flag is unaffected.
+    ///
+    /// For example `let flags = InstanceFlags::debugging().with_env();` with `WGPU_VALIDATION=0`
+    /// does not contain `InstanceFlags::VALIDATION`.
+    ///
+    /// The environment variables are named after the flags prefixed with "WGPU_". For example:
+    /// - WGPU_DEBUG
+    /// - WGPU_VALIDATION
+    pub fn with_env(mut self) -> Self {
+        fn env(key: &str) -> Option<bool> {
+            std::env::var(key).ok().map(|s| match s.as_str() {
+                "0" => false,
+                _ => true,
+            })
+        }
+
+        if let Some(bit) = env("WGPU_VALIDATION") {
+            self.set(Self::VALIDATION, bit);
+        }
+        if let Some(bit) = env("WGPU_DEBUG") {
+            self.set(Self::DEBUG, bit);
+        }
+
+        self
     }
 }
 
@@ -932,6 +1031,12 @@ pub struct Limits {
     /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
+
+    /// Maximum number of live non-sampler bindings.
+    ///
+    /// This limit only affects the d3d12 backend. Using a large number will allow the device
+    /// to create many bind groups at the cost of a large up-front allocation at device creation.
+    pub max_non_sampler_bindings: u32,
 }
 
 impl Default for Limits {
@@ -966,6 +1071,7 @@ impl Default for Limits {
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
             max_push_constant_size: 0,
+            max_non_sampler_bindings: 1_000_000,
         }
     }
 }
@@ -1006,6 +1112,7 @@ impl Limits {
     ///     max_compute_workgroup_size_z: 64,
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
     pub fn downlevel_defaults() -> Self {
@@ -1039,6 +1146,7 @@ impl Limits {
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
             max_buffer_size: 256 << 20,
+            max_non_sampler_bindings: 1_000_000,
         }
     }
 
@@ -1070,14 +1178,15 @@ impl Limits {
     ///     max_push_constant_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
+    ///     max_inter_stage_shader_components: 31,
     ///     max_compute_workgroup_storage_size: 0, // +
     ///     max_compute_invocations_per_workgroup: 0, // +
     ///     max_compute_workgroup_size_x: 0, // +
     ///     max_compute_workgroup_size_y: 0, // +
     ///     max_compute_workgroup_size_z: 0, // +
     ///     max_compute_workgroups_per_dimension: 0, // +
-    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_buffer_size: 256 << 20, // (256 MiB),
+    ///     max_non_sampler_bindings: 1_000_000,
     /// });
     /// ```
     pub fn downlevel_webgl2_defaults() -> Self {
@@ -1094,6 +1203,9 @@ impl Limits {
             max_compute_workgroup_size_y: 0,
             max_compute_workgroup_size_z: 0,
             max_compute_workgroups_per_dimension: 0,
+
+            // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
+            max_inter_stage_shader_components: 31,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
@@ -1194,6 +1306,7 @@ impl Limits {
         compare!(max_compute_workgroup_size_z, Less);
         compare!(max_compute_workgroups_per_dimension, Less);
         compare!(max_buffer_size, Less);
+        compare!(max_non_sampler_bindings, Less);
     }
 }
 
@@ -1270,8 +1383,8 @@ bitflags::bitflags! {
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to indexed draw calls.
         const BASE_VERTEX = 1 << 3;
-        /// Supports reading from a depth/stencil buffer while using as a read-only depth/stencil
-        /// attachment.
+        /// Supports reading from a depth/stencil texture while using it as a read-only
+        /// depth/stencil attachment.
         ///
         /// The WebGL2 and GLES backends do not support RODS.
         const READ_ONLY_DEPTH_STENCIL = 1 << 4;
@@ -1540,6 +1653,8 @@ impl TextureViewDimension {
 ///
 /// Corresponds to [WebGPU `GPUBlendFactor`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpublendfactor).
+/// Values using S1 requires [`Features::DUAL_SOURCE_BLENDING`] and can only be
+/// used with the first render target.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1572,6 +1687,29 @@ pub enum BlendFactor {
     Constant = 11,
     /// 1.0 - Constant
     OneMinusConstant = 12,
+    /// S1.component
+    Src1 = 13,
+    /// 1.0 - S1.component
+    OneMinusSrc1 = 14,
+    /// S1.alpha
+    Src1Alpha = 15,
+    /// 1.0 - S1.alpha
+    OneMinusSrc1Alpha = 16,
+}
+
+impl BlendFactor {
+    /// Returns `true` if the blend factor references the second blend source.
+    ///
+    /// Note that the usage of those blend factors require [`Features::DUAL_SOURCE_BLENDING`].
+    pub fn ref_second_blend_source(&self) -> bool {
+        match self {
+            BlendFactor::Src1
+            | BlendFactor::OneMinusSrc1
+            | BlendFactor::Src1Alpha
+            | BlendFactor::OneMinusSrc1Alpha => true,
+            _ => false,
+        }
+    }
 }
 
 /// Alpha blend operation.
@@ -2095,6 +2233,8 @@ pub enum TextureFormat {
     // Packed 32 bit formats
     /// Packed unsigned float with 9 bits mantisa for each RGB component, then a common 5 bits exponent
     Rgb9e5Ufloat,
+    /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. Unsigned in shader.
+    Rgb10a2Uint,
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     Rgb10a2Unorm,
     /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
@@ -2355,6 +2495,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "rgba8sint" => TextureFormat::Rgba8Sint,
                     "bgra8unorm" => TextureFormat::Bgra8Unorm,
                     "bgra8unorm-srgb" => TextureFormat::Bgra8UnormSrgb,
+                    "rgb10a2uint" => TextureFormat::Rgb10a2Uint,
                     "rgb10a2unorm" => TextureFormat::Rgb10a2Unorm,
                     "rg11b10ufloat" => TextureFormat::Rg11b10Float,
                     "rg32uint" => TextureFormat::Rg32Uint,
@@ -2481,6 +2622,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Rgba8Sint => "rgba8sint",
             TextureFormat::Bgra8Unorm => "bgra8unorm",
             TextureFormat::Bgra8UnormSrgb => "bgra8unorm-srgb",
+            TextureFormat::Rgb10a2Uint => "rgb10a2uint",
             TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
             TextureFormat::Rg11b10Float => "rg11b10ufloat",
             TextureFormat::Rg32Uint => "rg32uint",
@@ -2671,6 +2813,7 @@ impl TextureFormat {
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
             | Self::Rgb9e5Ufloat
+            | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float
             | Self::Rg32Uint
@@ -2769,6 +2912,7 @@ impl TextureFormat {
             | Self::Bgra8Unorm
             | Self::Bgra8UnormSrgb
             | Self::Rgb9e5Ufloat
+            | Self::Rgb10a2Uint
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float
             | Self::Rg32Uint
@@ -2848,6 +2992,11 @@ impl TextureFormat {
         } else {
             basic
         };
+        let bgra8unorm = if device_features.contains(Features::BGRA8UNORM_STORAGE) {
+            attachment | TextureUsages::STORAGE_BINDING
+        } else {
+            attachment
+        };
 
         #[rustfmt::skip] // lets make a nice table
         let (
@@ -2876,8 +3025,9 @@ impl TextureFormat {
             Self::Rgba8Snorm =>           (        noaa,    storage),
             Self::Rgba8Uint =>            (        msaa,  all_flags),
             Self::Rgba8Sint =>            (        msaa,  all_flags),
-            Self::Bgra8Unorm =>           (msaa_resolve, attachment),
+            Self::Bgra8Unorm =>           (msaa_resolve, bgra8unorm),
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
+            Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
             Self::Rg11b10Float =>         (        msaa,   rg11b10f),
             Self::Rg32Uint =>             (        noaa,  all_flags),
@@ -2983,7 +3133,8 @@ impl TextureFormat {
             | Self::Rgba16Uint
             | Self::R32Uint
             | Self::Rg32Uint
-            | Self::Rgba32Uint => Some(uint),
+            | Self::Rgba32Uint
+            | Self::Rgb10a2Uint => Some(uint),
 
             Self::R8Sint
             | Self::Rg8Sint
@@ -3071,7 +3222,9 @@ impl TextureFormat {
             | Self::Rg16Sint
             | Self::Rg16Float => Some(4),
             Self::R32Uint | Self::R32Sint | Self::R32Float => Some(4),
-            Self::Rgb9e5Ufloat | Self::Rgb10a2Unorm | Self::Rg11b10Float => Some(4),
+            Self::Rgb9e5Ufloat | Self::Rgb10a2Uint | Self::Rgb10a2Unorm | Self::Rg11b10Float => {
+                Some(4)
+            }
 
             Self::Rgba16Unorm
             | Self::Rgba16Snorm
@@ -3179,7 +3332,7 @@ impl TextureFormat {
             | Self::Rgba32Float => 4,
 
             Self::Rgb9e5Ufloat | Self::Rg11b10Float => 3,
-            Self::Rgb10a2Unorm => 4,
+            Self::Rgb10a2Uint | Self::Rgb10a2Unorm => 4,
 
             Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
 
@@ -3377,6 +3530,10 @@ fn texture_format_serialize() {
     assert_eq!(
         serde_json::to_string(&TextureFormat::Bgra8UnormSrgb).unwrap(),
         "\"bgra8unorm-srgb\"".to_string()
+    );
+    assert_eq!(
+        serde_json::to_string(&TextureFormat::Rgb10a2Uint).unwrap(),
+        "\"rgb10a2uint\"".to_string()
     );
     assert_eq!(
         serde_json::to_string(&TextureFormat::Rgb10a2Unorm).unwrap(),
@@ -3669,6 +3826,10 @@ fn texture_format_deserialize() {
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"bgra8unorm-srgb\"").unwrap(),
         TextureFormat::Bgra8UnormSrgb
+    );
+    assert_eq!(
+        serde_json::from_str::<TextureFormat>("\"rgb10a2uint\"").unwrap(),
+        TextureFormat::Rgb10a2Uint
     );
     assert_eq!(
         serde_json::from_str::<TextureFormat>("\"rgb10a2unorm\"").unwrap(),
@@ -4302,73 +4463,73 @@ pub struct VertexAttribute {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum VertexFormat {
-    /// Two unsigned bytes (u8). `uvec2` in shaders.
+    /// Two unsigned bytes (u8). `vec2<u32>` in shaders.
     Uint8x2 = 0,
-    /// Four unsigned bytes (u8). `uvec4` in shaders.
+    /// Four unsigned bytes (u8). `vec4<u32>` in shaders.
     Uint8x4 = 1,
-    /// Two signed bytes (i8). `ivec2` in shaders.
+    /// Two signed bytes (i8). `vec2<i32>` in shaders.
     Sint8x2 = 2,
-    /// Four signed bytes (i8). `ivec4` in shaders.
+    /// Four signed bytes (i8). `vec4<i32>` in shaders.
     Sint8x4 = 3,
-    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2` in shaders.
+    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2<f32>` in shaders.
     Unorm8x2 = 4,
-    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4` in shaders.
+    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 5,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2` in shaders.
+    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 6,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4` in shaders.
+    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 7,
-    /// Two unsigned shorts (u16). `uvec2` in shaders.
+    /// Two unsigned shorts (u16). `vec2<u32>` in shaders.
     Uint16x2 = 8,
-    /// Four unsigned shorts (u16). `uvec4` in shaders.
+    /// Four unsigned shorts (u16). `vec4<u32>` in shaders.
     Uint16x4 = 9,
-    /// Two signed shorts (i16). `ivec2` in shaders.
+    /// Two signed shorts (i16). `vec2<i32>` in shaders.
     Sint16x2 = 10,
-    /// Four signed shorts (i16). `ivec4` in shaders.
+    /// Four signed shorts (i16). `vec4<i32>` in shaders.
     Sint16x4 = 11,
-    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2` in shaders.
+    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2<f32>` in shaders.
     Unorm16x2 = 12,
-    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4` in shaders.
+    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 13,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2` in shaders.
+    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 14,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4` in shaders.
+    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 15,
-    /// Two half-precision floats (no Rust equiv). `vec2` in shaders.
+    /// Two half-precision floats (no Rust equiv). `vec2<f32>` in shaders.
     Float16x2 = 16,
-    /// Four half-precision floats (no Rust equiv). `vec4` in shaders.
+    /// Four half-precision floats (no Rust equiv). `vec4<f32>` in shaders.
     Float16x4 = 17,
-    /// One single-precision float (f32). `float` in shaders.
+    /// One single-precision float (f32). `f32` in shaders.
     Float32 = 18,
-    /// Two single-precision floats (f32). `vec2` in shaders.
+    /// Two single-precision floats (f32). `vec2<f32>` in shaders.
     Float32x2 = 19,
-    /// Three single-precision floats (f32). `vec3` in shaders.
+    /// Three single-precision floats (f32). `vec3<f32>` in shaders.
     Float32x3 = 20,
-    /// Four single-precision floats (f32). `vec4` in shaders.
+    /// Four single-precision floats (f32). `vec4<f32>` in shaders.
     Float32x4 = 21,
-    /// One unsigned int (u32). `uint` in shaders.
+    /// One unsigned int (u32). `u32` in shaders.
     Uint32 = 22,
-    /// Two unsigned ints (u32). `uvec2` in shaders.
+    /// Two unsigned ints (u32). `vec2<u32>` in shaders.
     Uint32x2 = 23,
-    /// Three unsigned ints (u32). `uvec3` in shaders.
+    /// Three unsigned ints (u32). `vec3<u32>` in shaders.
     Uint32x3 = 24,
-    /// Four unsigned ints (u32). `uvec4` in shaders.
+    /// Four unsigned ints (u32). `vec4<u32>` in shaders.
     Uint32x4 = 25,
-    /// One signed int (i32). `int` in shaders.
+    /// One signed int (i32). `i32` in shaders.
     Sint32 = 26,
-    /// Two signed ints (i32). `ivec2` in shaders.
+    /// Two signed ints (i32). `vec2<i32>` in shaders.
     Sint32x2 = 27,
-    /// Three signed ints (i32). `ivec3` in shaders.
+    /// Three signed ints (i32). `vec3<i32>` in shaders.
     Sint32x3 = 28,
-    /// Four signed ints (i32). `ivec4` in shaders.
+    /// Four signed ints (i32). `vec4<i32>` in shaders.
     Sint32x4 = 29,
-    /// One double-precision float (f64). `double` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// One double-precision float (f64). `f32` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64 = 30,
-    /// Two double-precision floats (f64). `dvec2` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Two double-precision floats (f64). `vec2<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x2 = 31,
-    /// Three double-precision floats (f64). `dvec3` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Three double-precision floats (f64). `vec3<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x3 = 32,
-    /// Four double-precision floats (f64). `dvec4` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
+    /// Four double-precision floats (f64). `vec4<f32>` in shaders. Requires [`Features::VERTEX_ATTRIBUTE_64BIT`].
     Float64x4 = 33,
 }
 
@@ -6076,6 +6237,7 @@ impl<T: Copy> ImageCopyTextureTagged<T> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct ImageSubresourceRange {
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`][TAA].
     ///
@@ -6400,19 +6562,45 @@ pub enum Dx12Compiler {
     },
 }
 
+/// Selects which OpenGL ES 3 minor version to request.
+///
+/// When using ANGLE as an OpenGL ES/EGL implementation, explicitly requesting `Version1` can provide a non-conformant ES 3.1 on APIs like D3D11.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub enum Gles3MinorVersion {
+    /// No explicit minor version is requested, the driver automatically picks the highest available.
+    #[default]
+    Automatic,
+
+    /// Request an ES 3.0 context.
+    Version0,
+
+    /// Request an ES 3.1 context.
+    Version1,
+
+    /// Request an ES 3.2 context.
+    Version2,
+}
+
 /// Options for creating an instance.
+#[derive(Debug)]
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
     pub backends: Backends,
+    /// Flags to tune the behavior of the instance.
+    pub flags: InstanceFlags,
     /// Which DX12 shader compiler to use.
     pub dx12_shader_compiler: Dx12Compiler,
+    /// Which OpenGL ES 3 minor version to request.
+    pub gles_minor_version: Gles3MinorVersion,
 }
 
 impl Default for InstanceDescriptor {
     fn default() -> Self {
         Self {
             backends: Backends::all(),
+            flags: InstanceFlags::default(),
             dx12_shader_compiler: Dx12Compiler::default(),
+            gles_minor_version: Gles3MinorVersion::default(),
         }
     }
 }

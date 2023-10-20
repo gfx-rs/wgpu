@@ -6,7 +6,8 @@ skip-tree = [
 	{ name = "wgpu-info" },
 ]
 skip = [
-	{ name = "wgpu" }
+	{ name = "wgpu" },
+	{ name = "fastrand" }
 ]
 wildcards = "deny"
 
@@ -19,6 +20,7 @@ allow = [
 	"CC0-1.0",
 	"ISC",
 	"MIT",
+	"MIT-0",
 	"MPL-2.0",
 	"Unicode-DFS-2016",
 	"Zlib",
@@ -27,6 +29,7 @@ allow = [
 [sources]
 allow-git = [
 	"https://github.com/grovesNL/glow",
+	"https://github.com/gfx-rs/metal-rs",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

@@ -55,7 +55,7 @@ use winapi::{
     Interface as _,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
@@ -94,7 +94,7 @@ pub struct Instance {
     library: Arc<d3d12::D3D12Lib>,
     supports_allow_tearing: bool,
     _lib_dxgi: d3d12::DxgiLib,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     dx12_shader_compiler: wgt::Dx12Compiler,
 }
 
@@ -124,6 +124,21 @@ impl Instance {
             swap_chain: None,
         }
     }
+
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut types::ISwapChainPanelNative,
+    ) -> Surface {
+        Surface {
+            factory: self.factory.clone(),
+            factory_media: self.factory_media.clone(),
+            target: SurfaceTarget::SwapChainPanel(unsafe {
+                d3d12::ComPtr::from_raw(swap_chain_panel)
+            }),
+            supports_allow_tearing: self.supports_allow_tearing,
+            swap_chain: None,
+        }
+    }
 }
 
 unsafe impl Send for Instance {}
@@ -145,6 +160,7 @@ enum SurfaceTarget {
     WndHandle(windef::HWND),
     Visual(d3d12::ComPtr<dcomp::IDCompositionVisual>),
     SurfaceHandle(winnt::HANDLE),
+    SwapChainPanel(d3d12::ComPtr<types::ISwapChainPanelNative>),
 }
 
 pub struct Surface {
@@ -169,7 +185,7 @@ enum MemoryArchitecture {
 
 #[derive(Debug, Clone, Copy)]
 struct PrivateCapabilities {
-    instance_flags: crate::InstanceFlags,
+    instance_flags: wgt::InstanceFlags,
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
@@ -474,6 +490,7 @@ pub struct Fence {
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
+#[derive(Debug)]
 pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
@@ -613,19 +630,23 @@ impl crate::Surface<Api> for Surface {
         let mut flags = dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         // We always set ALLOW_TEARING on the swapchain no matter
         // what kind of swapchain we want because ResizeBuffers
-        // cannot change if ALLOW_TEARING is applied to the swapchain.
+        // cannot change the swapchain's ALLOW_TEARING flag.
+        //
+        // This does not change the behavior of the swapchain, just
+        // allow present calls to use tearing.
         if self.supports_allow_tearing {
             flags |= dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
         }
+
+        // While `configure`s contract ensures that no work on the GPU's main queues
+        // are in flight, we still need to wait for the present queue to be idle.
+        unsafe { device.wait_for_present_queue_idle() }?;
 
         let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
 
         let swap_chain = match self.swap_chain.take() {
             //Note: this path doesn't properly re-initialize all of the things
             Some(sc) => {
-                // can't have image resources in flight used by GPU
-                let _ = unsafe { device.wait_idle() };
-
                 let raw = unsafe { sc.release_resources() };
                 let result = unsafe {
                     raw.ResizeBuffers(
@@ -662,7 +683,7 @@ impl crate::Surface<Api> for Surface {
                     flags,
                 };
                 let swap_chain1 = match self.target {
-                    SurfaceTarget::Visual(_) => {
+                    SurfaceTarget::Visual(_) | SurfaceTarget::SwapChainPanel(_) => {
                         profiling::scope!("IDXGIFactory4::CreateSwapChainForComposition");
                         self.factory
                             .unwrap_factory2()
@@ -720,6 +741,17 @@ impl crate::Surface<Api> for Surface {
                             ));
                         }
                     }
+                    &SurfaceTarget::SwapChainPanel(ref swap_chain_panel) => {
+                        if let Err(err) =
+                            unsafe { swap_chain_panel.SetSwapChain(swap_chain1.as_ptr()) }
+                                .into_result()
+                        {
+                            log::error!("Unable to SetSwapChain: {}", err);
+                            return Err(crate::SurfaceError::Other(
+                                "ISwapChainPanelNative::SetSwapChain",
+                            ));
+                        }
+                    }
                 }
 
                 match unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() }.into_result() {
@@ -744,7 +776,9 @@ impl crate::Surface<Api> for Surface {
                     )
                 };
             }
-            SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => {}
+            SurfaceTarget::Visual(_)
+            | SurfaceTarget::SurfaceHandle(_)
+            | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.swap_chain_size) };
@@ -773,12 +807,16 @@ impl crate::Surface<Api> for Surface {
     }
 
     unsafe fn unconfigure(&mut self, device: &Device) {
-        if let Some(mut sc) = self.swap_chain.take() {
+        if let Some(sc) = self.swap_chain.take() {
             unsafe {
-                let _ = sc.wait(None);
-                //TODO: this shouldn't be needed,
-                // but it complains that the queue is still used otherwise
-                let _ = device.wait_idle();
+                // While `unconfigure`s contract ensures that no work on the GPU's main queues
+                // are in flight, we still need to wait for the present queue to be idle.
+
+                // The major failure mode of this function is device loss,
+                // which if we have lost the device, we should just continue
+                // cleaning up, without error.
+                let _ = device.wait_for_present_queue_idle();
+
                 let _raw = sc.release_resources();
             }
         }
@@ -837,6 +875,13 @@ impl crate::Queue<Api> for Queue {
                 .signal(&fence.raw, value)
                 .into_device_result("Signal fence")?;
         }
+
+        // Note the lack of synchronization here between the main Direct queue
+        // and the dedicated presentation queue. This is automatically handled
+        // by the D3D runtime by detecting uses of resources derived from the
+        // swapchain. This automatic detection is why you cannot use a swapchain
+        // as an UAV in D3D12.
+
         Ok(())
     }
     unsafe fn present(

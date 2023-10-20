@@ -47,6 +47,7 @@ impl QueryResults {
     // * compute end
     const NUM_QUERIES: u64 = 8;
 
+    #[allow(clippy::redundant_closure)] // False positive
     fn from_raw_results(timestamps: Vec<u64>, timestamps_inside_passes: bool) -> Self {
         assert_eq!(timestamps.len(), Self::NUM_QUERIES as usize);
 
@@ -60,9 +61,9 @@ impl QueryResults {
         let mut encoder_timestamps = [0, 0];
         encoder_timestamps[0] = get_next_slot();
         let render_start_end_timestamps = [get_next_slot(), get_next_slot()];
-        let render_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let render_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         let compute_start_end_timestamps = [get_next_slot(), get_next_slot()];
-        let compute_inside_timestamp = timestamps_inside_passes.then_some(get_next_slot());
+        let compute_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         encoder_timestamps[1] = get_next_slot();
 
         QueryResults {
@@ -79,8 +80,8 @@ impl QueryResults {
         let elapsed_us = |start, end: u64| end.wrapping_sub(start) as f64 * period as f64 / 1000.0;
 
         println!(
-            "Elapsed time render + compute: {:.2} μs",
-            elapsed_us(self.encoder_timestamps[0], self.encoder_timestamps[1])
+            "Elapsed time before render until after compute: {:.2} μs",
+            elapsed_us(self.encoder_timestamps[0], self.encoder_timestamps[1]),
         );
         println!(
             "Elapsed time render pass: {:.2} μs",
@@ -140,7 +141,7 @@ impl Queries {
         encoder.resolve_query_set(
             &self.set,
             // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Musn't be larger than the number valid queries in the set.
-            0..self.next_unused_query as u32,
+            0..self.next_unused_query,
             &self.resolve_buffer,
             0,
         );
@@ -178,7 +179,9 @@ async fn run() {
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
+        flags: wgpu::InstanceFlags::from_build_config().with_env(),
         dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+        gles_minor_version: wgpu::Gles3MinorVersion::default(),
     });
 
     // `request_adapter` instantiates the general connection to the GPU
@@ -374,7 +377,7 @@ fn render_pass(
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                store: true,
+                store: wgpu::StoreOp::Store,
             },
         })],
         depth_stencil_attachment: None,
@@ -417,35 +420,29 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use wgpu_test::{gpu_test, GpuTestConfiguration};
+
     use crate::{submit_render_and_compute_pass_with_queries, QueryResults};
 
-    #[test]
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn test_timestamps_encoder() {
-        wgpu_test::initialize_test(
+    #[gpu_test]
+    static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+        .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(wgpu::Features::TIMESTAMP_QUERY),
-            |ctx| {
-                test_timestamps(ctx, false);
-            },
-        );
-    }
+        )
+        .run_sync(|ctx| test_timestamps(ctx, false));
 
-    #[test]
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn test_timestamps_passes() {
-        wgpu_test::initialize_test(
+    #[gpu_test]
+    static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
+        .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 ),
-            |ctx| {
-                test_timestamps(ctx, true);
-            },
-        );
-    }
+        )
+        .run_sync(|ctx| test_timestamps(ctx, true));
 
     fn test_timestamps(ctx: wgpu_test::TestingContext, timestamps_inside_passes: bool) {
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
@@ -464,13 +461,10 @@ mod tests {
             render_start_end_timestamps[1].wrapping_sub(render_start_end_timestamps[0]);
         let compute_delta =
             compute_start_end_timestamps[1].wrapping_sub(compute_start_end_timestamps[0]);
+        let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
 
-        // TODO: Metal encoder timestamps aren't implemented yet.
-        if ctx.adapter.get_info().backend != wgpu::Backend::Metal {
-            let encoder_delta = encoder_timestamps[1].wrapping_sub(encoder_timestamps[0]);
-            assert!(encoder_delta > 0);
-            assert!(encoder_delta >= render_delta + compute_delta);
-        }
+        assert!(encoder_delta > 0);
+        assert!(encoder_delta >= render_delta + compute_delta);
 
         if let Some(render_inside_timestamp) = render_inside_timestamp {
             assert!(render_inside_timestamp >= render_start_end_timestamps[0]);

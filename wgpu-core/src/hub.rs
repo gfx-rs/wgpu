@@ -169,7 +169,9 @@ use crate::{
     storage::{Element, Storage, StorageReport},
 };
 
-#[cfg(debug_assertions)]
+use wgt::{strict_assert_eq, strict_assert_ne};
+
+#[cfg(any(debug_assertions, feature = "strict_asserts"))]
 use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData};
 
@@ -243,6 +245,7 @@ impl<A: HalApi> Access<PipelineLayout<A>> for RenderBundle<A> {}
 impl<A: HalApi> Access<BindGroupLayout<A>> for Root {}
 impl<A: HalApi> Access<BindGroupLayout<A>> for Device<A> {}
 impl<A: HalApi> Access<BindGroupLayout<A>> for PipelineLayout<A> {}
+impl<A: HalApi> Access<BindGroupLayout<A>> for QuerySet<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for Root {}
 impl<A: HalApi> Access<BindGroup<A>> for Device<A> {}
 impl<A: HalApi> Access<BindGroup<A>> for BindGroupLayout<A> {}
@@ -280,7 +283,7 @@ impl<A: HalApi> Access<QuerySet<A>> for RenderPipeline<A> {}
 impl<A: HalApi> Access<QuerySet<A>> for ComputePipeline<A> {}
 impl<A: HalApi> Access<QuerySet<A>> for Sampler<A> {}
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "strict_asserts"))]
 thread_local! {
     /// Per-thread state checking `Token<Root>` creation in debug builds.
     ///
@@ -319,10 +322,10 @@ impl<'a, T> Token<'a, T> {
     ///
     /// This should only be used by `Registry` locking methods.
     pub(crate) fn new() -> Self {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "strict_asserts"))]
         ACTIVE_TOKEN.with(|active| {
             let old = active.get();
-            assert_ne!(old, 0, "Root token was dropped");
+            strict_assert_ne!(old, 0, "Root token was dropped");
             active.set(old + 1);
         });
         Self { level: PhantomData }
@@ -335,9 +338,9 @@ impl Token<'static, Root> {
     /// Debug builds check dynamically that each thread has at most
     /// one root token at a time.
     pub fn root() -> Self {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "strict_asserts"))]
         ACTIVE_TOKEN.with(|active| {
-            assert_eq!(0, active.replace(1), "Root token is already active");
+            strict_assert_eq!(0, active.replace(1), "Root token is already active");
         });
 
         Self { level: PhantomData }
@@ -346,7 +349,7 @@ impl Token<'static, Root> {
 
 impl<'a, T> Drop for Token<'a, T> {
     fn drop(&mut self) {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "strict_asserts"))]
         ACTIVE_TOKEN.with(|active| {
             let old = active.get();
             active.set(old - 1);
@@ -574,8 +577,10 @@ impl<A: HalApi, F: GlobalIdentityHandlerFactory> Hub<A, F> {
         for element in self.bind_group_layouts.data.write().map.drain(..) {
             if let Element::Occupied(bgl, _) = element {
                 let device = &devices[bgl.device_id.value];
-                unsafe {
-                    device.raw.destroy_bind_group_layout(bgl.raw);
+                if let Some(inner) = bgl.into_inner() {
+                    unsafe {
+                        device.raw.destroy_bind_group_layout(inner.raw);
+                    }
                 }
             }
         }

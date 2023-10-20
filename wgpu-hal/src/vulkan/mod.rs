@@ -43,7 +43,7 @@ use parking_lot::Mutex;
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
@@ -106,13 +106,19 @@ pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,
-    driver_api_version: u32,
+    /// The instance API version.
+    ///
+    /// Which is the version of Vulkan supported for instance-level functionality.
+    ///
+    /// It is associated with a `VkInstance` and its children,
+    /// except for a `VkPhysicalDevice` and its children.
+    instance_api_version: u32,
 }
 
 pub struct Instance {
@@ -196,6 +202,7 @@ struct PrivateCapabilities {
     robust_buffer_access2: bool,
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
+    image_format_list: bool,
 }
 
 bitflags::bitflags!(
@@ -207,6 +214,28 @@ bitflags::bitflags!(
         /// Qualcomm OOMs when there are zero color attachments but a non-null pointer
         /// to a subpass resolve attachment array. This nulls out that pointer in that case.
         const EMPTY_RESOLVE_ATTACHMENT_LISTS = 0x2;
+        /// If the following code returns false, then nvidia will end up filling the wrong range.
+        ///
+        /// ```skip
+        /// fn nvidia_succeeds() -> bool {
+        ///   # let (copy_length, start_offset) = (0, 0);
+        ///     if copy_length >= 4096 {
+        ///         if start_offset % 16 != 0 {
+        ///             if copy_length == 4096 {
+        ///                 return true;
+        ///             }
+        ///             if copy_length % 16 == 0 {
+        ///                 return false;
+        ///             }
+        ///         }
+        ///     }
+        ///     true
+        /// }
+        /// ```
+        ///
+        /// As such, we need to make sure all calls to vkCmdFillBuffer are aligned to 16 bytes
+        /// if they cover a range of 4096 bytes or more.
+        const FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16 = 0x4;
     }
 );
 

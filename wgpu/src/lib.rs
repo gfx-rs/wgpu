@@ -15,8 +15,7 @@ mod macros;
 use std::{
     any::Any,
     borrow::Cow,
-    error,
-    fmt::{Debug, Display},
+    error, fmt,
     future::Future,
     marker::PhantomData,
     num::NonZeroU32,
@@ -34,12 +33,12 @@ pub use wgt::{
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
     DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, ImageDataLayout,
-    ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits, MultisampleState, Origin2d,
-    Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference, PredefinedColorSpace,
-    PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology, PushConstantRange,
-    QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor, ShaderLocation,
-    ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
+    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, Limits,
+    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
+    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
+    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
+    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
     StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
@@ -55,6 +54,8 @@ pub use wgt::{
 ))]
 #[doc(hidden)]
 pub use ::hal;
+#[cfg(feature = "naga")]
+pub use ::naga;
 #[cfg(any(
     not(target_arch = "wasm32"),
     feature = "webgl",
@@ -524,7 +525,7 @@ impl Drop for ShaderModule {
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -561,7 +562,7 @@ static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ShaderModuleDescriptor<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -577,6 +578,7 @@ static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
+#[derive(Debug)]
 pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -766,9 +768,21 @@ impl Drop for CommandEncoder {
     }
 }
 
-/// In-progress recording of a render pass.
+/// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
 ///
-/// It can be created with [`CommandEncoder::begin_render_pass`].
+/// It can be created with [`CommandEncoder::begin_render_pass()`], whose [`RenderPassDescriptor`]
+/// specifies the attachments (textures) that will be rendered to.
+///
+/// Most of the methods on `RenderPass` serve one of two purposes, identifiable by their names:
+///
+/// * `draw_*()`: Drawing (that is, encoding a render command, which, when executed by the GPU, will
+///   rasterize something and execute shaders).
+/// * `set_*()`: Setting part of the [render state](https://gpuweb.github.io/gpuweb/#renderstate)
+///   for future drawing commands.
+///
+/// A render pass may contain any number of drawing commands, and before/between each command the
+/// render state may be updated however you wish; each drawing command will be executed using the
+/// render state that has been set when the `draw_*()` function is called.
 ///
 /// Corresponds to [WebGPU `GPURenderPassEncoder`](
 /// https://gpuweb.github.io/gpuweb/#render-pass-encoder).
@@ -997,16 +1011,24 @@ static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
-/// The render target must be cleared at least once before its content is loaded.
-///
-/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop).
+/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
+/// plus the corresponding clearValue.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum LoadOp<V> {
-    /// Clear with a specified value.
+    /// Loads the specified value for this attachment into the render pass.
+    ///
+    /// On some GPU hardware (primarily mobile), "clear" is significantly cheaper
+    /// because it avoids loading data from main memory into tile-local memory.
+    ///
+    /// On other GPU hardware, there isn’t a significant difference.
+    ///
+    /// As a result, it is recommended to use "clear" rather than "load" in cases
+    /// where the initial value doesn’t matter
+    /// (e.g. the render target will be cleared using a skybox).
     Clear(V),
-    /// Load from memory.
+    /// Loads the existing value for this attachment into the render pass.
     Load,
 }
 
@@ -1014,6 +1036,28 @@ impl<V: Default> Default for LoadOp<V> {
     fn default() -> Self {
         Self::Clear(Default::default())
     }
+}
+
+/// Operation to perform to the output attachment at the end of a render pass.
+///
+/// Corresponds to [WebGPU `GPUStoreOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum StoreOp {
+    /// Stores the resulting value of the render pass for this attachment.
+    #[default]
+    Store,
+    /// Discards the resulting value of the render pass for this attachment.
+    ///
+    /// The attachment will be treated as uninitialized afterwards.
+    /// (If only either Depth or Stencil texture-aspects is set to `Discard`,
+    /// the respective other texture-aspect will be preserved.)
+    ///
+    /// This can be significantly faster on tile-based render hardware.
+    ///
+    /// Prefer this if the attachment is not read by subsequent passes.
+    Discard,
 }
 
 /// Pair of load and store operations for an attachment aspect.
@@ -1027,14 +1071,18 @@ pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
     /// Whether data will be written to through this attachment.
-    pub store: bool,
+    ///
+    /// Note that resolve textures (if specified) are always written to,
+    /// regardless of this setting.
+    pub store: StoreOp,
 }
 
 impl<V: Default> Default for Operations<V> {
+    #[inline]
     fn default() -> Self {
         Self {
-            load: Default::default(),
-            store: true,
+            load: LoadOp::<V>::default(),
+            store: StoreOp::default(),
         }
     }
 }
@@ -1075,6 +1123,8 @@ pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
+    ///
+    /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
     pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
@@ -1690,8 +1740,8 @@ pub enum SurfaceError {
 }
 static_assertions::assert_impl_all!(SurfaceError: Send, Sync);
 
-impl Display for SurfaceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SurfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
             Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
             Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
@@ -1970,6 +2020,31 @@ impl Instance {
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
                 .create_surface_from_surface_handle(surface_handle)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
+        }
+    }
+
+    /// Creates a surface from `SwapChainPanel`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid SwapChainPanel to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_surface_from_swap_chain_panel(swap_chain_panel)
         };
         Surface {
             context: Arc::clone(&self.context),
@@ -2719,6 +2794,11 @@ impl Device {
                 )
         }
     }
+
+    /// Destroy this device.
+    pub fn destroy(&self) {
+        DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
+    }
 }
 
 impl Drop for Device {
@@ -2729,42 +2809,175 @@ impl Drop for Device {
     }
 }
 
-/// Requesting a device failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RequestDeviceError;
+/// Requesting a device from an [`Adapter`] failed.
+#[derive(Clone, Debug)]
+pub struct RequestDeviceError {
+    inner: RequestDeviceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum RequestDeviceErrorKind {
+    /// Error from [`wgpu_core`].
+    // must match dependency cfg
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        feature = "webgl",
+        target_os = "emscripten"
+    ))]
+    Core(core::instance::RequestDeviceError),
+
+    /// Error from web API that was called by `wgpu` to request a device.
+    ///
+    /// (This is currently never used by the webgl backend, but it could be.)
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    Web(wasm_bindgen::JsValue),
+}
+
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for RequestDeviceErrorKind {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for RequestDeviceErrorKind {}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
-impl Display for RequestDeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Requesting a device failed")
+impl fmt::Display for RequestDeviceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.fmt(f),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(error_js_value) => {
+                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
+                write!(f, "{error_js_value:?}")
+            }
+        }
     }
 }
 
-impl error::Error for RequestDeviceError {}
+impl error::Error for RequestDeviceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.source(),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(_) => None,
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+impl From<core::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: core::instance::RequestDeviceError) -> Self {
+        Self {
+            inner: RequestDeviceErrorKind::Core(error),
+        }
+    }
+}
 
 /// [`Instance::create_surface()`] or a related function failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct CreateSurfaceError {
-    // TODO: Report diagnostic clues
+    inner: CreateSurfaceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum CreateSurfaceErrorKind {
+    /// Error from [`wgpu_hal`].
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    // must match dependency cfg
+    Hal(hal::InstanceError),
+
+    /// Error from WebGPU surface creation.
+    #[allow(dead_code)] // may be unused depending on target and features
+    Web(String),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
-impl Display for CreateSurfaceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Creating a surface failed")
+impl fmt::Display for CreateSurfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                target_os = "emscripten",
+                feature = "webgl"
+            ))]
+            CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
+            CreateSurfaceErrorKind::Web(e) => e.fmt(f),
+        }
     }
 }
 
-impl error::Error for CreateSurfaceError {}
+impl error::Error for CreateSurfaceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                target_os = "emscripten",
+                feature = "webgl"
+            ))]
+            CreateSurfaceErrorKind::Hal(e) => e.source(),
+            CreateSurfaceErrorKind::Web(_) => None,
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    target_os = "emscripten",
+    feature = "webgl"
+))]
+impl From<hal::InstanceError> for CreateSurfaceError {
+    fn from(e: hal::InstanceError) -> Self {
+        Self {
+            inner: CreateSurfaceErrorKind::Hal(e),
+        }
+    }
+}
 
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
 static_assertions::assert_impl_all!(BufferAsyncError: Send, Sync);
 
-impl Display for BufferAsyncError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for BufferAsyncError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Error occurred when trying to async map a buffer")
     }
 }
@@ -2979,6 +3192,26 @@ impl<'a> BufferSlice<'a> {
             self.offset..end,
         );
         BufferView { slice: *self, data }
+    }
+
+    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
+    ///
+    /// This is useful in wasm builds when you want to pass mapped data directly to js. Unlike `get_mapped_range`
+    /// which unconditionally copies mapped data into the wasm heap, this function directly hands you the
+    /// ArrayBuffer that we mapped the data into in js.
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    pub fn get_mapped_range_as_array_buffer(&self) -> js_sys::ArrayBuffer {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        DynContext::buffer_get_mapped_range_as_array_buffer(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.buffer.data.as_ref(),
+            self.offset..end,
+        )
     }
 
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
@@ -3398,11 +3631,14 @@ impl CommandEncoder {
 
 impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index. The bind group layout
-    /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
+    /// in the active pipeline when any `draw_*()` method is called must match the layout of
+    /// this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in binding order.
     /// These offsets have to be aligned to [`Limits::min_uniform_buffer_offset_alignment`]
     /// or [`Limits::min_storage_buffer_offset_alignment`] appropriately.
+    ///
+    /// Subsequent draw calls’ shader executions will be able to access data in these bind groups.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -3436,6 +3672,8 @@ impl<'a> RenderPass<'a> {
     /// Sets the blend color as used by some of the blending modes.
     ///
     /// Subsequent blending tests will test against this value.
+    /// If this method has not been called, the blend constant defaults to [`Color::TRANSPARENT`]
+    /// (all components zero).
     pub fn set_blend_constant(&mut self, color: Color) {
         DynContext::render_pass_set_blend_constant(
             &*self.parent.context,
@@ -3489,6 +3727,11 @@ impl<'a> RenderPass<'a> {
     /// After transformation into [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
     /// Subsequent draw calls will discard any fragments which fall outside the scissor rectangle.
+    /// If this method has not been called, the scissor rectangle defaults to the entire bounds of
+    /// the render targets.
+    ///
+    /// The function of the scissor rectangle resembles [`set_viewport()`](Self::set_viewport),
+    /// but it does not affect the coordinate system, only which fragments are discarded.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
         DynContext::render_pass_set_scissor_rect(
             &*self.parent.context,
@@ -3504,7 +3747,9 @@ impl<'a> RenderPass<'a> {
     /// Sets the viewport used during the rasterization stage to linearly map
     /// from [normalized device coordinates](https://www.w3.org/TR/webgpu/#ndc) to [viewport coordinates](https://www.w3.org/TR/webgpu/#viewport-coordinates).
     ///
-    /// Subsequent draw calls will draw any fragments in this region.
+    /// Subsequent draw calls will only draw within this region.
+    /// If this method has not been called, the viewport defaults to the entire bounds of the render
+    /// targets.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
         DynContext::render_pass_set_viewport(
             &*self.parent.context,
@@ -3522,6 +3767,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the stencil reference.
     ///
     /// Subsequent stencil tests will test against this value.
+    /// If this method has not been called, the stencil reference value defaults to `0`.
     pub fn set_stencil_reference(&mut self, reference: u32) {
         DynContext::render_pass_set_stencil_reference(
             &*self.parent.context,
@@ -3549,6 +3795,9 @@ impl<'a> RenderPass<'a> {
     ///     }
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         DynContext::render_pass_draw(
             &*self.parent.context,
@@ -3609,6 +3858,9 @@ impl<'a> RenderPass<'a> {
     ///     }
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         DynContext::render_pass_draw_indexed(
             &*self.parent.context,
@@ -3625,6 +3877,9 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
@@ -3643,6 +3898,9 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3660,6 +3918,9 @@ impl<'a> RenderPass<'a> {
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.
+    ///
+    /// Commands in the bundle do not inherit this render pass's current render state, and after the
+    /// bundle has executed, the state is **cleared** (reset to defaults, not the previous state).
     pub fn execute_bundles<I: IntoIterator<Item = &'a RenderBundle> + 'a>(
         &mut self,
         render_bundles: I,
@@ -3685,8 +3946,10 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3711,8 +3974,10 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3742,7 +4007,6 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
-    ///
     /// These draw structures are expected to be tightly packed.
     ///
     /// The structure expected in `count_buffer` is the following:
@@ -3753,6 +4017,9 @@ impl<'a> RenderPass<'a> {
     ///     count: u32, // Number of draw calls to issue.
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect_count(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -3797,6 +4064,9 @@ impl<'a> RenderPass<'a> {
     ///     count: u32, // Number of draw calls to issue.
     /// }
     /// ```
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect_count(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4562,8 +4832,8 @@ impl Queue {
     }
 
     /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks attached to the same submission have also
-    /// been called.
+    /// being called implies that all mapped buffer callbacks which were registered before this call will
+    /// have been called.
     ///
     /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
     /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
@@ -4782,8 +5052,8 @@ impl<T> Clone for Id<T> {
 impl<T> Copy for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
-impl<T> Debug for Id<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<T> fmt::Debug for Id<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0).finish()
     }
 }
@@ -5083,8 +5353,8 @@ impl error::Error for Error {
     }
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),

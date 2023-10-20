@@ -1,5 +1,5 @@
 (
-    features: 0x0000_0004_0001_0000,
+    features: 0x0004_0004_0000_0000, // MAPPABLE_PRIMARY_BUFFERS | CLEAR_TEXTURE
     expectations: [
         (
             name: "Quad",
@@ -85,10 +85,10 @@
                 dst: Id(0, 1, Empty),
                 subresource_range: ImageSubresourceRange(
                     aspect: all,
-                    base_mip_level: 0,
-                    mip_level_count: None,
-                    base_array_layer: 0,
-                    array_layer_count: None,
+                    baseMipLevel: 0,
+                    mipLevelCount: None,
+                    baseArrayLayer: 0,
+                    arrayLayerCount: None,
                 ),
             ),
             CopyTextureToBuffer(

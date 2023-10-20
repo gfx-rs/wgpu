@@ -1,33 +1,27 @@
 //! Tests for texture copy bounds checks.
 
-use wasm_bindgen_test::*;
-use wgpu_test::{fail_if, initialize_test, TestParameters};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
 
-#[test]
-#[wasm_bindgen_test]
-fn bad_copy_origin() {
-    fn try_origin(origin: wgpu::Origin3d, size: wgpu::Extent3d, should_panic: bool) {
-        let parameters = TestParameters::default();
+#[gpu_test]
+static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let try_origin = |origin, size, should_panic| {
+        let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
+        let data = vec![255; BUFFER_SIZE as usize];
 
-        initialize_test(parameters, |ctx| {
-            let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
-            let data = vec![255; BUFFER_SIZE as usize];
-
-            fail_if(&ctx.device, should_panic, || {
-                ctx.queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture: &texture,
-                        mip_level: 0,
-                        origin,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    &data,
-                    BUFFER_COPY_LAYOUT,
-                    size,
-                )
-            });
+        fail_if(&ctx.device, should_panic, || {
+            ctx.queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &data,
+                BUFFER_COPY_LAYOUT,
+                size,
+            )
         });
-    }
+    };
 
     try_origin(wgpu::Origin3d { x: 0, y: 0, z: 0 }, TEXTURE_SIZE, false);
     try_origin(wgpu::Origin3d { x: 1, y: 0, z: 0 }, TEXTURE_SIZE, true);
@@ -86,7 +80,7 @@ fn bad_copy_origin() {
         },
         true,
     );
-}
+});
 
 const TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: 64,

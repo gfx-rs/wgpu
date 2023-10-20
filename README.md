@@ -30,34 +30,15 @@ The following binaries:
 
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
-### MSRV policy
-
-Minimum Supported Rust Version is **1.65**.
-It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
-This version can only be upgraded in breaking releases.
-
-The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
-require an MSRV ahead of Firefox's MSRV for nightly builds, as
-determined by the value of `MINIMUM_RUST_VERSION` in
-[`python/mozboot/mozboot/util.py`][util]. However, Firefox uses `cargo
-vendor` to extract only those crates it actually uses, so the
-workspace's other crates can have more recent MSRVs.
-
-_Note for Rust 1.64_: The workspace itself can even use a newer MSRV
-than Firefox, as long as the vendoring step's `Cargo.toml` rewriting
-removes any features Firefox's MSRV couldn't handle. For example,
-`wgpu` can use manifest key inheritance, added in Rust 1.64, even
-before Firefox reaches that MSRV, because `cargo vendor` copies
-inherited values directly into the individual crates' `Cargo.toml`
-files, producing 1.63-compatible files.
-
-[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
-
 ## Getting Started
 
 ### Rust
 
-Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --bin name`. See the [list of examples](examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
+Rust examples can be found at `wgpu/examples`. You can run the examples on native with `cargo run --bin <name>`. See the [list of examples](examples).
+
+To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin <name>`. Then connect to `http://localhost:8000` in your WebGPU enabled browser.
+
+To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin <name> --features webgl`. Then connect to `http://localhost:8000` in your WebGL enabled browser.
 
 If you are looking for a wgpu tutorial, look at the following:
 
@@ -89,14 +70,14 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-| API    | Windows                        | Linux & Android    | macOS & iOS               |
-| ------ | ------------------------------ | ------------------ | ------------------------- |
-| Vulkan | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |
-| Metal  |                                |                    | :white_check_mark:        |
-| DX12   | :white_check_mark: (W10+ only) |                    |                           |
-| DX11   | :hammer_and_wrench:            |                    |                           |
-| GLES3  |                                | :ok:               |                           |
-| Angle  | :ok:                           | :ok:               | :ok: (macOS only)         |
+| API         | Windows                        | Linux & Android    | macOS & iOS               | Web (wasm)                |
+| ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
+| Vulkan      | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |                           |
+| Metal       |                                |                    | :white_check_mark:        |                           |
+| DX12        | :white_check_mark: (W10+ only) |                    |                           |                           |
+| DX11        | :hammer_and_wrench:            |                    |                           |                           |
+| OpenGL      |  :ok: (Desktop GL 3.3+)        | :ok: (GL ES 3.0+)  | :ok: (angle; GL ES 3.0+)  | :ok: (WebGL2)             |
+| WebGPU      |                                |                    |                           | :white_check_mark:        |
 
 :white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
 
@@ -129,14 +110,31 @@ These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSof
 On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
 On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
+### MSRV policy
+
+Due to complex dependants, we have two MSRV policies:
+ - `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
+ - The rest of the workspace has the MSRV of **1.70**.
+
+It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
+This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
+
+The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
+require an MSRV ahead of Firefox's MSRV for nightly builds, as
+determined by the value of `MINIMUM_RUST_VERSION` in
+[`python/mozboot/mozboot/util.py`][util].
+
+[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
+
 ## Environment Variables
 
 All testing and example infrastructure shares the same set of environment variables that determine which Backend/GPU it will run on.
 
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
 - `WGPU_BACKEND` with a comma separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
-- `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high` or `low`)
+- `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high`, `low` or `none`)
 - `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc` or `fxc`, note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory otherwise it will fall back to `fxc`)
+- `WGPU_GLES_MINOR_VERSION` with the minor OpenGL ES 3 version number to request (`0`, `1`, `2` or `automatic`).
 
 When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU_BACKEND`, `DENO_WEBGPU_POWER_PREFERENCE`.
 
@@ -146,42 +144,33 @@ We have multiple methods of testing, each of which tests different qualities abo
 
 | Backend/Platform | Tests              | CTS                | Notes                                 |
 | ---------------- | ------------------ | ------------------ | ------------------------------------- |
-| DX12/Windows 10  | :heavy_check_mark: | :heavy_check_mark: | using WARP                            |
+| DX12/Windows 10  | :heavy_check_mark: | -                  | using WARP                            |
 | DX11/Windows 10  | :construction:     | —                  | using WARP                            |
-| Metal/MacOS      | —                  | —                  | metal requires GPU                    |
-| Vulkan/Linux     | :heavy_check_mark: | :x:                | using lavapipe, [cts hangs][cts-hang] |
+| Metal/MacOS      | :heavy_check_mark: | —                  | using hardware runner                 |
+| Vulkan/Linux     | :heavy_check_mark: | -                  | using swiftshader                     |
+| GL/Windows       |                    | —                  |                                       |
 | GLES/Linux       | :heavy_check_mark: | —                  | using llvmpipe                        |
-
-[cts-hang]: https://github.com/gfx-rs/wgpu/issues/1974
+| WebGL/Chrome     | :heavy_check_mark: | —                  | using swiftshader                     |
 
 ### Core Test Infrastructure
 
 We use a tool called [`cargo nextest`](https://github.com/nextest-rs/nextest) to run our tests.
 To install it, run `cargo install cargo-nextest`.
 
-To run the test suite on the default device:
+To run the test suite:
 
 ```
-cargo nextest run --no-fail-fast
+cargo xtask test
 ```
 
-`wgpu-info` can run the tests once for each adapter on your system.
+To run the test suite on WebGL (currently incomplete):
 
 ```
-cargo run --bin wgpu-info -- cargo nextest run --no-fail-fast
+cd wgpu
+wasm-pack test --headless --chrome --features webgl --workspace
 ```
 
-Then to run an example's image comparison tests, run:
-
-```
-cargo nextest run <example-test-name> --no-fail-fast
-```
-
-Or run a part of the integration test suite:
-
-```
-cargo nextest run -p wgpu -- <name-of-test>
-```
+This will automatically run the tests using a packaged browser. Remove `--headless` to run the tests with whatever browser you wish at `http://localhost:8000`.
 
 If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases.
 

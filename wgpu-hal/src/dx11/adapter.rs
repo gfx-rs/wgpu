@@ -94,7 +94,8 @@ impl super::Adapter {
             | wgt::Features::POLYGON_MODE_LINE
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO;
+            | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
+            | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER;
         let mut downlevel = wgt::DownlevelFlags::BASE_VERTEX
             | wgt::DownlevelFlags::READ_ONLY_DEPTH_STENCIL
             | wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER
@@ -132,6 +133,8 @@ impl super::Adapter {
             features |= wgt::Features::TIMESTAMP_QUERY;
             features |= wgt::Features::PIPELINE_STATISTICS_QUERY;
             features |= wgt::Features::SHADER_PRIMITIVE_INDEX;
+            features |= wgt::Features::DEPTH32FLOAT_STENCIL8;
+            features |= wgt::Features::RG11B10UFLOAT_RENDERABLE;
         }
 
         if feature_level >= FL10_1 {
@@ -148,6 +151,9 @@ impl super::Adapter {
         if feature_level >= FL11_1 {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
+
+        // bgra8unorm-storage is never supported on dx11 according to:
+        // https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/format-support-for-direct3d-11-0-feature-level-hardware#dxgi_format_b8g8r8a8_unormfcs-87
 
         //
         // Fill out limits and alignments
@@ -234,6 +240,7 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             // D3D11_BUFFER_DESC represents the buffer size as a 32 bit int.
             max_buffer_size: u32::MAX as u64,
+            max_non_sampler_bindings: u32::MAX,
         };
 
         //

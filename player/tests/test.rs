@@ -184,7 +184,9 @@ impl Corpus {
             IdentityPassThroughFactory,
             wgt::InstanceDescriptor {
                 backends: corpus.backends,
+                flags: wgt::InstanceFlags::debugging(),
                 dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
+                gles_minor_version: wgt::Gles3MinorVersion::default(),
             },
         );
         for &backend in BACKENDS {

@@ -12,6 +12,9 @@ use std::{borrow::Cow, iter};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
+#[cfg(test)]
+use wgpu_test::FailureCase;
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Vertex {
@@ -280,7 +283,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }
             } else {
@@ -291,7 +294,7 @@ impl wgpu_example::framework::Example for Example {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         // Storing pre-resolve MSAA data is unnecessary if it isn't used later.
                         // On tile-based GPU, avoid store can reduce your app's memory footprint.
-                        store: false,
+                        store: wgpu::StoreOp::Discard,
                     },
                 }
             };
@@ -311,23 +314,27 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("msaa-line");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn msaa_line() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "msaa-line",
         image_path: "/examples/msaa-line/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
         base_test_parameters: wgpu_test::TestParameters::default()
             // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
-            .specific_failure(Some(wgpu::Backends::DX12), Some(0x1002), None, false),
+            .expect_fail(FailureCase {
+                backends: Some(wgpu::Backends::DX12),
+                vendor: Some(0x1002),
+                ..FailureCase::default()
+            }),
         // There's a lot of natural variance so we check the weighted median too to differentiate
         // real failures from variance.
         comparisons: &[
@@ -337,5 +344,8 @@ fn msaa_line() {
                 threshold: 0.29,
             },
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

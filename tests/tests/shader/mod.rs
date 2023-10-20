@@ -15,9 +15,9 @@ use wgpu::{
 
 use wgpu_test::TestingContext;
 
-mod numeric_builtins;
-mod struct_layout;
-mod zero_init_workgroup_mem;
+pub mod numeric_builtins;
+pub mod struct_layout;
+pub mod zero_init_workgroup_mem;
 
 #[derive(Clone, Copy, PartialEq)]
 enum InputStorageType {

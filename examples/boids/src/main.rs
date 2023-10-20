@@ -278,7 +278,7 @@ impl wgpu_example::framework::Example for Example {
                 // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
                 // Users should avoid loading uninitialized memory since this can cause additional overhead.
                 load: wgpu::LoadOp::Load,
-                store: true,
+                store: wgpu::StoreOp::Store,
             },
         })];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
@@ -328,16 +328,16 @@ impl wgpu_example::framework::Example for Example {
 }
 
 /// run example
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("boids");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn boids() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "boids",
         // Generated on 1080ti on Vk/Windows
         image_path: "examples/boids/screenshot.png",
         width: 1024,
@@ -347,7 +347,10 @@ fn boids() {
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
             // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
-            .molten_vk_failure(),
+            .expect_fail(wgpu_test::FailureCase::molten_vk()),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

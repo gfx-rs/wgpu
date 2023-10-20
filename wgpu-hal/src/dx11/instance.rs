@@ -8,10 +8,13 @@ impl crate::Instance<super::Api> for super::Instance {
         };
 
         if !enable_dx11 {
-            return Err(crate::InstanceError);
+            return Err(crate::InstanceError::new(String::from(
+                "DX11 support is unstable; set WGPU_UNSTABLE_DX11_BACKEND=1 to enable anyway",
+            )));
         }
 
-        let lib_d3d11 = super::library::D3D11Lib::new().ok_or(crate::InstanceError)?;
+        let lib_d3d11 = super::library::D3D11Lib::new()
+            .ok_or_else(|| crate::InstanceError::new(String::from("failed to load d3d11.dll")))?;
 
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(
             auxil::dxgi::factory::DxgiFactoryType::Factory1,

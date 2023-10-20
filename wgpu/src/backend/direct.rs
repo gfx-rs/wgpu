@@ -4,7 +4,7 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
@@ -244,10 +244,7 @@ impl Context {
         &self,
         canvas: web_sys::HtmlCanvasElement,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -259,10 +256,7 @@ impl Context {
         &self,
         canvas: web_sys::OffscreenCanvas,
     ) -> Result<Surface, crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .create_surface_webgl_offscreen_canvas(canvas, ())
-            .map_err(|hal::InstanceError| crate::CreateSurfaceError {})?;
+        let id = self.0.create_surface_webgl_offscreen_canvas(canvas, ())?;
         Ok(Surface {
             id,
             configured_device: Mutex::default(),
@@ -286,6 +280,21 @@ impl Context {
         let id = unsafe {
             self.0
                 .instance_create_surface_from_surface_handle(surface_handle, ())
+        };
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
         };
         Surface {
             id,
@@ -398,6 +407,13 @@ fn map_texture_tagged_copy_view(
     }
 }
 
+fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
+    match op {
+        StoreOp::Store => wgc::command::StoreOp::Store,
+        StoreOp::Discard => wgc::command::StoreOp::Discard,
+    }
+}
+
 fn map_pass_channel<V: Copy + Default>(
     ops: Option<&Operations<V>>,
 ) -> wgc::command::PassChannel<V> {
@@ -407,11 +423,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Clear,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value,
             read_only: false,
         },
@@ -420,11 +432,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Load,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value: V::default(),
             read_only: false,
         },
@@ -628,8 +636,7 @@ impl crate::Context for Context {
             ()
         ));
         if let Some(err) = error {
-            log::error!("Error in Adapter::request_device: {}", err);
-            return ready(Err(crate::RequestDeviceError));
+            return ready(Err(err.into()));
         }
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
@@ -1448,6 +1455,15 @@ impl crate::Context for Context {
         }
 
         wgc::gfx_select!(device => global.device_drop(*device));
+    }
+    fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_destroy(*device));
+    }
+    fn device_lose(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        // TODO: accept a reason, and pass it to device_lose.
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_lose(*device, None));
     }
     fn device_poll(
         &self,

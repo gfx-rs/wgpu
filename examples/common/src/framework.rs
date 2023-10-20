@@ -4,7 +4,11 @@ use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
+use wgpu::{WasmNotSend, WasmNotSync};
+use wgpu_test::GpuTestConfiguration;
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -122,7 +126,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
     let mut offscreen_canvas_setup: Option<OffscreenCanvasSetup> = None;
     #[cfg(target_arch = "wasm32")]
     {
-        use wasm_bindgen::JsCast;
         use winit::platform::web::WindowExtWebSys;
 
         let query_string = web_sys::window().unwrap().location().search().unwrap();
@@ -155,10 +158,13 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
     let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
+    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
+        flags: wgpu::InstanceFlags::from_build_config().with_env(),
         dx12_shader_compiler,
+        gles_minor_version,
     });
     let (size, surface) = unsafe {
         let size = window.inner_size();
@@ -307,22 +313,11 @@ fn start<E: Example>(
                     },
                 ..
             } => {
-                // Once winit is fixed, the detection conditions here can be removed.
-                // https://github.com/rust-windowing/winit/issues/2876
-                let max_dimension = adapter.limits().max_texture_dimension_2d;
-                if size.width > max_dimension || size.height > max_dimension {
-                    log::warn!(
-                        "The resizing size {:?} exceeds the limit of {}.",
-                        size,
-                        max_dimension
-                    );
-                } else {
-                    log::info!("Resizing to {:?}", size);
-                    config.width = size.width.max(1);
-                    config.height = size.height.max(1);
-                    example.resize(&config, &device, &queue);
-                    surface.configure(&device, &config);
-                }
+                log::info!("Resizing to {:?}", size);
+                config.width = size.width.max(1);
+                config.height = size.height.max(1);
+                example.resize(&config, &device, &queue);
+                surface.configure(&device, &config);
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
@@ -453,8 +448,6 @@ pub fn run<E: Example>(title: &str) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn run<E: Example>(title: &str) {
-    use wasm_bindgen::prelude::*;
-
     let title = title.to_owned();
     wasm_bindgen_futures::spawn_local(async move {
         let setup = setup::<E>(&title).await;
@@ -502,7 +495,9 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
 
 pub use wgpu_test::image::ComparisonType;
 
-pub struct FrameworkRefTest {
+#[derive(Clone)]
+pub struct ExampleTestParams<E> {
+    pub name: &'static str,
     // Path to the reference image, relative to the root of the repo.
     pub image_path: &'static str,
     pub width: u32,
@@ -511,129 +506,128 @@ pub struct FrameworkRefTest {
     pub base_test_parameters: wgpu_test::TestParameters,
     /// Comparisons against FLIP statistics that determine if the test passes or fails.
     pub comparisons: &'static [ComparisonType],
+    pub _phantom: std::marker::PhantomData<E>,
 }
 
-#[allow(dead_code)]
-pub fn test<E: Example>(mut params: FrameworkRefTest) {
-    use std::mem;
+impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuTestConfiguration {
+    fn from(params: ExampleTestParams<E>) -> Self {
+        GpuTestConfiguration::new()
+            .name(params.name)
+            .parameters({
+                assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
 
-    assert_eq!(params.width % 64, 0, "width needs to be aligned 64");
+                let features = E::required_features() | params.optional_features;
 
-    let features = E::required_features() | params.optional_features;
-
-    wgpu_test::initialize_test(
-        mem::take(&mut params.base_test_parameters).features(features),
-        |ctx| {
-            let spawner = Spawner::new();
-
-            let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("destination"),
-                size: wgpu::Extent3d {
-                    width: params.width,
-                    height: params.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-                view_formats: &[],
-            });
-
-            let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("image map buffer"),
-                size: params.width as u64 * params.height as u64 * 4,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            });
-
-            let mut example = E::init(
-                &wgpu::SurfaceConfiguration {
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    width: params.width,
-                    height: params.height,
-                    present_mode: wgpu::PresentMode::Fifo,
-                    alpha_mode: wgpu::CompositeAlphaMode::Auto,
-                    view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
-                },
-                &ctx.adapter,
-                &ctx.device,
-                &ctx.queue,
-            );
-
-            example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
-
-            // Handle specific case for bunnymark
-            #[allow(deprecated)]
-            if params.image_path == "/examples/bunnymark/screenshot.png" {
-                // Press spacebar to spawn bunnies
-                example.update(winit::event::WindowEvent::KeyboardInput {
-                    input: winit::event::KeyboardInput {
-                        scancode: 0,
-                        state: winit::event::ElementState::Pressed,
-                        virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                        modifiers: winit::event::ModifiersState::empty(),
+                params.base_test_parameters.clone().features(features)
+            })
+            .run_async(move |ctx| async move {
+                let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("destination"),
+                    size: wgpu::Extent3d {
+                        width: params.width,
+                        height: params.height,
+                        depth_or_array_layers: 1,
                     },
-                    device_id: unsafe { winit::event::DeviceId::dummy() },
-                    is_synthetic: false,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+                    view_formats: &[],
                 });
 
-                // Step 3 extra frames
-                for _ in 0..3 {
-                    example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
-                }
-            }
+                let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let mut cmd_buf = ctx
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+                let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("image map buffer"),
+                    size: params.width as u64 * params.height as u64 * 4,
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    mapped_at_creation: false,
+                });
 
-            cmd_buf.copy_texture_to_buffer(
-                wgpu::ImageCopyTexture {
-                    texture: &dst_texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::ImageCopyBuffer {
-                    buffer: &dst_buffer,
-                    layout: wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(params.width * 4),
-                        rows_per_image: None,
+                let mut example = E::init(
+                    &wgpu::SurfaceConfiguration {
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        width: params.width,
+                        height: params.height,
+                        present_mode: wgpu::PresentMode::Fifo,
+                        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                        view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
                     },
-                },
-                wgpu::Extent3d {
-                    width: params.width,
-                    height: params.height,
-                    depth_or_array_layers: 1,
-                },
-            );
+                    &ctx.adapter,
+                    &ctx.device,
+                    &ctx.queue,
+                );
 
-            ctx.queue.submit(Some(cmd_buf.finish()));
+                {
+                    let spawner = Spawner::new();
+                    example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
 
-            let dst_buffer_slice = dst_buffer.slice(..);
-            dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-            ctx.device.poll(wgpu::Maintain::Wait);
-            let bytes = dst_buffer_slice.get_mapped_range().to_vec();
+                    // Handle specific case for bunnymark
+                    #[allow(deprecated)]
+                    if params.image_path == "/examples/bunnymark/screenshot.png" {
+                        // Press spacebar to spawn bunnies
+                        example.update(winit::event::WindowEvent::KeyboardInput {
+                            input: winit::event::KeyboardInput {
+                                scancode: 0,
+                                state: winit::event::ElementState::Pressed,
+                                virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
+                                modifiers: winit::event::ModifiersState::empty(),
+                            },
+                            device_id: unsafe { winit::event::DeviceId::dummy() },
+                            is_synthetic: false,
+                        });
 
-            wgpu_test::image::compare_image_output(
-                env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
-                ctx.adapter_info.backend,
-                params.width,
-                params.height,
-                &bytes,
-                params.comparisons,
-            );
-        },
-    );
+                        // Step 3 extra frames
+                        for _ in 0..3 {
+                            example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                        }
+                    }
+                }
+
+                let mut cmd_buf = ctx
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+                cmd_buf.copy_texture_to_buffer(
+                    wgpu::ImageCopyTexture {
+                        texture: &dst_texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::ImageCopyBuffer {
+                        buffer: &dst_buffer,
+                        layout: wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(params.width * 4),
+                            rows_per_image: None,
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width: params.width,
+                        height: params.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+
+                ctx.queue.submit(Some(cmd_buf.finish()));
+
+                let dst_buffer_slice = dst_buffer.slice(..);
+                dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
+                ctx.device.poll(wgpu::Maintain::Wait);
+                let bytes = dst_buffer_slice.get_mapped_range().to_vec();
+
+                wgpu_test::image::compare_image_output(
+                    env!("CARGO_MANIFEST_DIR").to_string() + "/../../" + params.image_path,
+                    &ctx.adapter_info,
+                    params.width,
+                    params.height,
+                    &bytes,
+                    params.comparisons,
+                )
+                .await;
+            })
+    }
 }
-
-// This allows treating the framework as a standalone example,
-// thus avoiding listing the example names in `Cargo.toml`.
-#[allow(dead_code)]
-fn main() {}

@@ -1,7 +1,5 @@
-use wasm_bindgen_test::*;
-
 use wgpu::util::DeviceExt;
-use wgpu_test::{image, initialize_test, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 //
 // These tests render two triangles to a 2x2 render target. The first triangle
@@ -37,55 +35,52 @@ use wgpu_test::{image, initialize_test, TestParameters, TestingContext};
 // draw_indexed() draws the triangles in the opposite order, using index
 // buffer [3, 4, 5, 0, 1, 2]. This also swaps the resulting pixel colors.
 //
-#[test]
-#[wasm_bindgen_test]
-fn draw() {
-    //
-    //   +-----+-----+
-    //   |white|blue |
-    //   +-----+-----+
-    //   | red |white|
-    //   +-----+-----+
-    //
-    let expected = [
-        255, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 255, 255,
-    ];
-    initialize_test(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
-        |ctx| {
-            pulling_common(ctx, &expected, |rpass| {
-                rpass.draw(0..6, 0..1);
-            })
-        },
-    );
-}
 
-#[test]
-#[wasm_bindgen_test]
-fn draw_indexed() {
-    //
-    //   +-----+-----+
-    //   |white| red |
-    //   +-----+-----+
-    //   |blue |white|
-    //   +-----+-----+
-    //
-    let expected = [
-        255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
-    ];
-    initialize_test(
+#[gpu_test]
+static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .test_features_limits()
             .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
-        |ctx| {
-            pulling_common(ctx, &expected, |rpass| {
-                rpass.draw_indexed(0..6, 0, 0..1);
-            })
-        },
-    );
-}
+    )
+    .run_sync(|ctx| {
+        //
+        //   +-----+-----+
+        //   |white|blue |
+        //   +-----+-----+
+        //   | red |white|
+        //   +-----+-----+
+        //
+        let expected = [
+            255, 255, 255, 255, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 255, 255,
+        ];
+        pulling_common(ctx, &expected, |rpass| {
+            rpass.draw(0..6, 0..1);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INDEXED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::SHADER_PRIMITIVE_INDEX),
+    )
+    .run_sync(|ctx| {
+        //
+        //   +-----+-----+
+        //   |white| red |
+        //   +-----+-----+
+        //   |blue |white|
+        //   +-----+-----+
+        //
+        let expected = [
+            255, 255, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+        ];
+        pulling_common(ctx, &expected, |rpass| {
+            rpass.draw_indexed(0..6, 0, 0..1);
+        })
+    });
 
 fn pulling_common(
     ctx: TestingContext,
@@ -169,7 +164,7 @@ fn pulling_common(
     });
     let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-    let readback_buffer = image::ReadbackBuffers::new(&ctx.device, &color_texture);
+    let readback_buffer = wgpu_test::image::ReadbackBuffers::new(&ctx.device, &color_texture);
 
     let mut encoder = ctx
         .device
@@ -180,7 +175,7 @@ fn pulling_common(
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
                 resolve_target: None,
                 view: &color_view,

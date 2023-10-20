@@ -4,7 +4,9 @@ use crate::{
 };
 use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
-    shared::{dxgi, dxgi1_2, minwindef::DWORD, windef, winerror},
+    shared::{
+        dxgi, dxgi1_2, dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM, minwindef::DWORD, windef, winerror,
+    },
     um::{d3d12 as d3d12_ty, d3d12sdklayers, winuser},
 };
 
@@ -15,7 +17,7 @@ impl Drop for super::Adapter {
             && self
                 .private_caps
                 .instance_flags
-                .contains(crate::InstanceFlags::VALIDATION)
+                .contains(wgt::InstanceFlags::VALIDATION)
         {
             unsafe {
                 self.report_live_objects();
@@ -47,7 +49,7 @@ impl super::Adapter {
     pub(super) fn expose(
         adapter: d3d12::DxgiAdapter,
         library: &Arc<d3d12::D3D12Lib>,
-        instance_flags: crate::InstanceFlags,
+        instance_flags: wgt::InstanceFlags,
         dx12_shader_compiler: &wgt::Dx12Compiler,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
@@ -100,12 +102,7 @@ impl super::Adapter {
             adapter.unwrap_adapter2().GetDesc2(&mut desc);
         }
 
-        let device_name = {
-            use std::{ffi::OsString, os::windows::ffi::OsStringExt};
-            let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-            let name = OsString::from_wide(&desc.Description[..len]);
-            name.to_string_lossy().into_owned()
-        };
+        let device_name = auxil::dxgi::conv::map_adapter_name(desc.Description);
 
         let mut features_architecture: d3d12_ty::D3D12_FEATURE_DATA_ARCHITECTURE =
             unsafe { mem::zeroed() };
@@ -242,8 +239,6 @@ impl super::Adapter {
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
             | wgt::Features::POLYGON_MODE_LINE
-            | wgt::Features::POLYGON_MODE_POINT
-            | wgt::Features::VERTEX_WRITABLE_STORAGE
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::TIMESTAMP_QUERY
             | wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES
@@ -252,12 +247,18 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
             | wgt::Features::PUSH_CONSTANTS
             | wgt::Features::SHADER_PRIMITIVE_INDEX
-            | wgt::Features::RG11B10UFLOAT_RENDERABLE;
+            | wgt::Features::RG11B10UFLOAT_RENDERABLE
+            | wgt::Features::DUAL_SOURCE_BLENDING;
+
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
         // Alternatively, we could allocate a buffer for the query set,
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
+
+        if max_feature_level as u32 >= d3d12::FeatureLevel::L11_1 as u32 {
+            features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
+        }
 
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
@@ -270,6 +271,25 @@ impl super::Adapter {
                 | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_5_1,
+        );
+
+        let bgra8unorm_storage_supported = {
+            let mut bgra8unorm_info: d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT =
+                unsafe { mem::zeroed() };
+            bgra8unorm_info.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    d3d12_ty::D3D12_FEATURE_FORMAT_SUPPORT,
+                    &mut bgra8unorm_info as *mut _ as *mut _,
+                    mem::size_of::<d3d12_ty::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                )
+            };
+            hr == 0
+                && (bgra8unorm_info.Support2 & d3d12_ty::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0)
+        };
+        features.set(
+            wgt::Features::BGRA8UNORM_STORAGE,
+            bgra8unorm_storage_supported,
         );
 
         // TODO: Determine if IPresentationManager is supported
@@ -355,7 +375,11 @@ impl super::Adapter {
                     max_compute_workgroup_size_z: d3d12_ty::D3D12_CS_THREAD_GROUP_MAX_Z,
                     max_compute_workgroups_per_dimension:
                         d3d12_ty::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    max_buffer_size: u64::MAX,
+                    // Dx12 does not expose a maximum buffer size in the API.
+                    // This limit is chosen to avoid potential issues with drivers should they internally
+                    // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
+                    max_buffer_size: i32::MAX as u64,
+                    max_non_sampler_bindings: 1_000_000,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -377,7 +401,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
     unsafe fn open(
         &self,
         _features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = {
             profiling::scope!("ID3D12Device::CreateCommandQueue");
@@ -394,6 +418,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
         let device = super::Device::new(
             self.device.clone(),
             queue.clone(),
+            limits,
             self.private_caps,
             &self.library,
             self.dx12_shader_compiler.clone(),
@@ -571,7 +596,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                         None
                     }
                 }
-                SurfaceTarget::Visual(_) | SurfaceTarget::SurfaceHandle(_) => None,
+                SurfaceTarget::Visual(_)
+                | SurfaceTarget::SurfaceHandle(_)
+                | SurfaceTarget::SwapChainPanel(_) => None,
             }
         };
 

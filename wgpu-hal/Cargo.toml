@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.60"
+rust-version = "1.65"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -36,7 +36,7 @@ targets = [
 default = ["link"]
 metal = ["naga/msl-out", "block"]
 vulkan = ["naga/spv-out", "ash", "gpu-alloc", "gpu-descriptor", "libloading", "smallvec"]
-gles = ["naga/glsl-out", "glow", "khronos-egl", "libloading"]
+gles = ["naga/glsl-out", "glow", "glutin_wgl_sys", "khronos-egl", "libloading"]
 dx11 = ["naga/hlsl-out", "d3d12", "libloading", "winapi/d3d11", "winapi/std", "winapi/d3d11_1", "winapi/d3d11_2", "winapi/d3d11sdklayers", "winapi/dxgi1_6"]
 dx12 = ["naga/hlsl-out", "d3d12", "bit-set", "libloading", "range-alloc", "winapi/std", "winapi/winbase", "winapi/d3d12", "winapi/d3d12shader", "winapi/d3d12sdklayers", "winapi/dxgi1_6"]
 # TODO: This is a separate feature until Mozilla okays windows-rs, see https://github.com/gfx-rs/wgpu/issues/3207 for the tracking issue.
@@ -59,6 +59,7 @@ parking_lot = ">=0.11,<0.13"
 profiling = { version = "1", default-features = false }
 raw-window-handle = "0.5"
 thiserror = "1"
+once_cell = "1.18.0"
 
 # backends common
 arrayvec = "0.7"
@@ -80,21 +81,23 @@ gpu-alloc = { version = "0.6", optional = true }
 gpu-descriptor = { version = "0.2", optional = true }
 smallvec = { version = "1", optional = true, features = ["union"] }
 
-khronos-egl = { version = "4.1", features = ["dynamic"], optional = true }
-libloading = { version = ">=0.7,<0.9", optional = true }
+khronos-egl = { version = "6", features = ["dynamic"], optional = true }
+libloading = { version = ">=0.7, <0.9", optional = true }
 renderdoc-sys = { version = "1.0.0", optional = true }
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
-khronos-egl = { version = "4.1", features = ["static", "no-pkg-config"] }
+khronos-egl = { version = "6", features = ["static", "no-pkg-config"] }
 #Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
-libloading = { version = ">=0.7,<0.9", optional = true }
+libloading = { version = ">=0.7, <0.9", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # backend: Dx12
 bit-set = { version = "0.5", optional = true }
 range-alloc = { version = "0.1", optional = true }
-gpu-allocator = { version = "0.22", default_features = false, features = ["d3d12", "windows", "public-winapi"], optional = true }
+gpu-allocator = { version = "0.23", default_features = false, features = ["d3d12", "public-winapi"], optional = true }
 hassle-rs = { version = "0.10", optional = true }
+# backend: Gles
+glutin_wgl_sys = { version = "0.4", optional = true }
 
 winapi = { version = "0.3", features = ["profileapi", "libloaderapi", "windef", "winuser", "dcomp"] }
 d3d12 = { version = "0.7", features = ["libloading"], optional = true }
@@ -103,7 +106,7 @@ d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 # backend: Metal
 block = { version = "0.1", optional = true }
 
-metal = "0.26.0"
+metal = { git = "https://github.com/gfx-rs/metal-rs/", rev = "d24f1a4" } # More timer support via https://github.com/gfx-rs/metal-rs/pull/280
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
@@ -120,21 +123,21 @@ android_system_properties = "0.1.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+rev = "e25280df9316434ef7752970016d01a3aede3f17"
 version = "0.13.0"
 features = ["clone"]
 
 # DEV dependencies
 [dev-dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "bac2d82a430fbfcf100ee22b7c3bc12f3d593079"
+rev = "e25280df9316434ef7752970016d01a3aede3f17"
 version = "0.13.0"
 features = ["wgsl-in"]
 
 [dev-dependencies]
 cfg-if = "1"
 env_logger = "0.10"
-winit = { version = "0.28.6", features = [ "android-native-activity" ] }   # for "halmark" example
+winit = { version = "0.28.7", features = [ "android-native-activity" ] }   # for "halmark" example
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 glutin = "0.29.1" # for "gles" example

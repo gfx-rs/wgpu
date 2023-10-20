@@ -4,6 +4,7 @@ use wgpu::util::DeviceExt;
 // Indicates a u32 overflow in an intermediate Collatz value
 const OVERFLOW: u32 = 0xffffffff;
 
+#[cfg_attr(test, allow(dead_code))]
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
         let default = vec![1, 2, 3, 4];
@@ -31,6 +32,7 @@ async fn run() {
     log::info!("Steps: [{}]", disp_steps.join(", "));
 }
 
+#[cfg_attr(test, allow(dead_code))]
 async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
     // Instantiates instance of WebGPU
     let instance = wgpu::Instance::default();
@@ -53,12 +55,6 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         )
         .await
         .unwrap();
-
-    let info = adapter.get_info();
-    // skip this on LavaPipe temporarily
-    if info.vendor == 0x10005 {
-        return None;
-    }
 
     execute_gpu_inner(&device, &queue, numbers).await
 }
@@ -151,7 +147,7 @@ async fn execute_gpu_inner(
     // Note that we're not calling `.await` here.
     let buffer_slice = staging_buffer.slice(..);
     // Sets the buffer up for mapping, sending over the result of the mapping back to us when it is finished.
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
     // Poll the device in a blocking manner so that our future resolves.
@@ -160,7 +156,7 @@ async fn execute_gpu_inner(
     device.poll(wgpu::Maintain::Wait);
 
     // Awaits until `buffer_future` can be read from
-    if let Some(Ok(())) = receiver.receive().await {
+    if let Ok(Ok(())) = receiver.recv_async().await {
         // Gets contents of buffer
         let data = buffer_slice.get_mapped_range();
         // Since contents are got in bytes, this converts these bytes back to u32
@@ -182,6 +178,7 @@ async fn execute_gpu_inner(
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -196,5 +193,8 @@ fn main() {
     }
 }
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();
