@@ -296,20 +296,29 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
           cargo -V
 
-      - name: install warp
+      - name: (windows) install warp, llvmpipe, lavapipe
         if: matrix.os == 'windows-2022'
-        shell: powershell
+        shell: bash
         run: |
-          Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -OutFile warp.zip
-          Expand-Archive warp.zip -DestinationPath warp
+          set -e
+          
+          curl.exe -L https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
+          7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
-          New-Item -ItemType Directory target/debug -Force
-          New-Item -ItemType Directory target/debug/deps -Force
+          mkdir -p target/debug/dep
 
-          cp warp/build/native/amd64/d3d10warp.dll target/debug/
-          cp warp/build/native/amd64/d3d10warp.dll target/debug/deps
+          cp -v warp/d3d10warp.dll target/debug/
+          cp -v warp/d3d10warp.dll target/debug/deps
 
-      - name: install llvmpipe, alavapipe, vulkan sdk
+          curl.exe -L https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z -o mesa.7z
+          7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
+
+          cp -v mesa/* target/debug/
+          cp -v mesa/* target/debug/deps
+
+          echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_74.json" >> "$GITHUB_ENV"
+
+      - name: install llvmpipe, lavapipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
