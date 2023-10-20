@@ -779,6 +779,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
+        (
+            "subgroup-operations",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
