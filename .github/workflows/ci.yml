@@ -296,7 +296,20 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
           cargo -V
 
-      - name: install llvmpipe, vulkan sdk
+      - name: install warp
+        if: matrix.os == 'windows-2022'
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -OutFile warp.zip
+          Expand-Archive warp.zip -DestinationPath warp
+
+          New-Item -ItemType Directory target/debug -Force
+          New-Item -ItemType Directory target/debug/deps -Force
+
+          cp warp/build/native/amd64/d3d10warp.dll target/debug/
+          cp warp/build/native/amd64/d3d10warp.dll target/debug/deps
+
+      - name: install llvmpipe, alavapipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
