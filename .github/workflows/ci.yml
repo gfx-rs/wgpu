@@ -356,17 +356,20 @@ jobs:
             . -> target
             xtask -> xtask/target
 
+      - name: run wgpu-info
+        shell: bash
+        run: |
+          export RUST_LOG=trace
+
+          # This needs to match the command in xtask/tests.rs
+          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info
+
       - name: run tests
         shell: bash
         run: |
           set -e
 
           cargo xtask test --llvm-cov
-      
-      - name: print gpuinfo
-        shell: bash
-        run: |
-          cat .gpuconfig
 
       - uses: actions/upload-artifact@v3
         if: always() # We want artifacts even if the tests fail.
