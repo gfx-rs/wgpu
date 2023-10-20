@@ -118,7 +118,7 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
-      - name: install aarch64-linux-gnu g++
+      - name: (linux aarch64) install aarch64-linux-gnu g++
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           set -e
@@ -127,7 +127,7 @@ jobs:
 
           sudo apt-get install g++-aarch64-linux-gnu
 
-      - name: add android apk to path
+      - name: (android) add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
           # clang++ will be detected correctly by CC from path
@@ -304,6 +304,8 @@ jobs:
 
           curl.exe https://sdk.lunarg.com/sdk/download/1.3.261.1/windows/VulkanSDK-1.3.261.1-Installer.exe -o vk_sdk.exe
           ./vk_sdk.exe --accept-licenses --default-answer --confirm-command install
+
+          echo "C:/VulkanSDK/1.3.261.1" >> $GITHUB_PATH
 
           curl.exe -L https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
           7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
