@@ -286,15 +286,15 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
-      - name: Install cargo-nextest and cargo-llvm-cov
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest,cargo-llvm-cov
-
       - name: Install Repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
           cargo -V
+
+      - name: Install cargo-nextest and cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
 
       - name: (windows) install warp, llvmpipe, lavapipe
         if: matrix.os == 'windows-2022'
@@ -316,7 +316,8 @@ jobs:
           cp -v mesa/* target/llvm-cov-target/debug/
           cp -v mesa/* target/llvm-cov-target/debug/deps
 
-          echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_74.json" >> "$GITHUB_ENV"
+          echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
 
       - name: install llvmpipe, lavapipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
