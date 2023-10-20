@@ -723,12 +723,20 @@ impl TypedExpression {
     }
 }
 
-enum Composition {
+/// A single vector component or swizzle.
+///
+/// This represents the things that can appear after the `.` in a vector access
+/// expression: either a single component name, or a series of them,
+/// representing a swizzle.
+enum Components {
     Single(u32),
-    Multi(crate::VectorSize, [crate::SwizzleComponent; 4]),
+    Swizzle {
+        size: crate::VectorSize,
+        pattern: [crate::SwizzleComponent; 4],
+    },
 }
 
-impl Composition {
+impl Components {
     const fn letter_component(letter: char) -> Option<crate::SwizzleComponent> {
         use crate::SwizzleComponent as Sc;
         match letter {
@@ -740,7 +748,7 @@ impl Composition {
         }
     }
 
-    fn extract_impl(name: &str, name_span: Span) -> Result<u32, Error> {
+    fn single_component(name: &str, name_span: Span) -> Result<u32, Error> {
         let ch = name.chars().next().ok_or(Error::BadAccessor(name_span))?;
         match Self::letter_component(ch) {
             Some(sc) => Ok(sc as u32),
@@ -748,23 +756,24 @@ impl Composition {
         }
     }
 
-    fn make(name: &str, name_span: Span) -> Result<Self, Error> {
-        if name.len() > 1 {
-            let mut components = [crate::SwizzleComponent::X; 4];
-            for (comp, ch) in components.iter_mut().zip(name.chars()) {
-                *comp = Self::letter_component(ch).ok_or(Error::BadAccessor(name_span))?;
-            }
+    /// Construct a `Components` value from a 'member' name, like `"wzy"` or `"x"`.
+    ///
+    /// Use `name_span` for reporting errors in parsing the component string.
+    fn new(name: &str, name_span: Span) -> Result<Self, Error> {
+        let size = match name.len() {
+            1 => return Ok(Components::Single(Self::single_component(name, name_span)?)),
+            2 => crate::VectorSize::Bi,
+            3 => crate::VectorSize::Tri,
+            4 => crate::VectorSize::Quad,
+            _ => return Err(Error::BadAccessor(name_span)),
+        };
 
-            let size = match name.len() {
-                2 => crate::VectorSize::Bi,
-                3 => crate::VectorSize::Tri,
-                4 => crate::VectorSize::Quad,
-                _ => return Err(Error::BadAccessor(name_span)),
-            };
-            Ok(Composition::Multi(size, components))
-        } else {
-            Self::extract_impl(name, name_span).map(Composition::Single)
+        let mut pattern = [crate::SwizzleComponent::X; 4];
+        for (comp, ch) in pattern.iter_mut().zip(name.chars()) {
+            *comp = Self::letter_component(ch).ok_or(Error::BadAccessor(name_span))?;
         }
+
+        Ok(Components::Swizzle { size, pattern })
     }
 }
 
@@ -1644,8 +1653,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         )
                     }
                     crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => {
-                        match Composition::make(field.name, field.span)? {
-                            Composition::Multi(size, pattern) => {
+                        match Components::new(field.name, field.span)? {
+                            Components::Swizzle { size, pattern } => {
                                 let vector = ctx.apply_load_rule(TypedExpression {
                                     handle,
                                     is_reference,
@@ -1660,7 +1669,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                     false,
                                 )
                             }
-                            Composition::Single(index) => (
+                            Components::Single(index) => (
                                 crate::Expression::AccessIndex {
                                     base: handle,
                                     index,
