@@ -86,16 +86,6 @@ pub struct GlobalContext<'source, 'temp, 'out> {
 }
 
 impl<'source> GlobalContext<'source, '_, '_> {
-    fn reborrow(&mut self) -> GlobalContext<'source, '_, '_> {
-        GlobalContext {
-            ast_expressions: self.ast_expressions,
-            globals: self.globals,
-            types: self.types,
-            module: self.module,
-            const_typifier: self.const_typifier,
-        }
-    }
-
     fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             ast_expressions: self.ast_expressions,
@@ -917,11 +907,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
-                    let lowered_decl = self.function(f, span, ctx.reborrow())?;
+                    let lowered_decl = self.function(f, span, &mut ctx)?;
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
-                    let ty = self.resolve_ast_type(v.ty, ctx.reborrow())?;
+                    let ty = self.resolve_ast_type(v.ty, &mut ctx)?;
 
                     let init = v
                         .init
@@ -957,7 +947,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let inferred_type = ectx.register_type(init)?;
 
                     let explicit_ty =
-                        c.ty.map(|ty| self.resolve_ast_type(ty, ctx.reborrow()))
+                        c.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx))
                             .transpose()?;
 
                     if let Some(explicit) = explicit_ty {
@@ -996,12 +986,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
                 }
                 ast::GlobalDeclKind::Struct(ref s) => {
-                    let handle = self.r#struct(s, span, ctx.reborrow())?;
+                    let handle = self.r#struct(s, span, &mut ctx)?;
                     ctx.globals
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
-                    let ty = self.resolve_ast_type(alias.ty, ctx.reborrow())?;
+                    let ty = self.resolve_ast_type(alias.ty, &mut ctx)?;
                     ctx.globals
                         .insert(alias.name.name, LoweredGlobalDecl::Type(ty));
                 }
@@ -1015,7 +1005,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         f: &ast::Function<'source>,
         span: Span,
-        mut ctx: GlobalContext<'source, '_, '_>,
+        ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<LoweredGlobalDecl, Error<'source>> {
         let mut local_table = FastHashMap::default();
         let mut local_variables = Arena::new();
@@ -1027,7 +1017,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .iter()
             .enumerate()
             .map(|(i, arg)| {
-                let ty = self.resolve_ast_type(arg.ty, ctx.reborrow())?;
+                let ty = self.resolve_ast_type(arg.ty, ctx)?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
                 local_table.insert(arg.handle, TypedExpression::non_reference(expr));
@@ -1036,7 +1026,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(crate::FunctionArgument {
                     name: Some(arg.name.name.to_string()),
                     ty,
-                    binding: self.binding(&arg.binding, ty, ctx.reborrow())?,
+                    binding: self.binding(&arg.binding, ty, ctx)?,
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -1045,10 +1035,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .result
             .as_ref()
             .map(|res| {
-                let ty = self.resolve_ast_type(res.ty, ctx.reborrow())?;
+                let ty = self.resolve_ast_type(res.ty, ctx)?;
                 Ok(crate::FunctionResult {
                     ty,
-                    binding: self.binding(&res.binding, ty, ctx.reborrow())?,
+                    binding: self.binding(&res.binding, ty, ctx)?,
                 })
             })
             .transpose()?;
@@ -1157,7 +1147,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.expression_constness.force_non_const(value);
 
                     let explicit_ty =
-                        l.ty.map(|ty| self.resolve_ast_type(ty, ctx.as_global()))
+                        l.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
                             .transpose()?;
 
                     if let Some(ty) = explicit_ty {
@@ -1195,7 +1185,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     };
 
                     let explicit_ty =
-                        v.ty.map(|ty| self.resolve_ast_type(ty, ctx.as_global()))
+                        v.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
                             .transpose()?;
 
                     let ty = match (explicit_ty, initializer) {
@@ -1735,7 +1725,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Expression::Bitcast { expr, to, ty_span } => {
                 let expr = self.expression(expr, ctx.reborrow())?;
-                let to_resolved = self.resolve_ast_type(to, ctx.as_global())?;
+                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_global())?;
 
                 let kind = match ctx.module.types[to_resolved].inner {
                     crate::TypeInner::Scalar { kind, .. } => kind,
@@ -2486,14 +2476,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         s: &ast::Struct<'source>,
         span: Span,
-        mut ctx: GlobalContext<'source, '_, '_>,
+        ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let mut offset = 0;
         let mut struct_alignment = Alignment::ONE;
         let mut members = Vec::with_capacity(s.members.len());
 
         for member in s.members.iter() {
-            let ty = self.resolve_ast_type(member.ty, ctx.reborrow())?;
+            let ty = self.resolve_ast_type(member.ty, ctx)?;
 
             self.layouter.update(ctx.module.to_ctx()).unwrap();
 
@@ -2526,7 +2516,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 member_min_alignment
             };
 
-            let binding = self.binding(&member.binding, ty, ctx.reborrow())?;
+            let binding = self.binding(&member.binding, ty, ctx)?;
 
             offset = member_alignment.round_up(offset);
             struct_alignment = struct_alignment.max(member_alignment);
@@ -2580,7 +2570,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn array_size(
         &mut self,
         size: ast::ArraySize<'source>,
-        mut ctx: GlobalContext<'source, '_, '_>,
+        ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<crate::ArraySize, Error<'source>> {
         Ok(match size {
             ast::ArraySize::Constant(expr) => {
@@ -2609,7 +2599,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn resolve_ast_type(
         &mut self,
         handle: Handle<ast::Type<'source>>,
-        mut ctx: GlobalContext<'source, '_, '_>,
+        ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar { kind, width } => crate::TypeInner::Scalar { kind, width },
@@ -2627,12 +2617,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             },
             ast::Type::Atomic { kind, width } => crate::TypeInner::Atomic { kind, width },
             ast::Type::Pointer { base, space } => {
-                let base = self.resolve_ast_type(base, ctx.reborrow())?;
+                let base = self.resolve_ast_type(base, ctx)?;
                 crate::TypeInner::Pointer { base, space }
             }
             ast::Type::Array { base, size } => {
-                let base = self.resolve_ast_type(base, ctx.reborrow())?;
-                let size = self.array_size(size, ctx.reborrow())?;
+                let base = self.resolve_ast_type(base, ctx)?;
+                let size = self.array_size(size, ctx)?;
 
                 self.layouter.update(ctx.module.to_ctx()).unwrap();
                 let stride = self.layouter[base].to_stride();
@@ -2652,8 +2642,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Type::AccelerationStructure => crate::TypeInner::AccelerationStructure,
             ast::Type::RayQuery => crate::TypeInner::RayQuery,
             ast::Type::BindingArray { base, size } => {
-                let base = self.resolve_ast_type(base, ctx.reborrow())?;
-                let size = self.array_size(size, ctx.reborrow())?;
+                let base = self.resolve_ast_type(base, ctx)?;
+                let size = self.array_size(size, ctx)?;
                 crate::TypeInner::BindingArray { base, size }
             }
             ast::Type::RayDesc => {
@@ -2678,7 +2668,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         binding: &Option<ast::Binding<'source>>,
         ty: Handle<crate::Type>,
-        mut ctx: GlobalContext<'source, '_, '_>,
+        ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<Option<crate::Binding>, Error<'source>> {
         Ok(match *binding {
             Some(ast::Binding::BuiltIn(b)) => Some(crate::Binding::BuiltIn(b)),

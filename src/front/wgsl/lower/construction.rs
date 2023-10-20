@@ -576,8 +576,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::ConstructorType::PartialArray => ConcreteConstructorHandle::PartialArray,
             ast::ConstructorType::Array { base, size } => {
-                let base = self.resolve_ast_type(base, ctx.as_global())?;
-                let size = self.array_size(size, ctx.as_global())?;
+                let base = self.resolve_ast_type(base, &mut ctx.as_global())?;
+                let size = self.array_size(size, &mut ctx.as_global())?;
 
                 self.layouter.update(ctx.module.to_ctx()).unwrap();
                 let stride = self.layouter[base].to_stride();
