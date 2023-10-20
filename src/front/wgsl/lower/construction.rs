@@ -45,7 +45,7 @@ enum ConcreteConstructor<'a> {
 }
 
 impl ConcreteConstructorHandle {
-    fn to_error_string(&self, ctx: ExpressionContext) -> String {
+    fn to_error_string(&self, ctx: &mut ExpressionContext) -> String {
         match *self {
             Self::PartialVector { size } => {
                 format!("vec{}<?>", size as u32,)
@@ -143,15 +143,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         constructor: &ast::ConstructorType<'source>,
         ty_span: Span,
         components: &[Handle<ast::Expression<'source>>],
-        mut ctx: ExpressionContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
-        let constructor_h = self.constructor(constructor, ctx.reborrow())?;
+        let constructor_h = self.constructor(constructor, ctx)?;
 
         let components_h = match *components {
             [] => ComponentsHandle::None,
             [component] => {
                 let span = ctx.ast_expressions.get_span(component);
-                let component = self.expression(component, ctx.reborrow())?;
+                let component = self.expression(component, ctx)?;
                 let ty = super::resolve!(ctx, component);
 
                 ComponentsHandle::One {
@@ -162,12 +162,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             [component, ref rest @ ..] => {
                 let span = ctx.ast_expressions.get_span(component);
-                let component = self.expression(component, ctx.reborrow())?;
+                let component = self.expression(component, ctx)?;
 
                 let components = std::iter::once(Ok(component))
                     .chain(
                         rest.iter()
-                            .map(|&component| self.expression(component, ctx.reborrow())),
+                            .map(|&component| self.expression(component, ctx)),
                     )
                     .collect::<Result<_, _>>()?;
                 let spans = std::iter::once(span)
@@ -488,7 +488,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Err(Error::BadTypeCast {
                     span,
                     from_type,
-                    to_type: constructor_h.to_error_string(ctx.reborrow()),
+                    to_type: constructor_h.to_error_string(ctx),
                 });
             }
 
@@ -545,7 +545,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn constructor<'out>(
         &mut self,
         constructor: &ast::ConstructorType<'source>,
-        mut ctx: ExpressionContext<'source, '_, 'out>,
+        ctx: &mut ExpressionContext<'source, '_, 'out>,
     ) -> Result<ConcreteConstructorHandle, Error<'source>> {
         let c = match *constructor {
             ast::ConstructorType::Scalar { width, kind } => {
