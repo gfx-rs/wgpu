@@ -489,14 +489,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     /// in [`ctx.module`] a suitable Naga `Type` and return a
     /// [`ConcreteConstructorHandle::Type`] value holding its handle.
     ///
-    /// Note that constructing an [`Array`] type may require inserting
-    /// [`Constant`]s as well as `Type`s into `ctx.module`, to represent the
-    /// array's length.
-    ///
     /// [`Type`]: crate::Type
     /// [`ctx.module`]: ExpressionContext::module
-    /// [`Array`]: crate::TypeInner::Array
-    /// [`Constant`]: crate::Constant
     fn constructor<'out>(
         &mut self,
         constructor: &ast::ConstructorType<'source>,
