@@ -107,7 +107,7 @@ wgpu-example = { version = "0.17.0", path = "./examples/common" }
 wgpu-macros = { version = "0.17.0", path = "./wgpu-macros" }
 wgpu-test = { version = "0.17", path = "./tests"}
 wgpu-types = { version = "0.17.0", path = "./wgpu-types" }
-winit = { version = "0.28.7", features = [ "android-native-activity" ] }
+winit = { version = "0.29.2", features = [ "android-native-activity" ] }
 
 # Metal dependencies
 block = "0.1"
