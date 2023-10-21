@@ -152,6 +152,9 @@ impl super::Adapter {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
+        // bgra8unorm-storage is never supported on dx11 according to:
+        // https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/format-support-for-direct3d-11-0-feature-level-hardware#dxgi_format_b8g8r8a8_unormfcs-87
+
         //
         // Fill out limits and alignments
         //

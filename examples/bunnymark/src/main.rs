@@ -353,16 +353,16 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("bunnymark");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn bunnymark() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "bunnymark",
         image_path: "/examples/bunnymark/screenshot.png",
         width: 1024,
         height: 768,
@@ -376,5 +376,8 @@ fn bunnymark() {
                 threshold: 0.05,
             },
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

@@ -67,6 +67,7 @@ pub struct Instance {
     pub dx11: Option<HalInstance<hal::api::Dx11>>,
     #[cfg(feature = "gles")]
     pub gl: Option<HalInstance<hal::api::Gles>>,
+    pub flags: wgt::InstanceFlags,
 }
 
 impl Instance {
@@ -111,6 +112,7 @@ impl Instance {
             dx11: init(hal::api::Dx11, &instance_desc),
             #[cfg(feature = "gles")]
             gl: init(hal::api::Gles, &instance_desc),
+            flags: instance_desc.flags,
         }
     }
 
@@ -295,6 +297,7 @@ impl<A: HalApi> Adapter<A> {
         self_id: AdapterId,
         open: hal::OpenDevice<A>,
         desc: &DeviceDescriptor,
+        instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
         log::trace!("Adapter::create_device");
@@ -310,6 +313,7 @@ impl<A: HalApi> Adapter<A> {
             caps.downlevel.clone(),
             desc,
             trace_path,
+            instance_flags,
         )
         .or(Err(RequestDeviceError::OutOfMemory))
     }
@@ -318,6 +322,7 @@ impl<A: HalApi> Adapter<A> {
         &self,
         self_id: AdapterId,
         desc: &DeviceDescriptor,
+        instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
     ) -> Result<Device<A>, RequestDeviceError> {
         // Verify all features were exposed by the adapter
@@ -368,7 +373,7 @@ impl<A: HalApi> Adapter<A> {
             },
         )?;
 
-        self.create_device_from_hal(self_id, open, desc, trace_path)
+        self.create_device_from_hal(self_id, open, desc, instance_flags, trace_path)
     }
 }
 
@@ -1127,10 +1132,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device = match adapter.create_device(adapter_id, desc, trace_path) {
-                Ok(device) => device,
-                Err(e) => break e,
-            };
+            let device =
+                match adapter.create_device(adapter_id, desc, self.instance.flags, trace_path) {
+                    Ok(device) => device,
+                    Err(e) => break e,
+                };
             let id = fid.assign(device, &mut token);
             return (id.0, None);
         };
@@ -1163,11 +1169,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let device =
-                match adapter.create_device_from_hal(adapter_id, hal_device, desc, trace_path) {
-                    Ok(device) => device,
-                    Err(e) => break e,
-                };
+            let device = match adapter.create_device_from_hal(
+                adapter_id,
+                hal_device,
+                desc,
+                self.instance.flags,
+                trace_path,
+            ) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
             let id = fid.assign(device, &mut token);
             return (id.0, None);
         };

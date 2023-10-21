@@ -313,16 +313,16 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("msaa-line");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn msaa_line() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "msaa-line",
         image_path: "/examples/msaa-line/screenshot.png",
         width: 1024,
         height: 768,
@@ -343,5 +343,8 @@ fn msaa_line() {
                 threshold: 0.29,
             },
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

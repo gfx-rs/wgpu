@@ -1,4 +1,4 @@
-use super::Command as C;
+use super::{conv::is_layered_target, Command as C};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{mem, slice, sync::Arc};
@@ -6,24 +6,33 @@ use std::{mem, slice, sync::Arc};
 #[cfg(not(target_arch = "wasm32"))]
 const DEBUG_ID: u32 = 0;
 
-const CUBEMAP_FACES: [u32; 6] = [
-    glow::TEXTURE_CUBE_MAP_POSITIVE_X,
-    glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
-    glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
-    glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
-    glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
-    glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
-];
-
 #[cfg(not(target_arch = "wasm32"))]
 fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
-fn is_layered_target(target: super::BindTarget) -> bool {
+fn get_2d_target(target: u32, array_layer: u32) -> u32 {
+    const CUBEMAP_FACES: [u32; 6] = [
+        glow::TEXTURE_CUBE_MAP_POSITIVE_X,
+        glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
+        glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
+        glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
+        glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+    ];
+
     match target {
-        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D | glow::TEXTURE_CUBE_MAP_ARRAY => true,
-        _ => false,
+        glow::TEXTURE_2D => target,
+        glow::TEXTURE_CUBE_MAP => CUBEMAP_FACES[array_layer as usize],
+        _ => unreachable!(),
+    }
+}
+
+fn get_z_offset(target: u32, base: &crate::TextureCopyBase) -> u32 {
+    match target {
+        glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY => base.array_layer,
+        glow::TEXTURE_3D => base.origin.z,
+        _ => unreachable!(),
     }
 }
 
@@ -54,10 +63,6 @@ impl super::Queue {
                 .map(|i| glow::COLOR_ATTACHMENT0 + i)
                 .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
             unsafe { gl.draw_buffers(&indices) };
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        for draw_buffer in 0..self.draw_buffer_count as u32 {
-            unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
         }
     }
 
@@ -122,22 +127,12 @@ impl super::Queue {
                             view.array_layers.start as i32,
                         )
                     };
-                } else if target == glow::TEXTURE_CUBE_MAP {
-                    unsafe {
-                        gl.framebuffer_texture_2d(
-                            fbo_target,
-                            attachment,
-                            CUBEMAP_FACES[view.array_layers.start as usize],
-                            Some(raw),
-                            view.mip_levels.start as i32,
-                        )
-                    };
                 } else {
                     unsafe {
                         gl.framebuffer_texture_2d(
                             fbo_target,
                             attachment,
-                            target,
+                            get_2d_target(target, view.array_layers.start),
                             Some(raw),
                             view.mip_levels.start as i32,
                         )
@@ -393,12 +388,7 @@ impl super::Queue {
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 if is_layered_target(dst_target) {
-                    let z_offset =
-                        if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY = dst_target {
-                            copy.dst_base.array_layer as i32
-                        } else {
-                            copy.dst_base.origin.z as i32
-                        };
+                    let z_offset = get_z_offset(dst_target, &copy.dst_base);
 
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
@@ -407,7 +397,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -422,7 +412,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -437,7 +427,7 @@ impl super::Queue {
                                 copy.dst_base.mip_level as i32,
                                 copy.dst_base.origin.x as i32,
                                 copy.dst_base.origin.y as i32,
-                                z_offset,
+                                z_offset as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -449,11 +439,7 @@ impl super::Queue {
                         wgt::ExternalImageSource::OffscreenCanvas(_) => unreachable!(),
                     }
                 } else {
-                    let dst_target = if let glow::TEXTURE_CUBE_MAP = dst_target {
-                        CUBEMAP_FACES[copy.dst_base.array_layer as usize]
-                    } else {
-                        dst_target
-                    };
+                    let dst_target = get_2d_target(dst_target, copy.dst_base.array_layer);
 
                     match src.source {
                         wgt::ExternalImageSource::ImageBitmap(ref b) => unsafe {
@@ -513,7 +499,6 @@ impl super::Queue {
                 src_target,
                 dst,
                 dst_target,
-                dst_is_cubemap,
                 ref copy,
             } => {
                 //TODO: handle 3D copies
@@ -542,33 +527,14 @@ impl super::Queue {
                 }
 
                 unsafe { gl.bind_texture(dst_target, Some(dst)) };
-                if dst_is_cubemap {
-                    unsafe {
-                        gl.copy_tex_sub_image_2d(
-                            CUBEMAP_FACES[copy.dst_base.array_layer as usize],
-                            copy.dst_base.mip_level as i32,
-                            copy.dst_base.origin.x as i32,
-                            copy.dst_base.origin.y as i32,
-                            copy.src_base.origin.x as i32,
-                            copy.src_base.origin.y as i32,
-                            copy.size.width as i32,
-                            copy.size.height as i32,
-                        )
-                    };
-                } else if is_layered_target(dst_target) {
+                if is_layered_target(dst_target) {
                     unsafe {
                         gl.copy_tex_sub_image_3d(
                             dst_target,
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
-                            if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                dst_target
-                            {
-                                copy.dst_base.array_layer as i32
-                            } else {
-                                copy.dst_base.origin.z as i32
-                            },
+                            get_z_offset(dst_target, &copy.dst_base) as i32,
                             copy.src_base.origin.x as i32,
                             copy.src_base.origin.y as i32,
                             copy.size.width as i32,
@@ -578,7 +544,7 @@ impl super::Queue {
                 } else {
                     unsafe {
                         gl.copy_tex_sub_image_2d(
-                            dst_target,
+                            get_2d_target(dst_target, copy.dst_base.array_layer),
                             copy.dst_base.mip_level as i32,
                             copy.dst_base.origin.x as i32,
                             copy.dst_base.origin.y as i32,
@@ -636,13 +602,7 @@ impl super::Queue {
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
-                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                    dst_target
-                                {
-                                    copy.texture_base.array_layer as i32
-                                } else {
-                                    copy.texture_base.origin.z as i32
-                                },
+                                get_z_offset(dst_target, &copy.texture_base) as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -654,11 +614,7 @@ impl super::Queue {
                     } else {
                         unsafe {
                             gl.tex_sub_image_2d(
-                                if let glow::TEXTURE_CUBE_MAP = dst_target {
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
-                                } else {
-                                    dst_target
-                                },
+                                get_2d_target(dst_target, copy.texture_base.array_layer),
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
@@ -712,13 +668,7 @@ impl super::Queue {
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
-                                if let glow::TEXTURE_2D_ARRAY | glow::TEXTURE_CUBE_MAP_ARRAY =
-                                    dst_target
-                                {
-                                    copy.texture_base.array_layer as i32
-                                } else {
-                                    copy.texture_base.origin.z as i32
-                                },
+                                get_z_offset(dst_target, &copy.texture_base) as i32,
                                 copy.size.width as i32,
                                 copy.size.height as i32,
                                 copy.size.depth as i32,
@@ -729,11 +679,7 @@ impl super::Queue {
                     } else {
                         unsafe {
                             gl.compressed_tex_sub_image_2d(
-                                if let glow::TEXTURE_CUBE_MAP = dst_target {
-                                    CUBEMAP_FACES[copy.texture_base.array_layer as usize]
-                                } else {
-                                    dst_target
-                                },
+                                get_2d_target(dst_target, copy.texture_base.array_layer),
                                 copy.texture_base.mip_level as i32,
                                 copy.texture_base.origin.x as i32,
                                 copy.texture_base.origin.y as i32,
@@ -970,16 +916,6 @@ impl super::Queue {
                     .map(|i| glow::COLOR_ATTACHMENT0 + i)
                     .collect::<ArrayVec<_, { crate::MAX_COLOR_ATTACHMENTS }>>();
                 unsafe { gl.draw_buffers(&indices) };
-
-                if self
-                    .shared
-                    .private_caps
-                    .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
-                {
-                    for draw_buffer in 0..count as u32 {
-                        unsafe { gl.disable_draw_buffer(glow::BLEND, draw_buffer) };
-                    }
-                }
             }
             C::ClearColorF {
                 draw_buffer,
@@ -1249,7 +1185,7 @@ impl super::Queue {
                         )
                     };
                     if let Some(ref blend) = *blend {
-                        unsafe { gl.enable_draw_buffer(index, glow::BLEND) };
+                        unsafe { gl.enable_draw_buffer(glow::BLEND, index) };
                         if blend.color != blend.alpha {
                             unsafe {
                                 gl.blend_equation_separate_draw_buffer(
@@ -1273,12 +1209,8 @@ impl super::Queue {
                                 gl.blend_func_draw_buffer(index, blend.color.src, blend.color.dst)
                             };
                         }
-                    } else if self
-                        .shared
-                        .private_caps
-                        .contains(super::PrivateCapabilities::CAN_DISABLE_DRAW_BUFFER)
-                    {
-                        unsafe { gl.disable_draw_buffer(index, glow::BLEND) };
+                    } else {
+                        unsafe { gl.disable_draw_buffer(glow::BLEND, index) };
                     }
                 } else {
                     unsafe {
@@ -1511,13 +1443,7 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &mut super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
-        let gl = unsafe { &self.shared.context.get_without_egl_lock() };
-
-        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-        let gl = &self.shared.context.glow_context;
-
-        unsafe { surface.present(texture, gl) }
+        unsafe { surface.present(texture, &self.shared.context) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

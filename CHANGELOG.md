@@ -44,6 +44,12 @@ Bottom level categories:
 
 - Update Naga to 9eb3a1dc (2023-10-12), which includes support for WGSL constant expressions. By @jimblandy in [#4233](https://github.com/gfx-rs/wgpu/pull/4233)
 
+#### Support desktop OpenGL via WGL on Windows
+
+Added creating of full OpenGL contexts to the GLES backend using WGL to support older devices.
+
+By @Zoxc in [#4248](https://github.com/gfx-rs/wgpu/pull/4248)
+
 #### Pass timestamp queries
 
 Addition of `TimestampWrites` to compute and render passes to allow profiling.
@@ -101,7 +107,6 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add WinUI 3 SwapChainPanel support. By @ddrboxman in [#4191](https://github.com/gfx-rs/wgpu/pull/4191)
 
 ### Changes
-
 #### General
 
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
@@ -115,6 +120,10 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add `Rgb10a2Uint` format. By @teoxoy in [4199](https://github.com/gfx-rs/wgpu/pull/4199)
 - Validate that resources are used on the right device. By @nical in [4207](https://github.com/gfx-rs/wgpu/pull/4207)
 - Expose instance flags. By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
+- Add support for the bgra8unorm-storage feature. By @jinleili and @nical in [#4228](https://github.com/gfx-rs/wgpu/pull/4228)
+- Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
+- Let the `"strict_asserts"` feature enable check that wgpu-core's lock-ordering tokens are unique per thread. By @jimblandy in [#4258]([https://github.com/gfx-rs/wgpu/pull/4258])
+- Allow filtering labels out before they are passed to GPU drivers by @nical in [https://github.com/gfx-rs/wgpu/pull/4246](4246)
 
 #### Vulkan
 
@@ -167,6 +176,10 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 - Ensure that limit requests and reporting is done correctly. By @OptimisticPeach in [#4107](https://github.com/gfx-rs/wgpu/pull/4107)
 - Validate usage of polygon mode. By @teoxoy in [#4196](https://github.com/gfx-rs/wgpu/pull/4196)
+
+#### GLES
+
+- enable/disable blending per attachment only when available (on ES 3.2 or higher). By @teoxoy in [#4234](https://github.com/gfx-rs/wgpu/pull/4234)
 
 #### Testing
 

@@ -1,30 +1,24 @@
-use wasm_bindgen_test::*;
-use wgpu::RenderPassDescriptor;
-use wgpu_test::{fail, initialize_test, FailureCase, TestParameters};
+use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
-#[test]
-#[wasm_bindgen_test]
-fn drop_encoder() {
-    initialize_test(TestParameters::default(), |ctx| {
-        let encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        drop(encoder);
-    })
-}
+#[gpu_test]
+static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    drop(encoder);
+});
 
-#[test]
-fn drop_encoder_after_error() {
-    // This test crashes on DX12 with the exception:
-    //
-    // ID3D12CommandAllocator::Reset: The command allocator cannot be reset because a
-    // command list is currently being recorded with the allocator. [ EXECUTION ERROR
-    // #543: COMMAND_ALLOCATOR_CANNOT_RESET]
-    //
-    // For now, we mark the test as failing on DX12.
-    let parameters =
-        TestParameters::default().expect_fail(FailureCase::backend(wgpu::Backends::DX12));
-    initialize_test(parameters, |ctx| {
+// This test crashes on DX12 with the exception:
+//
+// ID3D12CommandAllocator::Reset: The command allocator cannot be reset because a
+// command list is currently being recorded with the allocator. [ EXECUTION ERROR
+// #543: COMMAND_ALLOCATOR_CANNOT_RESET]
+//
+// For now, we mark the test as failing on DX12.
+#[gpu_test]
+static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::backend(wgpu::Backends::DX12)))
+    .run_sync(|ctx| {
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -45,7 +39,7 @@ fn drop_encoder_after_error() {
         });
         let target_view = target_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut renderpass = encoder.begin_render_pass(&RenderPassDescriptor {
+        let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("renderpass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 ops: wgpu::Operations::default(),
@@ -67,5 +61,4 @@ fn drop_encoder_after_error() {
         // a CommandEncoder which errored out when processing a command.
         // The encoder is still open!
         drop(encoder);
-    })
-}
+    });

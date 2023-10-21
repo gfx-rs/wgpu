@@ -28,3 +28,6 @@ cts/
 
 # Readme says to put angle in working directory
 *.dll
+
+# Cached GPU config
+.gpuconfig

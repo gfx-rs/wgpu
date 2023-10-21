@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 bytemuck.workspace = true
 env_logger.workspace = true
-futures-intrusive.workspace = true
+flume.workspace = true
 log.workspace = true
 pollster.workspace = true
 wgpu.workspace = true
