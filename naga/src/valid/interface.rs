@@ -168,6 +168,10 @@ impl VaryingContext<'_> {
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
+                    Bi::NumSubgroups
+                    | Bi::SubgroupId
+                    | Bi::SubgroupSize
+                    | Bi::SubgroupInvocationId => Capabilities::SUBGROUP,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {

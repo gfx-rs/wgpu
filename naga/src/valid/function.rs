@@ -148,6 +148,8 @@ pub enum FunctionError {
     InvalidRayDescriptor(Handle<crate::Expression>),
     #[error("Ray Query {0:?} does not have a matching type")]
     InvalidRayQueryType(Handle<crate::Type>),
+    #[error("Shader requires capability {0:?}")]
+    MissingCapability(super::Capabilities),
     #[error(
         "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
     )]
@@ -746,8 +748,16 @@ impl super::Validator {
                     stages &= super::ShaderStages::FRAGMENT;
                     finished = true;
                 }
-                S::Barrier(_) => {
+                S::Barrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
+                    if barrier.contains(crate::Barrier::SUB_GROUP)
+                        && !self.capabilities.contains(super::Capabilities::SUBGROUP)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SUBGROUP,
+                        )
+                        .with_span_static(span, "subgroup operation"));
+                    }
                 }
                 S::Store { pointer, value } => {
                     let mut current = pointer;
@@ -1038,6 +1048,12 @@ impl super::Validator {
                     }
                 }
                 S::SubgroupBallot { result, predicate } => {
+                    if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SUBGROUP,
+                        )
+                        .with_span_static(span, "subgroup operation"));
+                    }
                     if let Some(predicate) = predicate {
                         let predicate_inner =
                             context.resolve_type(predicate, &self.valid_expression_set)?;
@@ -1065,6 +1081,12 @@ impl super::Validator {
                     argument,
                     result,
                 } => {
+                    if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SUBGROUP,
+                        )
+                        .with_span_static(span, "subgroup operation"));
+                    }
                     self.validate_subgroup_operation(op, collective_op, argument, result, context)?;
                 }
                 S::SubgroupGather {
@@ -1072,6 +1094,12 @@ impl super::Validator {
                     argument,
                     result,
                 } => {
+                    if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::SUBGROUP,
+                        )
+                        .with_span_static(span, "subgroup operation"));
+                    }
                     self.validate_subgroup_broadcast(mode, argument, result, context)?;
                 }
             }

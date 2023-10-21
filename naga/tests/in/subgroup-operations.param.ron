@@ -1,4 +1,5 @@
 (
+	god_mode: true,
 	spv: (
 		version: (1, 3),
 	),
