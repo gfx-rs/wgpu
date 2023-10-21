@@ -857,6 +857,11 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+    convert_spv(
+        "subgroup-operations-s",
+        false,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
 }
 
 #[cfg(feature = "glsl-in")]
