@@ -124,7 +124,6 @@
             desc: (
                 label: None,
                 flags: (bits: 3),
-                debug: false,
             ),
             data: "zero-init-texture-binding.wgsl",
         ),

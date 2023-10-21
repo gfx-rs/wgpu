@@ -568,8 +568,6 @@ pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
-    /// Generate debug symbols, only available in spv-out
-    pub debug: bool,
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 

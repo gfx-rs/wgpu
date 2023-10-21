@@ -88,7 +88,6 @@ impl wgpu_example::framework::Example for Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                 "triangle_and_lines.wgsl"
             ))),
-            debug: false,
         });
 
         let pipeline_triangle_conservative =
@@ -198,7 +197,6 @@ impl wgpu_example::framework::Example for Example {
             let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("upscale.wgsl"))),
-                debug: false,
             });
             (
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

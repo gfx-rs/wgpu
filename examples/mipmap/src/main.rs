@@ -85,7 +85,6 @@ impl Example {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blit.wgsl"))),
-            debug: false,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -283,7 +282,6 @@ impl wgpu_example::framework::Example for Example {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("draw.wgsl"))),
-            debug: false,
         });
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

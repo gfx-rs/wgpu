@@ -44,7 +44,6 @@ pub fn op_webgpu_create_shader_module(
     let descriptor = wgpu_core::pipeline::ShaderModuleDescriptor {
         label: Some(label),
         shader_bound_checks: wgpu_types::ShaderBoundChecks::default(),
-        debug: false,
     };
 
     gfx_put!(device => instance.device_create_shader_module(

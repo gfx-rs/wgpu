@@ -1317,7 +1317,7 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
         );
 
-        let debug_source = if desc.debug {
+        let debug_source = if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) {
             Some(hal::DebugSource {
                 file_name: Cow::Owned(
                     desc.label
@@ -1339,17 +1339,14 @@ impl<A: HalApi> Device<A> {
                     inner: Box::new(inner),
                 })
             })?;
-        let interface = validation::Interface::new(&module, &info, self.limits.clone());
 
+        let interface =
+            validation::Interface::new(&module, &info, self.limits.clone(), self.features);
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
             module,
             info,
             debug_source,
         });
-        let interface =
-            validation::Interface::new(&module, &info, self.limits.clone(), self.features);
-        let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
-
         let hal_desc = hal::ShaderModuleDescriptor {
             label: desc.label.to_hal(self.instance_flags),
             runtime_checks: desc.shader_bound_checks.runtime_checks(),

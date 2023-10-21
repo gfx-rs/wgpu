@@ -28,7 +28,6 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Shader module"),
                 source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-                debug: false,
             });
         let pipeline = ctx
             .device

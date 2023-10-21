@@ -81,20 +81,13 @@ macro_rules! include_spirv_raw {
 /// Macro to load a WGSL module statically.
 #[macro_export]
 macro_rules! include_wgsl {
-    ($name:tt) => {{
-        // log::info!("including '{}'", $name);
-        $crate::ShaderModuleDescriptor {
-            label: Some($name),
-            source: $crate::ShaderSource::Wgsl(include_str!($name).into()),
-            debug: false,
+    ($($token:tt)*) => {
+        {
+            //log::info!("including '{}'", $($token)*);
+            $crate::ShaderModuleDescriptor {
+                label: Some($($token)*),
+                source: $crate::ShaderSource::Wgsl(include_str!($($token)*).into()),
+            }
         }
-    }};
-    ($name:tt, $debug:tt) => {{
-        // log::info!("including '{}', '{}'", $name, $debug);
-        $crate::ShaderModuleDescriptor {
-            label: Some($name),
-            source: $crate::ShaderSource::Wgsl(include_str!($name).into()),
-            debug: $debug,
-        }
-    }};
+    };
 }

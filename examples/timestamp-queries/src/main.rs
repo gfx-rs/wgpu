@@ -237,7 +237,6 @@ fn submit_render_and_compute_pass_with_queries(
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("shader.wgsl"))),
-        debug: false,
     });
 
     encoder.write_timestamp(&queries.set, queries.next_unused_query);

@@ -895,7 +895,6 @@ impl crate::Context for Context {
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
             label: desc.label.map(Borrowed),
             shader_bound_checks,
-            debug: desc.debug,
         };
         let source = match desc.source {
             #[cfg(feature = "spirv")]
@@ -959,7 +958,6 @@ impl crate::Context for Context {
             // Doesn't matter the value since spirv shaders aren't mutated to include
             // runtime checks
             shader_bound_checks: unsafe { wgt::ShaderBoundChecks::unchecked() },
-            debug: false,
         };
         let (id, error) = wgc::gfx_select!(
             device => global.device_create_shader_module_spirv(*device, &descriptor, Borrowed(&desc.source), ())

@@ -48,7 +48,6 @@ impl wgpu_example::framework::Example for Example {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                 "../../../wgpu-hal/examples/halmark/shader.wgsl"
             ))),
-            debug: false,
         });
 
         let global_bind_group_layout =

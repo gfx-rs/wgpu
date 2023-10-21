@@ -496,12 +496,10 @@ impl wgpu_example::framework::Example for Example {
         let terrain_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("terrain"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("terrain.wgsl"))),
-            debug: false,
         });
         let water_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("water"),
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("water.wgsl"))),
-            debug: false,
         });
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what

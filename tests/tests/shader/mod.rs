@@ -288,7 +288,6 @@ fn shader_input_output_test(
         let sm = ctx.device.create_shader_module(ShaderModuleDescriptor {
             label: Some(&format!("shader {test_name}")),
             source: ShaderSource::Wgsl(Cow::Borrowed(&processed)),
-            debug: false,
         });
 
         let pipeline = ctx

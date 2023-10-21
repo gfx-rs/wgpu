@@ -360,7 +360,6 @@ fn copy_via_compute(
     let sm = device.create_shader_module(ShaderModuleDescriptor {
         label: Some("shader copy_texture_to_buffer.wgsl"),
         source: ShaderSource::Wgsl(Cow::Borrowed(&processed_source)),
-        debug: false,
     });
 
     let pipeline_copy = device.create_compute_pipeline(&ComputePipelineDescriptor {

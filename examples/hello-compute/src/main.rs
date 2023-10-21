@@ -68,7 +68,6 @@ async fn execute_gpu_inner(
     let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: None,
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        debug: false,
     });
 
     // Gets the size in bytes of the buffer.
