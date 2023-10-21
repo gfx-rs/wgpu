@@ -32,6 +32,7 @@ macro_rules! resolve_inner {
         $ctx.typifier()[$expr].inner_with(&$ctx.module.types)
     }};
 }
+pub(super) use resolve_inner;
 
 /// Resolves the inner types of two given expressions.
 ///
@@ -64,7 +65,6 @@ macro_rules! resolve {
         &$ctx.typifier()[$expr]
     }};
 }
-pub(super) use resolve;
 
 /// State for constructing a `crate::Module`.
 pub struct GlobalContext<'source, 'temp, 'out> {

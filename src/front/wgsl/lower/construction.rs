@@ -5,7 +5,6 @@ use crate::{Handle, Span};
 
 use crate::front::wgsl::error::Error;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
-use crate::proc::TypeResolution;
 
 enum ConcreteConstructorHandle {
     PartialVector {
@@ -59,46 +58,6 @@ impl ConcreteConstructorHandle {
     }
 }
 
-enum ComponentsHandle<'a> {
-    None,
-    One {
-        component: Handle<crate::Expression>,
-        span: Span,
-        ty: &'a TypeResolution,
-    },
-    Many {
-        components: Vec<Handle<crate::Expression>>,
-        spans: Vec<Span>,
-        first_component_ty: &'a TypeResolution,
-    },
-}
-
-impl<'a> ComponentsHandle<'a> {
-    fn borrow(self, module: &'a crate::Module) -> Components<'a> {
-        match self {
-            Self::None => Components::None,
-            Self::One {
-                component,
-                span,
-                ty,
-            } => Components::One {
-                component,
-                span,
-                ty_inner: ty.inner_with(&module.types),
-            },
-            Self::Many {
-                components,
-                spans,
-                first_component_ty,
-            } => Components::Many {
-                components,
-                spans,
-                first_component_ty_inner: first_component_ty.inner_with(&module.types),
-            },
-        }
-    }
-}
-
 enum Components<'a> {
     None,
     One {
@@ -147,17 +106,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let constructor_h = self.constructor(constructor, ctx)?;
 
-        let components_h = match *components {
-            [] => ComponentsHandle::None,
+        let components = match *components {
+            [] => Components::None,
             [component] => {
                 let span = ctx.ast_expressions.get_span(component);
                 let component = self.expression(component, ctx)?;
-                let ty = super::resolve!(ctx, component);
+                let ty_inner = super::resolve_inner!(ctx, component);
 
-                ComponentsHandle::One {
+                Components::One {
                     component,
                     span,
-                    ty,
+                    ty_inner,
                 }
             }
             [component, ref rest @ ..] => {
@@ -177,20 +136,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     )
                     .collect();
 
-                let ty = super::resolve!(ctx, component);
+                let first_component_ty_inner = super::resolve_inner!(ctx, component);
 
-                ComponentsHandle::Many {
+                Components::Many {
                     components,
                     spans,
-                    first_component_ty: ty,
+                    first_component_ty_inner,
                 }
             }
         };
 
-        let (components, constructor) = (
-            components_h.borrow(ctx.module),
-            constructor_h.borrow(ctx.module),
-        );
+        let constructor = constructor_h.borrow(ctx.module);
+
         let expr = match (components, constructor) {
             // Empty constructor
             (Components::None, dst_ty) => match dst_ty {
