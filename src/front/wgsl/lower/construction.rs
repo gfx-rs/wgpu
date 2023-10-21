@@ -466,18 +466,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::Expression::Compose { ty, components }
             }
 
-            // Array constructor
-            (components, ConcreteConstructor::Type(ty, &crate::TypeInner::Array { .. })) => {
+            // Array or Struct constructor
+            (
+                components,
+                ConcreteConstructor::Type(
+                    ty,
+                    &crate::TypeInner::Array { .. } | &crate::TypeInner::Struct { .. },
+                ),
+            ) => {
                 let components = components.into_components_vec();
                 crate::Expression::Compose { ty, components }
-            }
-
-            // Struct constructor
-            (components, ConcreteConstructor::Type(ty, &crate::TypeInner::Struct { .. })) => {
-                crate::Expression::Compose {
-                    ty,
-                    components: components.into_components_vec(),
-                }
             }
 
             // ERRORS
