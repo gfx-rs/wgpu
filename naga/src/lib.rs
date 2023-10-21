@@ -1446,9 +1446,7 @@ pub enum Expression {
     ///
     /// For [`TypeInner::Atomic`] the result is a corresponding scalar.
     /// For other types behind the `pointer<T>`, the result is `T`.
-    Load {
-        pointer: Handle<Expression>,
-    },
+    Load { pointer: Handle<Expression> },
     /// Sample a point from a sampled or a depth image.
     ImageSample {
         image: Handle<Expression>,
@@ -1588,10 +1586,7 @@ pub enum Expression {
     /// Result of calling another function.
     CallResult(Handle<Function>),
     /// Result of an atomic operation.
-    AtomicResult {
-        ty: Handle<Type>,
-        comparison: bool,
-    },
+    AtomicResult { ty: Handle<Type>, comparison: bool },
     /// Result of a [`WorkGroupUniformLoad`] statement.
     ///
     /// [`WorkGroupUniformLoad`]: Statement::WorkGroupUniformLoad
@@ -1619,10 +1614,15 @@ pub enum Expression {
         query: Handle<Expression>,
         committed: bool,
     },
+    /// Result of a [`SubgroupBallot`] statement.
+    ///
+    /// [`SubgroupBallot`]: Statement::SubgroupBallot
     SubgroupBallotResult,
-    SubgroupOperationResult {
-        ty: Handle<Type>,
-    },
+    /// Result of a [`SubgroupCollectiveOperation`] or [`SubgroupGather`] statement.
+    ///
+    /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
+    /// [`SubgroupGather`]: Statement::SubgroupGather
+    SubgroupOperationResult { ty: Handle<Type> },
 }
 
 pub use block::Block;
@@ -1895,7 +1895,7 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
-    // subgroupBallot(bool) -> vec4<u32>
+    /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
         ///
@@ -1904,7 +1904,7 @@ pub enum Statement {
         /// The value from this thread to store in the ballot
         predicate: Option<Handle<Expression>>,
     },
-
+    /// Gather a value from another active thread in the subgroup
     SubgroupGather {
         /// Specifies which thread to gather from
         mode: GatherMode,
@@ -1915,8 +1915,7 @@ pub enum Statement {
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
     },
-
-    /// Compute a collective operation across all active threads in th subgroup
+    /// Compute a collective operation across all active threads in the subgroup
     SubgroupCollectiveOperation {
         /// What operation to compute
         op: SubgroupOperation,
