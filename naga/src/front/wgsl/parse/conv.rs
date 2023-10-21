@@ -263,18 +263,3 @@ pub fn map_subgroup_operation(
         _ => return None,
     })
 }
-
-pub fn map_subgroup_gather(word: &str) -> Option<crate::GatherMode> {
-    use crate::GatherMode as gm;
-    use crate::Handle;
-    use std::num::NonZeroU32;
-    Some(match word {
-        "subgroupBroadcastFirst" => gm::BroadcastFirst,
-        "subgroupBroadcast" => gm::Broadcast(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
-        "subgroupShuffle" => gm::Shuffle(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
-        "subgroupShuffleDown" => gm::ShuffleDown(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
-        "subgroupShuffleUp" => gm::ShuffleUp(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
-        "subgroupShuffleXor" => gm::ShuffleXor(Handle::new(NonZeroU32::new(u32::MAX).unwrap())),
-        _ => return None,
-    })
-}

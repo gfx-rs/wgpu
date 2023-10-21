@@ -829,6 +829,29 @@ impl Texture {
     }
 }
 
+enum SubgroupGather {
+    BroadcastFirst,
+    Broadcast,
+    Shuffle,
+    ShuffleDown,
+    ShuffleUp,
+    ShuffleXor,
+}
+
+impl SubgroupGather {
+    pub fn map(word: &str) -> Option<Self> {
+        Some(match word {
+            "subgroupBroadcastFirst" => Self::BroadcastFirst,
+            "subgroupBroadcast" => Self::Broadcast,
+            "subgroupShuffle" => Self::Shuffle,
+            "subgroupShuffleDown" => Self::ShuffleDown,
+            "subgroupShuffleUp" => Self::ShuffleUp,
+            "subgroupShuffleXor" => Self::ShuffleXor,
+            _ => return None,
+        })
+    }
+}
+
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
     layouter: Layouter,
@@ -1870,7 +1893,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(Some(
                         self.subgroup_operation_helper(span, op, cop, arguments, ctx)?,
                     ));
-                } else if let Some(mode) = conv::map_subgroup_gather(function.name) {
+                } else if let Some(mode) = SubgroupGather::map(function.name) {
                     return Ok(Some(
                         self.subgroup_gather_helper(span, mode, arguments, ctx)?,
                     ));
@@ -2497,18 +2520,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn subgroup_gather_helper(
         &mut self,
         span: Span,
-        mode: crate::GatherMode,
+        mode: SubgroupGather,
         arguments: &[Handle<ast::Expression<'source>>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
         let mut args = ctx.prepare_args(arguments, 2, span);
 
         let argument = self.expression(args.next()?, ctx)?;
-        let index = if let crate::GatherMode::BroadcastFirst = mode {
-            Handle::new(NonZeroU32::new(u32::MAX).unwrap())
+
+        use SubgroupGather as Sg;
+        let mode = if let Sg::BroadcastFirst = mode {
+            crate::GatherMode::BroadcastFirst
         } else {
-            self.expression(args.next()?, ctx)?
+            let index = self.expression(args.next()?, ctx)?;
+            match mode {
+                Sg::Broadcast => crate::GatherMode::Broadcast(index),
+                Sg::Shuffle => crate::GatherMode::Shuffle(index),
+                Sg::ShuffleDown => crate::GatherMode::ShuffleDown(index),
+                Sg::ShuffleUp => crate::GatherMode::ShuffleUp(index),
+                Sg::ShuffleXor => crate::GatherMode::ShuffleXor(index),
+                Sg::BroadcastFirst => unreachable!(),
+            }
         };
+
         args.finish()?;
 
         let ty = ctx.register_type(argument)?;
@@ -2518,14 +2552,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let rctx = ctx.runtime_expression_ctx(span)?;
         rctx.block.push(
             crate::Statement::SubgroupGather {
-                mode: match mode {
-                    crate::GatherMode::BroadcastFirst => crate::GatherMode::BroadcastFirst,
-                    crate::GatherMode::Broadcast(_) => crate::GatherMode::Broadcast(index),
-                    crate::GatherMode::Shuffle(_) => crate::GatherMode::Shuffle(index),
-                    crate::GatherMode::ShuffleDown(_) => crate::GatherMode::ShuffleDown(index),
-                    crate::GatherMode::ShuffleUp(_) => crate::GatherMode::ShuffleUp(index),
-                    crate::GatherMode::ShuffleXor(_) => crate::GatherMode::ShuffleXor(index),
-                },
+                mode,
                 argument,
                 result,
             },
