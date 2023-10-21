@@ -3692,14 +3692,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                 }
                 Op::GroupNonUniformBallot => {
-                    inst.expect(4)?;
-                    let _result_type_id = self.next()?;
+                    inst.expect(5)?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
                     let predicate_id = self.next()?;
-
-                    let result_lookup = self.lookup_expression.lookup(result_id)?;
-                    let result_handle = get_expr_handle!(result_id, result_lookup);
 
                     let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
                     let _exec_scope = resolve_constant(ctx.gctx(), exec_scope_const.handle)
@@ -3726,6 +3724,18 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         Some(predicate_handle)
                     };
 
+                    let result_handle = ctx
+                        .expressions
+                        .append(crate::Expression::SubgroupBallotResult, span);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
                     block.push(
                         crate::Statement::SubgroupBallot {
                             result: result_handle,
@@ -3733,6 +3743,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         },
                         span,
                     );
+                    emitter.start(ctx.expressions);
                 }
                 spirv::Op::GroupNonUniformAll
                 | spirv::Op::GroupNonUniformAny
@@ -3752,17 +3763,18 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | spirv::Op::GroupNonUniformLogicalAnd
                 | spirv::Op::GroupNonUniformLogicalOr
                 | spirv::Op::GroupNonUniformLogicalXor => {
+                    block.extend(emitter.finish(ctx.expressions));
                     inst.expect(
                         if matches!(
                             inst.op,
                             spirv::Op::GroupNonUniformAll | spirv::Op::GroupNonUniformAny
                         ) {
-                            4
-                        } else {
                             5
+                        } else {
+                            6
                         },
                     )?;
-                    let _result_type_id = self.next()?;
+                    let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
                     let collective_op_id = match inst.op {
@@ -3787,8 +3799,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     };
                     let argument_id = self.next()?;
 
-                    let result_lookup = self.lookup_expression.lookup(result_id)?;
-                    let result_handle = get_expr_handle!(result_id, result_lookup);
                     let argument_lookup = self.lookup_expression.lookup(argument_id)?;
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
 
@@ -3821,6 +3831,23 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         _ => unreachable!(),
                     };
 
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
                     block.push(
                         crate::Statement::SubgroupCollectiveOperation {
                             result: result_handle,
@@ -3830,6 +3857,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         },
                         span,
                     );
+                    emitter.start(ctx.expressions);
                 }
                 Op::GroupNonUniformBroadcastFirst
                 | Op::GroupNonUniformBroadcast
@@ -3839,18 +3867,17 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::GroupNonUniformShuffleXor => {
                     inst.expect(
                         if matches!(inst.op, spirv::Op::GroupNonUniformBroadcastFirst) {
-                            4
-                        } else {
                             5
+                        } else {
+                            6
                         },
                     )?;
-                    let _result_type_id = self.next()?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let exec_scope_id = self.next()?;
                     let argument_id = self.next()?;
 
-                    let result_lookup = self.lookup_expression.lookup(result_id)?;
-                    let result_handle = get_expr_handle!(result_id, result_lookup);
                     let argument_lookup = self.lookup_expression.lookup(argument_id)?;
                     let argument_handle = get_expr_handle!(argument_id, argument_lookup);
 
@@ -3885,6 +3912,23 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         }
                     };
 
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
                     block.push(
                         crate::Statement::SubgroupGather {
                             result: result_handle,
@@ -3893,6 +3937,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         },
                         span,
                     );
+                    emitter.start(ctx.expressions);
                 }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
