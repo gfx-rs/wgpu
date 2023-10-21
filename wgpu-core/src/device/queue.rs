@@ -10,6 +10,7 @@ use crate::{
     get_lowest_common_denom,
     global::Global,
     hal_api::HalApi,
+    hal_label,
     id::{self, QueueId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
@@ -298,10 +299,11 @@ impl<A: HalApi> PendingWrites<A> {
 fn prepare_staging_buffer<A: HalApi>(
     device: &Arc<Device<A>>,
     size: wgt::BufferAddress,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(StagingBuffer<A>, *mut u8), DeviceError> {
     profiling::scope!("prepare_staging_buffer");
     let stage_desc = hal::BufferDescriptor {
-        label: Some("(wgpu internal) Staging"),
+        label: hal_label(Some("(wgpu internal) Staging"), instance_flags),
         size,
         usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::COPY_SRC,
         memory_flags: hal::MemoryFlags::TRANSIENT,
@@ -414,7 +416,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(device, data_size)?;
+        let (staging_buffer, staging_buffer_ptr) =
+            prepare_staging_buffer(device, data_size, device.instance_flags)?;
         let mut pending_writes = device.pending_writes.lock();
         let pending_writes = pending_writes.as_mut().unwrap();
 
@@ -459,7 +462,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = queue.device.as_ref().unwrap();
 
         let (staging_buffer, staging_buffer_ptr) =
-            prepare_staging_buffer(device, buffer_size.get())?;
+            prepare_staging_buffer(device, buffer_size.get(), device.instance_flags)?;
 
         let fid = hub.staging_buffers.prepare::<G>(id_in);
         let (id, _) = fid.assign(staging_buffer);
@@ -816,7 +819,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
-        let (staging_buffer, staging_buffer_ptr) = prepare_staging_buffer(device, stage_size)?;
+        let (staging_buffer, staging_buffer_ptr) =
+            prepare_staging_buffer(device, stage_size, device.instance_flags)?;
 
         let stage_fid = hub.staging_buffers.request();
         let staging_buffer = stage_fid.init(staging_buffer);
@@ -1334,7 +1338,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         unsafe {
                             baked
                                 .encoder
-                                .begin_encoding(Some("(wgpu internal) Transit"))
+                                .begin_encoding(hal_label(
+                                    Some("(wgpu internal) Transit"),
+                                    device.instance_flags,
+                                ))
                                 .map_err(DeviceError::from)?
                         };
                         log::trace!("Stitching command buffer {:?} before submission", cmb_id);
@@ -1365,7 +1372,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             unsafe {
                                 baked
                                     .encoder
-                                    .begin_encoding(Some("(wgpu internal) Present"))
+                                    .begin_encoding(hal_label(
+                                        Some("(wgpu internal) Present"),
+                                        device.instance_flags,
+                                    ))
                                     .map_err(DeviceError::from)?
                             };
                             trackers

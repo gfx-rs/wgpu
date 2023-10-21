@@ -71,6 +71,7 @@ pub struct Instance {
     pub dx11: Option<HalInstance<hal::api::Dx11>>,
     #[cfg(feature = "gles")]
     pub gl: Option<HalInstance<hal::api::Gles>>,
+    pub flags: wgt::InstanceFlags,
 }
 
 impl Instance {
@@ -115,6 +116,7 @@ impl Instance {
             dx11: init(hal::api::Dx11, &instance_desc),
             #[cfg(feature = "gles")]
             gl: init(hal::api::Gles, &instance_desc),
+            flags: instance_desc.flags,
         }
     }
 
@@ -301,6 +303,7 @@ impl<A: HalApi> Adapter<A> {
         self: &Arc<Self>,
         hal_device: OpenDevice<A>,
         desc: &DeviceDescriptor,
+        instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         log::info!("Adapter::create_device");
@@ -314,6 +317,7 @@ impl<A: HalApi> Adapter<A> {
             caps.downlevel.clone(),
             desc,
             trace_path,
+            instance_flags,
         ) {
             let queue = Queue {
                 device: None,
@@ -328,6 +332,7 @@ impl<A: HalApi> Adapter<A> {
     fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
+        instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
@@ -378,7 +383,7 @@ impl<A: HalApi> Adapter<A> {
             },
         )?;
 
-        self.create_device_and_queue_from_hal(open, desc, trace_path)
+        self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
     }
 }
 
@@ -1186,10 +1191,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let (device, mut queue) = match adapter.create_device_and_queue(desc, trace_path) {
-                Ok((device, queue)) => (device, queue),
-                Err(e) => break e,
-            };
+            let (device, mut queue) =
+                match adapter.create_device_and_queue(desc, self.instance.flags, trace_path) {
+                    Ok((device, queue)) => (device, queue),
+                    Err(e) => break e,
+                };
             let (device_id, _) = device_fid.assign(device);
             log::info!("Created Device {:?}", device_id);
 
@@ -1233,11 +1239,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(adapter) => adapter,
                 Err(_) => break RequestDeviceError::InvalidAdapter,
             };
-            let (device, mut queue) =
-                match adapter.create_device_and_queue_from_hal(hal_device, desc, trace_path) {
-                    Ok(device) => device,
-                    Err(e) => break e,
-                };
+            let (device, mut queue) = match adapter.create_device_and_queue_from_hal(
+                hal_device,
+                desc,
+                self.instance.flags,
+                trace_path,
+            ) {
+                Ok(device) => device,
+                Err(e) => break e,
+            };
             let (device_id, _) = devices_fid.assign(device);
             log::info!("Created Device {:?}", device_id);
 

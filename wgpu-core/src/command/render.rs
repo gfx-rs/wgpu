@@ -17,7 +17,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    id,
+    hal_label, id,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::{self, PipelineFlags},
@@ -1166,7 +1166,7 @@ impl<'a, A: HalApi> RenderPassInfo<'a, A> {
         };
 
         let hal_desc = hal::RenderPassDescriptor {
-            label,
+            label: hal_label(label, device.instance_flags),
             extent,
             sample_count,
             color_attachments: &colors,
@@ -1296,6 +1296,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "CommandEncoder::run_render_pass {}",
             base.label.unwrap_or("")
         );
+
+        let discard_hal_labels = self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
+        let label = hal_label(base.label, self.instance.flags);
+
         let init_scope = PassErrorScope::Pass(encoder_id);
 
         let hub = A::hub(self);
@@ -1334,7 +1341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             encoder.close();
             // We will reset this to `Recording` if we succeed, acts as a fail-safe.
             *status = CommandEncoderStatus::Error;
-            encoder.open_pass(base.label);
+            encoder.open_pass(label);
 
             let bundle_guard = hub.render_bundles.read();
             let bind_group_guard = hub.bind_groups.read();
@@ -1351,7 +1358,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut info = RenderPassInfo::start(
                 device,
-                base.label,
+                label,
                 color_attachments,
                 depth_stencil_attachment,
                 timestamp_writes,
@@ -2126,15 +2133,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     RenderCommand::PushDebugGroup { color: _, len } => {
                         state.debug_scope_depth += 1;
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
+                        if !discard_hal_labels {
+                            let label = str::from_utf8(
+                                &base.string_data[string_offset..string_offset + len],
+                            )
+                            .unwrap();
 
-                        log::trace!("RenderPass::push_debug_group {label:?}");
-                        string_offset += len;
-                        unsafe {
-                            raw.begin_debug_marker(label);
+                            log::trace!("RenderPass::push_debug_group {label:?}");
+                            unsafe {
+                                raw.begin_debug_marker(label);
+                            }
                         }
+                        string_offset += len;
                     }
                     RenderCommand::PopDebugGroup => {
                         log::trace!("RenderPass::pop_debug_group");
@@ -2145,19 +2155,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .map_pass_err(scope);
                         }
                         state.debug_scope_depth -= 1;
-                        unsafe {
-                            raw.end_debug_marker();
+                        if !discard_hal_labels {
+                            unsafe {
+                                raw.end_debug_marker();
+                            }
                         }
                     }
                     RenderCommand::InsertDebugMarker { color: _, len } => {
-                        let label =
-                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                                .unwrap();
-                        log::trace!("RenderPass::insert_debug_marker {label:?}");
-                        string_offset += len;
-                        unsafe {
-                            raw.insert_debug_marker(label);
+                        if !discard_hal_labels {
+                            let label = str::from_utf8(
+                                &base.string_data[string_offset..string_offset + len],
+                            )
+                            .unwrap();
+                            log::trace!("RenderPass::insert_debug_marker {label:?}");
+                            unsafe {
+                                raw.insert_debug_marker(label);
+                            }
                         }
+                        string_offset += len;
                     }
                     RenderCommand::WriteTimestamp {
                         query_set_id,

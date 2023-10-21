@@ -228,8 +228,9 @@ impl Surface {
     pub(super) unsafe fn present(
         &self,
         _suf_texture: super::Texture,
-        gl: &glow::Context,
+        context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
+        let gl = &context.glow_context;
         let swapchain = self.swapchain.read();
         let swapchain = swapchain.as_ref().ok_or(crate::SurfaceError::Other(
             "need to configure surface before presenting",

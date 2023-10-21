@@ -8,6 +8,8 @@ Usage: xtask <COMMAND>
 
 Commands:
   run-wasm
+  test
+    --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
 
 Options:
   -h, --help  Print help
@@ -40,6 +42,7 @@ impl Args {
 
 pub(crate) enum Subcommand {
     RunWasm { args: Arguments },
+    Test { args: Arguments },
 }
 
 impl Subcommand {
@@ -50,6 +53,7 @@ impl Subcommand {
             .context("no subcommand specified; see `--help` for more details")?;
         match &*subcmd {
             "run-wasm" => Ok(Self::RunWasm { args }),
+            "test" => Ok(Self::Test { args }),
             other => {
                 bail!("unrecognized subcommand {other:?}; see `--help` for more details")
             }

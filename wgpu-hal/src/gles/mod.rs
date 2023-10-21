@@ -57,12 +57,14 @@ To address this, we invalidate the vertex buffers based on:
 */
 
 ///cbindgen:ignore
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(not(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten")))))]
 mod egl;
 #[cfg(target_os = "emscripten")]
 mod emscripten;
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod web;
+#[cfg(windows)]
+mod wgl;
 
 mod adapter;
 mod command;
@@ -72,15 +74,20 @@ mod queue;
 
 use crate::{CopyExtent, TextureDescriptor};
 
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(not(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten")))))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(not(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten")))))]
 use self::egl::{Instance, Surface};
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use self::web::AdapterContext;
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 use self::web::{Instance, Surface};
+
+#[cfg(windows)]
+use self::wgl::AdapterContext;
+#[cfg(windows)]
+use self::wgl::{Instance, Surface};
 
 use arrayvec::ArrayVec;
 
@@ -204,6 +211,7 @@ struct AdapterShared {
     max_texture_size: u32,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
+    es: bool,
 }
 
 pub struct Adapter {
@@ -907,5 +915,55 @@ impl fmt::Debug for CommandEncoder {
         f.debug_struct("CommandEncoder")
             .field("cmd_buffer", &self.cmd_buffer)
             .finish()
+    }
+}
+
+#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
+    let source_str = match source {
+        glow::DEBUG_SOURCE_API => "API",
+        glow::DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
+        glow::DEBUG_SOURCE_SHADER_COMPILER => "ShaderCompiler",
+        glow::DEBUG_SOURCE_THIRD_PARTY => "Third Party",
+        glow::DEBUG_SOURCE_APPLICATION => "Application",
+        glow::DEBUG_SOURCE_OTHER => "Other",
+        _ => unreachable!(),
+    };
+
+    let log_severity = match severity {
+        glow::DEBUG_SEVERITY_HIGH => log::Level::Error,
+        glow::DEBUG_SEVERITY_MEDIUM => log::Level::Warn,
+        glow::DEBUG_SEVERITY_LOW => log::Level::Info,
+        glow::DEBUG_SEVERITY_NOTIFICATION => log::Level::Trace,
+        _ => unreachable!(),
+    };
+
+    let type_str = match gltype {
+        glow::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "Deprecated Behavior",
+        glow::DEBUG_TYPE_ERROR => "Error",
+        glow::DEBUG_TYPE_MARKER => "Marker",
+        glow::DEBUG_TYPE_OTHER => "Other",
+        glow::DEBUG_TYPE_PERFORMANCE => "Performance",
+        glow::DEBUG_TYPE_POP_GROUP => "Pop Group",
+        glow::DEBUG_TYPE_PORTABILITY => "Portability",
+        glow::DEBUG_TYPE_PUSH_GROUP => "Push Group",
+        glow::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "Undefined Behavior",
+        _ => unreachable!(),
+    };
+
+    let _ = std::panic::catch_unwind(|| {
+        log::log!(
+            log_severity,
+            "GLES: [{}/{}] ID {} : {}",
+            source_str,
+            type_str,
+            id,
+            message
+        );
+    });
+
+    if cfg!(debug_assertions) && log_severity == log::Level::Error {
+        // Set canary and continue
+        crate::VALIDATION_CANARY.set();
     }
 }

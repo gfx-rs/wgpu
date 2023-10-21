@@ -1,23 +1,18 @@
 use super::*;
-use pollster::FutureExt;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn hello_synchronization_test_results() {
-    initialize_test(
+#[gpu_test]
+static SYNC: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         // Taken from hello-compute tests.
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults()),
-        |ctx| {
-            let ExecuteResults {
-                patient_workgroup_results,
-                hasty_workgroup_results: _,
-            } = execute(&ctx.device, &ctx.queue, ARR_SIZE).block_on();
-            assert_eq!(patient_workgroup_results, [16_u32; ARR_SIZE]);
-        },
-    );
-}
+    )
+    .run_async(|ctx| async move {
+        let ExecuteResults {
+            patient_workgroup_results,
+            hasty_workgroup_results: _,
+        } = execute(&ctx.device, &ctx.queue, ARR_SIZE).await;
+        assert_eq!(patient_workgroup_results, [16_u32; ARR_SIZE]);
+    });

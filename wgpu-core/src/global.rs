@@ -1,5 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
+use wgt::Backend;
+
 use crate::{
     hal_api::HalApi,
     hub::{HubReport, Hubs},
@@ -29,28 +31,20 @@ impl GlobalReport {
     pub fn surfaces(&self) -> &RegistryReport {
         &self.surfaces
     }
-    pub fn hub_report(&self) -> &HubReport {
-        #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
-        if self.vulkan.is_some() {
-            return self.vulkan.as_ref().unwrap();
+    pub fn hub_report(&self, backend: Backend) -> &HubReport {
+        match backend {
+            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            Backend::Vulkan => self.vulkan.as_ref().unwrap(),
+            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+            Backend::Metal => self.metal.as_ref().unwrap(),
+            #[cfg(all(feature = "dx12", windows))]
+            Backend::Dx12 => self.dx12.as_ref().unwrap(),
+            #[cfg(all(feature = "dx11", windows))]
+            Backend::Dx11 => self.dx11.as_ref().unwrap(),
+            #[cfg(feature = "gles")]
+            Backend::Gl => self.gl.as_ref().unwrap(),
+            _ => panic!("HubReport is not supported on this backend"),
         }
-        #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
-        if self.metal.is_some() {
-            return self.metal.as_ref().unwrap();
-        }
-        #[cfg(all(feature = "dx12", windows))]
-        if self.dx12.is_some() {
-            return self.dx12.as_ref().unwrap();
-        }
-        #[cfg(all(feature = "dx11", windows))]
-        if self.dx11.is_some() {
-            return self.dx11.as_ref().unwrap();
-        }
-        #[cfg(feature = "gles")]
-        if self.gl.is_some() {
-            return self.gl.as_ref().unwrap();
-        }
-        unreachable!();
     }
 }
 

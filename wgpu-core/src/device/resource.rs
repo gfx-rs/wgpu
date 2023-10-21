@@ -10,6 +10,7 @@ use crate::{
         RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
+    hal_label,
     hub::Hub,
     id::{self, DeviceId, QueueId},
     init_tracker::{
@@ -120,6 +121,7 @@ pub struct Device<A: HalApi> {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
+    pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -193,6 +195,7 @@ impl<A: HalApi> Device<A> {
         downlevel: wgt::DownlevelCapabilities,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
+        instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, CreateDeviceError> {
         #[cfg(not(feature = "trace"))]
         if let Some(_) = trace_path {
@@ -213,7 +216,7 @@ impl<A: HalApi> Device<A> {
         let zero_buffer = unsafe {
             raw_device
                 .create_buffer(&hal::BufferDescriptor {
-                    label: Some("(wgpu internal) zero init buffer"),
+                    label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
                     size: ZERO_BUFFER_SIZE,
                     usage: hal::BufferUses::COPY_SRC | hal::BufferUses::COPY_DST,
                     memory_flags: hal::MemoryFlags::empty(),
@@ -271,6 +274,7 @@ impl<A: HalApi> Device<A> {
             limits: desc.limits.clone(),
             features: desc.features,
             downlevel,
+            instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
         })
     }
@@ -504,7 +508,7 @@ impl<A: HalApi> Device<A> {
         memory_flags.set(hal::MemoryFlags::TRANSIENT, transient);
 
         let hal_desc = hal::BufferDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             size: aligned_size,
             usage,
             memory_flags,
@@ -729,7 +733,7 @@ impl<A: HalApi> Device<A> {
         let hal_usage = conv::map_texture_usage_for_texture(desc, &format_features);
 
         let hal_desc = hal::TextureDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             size: desc.size,
             mip_level_count: desc.mip_level_count,
             sample_count: desc.sample_count,
@@ -762,11 +766,16 @@ impl<A: HalApi> Device<A> {
                 wgt::TextureDimension::D3 => unreachable!(),
             };
 
+            let clear_label = hal_label(
+                Some("(wgpu internal) clear texture view"),
+                self.instance_flags,
+            );
+
             let mut clear_views = SmallVec::new();
             for mip_level in 0..desc.mip_level_count {
                 for array_layer in 0..desc.size.depth_or_array_layers {
                     let desc = hal::TextureViewDescriptor {
-                        label: Some("(wgpu internal) clear texture view"),
+                        label: clear_label,
                         format: desc.format,
                         dimension,
                         usage,
@@ -1062,7 +1071,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let hal_desc = hal::TextureViewDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             format,
             dimension: resolved_dimension,
             usage,
@@ -1178,7 +1187,7 @@ impl<A: HalApi> Device<A> {
         //TODO: check for wgt::DownlevelFlags::COMPARISON_SAMPLERS
 
         let hal_desc = hal::SamplerDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             address_modes: desc.address_modes,
             mag_filter: desc.mag_filter,
             min_filter: desc.min_filter,
@@ -1300,6 +1309,12 @@ impl<A: HalApi> Device<A> {
             Caps::DUAL_SOURCE_BLENDING,
             self.features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
         );
+        caps.set(
+            Caps::CUBE_ARRAY_TEXTURES,
+            self.downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
+        );
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
@@ -1315,7 +1330,7 @@ impl<A: HalApi> Device<A> {
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader { module, info });
 
         let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             runtime_checks: desc.shader_bound_checks.runtime_checks(),
         };
         let raw = match unsafe {
@@ -1356,7 +1371,7 @@ impl<A: HalApi> Device<A> {
     ) -> Result<pipeline::ShaderModule<A>, pipeline::CreateShaderModuleError> {
         self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
         let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             runtime_checks: desc.shader_bound_checks.runtime_checks(),
         };
         let hal_shader = hal::ShaderInput::SpirV(source);
@@ -1452,7 +1467,7 @@ impl<A: HalApi> Device<A> {
 
     pub(crate) fn create_bind_group_layout(
         self: &Arc<Self>,
-        label: Option<&str>,
+        label: &crate::Label,
         entry_map: binding_model::BindEntryMap,
     ) -> Result<BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
@@ -1616,6 +1631,7 @@ impl<A: HalApi> Device<A> {
         let bgl_flags = conv::bind_group_layout_flags(self.features);
 
         let mut hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
+        let label = label.to_hal(self.instance_flags);
         hal_bindings.sort_by_key(|b| b.binding);
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
@@ -1651,7 +1667,7 @@ impl<A: HalApi> Device<A> {
             count_validator,
             entries: entry_map,
             #[cfg(debug_assertions)]
-            label: label.unwrap_or("").to_string(),
+            label: label.unwrap_or_default().to_string(),
         })
     }
 
@@ -2050,7 +2066,7 @@ impl<A: HalApi> Device<A> {
             }
         }
         let hal_desc = hal::BindGroupDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             layout: layout.raw(),
             entries: &hal_entries,
             buffers: &hal_buffers,
@@ -2324,7 +2340,7 @@ impl<A: HalApi> Device<A> {
             .map(|&id| bgl_guard.get(id).unwrap().raw())
             .collect::<Vec<_>>();
         let hal_desc = hal::PipelineLayoutDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             flags: hal::PipelineLayoutFlags::BASE_VERTEX_INSTANCE,
             bind_group_layouts: &bgl_vec,
             push_constant_ranges: desc.push_constant_ranges.as_ref(),
@@ -2383,7 +2399,7 @@ impl<A: HalApi> Device<A> {
                     *bgl_id = dedup_id;
                     None
                 }
-                None => Some(self.create_bind_group_layout(None, map)?),
+                None => Some(self.create_bind_group_layout(&None, map)?),
             };
             if let Some(bgl) = bgl {
                 bgl_registry.force_replace(*bgl_id, bgl);
@@ -2485,7 +2501,7 @@ impl<A: HalApi> Device<A> {
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, layout);
 
         let pipeline_desc = hal::ComputePipelineDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             layout: layout.raw(),
             stage: hal::ProgrammableStage {
                 entry_point: desc.stage.entry_point.as_ref(),
@@ -3018,7 +3034,7 @@ impl<A: HalApi> Device<A> {
             Device::make_late_sized_buffer_groups(&shader_binding_sizes, &layout);
 
         let pipeline_desc = hal::RenderPipelineDescriptor {
-            label: desc.label.borrow_option(),
+            label: desc.label.to_hal(self.instance_flags),
             layout: layout.raw(),
             vertex_buffers: &vertex_buffers,
             vertex_stage,
@@ -3180,7 +3196,7 @@ impl<A: HalApi> Device<A> {
             });
         }
 
-        let hal_desc = desc.map_label(crate::LabelHelpers::borrow_option);
+        let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
         Ok(QuerySet {
             raw: Some(unsafe { self.raw().create_query_set(&hal_desc).unwrap() }),
             device: self.clone(),

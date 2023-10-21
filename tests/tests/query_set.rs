@@ -1,8 +1,9 @@
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
-#[test]
-fn drop_failed_timestamp_query_set() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
         // Enter an error scope, so the validation catch-all doesn't
         // report the error too early.
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -20,4 +21,3 @@ fn drop_failed_timestamp_query_set() {
 
         assert!(pollster::block_on(ctx.device.pop_error_scope()).is_some());
     });
-}

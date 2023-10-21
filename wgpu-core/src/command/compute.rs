@@ -14,7 +14,7 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
-    id,
+    hal_label, id,
     id::DeviceId,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
@@ -465,8 +465,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(&*query_set_guard),
         );
 
+        let discard_hal_labels = self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
         let hal_desc = hal::ComputePassDescriptor {
-            label: base.label,
+            label: hal_label(base.label, self.instance.flags),
             timestamp_writes,
         };
 
@@ -751,13 +755,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::PushDebugGroup { color: _, len } => {
                     state.debug_scope_depth += 1;
-                    let label =
-                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                            .unwrap();
-                    string_offset += len;
-                    unsafe {
-                        raw.begin_debug_marker(label);
+                    if !discard_hal_labels {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        unsafe {
+                            raw.begin_debug_marker(label);
+                        }
                     }
+                    string_offset += len;
                 }
                 ComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
@@ -767,16 +773,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                     }
                     state.debug_scope_depth -= 1;
-                    unsafe {
-                        raw.end_debug_marker();
+                    if !discard_hal_labels {
+                        unsafe {
+                            raw.end_debug_marker();
+                        }
                     }
                 }
                 ComputeCommand::InsertDebugMarker { color: _, len } => {
-                    let label =
-                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                            .unwrap();
+                    if !discard_hal_labels {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        unsafe { raw.insert_debug_marker(label) }
+                    }
                     string_offset += len;
-                    unsafe { raw.insert_debug_marker(label) }
                 }
                 ComputeCommand::WriteTimestamp {
                     query_set_id,

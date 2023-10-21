@@ -1,9 +1,12 @@
-use std::{borrow::Cow, ffi::OsStr, io, path::Path};
+//! Image comparison utilities
+
+use std::{borrow::Cow, ffi::OsStr, path::Path};
 
 use wgpu::util::{align_to, DeviceExt};
 use wgpu::*;
 
-fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
+#[cfg(not(target_arch = "wasm32"))]
+async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> {
     let data = match std::fs::read(&path) {
         Ok(f) => f,
         Err(e) => {
@@ -15,7 +18,7 @@ fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> 
             return None;
         }
     };
-    let decoder = png::Decoder::new(io::Cursor::new(data));
+    let decoder = png::Decoder::new(std::io::Cursor::new(data));
     let mut reader = decoder.read_info().ok()?;
 
     let mut buffer = vec![0; reader.output_buffer_size()];
@@ -40,32 +43,26 @@ fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec<u8>> 
     Some(buffer)
 }
 
-#[allow(unused_variables)]
-fn write_png(
+#[cfg(not(target_arch = "wasm32"))]
+async fn write_png(
     path: impl AsRef<Path>,
     width: u32,
     height: u32,
     data: &[u8],
     compression: png::Compression,
 ) {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let file = io::BufWriter::new(std::fs::File::create(path).unwrap());
+    let file = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
 
-        let mut encoder = png::Encoder::new(file, width, height);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        encoder.set_compression(compression);
-        let mut writer = encoder.write_header().unwrap();
+    let mut encoder = png::Encoder::new(file, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_compression(compression);
+    let mut writer = encoder.write_header().unwrap();
 
-        writer.write_image_data(data).unwrap();
-    }
+    writer.write_image_data(data).unwrap();
 }
 
-pub fn calc_difference(lhs: u8, rhs: u8) -> u8 {
-    (lhs as i16 - rhs as i16).unsigned_abs() as u8
-}
-
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 fn add_alpha(input: &[u8]) -> Vec<u8> {
     input
         .chunks_exact(3)
@@ -73,6 +70,7 @@ fn add_alpha(input: &[u8]) -> Vec<u8> {
         .collect()
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 fn remove_alpha(input: &[u8]) -> Vec<u8> {
     input
         .chunks_exact(4)
@@ -148,7 +146,8 @@ impl ComparisonType {
     }
 }
 
-pub fn compare_image_output(
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
     adapter_info: &wgt::AdapterInfo,
     width: u32,
@@ -156,29 +155,47 @@ pub fn compare_image_output(
     test_with_alpha: &[u8],
     checks: &[ComparisonType],
 ) {
-    #[cfg(not(target_arch = "wasm32"))]
+    use std::{ffi::OsString, str::FromStr};
+
+    let reference_path = Path::new(&path);
+    let reference_with_alpha = read_png(&path, width, height).await;
+
+    let reference = match reference_with_alpha {
+        Some(v) => remove_alpha(&v),
+        None => {
+            write_png(
+                &path,
+                width,
+                height,
+                test_with_alpha,
+                png::Compression::Best,
+            )
+            .await;
+            return;
+        }
+    };
+    let test = remove_alpha(test_with_alpha);
+
+    assert_eq!(reference.len(), test.len());
+
+    let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
+    let renderer = format!(
+        "{}-{}-{}",
+        adapter_info.backend.to_str(),
+        sanitize_for_path(&adapter_info.name),
+        sanitize_for_path(&adapter_info.driver)
+    );
+    // Determine the paths to write out the various intermediate files
+    let actual_path = Path::new(&path).with_file_name(
+        OsString::from_str(&format!("{}-{}-actual.png", file_stem, renderer)).unwrap(),
+    );
+    let difference_path = Path::new(&path).with_file_name(
+        OsString::from_str(&format!("{}-{}-difference.png", file_stem, renderer,)).unwrap(),
+    );
+
+    let mut all_passed;
+    let magma_image_with_alpha;
     {
-        use std::{ffi::OsString, str::FromStr};
-
-        let reference_with_alpha = read_png(&path, width, height);
-
-        let reference = match reference_with_alpha {
-            Some(v) => remove_alpha(&v),
-            None => {
-                write_png(
-                    &path,
-                    width,
-                    height,
-                    test_with_alpha,
-                    png::Compression::Best,
-                );
-                return;
-            }
-        };
-        let test = remove_alpha(test_with_alpha);
-
-        assert_eq!(reference.len(), test.len());
-
         let reference_flip = nv_flip::FlipImageRgb8::with_data(width, height, &reference);
         let test_flip = nv_flip::FlipImageRgb8::with_data(width, height, &test);
 
@@ -189,7 +206,6 @@ pub fn compare_image_output(
         );
         let mut pool = nv_flip::FlipPool::from_image(&error_map_flip);
 
-        let reference_path = Path::new(&path);
         println!(
             "Starting image comparison test with reference image \"{}\"",
             reference_path.display()
@@ -198,59 +214,57 @@ pub fn compare_image_output(
         print_flip(&mut pool);
 
         // If there are no checks, we want to fail the test.
-        let mut all_passed = !checks.is_empty();
+        all_passed = !checks.is_empty();
         // We always iterate all of these, as the call to check prints
         for check in checks {
             all_passed &= check.check(&mut pool);
         }
 
-        let file_stem = reference_path.file_stem().unwrap().to_string_lossy();
-        let renderer = format!(
-            "{}-{}-{}",
-            adapter_info.backend.to_str(),
-            sanitize_for_path(&adapter_info.name),
-            sanitize_for_path(&adapter_info.driver)
-        );
-        // Determine the paths to write out the various intermediate files
-        let actual_path = Path::new(&path).with_file_name(
-            OsString::from_str(&format!("{}-{}-actual.png", file_stem, renderer)).unwrap(),
-        );
-        let difference_path = Path::new(&path).with_file_name(
-            OsString::from_str(&format!("{}-{}-difference.png", file_stem, renderer,)).unwrap(),
-        );
-
         // Convert the error values to a false color reprensentation
         let magma_image = error_map_flip
             .apply_color_lut(&nv_flip::magma_lut())
             .to_vec();
-        let magma_image_with_alpha = add_alpha(&magma_image);
-
-        write_png(
-            actual_path,
-            width,
-            height,
-            test_with_alpha,
-            png::Compression::Fast,
-        );
-        write_png(
-            difference_path,
-            width,
-            height,
-            &magma_image_with_alpha,
-            png::Compression::Fast,
-        );
-
-        if !all_passed {
-            panic!("Image data mismatch!")
-        }
+        magma_image_with_alpha = add_alpha(&magma_image);
     }
 
+    write_png(
+        actual_path,
+        width,
+        height,
+        test_with_alpha,
+        png::Compression::Fast,
+    )
+    .await;
+    write_png(
+        difference_path,
+        width,
+        height,
+        &magma_image_with_alpha,
+        png::Compression::Fast,
+    )
+    .await;
+
+    if !all_passed {
+        panic!("Image data mismatch!")
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn compare_image_output(
+    path: impl AsRef<Path> + AsRef<OsStr>,
+    adapter_info: &wgt::AdapterInfo,
+    width: u32,
+    height: u32,
+    test_with_alpha: &[u8],
+    checks: &[ComparisonType],
+) {
     #[cfg(target_arch = "wasm32")]
     {
         let _ = (path, adapter_info, width, height, test_with_alpha, checks);
     }
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(unused))]
 fn sanitize_for_path(s: &str) -> String {
     s.chars()
         .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })

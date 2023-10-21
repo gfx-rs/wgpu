@@ -123,7 +123,6 @@ use crate::{
     resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
     storage::{Element, Storage},
 };
-
 use std::fmt::Debug;
 
 #[derive(Debug, PartialEq, Eq)]

@@ -1,58 +1,81 @@
-use wasm_bindgen_test::*;
 use wgpu::*;
 use wgpu_test::{
-    image::ReadbackBuffers, initialize_test, FailureCase, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
+    TestingContext,
 };
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
-#[test]
-#[wasm_bindgen_test]
-fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
-    initialize_test(
-        TestParameters::default().skip(FailureCase::webgl2()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
-            case.create_command_encoder();
-            case.discard();
-            case.submit_command_encoder();
+#[gpu_test]
+static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
+    GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|mut ctx| {
+        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+        case.create_command_encoder();
+        case.discard();
+        case.submit_command_encoder();
 
-            case.create_command_encoder();
-            case.copy_texture_to_buffer();
-            case.submit_command_encoder();
+        case.create_command_encoder();
+        case.copy_texture_to_buffer();
+        case.submit_command_encoder();
 
-            case.assert_buffers_are_zero();
-        },
-    );
-}
+        case.assert_buffers_are_zero();
+    });
 
-// Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in the same encoder to a buffer.
-#[test]
-#[wasm_bindgen_test]
-fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(
-        TestParameters::default().skip(FailureCase::webgl2()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
-            case.create_command_encoder();
-            case.discard();
-            case.copy_texture_to_buffer();
-            case.submit_command_encoder();
+#[gpu_test]
+static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
+    GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|mut ctx| {
+        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+        case.create_command_encoder();
+        case.discard();
+        case.copy_texture_to_buffer();
+        case.submit_command_encoder();
 
-            case.assert_buffers_are_zero();
-        },
-    );
-}
+        case.assert_buffers_are_zero();
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(
+#[gpu_test]
+static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
+    GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(
                 DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
             )
             .limits(Limits::downlevel_defaults()),
-        |mut ctx| {
+    )
+    .run_sync(|mut ctx| {
+        for format in [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+        ] {
+            let mut case = TestCase::new(&mut ctx, format);
+            case.create_command_encoder();
+            case.discard();
+            case.copy_texture_to_buffer();
+            case.submit_command_encoder();
+
+            case.assert_buffers_are_zero();
+        }
+    });
+
+#[gpu_test]
+static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(
+                    DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
+                        | DownlevelFlags::COMPUTE_SHADERS,
+                )
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_sync(|mut ctx| {
             for format in [
                 TextureFormat::Stencil8,
                 TextureFormat::Depth16Unorm,
@@ -62,42 +85,16 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
             ] {
                 let mut case = TestCase::new(&mut ctx, format);
                 case.create_command_encoder();
-                case.discard();
+
+                case.discard_depth();
+                case.discard_stencil();
                 case.copy_texture_to_buffer();
+
                 case.submit_command_encoder();
 
                 case.assert_buffers_are_zero();
             }
-        },
-    );
-}
-
-#[test]
-#[wasm_bindgen_test]
-fn discarding_either_depth_or_stencil_aspect() {
-    initialize_test(
-        TestParameters::default()
-            .downlevel_flags(
-                DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
-            )
-            .limits(Limits::downlevel_defaults()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Depth24PlusStencil8);
-
-            case.create_command_encoder();
-            case.discard_depth();
-            case.discard_stencil();
-            //When splitting it in subsequent submits of different command encoders
-            //it seems that texture tracker is not able anymore to get that the texture has been left in DEPTH_STENCIL_WRITE
-            //and it assume that it could find it uninitialized and set it in RESOURCE as not owning it
-            //When using a unique submit instead the tracker is able to follow all resource barriers and everything is smooth
-            case.copy_texture_to_buffer();
-            case.submit_command_encoder();
-
-            case.assert_buffers_are_zero();
-        },
-    );
-}
+        });
 
 struct TestCase<'ctx> {
     ctx: &'ctx mut TestingContext,

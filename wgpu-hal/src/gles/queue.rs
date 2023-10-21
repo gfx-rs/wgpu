@@ -1453,13 +1453,7 @@ impl crate::Queue<super::Api> for super::Queue {
         surface: &super::Surface,
         texture: super::Texture,
     ) -> Result<(), crate::SurfaceError> {
-        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
-        let gl = unsafe { &self.shared.context.get_without_egl_lock() };
-
-        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
-        let gl = &self.shared.context.glow_context;
-
-        unsafe { surface.present(texture, gl) }
+        unsafe { surface.present(texture, &self.shared.context) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {

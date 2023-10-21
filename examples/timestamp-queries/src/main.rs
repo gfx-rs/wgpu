@@ -419,35 +419,29 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use wgpu_test::{gpu_test, GpuTestConfiguration};
+
     use crate::{submit_render_and_compute_pass_with_queries, QueryResults};
 
-    #[test]
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn test_timestamps_encoder() {
-        wgpu_test::initialize_test(
+    #[gpu_test]
+    static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+        .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(wgpu::Features::TIMESTAMP_QUERY),
-            |ctx| {
-                test_timestamps(ctx, false);
-            },
-        );
-    }
+        )
+        .run_sync(|ctx| test_timestamps(ctx, false));
 
-    #[test]
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn test_timestamps_passes() {
-        wgpu_test::initialize_test(
+    #[gpu_test]
+    static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
+        .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
                 .features(
                     wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 ),
-            |ctx| {
-                test_timestamps(ctx, true);
-            },
-        );
-    }
+        )
+        .run_sync(|ctx| test_timestamps(ctx, true));
 
     fn test_timestamps(ctx: wgpu_test::TestingContext, timestamps_inside_passes: bool) {
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);

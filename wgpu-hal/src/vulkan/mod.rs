@@ -121,7 +121,13 @@ pub struct InstanceShared {
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,
-    driver_api_version: u32,
+    /// The instance API version.
+    ///
+    /// Which is the version of Vulkan supported for instance-level functionality.
+    ///
+    /// It is associated with a `VkInstance` and its children,
+    /// except for a `VkPhysicalDevice` and its children.
+    instance_api_version: u32,
 }
 
 pub struct Instance {
@@ -205,6 +211,7 @@ struct PrivateCapabilities {
     robust_buffer_access2: bool,
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
+    image_format_list: bool,
 }
 
 bitflags::bitflags!(

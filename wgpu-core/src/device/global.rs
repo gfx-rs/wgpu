@@ -143,60 +143,86 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let fid = hub.buffers.prepare::<G>(id_in);
 
-        let device = match hub.devices.get(device_id) {
-            Ok(device) => {
-                if !device.is_valid() {
-                    let id = fid.assign_error(desc.label.borrow_or_default());
-                    return (id, Some(DeviceError::Lost.into()));
+        let error = loop {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                Err(_) => {
+                    break DeviceError::Invalid.into();
                 }
-                device
+            };
+            if !device.is_valid() {
+                break DeviceError::Lost.into();
             }
-            Err(_) => {
+
+            if desc.usage.is_empty() {
+                // Per spec, `usage` must not be zero.
                 let id = fid.assign_error(desc.label.borrow_or_default());
-                return (id, Some(DeviceError::Invalid.into()));
+                return (
+                    id,
+                    Some(resource::CreateBufferError::InvalidUsage(desc.usage)),
+                );
             }
-        };
 
-        if desc.usage.is_empty() {
-            // Per spec, `usage` must not be zero.
-            let id = fid.assign_error(desc.label.borrow_or_default());
-            return (
-                id,
-                Some(resource::CreateBufferError::InvalidUsage(desc.usage)),
-            );
-        }
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            let mut desc = desc.clone();
-            let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
-            if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-                desc.usage |= wgt::BufferUsages::COPY_DST;
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                let mut desc = desc.clone();
+                let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
+                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                    desc.usage |= wgt::BufferUsages::COPY_DST;
+                }
+                trace.add(trace::Action::CreateBuffer(fid.id(), desc));
             }
-            trace.add(trace::Action::CreateBuffer(fid.id(), desc));
-        }
 
-        let buffer = match device.create_buffer(desc, false) {
-            Ok(buffer) => buffer,
-            Err(e) => {
-                let id = fid.assign_error(desc.label.borrow_or_default());
-                return (id, Some(e));
-            }
-        };
+            let buffer = match device.create_buffer(desc, false) {
+                Ok(buffer) => buffer,
+                Err(e) => {
+                    let id = fid.assign_error(desc.label.borrow_or_default());
+                    return (id, Some(e));
+                }
+            };
 
-        let (id, resource) = fid.assign(buffer);
-        log::info!("Created Buffer {:?} with {:?}", id, desc);
+            let (id, resource) = fid.assign(buffer);
+            log::info!("Created Buffer {:?} with {:?}", id, desc);
 
-        let buffer_use = if !desc.mapped_at_creation {
-            hal::BufferUses::empty()
-        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-            // buffer is mappable, so we are just doing that at start
-            let map_size = resource.size;
-            let ptr = if map_size == 0 {
-                std::ptr::NonNull::dangling()
+            let buffer_use = if !desc.mapped_at_creation {
+                hal::BufferUses::empty()
+            } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                // buffer is mappable, so we are just doing that at start
+                let map_size = resource.size;
+                let ptr = if map_size == 0 {
+                    std::ptr::NonNull::dangling()
+                } else {
+                    match map_buffer(device.raw(), &resource, 0, map_size, HostMap::Write) {
+                        Ok(ptr) => ptr,
+                        Err(e) => {
+                            device.lock_life().schedule_resource_destruction(
+                                queue::TempResource::Buffer(resource),
+                                !0,
+                            );
+                            hub.buffers
+                                .force_replace_with_error(id, desc.label.borrow_or_default());
+                            return (id, Some(e.into()));
+                        }
+                    }
+                };
+                *resource.map_state.lock() = resource::BufferMapState::Active {
+                    ptr,
+                    range: 0..map_size,
+                    host: HostMap::Write,
+                };
+                hal::BufferUses::MAP_WRITE
             } else {
-                match map_buffer(device.raw(), &resource, 0, map_size, HostMap::Write) {
-                    Ok(ptr) => ptr,
+                // buffer needs staging area for initialization only
+                let stage_desc = wgt::BufferDescriptor {
+                    label: Some(Cow::Borrowed(
+                        "(wgpu internal) initializing unmappable buffer",
+                    )),
+                    size: desc.size,
+                    usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
+                    mapped_at_creation: false,
+                };
+                let stage = match device.create_buffer(&stage_desc, true) {
+                    Ok(stage) => stage,
                     Err(e) => {
                         device.lock_life().schedule_resource_destruction(
                             queue::TempResource::Buffer(resource),
@@ -204,78 +230,57 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         hub.buffers
                             .force_replace_with_error(id, desc.label.borrow_or_default());
-                        return (id, Some(e.into()));
+                        return (id, Some(e));
                     }
-                }
-            };
-            *resource.map_state.lock() = resource::BufferMapState::Active {
-                ptr,
-                range: 0..map_size,
-                host: HostMap::Write,
-            };
-            hal::BufferUses::MAP_WRITE
-        } else {
-            // buffer needs staging area for initialization only
-            let stage_desc = wgt::BufferDescriptor {
-                label: Some(Cow::Borrowed(
-                    "(wgpu internal) initializing unmappable buffer",
-                )),
-                size: desc.size,
-                usage: wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::COPY_SRC,
-                mapped_at_creation: false,
-            };
-            let stage = match device.create_buffer(&stage_desc, true) {
-                Ok(stage) => stage,
-                Err(e) => {
-                    device
-                        .lock_life()
-                        .schedule_resource_destruction(queue::TempResource::Buffer(resource), !0);
-                    hub.buffers
-                        .force_replace_with_error(id, desc.label.borrow_or_default());
-                    return (id, Some(e));
-                }
-            };
-            let stage_fid = hub.buffers.request();
-            let stage = stage_fid.init(stage);
+                };
+                let stage_fid = hub.buffers.request();
+                let stage = stage_fid.init(stage);
 
-            let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
-                Ok(mapping) => mapping,
-                Err(e) => {
-                    let mut life_lock = device.lock_life();
-                    life_lock
-                        .schedule_resource_destruction(queue::TempResource::Buffer(resource), !0);
-                    life_lock.schedule_resource_destruction(queue::TempResource::Buffer(stage), !0);
-                    hub.buffers
-                        .force_replace_with_error(id, desc.label.borrow_or_default());
-                    return (id, Some(DeviceError::from(e).into()));
-                }
+                let mapping = match unsafe { device.raw().map_buffer(stage.raw(), 0..stage.size) } {
+                    Ok(mapping) => mapping,
+                    Err(e) => {
+                        let mut life_lock = device.lock_life();
+                        life_lock.schedule_resource_destruction(
+                            queue::TempResource::Buffer(resource),
+                            !0,
+                        );
+                        life_lock
+                            .schedule_resource_destruction(queue::TempResource::Buffer(stage), !0);
+                        hub.buffers
+                            .force_replace_with_error(id, desc.label.borrow_or_default());
+                        return (id, Some(DeviceError::from(e).into()));
+                    }
+                };
+
+                assert_eq!(resource.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
+                // Zero initialize memory and then mark both staging and buffer as initialized
+                // (it's guaranteed that this is the case by the time the buffer is usable)
+                unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, resource.size as usize) };
+                resource
+                    .initialization_status
+                    .write()
+                    .drain(0..resource.size);
+                stage.initialization_status.write().drain(0..resource.size);
+
+                *resource.map_state.lock() = resource::BufferMapState::Init {
+                    ptr: mapping.ptr,
+                    needs_flush: !mapping.is_coherent,
+                    stage_buffer: stage,
+                };
+                hal::BufferUses::COPY_DST
             };
 
-            assert_eq!(resource.size % wgt::COPY_BUFFER_ALIGNMENT, 0);
-            // Zero initialize memory and then mark both staging and buffer as initialized
-            // (it's guaranteed that this is the case by the time the buffer is usable)
-            unsafe { ptr::write_bytes(mapping.ptr.as_ptr(), 0, resource.size as usize) };
-            resource
-                .initialization_status
-                .write()
-                .drain(0..resource.size);
-            stage.initialization_status.write().drain(0..resource.size);
+            device
+                .trackers
+                .lock()
+                .buffers
+                .insert_single(id, resource, buffer_use);
 
-            *resource.map_state.lock() = resource::BufferMapState::Init {
-                ptr: mapping.ptr,
-                needs_flush: !mapping.is_coherent,
-                stage_buffer: stage,
-            };
-            hal::BufferUses::COPY_DST
+            return (id, None);
         };
 
-        device
-            .trackers
-            .lock()
-            .buffers
-            .insert_single(id, resource, buffer_use);
-
-        (id, None)
+        let id = fid.assign_error(desc.label.borrow_or_default());
+        (id, Some(error))
     }
 
     /// Assign `id_in` an error with the given `label`.
@@ -974,11 +979,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return (id, None);
             }
 
-            let layout =
-                match device.create_bind_group_layout(desc.label.borrow_option(), entry_map) {
-                    Ok(layout) => layout,
-                    Err(e) => break e,
-                };
+            let layout = match device.create_bind_group_layout(&desc.label, entry_map) {
+                Ok(layout) => layout,
+                Err(e) => break e,
+            };
 
             let (id, _layout) = fid.assign(layout);
             log::info!("Created BindGroupLayout {:?}", id);
@@ -1323,7 +1327,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &device,
                 #[cfg(feature = "trace")]
                 device.trace.lock().is_some(),
-                &desc.label,
+                desc.label
+                    .to_hal(device.instance_flags)
+                    .map(|s| s.to_string()),
             );
 
             let (id, _) = fid.assign(command_buffer);

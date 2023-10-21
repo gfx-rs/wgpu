@@ -1,9 +1,10 @@
 use std::borrow::Cow;
-use wgpu_test::{initialize_test, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
-#[test]
-fn occlusion_query() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|ctx| {
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Depth texture"),
@@ -124,5 +125,4 @@ fn occlusion_query() {
         assert_ne!(query_data[0], 0);
         assert_ne!(query_data[1], 0);
         assert_eq!(query_data[2], 0);
-    })
-}
+    });
