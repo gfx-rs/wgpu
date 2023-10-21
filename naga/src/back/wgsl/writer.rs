@@ -931,7 +931,7 @@ impl<W: Write> Writer<W> {
                 self.start_named_expr(module, result, func_ctx, &res_name)?;
                 self.named_expressions.insert(result, res_name);
 
-                writeln!(self.out, "subgroupBallot(")?;
+                write!(self.out, "subgroupBallot(")?;
                 if let Some(predicate) = predicate {
                     self.write_expr(module, predicate, func_ctx)?;
                 }

@@ -8,6 +8,7 @@ fn main(
     subgroupBarrier();
 
     subgroupBallot((subgroup_invocation_id & 1u) == 1u);
+    subgroupBallot();
 
     subgroupAll(subgroup_invocation_id != 0u);
     subgroupAny(subgroup_invocation_id == 0u);
