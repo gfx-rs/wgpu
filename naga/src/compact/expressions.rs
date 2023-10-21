@@ -55,7 +55,7 @@ impl<'tracer> ExpressionTracer<'tracer> {
                 | Ex::GlobalVariable(_)
                 | Ex::LocalVariable(_)
                 | Ex::CallResult(_)
-                | Ex::SubgroupBallotResult // FIXME: ???
+                | Ex::SubgroupBallotResult
                 | Ex::RayQueryProceedResult => {}
 
                 Ex::Constant(handle) => {
@@ -224,7 +224,7 @@ impl ModuleMap {
             | Ex::GlobalVariable(_)
             | Ex::LocalVariable(_)
             | Ex::CallResult(_)
-            | Ex::SubgroupBallotResult // FIXME: ???
+            | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
             // Expressions that contain handles that need to be adjusted.

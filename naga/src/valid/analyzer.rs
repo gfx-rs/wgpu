@@ -741,11 +741,11 @@ impl FunctionInfo {
                 requirements: UniformityRequirements::empty(),
             },
             E::SubgroupBallotResult => Uniformity {
-                non_uniform_result: None, // FIXME
+                non_uniform_result: None,
                 requirements: UniformityRequirements::empty(),
             },
             E::SubgroupOperationResult { .. } => Uniformity {
-                non_uniform_result: None, // FIXME
+                non_uniform_result: None,
                 requirements: UniformityRequirements::empty(),
             },
         };

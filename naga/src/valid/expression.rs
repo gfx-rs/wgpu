@@ -1538,7 +1538,7 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult => ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
-            E::SubgroupOperationResult { .. } => ShaderStages::COMPUTE, // FIXME
+            E::SubgroupOperationResult { .. } => ShaderStages::COMPUTE | ShaderStages::FRAGMENT,
         };
         Ok(stages)
     }
