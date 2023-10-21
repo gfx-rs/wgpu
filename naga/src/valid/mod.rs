@@ -108,6 +108,8 @@ bitflags::bitflags! {
         const DUAL_SOURCE_BLENDING = 0x2000;
         /// Support for arrayed cube textures.
         const CUBE_ARRAY_TEXTURES = 0x4000;
+        /// Support for `debugPrintf`
+        const DEBUG_PRINTF = 0x8000;
     }
 }
 

@@ -140,6 +140,8 @@ pub enum FunctionError {
         index: usize,
         source: ExpressionError,
     },
+    #[error("Capability {0:?} is required")]
+    MissingCapability(super::Capabilities),
     #[error(
         "Required uniformity of control flow for {0:?} in {1:?} is not fulfilled because of {2:?}"
     )]
@@ -910,6 +912,15 @@ impl super::Validator {
                     }
                 }
                 S::DebugPrintf { ref arguments, .. } => {
+                    if !self
+                        .capabilities
+                        .contains(super::Capabilities::DEBUG_PRINTF)
+                    {
+                        return Err(FunctionError::MissingCapability(
+                            super::Capabilities::DEBUG_PRINTF,
+                        )
+                        .with_span_static(span, "debugPrintf"));
+                    }
                     for (index, &expr) in arguments.iter().enumerate() {
                         context
                             .resolve_type_impl(expr, &self.valid_expression_set)
