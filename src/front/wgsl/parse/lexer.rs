@@ -350,9 +350,7 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<(&'a str, Span), Error<'a>> {
         match self.next() {
-            (Token::Word(word), span) if word == "_" => {
-                Err(Error::InvalidIdentifierUnderscore(span))
-            }
+            (Token::Word("_"), span) => Err(Error::InvalidIdentifierUnderscore(span)),
             (Token::Word(word), span) if word.starts_with("__") => {
                 Err(Error::ReservedIdentifierPrefix(span))
             }

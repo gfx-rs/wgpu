@@ -41,10 +41,7 @@ pub struct Handle<T> {
 
 impl<T> Clone for Handle<T> {
     fn clone(&self) -> Self {
-        Handle {
-            index: self.index,
-            marker: self.marker,
-        }
+        *self
     }
 }
 
@@ -60,7 +57,7 @@ impl<T> Eq for Handle<T> {}
 
 impl<T> PartialOrd for Handle<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.index.partial_cmp(&other.index)
+        Some(self.cmp(other))
     }
 }
 
