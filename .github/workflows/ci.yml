@@ -296,19 +296,6 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
-      - name: (windows) install vulkan sdk
-        if: matrix.os == 'windows-2022'
-        shell: bash
-        run: |
-          set -e
-
-          curl.exe https://sdk.lunarg.com/sdk/download/1.3.261.1/windows/VulkanSDK-1.3.261.1-Installer.exe -o vk_sdk.exe
-          ./vk_sdk.exe --accept-licenses --default-answer --confirm-command install
-
-          echo "C:/VulkanSDK/1.3.261.1/bin" >> "$GITHUB_PATH"
-          echo "VULKAN_SDK=C:/VulkanSDK/1.3.261.1" >> "$GITHUB_ENV"
-          echo "VK_SDK_PATH=C:/VulkanSDK/1.3.261.1" >> "$GITHUB_ENV"
-
       - name: (windows) install warp
         if: matrix.os == 'windows-2022'
         shell: bash

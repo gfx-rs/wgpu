@@ -173,8 +173,7 @@ static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
-            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
@@ -188,7 +187,8 @@ static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
-            .expect_fail(FailureCase::backend(wgpu::Backends::DX11)),
+            // https://github.com/gfx-rs/wgpu/issues/4276
+            .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_sync(|ctx| {
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
