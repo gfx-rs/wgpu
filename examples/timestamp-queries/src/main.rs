@@ -75,6 +75,7 @@ impl QueryResults {
         }
     }
 
+    #[cfg_attr(test, allow(unused))]
     fn print(&self, queue: &wgpu::Queue) {
         let period = queue.get_timestamp_period();
         let elapsed_us = |start, end: u64| end.wrapping_sub(start) as f64 * period as f64 / 1000.0;
@@ -174,6 +175,7 @@ impl Queries {
     }
 }
 
+#[cfg_attr(test, allow(unused))]
 async fn run() {
     // Instantiates instance of wgpu
     let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
@@ -403,6 +405,7 @@ fn render_pass(
     rpass.draw(0..3, 0..1);
 }
 
+#[cfg(not(test))]
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -416,6 +419,9 @@ fn main() {
         wasm_bindgen_futures::spawn_local(run());
     }
 }
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();
 
 #[cfg(test)]
 mod tests {
