@@ -1316,6 +1316,10 @@ impl<A: HalApi> Device<A> {
                 .flags
                 .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
         );
+        caps.set(
+            Caps::SUBGROUP,
+            self.features.contains(wgt::Features::SUBGROUP_OPERATIONS),
+        );
 
         let debug_source = if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) {
             Some(hal::DebugSource {
