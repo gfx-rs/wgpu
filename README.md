@@ -76,7 +76,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 | Metal       |                                |                    | :white_check_mark:        |                           |
 | DX12        | :white_check_mark:             |                    |                           |                           | 
 | DX11        | :hammer_and_wrench:            |                    |                           |                           |
-| OpenGL      |  :ok: (GL 3.3+)                | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL)              | 
+| OpenGL      |  :ok: (GL 3.3+)                | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
 | WebGPU      |                                |                    |                           | :white_check_mark:        |
 
 :white_check_mark: = First Class Support  
