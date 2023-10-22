@@ -698,6 +698,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                     raw,
                     target,
                     aspects,
+                    ref mip_levels,
                 } => {
                     dirty_textures |= 1 << slot;
                     self.state.texture_slots[slot as usize].tex_target = target;
@@ -706,6 +707,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                         texture: raw,
                         target,
                         aspects,
+                        mip_levels: mip_levels.clone(),
                     });
                 }
                 super::RawBinding::Image(ref binding) => {
