@@ -911,22 +911,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     if let Some(explicit) = explicit_ty {
                         if explicit != inferred_type {
                             let ty = &ctx.module.types[explicit];
-                            let explicit = ty
+                            let expected = ty
                                 .name
                                 .clone()
                                 .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
 
                             let ty = &ctx.module.types[inferred_type];
-                            let inferred = ty
+                            let got = ty
                                 .name
                                 .clone()
                                 .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
 
-                            return Err(Error::InitializationTypeMismatch(
-                                c.name.span,
-                                explicit,
-                                inferred,
-                            ));
+                            return Err(Error::InitializationTypeMismatch {
+                                name: c.name.span,
+                                expected,
+                                got,
+                            });
                         }
                     }
 
@@ -1113,11 +1113,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             .inner
                             .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
                         {
-                            return Err(Error::InitializationTypeMismatch(
-                                l.name.span,
-                                ctx.format_type(ty),
-                                ctx.format_type(init_ty),
-                            ));
+                            return Err(Error::InitializationTypeMismatch {
+                                name: l.name.span,
+                                expected: ctx.format_type(ty),
+                                got: ctx.format_type(init_ty),
+                            });
                         }
                     }
 
@@ -1152,11 +1152,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .inner
                                 .equivalent(initializer_ty, &ctx.module.types)
                             {
-                                return Err(Error::InitializationTypeMismatch(
-                                    v.name.span,
-                                    ctx.format_type(explicit),
-                                    ctx.format_typeinner(initializer_ty),
-                                ));
+                                return Err(Error::InitializationTypeMismatch {
+                                    name: v.name.span,
+                                    expected: ctx.format_type(explicit),
+                                    got: ctx.format_typeinner(initializer_ty),
+                                });
                             }
                             explicit
                         }

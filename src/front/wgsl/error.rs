@@ -177,7 +177,11 @@ pub enum Error<'a> {
     InconsistentBinding(Span),
     TypeNotConstructible(Span),
     TypeNotInferrable(Span),
-    InitializationTypeMismatch(Span, String, String),
+    InitializationTypeMismatch {
+        name: Span,
+        expected: String,
+        got: String,
+    },
     MissingType(Span),
     MissingAttribute(&'static str, Span),
     InvalidAtomicPointer(Span),
@@ -475,15 +479,15 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "type can't be inferred".into())],
                 notes: vec![],
             },
-            Error::InitializationTypeMismatch(name_span, ref expected_ty, ref got_ty) => {
+            Error::InitializationTypeMismatch { name, ref expected, ref got } => {
                 ParseError {
                     message: format!(
                         "the type of `{}` is expected to be `{}`, but got `{}`",
-                        &source[name_span], expected_ty, got_ty,
+                        &source[name], expected, got,
                     ),
                     labels: vec![(
-                        name_span,
-                        format!("definition of `{}`", &source[name_span]).into(),
+                        name,
+                        format!("definition of `{}`", &source[name]).into(),
                     )],
                     notes: vec![],
                 }
