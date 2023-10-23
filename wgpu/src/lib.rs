@@ -1945,19 +1945,19 @@ impl Instance {
         let raw_display_handle = window
             .display_handle()
             .map_err(|e| CreateSurfaceError {
-                inner: CreateSurfaceErrorKind::RawHandle(e)
+                inner: CreateSurfaceErrorKind::RawHandle(e),
             })?
             .as_raw();
         let raw_window_handle = window
             .window_handle()
             .map_err(|e| CreateSurfaceError {
-                inner: CreateSurfaceErrorKind::RawHandle(e)
+                inner: CreateSurfaceErrorKind::RawHandle(e),
             })?
             .as_raw();
         let (id, data) = DynContext::instance_create_surface(
             &*self.context,
             raw_display_handle,
-            raw_window_handle
+            raw_window_handle,
         )?;
         Ok(Surface {
             context: Arc::clone(&self.context),

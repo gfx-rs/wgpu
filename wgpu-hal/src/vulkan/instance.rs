@@ -750,7 +750,9 @@ impl crate::Instance<super::Api> for super::Instance {
                 let connection = display.connection.expect("Pointer to X-Server is not set.");
                 self.create_surface_from_xcb(connection.as_ptr(), handle.window.get())
             }
-            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window.as_ptr()),
+            (Rwh::AndroidNdk(handle), _) => {
+                self.create_surface_android(handle.a_native_window.as_ptr())
+            }
             #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
