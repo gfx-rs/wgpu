@@ -95,66 +95,70 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
         .map(|desc| (desc.window.id(), desc.build(&adapter, &device)))
         .collect();
 
-    event_loop.run(move |event, target| {
-        // Have the closure take ownership of the resources.
-        // `event_loop.run` never returns, therefore we must do this to ensure
-        // the resources are properly cleaned up.
-        let _ = (&instance, &adapter);
+    event_loop
+        .run(move |event, target| {
+            // Have the closure take ownership of the resources.
+            // `event_loop.run` never returns, therefore we must do this to ensure
+            // the resources are properly cleaned up.
+            let _ = (&instance, &adapter);
 
-        match event {
-            Event::WindowEvent {
-                window_id, event, ..
-            } => match event {
-                WindowEvent::Resized(new_size) => {
-                    // Recreate the swap chain with the new size
-                    if let Some(viewport) = viewports.get_mut(&window_id) {
-                        viewport.resize(&device, new_size);
-                        // On macos the window needs to be redrawn manually after resizing
-                        viewport.desc.window.request_redraw();
-                    }
-                }
-                WindowEvent::RedrawRequested => {
-                    if let Some(viewport) = viewports.get_mut(&window_id) {
-                        let frame = viewport.get_current_texture();
-                        let view = frame
-                            .texture
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-                        let mut encoder =
-                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: None,
-                            });
-                        {
-                            let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: None,
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Clear(viewport.desc.background),
-                                        store: wgpu::StoreOp::Store,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                                timestamp_writes: None,
-                                occlusion_query_set: None,
-                            });
+            if let Event::WindowEvent { window_id, event } = event {
+                match event {
+                    WindowEvent::Resized(new_size) => {
+                        // Recreate the swap chain with the new size
+                        if let Some(viewport) = viewports.get_mut(&window_id) {
+                            viewport.resize(&device, new_size);
+                            // On macos the window needs to be redrawn manually after resizing
+                            viewport.desc.window.request_redraw();
                         }
+                    }
+                    WindowEvent::RedrawRequested => {
+                        if let Some(viewport) = viewports.get_mut(&window_id) {
+                            let frame = viewport.get_current_texture();
+                            let view = frame
+                                .texture
+                                .create_view(&wgpu::TextureViewDescriptor::default());
+                            let mut encoder =
+                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                    label: None,
+                                });
+                            {
+                                let _rpass =
+                                    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: None,
+                                        color_attachments: &[Some(
+                                            wgpu::RenderPassColorAttachment {
+                                                view: &view,
+                                                resolve_target: None,
+                                                ops: wgpu::Operations {
+                                                    load: wgpu::LoadOp::Clear(
+                                                        viewport.desc.background,
+                                                    ),
+                                                    store: wgpu::StoreOp::Store,
+                                                },
+                                            },
+                                        )],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None,
+                                        occlusion_query_set: None,
+                                    });
+                            }
 
-                        queue.submit(Some(encoder.finish()));
-                        frame.present();
+                            queue.submit(Some(encoder.finish()));
+                            frame.present();
+                        }
                     }
-                }
-                WindowEvent::CloseRequested => {
-                    viewports.remove(&window_id);
-                    if viewports.is_empty() {
-                        target.exit();
+                    WindowEvent::CloseRequested => {
+                        viewports.remove(&window_id);
+                        if viewports.is_empty() {
+                            target.exit();
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
-            },
-            _ => {}
-        }
-    }).unwrap();
+            }
+        })
+        .unwrap();
 }
 
 fn main() {

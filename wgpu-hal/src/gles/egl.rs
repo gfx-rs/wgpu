@@ -1166,7 +1166,7 @@ impl crate::Surface<super::Api> for Surface {
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
                         let window =
                             unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
-                                as *mut _ as *mut std::ffi::c_void;
+                                as *mut _;
                         wl_window = Some(window);
                         window
                     }
