@@ -230,7 +230,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::info!("SL version: {}", &sl_version);
+            log::trace!("SL version: {}", &sl_version);
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
                 let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;

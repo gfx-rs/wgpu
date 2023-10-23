@@ -405,7 +405,7 @@ impl crate::Instance<super::Api> for Instance {
         }
 
         if desc.flags.contains(InstanceFlags::VALIDATION) && gl.supports_debug() {
-            log::info!("Enabling GL debug output");
+            log::debug!("Enabling GL debug output");
             unsafe { gl.enable(glow::DEBUG_OUTPUT) };
             unsafe { gl.debug_message_callback(super::gl_debug_message_callback) };
         }
