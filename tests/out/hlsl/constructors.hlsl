@@ -52,6 +52,4 @@ void main()
     bool ic0_ = bool((bool)0);
     uint2 ic4_ = uint2(0u, 0u);
     float2x3 ic5_ = float2x3(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0));
-    uint2 ic6_ = asuint((uint2)0);
-    float2x3 ic7_ = asfloat((float2x3)0);
 }

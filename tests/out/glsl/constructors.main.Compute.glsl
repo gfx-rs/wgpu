@@ -34,7 +34,5 @@ void main() {
     bool ic0_ = bool(false);
     uvec2 ic4_ = uvec2(0u, 0u);
     mat2x3 ic5_ = mat2x3(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0));
-    uvec2 ic6_ = uvec2(0u);
-    mat2x3 ic7_ = mat2x3(0.0);
 }
 

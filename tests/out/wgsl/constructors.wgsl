@@ -29,6 +29,4 @@ fn main() {
     let ic0_ = bool(bool());
     let ic4_ = vec2<u32>(0u, 0u);
     let ic5_ = mat2x3<f32>(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0));
-    let ic6_ = bitcast<vec2<u32>>(vec2<u32>());
-    let ic7_ = mat2x3<f32>(mat2x3<f32>());
 }

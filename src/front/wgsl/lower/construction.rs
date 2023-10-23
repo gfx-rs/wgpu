@@ -239,20 +239,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             (
                 Components::One {
                     component,
-                    ty_inner:
-                        &crate::TypeInner::Vector {
-                            size: src_size,
-                            kind: src_kind,
-                            ..
-                        },
+                    ty_inner: &crate::TypeInner::Vector { size: src_size, .. },
                     ..
                 },
                 ConcreteConstructor::PartialVector { size: dst_size },
-            ) if dst_size == src_size => crate::Expression::As {
-                expr: component,
-                kind: src_kind,
-                convert: None,
-            },
+            ) if dst_size == src_size => {
+                // This is a trivial conversion: the sizes match, and a Partial
+                // constructor doesn't specify a scalar type, so nothing can
+                // possibly happen.
+                return Ok(component);
+            }
 
             // Matrix conversion (matrix -> matrix)
             (
@@ -296,11 +292,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     columns: dst_columns,
                     rows: dst_rows,
                 },
-            ) if dst_columns == src_columns && dst_rows == src_rows => crate::Expression::As {
-                expr: component,
-                kind: crate::ScalarKind::Float,
-                convert: None,
-            },
+            ) if dst_columns == src_columns && dst_rows == src_rows => {
+                // This is a trivial conversion: the sizes match, and a Partial
+                // constructor doesn't specify a scalar type, so nothing can
+                // possibly happen.
+                return Ok(component);
+            }
 
             // Vector constructor (splat) - infer type
             (
