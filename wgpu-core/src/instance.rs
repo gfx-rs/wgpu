@@ -615,9 +615,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             presentation: None,
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: None,
+            #[cfg(all(feature = "dx12", windows))]
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
                 raw: unsafe { inst.create_surface_from_visual(visual as _) },
             }),
+            #[cfg(all(feature = "dx11", windows))]
             dx11: None,
             #[cfg(feature = "gles")]
             gl: None,
@@ -643,9 +645,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             presentation: None,
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: None,
+            #[cfg(all(feature = "dx12", windows))]
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
                 raw: unsafe { inst.create_surface_from_surface_handle(surface_handle) },
             }),
+            #[cfg(all(feature = "dx11", windows))]
             dx11: None,
             #[cfg(feature = "gles")]
             gl: None,
@@ -671,9 +675,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             presentation: None,
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: None,
+            #[cfg(all(feature = "dx12", windows))]
             dx12: self.instance.dx12.as_ref().map(|inst| HalSurface {
                 raw: unsafe { inst.create_surface_from_swap_chain_panel(swap_chain_panel as _) },
             }),
+            #[cfg(all(feature = "dx11", windows))]
             dx11: None,
             #[cfg(feature = "gles")]
             gl: None,
