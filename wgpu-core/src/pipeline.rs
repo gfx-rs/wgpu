@@ -36,7 +36,7 @@ pub enum ShaderModuleSource<'a> {
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     #[cfg_attr(feature = "serde", serde(default))]
-    pub shader_bound_checks: wgt::ShaderBoundChecks
+    pub shader_bound_checks: wgt::ShaderBoundChecks,
 }
 
 #[derive(Debug)]
