@@ -892,17 +892,19 @@ impl crate::Instance<super::Api> for Instance {
                     use std::ops::DerefMut;
                     let display_attributes = [khronos_egl::ATTRIB_NONE];
 
-                    let display = inner
-                        .egl
-                        .instance
-                        .upcast::<khronos_egl::EGL1_5>()
-                        .unwrap()
-                        .get_platform_display(
-                            EGL_PLATFORM_WAYLAND_KHR,
-                            display_handle.display.as_ptr(),
-                            &display_attributes,
-                        )
-                        .unwrap();
+                    let display = unsafe {
+                        inner
+                            .egl
+                            .instance
+                            .upcast::<khronos_egl::EGL1_5>()
+                            .unwrap()
+                            .get_platform_display(
+                                EGL_PLATFORM_WAYLAND_KHR,
+                                display_handle.display.as_ptr(),
+                                &display_attributes,
+                            )
+                    }
+                    .unwrap();
 
                     let new_inner = Inner::create(
                         self.flags,
@@ -1155,19 +1157,24 @@ impl crate::Surface<super::Api> for Surface {
                     (WindowKind::AngleX11, Rwh::Xcb(handle)) => {
                         handle.window.get() as *mut std::ffi::c_void
                     }
-                    (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => handle.a_native_window.as_ptr(),
+                    (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => {
+                        handle.a_native_window.as_ptr()
+                    }
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(b"wl_egl_window_create") }.unwrap();
-                        let window = unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
-                            as *mut _ as *mut std::ffi::c_void;
+                        let window =
+                            unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
+                                as *mut _ as *mut std::ffi::c_void;
                         wl_window = Some(window);
                         window
                     }
                     #[cfg(target_os = "emscripten")]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut std::ffi::c_void,
-                    (WindowKind::Unknown, Rwh::Win32(handle)) => handle.hwnd.get() as * mut std::ffi::c_void,
+                    (WindowKind::Unknown, Rwh::Win32(handle)) => {
+                        handle.hwnd.get() as *mut std::ffi::c_void
+                    }
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => {
                         #[cfg(not(target_os = "macos"))]
                         let window_ptr = handle.ns_view.as_ptr();
