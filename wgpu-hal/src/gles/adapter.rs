@@ -411,6 +411,11 @@ impl super::Adapter {
             wgt::DownlevelFlags::MULTISAMPLED_SHADING,
             supported((3, 2), (4, 0)) || extensions.contains("OES_sample_variables"),
         );
+        let query_buffers = extensions.contains("GL_ARB_query_buffer_object")
+            || extensions.contains("GL_AMD_query_buffer_object");
+        if query_buffers {
+            downlevel_flags.set(wgt::DownlevelFlags::NONBLOCKING_QUERY_RESOLVE, true);
+        }
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -450,9 +455,7 @@ impl super::Adapter {
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
-        let query_buffers = extensions.contains("GL_ARB_query_buffer_object")
-            || extensions.contains("GL_AMD_query_buffer_object");
-        if extensions.contains("GL_ARB_timer_query") && query_buffers {
+        if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES, true);
         }
