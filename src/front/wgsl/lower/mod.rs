@@ -2099,7 +2099,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             return Ok(None);
                         }
                         "textureLoad" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
+                            let mut args = ctx.prepare_args(arguments, 2, span);
 
                             let image = args.next()?;
                             let image_span = ctx.ast_expressions.get_span(image);
@@ -2117,7 +2117,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let level = class
                                 .is_mipmapped()
-                                .then(|| self.expression(args.next()?, ctx))
+                                .then(|| {
+                                    args.min_args += 1;
+                                    self.expression(args.next()?, ctx)
+                                })
                                 .transpose()?;
 
                             let sample = class
