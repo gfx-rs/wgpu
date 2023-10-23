@@ -57,7 +57,9 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .skip(FailureCase::adapter("V3D")),
+            .skip(FailureCase::adapter("V3D"))
+            // Segfaults on linux CI only https://github.com/gfx-rs/wgpu/issues/4285
+            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe")),
     )
     .run_sync(|ctx| {
         use std::{sync::mpsc, sync::Arc, thread, time::Duration};
