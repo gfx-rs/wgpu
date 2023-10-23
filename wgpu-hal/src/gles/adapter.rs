@@ -228,6 +228,28 @@ impl super::Adapter {
             return None;
         }
 
+        if let Some(es_ver) = es_ver {
+            if es_ver < (3, 0) {
+                log::warn!(
+                    "Returned GLES context is {}.{}, when 3.0+ was requested",
+                    es_ver.0,
+                    es_ver.1
+                );
+                return None;
+            }
+        }
+
+        if let Some(full_ver) = full_ver {
+            if full_ver < (3, 3) {
+                log::warn!(
+                    "Returned GL context is {}.{}, when 3.3+ is needed",
+                    full_ver.0,
+                    full_ver.1
+                );
+                return None;
+            }
+        }
+
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
             log::info!("SL version: {}", &sl_version);
@@ -250,28 +272,6 @@ impl super::Adapter {
         };
 
         log::trace!("Supported GL Extensions: {:#?}", extensions);
-
-        if let Some(es_ver) = es_ver {
-            if es_ver < (3, 0) {
-                log::warn!(
-                    "Returned GLES context is {}.{}, when 3.0+ was requested",
-                    es_ver.0,
-                    es_ver.1
-                );
-                return None;
-            }
-        }
-
-        if let Some(full_ver) = full_ver {
-            if full_ver < (3, 3) {
-                log::warn!(
-                    "Returned GL context is {}.{}, when 3.3+ is needed",
-                    full_ver.0,
-                    full_ver.1
-                );
-                return None;
-            }
-        }
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
