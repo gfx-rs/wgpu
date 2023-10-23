@@ -14,7 +14,6 @@ use winit::{
     event::{self, ElementState, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey},
-    platform::scancode::PhysicalKeyExtScancode,
 };
 
 #[allow(dead_code)]
