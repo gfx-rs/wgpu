@@ -50,9 +50,7 @@ fn draw_test_with_reports(
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 4 * expected.len() as u64,
-        usage: wgpu::BufferUsages::COPY_SRC
-            | wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::MAP_READ,
+        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
     });
 
@@ -281,7 +279,11 @@ fn draw_test_with_reports(
 #[wgpu_macros::gpu_test]
 static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
     wgpu_test::GpuTestConfiguration::new()
-        .parameters(wgpu_test::TestParameters::default().test_features_limits())
+        .parameters(
+            wgpu_test::TestParameters::default()
+                .test_features_limits()
+                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+        )
         .run_sync(|ctx| {
             draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
                 cmb.draw(0..6, 0..1);

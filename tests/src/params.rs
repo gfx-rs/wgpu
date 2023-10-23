@@ -240,9 +240,9 @@ bitflags::bitflags! {
 
 // Builder pattern to make it easier
 impl TestParameters {
-    /// Set of common features that most internal tests require for readback.
+    /// Set of common features that most internal tests require for compute and readback.
     pub fn test_features_limits(self) -> Self {
-        self.features(Features::MAPPABLE_PRIMARY_BUFFERS | Features::VERTEX_WRITABLE_STORAGE)
+        self.downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
     }
 

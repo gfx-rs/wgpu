@@ -7,7 +7,6 @@ static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
             .skip(FailureCase::adapter("V3D")),
     )
     .run_async(|ctx| {
@@ -22,7 +21,6 @@ static COMPUTE_2: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
             .skip(FailureCase::adapter("V3D")),
     )
     .run_async(|ctx| {
@@ -37,7 +35,6 @@ static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
             .skip(FailureCase::adapter("V3D")),
     )
     .run_async(|ctx| {
@@ -60,8 +57,9 @@ static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
-            .skip(FailureCase::adapter("V3D")),
+            .skip(FailureCase::adapter("V3D"))
+            // Segfaults on linux CI only https://github.com/gfx-rs/wgpu/issues/4285
+            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe")),
     )
     .run_sync(|ctx| {
         use std::{sync::mpsc, sync::Arc, thread, time::Duration};

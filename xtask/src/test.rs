@@ -3,6 +3,7 @@ use pico_args::Arguments;
 
 pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
+    // These needs to match the command in "run wgpu-info" in `.github/workflows/ci.yml`
     let llvm_cov_flags: &[_] = if llvm_cov {
         &["llvm-cov", "--no-cfg-coverage", "--no-report"]
     } else {

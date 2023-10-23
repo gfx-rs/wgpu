@@ -118,7 +118,7 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
-      - name: install aarch64-linux-gnu g++
+      - name: (linux aarch64) install aarch64-linux-gnu g++
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           set -e
@@ -127,7 +127,7 @@ jobs:
 
           sudo apt-get install g++-aarch64-linux-gnu
 
-      - name: add android apk to path
+      - name: (android) add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
           # clang++ will be detected correctly by CC from path
@@ -286,17 +286,57 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
+          cargo -V
+
       - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
-      - name: Install Repo MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          cargo -V
+        # Cache step must go before warp and mesa install on windows as they write into the
+        # target directory, and rust-cache will overwrite the entirety of the target directory.
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        if: matrix.os[0] != 'self-hosted'
+        with:
+          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          workspaces: |
+            . -> target
+            xtask -> xtask/target
 
-      - name: install llvmpipe, vulkan sdk
+      - name: (windows) install warp
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
+          7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
+
+          mkdir -p target/llvm-cov-target/debug/deps
+
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/deps
+
+      - name: (windows) install mesa
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z -o mesa.7z
+          7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
+
+          cp -v mesa/* target/llvm-cov-target/debug/
+          cp -v mesa/* target/llvm-cov-target/debug/deps
+
+          echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+
+      - name: (linux) install llvmpipe, lavapipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
@@ -321,11 +361,15 @@ jobs:
           [profile.dev]
           debug = 1" >> .cargo/config.toml
 
-      - name: caching
-        uses: Swatinem/rust-cache@v2
-        if: matrix.os[0] != 'self-hosted'
-        with:
-          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+      - name: run wgpu-info
+        shell: bash
+        run: |
+          echo "$PATH"
+          
+          export RUST_LOG=trace
+
+          # This needs to match the command in xtask/tests.rs
+          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info
 
       - name: run tests
         shell: bash
