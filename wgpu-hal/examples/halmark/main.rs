@@ -270,7 +270,7 @@ impl<A: hal::Api> Example<A> {
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
-        let texture_data = vec![0xFFu8; 4];
+        let texture_data = [0xFFu8; 4];
 
         let staging_buffer_desc = hal::BufferDescriptor {
             label: Some("stage"),
