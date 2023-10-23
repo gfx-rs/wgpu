@@ -70,16 +70,20 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-| API         | Windows                        | Linux & Android    | macOS & iOS               | Web (wasm)                |
+| API         | Windows                        | Linux/Android      | macOS/iOS                 | Web (wasm)                |
 | ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
-| Vulkan      | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |                           |
+| Vulkan      | :white_check_mark:             | :white_check_mark: | :volcano:                 |                           |
 | Metal       |                                |                    | :white_check_mark:        |                           |
-| DX12        | :white_check_mark: (W10+ only) |                    |                           |                           |
+| DX12        | :white_check_mark:             |                    |                           |                           | 
 | DX11        | :hammer_and_wrench:            |                    |                           |                           |
-| OpenGL      |  :ok: (Desktop GL 3.3+)        | :ok: (GL ES 3.0+)  | :ok: (angle; GL ES 3.0+)  | :ok: (WebGL2)             |
+| OpenGL      |  :ok: (GL 3.3+)                | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
 | WebGPU      |                                |                    |                           | :white_check_mark:        |
 
-:white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
+:white_check_mark: = First Class Support  
+:ok: = Downlevel/Best Effort Support  
+:triangular_ruler: = Requires the [ANGLE](#angle) translation layer  
+:volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
+:hammer_and_wrench: = Unsupported, though open to contributions  
 
 ### Shader Support
 
@@ -103,7 +107,7 @@ To enable GLSL shaders, enable the `glsl` feature of wgpu.
 ### Angle
 
 [Angle](http://angleproject.org) is a translation layer from GLES to other backends, developed by Google.
-We support running our GLES3 backend over it in order to reach platforms with GLES2 or DX11 support, which aren't accessible otherwise.
+We support running our GLES3 backend over it in order to reach platforms DX11 support, which aren't accessible otherwise.
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
 These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts, [manual compilation](https://github.com/google/angle/blob/main/doc/DevSetup.md) may be required on Macs with Apple silicon.
 
@@ -140,17 +144,17 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 ## Testing
 
-We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI if possible. The current state of CI testing:
+We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI. The current state of CI testing:
 
-| Backend/Platform | Tests              | CTS                | Notes                                 |
-| ---------------- | ------------------ | ------------------ | ------------------------------------- |
-| DX12/Windows 10  | :heavy_check_mark: | -                  | using WARP                            |
-| DX11/Windows 10  | :construction:     | —                  | using WARP                            |
-| Metal/MacOS      | :heavy_check_mark: | —                  | using hardware runner                 |
-| Vulkan/Linux     | :heavy_check_mark: | -                  | using swiftshader                     |
-| GL/Windows       |                    | —                  |                                       |
-| GLES/Linux       | :heavy_check_mark: | —                  | using llvmpipe                        |
-| WebGL/Chrome     | :heavy_check_mark: | —                  | using swiftshader                     |
+| Platform/Backend | Tests              | Notes                                 |
+| ---------------- | ------------------ | ------------------------------------- |
+| Windows/DX12     | :heavy_check_mark: | using WARP                            |
+| Windows/OpenGL   | :heavy_check_mark: | using llvmpipe                        |
+| MacOS/Metal      | :heavy_check_mark: | using hardware runner                 |
+| Linux/Vulkan     | :heavy_check_mark: | using lavapipe                        |
+| Linux/OpenGL ES  | :heavy_check_mark: | using llvmpipe                        |
+| Chrome/WebGL     | :heavy_check_mark: | using swiftshader                     |
+| Chrome/WebGPU    | :x:                | not set up                            |
 
 ### Core Test Infrastructure
 
@@ -160,7 +164,7 @@ To install it, run `cargo install cargo-nextest`.
 To run the test suite:
 
 ```
-cargo nextest run --no-fail-fast
+cargo xtask test
 ```
 
 To run the test suite on WebGL (currently incomplete):

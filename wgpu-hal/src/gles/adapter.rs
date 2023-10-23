@@ -210,16 +210,12 @@ impl super::Adapter {
             (glow::VENDOR, glow::RENDERER)
         };
 
-        let (vendor, renderer) = {
-            let vendor = unsafe { gl.get_parameter_string(vendor_const) };
-            let renderer = unsafe { gl.get_parameter_string(renderer_const) };
-
-            (vendor, renderer)
-        };
+        let vendor = unsafe { gl.get_parameter_string(vendor_const) };
+        let renderer = unsafe { gl.get_parameter_string(renderer_const) };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::info!("Vendor: {}", vendor);
-        log::info!("Renderer: {}", renderer);
-        log::info!("Version: {}", version);
+        log::trace!("Vendor: {}", vendor);
+        log::trace!("Renderer: {}", renderer);
+        log::trace!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver
@@ -231,6 +227,29 @@ impl super::Adapter {
             log::warn!("Unable to parse OpenGL version");
             return None;
         }
+
+        let shading_language_version = {
+            let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
+            log::info!("SL version: {}", &sl_version);
+            if full_ver.is_some() {
+                let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
+                let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
+                // Naga doesn't think it supports GL 460+, so we cap it at 450
+                if value > 450 {
+                    value = 450;
+                }
+                naga::back::glsl::Version::Desktop(value)
+            } else {
+                let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
+                let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
+                naga::back::glsl::Version::Embedded {
+                    version: value,
+                    is_webgl: cfg!(target_arch = "wasm32"),
+                }
+            }
+        };
+
+        log::trace!("Supported GL Extensions: {:#?}", extensions);
 
         if let Some(es_ver) = es_ver {
             if es_ver < (3, 0) {
@@ -271,27 +290,6 @@ impl super::Adapter {
         let supports_compute =
             supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
         let supports_work_group_params = supports_compute;
-
-        let shading_language_version = {
-            let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::info!("SL version: {}", &sl_version);
-            if full_ver.is_some() {
-                let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
-                let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
-                // Naga doesn't think it supports GL 460+, so we cap it at 450
-                if value > 450 {
-                    value = 450;
-                }
-                naga::back::glsl::Version::Desktop(value)
-            } else {
-                let (sl_major, sl_minor) = Self::parse_version(&sl_version).ok()?;
-                let value = sl_major as u16 * 100 + sl_minor as u16 * 10;
-                naga::back::glsl::Version::Embedded {
-                    version: value,
-                    is_webgl: cfg!(target_arch = "wasm32"),
-                }
-            }
-        };
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
         let is_angle = renderer.contains("ANGLE");
@@ -385,7 +383,9 @@ impl super::Adapter {
                 && (vertex_shader_storage_blocks != 0 || vertex_ssbo_false_zero),
         );
         downlevel_flags.set(wgt::DownlevelFlags::FRAGMENT_STORAGE, supports_storage);
-        if extensions.contains("EXT_texture_filter_anisotropic") {
+        if extensions.contains("EXT_texture_filter_anisotropic")
+            || extensions.contains("GL_EXT_texture_filter_anisotropic")
+        {
             let max_aniso =
                 unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_MAX_ANISOTROPY_EXT) } as u32;
             downlevel_flags.set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, max_aniso >= 16);
@@ -418,11 +418,12 @@ impl super::Adapter {
             | wgt::Features::PUSH_CONSTANTS;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
-            extensions.contains("GL_EXT_texture_border_clamp"),
+            extensions.contains("GL_EXT_texture_border_clamp")
+                || extensions.contains("GL_ARB_texture_border_clamp"),
         );
         features.set(
             wgt::Features::DEPTH_CLIP_CONTROL,
-            extensions.contains("GL_EXT_depth_clamp"),
+            extensions.contains("GL_EXT_depth_clamp") || extensions.contains("GL_ARB_depth_clamp"),
         );
         features.set(
             wgt::Features::VERTEX_WRITABLE_STORAGE,
@@ -431,11 +432,12 @@ impl super::Adapter {
         );
         features.set(
             wgt::Features::MULTIVIEW,
-            extensions.contains("OVR_multiview2"),
+            extensions.contains("OVR_multiview2") || extensions.contains("GL_OVR_multiview2"),
         );
         features.set(
             wgt::Features::DUAL_SOURCE_BLENDING,
-            extensions.contains("GL_EXT_blend_func_extended"),
+            extensions.contains("GL_EXT_blend_func_extended")
+                || extensions.contains("GL_ARB_blend_func_extended"),
         );
         features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
@@ -448,6 +450,11 @@ impl super::Adapter {
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
+        let gl_bcn_exts = [
+            "GL_EXT_texture_compression_s3tc",
+            "GL_EXT_texture_compression_rgtc",
+            "GL_ARB_texture_compression_bptc",
+        ];
         let gles_bcn_exts = [
             "GL_EXT_texture_compression_s3tc_srgb",
             "GL_EXT_texture_compression_rgtc",
@@ -461,18 +468,23 @@ impl super::Adapter {
         ];
         let bcn_exts = if cfg!(target_arch = "wasm32") {
             &webgl_bcn_exts[..]
-        } else {
+        } else if es_ver.is_some() {
             &gles_bcn_exts[..]
+        } else {
+            &gl_bcn_exts[..]
         };
         features.set(
             wgt::Features::TEXTURE_COMPRESSION_BC,
             bcn_exts.iter().all(|&ext| extensions.contains(ext)),
         );
-        features.set(
-            wgt::Features::TEXTURE_COMPRESSION_ETC2,
-            // This is a part of GLES-3 but not WebGL2 core
-            !cfg!(target_arch = "wasm32") || extensions.contains("WEBGL_compressed_texture_etc"),
-        );
+        let has_etc = if cfg!(target_arch = "wasm32") {
+            extensions.contains("WEBGL_compressed_texture_etc")
+        } else {
+            // This is a required part of GLES3, but not part of Desktop GL at all.
+            es_ver.is_some()
+        };
+        features.set(wgt::Features::TEXTURE_COMPRESSION_ETC2, has_etc);
+
         // `OES_texture_compression_astc` provides 2D + 3D, LDR + HDR support
         if extensions.contains("WEBGL_compressed_texture_astc")
             || extensions.contains("GL_OES_texture_compression_astc")
@@ -514,7 +526,8 @@ impl super::Adapter {
         let mut private_caps = super::PrivateCapabilities::empty();
         private_caps.set(
             super::PrivateCapabilities::BUFFER_ALLOCATION,
-            extensions.contains("GL_EXT_buffer_storage"),
+            extensions.contains("GL_EXT_buffer_storage")
+                || extensions.contains("GL_ARB_buffer_storage"),
         );
         private_caps.set(
             super::PrivateCapabilities::SHADER_BINDING_LAYOUT,
@@ -538,11 +551,13 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::GET_BUFFER_SUB_DATA,
-            cfg!(target_arch = "wasm32"),
+            cfg!(target_arch = "wasm32") || full_ver.is_some(),
         );
         let color_buffer_float = extensions.contains("GL_EXT_color_buffer_float")
+            || extensions.contains("GL_ARB_color_buffer_float")
             || extensions.contains("EXT_color_buffer_float");
-        let color_buffer_half_float = extensions.contains("GL_EXT_color_buffer_half_float");
+        let color_buffer_half_float = extensions.contains("GL_EXT_color_buffer_half_float")
+            || extensions.contains("GL_ARB_half_float_pixel");
         private_caps.set(
             super::PrivateCapabilities::COLOR_BUFFER_HALF_FLOAT,
             color_buffer_half_float || color_buffer_float,
@@ -553,7 +568,11 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
-            extensions.contains("OES_texture_float_linear"),
+            if full_ver.is_some() {
+                color_buffer_float
+            } else {
+                extensions.contains("OES_texture_float_linear")
+            },
         );
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;

@@ -1,10 +1,9 @@
 use std::fmt::Write;
 
-use wasm_bindgen_test::*;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{initialize_test, FailureCase, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
@@ -175,46 +174,41 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     tests
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn uniform_input() {
-    initialize_test(
+#[gpu_test]
+static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
             .expect_fail(FailureCase::backend(wgpu::Backends::VULKAN))
             .limits(Limits::downlevel_defaults()),
-        |ctx| {
-            shader_input_output_test(
-                ctx,
-                InputStorageType::Uniform,
-                create_struct_layout_tests(InputStorageType::Uniform),
-            );
-        },
-    );
-}
+    )
+    .run_sync(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Uniform,
+            create_struct_layout_tests(InputStorageType::Uniform),
+        );
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn storage_input() {
-    initialize_test(
+#[gpu_test]
+static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
-        |ctx| {
-            shader_input_output_test(
-                ctx,
-                InputStorageType::Storage,
-                create_struct_layout_tests(InputStorageType::Storage),
-            );
-        },
-    );
-}
+    )
+    .run_sync(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_struct_layout_tests(InputStorageType::Storage),
+        );
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn push_constant_input() {
-    initialize_test(
+#[gpu_test]
+static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .features(Features::PUSH_CONSTANTS)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
@@ -223,12 +217,11 @@ fn push_constant_input() {
                 ..Limits::downlevel_defaults()
             })
             .expect_fail(FailureCase::backend(Backends::GL)),
-        |ctx| {
-            shader_input_output_test(
-                ctx,
-                InputStorageType::PushConstant,
-                create_struct_layout_tests(InputStorageType::PushConstant),
-            );
-        },
-    );
-}
+    )
+    .run_sync(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::PushConstant,
+            create_struct_layout_tests(InputStorageType::PushConstant),
+        );
+    });

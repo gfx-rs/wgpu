@@ -2,9 +2,11 @@ const ARR_SIZE: usize = 128;
 
 struct ExecuteResults {
     patient_workgroup_results: Vec<u32>,
+    #[cfg_attr(test, allow(unused))]
     hasty_workgroup_results: Vec<u32>,
 }
 
+#[cfg_attr(test, allow(unused))]
 async fn run() {
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -179,14 +181,15 @@ async fn get_data<T: bytemuck::Pod>(
     );
     queue.submit(Some(command_encoder.finish()));
     let buffer_slice = staging_buffer.slice(..);
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     device.poll(wgpu::Maintain::Wait);
-    receiver.receive().await.unwrap().unwrap();
+    receiver.recv_async().await.unwrap().unwrap();
     output.copy_from_slice(bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));
     staging_buffer.unmap();
 }
 
+#[cfg(not(test))]
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -206,6 +209,9 @@ fn main() {
         wasm_bindgen_futures::spawn_local(run());
     }
 }
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();
 
 #[cfg(test)]
 mod tests;

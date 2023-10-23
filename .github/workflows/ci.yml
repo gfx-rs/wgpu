@@ -118,7 +118,7 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
-      - name: install aarch64-linux-gnu g++
+      - name: (linux aarch64) install aarch64-linux-gnu g++
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           set -e
@@ -127,7 +127,7 @@ jobs:
 
           sudo apt-get install g++-aarch64-linux-gnu
 
-      - name: add android apk to path
+      - name: (android) add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
           # clang++ will be detected correctly by CC from path
@@ -270,17 +270,14 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2022
-            backends: dx12
 
           # Mac
           - name: Mac aarch64
             os: [self-hosted, macOS]
-            backends: vulkan metal
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
-            backends: vulkan gl
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -289,23 +286,46 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
+          cargo -V
+
       - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
-      - name: install swiftshader
-        if: matrix.os == 'ubuntu-22.04'
+      - name: (windows) install warp
+        if: matrix.os == 'windows-2022'
         shell: bash
         run: |
           set -e
 
-          mkdir -p swiftshader
-          curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
+          curl.exe -L https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
+          7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
-          echo "VK_ICD_FILENAMES=$PWD/swiftshader/vk_swiftshader_icd.json" >> $GITHUB_ENV
+          mkdir -p target/llvm-cov-target/debug/deps
 
-      - name: install llvmpipe, vulkan sdk
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/deps
+
+      - name: (windows) install mesa
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z -o mesa.7z
+          7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
+
+          cp -v mesa/* target/llvm-cov-target/debug/
+          cp -v mesa/* target/llvm-cov-target/debug/deps
+
+          echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+
+      - name: (linux) install llvmpipe, lavapipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
@@ -317,8 +337,10 @@ jobs:
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
 
+          sudo add-apt-repository ppa:kisak/kisak-mesa
+
           sudo apt-get update
-          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk mesa-vulkan-drivers
 
       - name: disable debug
         shell: bash
@@ -333,23 +355,26 @@ jobs:
         if: matrix.os[0] != 'self-hosted'
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          workspaces: |
+            . -> target
+            xtask -> xtask/target
 
       - name: run wgpu-info
         shell: bash
         run: |
-          set -e
+          echo "$PATH"
+          
+          export RUST_LOG=trace
 
-          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report --features vulkan-portability
+          # This needs to match the command in xtask/tests.rs
+          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info
 
       - name: run tests
         shell: bash
         run: |
           set -e
 
-          for backend in ${{ matrix.backends }}; do
-            echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report --features vulkan-portability
-          done
+          cargo xtask test --llvm-cov
 
       - uses: actions/upload-artifact@v3
         if: always() # We want artifacts even if the tests fail.
@@ -421,6 +446,7 @@ jobs:
       - name: run rustfmt
         run: |
           cargo fmt -- --check
+          cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
   check-cts-runner:
     name: Clippy cts_runner

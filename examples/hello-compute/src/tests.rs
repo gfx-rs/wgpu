@@ -1,122 +1,92 @@
-use std::sync::Arc;
-
 use super::*;
-use wgpu_test::{initialize_test, FailureCase, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn test_compute_1() {
-    initialize_test(
+#[gpu_test]
+static COMPUTE_1: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
             .skip(FailureCase::adapter("V3D")),
-        |ctx| {
-            let input = &[1, 2, 3, 4];
+    )
+    .run_async(|ctx| {
+        let input = &[1, 2, 3, 4];
 
-            pollster::block_on(assert_execute_gpu(
-                &ctx.device,
-                &ctx.queue,
-                input,
-                &[0, 1, 7, 2],
-            ));
-        },
-    );
-}
+        async move { assert_execute_gpu(&ctx.device, &ctx.queue, input, &[0, 1, 7, 2]).await }
+    });
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn test_compute_2() {
-    initialize_test(
+#[gpu_test]
+static COMPUTE_2: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
             .skip(FailureCase::adapter("V3D")),
-        |ctx| {
-            let input = &[5, 23, 10, 9];
+    )
+    .run_async(|ctx| {
+        let input = &[5, 23, 10, 9];
 
-            pollster::block_on(assert_execute_gpu(
-                &ctx.device,
-                &ctx.queue,
-                input,
-                &[5, 15, 6, 19],
-            ));
-        },
-    );
-}
+        async move { assert_execute_gpu(&ctx.device, &ctx.queue, input, &[5, 15, 6, 19]).await }
+    });
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn test_compute_overflow() {
-    initialize_test(
+#[gpu_test]
+static COMPUTE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
             .skip(FailureCase::adapter("V3D")),
-        |ctx| {
-            let input = &[77031, 837799, 8400511, 63728127];
-            pollster::block_on(assert_execute_gpu(
+    )
+    .run_async(|ctx| {
+        let input = &[77031, 837799, 8400511, 63728127];
+        async move {
+            assert_execute_gpu(
                 &ctx.device,
                 &ctx.queue,
                 input,
                 &[350, 524, OVERFLOW, OVERFLOW],
-            ));
-        },
-    );
-}
+            )
+            .await
+        }
+    });
 
-#[test]
-// Wasm doesn't support threads
-fn test_multithreaded_compute() {
-    initialize_test(
+#[cfg(not(target_arch = "wasm32"))]
+#[gpu_test]
+static MULTITHREADED_COMPUTE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits::downlevel_defaults())
-            .features(wgpu::Features::TIMESTAMP_QUERY)
-            .skip(FailureCase::adapter("V3D"))
-            // https://github.com/gfx-rs/wgpu/issues/3944
-            .skip(FailureCase::backend_adapter(
-                wgpu::Backends::VULKAN,
-                "swiftshader",
-            ))
-            // https://github.com/gfx-rs/wgpu/issues/3250
-            .skip(FailureCase::backend_adapter(wgpu::Backends::GL, "llvmpipe"))
-            .skip(FailureCase::molten_vk()),
-        |ctx| {
-            use std::{sync::mpsc, thread, time::Duration};
+            .skip(FailureCase::adapter("V3D")),
+    )
+    .run_sync(|ctx| {
+        use std::{sync::mpsc, sync::Arc, thread, time::Duration};
 
-            let ctx = Arc::new(ctx);
+        let ctx = Arc::new(ctx);
 
-            let thread_count = 8;
+        let thread_count = 8;
 
-            let (tx, rx) = mpsc::channel();
-            for _ in 0..thread_count {
-                let tx = tx.clone();
-                let ctx = Arc::clone(&ctx);
-                thread::spawn(move || {
-                    let input = &[100, 100, 100];
-                    pollster::block_on(assert_execute_gpu(
-                        &ctx.device,
-                        &ctx.queue,
-                        input,
-                        &[25, 25, 25],
-                    ));
-                    tx.send(true).unwrap();
-                });
-            }
+        let (tx, rx) = mpsc::channel();
+        for _ in 0..thread_count {
+            let tx = tx.clone();
+            let ctx = Arc::clone(&ctx);
+            thread::spawn(move || {
+                let input = &[100, 100, 100];
+                pollster::block_on(assert_execute_gpu(
+                    &ctx.device,
+                    &ctx.queue,
+                    input,
+                    &[25, 25, 25],
+                ));
+                tx.send(true).unwrap();
+            });
+        }
 
-            for _ in 0..thread_count {
-                rx.recv_timeout(Duration::from_secs(10))
-                    .expect("A thread never completed.");
-            }
-        },
-    );
-}
+        for _ in 0..thread_count {
+            rx.recv_timeout(Duration::from_secs(10))
+                .expect("A thread never completed.");
+        }
+    });
 
 async fn assert_execute_gpu(
     device: &wgpu::Device,

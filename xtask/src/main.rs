@@ -4,6 +4,7 @@ use anyhow::Context;
 use cli::Args;
 
 mod cli;
+mod test;
 
 fn main() -> anyhow::Result<()> {
     env_logger::builder()
@@ -65,6 +66,7 @@ fn run(mut args: Args) -> anyhow::Result<()> {
             );
             Ok(())
         }
+        cli::Subcommand::Test => test::run_tests(args.command_args),
         _ => unreachable!(),
     }
 }

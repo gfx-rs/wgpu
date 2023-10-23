@@ -1,4 +1,4 @@
-use wgpu_test::{image, initialize_test, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestingContext};
 
 struct Rect {
     x: u32,
@@ -97,25 +97,23 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
     assert!(readback_buffer.check_buffer_contents(&ctx.device, &expected_data));
 }
 
-#[test]
-fn scissor_test_full_rect() {
-    initialize_test(TestParameters::default(), |ctx| {
-        scissor_test_impl(
-            &ctx,
-            Rect {
-                x: 0,
-                y: 0,
-                width: TEXTURE_WIDTH,
-                height: TEXTURE_HEIGHT,
-            },
-            [255; BUFFER_SIZE],
-        );
-    })
-}
+#[gpu_test]
+static SCISSOR_TEST_FULL_RECT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    scissor_test_impl(
+        &ctx,
+        Rect {
+            x: 0,
+            y: 0,
+            width: TEXTURE_WIDTH,
+            height: TEXTURE_HEIGHT,
+        },
+        [255; BUFFER_SIZE],
+    );
+});
 
-#[test]
-fn scissor_test_empty_rect() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static SCISSOR_TEST_EMPTY_RECT: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         scissor_test_impl(
             &ctx,
             Rect {
@@ -126,12 +124,11 @@ fn scissor_test_empty_rect() {
             },
             [0; BUFFER_SIZE],
         );
-    })
-}
+    });
 
-#[test]
-fn scissor_test_empty_rect_with_offset() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .run_sync(|ctx| {
         scissor_test_impl(
             &ctx,
             Rect {
@@ -142,15 +139,15 @@ fn scissor_test_empty_rect_with_offset() {
             },
             [0; BUFFER_SIZE],
         );
-    })
-}
+    });
 
-#[test]
-fn scissor_test_custom_rect() {
-    let mut expected_result = [0; BUFFER_SIZE];
-    expected_result[((3 * BUFFER_SIZE) / 4)..][..BUFFER_SIZE / 4]
-        .copy_from_slice(&[255; BUFFER_SIZE / 4]);
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static SCISSOR_TEST_CUSTOM_RECT: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
+        let mut expected_result = [0; BUFFER_SIZE];
+        expected_result[((3 * BUFFER_SIZE) / 4)..][..BUFFER_SIZE / 4]
+            .copy_from_slice(&[255; BUFFER_SIZE / 4]);
+
         scissor_test_impl(
             &ctx,
             Rect {
@@ -161,5 +158,4 @@ fn scissor_test_custom_rect() {
             },
             expected_result,
         );
-    })
-}
+    });

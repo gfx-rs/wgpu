@@ -8,6 +8,8 @@ Usage: xtask <COMMAND>
 
 Commands:
   run-wasm
+  test
+    --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
 
 Options:
   -h, --help  Print help
@@ -21,7 +23,6 @@ pub struct Args {
 impl Args {
     pub fn parse() -> Self {
         let mut args = Arguments::from_env();
-        log::debug!("parsing args: {args:?}");
         if args.contains("--help") {
             eprint!("{HELP}");
             // Emulate Cargo exit status:
@@ -44,6 +45,7 @@ impl Args {
 
 pub enum Subcommand {
     RunWasm,
+    Test,
 }
 
 impl Subcommand {
@@ -53,6 +55,7 @@ impl Subcommand {
     pub fn to_str(&self) -> &'static str {
         match self {
             Self::RunWasm => "run-wasm",
+            Self::Test => "test",
         }
     }
 
@@ -60,6 +63,7 @@ impl Subcommand {
     pub fn required_features_enabled(&self) -> bool {
         match self {
             Self::RunWasm => cfg!(feature = "run-wasm"),
+            Self::Test => true,
         }
     }
 
@@ -67,6 +71,8 @@ impl Subcommand {
     pub fn features(&self) -> &'static str {
         match self {
             Self::RunWasm => "run-wasm",
+            // We will never ask for the features if required_features_enabled always returns true.
+            Self::Test => unreachable!(),
         }
     }
 
@@ -77,6 +83,7 @@ impl Subcommand {
             .context("no subcommand specified; see `--help` for more details")?;
         match &*subcmd {
             "run-wasm" => Ok(Self::RunWasm),
+            "test" => Ok(Self::Test),
             other => {
                 bail!("unrecognized subcommand {other:?}; see `--help` for more details")
             }
