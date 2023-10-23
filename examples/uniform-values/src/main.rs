@@ -323,7 +323,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 }
 
 fn main() {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let window = winit::window::WindowBuilder::new()
         .with_title("Remember: Use U/D to change sample count!")
         .with_inner_size(winit::dpi::LogicalSize::new(900, 900))

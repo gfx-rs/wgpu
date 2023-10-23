@@ -7,11 +7,14 @@ use std::time::Instant;
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
-use wgpu::{WasmNotSend, WasmNotSync};
+use wgpu::{Surface, SurfaceConfiguration, WasmNotSend, WasmNotSync};
 use wgpu_test::GpuTestConfiguration;
 use winit::{
-    event::{self, WindowEvent},
+    dpi::PhysicalSize,
+    event::{self, ElementState, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey},
+    platform::scancode::PhysicalKeyExtScancode,
 };
 
 #[allow(dead_code)]
@@ -92,7 +95,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         env_logger::init();
     };
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title(title);
     #[cfg(windows_OFF)] // TODO
@@ -290,113 +293,104 @@ fn start<E: Example>(
     let (mut frame_count, mut accum_time) = (0, 0.0);
 
     log::info!("Entering render loop...");
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, target| {
         let _ = (&instance, &adapter); // force ownership by the closure
-        *control_flow = if cfg!(feature = "metal-auto-capture") {
-            ControlFlow::Exit
-        } else {
-            ControlFlow::Poll
-        };
-        match event {
-            event::Event::RedrawEventsCleared => {
-                #[cfg(not(target_arch = "wasm32"))]
-                spawner.run_until_stalled();
+        target.set_control_flow(ControlFlow::Poll);
 
-                window.request_redraw();
-            }
+        if cfg!(feature = "metal-auto-capture") {
+            target.exit();
+        };
+
+        match event {
             event::Event::WindowEvent {
-                event:
-                    WindowEvent::Resized(size)
-                    | WindowEvent::ScaleFactorChanged {
-                        new_inner_size: &mut size,
-                        ..
-                    },
+                event: WindowEvent::Resized(size),
                 ..
-            } => {
-                log::info!("Resizing to {:?}", size);
-                config.width = size.width.max(1);
-                config.height = size.height.max(1);
-                example.resize(&config, &device, &queue);
-                surface.configure(&device, &config);
+            } => resize_window(example, size, &mut config, &mut surface, &device, &queue),
+            event::Event::WindowEvent {
+                event: WindowEvent::ScaleFactorChanged { scale_factor, .. },
+                ..
+            } if scale_factor > 0.0 => {
+                let new_size = PhysicalSize {
+                    width: (f64::from(config.width) * scale_factor) as u32,
+                    height: (f64::from(config.height) * scale_factor) as u32,
+                };
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
-                    input:
-                        event::KeyboardInput {
-                            virtual_keycode: Some(event::VirtualKeyCode::Escape),
-                            state: event::ElementState::Pressed,
+                    event:
+                        KeyEvent {
+                            logical_key: Key::Named(NamedKey::Escape),
                             ..
                         },
                     ..
                 }
                 | WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
+                    target.exit();
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 WindowEvent::KeyboardInput {
-                    input:
-                        event::KeyboardInput {
-                            virtual_keycode: Some(event::VirtualKeyCode::R),
-                            state: event::ElementState::Pressed,
+                    event:
+                        KeyEvent {
+                            logical_key: Key::Character(s),
                             ..
                         },
                     ..
-                } => {
+                } if s == "r" => {
                     println!("{:#?}", instance.generate_report());
                 }
                 _ => {
                     example.update(event);
                 }
+                event::WindowEvent::RedrawRequested => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        accum_time += last_frame_inst.elapsed().as_secs_f32();
+                        last_frame_inst = Instant::now();
+                        frame_count += 1;
+                        if frame_count == 100 {
+                            println!(
+                                "Avg frame time {}ms",
+                                accum_time * 1000.0 / frame_count as f32
+                            );
+                            accum_time = 0.0;
+                            frame_count = 0;
+                        }
+                    }
+
+                    let frame = match surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(_) => {
+                            surface.configure(&device, &config);
+                            surface
+                                .get_current_texture()
+                                .expect("Failed to acquire next surface texture!")
+                        }
+                    };
+                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                        format: Some(surface_view_format),
+                        ..wgpu::TextureViewDescriptor::default()
+                    });
+
+                    example.render(&view, &device, &queue, &spawner);
+
+                    frame.present();
+
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+                            let image_bitmap = offscreen_canvas_setup
+                                .offscreen_canvas
+                                .transfer_to_image_bitmap()
+                                .expect("couldn't transfer offscreen canvas to image bitmap.");
+                            offscreen_canvas_setup
+                                .bitmap_renderer
+                                .transfer_from_image_bitmap(&image_bitmap);
+
+                            log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
+                        }
+                    }
+                }
             },
-            event::Event::RedrawRequested(_) => {
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    accum_time += last_frame_inst.elapsed().as_secs_f32();
-                    last_frame_inst = Instant::now();
-                    frame_count += 1;
-                    if frame_count == 100 {
-                        println!(
-                            "Avg frame time {}ms",
-                            accum_time * 1000.0 / frame_count as f32
-                        );
-                        accum_time = 0.0;
-                        frame_count = 0;
-                    }
-                }
-
-                let frame = match surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(_) => {
-                        surface.configure(&device, &config);
-                        surface
-                            .get_current_texture()
-                            .expect("Failed to acquire next surface texture!")
-                    }
-                };
-                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(surface_view_format),
-                    ..wgpu::TextureViewDescriptor::default()
-                });
-
-                example.render(&view, &device, &queue, &spawner);
-
-                frame.present();
-
-                #[cfg(target_arch = "wasm32")]
-                {
-                    if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
-                        let image_bitmap = offscreen_canvas_setup
-                            .offscreen_canvas
-                            .transfer_to_image_bitmap()
-                            .expect("couldn't transfer offscreen canvas to image bitmap.");
-                        offscreen_canvas_setup
-                            .bitmap_renderer
-                            .transfer_from_image_bitmap(&image_bitmap);
-
-                        log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
-                    }
-                }
-            }
             _ => {}
         }
     });
@@ -565,15 +559,18 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                     example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
 
                     // Handle specific case for bunnymark
-                    #[allow(deprecated)]
+                    // #[allow(deprecated)]
                     if params.image_path == "/examples/bunnymark/screenshot.png" {
                         // Press spacebar to spawn bunnies
                         example.update(winit::event::WindowEvent::KeyboardInput {
-                            input: winit::event::KeyboardInput {
-                                scancode: 0,
-                                state: winit::event::ElementState::Pressed,
-                                virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                                modifiers: winit::event::ModifiersState::empty(),
+                            event: KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::Space),
+                                state: ElementState::Pressed,
+                                logical_key: Key::Named(NamedKey::Space),
+                                text: None,
+                                location: KeyLocation::Standard,
+                                repeat: false,
+                                platform_specific: false,
                             },
                             device_id: unsafe { winit::event::DeviceId::dummy() },
                             is_synthetic: false,
@@ -630,4 +627,18 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                 .await;
             })
     }
+}
+
+fn resize_window<E: Example>(
+    example: E,
+    size: PhysicalSize<u32>,
+    config: &mut SurfaceConfiguration,
+    surface: &mut Surface,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) {
+    config.width = size.width.max(1);
+    config.height = size.height.max(1);
+    example.resize(&config, &device, &queue);
+    surface.configure(&device, &config);
 }
