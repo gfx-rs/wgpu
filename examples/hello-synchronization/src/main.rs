@@ -2,9 +2,11 @@ const ARR_SIZE: usize = 128;
 
 struct ExecuteResults {
     patient_workgroup_results: Vec<u32>,
+    #[cfg_attr(test, allow(unused))]
     hasty_workgroup_results: Vec<u32>,
 }
 
+#[cfg_attr(test, allow(unused))]
 async fn run() {
     let instance = wgpu::Instance::default();
     let adapter = instance
@@ -187,6 +189,7 @@ async fn get_data<T: bytemuck::Pod>(
     staging_buffer.unmap();
 }
 
+#[cfg(not(test))]
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -206,6 +209,9 @@ fn main() {
         wasm_bindgen_futures::spawn_local(run());
     }
 }
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();
 
 #[cfg(test)]
 mod tests;
