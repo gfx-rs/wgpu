@@ -4,14 +4,25 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[features]
+run-wasm = ["cargo-run-wasm"]
+
 [dependencies]
+# The dependencies in this config have no transitive dependencies.
 anyhow = "1.0.71"
+env_logger = { version = "0.10.0", default-features = false }
+log = "0.4.18"
+pico-args = { version = "0.5.0", features = [
+    "eq-separator",
+    "short-space-opt",
+    "combined-flags",
+] }
+xshell = "0.2.3"
+
+# Feature: run-wasm
+
 # Current contents filed as a PR here:
 # <https://github.com/rukai/cargo-run-wasm/pull/37>
-cargo-run-wasm = { version = "0.3.2", git = "https://github.com/ErichDonGubler/cargo-run-wasm", branch = "expose-args" }
-env_logger = "0.10.0"
-log = "0.4.18"
-pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt", "combined-flags"] }
-xshell = "0.2.3"
+cargo-run-wasm = { version = "0.3.2", git = "https://github.com/ErichDonGubler/cargo-run-wasm", branch = "expose-args", optional = true  }
 
 [workspace]
