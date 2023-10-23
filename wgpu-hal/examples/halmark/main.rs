@@ -156,6 +156,7 @@ impl<A: hal::Api> Example<A> {
             hal::NagaShader {
                 module: Cow::Owned(module),
                 info,
+                debug_source: None,
             }
         };
         let shader_desc = hal::ShaderModuleDescriptor {

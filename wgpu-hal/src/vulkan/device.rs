@@ -723,7 +723,9 @@ impl super::Device {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
                 };
-                let needs_temp_options = !runtime_checks || !binding_map.is_empty();
+                let needs_temp_options = !runtime_checks
+                    || !binding_map.is_empty()
+                    || naga_shader.debug_source.is_some();
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -739,6 +741,14 @@ impl super::Device {
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
                     }
+
+                    if let Some(ref debug) = naga_shader.debug_source {
+                        temp_options.debug_info = Some(naga::back::spv::DebugInfo {
+                            source_code: &debug.source_code,
+                            file_name: debug.file_name.as_ref().as_ref(),
+                        })
+                    }
+
                     &temp_options
                 } else {
                     &self.naga_options
@@ -1513,6 +1523,14 @@ impl crate::Device<super::Api> for super::Device {
                     });
                 }
                 let mut naga_options = self.naga_options.clone();
+                naga_options.debug_info =
+                    naga_shader
+                        .debug_source
+                        .as_ref()
+                        .map(|d| naga::back::spv::DebugInfo {
+                            source_code: d.source_code.as_ref(),
+                            file_name: d.file_name.as_ref().as_ref(),
+                        });
                 if !desc.runtime_checks {
                     naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
