@@ -758,7 +758,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = unsafe { GetModuleHandleW(std::ptr::null()) };
-                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
+                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd.get() as *mut _)
             }
             #[cfg(target_os = "macos")]
             (Rwh::AppKit(handle), _)
