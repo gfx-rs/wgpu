@@ -2815,7 +2815,10 @@ impl<A: HalApi> Device<A> {
                             .flags
                             .sample_count_supported(desc.multisample.count)
                     {
-                        break Some(pipeline::ColorStateError::FormatNotMultisampled(cs.format));
+                        break Some(pipeline::ColorStateError::InvalidSampleCount(
+                            desc.multisample.count,
+                            cs.format,
+                        ));
                     }
                     if let Some(blend_mode) = cs.blend {
                         for factor in [
@@ -2870,7 +2873,8 @@ impl<A: HalApi> Device<A> {
                         .flags
                         .sample_count_supported(desc.multisample.count)
                 {
-                    break Some(pipeline::DepthStencilStateError::FormatNotMultisampled(
+                    break Some(pipeline::DepthStencilStateError::InvalidSampleCount(
+                        desc.multisample.count,
                         ds.format,
                     ));
                 }

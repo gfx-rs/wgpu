@@ -299,8 +299,8 @@ pub enum ColorStateError {
     FormatNotBlendable(wgt::TextureFormat),
     #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
-    #[error("Format {0:?} can't be multisampled")]
-    FormatNotMultisampled(wgt::TextureFormat),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. It may be supported by your adapter through the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature.")]
+    InvalidSampleCount(u32, wgt::TextureFormat),
     #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
         pipeline: validation::NumericType,
@@ -321,8 +321,8 @@ pub enum DepthStencilStateError {
     FormatNotDepth(wgt::TextureFormat),
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
-    #[error("Format {0:?} can't be multisampled")]
-    FormatNotMultisampled(wgt::TextureFormat),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. It may be supported by your adapter through the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature.")]
+    InvalidSampleCount(u32, wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
