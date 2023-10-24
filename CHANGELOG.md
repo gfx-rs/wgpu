@@ -48,6 +48,14 @@ This allows us to cover the last 12 years of Intel GPUs (starting with Ivy Bridg
 
 By @Zoxc in [#4248](https://github.com/gfx-rs/wgpu/pull/4248)
 
+### Timestamp Queries Supported on Metal and OpenGL
+
+Timestamp queries are now supported on both Metal and Desktop OpenGL. On Apple chips on Metal, they only support timestamp queries in command buffers or in the renderpass descriptor,
+they do not support them inside a pass.
+
+Metal: By @Wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)  
+OpenGL: By @Zoxc in [#4267](https://github.com/gfx-rs/wgpu/pull/4267)
+
 ### Render/Compute Pass Query Writes
 
 Addition of the `TimestampWrites` type to compute and render pass descriptors to allow profiling on tilers which do not support timestamps inside passes.
@@ -57,7 +65,6 @@ Added [an example](https://github.com/gfx-rs/wgpu/tree/trunk/examples/timestamp-
 Additionally, metal now supports timestamp queries!
 
 By @FL33TW00D & @wumpf in [#3636](https://github.com/gfx-rs/wgpu/pull/3636).
-By @Wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
 
 ### Occlusion Queries
 
@@ -169,8 +176,8 @@ let instance = wgpu::Instance::new(InstanceDescriptor {
 });
 ```
 
-By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
-By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
+`gles_minor_version`: By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)  
+`flags`: By @nical in [#4230](https://github.com/gfx-rs/wgpu/pull/4230)
 
 ### Many New Examples!
 
@@ -230,7 +237,6 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 - Bump `gpu-allocator` to 0.23. By @Elabajaba in [#4198](https://github.com/gfx-rs/wgpu/pull/4198)
 
-
 ### Documentation
 
 - Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4035](https://github.com/gfx-rs/wgpu/pull/4035)
@@ -270,10 +276,6 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 #### GLES
 
 - enable/disable blending per attachment only when available (on ES 3.2 or higher). By @teoxoy in [#4234](https://github.com/gfx-rs/wgpu/pull/4234)
-
-#### Testing
-
-- Skip `test_multithreaded_compute` on MoltenVK. By @jimblandy in [#4096](https://github.com/gfx-rs/wgpu/pull/4096).
 
 ### Documentation
 
