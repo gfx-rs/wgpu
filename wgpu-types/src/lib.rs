@@ -299,17 +299,7 @@ bitflags::bitflags! {
         /// This is a web and native feature.
         const SHADER_F16 = 1 << 8;
 
-        /// Allows shaders to use the subgroup operation built-ins
-        ///
-        /// Supported Platforms:
-        /// - Vulkan
-        /// - DX12
-        /// - Metal
-        ///
-        /// This is a web and native feature.
-        const SUBGROUP_OPERATIONS = 1 << 9;
-
-        // 10..14 available
+        // 9..14 available
 
         // Texture Formats:
 
@@ -766,9 +756,37 @@ bitflags::bitflags! {
         /// - OpenGL
         const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
 
-        // 54..59 available
+        // 55 available
 
         // Shader:
+
+        /// Allows compute shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_COMPUTE = 1 << 56;
+        /// Allows fragment shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_FRAGMENT = 1 << 57;
+        /// Allows vertx shaders to use the subgroup operation built-ins
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SUBGROUP_VERTEX = 1 << 58;
 
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///

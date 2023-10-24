@@ -885,7 +885,7 @@ impl super::PrivateCapabilities {
         features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         if self.supports_simd_scoped_operations {
-            features.insert(F::SUBGROUP_OPERATIONS);
+            features.insert(F::SUBGROUP_COMPUTE | F::SUBGROUP_FRAGMENT | F::SUBGROUP_VERTEX);
         }
 
         features

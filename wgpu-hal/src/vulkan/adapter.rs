@@ -490,21 +490,33 @@ impl PhysicalDeviceFeatures {
         }
 
         if let Some(ref subgroup) = caps.subgroup {
-            features.set(
-                F::SUBGROUP_OPERATIONS,
-                subgroup.supported_operations.contains(
-                    vk::SubgroupFeatureFlags::BASIC
-                        | vk::SubgroupFeatureFlags::VOTE
-                        | vk::SubgroupFeatureFlags::ARITHMETIC
-                        | vk::SubgroupFeatureFlags::BALLOT
-                        | vk::SubgroupFeatureFlags::SHUFFLE
-                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE
-                        | vk::SubgroupFeatureFlags::CLUSTERED
-                        | vk::SubgroupFeatureFlags::QUAD,
-                ) && subgroup
-                    .supported_stages
-                    .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT),
-            );
+            if subgroup.supported_operations.contains(
+                vk::SubgroupFeatureFlags::BASIC
+                    | vk::SubgroupFeatureFlags::VOTE
+                    | vk::SubgroupFeatureFlags::ARITHMETIC
+                    | vk::SubgroupFeatureFlags::BALLOT
+                    | vk::SubgroupFeatureFlags::SHUFFLE
+                    | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE,
+            ) {
+                features.set(
+                    F::SUBGROUP_COMPUTE,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::COMPUTE),
+                );
+                features.set(
+                    F::SUBGROUP_FRAGMENT,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::FRAGMENT),
+                );
+                features.set(
+                    F::SUBGROUP_VERTEX,
+                    subgroup
+                        .supported_stages
+                        .contains(vk::ShaderStageFlags::VERTEX),
+                );
+            }
         }
 
         let supports_depth_format = |format| {
@@ -1279,17 +1291,17 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::Geometry);
             }
 
-            if features.contains(wgt::Features::SUBGROUP_OPERATIONS) {
+            if features.intersects(
+                wgt::Features::SUBGROUP_COMPUTE
+                    | wgt::Features::SUBGROUP_FRAGMENT
+                    | wgt::Features::SUBGROUP_VERTEX,
+            ) {
                 capabilities.push(spv::Capability::GroupNonUniform);
                 capabilities.push(spv::Capability::GroupNonUniformVote);
                 capabilities.push(spv::Capability::GroupNonUniformArithmetic);
                 capabilities.push(spv::Capability::GroupNonUniformBallot);
                 capabilities.push(spv::Capability::GroupNonUniformShuffle);
                 capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
-                capabilities.push(spv::Capability::GroupNonUniformClustered);
-                capabilities.push(spv::Capability::GroupNonUniformQuad);
-                capabilities.push(spv::Capability::SubgroupBallotKHR);
-                capabilities.push(spv::Capability::SubgroupVoteKHR);
             }
 
             if features.intersects(
@@ -1319,7 +1331,11 @@ impl super::Adapter {
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
             spv::Options {
-                lang_version: if features.contains(wgt::Features::SUBGROUP_OPERATIONS) {
+                lang_version: if features.intersects(
+                    wgt::Features::SUBGROUP_COMPUTE
+                        | wgt::Features::SUBGROUP_FRAGMENT
+                        | wgt::Features::SUBGROUP_VERTEX,
+                ) {
                     (1, 3)
                 } else {
                     (1, 0)

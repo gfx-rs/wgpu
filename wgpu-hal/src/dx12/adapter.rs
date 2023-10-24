@@ -293,7 +293,9 @@ impl super::Adapter {
         );
 
         features.set(
-            wgt::Features::SUBGROUP_OPERATIONS,
+            wgt::Features::SUBGROUP_COMPUTE
+                | wgt::Features::SUBGROUP_FRAGMENT
+                | wgt::Features::SUBGROUP_VERTEX,
             shader_model_support.HighestShaderModel >= d3d12_ty::D3D_SHADER_MODEL_6_0
                 && matches!(dx12_shader_compiler, &wgt::Dx12Compiler::Dxc { .. }),
         );

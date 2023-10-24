@@ -8,7 +8,7 @@ const THREAD_COUNT: u64 = 128;
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::SUBGROUP_OPERATIONS)
+            .features(wgpu::Features::SUBGROUP_COMPUTE)
             .limits(wgpu::Limits::downlevel_defaults())
             .expect_fail(wgpu_test::FailureCase::molten_vk()),
     )
