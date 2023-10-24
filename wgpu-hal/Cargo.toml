@@ -67,7 +67,7 @@ rustc-hash = "1.1"
 log = "0.4"
 
 # backend: Gles
-glow = { version = "0.12.3", optional = true }
+glow = { version = "0.13", optional = true }
 
 [dependencies.wgt]
 package = "wgpu-types"
