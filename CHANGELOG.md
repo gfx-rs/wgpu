@@ -40,40 +40,100 @@ Bottom level categories:
 
 ## Unreleased
 
-### Major changes
+### Desktop OpenGL 3.3+ Support on Windows
 
-- Update Naga to 9eb3a1dc (2023-10-12), which includes support for WGSL constant expressions. By @jimblandy in [#4233](https://github.com/gfx-rs/wgpu/pull/4233)
+We now support OpenGL on Windows! This brings support for a vast majority of the hardware that used to be covered by our DX11 backend. As of this writing we support OpenGL 3.3+, though there are efforts to reduce that further.
 
-#### Support desktop OpenGL via WGL on Windows
-
-Added creating of full OpenGL contexts to the GLES backend using WGL to support older devices.
+This allows us to cover the last 12 years of Intel GPUs (starting with Ivy Bridge; aka 3xxx), and the last 16 years of AMD (starting with Terascale; aka HD 2000) / NVidia GPUs (starting with Tesla; aka GeForce 8xxx).
 
 By @Zoxc in [#4248](https://github.com/gfx-rs/wgpu/pull/4248)
 
-#### Pass timestamp queries
+### Render/Compute Pass Query Writes
 
-Addition of `TimestampWrites` to compute and render passes to allow profiling.
-This brings us in line with the spec.
+Addition of the `TimestampWrites` type to compute and render pass descriptors to allow profiling on tilers which do not support timestamps inside passes.
 
-Added new example to demonstrate the various kinds of timestamps.
+Added [an example](https://github.com/gfx-rs/wgpu/tree/trunk/examples/timestamp-queries) to demonstrate the various kinds of timestamps.
+
+Additionally, metal now supports timestamp queries!
 
 By @FL33TW00D & @wumpf in [#3636](https://github.com/gfx-rs/wgpu/pull/3636).
+By @Wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
 
-#### Occlusion Query Support
+### Occlusion Queries
 
-The `occlusion_query_set` value defines where the occlusion query results will be stored for this pass.
+We now support binary occlusion queries! This allows you to determine if any of the draw calls within the query drew any pixels.
+
+Use the new `occlusion_query_set` field on `RenderPassDescriptor` to give a query set that occlusion queries will write to.
 
 ```diff
-let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-  // ...
-+ occlusion_query_set: None,
+let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+    // ...
++   occlusion_query_set: Some(&my_occlusion_query_set),
 });
 ```
 
+Within the renderpass do the following to write the occlusion query results to the query set at the given index:
+
+```rust
+rpass.begin_occlusion_query(index);
+rpass.draw(...);
+rpass.draw(...);
+rpass.end_occlusion_query();
+```
+
+These are binary occlusion queries, so the result will be either 0 or an unspecified non-zero value.
+
 By @Valaphee in [#3402](https://github.com/gfx-rs/wgpu/pull/3402)
 
+### Shader Improvements
 
-#### Render pass store operation is now an enum
+```rust
+// WGSL constant expressions are now supported!
+const BLAH: u32 = 1u + 1u;
+
+// `rgb10a2uint` and `bgra8unorm` can now be used as a storage image format.
+var image: texture_storage_2d<rgb10a2uint, write>;
+var image: texture_storage_2d<bgra8unorm, write>;
+
+// You can now use dual source blending!
+struct FragmentOutput{
+    @location(0) source1: vec4<f32>,
+    @location(0) @second_blend_source source2: vec4<f32>,
+}
+
+// `modf`/`frexp` now return structures
+let result = modf(1.5);
+result.fract == 0.5;
+result.whole == 1.0;
+
+let result = frexp(1.5);
+result.fract == 0.75;
+result.exponent == 2i;
+
+// `modf`/`frexp` are currently disabled on GLSL and SPIR-V input.
+```
+
+### Shader Validation Improvements
+
+```rust
+// Cannot get pointer to a workgroup variable
+fn func(p: ptr<workgroup, u32>); // ERROR
+
+// Cannot create Inf/NaN through constant expressions
+const INF: f32 = 3.40282347e+38 + 1.0; // ERROR
+const NAN: f32 = 0.0 / 0.0; // ERROR
+
+// `outerProduct` function removed
+
+// Error on repeated or missing `@workgroup_size()`
+@workgroup_size(1) @workgroup_size(2) // ERROR
+fn compute_main() {}
+
+// Error on repeated attributes.
+fn fragment_main(@location(0) @location(0) location_0: f32) // ERROR
+```
+
+### RenderPass `StoreOp` is now Enumeration
 
 `wgpu::Operations::store` used to be an underdocumented boolean value,
 causing misunderstandings of the effect of setting it to `false`.
@@ -93,20 +153,56 @@ depth_ops: Some(wgpu::Operations {
 
 By @wumpf in [#4147](https://github.com/gfx-rs/wgpu/pull/4147)
 
-#### The GLES backend is now optional on Windows & macOS
+### Instance Descriptor Settings
+
+The instance descriptor grew two more fields: `flags` and `gles_minor_version`.
+
+`flags` allow you to toggle the underlying api validation layers, debug information about shaders and objects in capture programs, and the ability to discard lables
+
+`gles_minor_version` is a rather niche feature that allows you to force the GLES backend to use a specific minor version, this is useful to get ANGLE to enable more than GLES 3.0.
+
+```diff
+let instance = wgpu::Instance::new(InstanceDescriptor {
+    ...
++   flags: wgpu::InstanceFlags::default()
++   gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+});
+```
+
+By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
+By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
+
+### Many New Examples!
+
+- Added the following examples: By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
+  - [repeated-compute](https://github.com/gfx-rs/wgpu/tree/trunk/examples/repeated-compute)
+  - [storage-texture](https://github.com/gfx-rs/wgpu/tree/trunk/examples/storage-texture)
+  - [render-to-texture](https://github.com/gfx-rs/wgpu/tree/trunk/examples/render-to-texture)
+  - [uniform-values](https://github.com/gfx-rs/wgpu/tree/trunk/examples/uniform-values)
+  - [hello-workgroups](https://github.com/gfx-rs/wgpu/tree/trunk/examples/hello-workgroups)
+  - [hello-synchronization](https://github.com/gfx-rs/wgpu/tree/trunk/examples/hello-synchronization)
+
+### Revamped Testing Suite
+
+Our testing harness was completely revamped and now automatically runs against all gpus in the system, shows the expected status of every test, and is tolerant to flakes.
+
+Additionally, we have filled out our CI to now run the latest versions of WARP and Mesa. This means we can test even more features on CI than before.
+
+By @cwfitzgerald in [#3873](https://github.com/gfx-rs/wgpu/pull/3873)
+
+### The GLES backend is now optional on macOS
 
 The `angle` feature flag has to be set for the GLES backend to be enabled on Windows & macOS.
 
 By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
-
 ### Added/New Features
 
-- Add `gles_minor_version` field to `wgpu::InstanceDescriptor`. By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
 - Re-export Naga. By @exrook in [#4172](https://github.com/gfx-rs/wgpu/pull/4172)
 - Add WinUI 3 SwapChainPanel support. By @ddrboxman in [#4191](https://github.com/gfx-rs/wgpu/pull/4191)
 
 ### Changes
+
 #### General
 
 - Omit texture store bound checks since they are no-ops if out of bounds on all APIs. By @teoxoy in [#3975](https://github.com/gfx-rs/wgpu/pull/3975)
@@ -119,7 +215,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add trace-level logging for most entry points in wgpu-core By @nical in [4183](https://github.com/gfx-rs/wgpu/pull/4183)
 - Add `Rgb10a2Uint` format. By @teoxoy in [4199](https://github.com/gfx-rs/wgpu/pull/4199)
 - Validate that resources are used on the right device. By @nical in [4207](https://github.com/gfx-rs/wgpu/pull/4207)
-- Expose instance flags. By @nical in [4230](https://github.com/gfx-rs/wgpu/pull/4230)
+- Expose instance flags. 
 - Add support for the bgra8unorm-storage feature. By @jinleili and @nical in [#4228](https://github.com/gfx-rs/wgpu/pull/4228)
 - Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
 - Let the `"strict_asserts"` feature enable check that wgpu-core's lock-ordering tokens are unique per thread. By @jimblandy in [#4258]([https://github.com/gfx-rs/wgpu/pull/4258])
@@ -128,7 +224,6 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 #### Vulkan
 
 - Rename `wgpu_hal::vulkan::Instance::required_extensions` to `desired_extensions`. By @jimblandy in [#4115](https://github.com/gfx-rs/wgpu/pull/4115)
-
 - Don't bother calling `vkFreeCommandBuffers` when `vkDestroyCommandPool` will take care of that for us. By @jimblandy in [#4059](https://github.com/gfx-rs/wgpu/pull/4059)
 
 #### DX12
@@ -137,12 +232,9 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 
 ### Documentation
+
 - Use WGSL for VertexFormat example types. By @ScanMountGoat in [#4035](https://github.com/gfx-rs/wgpu/pull/4035)
 - Fix description of `Features::TEXTURE_COMPRESSION_ASTC_HDR` in [#4157](https://github.com/gfx-rs/wgpu/pull/4157)
-
-#### Metal
-
-- Support for timestamp queries on encoders and passes. By @wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
 
 ### Bug Fixes
 
@@ -155,12 +247,10 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Fix a panic in `surface_configure`. By @nical in [#4220](https://github.com/gfx-rs/wgpu/pull/4220) and [#4227](https://github.com/gfx-rs/wgpu/pull/4227)
 
 #### Vulkan
+
 - Fix enabling `wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY` not being actually enabled in vulkan backend. By @39ali in[#3772](https://github.com/gfx-rs/wgpu/pull/3772).
-
 - Don't pass `vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR` unless the `VK_KHR_portability_enumeration` extension is available. By @jimblandy in[#4038](https://github.com/gfx-rs/wgpu/pull/4038).
-
 - Enhancement of [#4038], using ash's definition instead of hard-coded c_str. By @hybcloud in[#4044](https://github.com/gfx-rs/wgpu/pull/4044).
-
 - Enable vulkan presentation on (Linux) Intel Mesa >= v21.2. By @flukejones in[#4110](https://github.com/gfx-rs/wgpu/pull/4110)
 
 #### DX12
@@ -191,13 +281,6 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 
 ### Examples
 
-- Added the following examples: By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
-  - repeated-compute
-  - storage-texture
-  - render-to-texture
-  - uniform-values
-  - hello-workgroups
-  - hello-synchronization
 - Created `wgpu-example::utils` module to contain misc functions and such that are common code but aren't part of the example framework. Add to it the functions `output_image_wasm` and `output_image_native`, both for outputting `Vec<u8>` RGBA images either to the disc or the web page. By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 - Removed `capture` example as it had issues (did not run on wasm) and has been replaced by `render-to-texture` (see above). By @JustAnotherCodemonkey in [#3885](https://github.com/gfx-rs/wgpu/pull/3885).
 
