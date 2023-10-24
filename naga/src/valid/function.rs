@@ -58,6 +58,8 @@ pub enum SubgroupError {
     InvalidOperand(Handle<crate::Expression>),
     #[error("Result type for {0:?} doesn't match the statement")]
     ResultTypeMismatch(Handle<crate::Expression>),
+    #[error("Support for subgroup operation {0:?} is required")]
+    UnsupportedOperation(super::SubgroupOperationSet),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -750,13 +752,24 @@ impl super::Validator {
                 }
                 S::Barrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
-                    if barrier.contains(crate::Barrier::SUB_GROUP)
-                        && !self.capabilities.contains(super::Capabilities::SUBGROUP)
-                    {
-                        return Err(FunctionError::MissingCapability(
-                            super::Capabilities::SUBGROUP,
-                        )
-                        .with_span_static(span, "subgroup operation"));
+                    if barrier.contains(crate::Barrier::SUB_GROUP) {
+                        if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
+                            return Err(FunctionError::MissingCapability(
+                                super::Capabilities::SUBGROUP,
+                            )
+                            .with_span_static(span, "missing capability for this operation"));
+                        }
+                        if !self
+                            .subgroup_operations
+                            .contains(super::SubgroupOperationSet::BASIC)
+                        {
+                            return Err(FunctionError::InvalidSubgroup(
+                                SubgroupError::UnsupportedOperation(
+                                    super::SubgroupOperationSet::BASIC,
+                                ),
+                            )
+                            .with_span_static(span, "support for this operation is not present"));
+                        }
                     }
                 }
                 S::Store { pointer, value } => {
@@ -1048,11 +1061,23 @@ impl super::Validator {
                     }
                 }
                 S::SubgroupBallot { result, predicate } => {
+                    stages &= self.subgroup_stages;
                     if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
                         return Err(FunctionError::MissingCapability(
                             super::Capabilities::SUBGROUP,
                         )
-                        .with_span_static(span, "subgroup operation"));
+                        .with_span_static(span, "missing capability for this operation"));
+                    }
+                    if !self
+                        .subgroup_operations
+                        .contains(super::SubgroupOperationSet::BALLOT)
+                    {
+                        return Err(FunctionError::InvalidSubgroup(
+                            SubgroupError::UnsupportedOperation(
+                                super::SubgroupOperationSet::BALLOT,
+                            ),
+                        )
+                        .with_span_static(span, "support for this operation is not present"));
                     }
                     if let Some(predicate) = predicate {
                         let predicate_inner =
@@ -1081,11 +1106,19 @@ impl super::Validator {
                     argument,
                     result,
                 } => {
+                    stages &= self.subgroup_stages;
                     if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
                         return Err(FunctionError::MissingCapability(
                             super::Capabilities::SUBGROUP,
                         )
-                        .with_span_static(span, "subgroup operation"));
+                        .with_span_static(span, "missing capability for this operation"));
+                    }
+                    let operation = op.required_operations();
+                    if !self.subgroup_operations.contains(operation) {
+                        return Err(FunctionError::InvalidSubgroup(
+                            SubgroupError::UnsupportedOperation(operation),
+                        )
+                        .with_span_static(span, "support for this operation is not present"));
                     }
                     self.validate_subgroup_operation(op, collective_op, argument, result, context)?;
                 }
@@ -1094,11 +1127,19 @@ impl super::Validator {
                     argument,
                     result,
                 } => {
+                    stages &= self.subgroup_stages;
                     if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
                         return Err(FunctionError::MissingCapability(
                             super::Capabilities::SUBGROUP,
                         )
-                        .with_span_static(span, "subgroup operation"));
+                        .with_span_static(span, "missing capability for this operation"));
+                    }
+                    let operation = mode.required_operations();
+                    if !self.subgroup_operations.contains(operation) {
+                        return Err(FunctionError::InvalidSubgroup(
+                            SubgroupError::UnsupportedOperation(operation),
+                        )
+                        .with_span_static(span, "support for this operation is not present"));
                     }
                     self.validate_subgroup_broadcast(mode, argument, result, context)?;
                 }

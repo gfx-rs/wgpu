@@ -401,6 +401,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate the IR before compaction.
     let info = match naga::valid::Validator::new(params.validation_flags, validation_caps)
+        .subgroup_stages(naga::valid::ShaderStages::all())
+        .subgroup_operations(naga::valid::SubgroupOperationSet::all())
         .validate(&module)
     {
         Ok(info) => Some(info),

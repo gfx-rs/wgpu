@@ -129,6 +129,59 @@ impl Default for Capabilities {
 }
 
 bitflags::bitflags! {
+    /// Supported subgroup operations
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    pub struct SubgroupOperationSet: u8 {
+        /// Elect, Barrier
+        const BASIC = 1 << 0;
+        /// Any, All
+        const VOTE = 1 << 1;
+        /// reductions, scans
+        const ARITHMETIC = 1 << 2;
+        /// ballot, broadcast
+        const BALLOT = 1 << 3;
+        /// shuffle, shuffle xor
+        const SHUFFLE = 1 << 4;
+        /// shuffle up, down
+        const SHUFFLE_RELATIVE = 1 << 5;
+        // We don't support these operations yet
+        // /// Clustered
+        // const CLUSTERED = 1 << 6;
+        // /// Quad supported
+        // const QUAD_FRAMENT_COMPUTE = 1 << 7;
+        // /// Quad supported in all stages
+        // const QUAD_ALL_STAGES = 1 << 8;
+    }
+}
+
+#[cfg(feature = "validate")]
+impl super::SubgroupOperation {
+    const fn required_operations(&self) -> SubgroupOperationSet {
+        use SubgroupOperationSet as S;
+        match *self {
+            Self::All | Self::Any => S::VOTE,
+            Self::Add | Self::Mul | Self::Min | Self::Max | Self::And | Self::Or | Self::Xor => {
+                S::ARITHMETIC
+            }
+        }
+    }
+}
+
+#[cfg(feature = "validate")]
+impl super::GatherMode {
+    const fn required_operations(&self) -> SubgroupOperationSet {
+        use SubgroupOperationSet as S;
+        match *self {
+            Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
+            Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
+            Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+        }
+    }
+}
+
+bitflags::bitflags! {
     /// Validation flags.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -175,6 +228,8 @@ impl ops::Index<Handle<crate::Expression>> for ModuleInfo {
 pub struct Validator {
     flags: ValidationFlags,
     capabilities: Capabilities,
+    subgroup_stages: ShaderStages,
+    subgroup_operations: SubgroupOperationSet,
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
     location_mask: BitSet,
@@ -291,6 +346,8 @@ impl Validator {
         Validator {
             flags,
             capabilities,
+            subgroup_stages: ShaderStages::empty(),
+            subgroup_operations: SubgroupOperationSet::empty(),
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),
@@ -299,6 +356,16 @@ impl Validator {
             valid_expression_list: Vec::new(),
             valid_expression_set: BitSet::new(),
         }
+    }
+
+    pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
+        self.subgroup_stages = stages;
+        self
+    }
+
+    pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
+        self.subgroup_operations = operations;
+        self
     }
 
     /// Reset the validator internals

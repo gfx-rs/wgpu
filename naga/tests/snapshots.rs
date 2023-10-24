@@ -258,10 +258,18 @@ fn check_targets(
     let params = input.read_parameters();
     let name = &input.file_name;
 
-    let capabilities = if params.god_mode {
-        naga::valid::Capabilities::all()
+    let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
+        (
+            naga::valid::Capabilities::all(),
+            naga::valid::ShaderStages::all(),
+            naga::valid::SubgroupOperationSet::all(),
+        )
     } else {
-        naga::valid::Capabilities::default()
+        (
+            naga::valid::Capabilities::default(),
+            naga::valid::ShaderStages::empty(),
+            naga::valid::SubgroupOperationSet::empty(),
+        )
     };
 
     #[cfg(feature = "serialize")]
@@ -274,6 +282,8 @@ fn check_targets(
     }
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+        .subgroup_stages(subgroup_stages)
+        .subgroup_operations(subgroup_operations)
         .validate(module)
         .unwrap_or_else(|_| panic!("Naga module validation failed on test '{}'", name.display()));
 
@@ -291,6 +301,8 @@ fn check_targets(
         }
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
+            .subgroup_stages(subgroup_stages)
+            .subgroup_operations(subgroup_operations)
             .validate(module)
             .unwrap_or_else(|_| {
                 panic!(
