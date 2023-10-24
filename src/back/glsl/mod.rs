@@ -55,6 +55,7 @@ use std::{
     cmp::Ordering,
     fmt,
     fmt::{Error as FmtError, Write},
+    mem,
 };
 use thiserror::Error;
 
@@ -64,7 +65,7 @@ mod features;
 mod keywords;
 
 /// List of supported `core` GLSL versions.
-pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[330, 400, 410, 420, 430, 440, 450];
+pub const SUPPORTED_CORE_VERSIONS: &[u16] = &[140, 150, 330, 400, 410, 420, 430, 440, 450, 460];
 /// List of supported `es` GLSL versions.
 pub const SUPPORTED_ES_VERSIONS: &[u16] = &[300, 310, 320];
 
@@ -161,6 +162,10 @@ impl Version {
             Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
             Version::Embedded { version: v, .. } => SUPPORTED_ES_VERSIONS.contains(&v),
         }
+    }
+
+    fn supports_io_locations(&self) -> bool {
+        *self >= Version::Desktop(330) || *self >= Version::new_gles(300)
     }
 
     /// Checks if the version supports all of the explicit layouts:
@@ -285,12 +290,25 @@ pub struct PipelineOptions {
     pub multiview: Option<std::num::NonZeroU32>,
 }
 
+#[derive(Debug)]
+pub struct VaryingLocation {
+    /// The location of the global.
+    /// This corresponds to `layout(location = ..)` in GLSL.
+    pub location: u32,
+    /// The index which can be used for dual source blending.
+    /// This corresponds to `layout(index = ..)` in GLSL.
+    pub index: u32,
+}
+
 /// Reflection info for texture mappings and uniforms.
+#[derive(Debug)]
 pub struct ReflectionInfo {
     /// Mapping between texture names and variables/samplers.
     pub texture_mapping: crate::FastHashMap<String, TextureMapping>,
     /// Mapping between uniform variables and names.
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
+    /// Mapping between names and attribute locations.
+    pub varying: crate::FastHashMap<String, VaryingLocation>,
 }
 
 /// Mapping between a texture and its sampler, if it exists.
@@ -463,6 +481,8 @@ pub struct Writer<'a, W> {
     need_bake_expressions: back::NeedBakeExpressions,
     /// How many views to render to, if doing multiview rendering.
     multiview: Option<std::num::NonZeroU32>,
+    /// Mapping of varying variables to their location. Needed for reflections.
+    varying: crate::FastHashMap<String, VaryingLocation>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -525,6 +545,7 @@ impl<'a, W: Write> Writer<'a, W> {
             block_id: IdGenerator::default(),
             named_expressions: Default::default(),
             need_bake_expressions: Default::default(),
+            varying: Default::default(),
         };
 
         // Find all features required to print this module
@@ -1006,9 +1027,16 @@ impl<'a, W: Write> Writer<'a, W> {
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
         };
 
+        let precision = if self.options.version.is_es() {
+            "highp "
+        } else {
+            ""
+        };
+
         write!(
             self.out,
-            "highp {}{}{}{}{}{}",
+            "{}{}{}{}{}{}{}",
+            precision,
             glsl_scalar(kind, 4)?.prefix,
             base,
             glsl_dimension(dim),
@@ -1367,13 +1395,25 @@ impl<'a, W: Write> Writer<'a, W> {
         };
 
         // Write the I/O locations, if allowed
-        if self.options.version.supports_explicit_locations() || !emit_interpolation_and_auxiliary {
-            if second_blend_source {
-                write!(self.out, "layout(location = {location}, index = 1) ")?;
+        let io_location = if self.options.version.supports_explicit_locations()
+            || !emit_interpolation_and_auxiliary
+        {
+            if self.options.version.supports_io_locations() {
+                if second_blend_source {
+                    write!(self.out, "layout(location = {location}, index = 1) ")?;
+                } else {
+                    write!(self.out, "layout(location = {location}) ")?;
+                }
+                None
             } else {
-                write!(self.out, "layout(location = {location}) ")?;
+                Some(VaryingLocation {
+                    location,
+                    index: second_blend_source as u32,
+                })
             }
-        }
+        } else {
+            None
+        };
 
         // Write the interpolation qualifier.
         if let Some(interp) = interpolation {
@@ -1416,6 +1456,10 @@ impl<'a, W: Write> Writer<'a, W> {
             targetting_webgl: self.options.version.is_webgl(),
         };
         writeln!(self.out, " {vname};")?;
+
+        if let Some(location) = io_location {
+            self.varying.insert(vname.to_string(), location);
+        }
 
         Ok(())
     }
@@ -4000,7 +4044,7 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 
     /// Helper method used to produce the reflection info that's returned to the user
-    fn collect_reflection_info(&self) -> Result<ReflectionInfo, Error> {
+    fn collect_reflection_info(&mut self) -> Result<ReflectionInfo, Error> {
         use std::collections::hash_map::Entry;
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
         let mut texture_mapping = crate::FastHashMap::default();
@@ -4057,6 +4101,7 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(ReflectionInfo {
             texture_mapping,
             uniforms,
+            varying: mem::take(&mut self.varying),
         })
     }
 }

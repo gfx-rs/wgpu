@@ -1,22 +1,22 @@
 #version 430 core
 #extension GL_ARB_shader_texture_image_samples : require
-uniform highp sampler1D _group_0_binding_0_fs;
+uniform sampler1D _group_0_binding_0_fs;
 
-uniform highp sampler2D _group_0_binding_1_fs;
+uniform sampler2D _group_0_binding_1_fs;
 
-uniform highp sampler2DArray _group_0_binding_2_fs;
+uniform sampler2DArray _group_0_binding_2_fs;
 
-uniform highp sampler3D _group_0_binding_3_fs;
+uniform sampler3D _group_0_binding_3_fs;
 
-uniform highp sampler2DMS _group_0_binding_4_fs;
+uniform sampler2DMS _group_0_binding_4_fs;
 
-layout(rgba8) writeonly uniform highp image1D _group_0_binding_8_fs;
+layout(rgba8) writeonly uniform image1D _group_0_binding_8_fs;
 
-layout(rgba8) writeonly uniform highp image2D _group_0_binding_9_fs;
+layout(rgba8) writeonly uniform image2D _group_0_binding_9_fs;
 
-layout(rgba8) writeonly uniform highp image2DArray _group_0_binding_10_fs;
+layout(rgba8) writeonly uniform image2DArray _group_0_binding_10_fs;
 
-layout(rgba8) writeonly uniform highp image3D _group_0_binding_11_fs;
+layout(rgba8) writeonly uniform image3D _group_0_binding_11_fs;
 
 layout(location = 0) out vec4 _fs2p_location0;
 
