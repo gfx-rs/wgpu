@@ -2097,6 +2097,16 @@ impl TextureFormatFeatureFlags {
             _ => false,
         }
     }
+
+    /// A `Vec` of supported sample counts.
+    pub fn supported_sample_counts(&self) -> Vec<u32> {
+        let all_possible_sample_counts: Vec<u32> = vec![1, 2, 4, 8, 16];
+        all_possible_sample_counts
+            .iter()
+            .filter(|sc| self.sample_count_supported(**sc))
+            .cloned()
+            .collect()
+    }
 }
 
 impl_bitflags!(TextureFormatFeatureFlags);
