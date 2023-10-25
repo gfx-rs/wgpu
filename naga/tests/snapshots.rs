@@ -232,10 +232,8 @@ impl Input {
         let mut param_path = self.input_path();
         param_path.set_extension("param.ron");
         match fs::read_to_string(&param_path) {
-            Ok(string) => ron::de::from_str(&string).unwrap_or_else(|_| panic!(
-                "Couldn't parse param file: {}",
-                param_path.display()
-            )),
+            Ok(string) => ron::de::from_str(&string)
+                .unwrap_or_else(|_| panic!("Couldn't parse param file: {}", param_path.display())),
             Err(_) => Parameters::default(),
         }
     }
@@ -277,10 +275,7 @@ fn check_targets(
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .unwrap_or_else(|_| panic!(
-            "Naga module validation failed on test '{}'",
-            name.display()
-        ));
+        .unwrap_or_else(|_| panic!("Naga module validation failed on test '{}'", name.display()));
 
     #[cfg(feature = "compact")]
     let info = {
@@ -297,10 +292,12 @@ fn check_targets(
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
             .validate(module)
-            .unwrap_or_else(|_| panic!(
-                "Post-compaction module validation failed on test '{}'",
-                name.display()
-            ))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Post-compaction module validation failed on test '{}'",
+                    name.display()
+                )
+            })
     };
 
     #[cfg(feature = "serialize")]

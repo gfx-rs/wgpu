@@ -32,12 +32,12 @@ jobs:
       - name: Build Naga
         run: |
           cd naga
-          cargo build --release --bin naga
+          cargo build --release -p naga-cli
 
       - name: Convert shaders
         run: |
           cd naga
-          for file in data/*.spv do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
+          for file in data/*.spv do echo "Translating" ${file} && ../target/release/naga --validate 27 ${file} ${file}.metal; done
 
   parse-vulkan-tutorial-shaders:
     name: Parse Sascha Willems Vulkan tutorial shaders
@@ -51,7 +51,7 @@ jobs:
       - name: Build Naga
         run: |
           cd naga
-          cargo build --release --bin naga
+          cargo build --release -p naga-cli
 
       - name: Convert metal shaders
         run: |
@@ -66,7 +66,7 @@ jobs:
           do
               echo "Convert: $fname"
               FILE_COUNT=$((FILE_COUNT+1))
-              target/release/naga --validate 27 $(realpath ${fname}) out/$(basename ${fname}).metal
+              ../target/release/naga --validate 27 $(realpath ${fname}) out/$(basename ${fname}).metal
               if [[ $? -eq 0 ]]; then
                   SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
               fi
@@ -87,8 +87,7 @@ jobs:
 
       - name: Build Naga
         run: |
-          cd naga
-          cargo build --release --bin naga
+          cargo build --release -p naga-cli
 
       - name: Install spirv-tools
         run: |
@@ -125,7 +124,7 @@ jobs:
            do
                echo "Convert: $fname"
                FILE_COUNT=$((FILE_COUNT+1))
-               ../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
+               ../../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
                if [[ $? -eq 0 ]]; then
                    SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
                fi
@@ -147,7 +146,7 @@ jobs:
            do
                echo "Validate: $fname"
                FILE_COUNT=$((FILE_COUNT+1))
-               ../target/release/naga --validate 27 $(realpath ${fname})
+               ../../target/release/naga --validate 27 $(realpath ${fname})
                if [[ $? -eq 0 ]]; then
                    SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
                fi
