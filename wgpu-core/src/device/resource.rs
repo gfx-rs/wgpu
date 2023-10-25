@@ -332,7 +332,7 @@ impl<A: HalApi> Device<A> {
         let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
-            lose_device_invocations: lose_device_invocations,
+            lose_device_invocations,
         };
         Ok((closures, life_tracker.queue_empty()))
     }
