@@ -5,7 +5,10 @@
 fn main() {
     use player::{GlobalPlay as _, IdentityPassThroughFactory};
     use wgc::{device::trace, gfx_select};
-    use winit::{event::KeyEvent, keyboard::{Key, NamedKey}};
+    use winit::{
+        event::KeyEvent,
+        keyboard::{Key, NamedKey},
+    };
 
     use std::{
         fs,
