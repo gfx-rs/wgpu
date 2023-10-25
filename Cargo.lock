@@ -3844,6 +3844,7 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "wgpu",
+ "wgpu-core",
  "wgpu-macros",
  "wgpu-types",
 ]

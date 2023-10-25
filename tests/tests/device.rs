@@ -1,5 +1,7 @@
 use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
+use wgc::device::{DeviceLostReason, LoseDeviceClosure};
+
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::always()))
@@ -448,4 +450,36 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         fail(&ctx.device, || {
             buffer_for_unmap.unmap();
         });
+    });
+
+#[gpu_test]
+static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default())
+    .run_sync(|ctx| {
+        // This test checks that when device.destroy is called, the provided
+        // LoseDeviceClosure is called with reason DeviceLostReason::Destroyed.
+        // This is a weak assertion, because the closure is a moved FnOnce
+        // and only asserts *if it is run*. A more comprehensive test would need
+        // to become async and use something like tokio::sync::oneshot to send
+        // a message back containing infomation on the closure invocation. In
+        // that case, the main test function could assert the received value.
+        // Unfortunately, the test harness isn't as capable with async functions
+        // and can only run them under certain configs, as is done in
+        // request_device_error_on_native, above.
+
+        // Set a LoseDeviceClosure on the device.
+        let closure = LoseDeviceClosure::from_rust(Box::new(move |reason, _m| {
+            assert!(
+                matches!(reason, DeviceLostReason::Destroyed),
+                "Device lost info reason should match DeviceLostReason::Destroyed."
+            );
+        }));
+        ctx.device.set_lose_device_closure(closure);
+
+        // Destroy the device.
+        ctx.device.destroy();
+
+        // Make sure the device queues are empty, which ensures that the closure
+        // has been called.
+        assert!(ctx.device.poll(wgpu::Maintain::Wait));
     });
