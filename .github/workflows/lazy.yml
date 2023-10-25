@@ -1,5 +1,5 @@
 # Lazy jobs running on master post merges.
-name: lazy
+name: naga-lazy
 on:
   pull_request:
     paths:
@@ -14,7 +14,7 @@ env:
 
 jobs:
   parse-dota2:
-    name: Parse Dota2 shaders
+    name: "Validate Shaders: Dota2"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -37,10 +37,10 @@ jobs:
       - name: Convert shaders
         run: |
           cd naga
-          for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
+          for file in data/*.spv ; do echo "Translating" ${file} && ../target/release/naga --validate 27 ${file} ${file}.metal; done
 
   parse-vulkan-tutorial-shaders:
-    name: Parse Sascha Willems Vulkan tutorial shaders
+    name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -75,7 +75,7 @@ jobs:
           cat counter
 
   dneto0_spirv-samples:
-    name: Parse dneto0 spirv-samples
+    name: "Validate Shaders: dneto0 spirv-samples"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -153,29 +153,3 @@ jobs:
                echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
            done
            cat counter
-
-  check-snapshots-extra:
-    name: Check snapshots (validated or not)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: Test minimal (without span)
-        run: |
-          cd naga
-          cargo nextest run -p naga --features validate
-
-      - name: Test all (without validation)
-        run: |
-          cd naga
-          cargo nextest run -p naga --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out
-
-      - name: Check snapshots (without validation)
-        run: |
-          cd naga
-          git diff --exit-code -- tests/out
