@@ -623,17 +623,3 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
             })
     }
 }
-
-fn resize_window<E: Example>(
-    example: &mut E,
-    size: PhysicalSize<u32>,
-    config: &mut SurfaceConfiguration,
-    surface: &mut Surface,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-) {
-    config.width = size.width.max(1);
-    config.height = size.height.max(1);
-    example.resize(&config, &device, &queue);
-    surface.configure(&device, &config);
-}
