@@ -144,7 +144,7 @@ d3d12 = { version = "0.7", features = ["libloading"], optional = true }
 # backend: Metal
 block = { version = "0.1", optional = true }
 
-metal = { git = "https://github.com/gfx-rs/metal-rs/", rev = "d24f1a4" } # More timer support via https://github.com/gfx-rs/metal-rs/pull/280
+metal = "0.27.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 

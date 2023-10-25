@@ -115,7 +115,7 @@ winit = { version = "0.28.7", features = ["android-native-activity"] }
 
 # Metal dependencies
 block = "0.1"
-metal = "0.25.0"
+metal = "0.27.0"
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
