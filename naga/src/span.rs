@@ -189,7 +189,10 @@ impl<E> WithSpan<E> {
     }
 
     /// Add a new span with description.
-    #[cfg_attr(not(feature = "span"), allow(unused_variables, unused_mut, clippy::missing_const_for_fn))]
+    #[cfg_attr(
+        not(feature = "span"),
+        allow(unused_variables, unused_mut, clippy::missing_const_for_fn)
+    )]
     pub fn with_span<S>(mut self, span: Span, description: S) -> Self
     where
         S: ToString,

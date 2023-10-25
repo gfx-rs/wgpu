@@ -1,5 +1,5 @@
-# Lazy jobs running on master post merges.
-name: naga-lazy
+# Lazy jobs running on trunk post merges.
+name: Lazy
 on:
   pull_request:
     paths:

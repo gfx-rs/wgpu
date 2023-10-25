@@ -1,4 +1,4 @@
-name: shader-validation
+name: Shaders
 
 on:
   push:
@@ -8,29 +8,16 @@ on:
   merge_group:
 
 jobs:
-  naga-validate-windows-dxc:
-    name: "Validate Shaders: HLSL Output on DXC"
+  naga-validate-windows:
+    name: "Validate: HLSL"
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Add DirectXShaderCompiler
+      - name: Setup DXC
         uses: napokue/setup-dxc@v1.1.0
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
-
-      - run: cd naga; cargo xtask validate hlsl dxc
-
-  naga-validate-windows-fxc:
-    name: "Validate Shaders: HLSL Output on FXC"
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Add fxc bin to PATH
+      - name: Setup FXC
         run: |
           Get-Childitem -Path "C:\Program Files (x86)\Windows Kits\10\bin\**\x64\fxc.exe" `
           | Sort-Object -Property LastWriteTime -Descending `
@@ -44,10 +31,13 @@ jobs:
           workspaces: |
             naga/xtask -> naga/xtask/target
 
-      - run: cd naga; cargo xtask validate hlsl fxc
+      - run: |
+          cd naga
+          cargo xtask validate hlsl dxc
+          cargo xtask validate hlsl fxc
     
   naga-validate-macos:
-    name: "Validate Shaders: MSL"
+    name: "Validate: MSL"
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -57,10 +47,12 @@ jobs:
           workspaces: |
             naga/xtask -> naga/xtask/target
 
-      - run: cd naga; cargo xtask validate msl
+      - run: |
+          cd naga
+          cargo xtask validate msl
       
   naga-validate-linux:
-    name: "Validate Shaders: SPIR-V + GLSL"
+    name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
