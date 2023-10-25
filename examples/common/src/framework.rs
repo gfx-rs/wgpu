@@ -76,7 +76,6 @@ pub trait Example: 'static + Sized {
 }
 
 struct Setup {
-    window: winit::window::Window,
     event_loop: EventLoop<()>,
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
@@ -245,7 +244,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
         .expect("Unable to find a suitable GPU adapter!");
 
     Setup {
-        window,
         event_loop,
         instance,
         size,
@@ -260,7 +258,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
 fn start<E: Example>(
     #[cfg(not(target_arch = "wasm32"))] Setup {
-        window: _,
         event_loop,
         instance,
         size,
@@ -270,7 +267,6 @@ fn start<E: Example>(
         queue,
     }: Setup,
     #[cfg(target_arch = "wasm32")] Setup {
-        window: _,
         event_loop,
         instance,
         size,
