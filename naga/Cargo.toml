@@ -15,12 +15,6 @@ rust-version = "1.65"
 [package.metadata.docs.rs]
 all-features = true
 
-[profile.release]
-panic = "abort"
-
-[profile.dev]
-panic = "abort"
-
 [features]
 default = []
 clone = []
@@ -78,11 +72,3 @@ ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { version = "1.0", features = ["derive"] }
 spirv = { version = "0.2", features = ["deserialize"] }
-
-[workspace]
-members = [".", "cli"]
-
-# Include "cli", so that `cargo run` runs the CLI by default. Include ".", so
-# that `cargo test` includes naga's own tests by default (but note, using the
-# features that `cli/Cargo.toml` requests).
-default-members = [".", "cli"]

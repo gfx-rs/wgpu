@@ -2,10 +2,7 @@
 name: lazy
 on:
   push:
-    branches: [master]
-  pull_request:
-    paths:
-      - '.github/workflows/lazy.yml'
+    branches: [trunk]
 
 env:
   CARGO_INCREMENTAL: false

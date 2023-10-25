@@ -1,18 +1,15 @@
-name: validation-linux
+name: naga-validation-linux
+
 on:
+  push:
+    branches: ["*"]
+    tags: [v0.*]
   pull_request:
-    paths:
-      - '.github/workflows/validation-linux.yml'
-      - 'tests/out/spv/*.spvasm'
-      - 'tests/out/glsl/*.glsl'
-      - 'tests/out/dot/*.dot'
-      - 'tests/out/wgsl/*.wgsl'
-      - 'src/front/wgsl/*'
-      - 'xtask/**'
+  merge_group:
 
 jobs:
   validate-linux:
-    name: SPIR-V + GLSL
+    name: Validate Naga SPIR-V + GLSL Output
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -23,7 +20,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            xtask -> target
+            naga/xtask -> naga/xtask/target
 
       - run: cargo xtask validate spv
 

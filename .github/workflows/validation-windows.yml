@@ -1,16 +1,15 @@
 name: validation-windows
+
 on:
+  push:
+    branches: ["*"]
+    tags: [v0.*]
   pull_request:
-    paths:
-      - '.github/workflows/validation-windows.yml'
-      - 'tests/out/hlsl/*.hlsl'
-      - 'tests/out/hlsl/*.ron'
-      - 'xtask/**'
-      - 'hlsl-snapshots/**'
+  merge_group:
 
 jobs:
   validate-windows-dxc:
-    name: HLSL via DXC
+    name: Validate Naga HLSL Output on DXC
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -21,12 +20,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            xtask -> target
+            naga/xtask -> naga/xtask/target
 
       - run: cargo xtask validate hlsl dxc
 
   validate-windows-fxc:
-    name: HLSL via FXC
+    name: Validate Naga HLSL Output on FXC
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -43,6 +42,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            xtask -> target
+            naga/xtask -> target
 
       - run: cargo xtask validate hlsl fxc

@@ -1,14 +1,15 @@
 name: validation-macos
+
 on:
+  push:
+    branches: ["*"]
+    tags: [v0.*]
   pull_request:
-    paths:
-      - '.github/workflows/validation-macos.yml'
-      - 'tests/out/msl/*.msl'
-      - 'xtask/**'
+  merge_group:
 
 jobs:
   validate-macos:
-    name: MSL
+    name: Validate Naga MSL Output
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -16,6 +17,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            xtask -> target
+            naga/xtask -> naga/xtask/target
 
       - run: cargo xtask validate msl
