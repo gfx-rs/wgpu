@@ -662,6 +662,14 @@ impl<A: HalApi> Device<A> {
                 return Err(CreateTextureError::InvalidSampleCount(
                     desc.sample_count,
                     desc.format,
+                    desc.format
+                        .guaranteed_format_features(self.features)
+                        .flags
+                        .supported_sample_counts(),
+                    adapter
+                        .get_texture_format_features(desc.format)
+                        .flags
+                        .supported_sample_counts(),
                 ));
             };
         }
@@ -2818,6 +2826,14 @@ impl<A: HalApi> Device<A> {
                         break Some(pipeline::ColorStateError::InvalidSampleCount(
                             desc.multisample.count,
                             cs.format,
+                            cs.format
+                                .guaranteed_format_features(self.features)
+                                .flags
+                                .supported_sample_counts(),
+                            adapter
+                                .get_texture_format_features(cs.format)
+                                .flags
+                                .supported_sample_counts(),
                         ));
                     }
                     if let Some(blend_mode) = cs.blend {
@@ -2876,6 +2892,14 @@ impl<A: HalApi> Device<A> {
                     break Some(pipeline::DepthStencilStateError::InvalidSampleCount(
                         desc.multisample.count,
                         ds.format,
+                        ds.format
+                            .guaranteed_format_features(self.features)
+                            .flags
+                            .supported_sample_counts(),
+                        adapter
+                            .get_texture_format_features(ds.format)
+                            .flags
+                            .supported_sample_counts(),
                     ));
                 }
 
