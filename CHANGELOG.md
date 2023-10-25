@@ -38,6 +38,13 @@ Bottom level categories:
 - Hal
 -->
 
+## Unreleased ##
+
+### Changes ###
+
+#### General ####
+* `LoseDeviceClosure` callback mechanism provided so user agents can resolve `GPUDevice.lost` Promises at the appropriate time by @bradwerth in [#4299](https://github.com/gfx-rs/wgpu/pull/4299)
+
 ## v0.18.0 (2023-10-25)
 
 ### Desktop OpenGL 3.3+ Support on Windows
