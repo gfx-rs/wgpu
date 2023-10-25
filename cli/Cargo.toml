@@ -1,6 +1,6 @@
 [package]
 name = "naga-cli"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["Naga Developers"]
 edition = "2021"
 description = "Shader translation command line tool"
@@ -33,5 +33,5 @@ features = [
     "hlsl-out",
     "dot-out",
     "serialize",
-    "deserialize"
+    "deserialize",
 ]

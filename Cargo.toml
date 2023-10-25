@@ -1,6 +1,6 @@
 [package]
 name = "naga"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["Naga Developers"]
 edition = "2021"
 description = "Shader translation infrastructure"
@@ -60,7 +60,7 @@ num-traits = "0.2"
 spirv = { version = "0.2", optional = true }
 thiserror = "1.0.21"
 serde = { version = "1.0.103", features = ["derive"], optional = true }
-petgraph = { version ="0.6", optional = true }
+petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
@@ -70,7 +70,7 @@ bincode = "1"
 criterion = { version = "0.5", features = [] }
 diff = "0.1"
 env_logger = "0.10"
-hlsl-snapshots = { path = "./hlsl-snapshots"}
+hlsl-snapshots = { path = "./hlsl-snapshots" }
 # Require at least version 0.7.1 of ron, this version changed how floating points are
 # serialized by forcing them to always have the decimal part, this makes it backwards
 # incompatible with our tests because we do a syntatic diff and not a semantic one.
