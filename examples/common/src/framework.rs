@@ -304,16 +304,12 @@ fn start<E: Example>(
             event::Event::WindowEvent {
                 event: WindowEvent::Resized(size),
                 ..
-            } => resize_window(example, size, &mut config, &mut surface, &device, &queue),
-            event::Event::WindowEvent {
-                event: WindowEvent::ScaleFactorChanged { scale_factor, .. },
-                ..
-            } if scale_factor > 0.0 => {
-                let new_size = PhysicalSize {
-                    width: (f64::from(config.width) * scale_factor) as u32,
-                    height: (f64::from(config.height) * scale_factor) as u32,
-                };
-            }
+            } => {
+                config.width = size.width.max(1);
+                config.height = size.height.max(1);
+                example.resize(&config, &device, &queue);
+                surface.configure(&device, &config);
+            },
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
                     event:
