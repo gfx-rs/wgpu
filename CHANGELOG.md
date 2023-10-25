@@ -38,7 +38,7 @@ Bottom level categories:
 - Hal
 -->
 
-## Unreleased
+## v0.18.0 (2023-10-25)
 
 ### Desktop OpenGL 3.3+ Support on Windows
 
