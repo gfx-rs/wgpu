@@ -1463,6 +1463,23 @@ bitflags::bitflags! {
         ///
         /// The GLES/WebGL and Vulkan on Android doesn't support this.
         const SURFACE_VIEW_FORMATS = 1 << 21;
+
+        /// If this is true, calls to `CommandEncoder::resolve_query_set` will be performed on the queue timeline.
+        ///
+        /// If this is false, calls to `CommandEncoder::resolve_query_set` will be performed on the device (i.e. cpu) timeline
+        /// and will block that timeline until the query has data. You may work around this limitation by waiting until the submit
+        /// whose queries you are resolving is fully finished (through use of `queue.on_submitted_work_done`) and only
+        /// then submitting the resolve_query_set command. The queries will be guarenteed finished, so will not block.
+        ///
+        /// Supported by:
+        /// - Vulkan,
+        /// - DX12
+        /// - Metal
+        /// - OpenGL 4.4+
+        ///
+        /// Not Supported by:
+        /// - GL ES / WebGL
+        const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
     }
 }
 

@@ -1,4 +1,4 @@
-use super::{conv::is_layered_target, Command as C};
+use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use std::{
@@ -817,35 +817,98 @@ impl super::Queue {
             C::EndQuery(target) => {
                 unsafe { gl.end_query(target) };
             }
+            C::TimestampQuery(query) => {
+                unsafe { gl.query_counter(query, glow::TIMESTAMP) };
+            }
             C::CopyQueryResults {
                 ref query_range,
                 ref dst,
                 dst_target,
                 dst_offset,
             } => {
-                let mut temp_query_results = self.temp_query_results.lock();
-                temp_query_results.clear();
-                for &query in queries[query_range.start as usize..query_range.end as usize].iter() {
-                    let result = unsafe { gl.get_query_parameter_u32(query, glow::QUERY_RESULT) };
-                    temp_query_results.push(result as u64);
-                }
-                let query_data = unsafe {
-                    slice::from_raw_parts(
-                        temp_query_results.as_ptr() as *const u8,
-                        temp_query_results.len() * mem::size_of::<u64>(),
-                    )
-                };
-                match dst.raw {
-                    Some(buffer) => {
-                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
-                        unsafe {
-                            gl.buffer_sub_data_u8_slice(dst_target, dst_offset as i32, query_data)
-                        };
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::QUERY_BUFFERS)
+                    && dst.raw.is_some()
+                {
+                    unsafe {
+                        // We're assuming that the only relevant queries are 8 byte timestamps or
+                        // occlusion tests.
+                        let query_size = 8;
+
+                        let query_range_size = query_size * query_range.len();
+
+                        let buffer = gl.create_buffer().ok();
+                        gl.bind_buffer(glow::QUERY_BUFFER, buffer);
+                        gl.buffer_data_size(
+                            glow::QUERY_BUFFER,
+                            query_range_size as _,
+                            glow::STREAM_COPY,
+                        );
+
+                        for (i, &query) in queries
+                            [query_range.start as usize..query_range.end as usize]
+                            .iter()
+                            .enumerate()
+                        {
+                            gl.get_query_parameter_u64_with_offset(
+                                query,
+                                glow::QUERY_RESULT,
+                                query_size * i,
+                            )
+                        }
+                        gl.bind_buffer(dst_target, dst.raw);
+                        gl.copy_buffer_sub_data(
+                            glow::QUERY_BUFFER,
+                            dst_target,
+                            0,
+                            dst_offset as _,
+                            query_range_size as _,
+                        );
+                        if let Some(buffer) = buffer {
+                            gl.delete_buffer(buffer)
+                        }
                     }
-                    None => {
-                        let data = &mut dst.data.as_ref().unwrap().lock().unwrap();
-                        let len = query_data.len().min(data.len());
-                        data[..len].copy_from_slice(&query_data[..len]);
+                } else {
+                    let mut temp_query_results = self.temp_query_results.lock();
+                    temp_query_results.clear();
+                    for &query in
+                        queries[query_range.start as usize..query_range.end as usize].iter()
+                    {
+                        let mut result: u64 = 0;
+                        unsafe {
+                            let result: *mut u64 = &mut result;
+                            gl.get_query_parameter_u64_with_offset(
+                                query,
+                                glow::QUERY_RESULT,
+                                result as usize,
+                            )
+                        };
+                        temp_query_results.push(result);
+                    }
+                    let query_data = unsafe {
+                        slice::from_raw_parts(
+                            temp_query_results.as_ptr() as *const u8,
+                            temp_query_results.len() * mem::size_of::<u64>(),
+                        )
+                    };
+                    match dst.raw {
+                        Some(buffer) => {
+                            unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
+                            unsafe {
+                                gl.buffer_sub_data_u8_slice(
+                                    dst_target,
+                                    dst_offset as i32,
+                                    query_data,
+                                )
+                            };
+                        }
+                        None => {
+                            let data = &mut dst.data.as_ref().unwrap().lock().unwrap();
+                            let len = query_data.len().min(data.len());
+                            data[..len].copy_from_slice(&query_data[..len]);
+                        }
                     }
                 }
             }

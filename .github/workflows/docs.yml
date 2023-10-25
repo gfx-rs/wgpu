@@ -3,7 +3,7 @@ name: Documentation
 on:
   push:
     branches:
-      - master
+      - trunk
 
 env:
   CARGO_INCREMENTAL: false
@@ -22,11 +22,6 @@ jobs:
 
       - name: Install nightly toolchain
         run: rustup toolchain install nightly --no-self-update --profile=minimal
-
-      - name: Add EGL for OpenGL
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq libegl1-mesa-dev
 
       - name: Build the docs (nightly)
         run: |

@@ -1,5 +1,5 @@
 [alias]
-xtask = "run --manifest-path xtask/Cargo.toml --"
+xtask = "run --manifest-path xtask/Cargo.toml"
 
 [build]
 rustflags = [

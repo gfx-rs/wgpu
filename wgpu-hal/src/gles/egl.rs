@@ -946,7 +946,7 @@ impl crate::Instance<super::Api> for Instance {
         let inner = self.inner.lock();
         inner.egl.make_current();
 
-        let gl = unsafe {
+        let mut gl = unsafe {
             glow::Context::from_loader_function(|name| {
                 inner
                     .egl

@@ -229,6 +229,28 @@ impl super::Adapter {
             return None;
         }
 
+        if let Some(es_ver) = es_ver {
+            if es_ver < (3, 0) {
+                log::warn!(
+                    "Returned GLES context is {}.{}, when 3.0+ was requested",
+                    es_ver.0,
+                    es_ver.1
+                );
+                return None;
+            }
+        }
+
+        if let Some(full_ver) = full_ver {
+            if full_ver < (3, 3) {
+                log::warn!(
+                    "Returned GL context is {}.{}, when 3.3+ is needed",
+                    full_ver.0,
+                    full_ver.1
+                );
+                return None;
+            }
+        }
+
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
             log::debug!("SL version: {}", &sl_version);
@@ -251,28 +273,6 @@ impl super::Adapter {
         };
 
         log::debug!("Supported GL Extensions: {:#?}", extensions);
-
-        if let Some(es_ver) = es_ver {
-            if es_ver < (3, 0) {
-                log::warn!(
-                    "Returned GLES context is {}.{}, when 3.0+ was requested",
-                    es_ver.0,
-                    es_ver.1
-                );
-                return None;
-            }
-        }
-
-        if let Some(full_ver) = full_ver {
-            if full_ver < (3, 3) {
-                log::warn!(
-                    "Returned GL context is {}.{}, when 3.3+ is needed",
-                    full_ver.0,
-                    full_ver.1
-                );
-                return None;
-            }
-        }
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
@@ -412,6 +412,11 @@ impl super::Adapter {
             wgt::DownlevelFlags::MULTISAMPLED_SHADING,
             supported((3, 2), (4, 0)) || extensions.contains("OES_sample_variables"),
         );
+        let query_buffers = extensions.contains("GL_ARB_query_buffer_object")
+            || extensions.contains("GL_AMD_query_buffer_object");
+        if query_buffers {
+            downlevel_flags.set(wgt::DownlevelFlags::NONBLOCKING_QUERY_RESOLVE, true);
+        }
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -451,6 +456,10 @@ impl super::Adapter {
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
         features.set(wgt::Features::SHADER_UNUSED_VERTEX_OUTPUT, true);
+        if extensions.contains("GL_ARB_timer_query") {
+            features.set(wgt::Features::TIMESTAMP_QUERY, true);
+            features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES, true);
+        }
         let gl_bcn_exts = [
             "GL_EXT_texture_compression_s3tc",
             "GL_EXT_texture_compression_rgtc",
@@ -575,6 +584,7 @@ impl super::Adapter {
                 extensions.contains("OES_texture_float_linear")
             },
         );
+        private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;

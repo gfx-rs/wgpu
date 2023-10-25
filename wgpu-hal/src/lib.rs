@@ -1097,6 +1097,8 @@ pub struct NagaShader {
     pub module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
+    /// Source codes for debug
+    pub debug_source: Option<DebugSource>,
 }
 
 // Custom implementation avoids the need to generate Debug impl code
@@ -1117,6 +1119,12 @@ pub enum ShaderInput<'a> {
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     pub runtime_checks: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DebugSource {
+    pub file_name: Cow<'static, str>,
+    pub source_code: Cow<'static, str>,
 }
 
 /// Describes a programmable pipeline stage.
