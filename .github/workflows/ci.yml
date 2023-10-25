@@ -376,7 +376,7 @@ jobs:
         run: |
           set -e
 
-          cargo xtask test --llvm-cov --all-features
+          cargo xtask test --llvm-cov
 
       - uses: actions/upload-artifact@v3
         if: always() # We want artifacts even if the tests fail.

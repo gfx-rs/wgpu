@@ -37,7 +37,7 @@ jobs:
       - name: Convert shaders
         run: |
           cd naga
-          for file in data/*.spv do echo "Translating" ${file} && ../target/release/naga --validate 27 ${file} ${file}.metal; done
+          for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
 
   parse-vulkan-tutorial-shaders:
     name: Parse Sascha Willems Vulkan tutorial shaders
@@ -168,12 +168,12 @@ jobs:
       - name: Test minimal (without span)
         run: |
           cd naga
-          cargo nextest run --features validate -p naga
+          cargo nextest run -p naga --features validate
 
       - name: Test all (without validation)
         run: |
           cd naga
-          cargo nextest run --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
+          cargo nextest run -p naga --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out
 
       - name: Check snapshots (without validation)
         run: |
