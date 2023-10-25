@@ -1,0 +1,235 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 163
+OpCapability Shader
+OpCapability Linkage
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpDecorate %4 ArrayStride 4
+OpDecorate %9 ArrayStride 4
+OpMemberDecorate %10 0 Offset 0
+OpMemberDecorate %10 1 Offset 48
+OpMemberDecorate %10 2 Offset 64
+OpMemberDecorate %10 2 ColMajor
+OpMemberDecorate %10 2 MatrixStride 16
+OpMemberDecorate %10 3 Offset 112
+OpDecorate %10 Block
+OpDecorate %12 DescriptorSet 0
+OpDecorate %12 Binding 0
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  10
+%4 = OpTypeArray %3 %5
+%7 = OpTypeVector %3 4
+%8 = OpTypeMatrix %7 3
+%9 = OpTypeRuntimeArray %3
+%10 = OpTypeStruct %4 %7 %8 %9
+%11 = OpTypeInt 32 1
+%13 = OpTypePointer StorageBuffer %10
+%12 = OpVariable  %13  StorageBuffer
+%17 = OpTypeFunction %3 %11
+%19 = OpTypePointer StorageBuffer %4
+%20 = OpTypePointer StorageBuffer %3
+%21 = OpConstant  %6  9
+%23 = OpConstant  %6  0
+%30 = OpTypePointer StorageBuffer %9
+%32 = OpConstant  %6  1
+%35 = OpConstant  %6  3
+%42 = OpTypePointer StorageBuffer %7
+%43 = OpTypePointer StorageBuffer %3
+%51 = OpTypeFunction %3 %7 %11
+%58 = OpTypeFunction %7 %11
+%60 = OpTypePointer StorageBuffer %8
+%61 = OpTypePointer StorageBuffer %7
+%62 = OpConstant  %6  2
+%70 = OpTypeFunction %3 %11 %11
+%79 = OpConstant  %3  100.0
+%91 = OpTypeFunction %3
+%105 = OpTypeFunction %2 %11 %3
+%129 = OpTypeFunction %2 %11 %7
+%138 = OpTypeFunction %2 %11 %11 %3
+%158 = OpTypeFunction %2 %3
+%16 = OpFunction  %3  None %17
+%15 = OpFunctionParameter  %11
+%14 = OpLabel
+OpBranch %18
+%18 = OpLabel
+%22 = OpExtInst  %6  %1 UMin %15 %21
+%24 = OpAccessChain  %20  %12 %23 %22
+%25 = OpLoad  %3  %24
+OpReturnValue %25
+OpFunctionEnd
+%28 = OpFunction  %3  None %17
+%27 = OpFunctionParameter  %11
+%26 = OpLabel
+OpBranch %29
+%29 = OpLabel
+%31 = OpArrayLength  %6  %12 3
+%33 = OpISub  %6  %31 %32
+%34 = OpExtInst  %6  %1 UMin %27 %33
+%36 = OpAccessChain  %20  %12 %35 %34
+%37 = OpLoad  %3  %36
+OpReturnValue %37
+OpFunctionEnd
+%40 = OpFunction  %3  None %17
+%39 = OpFunctionParameter  %11
+%38 = OpLabel
+OpBranch %41
+%41 = OpLabel
+%44 = OpExtInst  %6  %1 UMin %39 %35
+%45 = OpAccessChain  %43  %12 %32 %44
+%46 = OpLoad  %3  %45
+OpReturnValue %46
+OpFunctionEnd
+%50 = OpFunction  %3  None %51
+%48 = OpFunctionParameter  %7
+%49 = OpFunctionParameter  %11
+%47 = OpLabel
+OpBranch %52
+%52 = OpLabel
+%53 = OpExtInst  %6  %1 UMin %49 %35
+%54 = OpVectorExtractDynamic  %3  %48 %53
+OpReturnValue %54
+OpFunctionEnd
+%57 = OpFunction  %7  None %58
+%56 = OpFunctionParameter  %11
+%55 = OpLabel
+OpBranch %59
+%59 = OpLabel
+%63 = OpExtInst  %6  %1 UMin %56 %62
+%64 = OpAccessChain  %61  %12 %62 %63
+%65 = OpLoad  %7  %64
+OpReturnValue %65
+OpFunctionEnd
+%69 = OpFunction  %3  None %70
+%67 = OpFunctionParameter  %11
+%68 = OpFunctionParameter  %11
+%66 = OpLabel
+OpBranch %71
+%71 = OpLabel
+%72 = OpExtInst  %6  %1 UMin %68 %35
+%73 = OpExtInst  %6  %1 UMin %67 %62
+%74 = OpAccessChain  %43  %12 %62 %73 %72
+%75 = OpLoad  %3  %74
+OpReturnValue %75
+OpFunctionEnd
+%78 = OpFunction  %3  None %17
+%77 = OpFunctionParameter  %11
+%76 = OpLabel
+OpBranch %80
+%80 = OpLabel
+%81 = OpConvertSToF  %3  %77
+%82 = OpFDiv  %3  %81 %79
+%83 = OpExtInst  %3  %1 Sin %82
+%84 = OpFMul  %3  %83 %79
+%85 = OpConvertFToS  %11  %84
+%86 = OpExtInst  %6  %1 UMin %85 %21
+%87 = OpAccessChain  %20  %12 %23 %86
+%88 = OpLoad  %3  %87
+OpReturnValue %88
+OpFunctionEnd
+%90 = OpFunction  %3  None %91
+%89 = OpLabel
+OpBranch %92
+%92 = OpLabel
+%93 = OpAccessChain  %20  %12 %23 %21
+%94 = OpLoad  %3  %93
+%95 = OpAccessChain  %43  %12 %32 %35
+%96 = OpLoad  %3  %95
+%97 = OpFAdd  %3  %94 %96
+%98 = OpAccessChain  %43  %12 %62 %62 %35
+%99 = OpLoad  %3  %98
+%100 = OpFAdd  %3  %97 %99
+OpReturnValue %100
+OpFunctionEnd
+%104 = OpFunction  %2  None %105
+%102 = OpFunctionParameter  %11
+%103 = OpFunctionParameter  %3
+%101 = OpLabel
+OpBranch %106
+%106 = OpLabel
+%107 = OpExtInst  %6  %1 UMin %102 %21
+%108 = OpAccessChain  %20  %12 %23 %107
+OpStore %108 %103
+OpReturn
+OpFunctionEnd
+%112 = OpFunction  %2  None %105
+%110 = OpFunctionParameter  %11
+%111 = OpFunctionParameter  %3
+%109 = OpLabel
+OpBranch %113
+%113 = OpLabel
+%114 = OpArrayLength  %6  %12 3
+%115 = OpISub  %6  %114 %32
+%116 = OpExtInst  %6  %1 UMin %110 %115
+%117 = OpAccessChain  %20  %12 %35 %116
+OpStore %117 %111
+OpReturn
+OpFunctionEnd
+%121 = OpFunction  %2  None %105
+%119 = OpFunctionParameter  %11
+%120 = OpFunctionParameter  %3
+%118 = OpLabel
+OpBranch %122
+%122 = OpLabel
+%123 = OpExtInst  %6  %1 UMin %119 %35
+%124 = OpAccessChain  %43  %12 %32 %123
+OpStore %124 %120
+OpReturn
+OpFunctionEnd
+%128 = OpFunction  %2  None %129
+%126 = OpFunctionParameter  %11
+%127 = OpFunctionParameter  %7
+%125 = OpLabel
+OpBranch %130
+%130 = OpLabel
+%131 = OpExtInst  %6  %1 UMin %126 %62
+%132 = OpAccessChain  %61  %12 %62 %131
+OpStore %132 %127
+OpReturn
+OpFunctionEnd
+%137 = OpFunction  %2  None %138
+%134 = OpFunctionParameter  %11
+%135 = OpFunctionParameter  %11
+%136 = OpFunctionParameter  %3
+%133 = OpLabel
+OpBranch %139
+%139 = OpLabel
+%140 = OpExtInst  %6  %1 UMin %135 %35
+%141 = OpExtInst  %6  %1 UMin %134 %62
+%142 = OpAccessChain  %43  %12 %62 %141 %140
+OpStore %142 %136
+OpReturn
+OpFunctionEnd
+%146 = OpFunction  %2  None %105
+%144 = OpFunctionParameter  %11
+%145 = OpFunctionParameter  %3
+%143 = OpLabel
+OpBranch %147
+%147 = OpLabel
+%148 = OpConvertSToF  %3  %144
+%149 = OpFDiv  %3  %148 %79
+%150 = OpExtInst  %3  %1 Sin %149
+%151 = OpFMul  %3  %150 %79
+%152 = OpConvertFToS  %11  %151
+%153 = OpExtInst  %6  %1 UMin %152 %21
+%154 = OpAccessChain  %20  %12 %23 %153
+OpStore %154 %145
+OpReturn
+OpFunctionEnd
+%157 = OpFunction  %2  None %158
+%156 = OpFunctionParameter  %3
+%155 = OpLabel
+OpBranch %159
+%159 = OpLabel
+%160 = OpAccessChain  %20  %12 %23 %21
+OpStore %160 %156
+%161 = OpAccessChain  %43  %12 %32 %35
+OpStore %161 %156
+%162 = OpAccessChain  %43  %12 %62 %62 %35
+OpStore %162 %156
+OpReturn
+OpFunctionEnd

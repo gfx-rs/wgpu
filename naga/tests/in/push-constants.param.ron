@@ -1,0 +1,20 @@
+(
+	god_mode: true,
+	glsl: (
+		version: Embedded(
+			version: 320,
+			is_webgl: false
+		),
+		writer_flags: (""),
+		binding_map: {},
+		zero_initialize_workgroup_memory: true,
+	),
+	hlsl: (
+		shader_model: V5_1,
+		binding_map: {},
+		fake_missing_bindings: true,
+		special_constants_binding: Some((space: 1, register: 0)),
+		push_constants_target: Some((space: 0, register: 0)),
+		zero_initialize_workgroup_memory: true,
+	),
+)

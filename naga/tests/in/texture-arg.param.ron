@@ -1,0 +1,7 @@
+(
+	spv: (
+		version: (1, 0),
+		debug: true,
+		adjust_coordinate_space: true,
+	),
+)

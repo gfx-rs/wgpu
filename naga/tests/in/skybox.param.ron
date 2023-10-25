@@ -1,0 +1,63 @@
+(
+	spv_flow_dump_prefix: "",
+	spv: (
+		version: (1, 0),
+		debug: false,
+		adjust_coordinate_space: false,
+	),
+	msl: (
+		lang_version: (2, 1),
+		per_entry_point_map: {
+			"vs_main": (
+				resources: {
+					(group: 0, binding: 0): (buffer: Some(0)),
+				},
+			),
+			"fs_main": (
+				resources: {
+					(group: 0, binding: 1): (texture: Some(0)),
+					(group: 0, binding: 2): (sampler: Some(Inline(0))),
+				},
+			),
+		},
+		inline_samplers: [
+			(
+				coord: Normalized,
+				address: (ClampToEdge, ClampToEdge, ClampToEdge),
+				mag_filter: Linear,
+				min_filter: Linear,
+				mip_filter: None,
+				border_color: TransparentBlack,
+				compare_func: Never,
+				lod_clamp: Some((start: 0.5, end: 10.0)),
+				max_anisotropy: Some(8),
+			),
+		],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+		zero_initialize_workgroup_memory: true,
+	),
+	glsl: (
+		version: Embedded(
+			version: 320,
+			is_webgl: false
+		),
+		writer_flags: (""),
+		binding_map: {
+			(group: 0, binding: 0): 0,
+			(group: 0, binding: 1): 0,
+		},
+		zero_initialize_workgroup_memory: true,
+	),
+	hlsl: (
+		shader_model: V5_1,
+		binding_map: {
+			(group: 0, binding: 0): (space: 0, register: 0),
+			(group: 0, binding: 1): (space: 0, register: 0),
+			(group: 0, binding: 2): (space: 1, register: 0),
+		},
+		fake_missing_bindings: false,
+		special_constants_binding: Some((space: 0, register: 1)),
+		zero_initialize_workgroup_memory: true,
+	),
+)
