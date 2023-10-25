@@ -17,7 +17,7 @@ env_logger = "0.10"
 argh = "0.1.5"
 
 [dependencies.naga]
-version = "0.13"
+version = "0.14"
 path = "../"
 features = [
     "validate",
