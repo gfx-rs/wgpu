@@ -3,7 +3,7 @@ use crate::device::trace;
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError,
+        DeviceError, LoseDeviceClosure,
     },
     hal_api::HalApi,
     hub::{Hub, Token},
@@ -313,6 +313,11 @@ pub(super) struct LifetimeTracker<A: hal::Api> {
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
     /// here until the next time the device is maintained.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
+
+    /// Closure to be called on "lose the device". This is invoked directly by
+    /// device.lose or by the UserCallbacks returned from maintain when the device
+    /// has been destroyed and its queues are empty.
+    pub lose_device_closure: Option<LoseDeviceClosure>,
 }
 
 impl<A: hal::Api> LifetimeTracker<A> {
@@ -326,6 +331,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             free_resources: NonReferencedResources::new(),
             ready_to_map: Vec::new(),
             work_done_closures: SmallVec::new(),
+            lose_device_closure: None,
         }
     }
 

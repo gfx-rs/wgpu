@@ -1937,7 +1937,12 @@ impl crate::context::Context for Context {
         device_data.0.destroy();
     }
 
-    fn device_lose(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+    fn device_lose(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        message: &str,
+    ) {
         // TODO: figure out the GPUDevice implementation of this, including resolving
         // the device.lost promise, which will require a different invocation pattern
         // with a callback.

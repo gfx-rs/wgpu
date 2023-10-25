@@ -8,8 +8,8 @@ use crate::{
     command, conv,
     device::life::WaitIdleError,
     device::{
-        AttachmentData, CommandAllocator, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext, CLEANUP_WAIT_MS,
+        AttachmentData, CommandAllocator, DeviceLostReason, LoseDeviceInvocation,
+        MissingDownlevelFlags, MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
     hal_label,
@@ -315,9 +315,24 @@ impl<A: HalApi> Device<A> {
         let mapping_closures = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw);
 
+        // Detect if we have been destroyed and now need to lose the device.
+        // If we are invalid (set at start of destroy) and our queue is empty,
+        // and we have a LoseDeviceClosure, return the closure to be called by
+        // our caller. This will complete the steps for both destroy and for
+        // "lose the device".
+        let mut lose_device_invocations = SmallVec::new();
+        if !self.valid && life_tracker.queue_empty() && life_tracker.lose_device_closure.is_some() {
+            lose_device_invocations.push(LoseDeviceInvocation {
+                closure: life_tracker.lose_device_closure.take().unwrap(),
+                reason: DeviceLostReason::Destroyed,
+                message: String::new(),
+            });
+        }
+
         let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
+            lose_device_invocations: lose_device_invocations,
         };
         Ok((closures, life_tracker.queue_empty()))
     }
@@ -3275,17 +3290,23 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn lose(&mut self, _reason: Option<&str>) {
+    pub(crate) fn lose<'this, 'token: 'this>(
+        &'this mut self,
+        token: &mut Token<'token, Self>,
+        message: &str,
+    ) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
         // places to prevent new work from being submitted.
         self.valid = false;
 
-        // The following steps remain in "lose the device":
         // 1) Resolve the GPUDevice device.lost promise.
-
-        // TODO: triggger this passively or actively, and supply the reason.
+        let mut life_tracker = self.lock_life(token);
+        if life_tracker.lose_device_closure.is_some() {
+            let lose_device_closure = life_tracker.lose_device_closure.take().unwrap();
+            lose_device_closure.call(DeviceLostReason::Unknown, message.to_string());
+        }
 
         // 2) Complete any outstanding mapAsync() steps.
         // 3) Complete any outstanding onSubmittedWorkDone() steps.

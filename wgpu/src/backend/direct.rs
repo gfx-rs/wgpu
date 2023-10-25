@@ -22,6 +22,7 @@ use std::{
     sync::Arc,
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
+use wgc::device::LoseDeviceClosure;
 use wgc::id::TypedId;
 use wgt::{WasmNotSend, WasmNotSync};
 
@@ -1454,14 +1455,24 @@ impl crate::Context for Context {
 
         wgc::gfx_select!(device => global.device_drop(*device));
     }
+    fn device_set_lose_device_closure(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        lose_device_closure: LoseDeviceClosure,
+    ) {
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_set_lose_device_closure(*device, lose_device_closure));
+    }
     fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         let global = &self.0;
         wgc::gfx_select!(device => global.device_destroy(*device));
     }
-    fn device_lose(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        // TODO: accept a reason, and pass it to device_lose.
+    fn device_lose(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData, message: &str) {
+        // We do not provide a reason to device_lose, because all reasons other than
+        // destroyed (which this is not) are "unknown".
         let global = &self.0;
-        wgc::gfx_select!(device => global.device_lose(*device, None));
+        wgc::gfx_select!(device => global.device_lose(*device, message));
     }
     fn device_poll(
         &self,

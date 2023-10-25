@@ -12,6 +12,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::Device as _;
 use smallvec::SmallVec;
+use std::os::raw::c_char;
 use thiserror::Error;
 use wgt::{BufferAddress, TextureFormat};
 
@@ -169,12 +170,15 @@ pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
+    pub lose_device_invocations: SmallVec<[LoseDeviceInvocation; 1]>,
 }
 
 impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.submissions.extend(other.submissions);
+        self.lose_device_invocations
+            .extend(other.lose_device_invocations);
     }
 
     fn fire(self) {
@@ -188,6 +192,105 @@ impl UserClosures {
         }
         for closure in self.submissions {
             closure.call();
+        }
+        for invocation in self.lose_device_invocations {
+            invocation
+                .closure
+                .call(invocation.reason, invocation.message);
+        }
+    }
+}
+
+/// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
+#[repr(u8)]
+#[derive(Debug, Copy, Clone)]
+pub enum DeviceLostReason {
+    /// Triggered by driver
+    Unknown = 0,
+    /// After Device::destroy
+    Destroyed = 1,
+}
+
+#[repr(C)]
+pub struct LoseDeviceClosureC {
+    pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
+    pub user_data: *mut u8,
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+unsafe impl Send for LoseDeviceClosureC {}
+
+pub struct LoseDeviceClosure {
+    // We wrap this so creating the enum in the C variant can be unsafe,
+    // allowing our call function to be safe.
+    inner: LoseDeviceClosureInner,
+}
+
+pub struct LoseDeviceInvocation {
+    closure: LoseDeviceClosure,
+    reason: DeviceLostReason,
+    message: String,
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type LoseDeviceCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type LoseDeviceCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+
+enum LoseDeviceClosureInner {
+    Rust { callback: LoseDeviceCallback },
+    C { inner: LoseDeviceClosureC },
+}
+
+impl LoseDeviceClosure {
+    pub fn from_rust(callback: LoseDeviceCallback) -> Self {
+        Self {
+            inner: LoseDeviceClosureInner::Rust { callback },
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - The callback pointer must be valid to call with the provided `user_data`
+    ///   pointer.
+    ///
+    /// - Both pointers must point to `'static` data, as the callback may happen at
+    ///   an unspecified time.
+    pub unsafe fn from_c(inner: LoseDeviceClosureC) -> Self {
+        Self {
+            inner: LoseDeviceClosureInner::C { inner },
+        }
+    }
+
+    pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
+        match self.inner {
+            LoseDeviceClosureInner::Rust { callback } => callback(reason, message),
+            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
+            LoseDeviceClosureInner::C { inner } => unsafe {
+                (inner.callback)(
+                    inner.user_data,
+                    reason as u8,
+                    message.as_ptr() as *const c_char,
+                )
+            },
         }
     }
 }

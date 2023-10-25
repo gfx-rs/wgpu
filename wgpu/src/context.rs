@@ -1,5 +1,7 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
+use wgc::device::LoseDeviceClosure;
+
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
@@ -269,8 +271,14 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData);
     fn device_drop(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+    fn device_set_lose_device_closure(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        lose_device_closure: LoseDeviceClosure,
+    );
     fn device_destroy(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
-    fn device_lose(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+    fn device_lose(&self, device: &Self::DeviceId, device_data: &Self::DeviceData, message: &str);
     fn device_poll(
         &self,
         device: &Self::DeviceId,
@@ -1365,8 +1373,14 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (ObjectId, Box<crate::Data>);
     fn device_drop(&self, device: &ObjectId, device_data: &crate::Data);
+    fn device_set_lose_device_closure(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        lose_device_closure: LoseDeviceClosure,
+    );
     fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data);
-    fn device_lose(&self, device: &ObjectId, device_data: &crate::Data);
+    fn device_lose(&self, device: &ObjectId, device_data: &crate::Data, message: &str);
     fn device_poll(&self, device: &ObjectId, device_data: &crate::Data, maintain: Maintain)
         -> bool;
     fn device_on_uncaptured_error(
@@ -2428,16 +2442,27 @@ where
         Context::device_drop(self, &device, device_data)
     }
 
+    fn device_set_lose_device_closure(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        lose_device_closure: LoseDeviceClosure,
+    ) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_set_lose_device_closure(self, &device, device_data, lose_device_closure)
+    }
+
     fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_destroy(self, &device, device_data)
     }
 
-    fn device_lose(&self, device: &ObjectId, device_data: &crate::Data) {
+    fn device_lose(&self, device: &ObjectId, device_data: &crate::Data, message: &str) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        Context::device_lose(self, &device, device_data)
+        Context::device_lose(self, &device, device_data, message)
     }
 
     fn device_poll(

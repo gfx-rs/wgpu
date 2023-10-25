@@ -47,6 +47,8 @@ pub use wgt::{
     VERTEX_STRIDE_ALIGNMENT,
 };
 
+pub use wgc::device::LoseDeviceClosure;
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     feature = "webgl",
@@ -2796,6 +2798,16 @@ impl Device {
     /// Destroy this device.
     pub fn destroy(&self) {
         DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
+    }
+
+    /// Set a LoseDeviceClosure on this device.
+    pub fn set_lose_device_closure(&self, lose_device_closure: LoseDeviceClosure) {
+        DynContext::device_set_lose_device_closure(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            lose_device_closure,
+        )
     }
 }
 
