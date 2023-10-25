@@ -5,10 +5,6 @@
 fn main() {
     use player::{GlobalPlay as _, IdentityPassThroughFactory};
     use wgc::{device::trace, gfx_select};
-    use winit::{
-        event::KeyEvent,
-        keyboard::{Key, NamedKey},
-    };
 
     use std::{
         fs,
@@ -18,7 +14,12 @@ fn main() {
     #[cfg(feature = "winit")]
     use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
     #[cfg(feature = "winit")]
-    use winit::{event_loop::EventLoop, window::WindowBuilder};
+    use winit::{
+        event::KeyEvent,
+        event_loop::EventLoop,
+        keyboard::{Key, NamedKey},
+        window::WindowBuilder,
+    };
 
     env_logger::init();
 
