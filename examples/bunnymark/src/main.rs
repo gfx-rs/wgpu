@@ -1,5 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
+use winit::{event::{KeyEvent, ElementState}, keyboard::{Key, NamedKey}};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
 
@@ -249,12 +250,11 @@ impl wgpu_example::framework::Example for Example {
 
     fn update(&mut self, event: winit::event::WindowEvent) {
         if let winit::event::WindowEvent::KeyboardInput {
-            input:
-                winit::event::KeyboardInput {
-                    virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                    state: winit::event::ElementState::Pressed,
-                    ..
-                },
+            event: KeyEvent {
+                logical_key: Key::Named(NamedKey::Space),
+                state: ElementState::Pressed,
+                ..
+            },
             ..
         } = event
         {

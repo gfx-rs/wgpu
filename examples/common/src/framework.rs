@@ -258,7 +258,7 @@ fn start<E: Example>(
         event_loop,
         instance,
         size,
-        surface,
+        mut surface,
         adapter,
         device,
         queue,
@@ -268,7 +268,7 @@ fn start<E: Example>(
         event_loop,
         instance,
         size,
-        surface,
+        mut surface,
         adapter,
         device,
         queue,
@@ -388,7 +388,7 @@ fn start<E: Example>(
             },
             _ => {}
         }
-    });
+    }).unwrap();
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -553,29 +553,29 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                     let spawner = Spawner::new();
                     example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
 
-                    // Handle specific case for bunnymark
-                    // #[allow(deprecated)]
-                    if params.image_path == "/examples/bunnymark/screenshot.png" {
-                        // Press spacebar to spawn bunnies
-                        example.update(winit::event::WindowEvent::KeyboardInput {
-                            event: KeyEvent {
-                                physical_key: PhysicalKey::Code(KeyCode::Space),
-                                state: ElementState::Pressed,
-                                logical_key: Key::Named(NamedKey::Space),
-                                text: None,
-                                location: KeyLocation::Standard,
-                                repeat: false,
-                                platform_specific: false,
-                            },
-                            device_id: unsafe { winit::event::DeviceId::dummy() },
-                            is_synthetic: false,
-                        });
-
-                        // Step 3 extra frames
-                        for _ in 0..3 {
-                            example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
-                        }
-                    }
+                    // // Handle specific case for bunnymark
+                    // // #[allow(deprecated)]
+                    // if params.image_path == "/examples/bunnymark/screenshot.png" {
+                    //     // Press spacebar to spawn bunnies
+                    //     example.update(winit::event::WindowEvent::KeyboardInput {
+                    //         event: KeyEvent {
+                    //             physical_key: PhysicalKey::Code(KeyCode::Space),
+                    //             state: ElementState::Pressed,
+                    //             logical_key: Key::Named(NamedKey::Space),
+                    //             text: None,
+                    //             location: KeyLocation::Standard,
+                    //             repeat: false,
+                    //             platform_specific: false,
+                    //         },
+                    //         device_id: unsafe { winit::event::DeviceId::dummy() },
+                    //         is_synthetic: false,
+                    //     });
+                    //
+                    //     // Step 3 extra frames
+                    //     for _ in 0..3 {
+                    //         example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
+                    //     }
+                    // }
                 }
 
                 let mut cmd_buf = ctx
@@ -625,7 +625,7 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
 }
 
 fn resize_window<E: Example>(
-    example: E,
+    example: &mut E,
     size: PhysicalSize<u32>,
     config: &mut SurfaceConfiguration,
     surface: &mut Surface,
