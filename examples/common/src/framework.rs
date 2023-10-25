@@ -7,13 +7,12 @@ use std::time::Instant;
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
-use wgpu::{Surface, SurfaceConfiguration, WasmNotSend, WasmNotSync};
+use wgpu::{WasmNotSend, WasmNotSync};
 use wgpu_test::GpuTestConfiguration;
 use winit::{
-    dpi::PhysicalSize,
-    event::{self, ElementState, KeyEvent, WindowEvent},
+    event::{self, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey},
+    keyboard::{Key, NamedKey},
 };
 
 #[allow(dead_code)]
@@ -34,9 +33,11 @@ pub trait Example: 'static + Sized {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::empty()
     }
+
     fn required_features() -> wgpu::Features {
         wgpu::Features::empty()
     }
+
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
         wgpu::DownlevelCapabilities {
             flags: wgpu::DownlevelFlags::empty(),
@@ -44,22 +45,27 @@ pub trait Example: 'static + Sized {
             ..wgpu::DownlevelCapabilities::default()
         }
     }
+
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
     }
+
     fn init(
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self;
+
     fn resize(
         &mut self,
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     );
+
     fn update(&mut self, event: WindowEvent);
+
     fn render(
         &mut self,
         view: &wgpu::TextureView,
@@ -258,7 +264,7 @@ fn start<E: Example>(
         event_loop,
         instance,
         size,
-        mut surface,
+        surface,
         adapter,
         device,
         queue,
@@ -333,9 +339,6 @@ fn start<E: Example>(
                 } if s == "r" => {
                     println!("{:#?}", instance.generate_report());
                 }
-                _ => {
-                    example.update(event);
-                }
                 event::WindowEvent::RedrawRequested => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
@@ -385,6 +388,7 @@ fn start<E: Example>(
                         }
                     }
                 }
+                _ => example.update(event),
             },
             _ => {}
         }
@@ -552,30 +556,6 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                 {
                     let spawner = Spawner::new();
                     example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
-
-                    // // Handle specific case for bunnymark
-                    // // #[allow(deprecated)]
-                    // if params.image_path == "/examples/bunnymark/screenshot.png" {
-                    //     // Press spacebar to spawn bunnies
-                    //     example.update(winit::event::WindowEvent::KeyboardInput {
-                    //         event: KeyEvent {
-                    //             physical_key: PhysicalKey::Code(KeyCode::Space),
-                    //             state: ElementState::Pressed,
-                    //             logical_key: Key::Named(NamedKey::Space),
-                    //             text: None,
-                    //             location: KeyLocation::Standard,
-                    //             repeat: false,
-                    //             platform_specific: false,
-                    //         },
-                    //         device_id: unsafe { winit::event::DeviceId::dummy() },
-                    //         is_synthetic: false,
-                    //     });
-                    //
-                    //     // Step 3 extra frames
-                    //     for _ in 0..3 {
-                    //         example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
-                    //     }
-                    // }
                 }
 
                 let mut cmd_buf = ctx
