@@ -161,6 +161,8 @@ bitflags::bitflags! {
         const COLOR_BUFFER_FLOAT = 1 << 9;
         /// Supports linear flitering `f32` textures.
         const TEXTURE_FLOAT_LINEAR = 1 << 10;
+        /// Supports query buffer objects.
+        const QUERY_BUFFERS = 1 << 11;
     }
 }
 
@@ -775,6 +777,7 @@ enum Command {
     SetIndexBuffer(glow::Buffer),
     BeginQuery(glow::Query, BindTarget),
     EndQuery(BindTarget),
+    TimestampQuery(glow::Query),
     CopyQueryResults {
         query_range: Range<u32>,
         dst: Buffer,

@@ -8,9 +8,9 @@
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
 [![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/master/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
-`wgpu` is a cross-platform, safe, pure-rust graphics api. It runs natively on Vulkan, Metal, D3D12, D3D11, and OpenGLES; and on top of WebGPU on wasm.
+`wgpu` is a cross-platform, safe, pure-rust graphics api. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
-The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
+The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox and Deno.
 
 ## Repo Overview
 
@@ -76,12 +76,12 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 | Metal       |                                |                    | :white_check_mark:        |                           |
 | DX12        | :white_check_mark:             |                    |                           |                           | 
 | DX11        | :hammer_and_wrench:            |                    |                           |                           |
-| OpenGL      |  :ok: (GL 3.3+)                | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
+| OpenGL      | :ok: (GL 3.3+)                 | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
 | WebGPU      |                                |                    |                           | :white_check_mark:        |
 
 :white_check_mark: = First Class Support  
 :ok: = Downlevel/Best Effort Support  
-:triangular_ruler: = Requires the [ANGLE](#angle) translation layer  
+:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)
 :volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 :hammer_and_wrench: = Unsupported, though open to contributions  
 

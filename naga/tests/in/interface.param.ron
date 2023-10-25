@@ -1,0 +1,31 @@
+(
+	spv: (
+		version: (1, 0),
+		capabilities: [ Shader, SampleRateShading ],
+		adjust_coordinate_space: false,
+		force_point_size: true,
+		clamp_frag_depth: true,
+		separate_entry_points: true,
+	),
+	hlsl: (
+		shader_model: V5_1,
+		binding_map: {},
+		fake_missing_bindings: false,
+		special_constants_binding: Some((space: 1, register: 0)),
+		zero_initialize_workgroup_memory: true,
+	),
+	wgsl: (
+		explicit_types: true,
+	),
+	msl: (
+		lang_version: (2, 1),
+		per_entry_point_map: {},
+		inline_samplers: [],
+		spirv_cross_compatibility: false,
+		fake_missing_bindings: false,
+		zero_initialize_workgroup_memory: true,
+	),
+	msl_pipeline: (
+		allow_and_force_point_size: true,
+	),
+)

@@ -387,7 +387,7 @@ impl crate::Instance<super::Api> for Instance {
             )
         })?;
 
-        let gl = unsafe {
+        let mut gl = unsafe {
             glow::Context::from_loader_function(|name| load_gl_func(name, Some(opengl_module)))
         };
 

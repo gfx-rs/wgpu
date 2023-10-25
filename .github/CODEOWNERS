@@ -2,3 +2,4 @@
 
 /cts_runner/    @gfx-rs/deno @gfx-rs/wgpu
 /deno_webgpu/   @gfx-rs/deno @gfx-rs/wgpu
+/naga/          @gfx-rs/naga
