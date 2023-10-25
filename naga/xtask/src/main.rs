@@ -190,7 +190,7 @@ fn run(args: Args) -> anyhow::Result<()> {
                 ValidateSubcommand::Wgsl => {
                     visit_files(snapshots_base_out, "wgsl/*.wgsl", |path| {
                         ack_visiting(path);
-                        EasyCommand::new("cargo", |cmd| cmd.args(["run", "--"]).arg(path)).success()
+                        EasyCommand::new("cargo", |cmd| cmd.args(["run", "-p", "naga-cli", "--"]).arg(path)).success()
                     })
                 }
                 ValidateSubcommand::Hlsl(cmd) => {

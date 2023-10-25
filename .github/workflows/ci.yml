@@ -239,6 +239,52 @@ jobs:
           # check wgpu-core with all features. This will also get wgpu-hal and wgpu-types.
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
+  naga-minimal-versions:
+    name: MSRV naga Minimal Versions
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Core MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup override set ${{ env.CORE_MSRV }}
+          cargo -V
+
+      - name: Install Nightly toolchain
+        run: |
+          rustup toolchain install nightly --no-self-update --profile=minimal --component clippy
+          cargo +nightly -V
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: Set Minimal Versions
+        shell: bash
+        run: |
+          set -e
+
+          cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+
+      - name: Clippy
+        shell: bash
+        run: |
+          set -e
+
+          cargo clippy --all-features -p naga -p naga-cli
+
   wasm-test:
     name: Test WebAssembly
     runs-on: ubuntu-latest
@@ -377,6 +423,9 @@ jobs:
           set -e
 
           cargo xtask test --llvm-cov
+
+      - name: check naga snapshots
+        run: git diff --exit-code -- naga/tests/out
 
       - uses: actions/upload-artifact@v3
         if: always() # We want artifacts even if the tests fail.

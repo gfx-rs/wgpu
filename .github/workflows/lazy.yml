@@ -1,11 +1,11 @@
-# Lazy jobs running on master post merges.
-name: lazy
+# Lazy jobs running on trunk post merges.
+name: Lazy
 on:
-  push:
-    branches: [master]
   pull_request:
     paths:
       - '.github/workflows/lazy.yml'
+  push:
+    branches: [trunk]
 
 env:
   CARGO_INCREMENTAL: false
@@ -14,41 +14,50 @@ env:
 
 jobs:
   parse-dota2:
-    name: Parse Dota2 shaders
+    name: "Validate Shaders: Dota2"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - run: mkdir data
+      - run: mkdir naga/data
 
       - name: Download shaders
-        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o data/all.zip
+        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
 
       - name: Unpack shaders
-        run: cd data && unzip all.zip
+        run: |
+          cd naga/data
+          unzip all.zip
 
       - name: Build Naga
-        run: cargo build --release --bin naga
+        run: |
+          cd naga
+          cargo build --release -p naga-cli
 
       - name: Convert shaders
-        run: for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
+        run: |
+          cd naga
+          for file in data/*.spv ; do echo "Translating" ${file} && ../target/release/naga --validate 27 ${file} ${file}.metal; done
 
   parse-vulkan-tutorial-shaders:
-    name: Parse Sascha Willems Vulkan tutorial shaders
+    name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
       - name: Download shaders
-        run: git clone https://github.com/SaschaWillems/Vulkan.git
+        run: cd naga && git clone https://github.com/SaschaWillems/Vulkan.git
 
       - name: Build Naga
-        run: cargo build --release --bin naga
+        run: |
+          cd naga
+          cargo build --release -p naga-cli
 
       - name: Convert metal shaders
         run: |
           # No needed to stop workflow if we can't validate one file
           set +e
+          cd naga
           touch counter
           SUCCESS_RESULT_COUNT=0
           FILE_COUNT=0
@@ -57,7 +66,7 @@ jobs:
           do
               echo "Convert: $fname"
               FILE_COUNT=$((FILE_COUNT+1))
-              target/release/naga --validate 27 $(realpath ${fname}) out/$(basename ${fname}).metal
+              ../target/release/naga --validate 27 $(realpath ${fname}) out/$(basename ${fname}).metal
               if [[ $? -eq 0 ]]; then
                   SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
               fi
@@ -66,26 +75,30 @@ jobs:
           cat counter
 
   dneto0_spirv-samples:
-    name: Parse dneto0 spirv-samples
+    name: "Validate Shaders: dneto0 spirv-samples"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
       - name: Download shaders
-        run: git clone https://github.com/dneto0/spirv-samples.git
+        run: |
+          cd naga
+          git clone https://github.com/dneto0/spirv-samples.git
 
       - name: Build Naga
-        run: cargo build --release --bin naga
+        run: |
+          cargo build --release -p naga-cli
 
       - name: Install spirv-tools
         run: |
-           wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
-           tar zxf install.tgz
-           ./install/bin/spirv-as --version
+          cd naga
+          wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
+          tar zxf install.tgz
+          ./install/bin/spirv-as --version
 
       - name: Compile spv from spvasm
         run: |
-           cd spirv-samples
+           cd naga/spirv-samples
            mkdir -p spv
 
            find "./spvasm" -name '*.spvasm' | while read fname;
@@ -97,7 +110,7 @@ jobs:
       - name: Validate spv and generate wgsl
         run: |
            set +e
-           cd spirv-samples
+           cd naga/spirv-samples
            SUCCESS_RESULT_COUNT=0
            FILE_COUNT=0
            mkdir -p spv
@@ -111,7 +124,7 @@ jobs:
            do
                echo "Convert: $fname"
                FILE_COUNT=$((FILE_COUNT+1))
-               ../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
+               ../../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
                if [[ $? -eq 0 ]]; then
                    SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
                fi
@@ -122,7 +135,7 @@ jobs:
       - name: Validate output wgsl
         run: |
            set +e
-           cd spirv-samples
+           cd naga/spirv-samples
            SUCCESS_RESULT_COUNT=0
            FILE_COUNT=0
 
@@ -133,30 +146,10 @@ jobs:
            do
                echo "Validate: $fname"
                FILE_COUNT=$((FILE_COUNT+1))
-               ../target/release/naga --validate 27 $(realpath ${fname})
+               ../../target/release/naga --validate 27 $(realpath ${fname})
                if [[ $? -eq 0 ]]; then
                    SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
                fi
                echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
            done
            cat counter
-
-  check-snapshots-extra:
-    name: Check snapshots (validated or not)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-nextest
-
-      - name: Test minimal (without span)
-        run: cargo nextest run --features validate -p naga
-
-      - name: Test all (without validation)
-        run: cargo nextest run --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
-
-      - name: Check snapshots (without validation)
-        run: git diff --exit-code -- tests/out

@@ -1,5 +1,7 @@
 # Change Log
 
+For changelogs after v0.14, see [the wgpu changelog](../CHANGELOG.md).
+
 ## v0.14 (2023-10-25)
 
 #### GENERAL

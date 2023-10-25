@@ -46,7 +46,7 @@ pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
 
     xshell::cmd!(
         shell,
-        "cargo {llvm_cov_nextest_flags...} --no-fail-fast --retries 2"
+        "cargo {llvm_cov_nextest_flags...} --all-features --no-fail-fast --retries 2"
     )
     .args(args.finish())
     .quiet()

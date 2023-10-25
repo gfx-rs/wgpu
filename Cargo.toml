@@ -3,27 +3,33 @@ resolver = "2"
 members = [
     "cts_runner",
     "deno_webgpu",
-    "player",
+
+    # default members
     "examples/*",
-    "wgpu",
+    "naga",
+    "naga-cli",
+    "player",
+    "tests",
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
     "wgpu-types",
-    "tests",
+    "wgpu",
 ]
 exclude = []
 default-members = [
     "examples/*",
+    "naga",
+    "naga-cli",
     "player",
-    "wgpu",
+    "tests",
     "wgpu-core",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
     "wgpu-types",
-    "tests",
+    "wgpu",
 ]
 
 [workspace.package]
@@ -52,8 +58,7 @@ path = "./wgpu-hal"
 version = "0.18.0"
 
 [workspace.dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-rev = "92e41b43e437146b5d946eb238de963be1168016"
+path = "./naga"
 version = "0.14.0"
 
 [workspace.dependencies]
@@ -161,7 +166,6 @@ tokio = "1.33.0"
 termcolor = "1.3.0"
 
 [patch."https://github.com/gfx-rs/naga"]
-#naga = { path = "../naga" }
 
 [patch."https://github.com/zakarumych/gpu-descriptor"]
 #gpu-descriptor = { path = "../gpu-descriptor/gpu-descriptor" }
@@ -170,7 +174,6 @@ termcolor = "1.3.0"
 #gpu-alloc = { path = "../gpu-alloc/gpu-alloc" }
 
 [patch.crates-io]
-#naga = { path = "../naga" }
 #glow = { path = "../glow" }
 #d3d12 = { path = "../d3d12-rs" }
 #web-sys = { path = "../wasm-bindgen/crates/web-sys" }

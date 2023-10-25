@@ -607,6 +607,7 @@ impl GlobalCtx<'_> {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn eval_expr_to_literal(
         &self,
         handle: crate::Handle<crate::Expression>,
