@@ -98,7 +98,6 @@ impl FeaturesManager {
         check_feature!(ARRAY_OF_ARRAYS, 120, 310);
         check_feature!(IMAGE_LOAD_STORE, 130, 310);
         check_feature!(CONSERVATIVE_DEPTH, 130, 300);
-        check_feature!(CONSERVATIVE_DEPTH, 130, 300);
         check_feature!(NOPERSPECTIVE_QUALIFIER, 130);
         check_feature!(SAMPLE_QUALIFIER, 400, 320);
         check_feature!(CLIP_DISTANCE, 130, 300 /* with extension */);
