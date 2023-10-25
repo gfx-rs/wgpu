@@ -414,10 +414,6 @@ impl<'a> Spawner<'a> {
     pub fn spawn_local(&self, future: impl Future<Output = ()> + 'a) {
         self.executor.spawn(future).detach();
     }
-
-    fn run_until_stalled(&self) {
-        while self.executor.try_tick() {}
-    }
 }
 
 #[cfg(target_arch = "wasm32")]
