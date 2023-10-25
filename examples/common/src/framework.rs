@@ -260,7 +260,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
 fn start<E: Example>(
     #[cfg(not(target_arch = "wasm32"))] Setup {
-        window,
+        window: _,
         event_loop,
         instance,
         size,
@@ -270,7 +270,7 @@ fn start<E: Example>(
         queue,
     }: Setup,
     #[cfg(target_arch = "wasm32")] Setup {
-        window,
+        window: _,
         event_loop,
         instance,
         size,
