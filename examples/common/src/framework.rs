@@ -298,101 +298,103 @@ fn start<E: Example>(
     let (mut frame_count, mut accum_time) = (0, 0.0);
 
     log::info!("Entering render loop...");
-    event_loop.run(move |event, target| {
-        let _ = (&instance, &adapter); // force ownership by the closure
-        target.set_control_flow(ControlFlow::Poll);
+    event_loop
+        .run(move |event, target| {
+            let _ = (&instance, &adapter); // force ownership by the closure
+            target.set_control_flow(ControlFlow::Poll);
 
-        if cfg!(feature = "metal-auto-capture") {
-            target.exit();
-        };
+            if cfg!(feature = "metal-auto-capture") {
+                target.exit();
+            };
 
-        match event {
-            event::Event::WindowEvent {
-                event: WindowEvent::Resized(size),
-                ..
-            } => {
-                config.width = size.width.max(1);
-                config.height = size.height.max(1);
-                example.resize(&config, &device, &queue);
-                surface.configure(&device, &config);
-            },
-            event::Event::WindowEvent { event, .. } => match event {
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            logical_key: Key::Named(NamedKey::Escape),
-                            ..
-                        },
+            match event {
+                event::Event::WindowEvent {
+                    event: WindowEvent::Resized(size),
                     ..
+                } => {
+                    config.width = size.width.max(1);
+                    config.height = size.height.max(1);
+                    example.resize(&config, &device, &queue);
+                    surface.configure(&device, &config);
                 }
-                | WindowEvent::CloseRequested => {
-                    target.exit();
-                }
-                #[cfg(not(target_arch = "wasm32"))]
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            logical_key: Key::Character(s),
-                            ..
-                        },
-                    ..
-                } if s == "r" => {
-                    println!("{:#?}", instance.generate_report());
-                }
-                event::WindowEvent::RedrawRequested => {
+                event::Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Named(NamedKey::Escape),
+                                ..
+                            },
+                        ..
+                    }
+                    | WindowEvent::CloseRequested => {
+                        target.exit();
+                    }
                     #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        accum_time += last_frame_inst.elapsed().as_secs_f32();
-                        last_frame_inst = Instant::now();
-                        frame_count += 1;
-                        if frame_count == 100 {
-                            println!(
-                                "Avg frame time {}ms",
-                                accum_time * 1000.0 / frame_count as f32
-                            );
-                            accum_time = 0.0;
-                            frame_count = 0;
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Character(s),
+                                ..
+                            },
+                        ..
+                    } if s == "r" => {
+                        println!("{:#?}", instance.generate_report());
+                    }
+                    event::WindowEvent::RedrawRequested => {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            accum_time += last_frame_inst.elapsed().as_secs_f32();
+                            last_frame_inst = Instant::now();
+                            frame_count += 1;
+                            if frame_count == 100 {
+                                println!(
+                                    "Avg frame time {}ms",
+                                    accum_time * 1000.0 / frame_count as f32
+                                );
+                                accum_time = 0.0;
+                                frame_count = 0;
+                            }
+                        }
+
+                        let frame = match surface.get_current_texture() {
+                            Ok(frame) => frame,
+                            Err(_) => {
+                                surface.configure(&device, &config);
+                                surface
+                                    .get_current_texture()
+                                    .expect("Failed to acquire next surface texture!")
+                            }
+                        };
+                        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                            format: Some(surface_view_format),
+                            ..wgpu::TextureViewDescriptor::default()
+                        });
+
+                        example.render(&view, &device, &queue, &spawner);
+
+                        frame.present();
+
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
+                                let image_bitmap = offscreen_canvas_setup
+                                    .offscreen_canvas
+                                    .transfer_to_image_bitmap()
+                                    .expect("couldn't transfer offscreen canvas to image bitmap.");
+                                offscreen_canvas_setup
+                                    .bitmap_renderer
+                                    .transfer_from_image_bitmap(&image_bitmap);
+
+                                log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
+                            }
                         }
                     }
-
-                    let frame = match surface.get_current_texture() {
-                        Ok(frame) => frame,
-                        Err(_) => {
-                            surface.configure(&device, &config);
-                            surface
-                                .get_current_texture()
-                                .expect("Failed to acquire next surface texture!")
-                        }
-                    };
-                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                        format: Some(surface_view_format),
-                        ..wgpu::TextureViewDescriptor::default()
-                    });
-
-                    example.render(&view, &device, &queue, &spawner);
-
-                    frame.present();
-
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
-                            let image_bitmap = offscreen_canvas_setup
-                                .offscreen_canvas
-                                .transfer_to_image_bitmap()
-                                .expect("couldn't transfer offscreen canvas to image bitmap.");
-                            offscreen_canvas_setup
-                                .bitmap_renderer
-                                .transfer_from_image_bitmap(&image_bitmap);
-
-                            log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
-                        }
-                    }
-                }
-                _ => example.update(event),
-            },
-            _ => {}
-        }
-    }).unwrap();
+                    _ => example.update(event),
+                },
+                _ => {}
+            }
+        })
+        .unwrap();
 }
 
 #[cfg(not(target_arch = "wasm32"))]

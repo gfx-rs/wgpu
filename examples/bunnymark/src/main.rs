@@ -84,7 +84,6 @@ impl Example {
         _spawner: &wgpu_example::framework::Spawner,
     ) {
         let delta = 0.01;
-
         for bunny in self.bunnies.iter_mut() {
             bunny.update_data(delta, &self.extent);
         }
