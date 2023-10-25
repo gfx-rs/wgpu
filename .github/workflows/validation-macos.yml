@@ -19,4 +19,4 @@ jobs:
           workspaces: |
             naga/xtask -> naga/xtask/target
 
-      - run: cargo xtask validate msl
+      - run: cd naga; cargo xtask validate msl

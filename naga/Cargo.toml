@@ -59,9 +59,11 @@ pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-xid = { version = "0.2.3", optional = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = { version = "0.5", features = [] }
+
 [dev-dependencies]
 bincode = "1"
-criterion = { version = "0.5", features = [] }
 diff = "0.1"
 env_logger = "0.10"
 hlsl-snapshots = { path = "./hlsl-snapshots" }

@@ -22,10 +22,10 @@ jobs:
           workspaces: |
             naga/xtask -> naga/xtask/target
 
-      - run: cargo xtask validate spv
+      - run: cd naga; cargo xtask validate spv
 
-      - run: cargo xtask validate glsl
+      - run: cd naga; cargo xtask validate glsl
 
-      - run: cargo xtask validate dot
+      - run: cd naga; cargo xtask validate dot
 
-      - run: cargo xtask validate wgsl
+      - run: cd naga; cargo xtask validate wgsl

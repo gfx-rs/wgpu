@@ -143,8 +143,8 @@ impl Input {
                     .expect("all files in snapshot input directory should have extensions");
                 let input = Input::new(
                     Some(&subdirectory),
-                    &file_name.file_stem().unwrap().to_str().unwrap(),
-                    &extension.to_str().unwrap(),
+                    file_name.file_stem().unwrap().to_str().unwrap(),
+                    extension.to_str().unwrap(),
                 );
                 input
             }),
@@ -232,7 +232,7 @@ impl Input {
         let mut param_path = self.input_path();
         param_path.set_extension("param.ron");
         match fs::read_to_string(&param_path) {
-            Ok(string) => ron::de::from_str(&string).expect(&format!(
+            Ok(string) => ron::de::from_str(&string).unwrap_or_else(|_| panic!(
                 "Couldn't parse param file: {}",
                 param_path.display()
             )),
@@ -277,7 +277,7 @@ fn check_targets(
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .expect(&format!(
+        .unwrap_or_else(|_| panic!(
             "Naga module validation failed on test '{}'",
             name.display()
         ));
@@ -297,7 +297,7 @@ fn check_targets(
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
             .validate(module)
-            .expect(&format!(
+            .unwrap_or_else(|_| panic!(
                 "Post-compaction module validation failed on test '{}'",
                 name.display()
             ))
@@ -576,7 +576,7 @@ fn write_output_hlsl(
         });
     }
 
-    config.to_file(&input.output_path("hlsl", "ron")).unwrap();
+    config.to_file(input.output_path("hlsl", "ron")).unwrap();
 }
 
 #[cfg(feature = "wgsl-out")]

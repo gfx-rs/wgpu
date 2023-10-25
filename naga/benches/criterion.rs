@@ -1,3 +1,4 @@
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::needless_borrowed_reference)]
 
 use criterion::*;

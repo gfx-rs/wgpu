@@ -22,7 +22,7 @@ jobs:
           workspaces: |
             naga/xtask -> naga/xtask/target
 
-      - run: cargo xtask validate hlsl dxc
+      - run: cd naga; cargo xtask validate hlsl dxc
 
   validate-windows-fxc:
     name: Validate Naga HLSL Output on FXC
@@ -42,6 +42,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            naga/xtask -> target
+            naga/xtask -> naga/xtask/target
 
-      - run: cargo xtask validate hlsl fxc
+      - run: cd naga; cargo xtask validate hlsl fxc

@@ -1,6 +1,9 @@
 # Lazy jobs running on master post merges.
 name: lazy
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/lazy.yml'
   push:
     branches: [trunk]
 
@@ -16,19 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - run: mkdir data
+      - run: mkdir naga/data
 
       - name: Download shaders
-        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o data/all.zip
+        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
 
       - name: Unpack shaders
-        run: cd data && unzip all.zip
+        run: |
+          cd naga/data
+          unzip all.zip
 
       - name: Build Naga
-        run: cargo build --release --bin naga
+        run: |
+          cd naga
+          cargo build --release --bin naga
 
       - name: Convert shaders
-        run: for file in data/*.spv ; do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
+        run: |
+          cd naga
+          for file in data/*.spv do echo "Translating" ${file} && target/release/naga --validate 27 ${file} ${file}.metal; done
 
   parse-vulkan-tutorial-shaders:
     name: Parse Sascha Willems Vulkan tutorial shaders
@@ -37,15 +46,18 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Download shaders
-        run: git clone https://github.com/SaschaWillems/Vulkan.git
+        run: cd naga && git clone https://github.com/SaschaWillems/Vulkan.git
 
       - name: Build Naga
-        run: cargo build --release --bin naga
+        run: |
+          cd naga
+          cargo build --release --bin naga
 
       - name: Convert metal shaders
         run: |
           # No needed to stop workflow if we can't validate one file
           set +e
+          cd naga
           touch counter
           SUCCESS_RESULT_COUNT=0
           FILE_COUNT=0
@@ -69,20 +81,25 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Download shaders
-        run: git clone https://github.com/dneto0/spirv-samples.git
+        run: |
+          cd naga
+          git clone https://github.com/dneto0/spirv-samples.git
 
       - name: Build Naga
-        run: cargo build --release --bin naga
+        run: |
+          cd naga
+          cargo build --release --bin naga
 
       - name: Install spirv-tools
         run: |
-           wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
-           tar zxf install.tgz
-           ./install/bin/spirv-as --version
+          cd naga
+          wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
+          tar zxf install.tgz
+          ./install/bin/spirv-as --version
 
       - name: Compile spv from spvasm
         run: |
-           cd spirv-samples
+           cd naga/spirv-samples
            mkdir -p spv
 
            find "./spvasm" -name '*.spvasm' | while read fname;
@@ -94,7 +111,7 @@ jobs:
       - name: Validate spv and generate wgsl
         run: |
            set +e
-           cd spirv-samples
+           cd naga/spirv-samples
            SUCCESS_RESULT_COUNT=0
            FILE_COUNT=0
            mkdir -p spv
@@ -119,7 +136,7 @@ jobs:
       - name: Validate output wgsl
         run: |
            set +e
-           cd spirv-samples
+           cd naga/spirv-samples
            SUCCESS_RESULT_COUNT=0
            FILE_COUNT=0
 
@@ -150,10 +167,16 @@ jobs:
           tool: cargo-nextest
 
       - name: Test minimal (without span)
-        run: cargo nextest run --features validate -p naga
+        run: |
+          cd naga
+          cargo nextest run --features validate -p naga
 
       - name: Test all (without validation)
-        run: cargo nextest run --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
+        run: |
+          cd naga
+          cargo nextest run --features wgsl-in,wgsl-out,glsl-in,glsl-out,spv-in,spv-out,msl-out,hlsl-out,dot-out --workspace
 
       - name: Check snapshots (without validation)
-        run: git diff --exit-code -- tests/out
+        run: |
+          cd naga
+          git diff --exit-code -- tests/out
