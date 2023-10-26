@@ -72,6 +72,27 @@ impl crate::Instance<super::Api> for super::Instance {
             }
         }
 
+        // Initialize DXC shader compiler
+        let dxc_container = match desc.dx12_shader_compiler.clone() {
+            wgt::Dx12Compiler::Dxc {
+                dxil_path,
+                dxc_path,
+            } => {
+                let container = super::shader_compilation::get_dxc_container(dxc_path, dxil_path)
+                    .map_err(|e| {
+                    crate::InstanceError::with_source(String::from("Failed to load DXC"), e)
+                })?;
+
+                container.map(Arc::new)
+            }
+            wgt::Dx12Compiler::Fxc => None,
+        };
+
+        match dxc_container {
+            Some(_) => log::debug!("Using DXC for shader compilation"),
+            None => log::debug!("Using FXC for shader compilation"),
+        }
+
         Ok(Self {
             // The call to create_factory will only succeed if we get a factory4, so this is safe.
             factory,
@@ -80,7 +101,7 @@ impl crate::Instance<super::Api> for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
-            dx12_shader_compiler: desc.dx12_shader_compiler.clone(),
+            dxc_container,
         })
     }
 
@@ -112,7 +133,7 @@ impl crate::Instance<super::Api> for super::Instance {
         adapters
             .into_iter()
             .filter_map(|raw| {
-                super::Adapter::expose(raw, &self.library, self.flags, &self.dx12_shader_compiler)
+                super::Adapter::expose(raw, &self.library, self.flags, self.dxc_container.clone())
             })
             .collect()
     }
