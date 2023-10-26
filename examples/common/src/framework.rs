@@ -271,7 +271,7 @@ fn start<E: Example>(
         event_loop,
         instance,
         size,
-        mut surface,
+        surface,
         adapter,
         device,
         queue,
