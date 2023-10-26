@@ -1209,6 +1209,10 @@ impl<A: HalApi> State<A> {
         };
         for (idx, (vbs, step)) in self.vertex.iter().zip(&pipeline.steps).enumerate() {
             if let Some(ref vbs) = *vbs {
+                if step.stride == 0 {
+                    // TODO: nevermind, this needs to be fixed differently.
+                    continue;
+                }
                 let limit = ((vbs.range.end - vbs.range.start) / step.stride) as u32;
                 match step.mode {
                     wgt::VertexStepMode::Vertex => {
