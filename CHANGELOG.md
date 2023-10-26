@@ -80,6 +80,9 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
+- Implement WGSL abstract types (by @jimblandy):
+  - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
+
 ### Bug Fixes
 
 #### WGL

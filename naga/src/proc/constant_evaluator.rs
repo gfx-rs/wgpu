@@ -979,28 +979,36 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v as i32,
                         Literal::Bool(v) => v as i32,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
                     Sc::U32 => Literal::U32(match literal {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
                         Literal::Bool(v) => v as u32,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
                     Sc::F32 => Literal::F32(match literal {
                         Literal::I32(v) => v as f32,
                         Literal::U32(v) => v as f32,
                         Literal::F32(v) => v,
                         Literal::Bool(v) => v as u32 as f32,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
                     Sc::BOOL => Literal::Bool(match literal {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
                         Literal::Bool(v) => v,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
                     _ => return Err(ConstantEvaluatorError::InvalidCastArg),
                 };

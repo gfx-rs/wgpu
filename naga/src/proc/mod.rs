@@ -94,6 +94,10 @@ impl super::Scalar {
         kind: crate::ScalarKind::Float,
         width: 8,
     };
+    pub const I64: Self = Self {
+        kind: crate::ScalarKind::Sint,
+        width: 8,
+    };
     pub const BOOL: Self = Self {
         kind: crate::ScalarKind::Bool,
         width: crate::BOOL_WIDTH,
@@ -130,6 +134,7 @@ impl PartialEq for crate::Literal {
             (Self::F32(a), Self::F32(b)) => a.to_bits() == b.to_bits(),
             (Self::U32(a), Self::U32(b)) => a == b,
             (Self::I32(a), Self::I32(b)) => a == b,
+            (Self::I64(a), Self::I64(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             _ => false,
         }
@@ -159,6 +164,10 @@ impl std::hash::Hash for crate::Literal {
                 hasher.write_u8(4);
                 v.hash(hasher);
             }
+            Self::I64(v) => {
+                hasher.write_u8(5);
+                v.hash(hasher);
+            }
         }
     }
 }
@@ -170,6 +179,7 @@ impl crate::Literal {
             (value, crate::ScalarKind::Float, 4) => Some(Self::F32(value as _)),
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
+            (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
             (1, crate::ScalarKind::Bool, 4) => Some(Self::Bool(true)),
             (0, crate::ScalarKind::Bool, 4) => Some(Self::Bool(false)),
             _ => None,
@@ -186,7 +196,7 @@ impl crate::Literal {
 
     pub const fn width(&self) -> crate::Bytes {
         match *self {
-            Self::F64(_) => 8,
+            Self::F64(_) | Self::I64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
             Self::Bool(_) => 1,
         }
@@ -197,6 +207,7 @@ impl crate::Literal {
             Self::F32(_) => crate::Scalar::F32,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
+            Self::I64(_) => crate::Scalar::I64,
             Self::Bool(_) => crate::Scalar::BOOL,
         }
     }
