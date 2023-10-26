@@ -17,7 +17,12 @@ pub struct GpuReport {
 
 impl GpuReport {
     pub fn generate() -> Self {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::util::backend_bits_from_env().unwrap_or_default(),
+            flags: wgpu::InstanceFlags::debugging().with_env(),
+            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+            gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+        });
         let adapters = instance.enumerate_adapters(wgpu::Backends::all());
 
         let mut devices = Vec::with_capacity(adapters.len());

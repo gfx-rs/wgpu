@@ -1,6 +1,6 @@
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
-    dx12::SurfaceTarget,
+    dx12::{shader_compilation, SurfaceTarget},
 };
 use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
@@ -50,7 +50,7 @@ impl super::Adapter {
         adapter: d3d12::DxgiAdapter,
         library: &Arc<d3d12::D3D12Lib>,
         instance_flags: wgt::InstanceFlags,
-        dx12_shader_compiler: &wgt::Dx12Compiler,
+        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -305,7 +305,7 @@ impl super::Adapter {
                 private_caps,
                 presentation_timer,
                 workarounds,
-                dx12_shader_compiler: dx12_shader_compiler.clone(),
+                dxc_container,
             },
             info,
             features,
@@ -421,7 +421,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             limits,
             self.private_caps,
             &self.library,
-            self.dx12_shader_compiler.clone(),
+            self.dxc_container.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,
