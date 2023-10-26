@@ -770,7 +770,7 @@ impl crate::Instance<super::Api> for super::Instance {
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                self.create_surface_from_view(handle.ui_view)
+                self.create_surface_from_view(handle.ui_view.as_ptr())
             }
             (_, _) => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Vulkan-compatible handle"

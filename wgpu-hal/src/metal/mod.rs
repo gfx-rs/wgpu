@@ -96,7 +96,7 @@ impl crate::Instance<Api> for Instance {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 let _ = &self.managed_metal_layer_delegate;
-                Ok(unsafe { Surface::from_view(handle.ui_view, None) })
+                Ok(unsafe { Surface::from_view(handle.ui_view.as_ptr(), None) })
             }
             #[cfg(target_os = "macos")]
             raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
