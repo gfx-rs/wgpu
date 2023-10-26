@@ -750,15 +750,15 @@ impl<A: HalApi> Device<A> {
             if desc.format == *format {
                 continue;
             }
-            match (desc.format, *format) {
-                (
-                    TextureFormat::NV12,
-                    TextureFormat::R8Unorm
-                    | TextureFormat::R8Uint
-                    | TextureFormat::Rg8Unorm
-                    | TextureFormat::Rg8Uint,
-                ) => continue,
-                _ => {}
+            if let (
+                TextureFormat::NV12,
+                TextureFormat::R8Unorm
+                | TextureFormat::R8Uint
+                | TextureFormat::Rg8Unorm
+                | TextureFormat::Rg8Uint,
+            ) = (desc.format, *format)
+            {
+                continue;
             }
             if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
                 return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
