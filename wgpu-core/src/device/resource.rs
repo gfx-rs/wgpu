@@ -811,11 +811,6 @@ impl<A: HalApi> Device<A> {
             );
 
             let mut clear_views = SmallVec::new();
-            let plane_count = if desc.format == wgt::TextureFormat::NV12 {
-                2
-            } else {
-                1
-            };
             for mip_level in 0..desc.mip_level_count {
                 for array_layer in 0..desc.size.depth_or_array_layers {
                     let desc = hal::TextureViewDescriptor {
