@@ -366,8 +366,10 @@ fn main() {
             .and_then(|win| win.document())
             .expect("Failed to get document.");
         let body = document.body().unwrap();
-        body.append_child(&web_sys::Element::from(window.canvas().expect("Couldn't get canvas")))
-            .unwrap();
+        body.append_child(&web_sys::Element::from(
+            window.canvas().expect("Couldn't get canvas"),
+        ))
+        .unwrap();
         let controls_text = document
             .create_element("p")
             .expect("Failed to create controls text as element.");
