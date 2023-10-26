@@ -401,8 +401,8 @@ static TEST: wgpu_example::framework::ExampleTestParams =
         comparisons: &[
             wgpu_test::ComparisonType::Mean(0.05),
             wgpu_test::ComparisonType::Percentile {
-                percentile: 0.95,
-                threshold: 0.05,
+                percentile: 0.99,
+                threshold: 0.19,
             },
         ],
         _phantom: std::marker::PhantomData::<Example>,
