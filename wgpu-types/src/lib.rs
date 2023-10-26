@@ -771,8 +771,12 @@ bitflags::bitflags! {
         /// - OpenGL
         const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
 
-        /// Supported platform:
+        /// Allows for creation of textures of format [`TextureFormat::NV12`]
+        ///
+        /// Supported platforms:
         /// - DX12
+        ///
+        /// This is a native only feature.
         const TEXTURE_FORMAT_NV12 = 1 << 55;
 
         // 55..59 available
@@ -2381,7 +2385,12 @@ pub enum TextureFormat {
     /// [`Features::DEPTH32FLOAT_STENCIL8`] must be enabled to use this texture format.
     Depth32FloatStencil8,
 
+    /// YUV 4:2:0 video resource format.
+    /// Valid luminance data view formats for this video resource format are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
+    /// Valid chrominance data view formats (width and height are each 1/2 of luminance view) for this video resource format are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
+    /// Width and height must be even.
     ///
+    /// [`Features::TEXTURE_FORMAT_NV12`] must be enabled to use this texture format.
     NV12,
 
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
