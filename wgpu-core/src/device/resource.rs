@@ -2682,7 +2682,6 @@ impl<A: HalApi> Device<A> {
 
         let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
         let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
-        let mut total_attributes = 0;
         let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
         for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
@@ -2693,11 +2692,12 @@ impl<A: HalApi> Device<A> {
             if vb_state.attributes.is_empty() {
                 continue;
             }
-            if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
+            let max_array_stride = self.limits.max_vertex_buffer_array_stride;
+            if vb_state.array_stride > max_array_stride as u64 {
                 return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
                     index: i as u32,
                     given: vb_state.array_stride as u32,
-                    limit: self.limits.max_vertex_buffer_array_stride,
+                    limit: max_array_stride,
                 });
             }
             if vb_state.array_stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
@@ -2713,7 +2713,16 @@ impl<A: HalApi> Device<A> {
             });
 
             for attribute in vb_state.attributes.iter() {
-                if attribute.offset >= 0x10000000 {
+                let format_size = attribute.format.size();
+                let attrib_end_offset = attribute.offset + format_size;
+                let offset_limit = if vb_state.array_stride == 0 {
+                    max_array_stride as u64
+                } else {
+                    vb_state.array_stride
+                }
+                .min(0x10000000);
+
+                if attrib_end_offset > offset_limit || attribute.offset % format_size.min(4) != 0 {
                     return Err(
                         pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
                             location: attribute.shader_location,
@@ -2730,6 +2739,15 @@ impl<A: HalApi> Device<A> {
                     self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                 }
 
+                if attribute.shader_location > self.limits.max_vertex_attributes {
+                    return Err(
+                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeLocation {
+                            given: attribute.shader_location,
+                            limit: self.limits.max_vertex_attributes,
+                        },
+                    );
+                }
+
                 let previous = io.insert(
                     attribute.shader_location,
                     validation::InterfaceVar::vertex_attribute(attribute.format),
@@ -2741,7 +2759,6 @@ impl<A: HalApi> Device<A> {
                     ));
                 }
             }
-            total_attributes += vb_state.attributes.len();
         }
 
         if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
@@ -2749,14 +2766,6 @@ impl<A: HalApi> Device<A> {
                 given: vertex_buffers.len() as u32,
                 limit: self.limits.max_vertex_buffers,
             });
-        }
-        if total_attributes > self.limits.max_vertex_attributes as usize {
-            return Err(
-                pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
-                    given: total_attributes as u32,
-                    limit: self.limits.max_vertex_attributes,
-                },
-            );
         }
 
         if desc.primitive.strip_index_format.is_some() && !desc.primitive.topology.is_strip() {
