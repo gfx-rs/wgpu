@@ -811,6 +811,11 @@ impl<A: HalApi> Device<A> {
             );
 
             let mut clear_views = SmallVec::new();
+            let plane_count = if desc.format == wgt::TextureFormat::NV12 {
+                2
+            } else {
+                1
+            };
             for mip_level in 0..desc.mip_level_count {
                 for array_layer in 0..desc.size.depth_or_array_layers {
                     let desc = hal::TextureViewDescriptor {
@@ -825,6 +830,7 @@ impl<A: HalApi> Device<A> {
                             base_array_layer: array_layer,
                             array_layer_count: Some(1),
                         },
+                        plane: None,
                     };
                     clear_views.push(Some(
                         unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
@@ -1115,6 +1121,7 @@ impl<A: HalApi> Device<A> {
             dimension: resolved_dimension,
             usage,
             range: resolved_range,
+            plane: desc.plane,
         };
 
         let raw = unsafe {

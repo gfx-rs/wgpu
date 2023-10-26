@@ -988,6 +988,8 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+    ///  The plane of the texture view.
+    pub plane: u32,
 }
 
 #[derive(Debug)]

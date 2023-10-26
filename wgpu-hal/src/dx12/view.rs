@@ -14,6 +14,7 @@ pub(super) struct ViewDescriptor {
     array_layer_count: u32,
     mip_level_base: u32,
     mip_level_count: u32,
+    plane: u32,
 }
 
 impl crate::TextureViewDescriptor<'_> {
@@ -30,6 +31,7 @@ impl crate::TextureViewDescriptor<'_> {
             mip_level_count: self.range.mip_level_count.unwrap_or(!0),
             array_layer_base: self.range.base_array_layer,
             array_layer_count: self.range.array_layer_count.unwrap_or(!0),
+            plane: self.plane,
         }
     }
 }
@@ -79,7 +81,7 @@ impl ViewDescriptor {
                     *desc.u.Texture2D_mut() = d3d12_ty::D3D12_TEX2D_SRV {
                         MostDetailedMip: self.mip_level_base,
                         MipLevels: self.mip_level_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: self.plane,
                         ResourceMinLODClamp: 0.0,
                     }
                 }
@@ -103,7 +105,7 @@ impl ViewDescriptor {
                         MipLevels: self.mip_level_count,
                         FirstArraySlice: self.array_layer_base,
                         ArraySize: self.array_layer_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: self.plane,
                         ResourceMinLODClamp: 0.0,
                     }
                 }
