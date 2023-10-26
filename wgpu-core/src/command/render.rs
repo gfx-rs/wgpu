@@ -1714,6 +1714,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             return Err(DeviceError::WrongDevice).map_pass_err(scope);
                         }
 
+                        let max_vertex_buffers = device.limits.max_vertex_buffers;
+                        if slot > max_vertex_buffers {
+                            return Err(RenderCommandError::VertexBufferIndexOutOfRange {
+                                index: slot,
+                                max: max_vertex_buffers,
+                            })
+                            .map_pass_err(scope);
+                        }
+
                         check_buffer_usage(buffer.usage, BufferUsages::VERTEX)
                             .map_pass_err(scope)?;
                         let buf_raw = buffer
