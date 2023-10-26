@@ -147,6 +147,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
                 let bitmap_renderer = window
                     .canvas()
+                    .expect("Couldn't get html canvas")
                     .get_context("bitmaprenderer")
                     .expect("couldn't create ImageBitmapRenderingContext (Result)")
                     .expect("couldn't create ImageBitmapRenderingContext (Option)")

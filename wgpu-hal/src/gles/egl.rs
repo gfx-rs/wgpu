@@ -865,7 +865,7 @@ impl crate::Instance<super::Api> for Instance {
                     .unwrap();
 
                 let ret = unsafe {
-                    ANativeWindow_setBuffersGeometry(handle.a_native_window, 0, 0, format)
+                    ANativeWindow_setBuffersGeometry(handle.a_native_window.as_ptr(), 0, 0, format)
                 };
 
                 if ret != 0 {
@@ -1183,7 +1183,7 @@ impl crate::Surface<super::Api> for Surface {
                             use objc::{msg_send, runtime::Object, sel, sel_impl};
                             // ns_view always have a layer and don't need to verify that it exists.
                             let layer: *mut Object =
-                                msg_send![handle.ns_view as *mut Object, layer];
+                                msg_send![handle.ns_view.as_ptr() as *mut Object, layer];
                             layer as *mut ffi::c_void
                         };
                         window_ptr

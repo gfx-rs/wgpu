@@ -764,7 +764,7 @@ impl crate::Instance<super::Api> for super::Instance {
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                self.create_surface_from_view(handle.ns_view)
+                self.create_surface_from_view(handle.ns_view.as_ptr())
             }
             #[cfg(target_os = "ios")]
             (Rwh::UiKit(handle), _)
