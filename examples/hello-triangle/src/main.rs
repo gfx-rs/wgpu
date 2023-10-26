@@ -163,7 +163,7 @@ fn main() {
             .and_then(|win| win.document())
             .and_then(|doc| doc.body())
             .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas()))
+                body.append_child(&web_sys::Element::from(window.canvas().unwrap()))
                     .ok()
             })
             .expect("couldn't append canvas to document body");
