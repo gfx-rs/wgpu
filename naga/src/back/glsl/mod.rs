@@ -2410,6 +2410,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::I64(_) => {
+                        return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
+                    }
                 }
             }
             Expression::Constant(handle) => {

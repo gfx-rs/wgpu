@@ -2041,6 +2041,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                 crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                 crate::Literal::I32(value) => write!(self.out, "{}", value)?,
+                crate::Literal::I64(value) => write!(self.out, "{}L", value)?,
                 crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
             },
             Expression::Constant(handle) => {

@@ -1650,3 +1650,148 @@ pub fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> 
 
     Ok(())
 }
+
+#[cfg(all(test, feature = "validate"))]
+/// Validate a module containing the given expression, expecting an error.
+fn validate_with_expression(
+    expr: crate::Expression,
+    caps: super::Capabilities,
+) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+    use crate::span::Span;
+
+    let mut function = crate::Function::default();
+    function.expressions.append(expr, Span::default());
+    function.body.push(
+        crate::Statement::Emit(function.expressions.range_from(0)),
+        Span::default(),
+    );
+
+    let mut module = crate::Module::default();
+    module.functions.append(function, Span::default());
+
+    let mut validator = super::Validator::new(super::ValidationFlags::EXPRESSIONS, caps);
+
+    validator.validate(&module)
+}
+
+#[cfg(all(test, feature = "validate"))]
+/// Validate a module containing the given constant expression, expecting an error.
+fn validate_with_const_expression(
+    expr: crate::Expression,
+    caps: super::Capabilities,
+) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+    use crate::span::Span;
+
+    let mut module = crate::Module::default();
+    module.const_expressions.append(expr, Span::default());
+
+    let mut validator = super::Validator::new(super::ValidationFlags::CONSTANTS, caps);
+
+    validator.validate(&module)
+}
+
+/// Using F64 in a function's expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn f64_runtime_literals() {
+    let result = validate_with_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::Function {
+            source: super::FunctionError::Expression {
+                source: super::ExpressionError::Literal(super::LiteralError::Width(
+                    super::r#type::WidthError::MissingCapability {
+                        name: "f64",
+                        flag: "FLOAT64",
+                    }
+                ),),
+                ..
+            },
+            ..
+        }
+    ));
+
+    let result = validate_with_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default() | super::Capabilities::FLOAT64,
+    );
+    assert!(result.is_ok());
+}
+
+/// Using F64 in a module's constant expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn f64_const_literals() {
+    let result = validate_with_const_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::ConstExpression {
+            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
+                super::r#type::WidthError::MissingCapability {
+                    name: "f64",
+                    flag: "FLOAT64",
+                }
+            )),
+            ..
+        }
+    ));
+
+    let result = validate_with_const_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default() | super::Capabilities::FLOAT64,
+    );
+    assert!(result.is_ok());
+}
+
+/// Using I64 in a function's expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn i64_runtime_literals() {
+    let result = validate_with_expression(
+        crate::Expression::Literal(crate::Literal::I64(1729)),
+        // There is no capability that enables this.
+        super::Capabilities::all(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::Function {
+            source: super::FunctionError::Expression {
+                source: super::ExpressionError::Literal(super::LiteralError::Width(
+                    super::r#type::WidthError::Unsupported64Bit
+                ),),
+                ..
+            },
+            ..
+        }
+    ));
+}
+
+/// Using I64 in a module's constant expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn i64_const_literals() {
+    let result = validate_with_const_expression(
+        crate::Expression::Literal(crate::Literal::I64(1729)),
+        // There is no capability that enables this.
+        super::Capabilities::all(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::ConstExpression {
+            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
+                super::r#type::WidthError::Unsupported64Bit,
+            ),),
+            ..
+        }
+    ));
+}
