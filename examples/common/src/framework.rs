@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use wgpu::{Instance, Surface, WasmNotSend, WasmNotSync};
 use wgpu_test::GpuTestConfiguration;
 use winit::{
@@ -88,17 +90,17 @@ fn init_logger() {
     }
 }
 
-struct EventLoopWrapper {
-    event_loop: EventLoop<()>,
-    window: Window,
-}
+struct EventLoopWrapper(EventLoop<()>);
 
 impl EventLoopWrapper {
-    pub fn new(title: &str) -> Self {
-        let event_loop = EventLoop::new().unwrap();
+    fn new() -> Self {
+        Self(EventLoop::new().unwrap())
+    }
+
+    fn window(&self, title: &str) -> Window {
         let mut builder = winit::window::WindowBuilder::new();
         builder = builder.with_title(title);
-        let window = builder.build(&event_loop).unwrap();
+        let window = builder.build(&self.0).unwrap();
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -113,7 +115,8 @@ impl EventLoopWrapper {
                 .expect("couldn't append canvas to document body");
         }
 
-        Self { event_loop, window }
+        #[cfg_attr(not(target_arch = "wasm32"), allow(clippy::let_and_return))]
+        window
     }
 }
 
@@ -121,7 +124,7 @@ impl EventLoopWrapper {
 ///
 /// As surface usage varies per platform, wrapping this up cleans up the event loop code.
 struct SurfaceWrapper {
-    surface: Option<wgpu::Surface>,
+    surface: Option<wgpu::Surface<'static>>,
     config: Option<wgpu::SurfaceConfiguration>,
 }
 
@@ -141,9 +144,9 @@ impl SurfaceWrapper {
     ///
     /// We cannot unconditionally create a surface here, as Android requires
     /// us to wait until we recieve the `Resumed` event to do so.
-    fn pre_adapter(&mut self, instance: &Instance, window: &Window) {
+    fn pre_adapter(&mut self, instance: &Instance, window: &'static Window) {
         if cfg!(target_arch = "wasm32") {
-            self.surface = Some(unsafe { instance.create_surface(&window).unwrap() });
+            self.surface = Some(instance.create_surface(window).unwrap());
         }
     }
 
@@ -163,7 +166,7 @@ impl SurfaceWrapper {
     /// On all native platforms, this is where we create the surface.
     ///
     /// Additionally, we configure the surface based on the (now valid) window size.
-    fn resume(&mut self, context: &ExampleContext, window: &Window, srgb: bool) {
+    fn resume(&mut self, context: &ExampleContext, window: &'static Window, srgb: bool) {
         // Window size is only actually valid after we enter the event loop.
         let window_size = window.inner_size();
         let width = window_size.width.max(1);
@@ -173,7 +176,7 @@ impl SurfaceWrapper {
 
         // We didn't create the surface in pre_adapter, so we need to do so now.
         if !cfg!(target_arch = "wasm32") {
-            self.surface = Some(unsafe { context.instance.create_surface(&window).unwrap() });
+            self.surface = Some(context.instance.create_surface(window).unwrap());
         }
 
         // From here on, self.surface should be Some.
@@ -252,7 +255,10 @@ struct ExampleContext {
 }
 impl ExampleContext {
     /// Initializes the example context.
-    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: &Window) -> Self {
+    async fn init_async<'a, E: Example>(
+        surface: &mut SurfaceWrapper,
+        window: &'static Window,
+    ) -> Self {
         log::info!("Initializing wgpu...");
 
         let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
@@ -355,9 +361,11 @@ impl FrameCounter {
 
 async fn start<E: Example>(title: &str) {
     init_logger();
-    let window_loop = EventLoopWrapper::new(title);
+    let window_loop = EventLoopWrapper::new();
+    static WINDOW: OnceLock<Window> = OnceLock::new();
+    let window = WINDOW.get_or_init(|| window_loop.window(title));
     let mut surface = SurfaceWrapper::new();
-    let context = ExampleContext::init_async::<E>(&mut surface, &window_loop.window).await;
+    let context = ExampleContext::init_async::<E>(&mut surface, window).await;
 
     let mut frame_counter = FrameCounter::new();
 
@@ -377,14 +385,14 @@ async fn start<E: Example>(title: &str) {
     // On native this is a result, but on wasm it's a unit type.
     #[allow(clippy::let_unit_value)]
     let _ = (event_loop_function)(
-        window_loop.event_loop,
+        window_loop.0,
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
             // We set to refresh as fast as possible.
             target.set_control_flow(ControlFlow::Poll);
 
             match event {
                 ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, &window_loop.window, E::SRGB);
+                    surface.resume(&context, window, E::SRGB);
 
                     // If we haven't created the example yet, do so now.
                     if example.is_none() {
@@ -408,7 +416,7 @@ async fn start<E: Example>(title: &str) {
                             &context.queue,
                         );
 
-                        window_loop.window.request_redraw();
+                        window.request_redraw();
                     }
                     WindowEvent::KeyboardInput {
                         event:
@@ -448,7 +456,7 @@ async fn start<E: Example>(title: &str) {
 
                         frame.present();
 
-                        window_loop.window.request_redraw();
+                        window.request_redraw();
                     }
                     _ => example.as_mut().unwrap().update(event),
                 },

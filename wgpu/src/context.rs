@@ -103,7 +103,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError>;
     fn instance_request_adapter(
         &self,
-        options: &RequestAdapterOptions<'_>,
+        options: &RequestAdapterOptions<'_, '_>,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
         &self,
@@ -1239,7 +1239,7 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     #[allow(clippy::type_complexity)]
     fn instance_request_adapter(
         &self,
-        options: &RequestAdapterOptions<'_>,
+        options: &RequestAdapterOptions<'_, '_>,
     ) -> Pin<InstanceRequestAdapterFuture>;
     fn adapter_request_device(
         &self,
@@ -2103,7 +2103,7 @@ where
 
     fn instance_request_adapter(
         &self,
-        options: &RequestAdapterOptions<'_>,
+        options: &RequestAdapterOptions<'_, '_>,
     ) -> Pin<InstanceRequestAdapterFuture> {
         let future: T::RequestAdapterFuture = Context::instance_request_adapter(self, options);
         Box::pin(async move {

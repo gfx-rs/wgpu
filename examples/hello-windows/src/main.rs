@@ -7,20 +7,20 @@ use winit::{
     window::{Window, WindowId},
 };
 
-struct ViewportDesc {
-    window: Window,
+struct ViewportDesc<'window> {
+    window: &'window Window,
     background: wgpu::Color,
-    surface: wgpu::Surface,
+    surface: wgpu::Surface<'window>,
 }
 
-struct Viewport {
-    desc: ViewportDesc,
+struct Viewport<'window> {
+    desc: ViewportDesc<'window>,
     config: wgpu::SurfaceConfiguration,
 }
 
-impl ViewportDesc {
-    fn new(window: Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+impl<'window> ViewportDesc<'window> {
+    fn new(window: &'window Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
+        let surface = instance.create_surface(window).unwrap();
         Self {
             window,
             background,
@@ -28,7 +28,7 @@ impl ViewportDesc {
         }
     }
 
-    fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
+    fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport<'window> {
         let size = self.window.inner_size();
 
         let caps = self.surface.get_capabilities(adapter);
@@ -48,7 +48,7 @@ impl ViewportDesc {
     }
 }
 
-impl Viewport {
+impl Viewport<'_> {
     fn resize(&mut self, device: &wgpu::Device, size: winit::dpi::PhysicalSize<u32>) {
         self.config.width = size.width;
         self.config.height = size.height;
@@ -62,11 +62,11 @@ impl Viewport {
     }
 }
 
-async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
+async fn run(event_loop: EventLoop<()>, viewports: &[(Window, wgpu::Color)]) {
     let instance = wgpu::Instance::default();
     let viewports: Vec<_> = viewports
-        .into_iter()
-        .map(|(window, color)| ViewportDesc::new(window, color, &instance))
+        .iter()
+        .map(|(window, color)| ViewportDesc::new(window, *color, &instance))
         .collect();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -200,7 +200,7 @@ fn main() {
         }
 
         env_logger::init();
-        pollster::block_on(run(event_loop, viewports));
+        pollster::block_on(run(event_loop, &viewports));
     }
     #[cfg(target_arch = "wasm32")]
     {

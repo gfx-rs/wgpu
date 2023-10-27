@@ -83,9 +83,9 @@ impl Default for AppState {
     }
 }
 
-struct WgpuContext {
-    pub window: Window,
-    pub surface: wgpu::Surface,
+struct WgpuContext<'window> {
+    pub window: &'window Window,
+    pub surface: wgpu::Surface<'window>,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -94,12 +94,12 @@ struct WgpuContext {
     pub uniform_buffer: wgpu::Buffer,
 }
 
-impl WgpuContext {
-    async fn new(window: Window) -> WgpuContext {
+impl WgpuContext<'_> {
+    async fn new(window: &Window) -> WgpuContext {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::default();
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -224,7 +224,7 @@ impl WgpuContext {
 }
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
-    let mut wgpu_context = Some(WgpuContext::new(window).await);
+    let mut wgpu_context = Some(WgpuContext::new(&window).await);
     // (6)
     let mut state = Some(AppState::default());
     let main_window_id = wgpu_context.as_ref().unwrap().window.id();
