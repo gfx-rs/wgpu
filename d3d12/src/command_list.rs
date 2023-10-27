@@ -19,7 +19,7 @@ pub enum CmdListType {
     // VideoProcess = d3d12::D3D12_COMMAND_LIST_TYPE_VIDEO_PROCESS,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct ClearFlags: u32 {
         const DEPTH = d3d12::D3D12_CLEAR_FLAG_DEPTH;
@@ -263,7 +263,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_pipeline_state(&self, pso:&PipelineState) {
+    pub fn set_pipeline_state(&self, pso: &PipelineState) {
         unsafe {
             self.SetPipelineState(pso.as_mut_ptr());
         }

@@ -9,7 +9,7 @@ use winapi::{
     Interface,
 };
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct FactoryCreationFlags: u32 {
         const DEBUG = dxgi1_3::DXGI_CREATE_FACTORY_DEBUG;
@@ -336,7 +336,7 @@ impl FactoryMedia {
     }
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct SwapChainPresentFlags: u32 {
         const DXGI_PRESENT_DO_NOT_SEQUENCE = dxgi::DXGI_PRESENT_DO_NOT_SEQUENCE;

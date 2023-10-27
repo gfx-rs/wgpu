@@ -1,7 +1,7 @@
 [package]
 name = "wgpu-hal"
 version = "0.18.0"
-authors = ["wgpu developers"]
+authors = ["gfx-rs developers"]
 edition = "2021"
 description = "WebGPU hardware abstraction layer"
 homepage = "https://wgpu.rs/"

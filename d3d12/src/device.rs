@@ -16,7 +16,7 @@ pub type Device = ComPtr<d3d12::ID3D12Device>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
-pub fn create_device<I: Interface>(
+    pub fn create_device<I: Interface>(
         &self,
         adapter: &ComPtr<I>,
         feature_level: crate::FeatureLevel,

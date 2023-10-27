@@ -9,17 +9,13 @@ license = "MIT OR Apache-2.0"
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 arbitrary = { version = "1.0.2", features = ["derive"] }
 libfuzzer-sys = "0.4"
 
-[dependencies.naga]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.naga]
 path = ".."
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in", "validate"]
-
-# Prevent this from interfering with workspaces
-[workspace]
-members = ["."]
 
 [[bin]]
 name = "spv_parser"

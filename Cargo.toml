@@ -5,9 +5,12 @@ members = [
     "deno_webgpu",
 
     # default members
+    "d3d12",
     "examples/*",
-    "naga",
     "naga-cli",
+    "naga",
+    "naga/fuzz",
+    "naga/hlsl-snapshots",
     "player",
     "tests",
     "wgpu-core",
@@ -17,13 +20,14 @@ members = [
     "wgpu-types",
     "wgpu",
 ]
-exclude = [
-    "d3d12",
-]
+exclude = []
 default-members = [
+    "d3d12",
     "examples/*",
-    "naga",
     "naga-cli",
+    "naga",
+    "naga/fuzz",
+    "naga/hlsl-snapshots",
     "player",
     "tests",
     "wgpu-core",
@@ -42,7 +46,7 @@ license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
 version = "0.18.0"
-authors = ["wgpu developers"]
+authors = ["gfx-rs developers"]
 
 [workspace.dependencies.wgc]
 package = "wgpu-core"

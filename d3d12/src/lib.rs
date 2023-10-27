@@ -1,5 +1,9 @@
-#[macro_use]
-extern crate bitflags;
+#![cfg(windows)]
+#![allow(
+    clippy::missing_safety_doc,
+    clippy::too_many_arguments,
+    clippy::not_unsafe_ptr_arg_deref
+)]
 
 use std::{convert::TryFrom, ffi::CStr};
 use winapi::{

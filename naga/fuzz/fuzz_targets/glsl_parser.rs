@@ -1,3 +1,4 @@
+#![cfg(not(target_arch = "wasm32"))]
 #![no_main]
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;

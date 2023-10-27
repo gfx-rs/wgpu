@@ -1,3 +1,4 @@
+#![cfg(not(target_arch = "wasm32"))]
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 use naga::front::wgsl::Frontend;
