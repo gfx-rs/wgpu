@@ -42,6 +42,12 @@ Bottom level categories:
 
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
+### Changes
+
+#### General
+
+- Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
+
 ### Bug Fixes
 
 #### WGL

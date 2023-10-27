@@ -151,6 +151,17 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     vk::FALSE
 }
 
+impl super::DebugUtilsCreateInfo {
+    fn to_vk_create_info(&self) -> vk::DebugUtilsMessengerCreateInfoEXTBuilder<'_> {
+        let user_data_ptr: *const super::DebugUtilsMessengerUserData = &*self.callback_data;
+        vk::DebugUtilsMessengerCreateInfoEXT::builder()
+            .message_severity(self.severity)
+            .message_type(self.message_type)
+            .user_data(user_data_ptr as *mut _)
+            .pfn_user_callback(Some(debug_utils_messenger_callback))
+    }
+}
+
 impl super::Swapchain {
     /// # Safety
     ///
@@ -297,7 +308,7 @@ impl super::Instance {
         raw_instance: ash::Instance,
         instance_api_version: u32,
         android_sdk_version: u32,
-        debug_utils_user_data: Option<super::DebugUtilsMessengerUserData>,
+        debug_utils_create_info: Option<super::DebugUtilsCreateInfo>,
         extensions: Vec<&'static CStr>,
         flags: wgt::InstanceFlags,
         has_nv_optimus: bool,
@@ -305,42 +316,19 @@ impl super::Instance {
     ) -> Result<Self, crate::InstanceError> {
         log::info!("Instance version: 0x{:x}", instance_api_version);
 
-        let debug_utils = if let Some(debug_callback_user_data) = debug_utils_user_data {
+        let debug_utils = if let Some(debug_utils_create_info) = debug_utils_create_info {
             if extensions.contains(&ext::DebugUtils::name()) {
                 log::info!("Enabling debug utils");
-                // Move the callback data to the heap, to ensure it will never be
-                // moved.
-                let callback_data = Box::new(debug_callback_user_data);
 
                 let extension = ext::DebugUtils::new(&entry, &raw_instance);
-                // having ERROR unconditionally because Vk doesn't like empty flags
-                let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
-                if log::max_level() >= log::LevelFilter::Debug {
-                    severity |= vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE;
-                }
-                if log::max_level() >= log::LevelFilter::Info {
-                    severity |= vk::DebugUtilsMessageSeverityFlagsEXT::INFO;
-                }
-                if log::max_level() >= log::LevelFilter::Warn {
-                    severity |= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING;
-                }
-                let user_data_ptr: *const super::DebugUtilsMessengerUserData = &*callback_data;
-                let vk_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-                    .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
-                    .message_severity(severity)
-                    .message_type(
-                        vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
-                            | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
-                            | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
-                    )
-                    .pfn_user_callback(Some(debug_utils_messenger_callback))
-                    .user_data(user_data_ptr as *mut _);
+                let vk_info = debug_utils_create_info.to_vk_create_info();
                 let messenger =
                     unsafe { extension.create_debug_utils_messenger(&vk_info, None) }.unwrap();
+
                 Some(super::DebugUtils {
                     extension,
                     messenger,
-                    callback_data,
+                    callback_data: debug_utils_create_info.callback_data,
                 })
             } else {
                 log::info!("Debug utils not enabled: extension not listed");
@@ -559,10 +547,12 @@ impl super::Instance {
 impl Drop for super::InstanceShared {
     fn drop(&mut self) {
         unsafe {
-            if let Some(du) = self.debug_utils.take() {
+            // Keep du alive since destroy_instance may also log
+            let _du = self.debug_utils.take().map(|du| {
                 du.extension
                     .destroy_debug_utils_messenger(du.messenger, None);
-            }
+                du
+            });
             if let Some(_drop_guard) = self.drop_guard.take() {
                 self.raw.destroy_instance(None);
             }
@@ -653,21 +643,52 @@ impl crate::Instance<super::Api> for super::Instance {
         let mut layers: Vec<&'static CStr> = Vec::new();
 
         // Request validation layer if asked.
-        let mut debug_callback_user_data = None;
-        if desc.flags.contains(wgt::InstanceFlags::VALIDATION) {
+        let mut debug_utils = None;
+        if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
             let validation_layer_name =
                 CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
             if let Some(layer_properties) = find_layer(&instance_layers, validation_layer_name) {
                 layers.push(validation_layer_name);
-                debug_callback_user_data = Some(super::DebugUtilsMessengerUserData {
-                    validation_layer_description: cstr_from_bytes_until_nul(
-                        &layer_properties.description,
-                    )
-                    .unwrap()
-                    .to_owned(),
-                    validation_layer_spec_version: layer_properties.spec_version,
-                    has_obs_layer,
-                });
+
+                if extensions.contains(&ext::DebugUtils::name()) {
+                    // Put the callback data on the heap, to ensure it will never be
+                    // moved.
+                    let callback_data = Box::new(super::DebugUtilsMessengerUserData {
+                        validation_layer_description: cstr_from_bytes_until_nul(
+                            &layer_properties.description,
+                        )
+                        .unwrap()
+                        .to_owned(),
+                        validation_layer_spec_version: layer_properties.spec_version,
+                        has_obs_layer,
+                    });
+
+                    // having ERROR unconditionally because Vk doesn't like empty flags
+                    let mut severity = vk::DebugUtilsMessageSeverityFlagsEXT::ERROR;
+                    if log::max_level() >= log::LevelFilter::Debug {
+                        severity |= vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE;
+                    }
+                    if log::max_level() >= log::LevelFilter::Info {
+                        severity |= vk::DebugUtilsMessageSeverityFlagsEXT::INFO;
+                    }
+                    if log::max_level() >= log::LevelFilter::Warn {
+                        severity |= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING;
+                    }
+
+                    let message_type = vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                        | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                        | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE;
+
+                    let create_info = super::DebugUtilsCreateInfo {
+                        severity,
+                        message_type,
+                        callback_data,
+                    };
+
+                    let vk_create_info = create_info.to_vk_create_info().build();
+
+                    debug_utils = Some((create_info, vk_create_info));
+                }
             } else {
                 log::warn!(
                     "InstanceFlags::VALIDATION requested, but unable to find layer: {}",
@@ -706,22 +727,25 @@ impl crate::Instance<super::Api> for super::Instance {
         if extensions.contains(&ash::vk::KhrPortabilityEnumerationFn::name()) {
             flags |= vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
         }
-
         let vk_instance = {
             let str_pointers = layers
                 .iter()
                 .chain(extensions.iter())
-                .map(|&s| {
+                .map(|&s: &&'static _| {
                     // Safe because `layers` and `extensions` entries have static lifetime.
                     s.as_ptr()
                 })
                 .collect::<Vec<_>>();
 
-            let create_info = vk::InstanceCreateInfo::builder()
+            let mut create_info = vk::InstanceCreateInfo::builder()
                 .flags(flags)
                 .application_info(&app_info)
                 .enabled_layer_names(&str_pointers[..layers.len()])
                 .enabled_extension_names(&str_pointers[layers.len()..]);
+
+            if let Some(&mut (_, ref mut vk_create_info)) = debug_utils.as_mut() {
+                create_info = create_info.push_next(vk_create_info);
+            }
 
             unsafe {
                 profiling::scope!("vkCreateInstance");
@@ -741,7 +765,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 vk_instance,
                 instance_api_version,
                 android_sdk_version,
-                debug_callback_user_data,
+                debug_utils.map(|(i, _)| i),
                 extensions,
                 desc.flags,
                 has_nv_optimus,
