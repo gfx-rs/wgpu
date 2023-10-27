@@ -11,7 +11,8 @@ use wgpu_test::GpuTestConfiguration;
 use winit::{
     event::{self, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    keyboard::{Key, NamedKey}, window::Window,
+    keyboard::{Key, NamedKey},
+    window::Window,
 };
 
 #[allow(dead_code)]
