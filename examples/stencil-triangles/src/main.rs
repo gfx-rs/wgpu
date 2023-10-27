@@ -177,12 +177,7 @@ impl wgpu_example::framework::Example for Example {
         // empty
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {

@@ -467,12 +467,7 @@ impl wgpu_example::framework::Example for Example {
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {

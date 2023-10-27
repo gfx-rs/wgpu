@@ -251,12 +251,7 @@ impl wgpu_example::framework::Example for Example {
             Example::create_multisampled_framebuffer(device, config, self.sample_count);
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(
                 device,

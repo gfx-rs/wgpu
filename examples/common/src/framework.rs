@@ -1,4 +1,3 @@
-use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]

@@ -10,9 +10,13 @@ cfg_if::cfg_if! {
         // even with the `fragile-send-sync-non-atomic-wasm` enabled.
         pub trait RunTestSendSync {}
         impl<T> RunTestSendSync for T {}
+        pub trait RunTestSend {}
+        impl<T> RunTestSend for T {}
     } else {
-        pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>> + Send + Sync>;
+        pub type RunTestAsync = Arc<dyn Fn(TestingContext) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
+        pub trait RunTestSend: Send {}
+        impl<T> RunTestSend for T where T: Send {}
         pub trait RunTestSendSync: Send + Sync {}
         impl<T> RunTestSendSync for T where T: Send + Sync {}
     }
@@ -83,10 +87,7 @@ impl GpuTestConfiguration {
     }
 
     /// Make the test function an synchronous function.
-    pub fn run_sync(
-        self,
-        test: impl Fn(TestingContext) + Copy + RunTestSendSync + 'static,
-    ) -> Self {
+    pub fn run_sync(self, test: impl Fn(TestingContext) + Copy + RunTestSendSync + 'static) -> Self {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(async move { test(ctx) }))),
             ..self
@@ -97,7 +98,7 @@ impl GpuTestConfiguration {
     pub fn run_async<F, R>(self, test: F) -> Self
     where
         F: Fn(TestingContext) -> R + RunTestSendSync + 'static,
-        R: Future<Output = ()> + RunTestSendSync + 'static,
+        R: Future<Output = ()> + RunTestSend + 'static,
     {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(test(ctx)))),
