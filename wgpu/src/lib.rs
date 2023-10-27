@@ -1954,11 +1954,13 @@ impl Instance {
                 inner: CreateSurfaceErrorKind::RawHandle(e),
             })?
             .as_raw();
-        let (id, data) = DynContext::instance_create_surface(
-            &*self.context,
-            raw_display_handle,
-            raw_window_handle,
-        )?;
+        let (id, data) = unsafe {
+            DynContext::instance_create_surface(
+                &*self.context,
+                raw_display_handle,
+                raw_window_handle,
+            )
+        }?;
         Ok(Surface {
             context: Arc::clone(&self.context),
             id,
