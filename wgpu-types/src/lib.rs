@@ -775,6 +775,7 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - DX12
+        /// - Vulkan
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_NV12 = 1 << 55;

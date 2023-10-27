@@ -535,6 +535,20 @@ impl PhysicalDeviceFeatures {
             supports_bgra8unorm_storage(instance, phd, caps.device_api_version),
         );
 
+        features.set(
+            F::TEXTURE_FORMAT_NV12,
+            supports_format(
+                instance,
+                phd,
+                vk::Format::G8_B8R8_2PLANE_420_UNORM,
+                vk::ImageTiling::OPTIMAL,
+                vk::FormatFeatureFlags::SAMPLED_IMAGE
+                    | vk::FormatFeatureFlags::STORAGE_IMAGE
+                    | vk::FormatFeatureFlags::TRANSFER_SRC
+                    | vk::FormatFeatureFlags::TRANSFER_DST,
+            ),
+        );
+
         (features, dl_flags)
     }
 
