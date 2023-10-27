@@ -87,7 +87,10 @@ impl GpuTestConfiguration {
     }
 
     /// Make the test function an synchronous function.
-    pub fn run_sync(self, test: impl Fn(TestingContext) + Copy + RunTestSendSync + 'static) -> Self {
+    pub fn run_sync(
+        self,
+        test: impl Fn(TestingContext) + Copy + RunTestSendSync + 'static,
+    ) -> Self {
         Self {
             test: Some(Arc::new(move |ctx| Box::pin(async move { test(ctx) }))),
             ..self
