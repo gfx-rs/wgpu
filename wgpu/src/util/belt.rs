@@ -3,12 +3,29 @@ use crate::{
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 
 struct Chunk {
     buffer: Arc<Buffer>,
     size: BufferAddress,
     offset: BufferAddress,
+}
+
+/// `Sync` wrapper that works by providing only exclusive access.
+///
+/// See https://doc.rust-lang.org/nightly/std/sync/struct.Exclusive.html
+struct Exclusive<T>(T);
+
+unsafe impl<T> Sync for Exclusive<T> {}
+
+impl<T> Exclusive<T> {
+    fn new(value: T) -> Self {
+        Self(value)
+    }
+
+    fn get_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
 }
 
 /// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
@@ -36,9 +53,9 @@ pub struct StagingBelt {
     /// into `active_chunks`.
     free_chunks: Vec<Chunk>,
     /// When closed chunks are mapped again, the map callback sends them here.
-    sender: std::sync::mpsc::Sender<Chunk>,
+    sender: Exclusive<mpsc::Sender<Chunk>>,
     /// Free chunks are received here to be put on `self.free_chunks`.
-    receiver: std::sync::mpsc::Receiver<Chunk>,
+    receiver: Exclusive<mpsc::Receiver<Chunk>>,
 }
 
 impl StagingBelt {
@@ -59,8 +76,8 @@ impl StagingBelt {
             active_chunks: Vec::new(),
             closed_chunks: Vec::new(),
             free_chunks: Vec::new(),
-            sender,
-            receiver,
+            sender: Exclusive::new(sender),
+            receiver: Exclusive::new(receiver),
         }
     }
 
@@ -148,9 +165,8 @@ impl StagingBelt {
     pub fn recall(&mut self) {
         self.receive_chunks();
 
-        let sender = &self.sender;
         for chunk in self.closed_chunks.drain(..) {
-            let sender = sender.clone();
+            let sender = self.sender.get_mut().clone();
             chunk
                 .buffer
                 .clone()
@@ -164,7 +180,7 @@ impl StagingBelt {
     /// Move all chunks that the GPU is done with (and are now mapped again)
     /// from `self.receiver` to `self.free_chunks`.
     fn receive_chunks(&mut self) {
-        while let Ok(mut chunk) = self.receiver.try_recv() {
+        while let Ok(mut chunk) = self.receiver.get_mut().try_recv() {
             chunk.offset = 0;
             self.free_chunks.push(chunk);
         }
