@@ -114,7 +114,7 @@ impl crate::Instance<super::Api> for super::Instance {
             raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
                 factory: self.factory.clone(),
                 factory_media: self.factory_media.clone(),
-                target: SurfaceTarget::WndHandle(handle.hwnd as *mut _),
+                target: SurfaceTarget::WndHandle(handle.hwnd.get() as *mut _),
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: None,
             }),

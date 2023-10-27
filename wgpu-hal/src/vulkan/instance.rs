@@ -740,33 +740,37 @@ impl crate::Instance<super::Api> for super::Instance {
 
         match (window_handle, display_handle) {
             (Rwh::Wayland(handle), Rdh::Wayland(display)) => {
-                self.create_surface_from_wayland(display.display, handle.surface)
+                self.create_surface_from_wayland(display.display.as_ptr(), handle.surface.as_ptr())
             }
             (Rwh::Xlib(handle), Rdh::Xlib(display)) => {
-                self.create_surface_from_xlib(display.display as *mut _, handle.window)
+                let display = display.display.expect("Display pointer is not set.");
+                self.create_surface_from_xlib(display.as_ptr() as *mut *const c_void, handle.window)
             }
             (Rwh::Xcb(handle), Rdh::Xcb(display)) => {
-                self.create_surface_from_xcb(display.connection, handle.window)
+                let connection = display.connection.expect("Pointer to X-Server is not set.");
+                self.create_surface_from_xcb(connection.as_ptr(), handle.window.get())
             }
-            (Rwh::AndroidNdk(handle), _) => self.create_surface_android(handle.a_native_window),
+            (Rwh::AndroidNdk(handle), _) => {
+                self.create_surface_android(handle.a_native_window.as_ptr())
+            }
             #[cfg(windows)]
             (Rwh::Win32(handle), _) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = unsafe { GetModuleHandleW(std::ptr::null()) };
-                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
+                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd.get() as *mut _)
             }
             #[cfg(target_os = "macos")]
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                self.create_surface_from_view(handle.ns_view)
+                self.create_surface_from_view(handle.ns_view.as_ptr())
             }
             #[cfg(target_os = "ios")]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::MetalSurface::name()) =>
             {
-                self.create_surface_from_view(handle.ui_view)
+                self.create_surface_from_view(handle.ui_view.as_ptr())
             }
             (_, _) => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Vulkan-compatible handle"

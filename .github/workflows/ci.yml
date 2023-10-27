@@ -441,7 +441,9 @@ jobs:
             **/*-difference.png
 
       - name: generate coverage report
+        id: coverage
         shell: bash
+        continue-on-error: true
         run: |
           set -e
 
@@ -449,6 +451,7 @@ jobs:
 
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
+        if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
 

@@ -14,6 +14,10 @@ use wgpu::util::DeviceExt;
 
 #[cfg(test)]
 use wgpu_test::FailureCase;
+use winit::{
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{Key, NamedKey},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -215,27 +219,31 @@ impl wgpu_example::framework::Example for Example {
     #[allow(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
-            winit::event::WindowEvent::KeyboardInput { input, .. } => {
-                if let winit::event::ElementState::Pressed = input.state {
-                    match input.virtual_keycode {
-                        // TODO: Switch back to full scans of possible options when we expose
-                        //       supported sample counts to the user.
-                        Some(winit::event::VirtualKeyCode::Left) => {
-                            if self.sample_count == self.max_sample_count {
-                                self.sample_count = 1;
-                                self.rebuild_bundle = true;
-                            }
-                        }
-                        Some(winit::event::VirtualKeyCode::Right) => {
-                            if self.sample_count == 1 {
-                                self.sample_count = self.max_sample_count;
-                                self.rebuild_bundle = true;
-                            }
-                        }
-                        _ => {}
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => match logical_key {
+                // TODO: Switch back to full scans of possible options when we expose
+                //       supported sample counts to the user.
+                Key::Named(NamedKey::ArrowLeft) => {
+                    if self.sample_count == self.max_sample_count {
+                        self.sample_count = 1;
+                        self.rebuild_bundle = true;
                     }
                 }
-            }
+                Key::Named(NamedKey::ArrowRight) => {
+                    if self.sample_count == 1 {
+                        self.sample_count = self.max_sample_count;
+                        self.rebuild_bundle = true;
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
