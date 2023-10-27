@@ -1,5 +1,5 @@
-#![cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 #![no_main]
+#![cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
 use libfuzzer_sys::fuzz_target;
 use naga::front::wgsl::Frontend;
 
