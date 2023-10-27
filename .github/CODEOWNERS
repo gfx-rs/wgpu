@@ -3,6 +3,7 @@
 /cts_runner/    @gfx-rs/deno @gfx-rs/wgpu
 /deno_webgpu/   @gfx-rs/deno @gfx-rs/wgpu
 /naga/          @gfx-rs/naga
+/naga-cli/      @gfx-rs/naga
 
 # We leave the codeowners empty for the changelog, so naga changes 
 # don't trigger wgpu reviews and vise versa.
