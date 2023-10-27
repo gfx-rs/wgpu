@@ -55,11 +55,11 @@ web-sys = { workspace = true }
 
 [dev-dependencies]
 naga = { workspace = true, features = ["wgsl-in"] }
-wasm-bindgen-test.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
 wasm-bindgen-futures.workspace = true
+wasm-bindgen-test.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }

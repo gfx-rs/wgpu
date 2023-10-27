@@ -29,7 +29,7 @@ pub enum MemoryPool {
     L1 = d3d12::D3D12_MEMORY_POOL_L1,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct HeapFlags: u32 {
         const NONE = d3d12::D3D12_HEAP_FLAG_NONE;

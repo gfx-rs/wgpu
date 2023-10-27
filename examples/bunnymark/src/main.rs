@@ -286,13 +286,7 @@ impl wgpu_example::framework::Example for Example {
         //empty
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let delta = 0.01;
         for bunny in self.bunnies.iter_mut() {
             bunny.position[0] += bunny.velocity[0] * delta;

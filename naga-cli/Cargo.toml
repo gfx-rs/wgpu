@@ -1,11 +1,10 @@
 [package]
 name = "naga-cli"
 version = "0.14.0"
-authors = ["Naga Developers"]
+authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Shader translation command line tool"
-homepage = "https://github.com/gfx-rs/naga"
-repository = "https://github.com/gfx-rs/naga"
+repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga-cli"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 

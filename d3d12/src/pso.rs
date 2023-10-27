@@ -1,17 +1,22 @@
 //! Pipeline state
 
 use crate::{com::ComPtr, Blob, D3DResult, Error};
-use std::{ffi::{self, c_void}, ops::Deref, ptr, marker::PhantomData};
+use std::{
+    ffi::{self, c_void},
+    marker::PhantomData,
+    ops::Deref,
+    ptr,
+};
 use winapi::um::{d3d12, d3dcompiler};
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct PipelineStateFlags: u32 {
         const TOOL_DEBUG = d3d12::D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
     }
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct ShaderCompileFlags: u32 {
         const DEBUG = d3dcompiler::D3DCOMPILE_DEBUG;
@@ -28,25 +33,34 @@ bitflags! {
 pub struct Shader<'a>(d3d12::D3D12_SHADER_BYTECODE, PhantomData<&'a c_void>);
 impl<'a> Shader<'a> {
     pub fn null() -> Self {
-        Shader(d3d12::D3D12_SHADER_BYTECODE {
-            BytecodeLength: 0,
-            pShaderBytecode: ptr::null(),
-        }, PhantomData)
+        Shader(
+            d3d12::D3D12_SHADER_BYTECODE {
+                BytecodeLength: 0,
+                pShaderBytecode: ptr::null(),
+            },
+            PhantomData,
+        )
     }
 
     pub fn from_raw(data: &'a [u8]) -> Self {
-        Shader(d3d12::D3D12_SHADER_BYTECODE {
-            BytecodeLength: data.len() as _,
-            pShaderBytecode: data.as_ptr() as _,
-        }, PhantomData)
+        Shader(
+            d3d12::D3D12_SHADER_BYTECODE {
+                BytecodeLength: data.len() as _,
+                pShaderBytecode: data.as_ptr() as _,
+            },
+            PhantomData,
+        )
     }
 
     // `blob` may not be null.
     pub fn from_blob(blob: &'a Blob) -> Self {
-        Shader(d3d12::D3D12_SHADER_BYTECODE {
-            BytecodeLength: unsafe { blob.GetBufferSize() },
-            pShaderBytecode: unsafe { blob.GetBufferPointer() },
-        }, PhantomData)
+        Shader(
+            d3d12::D3D12_SHADER_BYTECODE {
+                BytecodeLength: unsafe { blob.GetBufferSize() },
+                pShaderBytecode: unsafe { blob.GetBufferPointer() },
+            },
+            PhantomData,
+        )
     }
 
     /// Compile a shader from raw HLSL.
@@ -92,18 +106,24 @@ impl<'a> Deref for Shader<'a> {
 pub struct CachedPSO<'a>(d3d12::D3D12_CACHED_PIPELINE_STATE, PhantomData<&'a c_void>);
 impl<'a> CachedPSO<'a> {
     pub fn null() -> Self {
-        CachedPSO(d3d12::D3D12_CACHED_PIPELINE_STATE {
-            CachedBlobSizeInBytes: 0,
-            pCachedBlob: ptr::null(),
-        }, PhantomData)
+        CachedPSO(
+            d3d12::D3D12_CACHED_PIPELINE_STATE {
+                CachedBlobSizeInBytes: 0,
+                pCachedBlob: ptr::null(),
+            },
+            PhantomData,
+        )
     }
 
     // `blob` may not be null.
     pub fn from_blob(blob: &'a Blob) -> Self {
-        CachedPSO(d3d12::D3D12_CACHED_PIPELINE_STATE {
-            CachedBlobSizeInBytes: unsafe { blob.GetBufferSize() },
-            pCachedBlob: unsafe { blob.GetBufferPointer() },
-        }, PhantomData)
+        CachedPSO(
+            d3d12::D3D12_CACHED_PIPELINE_STATE {
+                CachedBlobSizeInBytes: unsafe { blob.GetBufferSize() },
+                pCachedBlob: unsafe { blob.GetBufferPointer() },
+            },
+            PhantomData,
+        )
     }
 }
 

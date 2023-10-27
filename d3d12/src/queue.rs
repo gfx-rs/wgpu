@@ -8,7 +8,7 @@ pub enum Priority {
     GlobalRealtime = d3d12::D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct CommandQueueFlags: u32 {
         const DISABLE_GPU_TIMEOUT = d3d12::D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT;

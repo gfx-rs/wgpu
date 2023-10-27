@@ -20,7 +20,7 @@ pub enum DescriptorHeapType {
     Dsv = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct DescriptorHeapFlags: u32 {
         const SHADER_VISIBLE = d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -253,7 +253,7 @@ pub enum RootSignatureVersion {
     V1_1 = d3d12::D3D_ROOT_SIGNATURE_VERSION_1_1,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct RootSignatureFlags: u32 {
         const ALLOW_IA_INPUT_LAYOUT = d3d12::D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;

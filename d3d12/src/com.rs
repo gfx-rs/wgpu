@@ -17,7 +17,7 @@ impl<T: Interface> ComPtr<T> {
 
     pub unsafe fn from_raw(raw: *mut T) -> Self {
         if !raw.is_null() {
-            (&*(raw as *mut IUnknown)).AddRef();
+            (*(raw as *mut IUnknown)).AddRef();
         }
         ComPtr(raw)
     }
@@ -65,7 +65,9 @@ impl<T: Interface> ComPtr<T> {
 impl<T: Interface> Clone for ComPtr<T> {
     fn clone(&self) -> Self {
         debug_assert!(!self.is_null());
-        unsafe { self.as_unknown().AddRef(); }
+        unsafe {
+            self.as_unknown().AddRef();
+        }
         ComPtr(self.0)
     }
 }
@@ -73,7 +75,9 @@ impl<T: Interface> Clone for ComPtr<T> {
 impl<T: Interface> Drop for ComPtr<T> {
     fn drop(&mut self) {
         if !self.0.is_null() {
-            unsafe { self.as_unknown().Release(); }
+            unsafe {
+                self.as_unknown().Release();
+            }
         }
     }
 }
@@ -121,8 +125,8 @@ impl<T: Interface> Hash for ComPtr<T> {
 ///
 /// ```rust
 /// # pub use d3d12::weak_com_inheritance_chain;
-/// # mod actual { 
-/// #     pub struct ComObject; impl winapi::Interface for ComObject { fn uuidof() -> winapi::shared::guiddef::GUID { todo!() } } 
+/// # mod actual {
+/// #     pub struct ComObject; impl winapi::Interface for ComObject { fn uuidof() -> winapi::shared::guiddef::GUID { todo!() } }
 /// #     pub struct ComObject1; impl winapi::Interface for ComObject1 { fn uuidof() -> winapi::shared::guiddef::GUID { todo!() } }
 /// #     pub struct ComObject2; impl winapi::Interface for ComObject2 { fn uuidof() -> winapi::shared::guiddef::GUID { todo!() } }
 /// # }

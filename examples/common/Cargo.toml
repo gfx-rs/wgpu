@@ -19,9 +19,6 @@ winit.workspace = true
 wgpu.workspace = true
 wgpu-test.workspace = true
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-async-executor.workspace = true
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
 console_log.workspace = true
