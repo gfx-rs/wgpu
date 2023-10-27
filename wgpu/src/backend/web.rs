@@ -1941,11 +1941,20 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        message: &str,
+        _message: &str,
     ) {
         // TODO: figure out the GPUDevice implementation of this, including resolving
         // the device.lost promise, which will require a different invocation pattern
         // with a callback.
+    }
+
+    fn device_set_lose_device_callback(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        _lose_device_callback: crate::context::LoseDeviceCallback,
+    ) {
+        unimplemented!();
     }
 
     fn device_poll(

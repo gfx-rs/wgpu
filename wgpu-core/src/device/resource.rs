@@ -8,8 +8,8 @@ use crate::{
     command, conv,
     device::life::WaitIdleError,
     device::{
-        AttachmentData, CommandAllocator, DeviceLostReason, LoseDeviceInvocation,
-        MissingDownlevelFlags, MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
+        AttachmentData, CommandAllocator, LoseDeviceInvocation, MissingDownlevelFlags,
+        MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
     hal_label,
@@ -34,7 +34,7 @@ use hal::{CommandEncoder as _, Device as _};
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{TextureFormat, TextureSampleType, TextureViewDimension};
+use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension};
 
 use std::{borrow::Cow, iter, num::NonZeroU32};
 

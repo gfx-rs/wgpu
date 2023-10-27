@@ -1455,13 +1455,14 @@ impl crate::Context for Context {
 
         wgc::gfx_select!(device => global.device_drop(*device));
     }
-    fn device_set_lose_device_closure(
+    fn device_set_lose_device_callback(
         &self,
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        lose_device_closure: LoseDeviceClosure,
+        lose_device_callback: crate::context::LoseDeviceCallback,
     ) {
         let global = &self.0;
+        let lose_device_closure = LoseDeviceClosure::from_rust(lose_device_callback);
         wgc::gfx_select!(device => global.device_set_lose_device_closure(*device, lose_device_closure));
     }
     fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {

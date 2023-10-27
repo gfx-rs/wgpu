@@ -32,22 +32,20 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
-    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, Limits,
-    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
-    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
-    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
+    Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
+    Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, Limits, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes,
+    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
+    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
+    SurfaceStatus, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
+    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
+    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
-
-pub use wgc::device::LoseDeviceClosure;
 
 #[cfg(any(
     not(target_arch = "wasm32"),
@@ -2800,13 +2798,16 @@ impl Device {
         DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// Set a LoseDeviceClosure on this device.
-    pub fn set_lose_device_closure(&self, lose_device_closure: LoseDeviceClosure) {
-        DynContext::device_set_lose_device_closure(
+    /// Set a LoseDeviceCallback on this device.
+    pub fn set_lose_device_callback(
+        &self,
+        callback: impl FnOnce(DeviceLostReason, String) + Send + 'static,
+    ) {
+        DynContext::device_set_lose_device_callback(
             &*self.context,
             &self.id,
             self.data.as_ref(),
-            lose_device_closure,
+            Box::new(callback),
         )
     }
 }

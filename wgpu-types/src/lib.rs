@@ -6692,3 +6692,15 @@ mod send_sync {
     )))]
     impl<T> WasmNotSync for T {}
 }
+
+/// Reason for "lose the device".
+///
+/// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
+#[repr(u8)]
+#[derive(Debug, Copy, Clone)]
+pub enum DeviceLostReason {
+    /// Triggered by driver
+    Unknown = 0,
+    /// After Device::destroy
+    Destroyed = 1,
+}

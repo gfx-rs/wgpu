@@ -1,7 +1,5 @@
 use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
-use wgc::device::{DeviceLostReason, LoseDeviceClosure};
-
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().expect_fail(FailureCase::always()))
@@ -467,14 +465,14 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // and can only run them under certain configs, as is done in
         // request_device_error_on_native, above.
 
-        // Set a LoseDeviceClosure on the device.
-        let closure = LoseDeviceClosure::from_rust(Box::new(move |reason, _m| {
+        // Set a LoseDeviceCallback on the device.
+        let callback = Box::new(move |reason, _m| {
             assert!(
-                matches!(reason, DeviceLostReason::Destroyed),
+                matches!(reason, wgt::DeviceLostReason::Destroyed),
                 "Device lost info reason should match DeviceLostReason::Destroyed."
             );
-        }));
-        ctx.device.set_lose_device_closure(closure);
+        });
+        ctx.device.set_lose_device_callback(callback);
 
         // Destroy the device.
         ctx.device.destroy();

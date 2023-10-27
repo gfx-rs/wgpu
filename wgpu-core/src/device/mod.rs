@@ -14,7 +14,7 @@ use hal::Device as _;
 use smallvec::SmallVec;
 use std::os::raw::c_char;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat};
+use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
 use std::{iter, num::NonZeroU32, ptr};
 
@@ -201,16 +201,6 @@ impl UserClosures {
     }
 }
 
-/// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
-#[repr(u8)]
-#[derive(Debug, Copy, Clone)]
-pub enum DeviceLostReason {
-    /// Triggered by driver
-    Unknown = 0,
-    /// After Device::destroy
-    Destroyed = 1,
-}
-
 #[repr(C)]
 pub struct LoseDeviceClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
@@ -285,10 +275,14 @@ impl LoseDeviceClosure {
             LoseDeviceClosureInner::Rust { callback } => callback(reason, message),
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
             LoseDeviceClosureInner::C { inner } => unsafe {
+                // We need to pass message as a c_char typed pointer. To avoid
+                // trivial conversion warnings on some platforms, we first coerce
+                // the pointer to u8.
+                let message_u8_ptr: *const u8 = message.as_ptr();
                 (inner.callback)(
                     inner.user_data,
                     reason as u8,
-                    message.as_ptr() as *const c_char,
+                    message_u8_ptr as *const c_char,
                 )
             },
         }

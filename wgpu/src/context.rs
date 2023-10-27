@@ -1,10 +1,8 @@
 use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin::Pin, sync::Arc};
 
-use wgc::device::LoseDeviceClosure;
-
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
-    DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
+    DeviceLostReason, DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
     TextureFormatFeatures, WasmNotSend, WasmNotSync,
 };
@@ -271,11 +269,11 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData);
     fn device_drop(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
-    fn device_set_lose_device_closure(
+    fn device_set_lose_device_callback(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        lose_device_closure: LoseDeviceClosure,
+        lose_device_callback: LoseDeviceCallback,
     );
     fn device_destroy(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
     fn device_lose(&self, device: &Self::DeviceId, device_data: &Self::DeviceData, message: &str);
@@ -1208,6 +1206,23 @@ pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
 )))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type LoseDeviceCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type LoseDeviceCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     fn as_any(&self) -> &dyn Any;
@@ -1373,11 +1388,11 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (ObjectId, Box<crate::Data>);
     fn device_drop(&self, device: &ObjectId, device_data: &crate::Data);
-    fn device_set_lose_device_closure(
+    fn device_set_lose_device_callback(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        lose_device_closure: LoseDeviceClosure,
+        lose_device_callback: LoseDeviceCallback,
     );
     fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data);
     fn device_lose(&self, device: &ObjectId, device_data: &crate::Data, message: &str);
@@ -2442,15 +2457,15 @@ where
         Context::device_drop(self, &device, device_data)
     }
 
-    fn device_set_lose_device_closure(
+    fn device_set_lose_device_callback(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        lose_device_closure: LoseDeviceClosure,
+        lose_device_callback: LoseDeviceCallback,
     ) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
-        Context::device_set_lose_device_closure(self, &device, device_data, lose_device_closure)
+        Context::device_set_lose_device_callback(self, &device, device_data, lose_device_callback)
     }
 
     fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data) {
