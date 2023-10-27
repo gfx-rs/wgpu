@@ -4649,7 +4649,7 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A read-only view into a staging buffer.
+/// A write-only view into a staging buffer.
 ///
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
