@@ -42,6 +42,10 @@ Bottom level categories:
 
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
+### Bug fixes
+
+- Fix issue in the metal backend of naga, where local variables were sometimes using variable names from previous functions
+
 ## v0.18.0 (2023-10-25)
 
 ### Desktop OpenGL 3.3+ Support on Windows
