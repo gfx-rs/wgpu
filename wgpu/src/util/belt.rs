@@ -36,9 +36,9 @@ pub struct StagingBelt {
     /// into `active_chunks`.
     free_chunks: Vec<Chunk>,
     /// When closed chunks are mapped again, the map callback sends them here.
-    sender: flume::Sender<Chunk>,
+    sender: std::sync::mpsc::Sender<Chunk>,
     /// Free chunks are received here to be put on `self.free_chunks`.
-    receiver: flume::Receiver<Chunk>,
+    receiver: std::sync::mpsc::Receiver<Chunk>,
 }
 
 impl StagingBelt {
@@ -53,7 +53,7 @@ impl StagingBelt {
     ///   (per [`StagingBelt::finish()`]); and
     /// * bigger is better, within these bounds.
     pub fn new(chunk_size: BufferAddress) -> Self {
-        let (sender, receiver) = flume::unbounded();
+        let (sender, receiver) = std::sync::mpsc::channel();
         StagingBelt {
             chunk_size,
             active_chunks: Vec::new(),
