@@ -256,7 +256,6 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
     ) {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(

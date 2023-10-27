@@ -266,7 +266,6 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
     ) {
         // create render pass descriptor and its color attachments
         let color_attachments = [Some(wgpu::RenderPassColorAttachment {

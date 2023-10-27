@@ -291,7 +291,6 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
     ) {
         let delta = 0.01;
         for bunny in self.bunnies.iter_mut() {

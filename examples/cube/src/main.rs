@@ -80,28 +80,6 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
-///
-/// Given a future `inner` of an `Option<E>` for some error type `E`,
-/// wait for the future to be ready, and panic if its value is `Some`.
-///
-/// This can be done simpler with `FutureExt`, but we don't want to add
-/// a dependency just for this small case.
-struct ErrorFuture<F> {
-    inner: F,
-}
-impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
-        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
-        inner.poll(cx).map(|error| {
-            if let Some(e) = error {
-                panic!("Rendering {e}");
-            }
-        })
-    }
-}
-
 struct Example {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
@@ -357,9 +335,7 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &wgpu_example::framework::Spawner,
     ) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -397,11 +373,6 @@ impl wgpu_example::framework::Example for Example {
         }
 
         queue.submit(Some(encoder.finish()));
-
-        // If an error occurs, report it and panic.
-        spawner.spawn_local(ErrorFuture {
-            inner: device.pop_error_scope(),
-        });
     }
 }
 

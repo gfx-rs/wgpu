@@ -708,7 +708,6 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
     ) {
         // update uniforms
         for entity in self.entities.iter_mut() {
