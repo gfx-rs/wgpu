@@ -76,12 +76,11 @@ impl Example {
         }
     }
 
-    fn _render(
+    fn render_inner(
         &mut self,
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
     ) {
         let delta = 0.01;
         for bunny in self.bunnies.iter_mut() {
@@ -371,7 +370,7 @@ impl wgpu_example::framework::Example for Example {
         self.spawn_bunnies();
 
         for _frame_number in 0..3 {
-            self._render(view, device, queue, spawner);
+            self.render_inner(view, device, queue);
         }
     }
 }
