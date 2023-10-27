@@ -4,7 +4,7 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
-#![warn(missing_docs, unsafe_op_in_unsafe_fn)]
+#![warn(missing_docs, rust_2018_idioms, unsafe_op_in_unsafe_fn)]
 
 mod backend;
 mod context;
@@ -294,7 +294,7 @@ pub struct BufferSlice<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
+static_assertions::assert_impl_all!(BufferSlice<'_>: Send, Sync);
 
 /// Handle to a texture on the GPU.
 ///
@@ -430,7 +430,7 @@ impl<'window> fmt::Debug for Surface<'window> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(Surface: Send, Sync);
+static_assertions::assert_impl_all!(Surface<'_>: Send, Sync);
 
 impl Drop for Surface<'_> {
     fn drop(&mut self) {
@@ -579,7 +579,7 @@ pub enum ShaderSource<'a> {
     #[doc(hidden)]
     Dummy(PhantomData<&'a ()>),
 }
-static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
+static_assertions::assert_impl_all!(ShaderSource<'_>: Send, Sync);
 
 /// Descriptor for use with [`Device::create_shader_module`].
 ///
@@ -592,7 +592,7 @@ pub struct ShaderModuleDescriptor<'a> {
     /// Source code for the shader.
     pub source: ShaderSource<'a>,
 }
-static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
 /// Descriptor for a shader module given by SPIR-V binary, for use with
 /// [`Device::create_shader_module_spirv`].
@@ -606,7 +606,7 @@ pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Binary SPIR-V data, in 4-byte words.
     pub source: Cow<'a, [u32]>,
 }
-static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV: Send, Sync);
+static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV<'_>: Send, Sync);
 
 /// Handle to a pipeline layout.
 ///
@@ -990,7 +990,7 @@ pub enum BindingResource<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(BindingResource: Send, Sync);
+static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);
 
 /// Describes the segment of a buffer to bind.
 ///
@@ -1028,7 +1028,7 @@ pub struct BufferBinding<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
+static_assertions::assert_impl_all!(BufferBinding<'_>: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
@@ -1131,7 +1131,7 @@ pub struct RenderPassTimestampWrites<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(RenderPassTimestampWrites: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassTimestampWrites<'_>: Send, Sync);
 
 /// Describes a color attachment to a [`RenderPass`].
 ///
@@ -1157,7 +1157,7 @@ pub struct RenderPassColorAttachment<'tex> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(RenderPassColorAttachment: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassColorAttachment<'_>: Send, Sync);
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 ///
@@ -1181,7 +1181,7 @@ pub struct RenderPassDepthStencilAttachment<'tex> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment<'_>: Send, Sync);
 
 // The underlying types are also exported so that documentation shows up for them
 
@@ -1202,7 +1202,7 @@ pub type RequestAdapterOptions<'a, 'b> = RequestAdapterOptionsBase<&'a Surface<'
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
+static_assertions::assert_impl_all!(RequestAdapterOptions<'_, '_>: Send, Sync);
 /// Describes a [`Device`].
 ///
 /// For use with [`Adapter::request_device`].
@@ -1210,7 +1210,7 @@ static_assertions::assert_impl_all!(RequestAdapterOptions: Send, Sync);
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudevicedescriptor).
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(DeviceDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 /// Describes a [`Buffer`].
 ///
 /// For use with [`Device::create_buffer`].
@@ -1218,7 +1218,7 @@ static_assertions::assert_impl_all!(DeviceDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUBufferDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(BufferDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(BufferDescriptor<'_>: Send, Sync);
 /// Describes a [`CommandEncoder`].
 ///
 /// For use with [`Device::create_command_encoder`].
@@ -1226,7 +1226,7 @@ static_assertions::assert_impl_all!(BufferDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUCommandEncoderDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandencoderdescriptor).
 pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(CommandEncoderDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 /// Describes a [`RenderBundle`].
 ///
 /// For use with [`RenderBundleEncoder::finish`].
@@ -1234,7 +1234,7 @@ static_assertions::assert_impl_all!(CommandEncoderDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPURenderBundleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderbundledescriptor).
 pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(RenderBundleDescriptor<'_>: Send, Sync);
 /// Describes a [`Texture`].
 ///
 /// For use with [`Device::create_texture`].
@@ -1242,7 +1242,7 @@ static_assertions::assert_impl_all!(RenderBundleDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat]>;
-static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
 /// Describes a [`QuerySet`].
 ///
 /// For use with [`Device::create_query_set`].
@@ -1250,7 +1250,7 @@ static_assertions::assert_impl_all!(TextureDescriptor: Send, Sync);
 /// Corresponds to [WebGPU `GPUQuerySetDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuquerysetdescriptor).
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(QuerySetDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(QuerySetDescriptor<'_>: Send, Sync);
 pub use wgt::Maintain as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type Maintain = wgt::Maintain<SubmissionIndex>;
@@ -1294,7 +1294,7 @@ pub struct TextureViewDescriptor<'a> {
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
 }
-static_assertions::assert_impl_all!(TextureViewDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);
 
 /// Describes a [`PipelineLayout`].
 ///
@@ -1323,7 +1323,7 @@ pub struct PipelineLayoutDescriptor<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(PipelineLayoutDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);
 
 /// Describes a [`Sampler`].
 ///
@@ -1358,7 +1358,7 @@ pub struct SamplerDescriptor<'a> {
     /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
     pub border_color: Option<SamplerBorderColor>,
 }
-static_assertions::assert_impl_all!(SamplerDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(SamplerDescriptor<'_>: Send, Sync);
 
 impl Default for SamplerDescriptor<'_> {
     fn default() -> Self {
@@ -1399,7 +1399,7 @@ pub struct BindGroupEntry<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(BindGroupEntry: Send, Sync);
+static_assertions::assert_impl_all!(BindGroupEntry<'_>: Send, Sync);
 
 /// Describes a group of bindings and the resources to be bound.
 ///
@@ -1423,7 +1423,7 @@ pub struct BindGroupDescriptor<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(BindGroupDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(BindGroupDescriptor<'_>: Send, Sync);
 
 /// Describes the attachments of a render pass.
 ///
@@ -1456,7 +1456,7 @@ pub struct RenderPassDescriptor<'tex, 'desc> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(RenderPassDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(RenderPassDescriptor<'_, '_>: Send, Sync);
 
 /// Describes how the vertex buffer is interpreted.
 ///
@@ -1473,7 +1473,7 @@ pub struct VertexBufferLayout<'a> {
     /// The list of attributes which comprise a single vertex.
     pub attributes: &'a [VertexAttribute],
 }
-static_assertions::assert_impl_all!(VertexBufferLayout: Send, Sync);
+static_assertions::assert_impl_all!(VertexBufferLayout<'_>: Send, Sync);
 
 /// Describes the vertex processing in a render pipeline.
 ///
@@ -1498,7 +1498,7 @@ pub struct VertexState<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(VertexState: Send, Sync);
+static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);
 
 /// Describes the fragment processing in a render pipeline.
 ///
@@ -1523,7 +1523,7 @@ pub struct FragmentState<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(FragmentState: Send, Sync);
+static_assertions::assert_impl_all!(FragmentState<'_>: Send, Sync);
 
 /// Describes a render (graphics) pipeline.
 ///
@@ -1558,7 +1558,7 @@ pub struct RenderPipelineDescriptor<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
 
 /// Describes the timestamp writes of a compute pass.
 ///
@@ -1583,7 +1583,7 @@ pub struct ComputePassTimestampWrites<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(ComputePassTimestampWrites: Send, Sync);
+static_assertions::assert_impl_all!(ComputePassTimestampWrites<'_>: Send, Sync);
 
 /// Describes the attachments of a compute pass.
 ///
@@ -1607,7 +1607,7 @@ pub struct ComputePassDescriptor<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(ComputePassDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);
 
 /// Describes a compute pipeline.
 ///
@@ -1634,7 +1634,7 @@ pub struct ComputePipelineDescriptor<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(ComputePipelineDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);
 
 pub use wgt::ImageCopyBuffer as ImageCopyBufferBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -1649,7 +1649,7 @@ pub type ImageCopyBuffer<'a> = ImageCopyBufferBase<&'a Buffer>;
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(ImageCopyBuffer: Send, Sync);
+static_assertions::assert_impl_all!(ImageCopyBuffer<'_>: Send, Sync);
 
 pub use wgt::ImageCopyTexture as ImageCopyTextureBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -1664,7 +1664,7 @@ pub type ImageCopyTexture<'a> = ImageCopyTextureBase<&'a Texture>;
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
 pub use wgt::ImageCopyTextureTagged as ImageCopyTextureTaggedBase;
 /// View of a texture which can be used to copy to a texture, including
@@ -1680,7 +1680,7 @@ pub type ImageCopyTextureTagged<'a> = ImageCopyTextureTaggedBase<&'a Texture>;
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(ImageCopyTexture: Send, Sync);
+static_assertions::assert_impl_all!(ImageCopyTexture<'_>: Send, Sync);
 
 /// Describes a [`BindGroupLayout`].
 ///
@@ -1696,7 +1696,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],
 }
-static_assertions::assert_impl_all!(BindGroupLayoutDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(BindGroupLayoutDescriptor<'_>: Send, Sync);
 
 /// Describes a [`RenderBundleEncoder`].
 ///
@@ -1720,7 +1720,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     /// If this render bundle will rendering to multiple array layers in the attachments at the same time.
     pub multiview: Option<NonZeroU32>,
 }
-static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(RenderBundleEncoderDescriptor<'_>: Send, Sync);
 
 /// Surface texture that can be rendered to.
 /// Result of a successful call to [`Surface::get_current_texture`].
@@ -1897,7 +1897,7 @@ impl Instance {
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request_adapter(
         &self,
-        options: &RequestAdapterOptions,
+        options: &RequestAdapterOptions<'_, '_>,
     ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
         let context = Arc::clone(&self.context);
         let adapter = self.context.instance_request_adapter(options);
@@ -2248,7 +2248,7 @@ impl Adapter {
     /// - Adapter does not support all features wgpu requires to safely operate.
     pub fn request_device(
         &self,
-        desc: &DeviceDescriptor,
+        desc: &DeviceDescriptor<'_>,
         trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
         let context = Arc::clone(&self.context);
@@ -2298,7 +2298,7 @@ impl Adapter {
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_device: hal::OpenDevice<A>,
-        desc: &DeviceDescriptor,
+        desc: &DeviceDescriptor<'_>,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), RequestDeviceError> {
         let context = Arc::clone(&self.context);
@@ -2363,7 +2363,7 @@ impl Adapter {
     }
 
     /// Returns whether this adapter may present to the passed surface.
-    pub fn is_surface_supported(&self, surface: &Surface) -> bool {
+    pub fn is_surface_supported(&self, surface: &Surface<'_>) -> bool {
         DynContext::adapter_is_surface_supported(
             &*self.context,
             &self.id,
@@ -2467,7 +2467,7 @@ impl Device {
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.
-    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor) -> ShaderModule {
+    pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
             &self.id,
@@ -2494,7 +2494,7 @@ impl Device {
     /// This has no effect on web.
     pub unsafe fn create_shader_module_unchecked(
         &self,
-        desc: ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor<'_>,
     ) -> ShaderModule {
         let (id, data) = DynContext::device_create_shader_module(
             &*self.context,
@@ -2520,7 +2520,7 @@ impl Device {
     /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
     pub unsafe fn create_shader_module_spirv(
         &self,
-        desc: &ShaderModuleDescriptorSpirV,
+        desc: &ShaderModuleDescriptorSpirV<'_>,
     ) -> ShaderModule {
         let (id, data) = unsafe {
             DynContext::device_create_shader_module_spirv(
@@ -2538,7 +2538,7 @@ impl Device {
     }
 
     /// Creates an empty [`CommandEncoder`].
-    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
+    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {
         let (id, data) = DynContext::device_create_command_encoder(
             &*self.context,
             &self.id,
@@ -2555,8 +2555,8 @@ impl Device {
     /// Creates an empty [`RenderBundleEncoder`].
     pub fn create_render_bundle_encoder(
         &self,
-        desc: &RenderBundleEncoderDescriptor,
-    ) -> RenderBundleEncoder {
+        desc: &RenderBundleEncoderDescriptor<'_>,
+    ) -> RenderBundleEncoder<'_> {
         let (id, data) = DynContext::device_create_render_bundle_encoder(
             &*self.context,
             &self.id,
@@ -2573,7 +2573,7 @@ impl Device {
     }
 
     /// Creates a new [`BindGroup`].
-    pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
+    pub fn create_bind_group(&self, desc: &BindGroupDescriptor<'_>) -> BindGroup {
         let (id, data) = DynContext::device_create_bind_group(
             &*self.context,
             &self.id,
@@ -2588,7 +2588,10 @@ impl Device {
     }
 
     /// Creates a [`BindGroupLayout`].
-    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
+    pub fn create_bind_group_layout(
+        &self,
+        desc: &BindGroupLayoutDescriptor<'_>,
+    ) -> BindGroupLayout {
         let (id, data) = DynContext::device_create_bind_group_layout(
             &*self.context,
             &self.id,
@@ -2603,7 +2606,7 @@ impl Device {
     }
 
     /// Creates a [`PipelineLayout`].
-    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor<'_>) -> PipelineLayout {
         let (id, data) = DynContext::device_create_pipeline_layout(
             &*self.context,
             &self.id,
@@ -2618,7 +2621,7 @@ impl Device {
     }
 
     /// Creates a [`RenderPipeline`].
-    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
+    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor<'_>) -> RenderPipeline {
         let (id, data) = DynContext::device_create_render_pipeline(
             &*self.context,
             &self.id,
@@ -2633,7 +2636,7 @@ impl Device {
     }
 
     /// Creates a [`ComputePipeline`].
-    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
+    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
         let (id, data) = DynContext::device_create_compute_pipeline(
             &*self.context,
             &self.id,
@@ -2648,7 +2651,7 @@ impl Device {
     }
 
     /// Creates a [`Buffer`].
-    pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
+    pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
@@ -2670,7 +2673,7 @@ impl Device {
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
-    pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
+    pub fn create_texture(&self, desc: &TextureDescriptor<'_>) -> Texture {
         let (id, data) =
             DynContext::device_create_texture(&*self.context, &self.id, self.data.as_ref(), desc);
         Texture {
@@ -2701,7 +2704,7 @@ impl Device {
     pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_texture: A::Texture,
-        desc: &TextureDescriptor,
+        desc: &TextureDescriptor<'_>,
     ) -> Texture {
         let texture = unsafe {
             self.context
@@ -2742,7 +2745,7 @@ impl Device {
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,
-        desc: &BufferDescriptor,
+        desc: &BufferDescriptor<'_>,
     ) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
@@ -2774,7 +2777,7 @@ impl Device {
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.
-    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+    pub fn create_sampler(&self, desc: &SamplerDescriptor<'_>) -> Sampler {
         let (id, data) =
             DynContext::device_create_sampler(&*self.context, &self.id, self.data.as_ref(), desc);
         Sampler {
@@ -2785,7 +2788,7 @@ impl Device {
     }
 
     /// Creates a new [`QuerySet`].
-    pub fn create_query_set(&self, desc: &QuerySetDescriptor) -> QuerySet {
+    pub fn create_query_set(&self, desc: &QuerySetDescriptor<'_>) -> QuerySet {
         let (id, data) =
             DynContext::device_create_query_set(&*self.context, &self.id, self.data.as_ref(), desc);
         QuerySet {
@@ -3180,12 +3183,12 @@ impl Drop for BufferViewMut<'_> {
 
 impl Buffer {
     /// Return the binding view of the entire buffer.
-    pub fn as_entire_binding(&self) -> BindingResource {
+    pub fn as_entire_binding(&self) -> BindingResource<'_> {
         BindingResource::Buffer(self.as_entire_buffer_binding())
     }
 
     /// Return the binding view of the entire buffer.
-    pub fn as_entire_buffer_binding(&self) -> BufferBinding {
+    pub fn as_entire_buffer_binding(&self) -> BufferBinding<'_> {
         BufferBinding {
             buffer: self,
             offset: 0,
@@ -3195,7 +3198,7 @@ impl Buffer {
 
     /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
     /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
-    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
         BufferSlice {
             buffer: self,
@@ -3354,7 +3357,7 @@ impl Texture {
     }
 
     /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+    pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
         let (id, data) =
             DynContext::texture_create_view(&*self.context, &self.id, self.data.as_ref(), desc);
         TextureView {
@@ -3370,7 +3373,7 @@ impl Texture {
     }
 
     /// Make an `ImageCopyTexture` representing the whole texture.
-    pub fn as_image_copy(&self) -> ImageCopyTexture {
+    pub fn as_image_copy(&self) -> ImageCopyTexture<'_> {
         ImageCopyTexture {
             texture: self,
             mip_level: 0,
@@ -3498,7 +3501,7 @@ impl CommandEncoder {
     /// Begins recording of a compute pass.
     ///
     /// This function returns a [`ComputePass`] object which records a single compute pass.
-    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor) -> ComputePass {
+    pub fn begin_compute_pass(&mut self, desc: &ComputePassDescriptor<'_>) -> ComputePass<'_> {
         let id = self.id.as_ref().unwrap();
         let (id, data) = DynContext::command_encoder_begin_compute_pass(
             &*self.context,
@@ -3545,8 +3548,8 @@ impl CommandEncoder {
     /// Copy data from a buffer to a texture.
     pub fn copy_buffer_to_texture(
         &mut self,
-        source: ImageCopyBuffer,
-        destination: ImageCopyTexture,
+        source: ImageCopyBuffer<'_>,
+        destination: ImageCopyTexture<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_buffer_to_texture(
@@ -3562,8 +3565,8 @@ impl CommandEncoder {
     /// Copy data from a texture to a buffer.
     pub fn copy_texture_to_buffer(
         &mut self,
-        source: ImageCopyTexture,
-        destination: ImageCopyBuffer,
+        source: ImageCopyTexture<'_>,
+        destination: ImageCopyBuffer<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_texture_to_buffer(
@@ -3585,8 +3588,8 @@ impl CommandEncoder {
     /// - Copy would overrun either texture
     pub fn copy_texture_to_texture(
         &mut self,
-        source: ImageCopyTexture,
-        destination: ImageCopyTexture,
+        source: ImageCopyTexture<'_>,
+        destination: ImageCopyTexture<'_>,
         copy_size: Extent3d,
     ) {
         DynContext::command_encoder_copy_texture_to_texture(
@@ -4495,7 +4498,7 @@ impl<'a> Drop for ComputePass<'a> {
 
 impl<'a> RenderBundleEncoder<'a> {
     /// Finishes recording and returns a [`RenderBundle`] that can be executed in other render passes.
-    pub fn finish(self, desc: &RenderBundleDescriptor) -> RenderBundle {
+    pub fn finish(self, desc: &RenderBundleDescriptor<'_>) -> RenderBundle {
         let (id, data) =
             DynContext::render_bundle_encoder_finish(&*self.context, self.id, self.data, desc);
         RenderBundle {
@@ -4738,7 +4741,7 @@ pub struct QueueWriteBufferView<'a> {
         not(target_feature = "atomics")
     )
 ))]
-static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
+static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
 
 impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
@@ -4855,7 +4858,7 @@ impl Queue {
     /// This method fails if `size` overruns the size of `texture`, or if `data` is too short.
     pub fn write_texture(
         &self,
-        texture: ImageCopyTexture,
+        texture: ImageCopyTexture<'_>,
         data: &[u8],
         data_layout: ImageDataLayout,
         size: Extent3d,
@@ -4876,7 +4879,7 @@ impl Queue {
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::ImageCopyExternalImage,
-        dest: ImageCopyTextureTagged,
+        dest: ImageCopyTextureTagged<'_>,
         size: Extent3d,
     ) {
         DynContext::queue_copy_external_image_to_texture(
@@ -5141,7 +5144,7 @@ impl<T> Copy for Id<T> {}
 
 #[cfg(feature = "expose-ids")]
 impl<T> fmt::Debug for Id<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0).finish()
     }
 }
@@ -5366,7 +5369,7 @@ impl Surface<'_> {
     /// The returned value is guaranteed to be unique among all `Surface`s created from the same
     /// `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Surface> {
+    pub fn global_id(&self) -> Id<Surface<'_>> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }

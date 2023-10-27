@@ -40,7 +40,7 @@ pub fn power_preference_from_env() -> Option<PowerPreference> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
-    compatible_surface: Option<&Surface>,
+    compatible_surface: Option<&Surface<'_>>,
 ) -> Option<Adapter> {
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
@@ -72,7 +72,7 @@ pub fn initialize_adapter_from_env(
 #[cfg(target_arch = "wasm32")]
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
-    _compatible_surface: Option<&Surface>,
+    _compatible_surface: Option<&Surface<'_>>,
 ) -> Option<Adapter> {
     None
 }

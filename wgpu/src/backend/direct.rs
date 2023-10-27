@@ -101,7 +101,7 @@ impl Context {
         &self,
         adapter: &wgc::id::AdapterId,
         hal_device: hal::OpenDevice<A>,
-        desc: &crate::DeviceDescriptor,
+        desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
@@ -134,7 +134,7 @@ impl Context {
         &self,
         hal_texture: A::Texture,
         device: &Device,
-        desc: &TextureDescriptor,
+        desc: &TextureDescriptor<'_>,
     ) -> Texture {
         let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
@@ -159,7 +159,7 @@ impl Context {
         &self,
         hal_buffer: A::Buffer,
         device: &Device,
-        desc: &BufferDescriptor,
+        desc: &BufferDescriptor<'_>,
     ) -> (wgc::id::BufferId, Buffer) {
         let global = &self.0;
         let (id, error) = unsafe {
@@ -308,7 +308,7 @@ impl Context {
         sink_mutex: &Mutex<ErrorSinkRaw>,
         cause: impl Error + WasmNotSendSync + 'static,
         label_key: &'static str,
-        label: Label,
+        label: Label<'_>,
         string: &'static str,
     ) {
         let error = wgc::error::ContextError {
@@ -375,14 +375,14 @@ impl Context {
     }
 }
 
-fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> wgc::command::ImageCopyBuffer {
+fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> wgc::command::ImageCopyBuffer {
     wgc::command::ImageCopyBuffer {
         buffer: view.buffer.id.into(),
         layout: view.layout,
     }
 }
 
-fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCopyTexture {
+fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> wgc::command::ImageCopyTexture {
     wgc::command::ImageCopyTexture {
         texture: view.texture.id.into(),
         mip_level: view.mip_level,
@@ -396,7 +396,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> wgc::command::ImageCo
     allow(unused)
 )]
 fn map_texture_tagged_copy_view(
-    view: crate::ImageCopyTextureTagged,
+    view: crate::ImageCopyTextureTagged<'_>,
 ) -> wgc::command::ImageCopyTextureTagged {
     wgc::command::ImageCopyTextureTagged {
         texture: view.texture.id.into(),
@@ -610,7 +610,7 @@ impl crate::Context for Context {
 
     fn instance_request_adapter(
         &self,
-        options: &crate::RequestAdapterOptions,
+        options: &crate::RequestAdapterOptions<'_, '_>,
     ) -> Self::RequestAdapterFuture {
         let id = self.0.request_adapter(
             &wgc::instance::RequestAdapterOptions {
@@ -627,7 +627,7 @@ impl crate::Context for Context {
         &self,
         adapter: &Self::AdapterId,
         _adapter_data: &Self::AdapterData,
-        desc: &crate::DeviceDescriptor,
+        desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
         let global = &self.0;
@@ -890,7 +890,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: ShaderModuleDescriptor,
+        desc: ShaderModuleDescriptor<'_>,
         shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
         let global = &self.0;
@@ -952,7 +952,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &ShaderModuleDescriptorSpirV,
+        desc: &ShaderModuleDescriptorSpirV<'_>,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
         let global = &self.0;
         let descriptor = wgc::pipeline::ShaderModuleDescriptor {
@@ -980,7 +980,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &BindGroupLayoutDescriptor,
+        desc: &BindGroupLayoutDescriptor<'_>,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
         let global = &self.0;
         let descriptor = wgc::binding_model::BindGroupLayoutDescriptor {
@@ -1005,7 +1005,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &BindGroupDescriptor,
+        desc: &BindGroupDescriptor<'_>,
     ) -> (Self::BindGroupId, Self::BindGroupData) {
         use wgc::binding_model as bm;
 
@@ -1120,7 +1120,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &PipelineLayoutDescriptor,
+        desc: &PipelineLayoutDescriptor<'_>,
     ) -> (Self::PipelineLayoutId, Self::PipelineLayoutData) {
         // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
@@ -1163,7 +1163,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &RenderPipelineDescriptor,
+        desc: &RenderPipelineDescriptor<'_>,
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
         use wgc::pipeline as pipe;
 
@@ -1234,7 +1234,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &ComputePipelineDescriptor,
+        desc: &ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         use wgc::pipeline as pipe;
 
@@ -1312,7 +1312,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &TextureDescriptor,
+        desc: &TextureDescriptor<'_>,
     ) -> (Self::TextureId, Self::TextureData) {
         let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let global = &self.0;
@@ -1342,7 +1342,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &SamplerDescriptor,
+        desc: &SamplerDescriptor<'_>,
     ) -> (Self::SamplerId, Self::SamplerData) {
         let descriptor = wgc::resource::SamplerDescriptor {
             label: desc.label.map(Borrowed),
@@ -1382,7 +1382,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &wgt::QuerySetDescriptor<Label>,
+        desc: &wgt::QuerySetDescriptor<Label<'_>>,
     ) -> (Self::QuerySetId, Self::QuerySetData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_query_set(
@@ -1399,7 +1399,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &CommandEncoderDescriptor,
+        desc: &CommandEncoderDescriptor<'_>,
     ) -> (Self::CommandEncoderId, Self::CommandEncoderData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(device => global.device_create_command_encoder(
@@ -1428,7 +1428,7 @@ impl crate::Context for Context {
         &self,
         device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        desc: &RenderBundleEncoderDescriptor,
+        desc: &RenderBundleEncoderDescriptor<'_>,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData) {
         let descriptor = wgc::command::RenderBundleEncoderDescriptor {
             label: desc.label.map(Borrowed),
@@ -1590,7 +1590,7 @@ impl crate::Context for Context {
         &self,
         texture: &Self::TextureId,
         texture_data: &Self::TextureData,
-        desc: &TextureViewDescriptor,
+        desc: &TextureViewDescriptor<'_>,
     ) -> (Self::TextureViewId, Self::TextureViewData) {
         let descriptor = wgc::resource::TextureViewDescriptor {
             label: desc.label.map(Borrowed),
@@ -1812,8 +1812,8 @@ impl crate::Context for Context {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyBuffer,
-        destination: crate::ImageCopyTexture,
+        source: crate::ImageCopyBuffer<'_>,
+        destination: crate::ImageCopyTexture<'_>,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
@@ -1835,8 +1835,8 @@ impl crate::Context for Context {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture,
-        destination: crate::ImageCopyBuffer,
+        source: crate::ImageCopyTexture<'_>,
+        destination: crate::ImageCopyBuffer<'_>,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
@@ -1858,8 +1858,8 @@ impl crate::Context for Context {
         &self,
         encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture,
-        destination: crate::ImageCopyTexture,
+        source: crate::ImageCopyTexture<'_>,
+        destination: crate::ImageCopyTexture<'_>,
         copy_size: wgt::Extent3d,
     ) {
         let global = &self.0;
@@ -1881,7 +1881,7 @@ impl crate::Context for Context {
         &self,
         encoder: &Self::CommandEncoderId,
         _encoder_data: &Self::CommandEncoderData,
-        desc: &ComputePassDescriptor,
+        desc: &ComputePassDescriptor<'_>,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
         let timestamp_writes =
             desc.timestamp_writes
@@ -2176,7 +2176,7 @@ impl crate::Context for Context {
         &self,
         _encoder: Self::RenderBundleEncoderId,
         encoder_data: Self::RenderBundleEncoderData,
-        desc: &crate::RenderBundleDescriptor,
+        desc: &crate::RenderBundleDescriptor<'_>,
     ) -> (Self::RenderBundleId, Self::RenderBundleData) {
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(encoder_data.parent() => global.render_bundle_encoder_finish(
@@ -2283,7 +2283,7 @@ impl crate::Context for Context {
         &self,
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
-        texture: crate::ImageCopyTexture,
+        texture: crate::ImageCopyTexture<'_>,
         data: &[u8],
         data_layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
@@ -2309,7 +2309,7 @@ impl crate::Context for Context {
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged,
+        dest: crate::ImageCopyTextureTagged<'_>,
         size: wgt::Extent3d,
     ) {
         let global = &self.0;
