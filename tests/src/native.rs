@@ -11,7 +11,7 @@ use crate::{
     config::GpuTestConfiguration, params::TestInfo, report::AdapterReport, run::execute_test,
 };
 
-type NativeTestFuture = Pin<Box<dyn Future<Output = ()> + Send + Sync>>;
+type NativeTestFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
 struct NativeTest {
     name: String,

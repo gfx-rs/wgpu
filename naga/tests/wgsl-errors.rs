@@ -8,7 +8,7 @@ fn check(input: &str, snapshot: &str) {
         .expect_err("expected parser error")
         .emit_to_string(input);
     if output != snapshot {
-        for diff in diff::lines(&output, snapshot) {
+        for diff in diff::lines(snapshot, &output) {
             match diff {
                 diff::Result::Left(l) => println!("-{l}"),
                 diff::Result::Both(l, _) => println!(" {l}"),

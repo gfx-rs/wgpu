@@ -367,13 +367,7 @@ impl wgpu_example::framework::Example for Example {
         //empty
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.spawn_bunnies();
 
         for _frame_number in 0..3 {

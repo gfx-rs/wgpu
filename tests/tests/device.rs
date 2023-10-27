@@ -27,15 +27,14 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
-#[test]
-fn request_device_error_on_native() {
-    pollster::block_on(request_device_error_message());
-}
+#[gpu_test]
+static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_async(|_ctx| request_device_error_message());
 
 /// Check that `RequestDeviceError`s produced have some diagnostic information.
 ///
 /// Note: this is a wasm *and* native test. On wasm it is run directly; on native, indirectly
-#[wasm_bindgen_test::wasm_bindgen_test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything

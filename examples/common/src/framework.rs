@@ -1,4 +1,3 @@
-use std::future::Future;
 #[cfg(target_arch = "wasm32")]
 use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
@@ -66,13 +65,7 @@ pub trait Example: 'static + Sized {
 
     fn update(&mut self, event: WindowEvent);
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        spawner: &Spawner,
-    );
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue);
 }
 
 struct Setup {
@@ -280,7 +273,6 @@ fn start<E: Example>(
         offscreen_canvas_setup,
     }: Setup,
 ) {
-    let spawner = Spawner::new();
     let mut config = surface
         .get_default_config(&adapter, size.width, size.height)
         .expect("Surface isn't supported by the adapter.");
@@ -369,7 +361,7 @@ fn start<E: Example>(
                             ..wgpu::TextureViewDescriptor::default()
                         });
 
-                        example.render(&view, &device, &queue, &spawner);
+                        example.render(&view, &device, &queue);
 
                         frame.present();
 
@@ -394,40 +386,6 @@ fn start<E: Example>(
             }
         })
         .unwrap();
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub struct Spawner<'a> {
-    executor: async_executor::LocalExecutor<'a>,
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl<'a> Spawner<'a> {
-    fn new() -> Self {
-        Self {
-            executor: async_executor::LocalExecutor::new(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn spawn_local(&self, future: impl Future<Output = ()> + 'a) {
-        self.executor.spawn(future).detach();
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-pub struct Spawner {}
-
-#[cfg(target_arch = "wasm32")]
-impl Spawner {
-    fn new() -> Self {
-        Self {}
-    }
-
-    #[allow(dead_code)]
-    pub fn spawn_local(&self, future: impl Future<Output = ()> + 'static) {
-        wasm_bindgen_futures::spawn_local(future);
-    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -550,10 +508,7 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                     &ctx.queue,
                 );
 
-                {
-                    let spawner = Spawner::new();
-                    example.render(&dst_view, &ctx.device, &ctx.queue, &spawner);
-                }
+                example.render(&dst_view, &ctx.device, &ctx.queue);
 
                 let mut cmd_buf = ctx
                     .device

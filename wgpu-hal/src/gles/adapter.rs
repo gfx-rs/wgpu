@@ -639,7 +639,8 @@ impl super::Adapter {
                 (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) } as u32)
             } else {
                 16 // should this be different?
-            },
+            }
+            .min(crate::MAX_VERTEX_BUFFERS as u32),
             max_vertex_attributes: (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) }
                 as u32)
                 .min(super::MAX_VERTEX_ATTRIBUTES as u32),
