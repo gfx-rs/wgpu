@@ -669,8 +669,21 @@ impl PhysicalDeviceCapabilities {
         }
 
         // Optional `VK_EXT_robustness2`
+        // Intel iGPUs with outdated drivers can break rendering if `VK_EXT_robustness2` is pushed.
+        // Driver version 31.0.101.2115 works, but there's probably an earlier functional version.
         if self.supports_extension(vk::ExtRobustness2Fn::name()) {
-            extensions.push(vk::ExtRobustness2Fn::name());
+            const DRIVER_VERSION_INTEL_31_0_101: u32 = 0x194000;
+            const DRIVER_VERSION_INTEL_WORKING: u32 = DRIVER_VERSION_INTEL_31_0_101 + 2115;
+
+            let props = self.properties;
+            let is_intel_igpu_outdated = props.vendor_id
+                == crate::auxil::db::intel::VENDOR
+                && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
+                && props.driver_version < DRIVER_VERSION_INTEL_WORKING;
+
+            if !is_intel_igpu_outdated {
+                extensions.push(vk::ExtRobustness2Fn::name());
+            }
         }
 
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
