@@ -441,7 +441,7 @@ impl crate::Instance<super::Api> for Instance {
             )));
         };
         Ok(Surface {
-            window: window.hwnd as *mut _,
+            window: window.hwnd.get() as *mut _,
             presentable: true,
             swapchain: None,
             srgb_capable: self.srgb_capable,

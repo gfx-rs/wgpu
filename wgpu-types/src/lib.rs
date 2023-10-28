@@ -177,6 +177,12 @@ bitflags::bitflags! {
     }
 }
 
+impl Default for Backends {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
 impl_bitflags!(Backends);
 
 impl From<Backend> for Backends {

@@ -5,7 +5,12 @@ extern crate wgpu_hal as hal;
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+use winit::{
+    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event_loop::ControlFlow,
+    keyboard::{Key, NamedKey},
+};
 
 use std::{
     borrow::{Borrow, Cow},
@@ -95,10 +100,15 @@ impl<A: hal::Api> Example<A> {
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe {
-            instance
-                .create_surface(window.raw_display_handle(), window.raw_window_handle())
-                .unwrap()
+        let mut surface = {
+            let raw_window_handle = window.window_handle()?.as_raw();
+            let raw_display_handle = window.display_handle()?.as_raw();
+
+            unsafe {
+                instance
+                    .create_surface(raw_display_handle, raw_window_handle)
+                    .unwrap()
+            }
         };
 
         let (adapter, capabilities) = unsafe {
@@ -261,7 +271,7 @@ impl<A: hal::Api> Example<A> {
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
 
-        let texture_data = vec![0xFFu8; 4];
+        let texture_data = [0xFFu8; 4];
 
         let staging_buffer_desc = hal::BufferDescriptor {
             label: Some("stage"),
@@ -563,10 +573,10 @@ impl<A: hal::Api> Example<A> {
 
     fn update(&mut self, event: winit::event::WindowEvent) {
         if let winit::event::WindowEvent::KeyboardInput {
-            input:
-                winit::event::KeyboardInput {
-                    virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                    state: winit::event::ElementState::Pressed,
+            event:
+                KeyEvent {
+                    logical_key: Key::Named(NamedKey::Space),
+                    state: ElementState::Pressed,
                     ..
                 },
             ..
@@ -777,7 +787,7 @@ cfg_if::cfg_if! {
 fn main() {
     env_logger::init();
 
-    let event_loop = winit::event_loop::EventLoop::new();
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = winit::window::WindowBuilder::new()
         .with_title("hal-bunnymark")
         .build(&event_loop)
@@ -789,51 +799,49 @@ fn main() {
     let mut last_frame_inst = Instant::now();
     let (mut frame_count, mut accum_time) = (0, 0.0);
 
-    event_loop.run(move |event, _, control_flow| {
-        let _ = &window; // force ownership by the closure
-        *control_flow = winit::event_loop::ControlFlow::Poll;
-        match event {
-            winit::event::Event::RedrawEventsCleared => {
-                window.request_redraw();
-            }
-            winit::event::Event::WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::KeyboardInput {
-                    input:
-                        winit::event::KeyboardInput {
-                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
-                            state: winit::event::ElementState::Pressed,
-                            ..
-                        },
-                    ..
+    event_loop
+        .run(move |event, target| {
+            let _ = &window; // force ownership by the closure
+            target.set_control_flow(ControlFlow::Poll);
+
+            match event {
+                Event::LoopExiting => {
+                    example.take().unwrap().exit();
                 }
-                | winit::event::WindowEvent::CloseRequested => {
-                    *control_flow = winit::event_loop::ControlFlow::Exit;
-                }
-                _ => {
-                    example.as_mut().unwrap().update(event);
-                }
-            },
-            winit::event::Event::RedrawRequested(_) => {
-                let ex = example.as_mut().unwrap();
-                {
-                    accum_time += last_frame_inst.elapsed().as_secs_f32();
-                    last_frame_inst = Instant::now();
-                    frame_count += 1;
-                    if frame_count == 100 && !ex.is_empty() {
-                        println!(
-                            "Avg frame time {}ms",
-                            accum_time * 1000.0 / frame_count as f32
-                        );
-                        accum_time = 0.0;
-                        frame_count = 0;
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Named(NamedKey::Escape),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
                     }
-                }
-                ex.render();
+                    | WindowEvent::CloseRequested => target.exit(),
+                    WindowEvent::RedrawRequested => {
+                        let ex = example.as_mut().unwrap();
+                        {
+                            accum_time += last_frame_inst.elapsed().as_secs_f32();
+                            last_frame_inst = Instant::now();
+                            frame_count += 1;
+                            if frame_count == 100 && !ex.is_empty() {
+                                println!(
+                                    "Avg frame time {}ms",
+                                    accum_time * 1000.0 / frame_count as f32
+                                );
+                                accum_time = 0.0;
+                                frame_count = 0;
+                            }
+                        }
+                        ex.render();
+                    }
+                    _ => {
+                        example.as_mut().unwrap().update(event);
+                    }
+                },
+                _ => {}
             }
-            winit::event::Event::LoopDestroyed => {
-                example.take().unwrap().exit();
-            }
-            _ => {}
-        }
-    });
+        })
+        .unwrap();
 }

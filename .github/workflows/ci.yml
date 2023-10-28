@@ -10,6 +10,7 @@ on:
 env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
+  WGPU_DX12_COMPILER: dxc
   RUST_LOG: info
   RUST_BACKTRACE: full
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
@@ -353,6 +354,10 @@ jobs:
             . -> target
             xtask -> xtask/target
 
+      - name: (windows) install dxc
+        if: matrix.os == 'windows-2022'
+        uses: napokue/setup-dxc@v1.1.0
+
       - name: (windows) install warp
         if: matrix.os == 'windows-2022'
         shell: bash
@@ -436,7 +441,9 @@ jobs:
             **/*-difference.png
 
       - name: generate coverage report
+        id: coverage
         shell: bash
+        continue-on-error: true
         run: |
           set -e
 
@@ -444,6 +451,7 @@ jobs:
 
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
+        if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
 

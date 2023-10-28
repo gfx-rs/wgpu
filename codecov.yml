@@ -3,6 +3,11 @@ coverage:
     project:
       default:
         informational: true
+        if_ci_failed: success
+    patch:
+      default:
+        informational: true
+        if_ci_failed: success
 comment: false
 github_checks:
     annotations: false

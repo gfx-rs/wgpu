@@ -173,7 +173,8 @@ impl super::Adapter {
         let max_vertex_buffers = match feature_level {
             FL9_1..=FL9_3 => 16,
             _ => 32,
-        };
+        }
+        .min(crate::MAX_VERTEX_BUFFERS as u32);
         let max_compute_workgroup_storage_size = match feature_level {
             FL9_1..=FL9_3 => 0,
             FL10_0 | FL10_1 => 4096 * 4, // This doesn't have an equiv SM4 constant :\
