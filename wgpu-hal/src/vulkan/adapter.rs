@@ -676,8 +676,7 @@ impl PhysicalDeviceCapabilities {
             const DRIVER_VERSION_INTEL_WORKING: u32 = DRIVER_VERSION_INTEL_31_0_101 + 2115;
 
             let props = self.properties;
-            let is_intel_igpu_outdated = props.vendor_id
-                == crate::auxil::db::intel::VENDOR
+            let is_intel_igpu_outdated = props.vendor_id == crate::auxil::db::intel::VENDOR
                 && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
                 && props.driver_version < DRIVER_VERSION_INTEL_WORKING;
 
