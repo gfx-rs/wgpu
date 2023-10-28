@@ -671,6 +671,7 @@ impl PhysicalDeviceCapabilities {
         // Optional `VK_EXT_robustness2`
         // Intel iGPUs with outdated drivers can break rendering if `VK_EXT_robustness2` is pushed.
         // Driver version 31.0.101.2115 works, but there's probably an earlier functional version.
+        // context: https://github.com/gfx-rs/wgpu/issues/4599
         if self.supports_extension(vk::ExtRobustness2Fn::name()) {
             const DRIVER_VERSION_INTEL_31_0_101: u32 = 0x194000;
             const DRIVER_VERSION_INTEL_WORKING: u32 = DRIVER_VERSION_INTEL_31_0_101 + 2115;
@@ -680,7 +681,9 @@ impl PhysicalDeviceCapabilities {
                 && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
                 && props.driver_version < DRIVER_VERSION_INTEL_WORKING;
 
-            if !is_intel_igpu_outdated {
+            if is_intel_igpu_outdated {
+                log::trace!("Disabling robustBufferAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X} less than 0x{:X}, the known good driver (31.0.101.2115)", props.driver_version, DRIVER_VERSION_INTEL_WORKING);
+            } else {
                 extensions.push(vk::ExtRobustness2Fn::name());
             }
         }
