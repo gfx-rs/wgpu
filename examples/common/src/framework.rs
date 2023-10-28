@@ -12,6 +12,7 @@ use winit::{
     event::{self, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
+    window::Window,
 };
 
 #[allow(dead_code)]
@@ -69,6 +70,7 @@ pub trait Example: 'static + Sized {
 }
 
 struct Setup {
+    _window: Window,
     event_loop: EventLoop<()>,
     instance: wgpu::Instance,
     size: winit::dpi::PhysicalSize<u32>,
@@ -240,6 +242,7 @@ async fn setup<E: Example>(title: &str) -> Setup {
         .expect("Unable to find a suitable GPU adapter!");
 
     Setup {
+        _window: window,
         event_loop,
         instance,
         size,
@@ -261,6 +264,7 @@ fn start<E: Example>(
         adapter,
         device,
         queue,
+        ..
     }: Setup,
     #[cfg(target_arch = "wasm32")] Setup {
         event_loop,
@@ -271,6 +275,7 @@ fn start<E: Example>(
         device,
         queue,
         offscreen_canvas_setup,
+        ..
     }: Setup,
 ) {
     let mut config = surface
