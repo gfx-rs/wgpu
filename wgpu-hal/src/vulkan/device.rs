@@ -1588,7 +1588,7 @@ impl crate::Device<super::Api> for super::Device {
             multiview: desc.multiview,
             ..Default::default()
         };
-        let mut stages = ArrayVec::<_, 2>::new();
+        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
         let mut vertex_attributes = Vec::new();
 

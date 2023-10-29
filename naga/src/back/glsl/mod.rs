@@ -1280,8 +1280,8 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> String {
-        match global.binding {
-            Some(ref br) => {
+        match (&global.binding, global.space) {
+            (&Some(ref br), _) => {
                 format!(
                     "_group_{}_binding_{}_{}",
                     br.group,
@@ -1289,7 +1289,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.entry_point.stage.to_str()
                 )
             }
-            None => self.names[&NameKey::GlobalVariable(handle)].clone(),
+            (&None, crate::AddressSpace::PushConstant) => {
+                format!("_push_constant_binding_{}", self.entry_point.stage.to_str())
+            }
+            (&None, _) => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
     }
 
@@ -1299,15 +1302,20 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> BackendResult {
-        match global.binding {
-            Some(ref br) => write!(
+        match (&global.binding, global.space) {
+            (&Some(ref br), _) => write!(
                 self.out,
                 "_group_{}_binding_{}_{}",
                 br.group,
                 br.binding,
                 self.entry_point.stage.to_str()
             )?,
-            None => write!(
+            (&None, crate::AddressSpace::PushConstant) => write!(
+                self.out,
+                "_push_constant_binding_{}",
+                self.entry_point.stage.to_str()
+            )?,
+            (&None, _) => write!(
                 self.out,
                 "{}",
                 &self.names[&NameKey::GlobalVariable(handle)]

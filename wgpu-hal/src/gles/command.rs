@@ -29,7 +29,7 @@ pub(super) struct State {
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
-    uniform_descs: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANTS }>,
+    uniform_descs: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
 }

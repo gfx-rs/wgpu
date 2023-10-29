@@ -9,14 +9,14 @@ struct PushConstants {
 struct FragmentIn {
     vec4 color;
 };
-uniform PushConstants pc;
+uniform PushConstants _push_constant_binding_vs;
 
 layout(location = 0) in vec2 _p2vs_location0;
 
 void main() {
     vec2 pos = _p2vs_location0;
     uint vi = uint(gl_VertexID);
-    float _e5 = pc.multiplier;
+    float _e5 = _push_constant_binding_vs.multiplier;
     gl_Position = vec4(((float(vi) * _e5) * pos), 0.0, 1.0);
     return;
 }

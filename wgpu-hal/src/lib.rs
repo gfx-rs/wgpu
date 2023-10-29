@@ -97,6 +97,9 @@ use bitflags::bitflags;
 use thiserror::Error;
 use wgt::{WasmNotSend, WasmNotSync};
 
+// - Vertex + Fragment
+// - Compute
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;

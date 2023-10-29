@@ -94,7 +94,7 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
         readback_buffer.copy_from(&ctx.device, &mut encoder, &texture);
         ctx.queue.submit(Some(encoder.finish()));
     }
-    assert!(readback_buffer.check_buffer_contents(&ctx.device, &expected_data));
+    readback_buffer.assert_buffer_contents(&ctx.device, &expected_data);
 }
 
 #[gpu_test]
