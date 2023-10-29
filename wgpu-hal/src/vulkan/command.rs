@@ -600,7 +600,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         layout: &super::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
         unsafe {
@@ -608,7 +608,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 self.active,
                 layout.raw,
                 conv::map_shader_stage(stages),
-                offset,
+                offset_bytes,
                 slice::from_raw_parts(data.as_ptr() as _, data.len() * 4),
             )
         };

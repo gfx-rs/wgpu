@@ -750,7 +750,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         _layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,
-        start_offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
         // There is nothing preventing the user from trying to update a single value within
@@ -760,7 +760,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         // As such, we locally keep a copy of the current state of the push constant memory
         // block. If the user tries to update a single value, we have the data to update the entirety
         // of the uniform.
-        let start_words = start_offset / 4;
+        let start_words = offset_bytes / 4;
         let end_words = start_words + data.len() as u32;
         self.state.current_push_constant_data[start_words as usize..end_words as usize]
             .copy_from_slice(data);
