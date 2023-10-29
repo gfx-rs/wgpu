@@ -4174,6 +4174,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.collect_all_element_names(base, segments, layouter, offset, items);
                     segments.pop();
                 }
+                *offset = layout.alignment.round_up(*offset)
             }
             TypeInner::Struct { ref members, .. } => {
                 for (index, member) in members.iter().enumerate() {
@@ -4184,6 +4185,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.collect_all_element_names(member.ty, segments, layouter, offset, items);
                     segments.pop();
                 }
+                *offset = layout.alignment.round_up(*offset)
             }
             _ => unreachable!(),
         }

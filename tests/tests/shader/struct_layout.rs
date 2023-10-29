@@ -171,6 +171,46 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         }
     }
 
+    // Nested struct and arraytest
+    {
+        let header = String::from("struct Inner { scalar: f32, member: array<vec3<f32>, 2>, scalar2: f32 }");
+        let members = format!("inner: Inner, scalar3: f32, vector: vec3<f32>, scalar4: f32");
+        let direct = String::from("\
+            output[0] = bitcast<u32>(input.inner.scalar);
+            output[1] = bitcast<u32>(input.inner.member[0].x);
+            output[2] = bitcast<u32>(input.inner.member[0].y);
+            output[3] = bitcast<u32>(input.inner.member[0].z);
+            output[4] = bitcast<u32>(input.inner.member[1].x);
+            output[5] = bitcast<u32>(input.inner.member[1].y);
+            output[6] = bitcast<u32>(input.inner.member[1].z);
+            output[7] = bitcast<u32>(input.inner.scalar2);
+            output[8] = bitcast<u32>(input.scalar3);
+            output[9] = bitcast<u32>(input.vector.x);
+            output[10] = bitcast<u32>(input.vector.y);
+            output[11] = bitcast<u32>(input.vector.z);
+            output[12] = bitcast<u32>(input.scalar4);
+        ");
+
+        tests.push(
+            ShaderTest::new(
+                format!("nested struct and array"),
+                members,
+                direct,
+                &input_values,
+                &[
+                    0, // inner.scalar
+                    4, 5, 6, // inner.member[0]
+                    8, 9, 10, // inner.member[1]
+                    12, // scalar2
+                    16, // scalar3
+                    20, 21, 22, // vector
+                    23, // scalar4
+                ],
+            )
+            .header(header),
+        );
+    }
+
     tests
 }
 
