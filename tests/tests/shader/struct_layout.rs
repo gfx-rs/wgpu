@@ -99,7 +99,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 }
             }
 
-            // https://github.com/gfx-rs/naga/issues/1785
+            // https://github.com/gfx-rs/wgpu/issues/4371
             let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
                 Backends::GL
             } else {
@@ -173,9 +173,11 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 
     // Nested struct and arraytest
     {
-        let header = String::from("struct Inner { scalar: f32, member: array<vec3<f32>, 2>, scalar2: f32 }");
-        let members = format!("inner: Inner, scalar3: f32, vector: vec3<f32>, scalar4: f32");
-        let direct = String::from("\
+        let header =
+            String::from("struct Inner { scalar: f32, member: array<vec3<f32>, 2>, scalar2: f32 }");
+        let members = String::from("inner: Inner, scalar3: f32, vector: vec3<f32>, scalar4: f32");
+        let direct = String::from(
+            "\
             output[0] = bitcast<u32>(input.inner.scalar);
             output[1] = bitcast<u32>(input.inner.member[0].x);
             output[2] = bitcast<u32>(input.inner.member[0].y);
@@ -189,11 +191,12 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             output[10] = bitcast<u32>(input.vector.y);
             output[11] = bitcast<u32>(input.vector.z);
             output[12] = bitcast<u32>(input.scalar4);
-        ");
+        ",
+        );
 
         tests.push(
             ShaderTest::new(
-                format!("nested struct and array"),
+                String::from("nested struct and array"),
                 members,
                 direct,
                 &input_values,

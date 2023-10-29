@@ -1471,13 +1471,10 @@ impl super::Queue {
                     }
                     glow::FLOAT_MAT2x3 => {
                         let unpacked_data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
+                        #[rustfmt::skip]
                         let packed_data = [
-                            unpacked_data[0],
-                            unpacked_data[1],
-                            unpacked_data[2], //
-                            unpacked_data[4],
-                            unpacked_data[5],
-                            unpacked_data[6], //
+                            unpacked_data[0], unpacked_data[1], unpacked_data[2],
+                            unpacked_data[4], unpacked_data[5], unpacked_data[6],
                         ];
                         unsafe { gl.uniform_matrix_2x3_f32_slice(location, false, &packed_data) };
                     }
@@ -1491,16 +1488,11 @@ impl super::Queue {
                     }
                     glow::FLOAT_MAT3 => {
                         let unpacked_data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
+                        #[rustfmt::skip]
                         let packed_data = [
-                            unpacked_data[0],
-                            unpacked_data[1],
-                            unpacked_data[2], //
-                            unpacked_data[4],
-                            unpacked_data[5],
-                            unpacked_data[6], //
-                            unpacked_data[8],
-                            unpacked_data[9],
-                            unpacked_data[10], //
+                            unpacked_data[0], unpacked_data[1], unpacked_data[2],
+                            unpacked_data[4], unpacked_data[5], unpacked_data[6],
+                            unpacked_data[8], unpacked_data[9], unpacked_data[10],
                         ];
                         unsafe { gl.uniform_matrix_3_f32_slice(location, false, &packed_data) };
                     }
@@ -1514,19 +1506,12 @@ impl super::Queue {
                     }
                     glow::FLOAT_MAT4x3 => {
                         let unpacked_data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
+                        #[rustfmt::skip]
                         let packed_data = [
-                            unpacked_data[0],
-                            unpacked_data[1],
-                            unpacked_data[2], //
-                            unpacked_data[4],
-                            unpacked_data[5],
-                            unpacked_data[6], //
-                            unpacked_data[8],
-                            unpacked_data[9],
-                            unpacked_data[10], //
-                            unpacked_data[12],
-                            unpacked_data[13],
-                            unpacked_data[14], //
+                            unpacked_data[0], unpacked_data[1], unpacked_data[2],
+                            unpacked_data[4], unpacked_data[5], unpacked_data[6],
+                            unpacked_data[8], unpacked_data[9], unpacked_data[10],
+                            unpacked_data[12], unpacked_data[13], unpacked_data[14],
                         ];
                         unsafe { gl.uniform_matrix_4x3_f32_slice(location, false, &packed_data) };
                     }

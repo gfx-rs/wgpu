@@ -429,7 +429,7 @@ impl super::Device {
 
             if let Some(location) = location {
                 uniforms.push(super::UniformDesc {
-                    location: location,
+                    location,
                     offset: item.offset,
                     utype,
                 });
