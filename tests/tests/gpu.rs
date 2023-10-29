@@ -20,6 +20,7 @@ mod occlusion_query;
 mod partially_bounded_arrays;
 mod pipeline;
 mod poll;
+mod push_constants;
 mod query_set;
 mod queue_transfer;
 mod resource_descriptor_accessor;
