@@ -43,7 +43,7 @@ Bottom level categories:
 ### Bug Fixes
 
 #### Vulkan
-- Push `VK_EXT_robustness2` to extensions only when not using an outdated intel iGPU driver. By @TheoDulka in [#4602](https://github.com/gfx-rs/wgpu/pull/4602).
+- Use `VK_EXT_robustness2` only when not using an outdated intel iGPU driver. By @TheoDulka in [#4602](https://github.com/gfx-rs/wgpu/pull/4602).
 
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
