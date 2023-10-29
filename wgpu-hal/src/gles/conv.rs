@@ -417,104 +417,74 @@ pub(super) fn map_storage_access(access: wgt::StorageTextureAccess) -> u32 {
     }
 }
 
-pub(super) fn is_sampler(glsl_uniform_type: u32) -> bool {
-    match glsl_uniform_type {
-        glow::INT_SAMPLER_1D
-        | glow::INT_SAMPLER_1D_ARRAY
-        | glow::INT_SAMPLER_2D
-        | glow::INT_SAMPLER_2D_ARRAY
-        | glow::INT_SAMPLER_2D_MULTISAMPLE
-        | glow::INT_SAMPLER_2D_MULTISAMPLE_ARRAY
-        | glow::INT_SAMPLER_2D_RECT
-        | glow::INT_SAMPLER_3D
-        | glow::INT_SAMPLER_CUBE
-        | glow::INT_SAMPLER_CUBE_MAP_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_1D
-        | glow::UNSIGNED_INT_SAMPLER_1D_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_2D
-        | glow::UNSIGNED_INT_SAMPLER_2D_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE
-        | glow::UNSIGNED_INT_SAMPLER_2D_MULTISAMPLE_ARRAY
-        | glow::UNSIGNED_INT_SAMPLER_2D_RECT
-        | glow::UNSIGNED_INT_SAMPLER_3D
-        | glow::UNSIGNED_INT_SAMPLER_CUBE
-        | glow::UNSIGNED_INT_SAMPLER_CUBE_MAP_ARRAY
-        | glow::SAMPLER_1D
-        | glow::SAMPLER_1D_SHADOW
-        | glow::SAMPLER_1D_ARRAY
-        | glow::SAMPLER_1D_ARRAY_SHADOW
-        | glow::SAMPLER_2D
-        | glow::SAMPLER_2D_SHADOW
-        | glow::SAMPLER_2D_ARRAY
-        | glow::SAMPLER_2D_ARRAY_SHADOW
-        | glow::SAMPLER_2D_MULTISAMPLE
-        | glow::SAMPLER_2D_MULTISAMPLE_ARRAY
-        | glow::SAMPLER_2D_RECT
-        | glow::SAMPLER_2D_RECT_SHADOW
-        | glow::SAMPLER_3D
-        | glow::SAMPLER_CUBE
-        | glow::SAMPLER_CUBE_MAP_ARRAY
-        | glow::SAMPLER_CUBE_MAP_ARRAY_SHADOW
-        | glow::SAMPLER_CUBE_SHADOW => true,
-        _ => false,
+pub(super) fn map_naga_uniform_type(ty: &naga::TypeInner) -> u32 {
+    match *ty {
+        naga::TypeInner::Scalar { kind, width } => {
+            assert_eq!(width, 4);
+            match kind {
+                naga::ScalarKind::Sint => glow::INT,
+                naga::ScalarKind::Uint => glow::UNSIGNED_INT,
+                naga::ScalarKind::Float => glow::FLOAT,
+                naga::ScalarKind::Bool => unreachable!(),
+            }
+        }
+        naga::TypeInner::Vector { size, kind, width } => {
+            assert_eq!(width, 4);
+
+            match (size, kind) {
+                (naga::VectorSize::Bi, naga::ScalarKind::Sint) => glow::INT_VEC2,
+                (naga::VectorSize::Bi, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC2,
+                (naga::VectorSize::Bi, naga::ScalarKind::Float) => glow::FLOAT_VEC2,
+                (naga::VectorSize::Tri, naga::ScalarKind::Sint) => glow::INT_VEC3,
+                (naga::VectorSize::Tri, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC3,
+                (naga::VectorSize::Tri, naga::ScalarKind::Float) => glow::FLOAT_VEC3,
+                (naga::VectorSize::Quad, naga::ScalarKind::Sint) => glow::INT_VEC4,
+                (naga::VectorSize::Quad, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC4,
+                (naga::VectorSize::Quad, naga::ScalarKind::Float) => glow::FLOAT_VEC4,
+                (_, naga::ScalarKind::Bool) => unreachable!(),
+            }
+        }
+        naga::TypeInner::Matrix {
+            columns,
+            rows,
+            width,
+        } => {
+            assert_eq!(width, 4);
+
+            match (columns, rows) {
+                (naga::VectorSize::Bi, naga::VectorSize::Bi) => glow::FLOAT_MAT2,
+                (naga::VectorSize::Bi, naga::VectorSize::Tri) => glow::FLOAT_MAT2x3,
+                (naga::VectorSize::Bi, naga::VectorSize::Quad) => glow::FLOAT_MAT2x4,
+                (naga::VectorSize::Tri, naga::VectorSize::Bi) => glow::FLOAT_MAT3x2,
+                (naga::VectorSize::Tri, naga::VectorSize::Tri) => glow::FLOAT_MAT3,
+                (naga::VectorSize::Tri, naga::VectorSize::Quad) => glow::FLOAT_MAT3x4,
+                (naga::VectorSize::Quad, naga::VectorSize::Bi) => glow::FLOAT_MAT4x2,
+                (naga::VectorSize::Quad, naga::VectorSize::Tri) => glow::FLOAT_MAT4x3,
+                (naga::VectorSize::Quad, naga::VectorSize::Quad) => glow::FLOAT_MAT4,
+            }
+        }
+        _ => unreachable!(),
     }
 }
 
-pub(super) fn is_image(glsl_uniform_type: u32) -> bool {
-    match glsl_uniform_type {
-        glow::INT_IMAGE_1D
-        | glow::INT_IMAGE_1D_ARRAY
-        | glow::INT_IMAGE_2D
-        | glow::INT_IMAGE_2D_ARRAY
-        | glow::INT_IMAGE_2D_MULTISAMPLE
-        | glow::INT_IMAGE_2D_MULTISAMPLE_ARRAY
-        | glow::INT_IMAGE_2D_RECT
-        | glow::INT_IMAGE_3D
-        | glow::INT_IMAGE_CUBE
-        | glow::INT_IMAGE_CUBE_MAP_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_1D
-        | glow::UNSIGNED_INT_IMAGE_1D_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_2D
-        | glow::UNSIGNED_INT_IMAGE_2D_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE
-        | glow::UNSIGNED_INT_IMAGE_2D_MULTISAMPLE_ARRAY
-        | glow::UNSIGNED_INT_IMAGE_2D_RECT
-        | glow::UNSIGNED_INT_IMAGE_3D
-        | glow::UNSIGNED_INT_IMAGE_CUBE
-        | glow::UNSIGNED_INT_IMAGE_CUBE_MAP_ARRAY
-        | glow::IMAGE_1D
-        | glow::IMAGE_1D_ARRAY
-        | glow::IMAGE_2D
-        | glow::IMAGE_2D_ARRAY
-        | glow::IMAGE_2D_MULTISAMPLE
-        | glow::IMAGE_2D_MULTISAMPLE_ARRAY
-        | glow::IMAGE_2D_RECT
-        | glow::IMAGE_3D
-        | glow::IMAGE_CUBE
-        | glow::IMAGE_CUBE_MAP_ARRAY => true,
-        _ => false,
-    }
-}
-
-pub(super) fn is_atomic_counter(glsl_uniform_type: u32) -> bool {
-    glsl_uniform_type == glow::UNSIGNED_INT_ATOMIC_COUNTER
-}
-
-pub(super) fn is_opaque_type(glsl_uniform_type: u32) -> bool {
-    is_sampler(glsl_uniform_type)
-        || is_image(glsl_uniform_type)
-        || is_atomic_counter(glsl_uniform_type)
-}
-
+#[rustfmt::skip]
 pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
     match glsl_uniform_type {
-        glow::FLOAT | glow::INT => 4,
-        glow::FLOAT_VEC2 | glow::INT_VEC2 => 8,
-        glow::FLOAT_VEC3 | glow::INT_VEC3 => 12,
-        glow::FLOAT_VEC4 | glow::INT_VEC4 => 16,
-        glow::FLOAT_MAT2 => 16,
-        glow::FLOAT_MAT3 => 36,
-        glow::FLOAT_MAT4 => 64,
+        glow::FLOAT | glow::INT | glow::UNSIGNED_INT => 4,
+        glow::FLOAT_VEC2 | glow::INT_VEC2 | glow::UNSIGNED_INT_VEC2 => 8,
+        glow::FLOAT_VEC3 | glow::INT_VEC3 | glow::UNSIGNED_INT_VEC3 => 12,
+        glow::FLOAT_VEC4 | glow::INT_VEC4 | glow::UNSIGNED_INT_VEC4 => 16,
+        // Making sure we round the _row_ value up to 4 in the 3 element case.
+        //             C R         C   R
+        glow::FLOAT_MAT2 =>   4 * (2 * 2),
+        glow::FLOAT_MAT2x3 => 4 * (2 * 4),
+        glow::FLOAT_MAT2x4 => 4 * (2 * 4),
+        glow::FLOAT_MAT3x2 => 4 * (3 * 2),
+        glow::FLOAT_MAT3 =>   4 * (3 * 4),
+        glow::FLOAT_MAT3x4 => 4 * (3 * 4),
+        glow::FLOAT_MAT4x2 => 4 * (4 * 2),
+        glow::FLOAT_MAT4x3 => 4 * (4 * 4),
+        glow::FLOAT_MAT4 =>   4 * (4 * 4),
         _ => panic!("Unsupported uniform datatype! {glsl_uniform_type:#X}"),
     }
 }

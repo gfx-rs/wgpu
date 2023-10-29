@@ -22,6 +22,7 @@ struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
+    push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
     multiview: Option<std::num::NonZeroU32>,
 }
 
@@ -49,7 +50,7 @@ impl CompilationContext<'_> {
                 Some(name) => name.clone(),
                 None => continue,
             };
-            log::debug!(
+            log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
                 &name,
@@ -83,6 +84,8 @@ impl CompilationContext<'_> {
                 self.sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
             }
         }
+
+        *self.push_constant_items = reflection_info.push_constant_items;
     }
 }
 
@@ -324,16 +327,18 @@ impl super::Device {
         }
 
         let mut name_binding_map = NameBindingMap::default();
+        let mut push_constant_items = Vec::new();
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
         let mut has_stages = wgt::ShaderStages::empty();
         let mut shaders_to_delete = arrayvec::ArrayVec::<_, 3>::new();
 
-        for (naga_stage, stage) in shaders {
+        for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
             let context = CompilationContext {
                 layout,
                 sampler_map: &mut sampler_map,
                 name_binding_map: &mut name_binding_map,
+                push_constant_items: &mut push_constant_items,
                 multiview,
             };
 
@@ -405,34 +410,29 @@ impl super::Device {
             }
         }
 
-        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] =
-            [None; super::MAX_PUSH_CONSTANTS].map(|_: Option<()>| Default::default());
-        let count = unsafe { gl.get_active_uniforms(program) };
-        let mut offset = 0;
+        let mut uniforms = ArrayVec::new();
 
-        for uniform in 0..count {
-            let glow::ActiveUniform { utype, name, .. } =
-                unsafe { gl.get_active_uniform(program, uniform) }.unwrap();
+        for item in push_constant_items {
+            let type_inner = &shaders[0].1.module.naga.module.types[item.ty].inner;
 
-            if conv::is_opaque_type(utype) {
-                continue;
-            }
+            let location = unsafe { gl.get_uniform_location(program, &item.name) };
 
-            if let Some(location) = unsafe { gl.get_uniform_location(program, &name) } {
-                if uniforms[offset / 4].location.is_some() {
-                    panic!("Offset already occupied")
-                }
+            log::trace!(
+                "push constant item: name={}, ty={:?}, offset={}, location = {:?}",
+                item.name,
+                type_inner,
+                item.offset,
+                location,
+            );
 
-                // `size` will always be 1 so we need to guess the real size from the type
-                let uniform_size = conv::uniform_byte_size(utype);
+            let utype = conv::map_naga_uniform_type(type_inner);
 
-                uniforms[offset / 4] = super::UniformDesc {
-                    location: Some(location),
-                    size: uniform_size,
+            if let Some(location) = location {
+                uniforms.push(super::UniformDesc {
+                    location: location,
+                    offset: item.offset,
                     utype,
-                };
-
-                offset += uniform_size as usize;
+                });
             }
         }
 

@@ -8,7 +8,6 @@ struct TextureSlotDesc {
     sampler_index: Option<u8>,
 }
 
-#[derive(Default)]
 pub(super) struct State {
     topology: u32,
     primitive: super::PrimitiveState,
@@ -30,8 +29,38 @@ pub(super) struct State {
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
-    push_offset_to_uniform: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANTS }>,
+    uniform_descs: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANTS }>,
+    current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            topology: Default::default(),
+            primitive: Default::default(),
+            index_format: Default::default(),
+            index_offset: Default::default(),
+            vertex_buffers: Default::default(),
+            vertex_attributes: Default::default(),
+            color_targets: Default::default(),
+            stencil: Default::default(),
+            depth_bias: Default::default(),
+            alpha_to_coverage_enabled: Default::default(),
+            samplers: Default::default(),
+            texture_slots: Default::default(),
+            render_size: Default::default(),
+            resolve_attachments: Default::default(),
+            invalidate_attachments: Default::default(),
+            has_pass_label: Default::default(),
+            instance_vbuf_mask: Default::default(),
+            dirty_vbuf_mask: Default::default(),
+            active_first_instance: Default::default(),
+            uniform_descs: Default::default(),
+            current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
+            end_of_pass_timestamp: Default::default(),
+        }
+    }
 }
 
 impl super::CommandBuffer {
@@ -176,10 +205,7 @@ impl super::CommandEncoder {
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
-        self.state.push_offset_to_uniform.clear();
-        self.state
-            .push_offset_to_uniform
-            .extend(inner.uniforms.iter().cloned());
+        self.state.uniform_descs = inner.uniforms.clone();
 
         // rebind textures, if needed
         let mut dirty_textures = 0u32;
@@ -726,21 +752,32 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_offset: u32,
         data: &[u32],
     ) {
-        let range = self.cmd_buffer.add_push_constant_data(data);
+        // Copy the data into the current state of the push constants,
+        // so that partial writes can be fully updated.
+        let start_words = start_offset / 4;
+        let end_words = start_words + data.len() as u32;
+        self.state.current_push_constant_data[start_words as usize..end_words as usize]
+            .copy_from_slice(data);
 
-        let end = start_offset + data.len() as u32 * 4;
-        let mut offset = start_offset;
-        while offset < end {
-            let uniform = self.state.push_offset_to_uniform[offset as usize / 4].clone();
-            let size = uniform.size;
-            if uniform.location.is_none() {
-                panic!("No uniform for push constant");
+        for uniform in self.state.uniform_descs.iter().cloned() {
+            let uniform_size_words = conv::uniform_byte_size(uniform.utype) / 4;
+            let uniform_start_words = uniform.offset / 4;
+            let uniform_end_words = uniform_start_words + uniform_size_words;
+
+            let uniform_data = &self.state.current_push_constant_data
+                [uniform_start_words as usize..uniform_end_words as usize];
+            let range = self.cmd_buffer.add_push_constant_data(uniform_data);
+
+            let needs_updating =
+                start_words < uniform_end_words || uniform_start_words <= end_words;
+
+            if needs_updating {
+                eprintln!("Creating command: {range:?}, {uniform:?}");
+                self.cmd_buffer.commands.push(C::SetPushConstants {
+                    uniform,
+                    offset: range.start,
+                });
             }
-            self.cmd_buffer.commands.push(C::SetPushConstants {
-                uniform,
-                offset: range.start + offset,
-            });
-            offset += size;
         }
     }
 

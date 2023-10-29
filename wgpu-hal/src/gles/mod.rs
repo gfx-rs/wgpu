@@ -476,10 +476,10 @@ struct VertexBufferDesc {
     stride: u32,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct UniformDesc {
-    location: Option<glow::UniformLocation>,
-    size: u32,
+    location: glow::UniformLocation,
+    offset: u32,
     utype: u32,
 }
 
@@ -503,7 +503,7 @@ type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
-    uniforms: [UniformDesc; MAX_PUSH_CONSTANTS],
+    uniforms: ArrayVec<UniformDesc, MAX_PUSH_CONSTANTS>,
 }
 
 #[derive(Clone, Debug)]

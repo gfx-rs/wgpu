@@ -215,8 +215,7 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(Limits {
                 max_push_constant_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
-            })
-            .expect_fail(FailureCase::backend(Backends::GL)),
+            }),
     )
     .run_sync(|ctx| {
         shader_input_output_test(

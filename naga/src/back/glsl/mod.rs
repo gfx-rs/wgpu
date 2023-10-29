@@ -309,6 +309,8 @@ pub struct ReflectionInfo {
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
     /// Mapping between names and attribute locations.
     pub varying: crate::FastHashMap<String, VaryingLocation>,
+    /// List of push constant items
+    pub push_constant_items: Vec<PushConstantItem>,
 }
 
 /// Mapping between a texture and its sampler, if it exists.
@@ -326,6 +328,20 @@ pub struct TextureMapping {
     pub texture: Handle<crate::GlobalVariable>,
     /// Handle to the associated sampler global variable, if it exists.
     pub sampler: Option<Handle<crate::GlobalVariable>>,
+}
+
+/// List of a push constant's OpenGL name, offset, and type.
+///
+/// Push constants are emulated using traditional uniforms in OpenGL.
+/// These are composed of a set of primatives (scalar, vector, matrix) that
+/// are given names. Because they are not backed by the concept of a buffer,
+/// we must do the work of calculating the offset of each primative in the
+/// push constant block.
+#[derive(Debug, Clone)]
+pub struct PushConstantItem {
+    pub name: String,
+    pub ty: Handle<crate::Type>,
+    pub offset: u32,
 }
 
 /// Helper structure that generates a number
@@ -4069,6 +4085,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        let mut push_constant_info = None;
         for (handle, var) in self.module.global_variables.iter() {
             if info[handle].is_empty() {
                 continue;
@@ -4093,16 +4110,83 @@ impl<'a, W: Write> Writer<'a, W> {
                         let name = self.reflection_names_globals[&handle].clone();
                         uniforms.insert(handle, name);
                     }
+                    crate::AddressSpace::PushConstant => {
+                        let name = self.reflection_names_globals[&handle].clone();
+                        push_constant_info = Some((name, var.ty));
+                    }
                     _ => (),
                 },
             }
+        }
+
+        let mut push_constant_segments = Vec::new();
+        let mut push_constant_items = vec![];
+
+        if let Some((name, ty)) = push_constant_info {
+            let mut layouter = crate::proc::Layouter::default();
+            layouter.update(self.module.to_ctx()).unwrap();
+
+            push_constant_segments.push(name);
+            self.collect_all_element_names(
+                ty,
+                &mut push_constant_segments,
+                &layouter,
+                &mut 0,
+                &mut push_constant_items,
+            );
         }
 
         Ok(ReflectionInfo {
             texture_mapping,
             uniforms,
             varying: mem::take(&mut self.varying),
+            push_constant_items,
         })
+    }
+
+    fn collect_all_element_names(
+        &mut self,
+        ty: Handle<crate::Type>,
+        segments: &mut Vec<String>,
+        layouter: &crate::proc::Layouter,
+        offset: &mut u32,
+        items: &mut Vec<PushConstantItem>,
+    ) {
+        let layout = &layouter[ty];
+        *offset = layout.alignment.round_up(*offset);
+        match self.module.types[ty].inner {
+            TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
+                let name: String = segments.iter().map(String::as_str).collect();
+                items.push(PushConstantItem {
+                    name,
+                    offset: *offset,
+                    ty,
+                });
+                *offset += layout.size;
+            }
+            TypeInner::Array { base, size, .. } => {
+                let crate::ArraySize::Constant(count) = size else {
+                    unreachable!("Cannot have dynamic arrays in push constants");
+                };
+
+                for i in 0..count.get() {
+                    segments.push(format!("[{}]", i));
+                    self.collect_all_element_names(base, segments, layouter, offset, items);
+                    segments.pop();
+                }
+            }
+            TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.iter().enumerate() {
+                    segments.push(format!(
+                        ".{}",
+                        self.names[&NameKey::StructMember(ty, index as u32)]
+                    ));
+                    self.collect_all_element_names(member.ty, segments, layouter, offset, items);
+                    segments.pop();
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 }
 
