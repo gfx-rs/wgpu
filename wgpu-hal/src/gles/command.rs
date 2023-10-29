@@ -30,6 +30,7 @@ pub(super) struct State {
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
     uniform_descs: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
+    // The current state of the push constant data block.
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
 }
@@ -752,27 +753,38 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_offset: u32,
         data: &[u32],
     ) {
-        // Copy the data into the current state of the push constants,
-        // so that partial writes can be fully updated.
+        // There is nothing preventing the user from trying to update a single value within
+        // a vector or matrix in the set_push_constant call, as to the user, all of this is
+        // just memory. However OpenGL does not allow parital uniform updates.
+        //
+        // As such, we locally keep a copy of the current state of the push constant memory
+        // block. If the user tries to update a single value, we have the data to update the entirety
+        // of the uniform.
         let start_words = start_offset / 4;
         let end_words = start_words + data.len() as u32;
         self.state.current_push_constant_data[start_words as usize..end_words as usize]
             .copy_from_slice(data);
 
+        // We iterate over the uniform list as there may be multiple uniforms that need
+        // updating from the same push constant memory (one for each shader stage).
+        //
+        // Additionally, any statically unused uniform descs will have been removed from this list
+        // by OpenGL, so the uniform list is not contiguous.
         for uniform in self.state.uniform_descs.iter().cloned() {
             let uniform_size_words = conv::uniform_byte_size(uniform.utype) / 4;
             let uniform_start_words = uniform.offset / 4;
             let uniform_end_words = uniform_start_words + uniform_size_words;
 
-            let uniform_data = &self.state.current_push_constant_data
-                [uniform_start_words as usize..uniform_end_words as usize];
-            let range = self.cmd_buffer.add_push_constant_data(uniform_data);
-
+            // Is true if any word within the uniform binding was updated
             let needs_updating =
                 start_words < uniform_end_words || uniform_start_words <= end_words;
 
             if needs_updating {
-                eprintln!("Creating command: {range:?}, {uniform:?}");
+                let uniform_data = &self.state.current_push_constant_data
+                    [uniform_start_words as usize..uniform_end_words as usize];
+
+                let range = self.cmd_buffer.add_push_constant_data(uniform_data);
+
                 self.cmd_buffer.commands.push(C::SetPushConstants {
                     uniform,
                     offset: range.start,

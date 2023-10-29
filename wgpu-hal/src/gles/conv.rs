@@ -433,13 +433,13 @@ pub(super) fn map_naga_uniform_type(ty: &naga::TypeInner) -> u32 {
 
             match (size, kind) {
                 (naga::VectorSize::Bi, naga::ScalarKind::Sint) => glow::INT_VEC2,
-                (naga::VectorSize::Bi, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC2,
-                (naga::VectorSize::Bi, naga::ScalarKind::Float) => glow::FLOAT_VEC2,
                 (naga::VectorSize::Tri, naga::ScalarKind::Sint) => glow::INT_VEC3,
-                (naga::VectorSize::Tri, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC3,
-                (naga::VectorSize::Tri, naga::ScalarKind::Float) => glow::FLOAT_VEC3,
                 (naga::VectorSize::Quad, naga::ScalarKind::Sint) => glow::INT_VEC4,
+                (naga::VectorSize::Bi, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC2,
+                (naga::VectorSize::Tri, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC3,
                 (naga::VectorSize::Quad, naga::ScalarKind::Uint) => glow::UNSIGNED_INT_VEC4,
+                (naga::VectorSize::Bi, naga::ScalarKind::Float) => glow::FLOAT_VEC2,
+                (naga::VectorSize::Tri, naga::ScalarKind::Float) => glow::FLOAT_VEC3,
                 (naga::VectorSize::Quad, naga::ScalarKind::Float) => glow::FLOAT_VEC4,
                 (_, naga::ScalarKind::Bool) => unreachable!(),
             }
@@ -474,7 +474,7 @@ pub(super) fn uniform_byte_size(glsl_uniform_type: u32) -> u32 {
         glow::FLOAT_VEC2 | glow::INT_VEC2 | glow::UNSIGNED_INT_VEC2 => 8,
         glow::FLOAT_VEC3 | glow::INT_VEC3 | glow::UNSIGNED_INT_VEC3 => 12,
         glow::FLOAT_VEC4 | glow::INT_VEC4 | glow::UNSIGNED_INT_VEC4 => 16,
-        // Making sure we round the _row_ value up to 4 in the 3 element case.
+        // Due to the alignment of vec3s, we need to round the _rows_ up to 4.
         //             C R         C   R
         glow::FLOAT_MAT2 =>   4 * (2 * 2),
         glow::FLOAT_MAT2x3 => 4 * (2 * 4),

@@ -309,7 +309,7 @@ pub struct ReflectionInfo {
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
     /// Mapping between names and attribute locations.
     pub varying: crate::FastHashMap<String, VaryingLocation>,
-    /// List of push constant items
+    /// List of push constant items in the shader.
     pub push_constant_items: Vec<PushConstantItem>,
 }
 
@@ -330,17 +330,47 @@ pub struct TextureMapping {
     pub sampler: Option<Handle<crate::GlobalVariable>>,
 }
 
-/// List of a push constant's OpenGL name, offset, and type.
+/// All information to bind a single uniform value to the shader.
 ///
 /// Push constants are emulated using traditional uniforms in OpenGL.
+///
 /// These are composed of a set of primatives (scalar, vector, matrix) that
 /// are given names. Because they are not backed by the concept of a buffer,
 /// we must do the work of calculating the offset of each primative in the
 /// push constant block.
 #[derive(Debug, Clone)]
 pub struct PushConstantItem {
+    /// GL uniform name for the item. This name is the same as if you were
+    /// to access it directly from a GLSL shader.
+    ///
+    /// The with the following example, the following names will be generated,
+    /// one name per GLSL uniform.
+    ///
+    /// ```glsl
+    /// struct InnerStruct {
+    ///     value: f32,
+    /// }
+    ///
+    /// struct PushConstant {
+    ///     InnerStruct inner;
+    ///     vec4 array[2];
+    /// }
+    ///
+    /// uniform PushConstants _push_constant_binding_cs;
+    /// ```
+    ///
+    /// ```text
+    /// - _push_constant_binding_cs.inner.value
+    /// - _push_constant_binding_cs.array[0]
+    /// - _push_constant_binding_cs.array[1]
+    /// ```
+    ///
     pub name: String,
+    /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
     pub ty: Handle<crate::Type>,
+    /// The offset in the push constant memory block this uniform maps to.
+    ///
+    /// The size of the uniform can be derived from the type.
     pub offset: u32,
 }
 
@@ -4131,11 +4161,18 @@ impl<'a, W: Write> Writer<'a, W> {
         let mut push_constant_items = vec![];
 
         if let Some((name, ty)) = push_constant_info {
+            // We don't have a layouter available to us, so we need to create one.
+            //
+            // This is potentially a bit wasteful, but the set of types in the program
+            // shouldn't be too large.
             let mut layouter = crate::proc::Layouter::default();
             layouter.update(self.module.to_ctx()).unwrap();
 
+            // We start with the name of the binding itself.
             push_constant_segments.push(name);
-            self.collect_all_element_names(
+
+            // We then recursively collect all the uniform fields of the push constant.
+            self.collect_push_constant_items(
                 ty,
                 &mut push_constant_segments,
                 &layouter,
@@ -4152,7 +4189,7 @@ impl<'a, W: Write> Writer<'a, W> {
         })
     }
 
-    fn collect_all_element_names(
+    fn collect_push_constant_items(
         &mut self,
         ty: Handle<crate::Type>,
         segments: &mut Vec<String>,
@@ -4160,10 +4197,15 @@ impl<'a, W: Write> Writer<'a, W> {
         offset: &mut u32,
         items: &mut Vec<PushConstantItem>,
     ) {
+        // At this point in the recursion, `segments` contains the path
+        // needed to access `ty` from the root.
+
         let layout = &layouter[ty];
         *offset = layout.alignment.round_up(*offset);
         match self.module.types[ty].inner {
+            // All these types map directly to GL uniforms.
             TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
+                // Build the full name, by combining all current segments.
                 let name: String = segments.iter().map(String::as_str).collect();
                 items.push(PushConstantItem {
                     name,
@@ -4172,27 +4214,34 @@ impl<'a, W: Write> Writer<'a, W> {
                 });
                 *offset += layout.size;
             }
+            // Arrays are recursed into.
             TypeInner::Array { base, size, .. } => {
                 let crate::ArraySize::Constant(count) = size else {
                     unreachable!("Cannot have dynamic arrays in push constants");
                 };
 
                 for i in 0..count.get() {
+                    // Add the array accessor and recurse.
                     segments.push(format!("[{}]", i));
-                    self.collect_all_element_names(base, segments, layouter, offset, items);
+                    self.collect_push_constant_items(base, segments, layouter, offset, items);
                     segments.pop();
                 }
+
+                // Ensure the stride is kept by rounding up to the alignment.
                 *offset = layout.alignment.round_up(*offset)
             }
             TypeInner::Struct { ref members, .. } => {
                 for (index, member) in members.iter().enumerate() {
+                    // Add struct accessor and recurse.
                     segments.push(format!(
                         ".{}",
                         self.names[&NameKey::StructMember(ty, index as u32)]
                     ));
-                    self.collect_all_element_names(member.ty, segments, layouter, offset, items);
+                    self.collect_push_constant_items(member.ty, segments, layouter, offset, items);
                     segments.pop();
                 }
+
+                // Ensure ending padding is kept by rounding up to the alignment.
                 *offset = layout.alignment.round_up(*offset)
             }
             _ => unreachable!(),

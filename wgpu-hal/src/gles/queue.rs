@@ -1399,9 +1399,9 @@ impl super::Queue {
                 offset,
             } => {
                 // T must be POD
+                //
+                // This function is absolutely sketchy and we really should be using bytemuck.
                 unsafe fn get_data<T, const COUNT: usize>(data: &[u8], offset: u32) -> &[T; COUNT] {
-                    eprintln!("Getting data: {:?}, {offset:?}, {COUNT}", data.len());
-
                     let data_required = mem::size_of::<T>() * COUNT;
 
                     let raw = &data[(offset as usize)..][..data_required];
@@ -1470,6 +1470,7 @@ impl super::Queue {
                         unsafe { gl.uniform_matrix_2_f32_slice(location, false, data) };
                     }
                     glow::FLOAT_MAT2x3 => {
+                        // repack 2 vec3s into 6 values.
                         let unpacked_data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
                         #[rustfmt::skip]
                         let packed_data = [
@@ -1487,6 +1488,7 @@ impl super::Queue {
                         unsafe { gl.uniform_matrix_3x2_f32_slice(location, false, data) };
                     }
                     glow::FLOAT_MAT3 => {
+                        // repack 3 vec3s into 9 values.
                         let unpacked_data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
                         #[rustfmt::skip]
                         let packed_data = [
@@ -1505,6 +1507,7 @@ impl super::Queue {
                         unsafe { gl.uniform_matrix_4x2_f32_slice(location, false, data) };
                     }
                     glow::FLOAT_MAT4x3 => {
+                        // repack 4 vec3s into 12 values.
                         let unpacked_data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
                         #[rustfmt::skip]
                         let packed_data = [

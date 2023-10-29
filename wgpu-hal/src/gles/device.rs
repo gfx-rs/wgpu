@@ -85,8 +85,7 @@ impl CompilationContext<'_> {
             }
         }
 
-        self.push_constant_items
-            .extend_from_slice(&reflection_info.push_constant_items);
+        *self.push_constant_items = reflection_info.push_constant_items;
     }
 }
 
@@ -395,6 +394,7 @@ impl super::Device {
                 match register {
                     super::BindingRegister::UniformBuffers => {
                         let index = unsafe { gl.get_uniform_block_index(program, name) }.unwrap();
+                        log::trace!("\tBinding slot {slot} to block index {index}");
                         unsafe { gl.uniform_block_binding(program, index, slot as _) };
                     }
                     super::BindingRegister::StorageBuffers => {
@@ -424,16 +424,16 @@ impl super::Device {
                 let location = unsafe { gl.get_uniform_location(program, &item.name) };
 
                 log::trace!(
-                    "push constant item: name={}, ty={:?}, offset={}, location = {:?}",
+                    "push constant item: name={}, ty={:?}, offset={}, location={:?}",
                     item.name,
                     type_inner,
                     item.offset,
                     location,
                 );
 
-                let utype = conv::map_naga_uniform_type(type_inner);
-
                 if let Some(location) = location {
+                    let utype = conv::map_naga_uniform_type(type_inner);
+
                     uniforms.push(super::UniformDesc {
                         location,
                         offset: item.offset,

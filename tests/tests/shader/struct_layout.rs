@@ -171,7 +171,9 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         }
     }
 
-    // Nested struct and arraytest
+    // Nested struct and array test.
+    //
+    // This tries to exploit all the weird edge cases of the struct layout algorithm.
     {
         let header =
             String::from("struct Inner { scalar: f32, member: array<vec3<f32>, 2>, scalar2: f32 }");

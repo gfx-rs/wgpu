@@ -109,7 +109,7 @@ const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
 const MAX_PUSH_CONSTANTS: usize = 64;
 // We have to account for each push constant may need to be set for every shader.
-const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS + crate::MAX_CONCURRENT_SHADER_STAGES;
+const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
     type Instance = Instance;
