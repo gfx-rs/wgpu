@@ -670,9 +670,7 @@ impl PhysicalDeviceCapabilities {
 
         // Optional `VK_EXT_robustness2`
         if self.supports_extension(vk::ExtRobustness2Fn::name()) {
-            if !is_intel_igpu_outdated_for_robustness2(self.properties) {
-                extensions.push(vk::ExtRobustness2Fn::name());
-            }
+            extensions.push(vk::ExtRobustness2Fn::name());
         }
 
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
@@ -871,7 +869,9 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceImageRobustnessFeaturesEXT::default());
                 builder = builder.push_next(next);
             }
-            if capabilities.supports_extension(vk::ExtRobustness2Fn::name()) {
+            if !is_intel_igpu_outdated_for_robustness2(capabilities.properties, capabilities.driver)
+                && capabilities.supports_extension(vk::ExtRobustness2Fn::name())
+            {
                 let next = features
                     .robustness2
                     .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
@@ -1784,16 +1784,26 @@ fn supports_bgra8unorm_storage(
 // For https://github.com/gfx-rs/wgpu/issues/4599
 // Intel iGPUs with outdated drivers can break rendering if `VK_EXT_robustness2` is used.
 // Driver version 31.0.101.2115 works, but there's probably an earlier functional version.
-fn is_intel_igpu_outdated_for_robustness2(props: vk::PhysicalDeviceProperties) -> bool {
+fn is_intel_igpu_outdated_for_robustness2(
+    props: vk::PhysicalDeviceProperties,
+    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+) -> bool {
+    use crate::auxil::cstr_from_bytes_until_nul;
+
     const DRIVER_VERSION_31_0_101: u32 = 0x194000;
     const DRIVER_VERSION_WORKING: u32 = DRIVER_VERSION_31_0_101 + 2115;
 
     let is_outdated = props.vendor_id == crate::auxil::db::intel::VENDOR
         && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
-        && props.driver_version < DRIVER_VERSION_WORKING;
+        && props.driver_version < DRIVER_VERSION_WORKING
+        && cstr_from_bytes_until_nul(&driver.unwrap_or_default().driver_info)
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default()
+            == "Intel driver";
 
     if is_outdated {
-        log::trace!("Disabling robustBufferAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X} less than 0x{:X}, the known good driver (31.0.101.2115)", props.driver_version, DRIVER_VERSION_WORKING);
+        log::trace!("Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X} less than 0x{:X}, the known good driver (31.0.101.2115)", props.driver_version, DRIVER_VERSION_WORKING);
     }
     is_outdated
 }
