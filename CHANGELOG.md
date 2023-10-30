@@ -4,7 +4,7 @@
 Please add your PR to the changelog! Choose from a top level and bottom
 level category, then write your changes like follows:
 
-- Describe your change in a user friendly format by @yourslug in [#9999](https://github.com/gfx-rs/wgpu/pull/2488)
+- Describe your change in a user friendly format by @yourslug in [#99999](https://github.com/gfx-rs/wgpu/pull/99999)
 
 You can add additional user facing information if it's a major breaking change. You can use the following to help:
 
@@ -40,12 +40,23 @@ Bottom level categories:
 
 ## Unreleased
 
+For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
 ### Major changes
 - Arcanization of wgpu core resources: Removed 'Token' and 'LifeTime' related management,
 removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal reference count, removing mut from resources and added instead internal members locks on demand or atomics operations, resources now implement Drop and destroy stuff when last 'Arc' resources is released, resources hold an 'Arc' in order to be able to implement Drop, resources have an utility to retrieve the id of the resource itself, removed all guards and just retrive the 'Arc' needed on-demand to unlock registry of resources asap removing locking from hot paths. By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
 
+### Bug Fixes
+
+
+#### WGL
+
+- Create a hidden window per `wgpu::Instance` instead of sharing a global one.
+
+## v0.18.0 (2023-10-25)
+
 ### Desktop OpenGL 3.3+ Support on Windows
+
 We now support OpenGL on Windows! This brings support for a vast majority of the hardware that used to be covered by our DX11 backend. As of this writing we support OpenGL 3.3+, though there are efforts to reduce that further.
 
 This allows us to cover the last 12 years of Intel GPUs (starting with Ivy Bridge; aka 3xxx), and the last 16 years of AMD (starting with Terascale; aka HD 2000) / NVidia GPUs (starting with Tesla; aka GeForce 8xxx).

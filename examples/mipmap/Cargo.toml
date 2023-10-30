@@ -14,10 +14,12 @@ harness = false
 [dependencies]
 bytemuck.workspace = true
 glam.workspace = true
-wasm-bindgen-test.workspace = true
 wgpu-example.workspace = true
 wgpu.workspace = true
 winit.workspace = true
 
 [dev-dependencies]
 wgpu-test.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true

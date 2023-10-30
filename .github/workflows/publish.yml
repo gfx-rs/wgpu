@@ -2,9 +2,8 @@ name: Publish
 
 on:
   push:
-    branches: ["*"]
-  pull_request:
-  merge_group:
+    branches:
+      - trunk
 
 env:
   CARGO_INCREMENTAL: false

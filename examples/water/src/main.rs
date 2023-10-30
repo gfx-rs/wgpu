@@ -691,13 +691,7 @@ impl wgpu_example::framework::Example for Example {
     }
 
     #[allow(clippy::eq_op)]
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
         let back_color = wgpu::Color {

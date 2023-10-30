@@ -8,9 +8,8 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-exclude = [
-    "Cargo.lock",
-]
+readme = "../README.md"
+exclude = ["Cargo.lock"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -41,7 +40,11 @@ webgl = ["hal", "wgc/gles"]
 vulkan-portability = ["wgc/vulkan"]
 expose-ids = []
 # Implement `Send` and `Sync` on Wasm.
-fragile-send-sync-non-atomic-wasm = ["hal/fragile-send-sync-non-atomic-wasm", "wgc/fragile-send-sync-non-atomic-wasm", "wgt/fragile-send-sync-non-atomic-wasm"]
+fragile-send-sync-non-atomic-wasm = [
+    "hal/fragile-send-sync-non-atomic-wasm",
+    "wgc/fragile-send-sync-non-atomic-wasm",
+    "wgt/fragile-send-sync-non-atomic-wasm",
+]
 
 # wgpu-core is always available as an optional dependency, "wgc".
 # Whenever wgpu-core is selected, we want raw window handle support.
@@ -87,7 +90,11 @@ hal = { workspace = true }
 hal = { workspace = true, features = ["renderdoc"] }
 
 [target.'cfg(windows)'.dependencies]
-hal = { workspace = true, features = ["dxc_shader_compiler", "renderdoc", "windows_rs"] }
+hal = { workspace = true, features = [
+    "dxc_shader_compiler",
+    "renderdoc",
+    "windows_rs",
+] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.hal]
 workspace = true
@@ -96,11 +103,10 @@ optional = true
 [dependencies]
 arrayvec.workspace = true
 cfg-if.workspace = true
-flume.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true
-raw-window-handle.workspace = true
+raw-window-handle = { workspace = true, features = ["std"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
 static_assertions.workspace = true
@@ -249,7 +255,7 @@ web-sys = { workspace = true, features = [
     "ImageBitmapRenderingContext",
     "Window",
     "WorkerGlobalScope",
-    "WorkerNavigator"
+    "WorkerNavigator",
 ] }
 wasm-bindgen.workspace = true
 js-sys.workspace = true

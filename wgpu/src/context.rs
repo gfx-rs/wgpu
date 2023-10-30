@@ -96,7 +96,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
     type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
@@ -1205,7 +1205,7 @@ pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
 pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     fn as_any(&self) -> &dyn Any;
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
@@ -2060,13 +2060,13 @@ where
         self
     }
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError> {
         let (surface, data) =
-            Context::instance_create_surface(self, display_handle, window_handle)?;
+            unsafe { Context::instance_create_surface(self, display_handle, window_handle) }?;
         Ok((surface.into(), Box::new(data) as _))
     }
 

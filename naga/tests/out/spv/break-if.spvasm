@@ -1,0 +1,88 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 50
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %48 "main"
+OpExecutionMode %48 LocalSize 1 1 1
+%2 = OpTypeVoid
+%3 = OpTypeBool
+%6 = OpTypeFunction %2
+%7 = OpConstantTrue  %3
+%16 = OpTypeFunction %2 %3
+%18 = OpTypePointer Function %3
+%19 = OpConstantNull  %3
+%21 = OpConstantNull  %3
+%35 = OpConstantNull  %3
+%37 = OpConstantNull  %3
+%5 = OpFunction  %2  None %6
+%4 = OpLabel
+OpBranch %8
+%8 = OpLabel
+OpBranch %9
+%9 = OpLabel
+OpLoopMerge %10 %12 None
+OpBranch %11
+%11 = OpLabel
+OpBranch %12
+%12 = OpLabel
+OpBranchConditional %7 %10 %9
+%10 = OpLabel
+OpReturn
+OpFunctionEnd
+%15 = OpFunction  %2  None %16
+%14 = OpFunctionParameter  %3
+%13 = OpLabel
+%17 = OpVariable  %18  Function %19
+%20 = OpVariable  %18  Function %21
+OpBranch %22
+%22 = OpLabel
+OpBranch %23
+%23 = OpLabel
+OpLoopMerge %24 %26 None
+OpBranch %25
+%25 = OpLabel
+OpBranch %26
+%26 = OpLabel
+OpStore %17 %14
+%27 = OpLoad  %3  %17
+%28 = OpLogicalNotEqual  %3  %14 %27
+OpStore %20 %28
+%29 = OpLoad  %3  %20
+%30 = OpLogicalEqual  %3  %14 %29
+OpBranchConditional %30 %24 %23
+%24 = OpLabel
+OpReturn
+OpFunctionEnd
+%33 = OpFunction  %2  None %16
+%32 = OpFunctionParameter  %3
+%31 = OpLabel
+%34 = OpVariable  %18  Function %35
+%36 = OpVariable  %18  Function %37
+OpBranch %38
+%38 = OpLabel
+OpBranch %39
+%39 = OpLabel
+OpLoopMerge %40 %42 None
+OpBranch %41
+%41 = OpLabel
+OpStore %34 %32
+%43 = OpLoad  %3  %34
+%44 = OpLogicalNotEqual  %3  %32 %43
+OpStore %36 %44
+OpBranch %42
+%42 = OpLabel
+%45 = OpLoad  %3  %36
+%46 = OpLogicalEqual  %3  %32 %45
+OpBranchConditional %46 %40 %39
+%40 = OpLabel
+OpReturn
+OpFunctionEnd
+%48 = OpFunction  %2  None %6
+%47 = OpLabel
+OpBranch %49
+%49 = OpLabel
+OpReturn
+OpFunctionEnd

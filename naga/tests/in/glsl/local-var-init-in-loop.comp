@@ -1,0 +1,7 @@
+void main() {
+    vec4 sum = vec4(0);
+    for (int i = 0; i < 4; i++) {
+        vec4 a = vec4(1);
+        sum += a;
+    }
+}

@@ -1,0 +1,78 @@
+;; Make sure that we promote `OpTypeArray` of textures and samplers into
+;; `TypeInner::BindingArray` and support indexing it through `OpAccessChain`
+;; and `OpInBoundsAccessChain`.
+;;
+;; Code in here corresponds to, more or less:
+;;
+;; ```rust
+;; #[spirv(fragment)]
+;; pub fn main(
+;;     #[spirv(descriptor_set = 0, binding = 0)]
+;;     images: &[Image!(2D, type=f32, sampled); 256],
+;;     #[spirv(descriptor_set = 0, binding = 1)]
+;;     samplers: &[Sampler; 256],
+;;     out: &mut Vec4,
+;; ) {
+;;     let image = images[1];
+;;     let sampler = samplers[1];
+;;
+;;     *out = image.sample_by_lod(sampler, vec2(0.5, 0.5), 0.0);
+;; }
+;; ```
+
+                     OpCapability Shader
+                     OpMemoryModel Logical Simple
+                     OpEntryPoint Fragment %main "main" %fn_param_images %fn_param_samplers %fn_param_out
+                     OpExecutionMode %main OriginUpperLeft
+                     OpDecorate %images ArrayStride 4
+                     OpDecorate %samplers ArrayStride 4
+                     OpDecorate %fn_param_images DescriptorSet 0
+                     OpDecorate %fn_param_images Binding 0
+                     OpDecorate %fn_param_samplers DescriptorSet 0
+                     OpDecorate %fn_param_samplers Binding 1
+                     OpDecorate %fn_param_out Location 0
+
+             %void = OpTypeVoid
+
+            %float = OpTypeFloat 32
+          %v2float = OpTypeVector %float 2
+          %v4float = OpTypeVector %float 4
+      %v4float_ptr = OpTypePointer Output %v4float
+        %float_0_5 = OpConstant %float 0.5
+    %float_0_5_0_5 = OpConstantComposite %v2float %float_0_5 %float_0_5
+          %float_0 = OpConstant %float 0
+
+              %int = OpTypeInt 32 1
+            %int_1 = OpConstant %int 1
+
+             %uint = OpTypeInt 32 0
+         %uint_256 = OpConstant %uint 256
+
+            %image = OpTypeImage %float 2D 2 0 0 1 Unknown
+        %image_ptr = OpTypePointer UniformConstant %image
+           %images = OpTypeArray %image %uint_256
+       %images_ptr = OpTypePointer UniformConstant %images
+
+          %sampler = OpTypeSampler
+      %sampler_ptr = OpTypePointer UniformConstant %sampler
+         %samplers = OpTypeArray %sampler %uint_256
+     %samplers_ptr = OpTypePointer UniformConstant %samplers
+
+    %sampled_image = OpTypeSampledImage %image
+
+          %fn_void = OpTypeFunction %void
+%fn_param_images   = OpVariable %images_ptr UniformConstant
+%fn_param_samplers = OpVariable %samplers_ptr UniformConstant
+     %fn_param_out = OpVariable %v4float_ptr Output
+
+             %main = OpFunction %void None %fn_void
+     %main_prelude = OpLabel
+                %1 = OpAccessChain %image_ptr %fn_param_images %int_1
+                %2 = OpInBoundsAccessChain %sampler_ptr %fn_param_samplers %int_1
+                %3 = OpLoad %sampler %2
+                %4 = OpLoad %image %1
+                %5 = OpSampledImage %sampled_image %4 %3
+                %6 = OpImageSampleExplicitLod %v4float %5 %float_0_5_0_5 Lod %float_0
+                     OpStore %fn_param_out %6
+                     OpReturn
+                     OpFunctionEnd

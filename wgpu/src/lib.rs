@@ -3,7 +3,7 @@
 //! To start using the API, create an [`Instance`].
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 mod backend;
@@ -1945,16 +1945,30 @@ impl Instance {
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
     pub unsafe fn create_surface<
-        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+        W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
     >(
         &self,
         window: &W,
     ) -> Result<Surface, CreateSurfaceError> {
-        let (id, data) = DynContext::instance_create_surface(
-            &*self.context,
-            raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
-            raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
-        )?;
+        let raw_display_handle = window
+            .display_handle()
+            .map_err(|e| CreateSurfaceError {
+                inner: CreateSurfaceErrorKind::RawHandle(e),
+            })?
+            .as_raw();
+        let raw_window_handle = window
+            .window_handle()
+            .map_err(|e| CreateSurfaceError {
+                inner: CreateSurfaceErrorKind::RawHandle(e),
+            })?
+            .as_raw();
+        let (id, data) = unsafe {
+            DynContext::instance_create_surface(
+                &*self.context,
+                raw_display_handle,
+                raw_window_handle,
+            )
+        }?;
         Ok(Surface {
             context: Arc::clone(&self.context),
             id,
@@ -2933,6 +2947,10 @@ enum CreateSurfaceErrorKind {
     /// Error from WebGPU surface creation.
     #[allow(dead_code)] // may be unused depending on target and features
     Web(String),
+
+    /// Error when trying to get a [`DisplayHandle`] or a [`WindowHandle`] from
+    /// `raw_window_handle`.
+    RawHandle(raw_window_handle::HandleError),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
@@ -2946,6 +2964,7 @@ impl fmt::Display for CreateSurfaceError {
             ))]
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
+            CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
         }
     }
 }
@@ -2960,6 +2979,7 @@ impl error::Error for CreateSurfaceError {
             ))]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            CreateSurfaceErrorKind::RawHandle(e) => e.source(),
         }
     }
 }
@@ -4639,7 +4659,7 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A read-only view into a staging buffer.
+/// A write-only view into a staging buffer.
 ///
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
@@ -4929,6 +4949,7 @@ impl Surface {
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
+    /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         DynContext::surface_configure(
             &*self.context,

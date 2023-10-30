@@ -1,4 +1,7 @@
-use crate::auxil::{self, dxgi::result::HResult as _};
+use crate::{
+    auxil::{self, dxgi::result::HResult as _},
+    dx12::shader_compilation,
+};
 
 use super::{conv, descriptor, view};
 use parking_lot::Mutex;
@@ -19,20 +22,12 @@ impl super::Device {
         limits: &wgt::Limits,
         private_caps: super::PrivateCapabilities,
         library: &Arc<d3d12::D3D12Lib>,
-        dx12_shader_compiler: wgt::Dx12Compiler,
+        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
         let mem_allocator = if private_caps.suballocation_supported {
             super::suballocation::create_allocator_wrapper(&raw)?
         } else {
             None
-        };
-
-        let dxc_container = match dx12_shader_compiler {
-            wgt::Dx12Compiler::Dxc {
-                dxil_path,
-                dxc_path,
-            } => super::shader_compilation::get_dxc_container(dxc_path, dxil_path)?,
-            wgt::Dx12Compiler::Fxc => None,
         };
 
         let mut idle_fence = d3d12::Fence::null();

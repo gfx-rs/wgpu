@@ -6,10 +6,8 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 
-#[cfg(not(target_arch = "wasm32"))]
 const DEBUG_ID: u32 = 0;
 
-#[cfg(not(target_arch = "wasm32"))]
 fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
     std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
@@ -1002,6 +1000,14 @@ impl super::Queue {
                     && is_srgb
                 {
                     unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
+                } else if draw_buffer < 32 {
+                    // Prefer `clear_color` as `clear_buffer_f32_slice` crashes on Sandy Bridge
+                    // on Windows.
+                    unsafe {
+                        gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
+                        gl.clear_color(color[0], color[1], color[2], color[3]);
+                        gl.clear(glow::COLOR_BUFFER_BIT);
+                    }
                 } else {
                     unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
                 }
@@ -1374,34 +1380,45 @@ impl super::Queue {
                     )
                 };
             }
-            #[cfg(not(target_arch = "wasm32"))]
             C::InsertDebugMarker(ref range) => {
                 let marker = extract_marker(data_bytes, range);
                 unsafe {
-                    gl.debug_message_insert(
-                        glow::DEBUG_SOURCE_APPLICATION,
-                        glow::DEBUG_TYPE_MARKER,
-                        DEBUG_ID,
-                        glow::DEBUG_SEVERITY_NOTIFICATION,
-                        marker,
-                    )
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        gl.debug_message_insert(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            glow::DEBUG_TYPE_MARKER,
+                            DEBUG_ID,
+                            glow::DEBUG_SEVERITY_NOTIFICATION,
+                            marker,
+                        )
+                    }
                 };
             }
-            #[cfg(target_arch = "wasm32")]
-            C::InsertDebugMarker(_) => (),
-            #[cfg_attr(target_arch = "wasm32", allow(unused))]
             C::PushDebugGroup(ref range) => {
-                #[cfg(not(target_arch = "wasm32"))]
                 let marker = extract_marker(data_bytes, range);
-                #[cfg(not(target_arch = "wasm32"))]
                 unsafe {
-                    gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                    }
                 };
             }
             C::PopDebugGroup => {
-                #[cfg(not(target_arch = "wasm32"))]
                 unsafe {
-                    gl.pop_debug_group()
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        gl.pop_debug_group()
+                    }
                 };
             }
             C::SetPushConstants {
@@ -1486,17 +1503,26 @@ impl crate::Queue<super::Api> for super::Queue {
             // this at the beginning of the loop in case something outside of wgpu modified
             // this state prior to commit.
             unsafe { self.reset_state(gl) };
-            #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref label) = cmd_buf.label {
-                unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+                {
+                    unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                }
             }
 
             for command in cmd_buf.commands.iter() {
                 unsafe { self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries) };
             }
 
-            #[cfg(not(target_arch = "wasm32"))]
-            if cmd_buf.label.is_some() {
+            if cmd_buf.label.is_some()
+                && self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::DEBUG_FNS)
+            {
                 unsafe { gl.pop_debug_group() };
             }
         }

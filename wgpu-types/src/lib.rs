@@ -177,6 +177,12 @@ bitflags::bitflags! {
     }
 }
 
+impl Default for Backends {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
 impl_bitflags!(Backends);
 
 impl From<Backend> for Backends {
@@ -2096,6 +2102,15 @@ impl TextureFormatFeatureFlags {
             16 => self.contains(tfsc::MULTISAMPLE_X16),
             _ => false,
         }
+    }
+
+    /// A `Vec` of supported sample counts.
+    pub fn supported_sample_counts(&self) -> Vec<u32> {
+        let all_possible_sample_counts: [u32; 5] = [1, 2, 4, 8, 16];
+        all_possible_sample_counts
+            .into_iter()
+            .filter(|&sc| self.sample_count_supported(sc))
+            .collect()
     }
 }
 
@@ -4878,9 +4893,9 @@ pub struct SurfaceConfiguration<V> {
     /// The texture format of the swap chain. The only formats that are guaranteed are
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
     pub format: TextureFormat,
-    /// Width of the swap chain. Must be the same size as the surface.
+    /// Width of the swap chain. Must be the same size as the surface, and nonzero.
     pub width: u32,
-    /// Height of the swap chain. Must be the same size as the surface.
+    /// Height of the swap chain. Must be the same size as the surface, and nonzero.
     pub height: u32,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
     /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and

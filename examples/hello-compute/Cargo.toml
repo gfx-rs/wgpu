@@ -26,5 +26,7 @@ log.workspace = true
 wasm-bindgen-futures.workspace = true
 
 [dev-dependencies]
-wasm-bindgen-test.workspace = true
 wgpu-test.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true

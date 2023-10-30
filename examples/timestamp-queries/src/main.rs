@@ -178,7 +178,7 @@ impl Queries {
 #[cfg_attr(test, allow(unused))]
 async fn run() {
     // Instantiates instance of wgpu
-    let backends = wgpu::util::backend_bits_from_env().unwrap_or_else(wgpu::Backends::all);
+    let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends,
         flags: wgpu::InstanceFlags::from_build_config().with_env(),

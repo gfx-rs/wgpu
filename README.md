@@ -6,7 +6,7 @@
 [![Dev Matrix  ](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org)
 [![User Matrix ](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org)
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
-[![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/master/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
+[![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/trunk/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
 `wgpu` is a cross-platform, safe, pure-rust graphics api. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
@@ -17,16 +17,19 @@ The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It 
 The repository hosts the following libraries:
 
 - [![Crates.io](https://img.shields.io/crates/v/wgpu.svg?label=wgpu)](https://crates.io/crates/wgpu) [![docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu/) - User facing Rust API.
-- [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - Internal WebGPU implementation.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - Internal safe implementation.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
+- [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga) [![docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga/) - Stand-alone shader translation library.
+- [![Crates.io](https://img.shields.io/crates/v/d3d12.svg?label=d3d12)](https://crates.io/crates/d3d12) [![docs.rs](https://docs.rs/d3d12/badge.svg)](https://docs.rs/d3d12/) - Collection of thin abstractions over d3d12.
 - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
 The following binaries:
 
+- [![Crates.io](https://img.shields.io/crates/v/naga-cli.svg?label=naga-cli)](https://crates.io/crates/naga-cli) - Tool for translating shaders between different languages using naga.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-info.svg?label=wgpu-info)](https://crates.io/crates/wgpu-info) - Tool for getting information on GPUs in the system.
 - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
 - `player` - standalone application for replaying the API traces.
-- `wgpu-info` - program that prints out information about all the adapters on the system or invokes a command for every adapter.
 
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
 
@@ -34,7 +37,7 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### Rust
 
-Rust examples can be found at `wgpu/examples`. You can run the examples on native with `cargo run --bin <name>`. See the [list of examples](examples).
+Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin <name>`. See the [list of examples](examples).
 
 To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin <name>`. Then connect to `http://localhost:8000` in your WebGPU enabled browser.
 
@@ -60,8 +63,9 @@ If you want to use wgpu in other languages, there are many bindings to wgpu-nati
 
 We have the Matrix space [![Matrix Space](https://img.shields.io/static/v1?label=Space&message=%23Wgpu&color=blue&logo=matrix)](https://matrix.to/#/#Wgpu:matrix.org) with a few different rooms that form the wgpu community:
 
-- [![Dev Matrix](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of the library's development.
-- [![User Matrix](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
+- [![Wgpu Matrix](https://img.shields.io/static/v1?label=wgpu-devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of the wgpu's development.
+- [![Naga Matrix](https://img.shields.io/static/v1?label=naga-devs&message=%23naga&color=blueviolet&logo=matrix)](https://matrix.to/#/#naga:matrix.org) - discussion of the naga's development.
+- [![User Matrix](https://img.shields.io/static/v1?label=wgpu-users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
 - [![Random Matrix](https://img.shields.io/static/v1?label=random&message=%23wgpu-random&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-random:matrix.org) - discussion of everything else.
 
 ## Wiki
@@ -117,13 +121,13 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 ### MSRV policy
 
 Due to complex dependants, we have two MSRV policies:
- - `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
+ - `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
  - The rest of the workspace has the MSRV of **1.70**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
 This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
 
-The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
+The `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
 require an MSRV ahead of Firefox's MSRV for nightly builds, as
 determined by the value of `MINIMUM_RUST_VERSION` in
 [`python/mozboot/mozboot/util.py`][util].
@@ -195,7 +199,7 @@ To run a given set of tests:
 
 ```
 # Must be inside the cts folder we just checked out, else this will fail
-cargo run --manifest-path ../cts_runner/Cargo.toml -- ./tools/run_deno --verbose "<test string>"
+cargo run --manifest-path ../Cargo.toml --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
 ```
 
 To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).

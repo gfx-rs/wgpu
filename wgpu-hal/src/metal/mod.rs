@@ -80,6 +80,7 @@ impl Instance {
 
 impl crate::Instance<Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
         Ok(Instance {
@@ -96,11 +97,14 @@ impl crate::Instance<Api> for Instance {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 let _ = &self.managed_metal_layer_delegate;
-                Ok(unsafe { Surface::from_view(handle.ui_view, None) })
+                Ok(unsafe { Surface::from_view(handle.ui_view.as_ptr(), None) })
             }
             #[cfg(target_os = "macos")]
             raw_window_handle::RawWindowHandle::AppKit(handle) => Ok(unsafe {
-                Surface::from_view(handle.ns_view, Some(&self.managed_metal_layer_delegate))
+                Surface::from_view(
+                    handle.ns_view.as_ptr(),
+                    Some(&self.managed_metal_layer_delegate),
+                )
             }),
             _ => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Metal-compatible handle"

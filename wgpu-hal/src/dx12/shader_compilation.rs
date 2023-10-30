@@ -99,7 +99,7 @@ mod dxc {
         let dxil = match hassle_rs::Dxil::new(dxil_path) {
             Ok(dxil) => dxil,
             Err(e) => {
-                log::warn!("Failed to load dxil.dll. Defaulting to Fxc instead: {}", e);
+                log::warn!("Failed to load dxil.dll. Defaulting to DXC instead: {}", e);
                 return Ok(None);
             }
         };
@@ -111,7 +111,7 @@ mod dxc {
             Ok(dxc) => dxc,
             Err(e) => {
                 log::warn!(
-                    "Failed to load dxcompiler.dll. Defaulting to Fxc instead: {}",
+                    "Failed to load dxcompiler.dll. Defaulting to FXC instead: {}",
                     e
                 );
                 return Ok(None);

@@ -361,13 +361,7 @@ impl wgpu_example::framework::Example for Example {
     fn update(&mut self, _event: winit::event::WindowEvent) {
         // noop
     }
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
         });

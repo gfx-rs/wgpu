@@ -1085,7 +1085,7 @@ impl crate::context::Context for Context {
         Context(gpu)
     }
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
