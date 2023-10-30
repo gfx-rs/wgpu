@@ -5,10 +5,15 @@
 
 use std::{future::Future, pin::Pin};
 
+use anyhow::Context;
 use parking_lot::Mutex;
 
 use crate::{
-    config::GpuTestConfiguration, params::TestInfo, report::AdapterReport, run::execute_test,
+    config::GpuTestConfiguration,
+    params::TestInfo,
+    report::{AdapterReport, GpuReport},
+    run::execute_test,
+    AdapterSettings,
 };
 
 type NativeTestFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -22,7 +27,7 @@ impl NativeTest {
     fn from_configuration(
         config: GpuTestConfiguration,
         adapter: &AdapterReport,
-        adapter_index: usize,
+        settings: AdapterSettings,
     ) -> Self {
         let backend = adapter.info.backend;
         let device_name = &adapter.info.name;
@@ -30,9 +35,11 @@ impl NativeTest {
         let test_info = TestInfo::from_configuration(&config, adapter);
 
         let full_name = format!(
-            "[{running_msg}] [{backend:?}/{device_name}/{adapter_index}] {base_name}",
+            "[{running_msg}] [{backend:?}/{device_name}/{adapter_index}/{min_features}] {base_name}",
             running_msg = test_info.running_msg,
             base_name = config.name,
+            adapter_index = settings.index,
+            min_features = if settings.minimum_features { "Min Feat" } else { "Full Feat" },
         );
         Self {
             name: full_name,
@@ -52,7 +59,7 @@ impl NativeTest {
                 std::env::set_var("MTL_DEBUG_LAYER", env_value);
                 std::env::set_var("MTL_SHADER_VALIDATION", env_value);
 
-                execute_test(config, Some(test_info), adapter_index).await;
+                execute_test(config, Some(test_info), settings).await;
             }),
         }
     }
@@ -71,12 +78,38 @@ pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(Vec::
 /// Return value for the main function.
 pub type MainResult = anyhow::Result<()>;
 
+fn enumerate_adapters(report: &GpuReport) -> Vec<(&AdapterReport, AdapterSettings)> {
+    let mut backends = wgpu::Backends::empty();
+
+    let mut adapters = Vec::new();
+    for (adapter_index, adapter) in report.devices.iter().enumerate() {
+        let adapter_backend: wgpu::Backends = adapter.info.backend.into();
+        // The first backend we encounter gets a minimum features.
+        if !backends.contains(adapter_backend) {
+            backends |= adapter_backend;
+            adapters.push((
+                adapter,
+                AdapterSettings {
+                    index: adapter_index,
+                    minimum_features: true,
+                },
+            ));
+        }
+
+        adapters.push((
+            adapter,
+            AdapterSettings {
+                index: adapter_index,
+                minimum_features: false,
+            },
+        ));
+    }
+
+    adapters
+}
+
 /// Main function that runs every gpu function once for every adapter on the system.
 pub fn main() -> MainResult {
-    use anyhow::Context;
-
-    use crate::report::GpuReport;
-
     let config_text = {
         profiling::scope!("Reading .gpuconfig");
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
@@ -86,12 +119,10 @@ pub fn main() -> MainResult {
 
     let mut test_guard = TEST_LIST.lock();
     execute_native(test_guard.drain(..).flat_map(|test| {
-        report
-            .devices
-            .iter()
-            .enumerate()
-            .map(move |(adapter_index, adapter)| {
-                NativeTest::from_configuration(test.clone(), adapter, adapter_index)
+        enumerate_adapters(&report)
+            .into_iter()
+            .map(move |(adapter, settings)| {
+                NativeTest::from_configuration(test.clone(), adapter, settings)
             })
     }));
 

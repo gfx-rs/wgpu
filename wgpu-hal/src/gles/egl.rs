@@ -316,6 +316,7 @@ impl EglContext {
 pub struct AdapterContext {
     glow: Mutex<glow::Context>,
     egl: Option<EglContext>,
+    flags: wgt::InstanceFlags,
 }
 
 unsafe impl Sync for AdapterContext {}
@@ -324,6 +325,10 @@ unsafe impl Send for AdapterContext {}
 impl AdapterContext {
     pub fn is_owned(&self) -> bool {
         self.egl.is_some()
+    }
+
+    pub fn flags(&self) -> wgt::InstanceFlags {
+        self.flags
     }
 
     /// Returns the EGL instance.

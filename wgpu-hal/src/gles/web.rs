@@ -8,11 +8,16 @@ use super::TextureFormatDesc;
 /// with the `AdapterContext` API from the EGL implementation.
 pub struct AdapterContext {
     pub glow_context: glow::Context,
+    pub flags: InstanceFlags,
 }
 
 impl AdapterContext {
     pub fn is_owned(&self) -> bool {
         false
+    }
+
+    pub fn flags(&self) -> wgt::InstanceFlags {
+        self.flags
     }
 
     /// Obtain a lock to the EGL context and get handle to the [`glow::Context`] that can be used to
@@ -27,6 +32,7 @@ impl AdapterContext {
 pub struct Instance {
     /// Set when a canvas is provided, and used to implement [`Instance::enumerate_adapters()`].
     webgl2_context: Mutex<Option<web_sys::WebGl2RenderingContext>>,
+    flags: wgt::InstanceFlags,
 }
 
 impl Instance {
@@ -123,10 +129,11 @@ unsafe impl Sync for Instance {}
 unsafe impl Send for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
-    unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WebGL) Backend");
         Ok(Instance {
             webgl2_context: Mutex::new(None),
+            flags: desc.flags,
         })
     }
 

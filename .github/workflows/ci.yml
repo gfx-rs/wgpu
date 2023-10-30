@@ -443,6 +443,7 @@ jobs:
       - name: generate coverage report
         id: coverage
         shell: bash
+        if: always() # We want coverage even if tests fail
         continue-on-error: true
         run: |
           set -e

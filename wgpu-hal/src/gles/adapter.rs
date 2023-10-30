@@ -585,6 +585,18 @@ impl super::Adapter {
         );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
 
+        if context
+            .flags()
+            .contains(wgt::InstanceFlags::MINIMAL_INTERNAL_CAPABILITIES)
+        {
+            private_caps.remove(
+                super::PrivateCapabilities::BUFFER_ALLOCATION
+                    | super::PrivateCapabilities::VERTEX_BUFFER_LAYOUT
+                    | super::PrivateCapabilities::GET_BUFFER_SUB_DATA
+                    | super::PrivateCapabilities::QUERY_BUFFERS,
+            );
+        }
+
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
 

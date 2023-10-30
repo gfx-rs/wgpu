@@ -1017,7 +1017,7 @@ impl super::Instance {
             return None;
         }
 
-        let private_caps = super::PrivateCapabilities {
+        let mut private_caps = super::PrivateCapabilities {
             flip_y_requires_shift: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(vk::KhrMaintenance1Fn::name()),
             imageless_framebuffers: match phd_features.imageless_framebuffer {
@@ -1083,6 +1083,25 @@ impl super::Instance {
             image_format_list: phd_capabilities.device_api_version >= vk::API_VERSION_1_2
                 || phd_capabilities.supports_extension(vk::KhrImageFormatListFn::name()),
         };
+
+        if self
+            .shared
+            .flags
+            .contains(wgt::InstanceFlags::MINIMAL_INTERNAL_CAPABILITIES)
+        {
+            private_caps.imageless_framebuffers = false;
+            private_caps.image_view_usage = false;
+            private_caps.timeline_semaphores = false;
+            private_caps.texture_d24 = false;
+            private_caps.texture_d24_s8 = false;
+            private_caps.texture_s8 = false;
+            private_caps.robust_buffer_access = false;
+            private_caps.robust_image_access = false;
+            private_caps.robust_buffer_access2 = false;
+            private_caps.robust_image_access2 = false;
+            private_caps.zero_initialize_workgroup_memory = false;
+        }
+
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
             alignments: phd_capabilities.to_hal_alignments(),

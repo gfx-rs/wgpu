@@ -849,6 +849,10 @@ bitflags::bitflags! {
         const VALIDATION = 1 << 1;
         /// Don't pass labels to wgpu-hal.
         const DISCARD_HAL_LABELS = 1 << 2;
+        /// Use the minimum possible internal capabilities for all devices.
+        ///
+        /// This is only useful for wgpu-internal testing.
+        const MINIMAL_INTERNAL_CAPABILITIES = 1 << 3;
     }
 }
 

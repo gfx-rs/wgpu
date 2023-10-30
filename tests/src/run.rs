@@ -8,7 +8,7 @@ use crate::{
     isolation,
     params::TestInfo,
     report::AdapterReport,
-    GpuTestConfiguration,
+    AdapterSettings, GpuTestConfiguration,
 };
 
 /// Parameters and resources hadned to the test function.
@@ -29,7 +29,7 @@ pub struct TestingContext {
 pub async fn execute_test(
     config: GpuTestConfiguration,
     test_info: Option<TestInfo>,
-    adapter_index: usize,
+    settings: AdapterSettings,
 ) {
     // If we get information externally, skip based on that information before we do anything.
     if let Some(TestInfo { skip: true, .. }) = test_info {
@@ -44,7 +44,7 @@ pub async fn execute_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (adapter, _surface_guard) = initialize_adapter(adapter_index).await;
+    let (adapter, _surface_guard) = initialize_adapter(settings).await;
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
