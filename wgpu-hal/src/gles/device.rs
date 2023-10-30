@@ -750,14 +750,60 @@ impl crate::Device<super::Api> for super::Device {
 
             if conv::is_layered_target(target) {
                 unsafe {
-                    gl.tex_storage_3d(
-                        target,
-                        desc.mip_level_count as i32,
-                        format_desc.internal,
-                        desc.size.width as i32,
-                        desc.size.height as i32,
-                        desc.size.depth_or_array_layers as i32,
-                    )
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::TEXTURE_STORAGE)
+                    {
+                        gl.tex_storage_3d(
+                            target,
+                            desc.mip_level_count as i32,
+                            format_desc.internal,
+                            desc.size.width as i32,
+                            desc.size.height as i32,
+                            desc.size.depth_or_array_layers as i32,
+                        )
+                    } else if target == glow::TEXTURE_3D {
+                        let mut width = desc.size.width;
+                        let mut height = desc.size.width;
+                        let mut depth = desc.size.depth_or_array_layers;
+                        for i in 0..desc.mip_level_count {
+                            gl.tex_image_3d(
+                                target,
+                                i as i32,
+                                format_desc.internal as i32,
+                                width as i32,
+                                height as i32,
+                                depth as i32,
+                                0,
+                                format_desc.external,
+                                format_desc.data_type,
+                                None,
+                            );
+                            width = max(1, width / 2);
+                            height = max(1, height / 2);
+                            depth = max(1, depth / 2);
+                        }
+                    } else {
+                        let mut width = desc.size.width;
+                        let mut height = desc.size.width;
+                        for i in 0..desc.mip_level_count {
+                            gl.tex_image_3d(
+                                target,
+                                i as i32,
+                                format_desc.internal as i32,
+                                width as i32,
+                                height as i32,
+                                desc.size.depth_or_array_layers as i32,
+                                0,
+                                format_desc.external,
+                                format_desc.data_type,
+                                None,
+                            );
+                            width = max(1, width / 2);
+                            height = max(1, height / 2);
+                        }
+                    }
                 };
             } else if desc.sample_count > 1 {
                 unsafe {

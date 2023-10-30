@@ -979,7 +979,13 @@ impl super::Queue {
                 unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.draw_fbo)) };
             }
             C::InvalidateAttachments(ref list) => {
-                unsafe { gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list) };
+                if self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::INVALIDATE_FRAMEBUFFER)
+                {
+                    unsafe { gl.invalidate_framebuffer(glow::DRAW_FRAMEBUFFER, list) };
+                }
             }
             C::SetDrawColorBuffers(count) => {
                 self.draw_buffer_count.store(count, Ordering::Relaxed);
@@ -1000,16 +1006,14 @@ impl super::Queue {
                     && is_srgb
                 {
                     unsafe { self.perform_shader_clear(gl, draw_buffer, *color) };
-                } else if draw_buffer < 32 {
-                    // Prefer `clear_color` as `clear_buffer_f32_slice` crashes on Sandy Bridge
+                } else {
+                    // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
                     // on Windows.
                     unsafe {
                         gl.draw_buffers(&[glow::COLOR_ATTACHMENT0 + draw_buffer]);
                         gl.clear_color(color[0], color[1], color[2], color[3]);
                         gl.clear(glow::COLOR_BUFFER_BIT);
                     }
-                } else {
-                    unsafe { gl.clear_buffer_f32_slice(glow::COLOR, draw_buffer, color) };
                 }
             }
             C::ClearColorU(draw_buffer, ref color) => {
@@ -1019,20 +1023,29 @@ impl super::Queue {
                 unsafe { gl.clear_buffer_i32_slice(glow::COLOR, draw_buffer, color) };
             }
             C::ClearDepth(depth) => {
-                unsafe { gl.clear_buffer_f32_slice(glow::DEPTH, 0, &[depth]) };
+                // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                // on Windows.
+                unsafe {
+                    gl.clear_depth_f32(depth);
+                    gl.clear(glow::DEPTH_BUFFER_BIT);
+                }
             }
             C::ClearStencil(value) => {
-                unsafe { gl.clear_buffer_i32_slice(glow::STENCIL, 0, &[value as i32]) };
+                // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                // on Windows.
+                unsafe {
+                    gl.clear_stencil(value as i32);
+                    gl.clear(glow::STENCIL_BUFFER_BIT);
+                }
             }
             C::ClearDepthAndStencil(depth, stencil_value) => {
+                // Prefer `clear` as `clear_buffer` functions have issues on Sandy Bridge
+                // on Windows.
                 unsafe {
-                    gl.clear_buffer_depth_stencil(
-                        glow::DEPTH_STENCIL,
-                        0,
-                        depth,
-                        stencil_value as i32,
-                    )
-                };
+                    gl.clear_depth_f32(depth);
+                    gl.clear_stencil(stencil_value as i32);
+                    gl.clear(glow::DEPTH_BUFFER_BIT | glow::STENCIL_BUFFER_BIT);
+                }
             }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
