@@ -329,6 +329,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     // We spawn a thread which owns the hidden window for this instance.
     thread::Builder::new()
         .stack_size(256 * 1024)
+        .name("wgpu-hal WGL Instance Thread".to_owned())
         .spawn(move || {
             let setup = (|| {
                 let instance = unsafe { GetModuleHandleA(ptr::null()) };
