@@ -343,17 +343,6 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
-        # Cache step must go before warp and mesa install on windows as they write into the
-        # target directory, and rust-cache will overwrite the entirety of the target directory.
-      - name: caching
-        uses: Swatinem/rust-cache@v2
-        if: matrix.os[0] != 'self-hosted'
-        with:
-          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
-          workspaces: |
-            . -> target
-            xtask -> xtask/target
-
       - name: (windows) install dxc
         if: matrix.os == 'windows-2022'
         uses: napokue/setup-dxc@v1.1.0
@@ -372,6 +361,8 @@ jobs:
           cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/
           cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/deps
 
+          rm -rv warp.zip warp/
+
       - name: (windows) install mesa
         if: matrix.os == 'windows-2022'
         shell: bash
@@ -383,6 +374,8 @@ jobs:
 
           cp -v mesa/* target/llvm-cov-target/debug/
           cp -v mesa/* target/llvm-cov-target/debug/deps
+
+          rm -rv mesa.7z mesa/
 
           echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
