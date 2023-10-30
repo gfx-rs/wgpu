@@ -222,7 +222,7 @@ impl super::Adapter {
             .is_none()
             .then_some(())
             .and_then(|_| Self::parse_version(&version).ok());
-        let web_gl = cfg!(all(target_arch = "wasm32", not(target_os = "emscripten")));
+        let web_gl = cfg!(target_arch = "wasm32");
 
         if let Some(full_ver) = full_ver {
             let core_profile = (full_ver >= (3, 2)).then_some(unsafe {
