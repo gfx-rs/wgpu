@@ -452,7 +452,7 @@ jobs:
 
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
-        if: steps.coverage.outcome == 'success'
+        if: always() # We want coverage even if tests fail
         with:
           files: lcov.info
 
