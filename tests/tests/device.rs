@@ -456,17 +456,12 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
     .run_sync(|ctx| {
         // This test checks that when device.destroy is called, the provided
         // LoseDeviceClosure is called with reason DeviceLostReason::Destroyed.
-        // This is a weak assertion, because the closure is a moved FnOnce
-        // and only asserts *if it is run*. A more comprehensive test would need
-        // to become async and use something like tokio::sync::oneshot to send
-        // a message back containing infomation on the closure invocation. In
-        // that case, the main test function could assert the received value.
-        // Unfortunately, the test harness isn't as capable with async functions
-        // and can only run them under certain configs, as is done in
-        // request_device_error_on_native, above.
+        let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
 
         // Set a LoseDeviceCallback on the device.
+        let was_called_clone = was_called.clone();
         let callback = Box::new(move |reason, _m| {
+            was_called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
                 matches!(reason, wgt::DeviceLostReason::Destroyed),
                 "Device lost info reason should match DeviceLostReason::Destroyed."
@@ -480,4 +475,9 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
         assert!(ctx.device.poll(wgpu::Maintain::Wait));
+
+        assert!(
+            was_called.load(std::sync::atomic::Ordering::SeqCst),
+            "Lose device callback should have been called."
+        );
     });
