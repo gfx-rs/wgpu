@@ -53,12 +53,12 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
         });
         let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::R8Unorm),
-            plane: 0,
+            plane: Some(0),
             ..Default::default()
         });
         let uv_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::Rg8Unorm),
-            plane: 1,
+            plane: Some(1),
             ..Default::default()
         });
         let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {

@@ -124,7 +124,7 @@ pub fn op_webgpu_create_texture_view(
         format: args.format,
         dimension: args.dimension,
         range: args.range,
-        plane: 0,
+        plane: None,
     };
 
     gfx_put!(texture => instance.texture_create_view(
