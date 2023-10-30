@@ -42,6 +42,13 @@ Bottom level categories:
 
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
+### Bug Fixes
+
+
+#### WGL
+
+- Create a hidden window per `wgpu::Instance` instead of sharing a global one.
+
 ## v0.18.0 (2023-10-25)
 
 ### Desktop OpenGL 3.3+ Support on Windows
