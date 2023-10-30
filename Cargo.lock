@@ -4441,6 +4441,7 @@ dependencies = [
  "parking_lot",
  "png",
  "pollster",
+ "profiling",
  "raw-window-handle 0.6.0",
  "serde",
  "serde_json",

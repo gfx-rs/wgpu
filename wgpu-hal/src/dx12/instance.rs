@@ -12,6 +12,7 @@ impl Drop for super::Instance {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init DX12 Backend");
         let lib_main = d3d12::D3D12Lib::new().map_err(|e| {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
         })?;

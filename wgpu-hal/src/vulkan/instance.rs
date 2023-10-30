@@ -209,14 +209,16 @@ impl super::Instance {
         _instance_api_version: u32,
         flags: wgt::InstanceFlags,
     ) -> Result<Vec<&'static CStr>, crate::InstanceError> {
-        let instance_extensions = entry
-            .enumerate_instance_extension_properties(None)
-            .map_err(|e| {
-                crate::InstanceError::with_source(
-                    String::from("enumerate_instance_extension_properties() failed"),
-                    e,
-                )
-            })?;
+        let instance_extensions = {
+            profiling::scope!("vkEnumerateInstanceExtensionProperties");
+            entry.enumerate_instance_extension_properties(None)
+        };
+        let instance_extensions = instance_extensions.map_err(|e| {
+            crate::InstanceError::with_source(
+                String::from("enumerate_instance_extension_properties() failed"),
+                e,
+            )
+        })?;
 
         // Check our extensions against the available extensions
         let mut extensions: Vec<&'static CStr> = Vec::new();
@@ -570,12 +572,21 @@ impl Drop for super::InstanceShared {
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init Vulkan Backend");
         use crate::auxil::cstr_from_bytes_until_nul;
 
-        let entry = unsafe { ash::Entry::load() }.map_err(|err| {
+        let entry = unsafe {
+            profiling::scope!("Load vk library");
+            ash::Entry::load()
+        }
+        .map_err(|err| {
             crate::InstanceError::with_source(String::from("missing Vulkan entry points"), err)
         })?;
-        let instance_api_version = match entry.try_enumerate_instance_version() {
+        let version = {
+            profiling::scope!("vkEnumerateInstanceVersion");
+            entry.try_enumerate_instance_version()
+        };
+        let instance_api_version = match version {
             // Vulkan 1.1+
             Ok(Some(version)) => version,
             Ok(None) => vk::API_VERSION_1_0,
@@ -612,7 +623,11 @@ impl crate::Instance<super::Api> for super::Instance {
 
         let extensions = Self::desired_extensions(&entry, instance_api_version, desc.flags)?;
 
-        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
+        let instance_layers = {
+            profiling::scope!("vkEnumerateInstanceLayerProperties");
+            entry.enumerate_instance_layer_properties()
+        };
+        let instance_layers = instance_layers.map_err(|e| {
             log::info!("enumerate_instance_layer_properties: {:?}", e);
             crate::InstanceError::with_source(
                 String::from("enumerate_instance_layer_properties() failed"),
@@ -708,7 +723,11 @@ impl crate::Instance<super::Api> for super::Instance {
                 .enabled_layer_names(&str_pointers[..layers.len()])
                 .enabled_extension_names(&str_pointers[layers.len()..]);
 
-            unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
+            unsafe {
+                profiling::scope!("vkCreateInstance");
+                entry.create_instance(&create_info, None)
+            }
+            .map_err(|e| {
                 crate::InstanceError::with_source(
                     String::from("Entry::create_instance() failed"),
                     e,

@@ -321,6 +321,7 @@ fn get_global_device_context() -> Result<HDC, crate::InstanceError> {
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init OpenGL (WGL) Backend");
         let opengl_module = unsafe { LoadLibraryA("opengl32.dll\0".as_ptr() as *const _) };
         if opengl_module.is_null() {
             return Err(crate::InstanceError::with_source(
