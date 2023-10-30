@@ -4386,6 +4386,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-srgb-blend-example"
+version = "0.18.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "wasm-bindgen-test",
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+ "winit 0.29.2",
+]
+
+[[package]]
 name = "wgpu-stencil-triangle-example"
 version = "0.18.0"
 dependencies = [
