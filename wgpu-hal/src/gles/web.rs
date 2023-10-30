@@ -124,6 +124,7 @@ unsafe impl Send for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init OpenGL (WebGL) Backend");
         Ok(Instance {
             webgl2_context: Mutex::new(None),
         })
