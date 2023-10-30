@@ -980,6 +980,7 @@ impl crate::Instance<super::Api> for Instance {
             super::Adapter::expose(AdapterContext {
                 glow: Mutex::new(gl),
                 egl: Some(inner.egl.clone()),
+                flags: self.flags,
             })
         }
         .into_iter()
@@ -1003,6 +1004,7 @@ impl super::Adapter {
             Self::expose(AdapterContext {
                 glow: Mutex::new(context),
                 egl: None,
+                flags: wgt::InstanceFlags::empty(),
             })
         }
     }

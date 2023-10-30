@@ -8,7 +8,7 @@ use super::TextureFormatDesc;
 /// with the `AdapterContext` API from the EGL implementation.
 pub struct AdapterContext {
     pub glow_context: glow::Context,
-    pub flags: InstanceFlags,
+    pub flags: wgt::InstanceFlags,
 }
 
 impl AdapterContext {
@@ -144,9 +144,14 @@ impl crate::Instance<super::Api> for Instance {
             None => return Vec::new(),
         };
 
-        unsafe { super::Adapter::expose(AdapterContext { glow_context: gl }) }
-            .into_iter()
-            .collect()
+        unsafe {
+            super::Adapter::expose(AdapterContext {
+                glow_context: gl,
+                flags: self.flags,
+            })
+        }
+        .into_iter()
+        .collect()
     }
 
     unsafe fn create_surface(

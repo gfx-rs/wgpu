@@ -180,7 +180,7 @@ impl super::Adapter {
             hr == 0 && features3.CastingFullyTypedFormatSupported != 0
         };
 
-        let private_caps = super::PrivateCapabilities {
+        let mut private_caps = super::PrivateCapabilities {
             instance_flags,
             heterogeneous_resource_heaps: options.ResourceHeapTier
                 != d3d12_ty::D3D12_RESOURCE_HEAP_TIER_1,
@@ -191,11 +191,16 @@ impl super::Adapter {
             } else {
                 super::MemoryArchitecture::NonUnified
             },
-            heap_create_not_zeroed: false, //TODO: winapi support for Options7
+            heap_create_not_zeroed: false,
             casting_fully_typed_format_supported,
             // See https://github.com/gfx-rs/wgpu/issues/3552
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
         };
+
+        if instance_flags.contains(wgt::InstanceFlags::MINIMAL_INTERNAL_CAPABILITIES) {
+            private_caps.casting_fully_typed_format_supported = false;
+            private_caps.suballocation_supported = false;
+        }
 
         // Theoretically vram limited, but in practice 2^20 is the limit
         let tier3_practical_descriptor_limit = 1 << 20;
