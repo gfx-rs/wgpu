@@ -31,7 +31,7 @@ impl crate::TextureViewDescriptor<'_> {
             mip_level_count: self.range.mip_level_count.unwrap_or(!0),
             array_layer_base: self.range.base_array_layer,
             array_layer_count: self.range.array_layer_count.unwrap_or(!0),
-            plane: self.plane,
+            plane: self.plane.unwrap_or(0),
         }
     }
 }

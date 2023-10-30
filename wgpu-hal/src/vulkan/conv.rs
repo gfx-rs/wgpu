@@ -1,7 +1,6 @@
 use ash::vk;
 
 // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkImageAspectFlagBits.html
-const VK_IMAGE_ASPECT_NONE: vk::Flags = 0;
 const VK_IMAGE_ASPECT_PLANE_0_BIT: vk::Flags = 0x00000010;
 const VK_IMAGE_ASPECT_PLANE_1_BIT: vk::Flags = 0x00000020;
 const VK_IMAGE_ASPECT_PLANE_2_BIT: vk::Flags = 0x00000040;
@@ -410,8 +409,14 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
 
 pub fn map_aspects(aspects: crate::FormatAspects, plane: Option<u32>) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(crate::FormatAspects::COLOR) {
-        flags |= vk::ImageAspectFlags::COLOR;
+    match plane {
+        Some(0) => flags |= vk::ImageAspectFlags::from_raw(VK_IMAGE_ASPECT_PLANE_0_BIT),
+        Some(1) => flags |= vk::ImageAspectFlags::from_raw(VK_IMAGE_ASPECT_PLANE_1_BIT),
+        Some(2) => flags |= vk::ImageAspectFlags::from_raw(VK_IMAGE_ASPECT_PLANE_2_BIT),
+        _ if aspects.contains(crate::FormatAspects::COLOR) => {
+            flags |= vk::ImageAspectFlags::COLOR;
+        }
+        _ => {}
     }
     if aspects.contains(crate::FormatAspects::DEPTH) {
         flags |= vk::ImageAspectFlags::DEPTH;
@@ -419,12 +424,6 @@ pub fn map_aspects(aspects: crate::FormatAspects, plane: Option<u32>) -> vk::Ima
     if aspects.contains(crate::FormatAspects::STENCIL) {
         flags |= vk::ImageAspectFlags::STENCIL;
     }
-    flags |= vk::ImageAspectFlags::from_raw(match plane {
-        Some(0) => VK_IMAGE_ASPECT_PLANE_0_BIT,
-        Some(1) => VK_IMAGE_ASPECT_PLANE_1_BIT,
-        Some(2) => VK_IMAGE_ASPECT_PLANE_2_BIT,
-        _ => VK_IMAGE_ASPECT_NONE,
-    });
     flags
 }
 
