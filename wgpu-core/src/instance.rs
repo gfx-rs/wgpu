@@ -459,8 +459,13 @@ pub enum RequestAdapterError {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    /// # Safety
+    ///
+    /// - `display_handle` must be a valid object to create a surface upon.
+    /// - `window_handle` must remain valid as long as the returned
+    ///   [`SurfaceId`] is being used.
     #[cfg(feature = "raw-window-handle")]
-    pub fn instance_create_surface(
+    pub unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
