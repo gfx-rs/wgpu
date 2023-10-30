@@ -611,6 +611,10 @@ impl super::Adapter {
             super::PrivateCapabilities::DEBUG_FNS,
             supported((3, 2), (4, 3)) && !web_gl,
         );
+        private_caps.set(
+            super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
+            supported((3, 0), (4, 3)),
+        );
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
