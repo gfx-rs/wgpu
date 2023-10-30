@@ -339,7 +339,7 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
 
     if texture_desc.format == wgt::TextureFormat::NV12 {
         // TODO: Currently COPY_DST for NV12 textures is unsupported.
-        return Ok(());
+        return;
     }
 
     // Gather list of zero_buffer copies and issue a single command then to perform them
