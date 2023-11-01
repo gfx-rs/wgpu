@@ -784,11 +784,10 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SUBGROUP_FRAGMENT = 1 << 57;
-        /// Allows vertx shaders to use the subgroup operation built-ins
+        /// Allows vertex shaders to use the subgroup operation built-ins
         ///
         /// Supported Platforms:
         /// - Vulkan
-        /// - DX12
         /// - Metal
         ///
         /// This is a native only feature.
