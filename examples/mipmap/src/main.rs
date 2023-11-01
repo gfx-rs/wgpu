@@ -514,8 +514,7 @@ static TEST: wgpu_example::framework::ExampleTestParams =
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default()
-            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
         _phantom: std::marker::PhantomData::<Example>,
     };
@@ -529,8 +528,7 @@ static TEST_QUERY: wgpu_example::framework::ExampleTestParams =
         width: 1024,
         height: 768,
         optional_features: QUERY_FEATURES,
-        base_test_parameters: wgpu_test::TestParameters::default()
-            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.025)],
         _phantom: std::marker::PhantomData::<Example>,
     };

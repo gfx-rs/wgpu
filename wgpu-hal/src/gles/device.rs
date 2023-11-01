@@ -1158,8 +1158,8 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::BindingType::Texture { .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
-                    if view.mip_levels.start != 0 || view.array_layers.start != 0 {
-                        log::error!("Unable to create a sampled texture binding for non-zero mipmap level or array layer.\n{}",
+                    if view.array_layers.start != 0 {
+                        log::error!("Unable to create a sampled texture binding for non-zero array layer.\n{}",
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
@@ -1167,6 +1167,7 @@ impl crate::Device<super::Api> for super::Device {
                         raw,
                         target,
                         aspects: view.aspects,
+                        mip_levels: view.mip_levels.clone(),
                     }
                 }
                 wgt::BindingType::StorageTexture {
