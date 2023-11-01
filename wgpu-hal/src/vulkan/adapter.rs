@@ -535,6 +535,8 @@ impl PhysicalDeviceFeatures {
             supports_bgra8unorm_storage(instance, phd, caps.device_api_version),
         );
 
+        // https://github.com/KhronosGroup/MoltenVK/issues/440
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         features.set(
             F::TEXTURE_FORMAT_NV12,
             supports_format(
