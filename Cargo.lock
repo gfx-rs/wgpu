@@ -159,9 +159,9 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
 name = "arbitrary"
-version = "1.3.1"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2e1373abdaa212b704512ec2bd8b26bd0b7d5c3f70117411a5d9a451383c859"
+checksum = "7d5a26814d8dcb93b0e5a0ff3c6d80a8843bafb21b39e8e18a6f05471870e110"
 dependencies = [
  "derive_arbitrary",
 ]
@@ -1073,9 +1073,9 @@ dependencies = [
 
 [[package]]
 name = "derive_arbitrary"
-version = "1.3.1"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e0efad4403bfc52dc201159c4b842a246a14b98c64b55dfd0f2d89729dfeb8"
+checksum = "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1790,9 +1790,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.0.2"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8adf3ddd720272c6ea8bf59463c04e0f93d0bbf7c5439b691bca2987e0270897"
+checksum = "d530e1a18b1cb4c484e6e34556a0d948706958449fca0cab753d649f2bce3d1f"
 dependencies = [
  "arbitrary",
  "equivalent",
@@ -2639,7 +2639,7 @@ dependencies = [
  "serde",
  "wgpu-core",
  "wgpu-types",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -3079,9 +3079,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.107"
+version = "1.0.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b420ce6e3d8bd882e9b243c6eed35dbc9a6110c9769e74b584e0d68d1f20c65"
+checksum = "3d1c7e3eac408d115102c4c24ad393e0821bb3a5df4d506a80f85f7a742a526b"
 dependencies = [
  "indexmap",
  "itoa",
@@ -4040,7 +4040,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4055,7 +4055,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4066,7 +4066,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4102,7 +4102,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4122,7 +4122,7 @@ dependencies = [
  "wgpu",
  "wgpu-hal",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4167,7 +4167,7 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winapi",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4185,7 +4185,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4234,7 +4234,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4246,7 +4246,7 @@ dependencies = [
  "env_logger",
  "pollster",
  "wgpu",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4299,7 +4299,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4313,7 +4313,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4333,7 +4333,7 @@ dependencies = [
  "web-sys",
  "wgpu",
  "wgpu-example",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4366,7 +4366,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4382,7 +4382,20 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
+]
+
+[[package]]
+name = "wgpu-srgb-blend-example"
+version = "0.18.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "wasm-bindgen-test",
+ "wgpu",
+ "wgpu-example",
+ "wgpu-test",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4394,7 +4407,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4441,6 +4454,7 @@ dependencies = [
  "parking_lot",
  "png",
  "pollster",
+ "profiling",
  "raw-window-handle 0.6.0",
  "serde",
  "serde_json",
@@ -4462,7 +4476,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4480,7 +4494,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wgpu",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4508,7 +4522,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4523,7 +4537,7 @@ dependencies = [
  "wgpu",
  "wgpu-example",
  "wgpu-test",
- "winit 0.29.2",
+ "winit 0.29.3",
 ]
 
 [[package]]
@@ -4813,9 +4827,9 @@ dependencies = [
 
 [[package]]
 name = "winit"
-version = "0.29.2"
+version = "0.29.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b829f75d02fe1e225b97c91a04c326900147a50234d1141a1cbe215ce8798c11"
+checksum = "161598019a9da35ab6c34dc46cd13546cba9dbf9816475d4dd9a639455016563"
 dependencies = [
  "ahash",
  "android-activity",

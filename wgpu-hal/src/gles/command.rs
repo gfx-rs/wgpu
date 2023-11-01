@@ -474,6 +474,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             panic!("Multiple render attachments with external framebuffers are not supported.");
         }
 
+        // `COLOR_ATTACHMENT0` to `COLOR_ATTACHMENT31` gives 32 possible color attachments.
+        assert!(desc.color_attachments.len() <= 32);
+
         match desc
             .color_attachments
             .first()
@@ -535,13 +538,6 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             .push(glow::STENCIL_ATTACHMENT);
                     }
                 }
-
-                if !rendering_to_external_framebuffer {
-                    // set the draw buffers and states
-                    self.cmd_buffer
-                        .commands
-                        .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
-                }
             }
         }
 
@@ -586,6 +582,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 );
             }
         }
+
+        if !rendering_to_external_framebuffer {
+            // set the draw buffers and states
+            self.cmd_buffer
+                .commands
+                .push(C::SetDrawColorBuffers(desc.color_attachments.len() as u8));
+        }
+
         if let Some(ref dsat) = desc.depth_stencil_attachment {
             let clear_depth = !dsat.depth_ops.contains(crate::AttachmentOps::LOAD);
             let clear_stencil = !dsat.stencil_ops.contains(crate::AttachmentOps::LOAD);
