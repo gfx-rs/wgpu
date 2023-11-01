@@ -620,7 +620,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 },
             );
 
-        let extensions = Self::desired_extensions(&entry, instance_api_version, desc.flags)?;
+        let mut extensions = Self::desired_extensions(&entry, instance_api_version, desc.flags)?;
 
         let instance_layers = {
             profiling::scope!("vkEnumerateInstanceLayerProperties");
@@ -653,6 +653,7 @@ impl crate::Instance<super::Api> for super::Instance {
 
         // Request validation layer if asked.
         let mut debug_utils = None;
+        let mut validation_features = None;
         if desc.flags.intersects(wgt::InstanceFlags::VALIDATION) {
             let validation_layer_name =
                 CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
@@ -697,6 +698,33 @@ impl crate::Instance<super::Api> for super::Instance {
                     let vk_create_info = create_info.to_vk_create_info().build();
 
                     debug_utils = Some((create_info, vk_create_info));
+                }
+
+                let validation_features_name = vk::ExtValidationFeaturesFn::name();
+                match entry.enumerate_instance_extension_properties(Some(validation_layer_name)) {
+                    Ok(validation_extensions) => {
+                        if validation_extensions.iter().any(|inst_ext| {
+                            cstr_from_bytes_until_nul(&inst_ext.extension_name)
+                                == Some(validation_features_name)
+                        }) {
+                            extensions.push(validation_features_name);
+                            validation_features = Some(
+                                vk::ValidationFeaturesEXT::builder().enabled_validation_features(
+                                    &[vk::ValidationFeatureEnableEXT::DEBUG_PRINTF],
+                                ),
+                            );
+                        } else {
+                            log::info!(
+                                "Unable to find validation layer extension {}, not enabling DEBUG_PRINTF",
+                                validation_features_name.to_string_lossy()
+                            )
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "enumerate_instance_extension_properties() failed for validation layer: {:?}", e
+                        )
+                    }
                 }
             } else {
                 log::warn!(
@@ -751,6 +779,10 @@ impl crate::Instance<super::Api> for super::Instance {
                 .application_info(&app_info)
                 .enabled_layer_names(&str_pointers[..layers.len()])
                 .enabled_extension_names(&str_pointers[layers.len()..]);
+
+            if let Some(validation_features) = validation_features.as_mut() {
+                create_info = create_info.push_next(validation_features);
+            }
 
             if let Some(&mut (_, ref mut vk_create_info)) = debug_utils.as_mut() {
                 create_info = create_info.push_next(vk_create_info);
