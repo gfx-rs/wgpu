@@ -175,11 +175,23 @@ pub enum EntryPointError {
     MissingBinding(crate::ResourceBinding),
 }
 
+bitflags::bitflags! {
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+    pub struct WriterFlags: u32 {
+        /// Emit debug printf statements
+        const EMIT_DEBUG_PRINTF = 0x1;
+    }
+}
+
 /// Configuration used in the [`Writer`].
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct Options {
+    /// Configuration flags for the writer.
+    pub flags: WriterFlags,
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
     /// Map of resources association to binding locations.
@@ -198,6 +210,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
+            flags: WriterFlags::empty(),
             shader_model: ShaderModel::V5_1,
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,

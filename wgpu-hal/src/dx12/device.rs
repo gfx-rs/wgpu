@@ -1070,6 +1070,7 @@ impl crate::Device<super::Api> for super::Device {
                     // FXC doesn't support SM 6.0
                     None => hlsl::ShaderModel::V5_1,
                 },
+                flags: hlsl::WriterFlags::default(),
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,

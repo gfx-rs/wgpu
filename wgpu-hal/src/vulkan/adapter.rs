@@ -1470,6 +1470,10 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
+            flags.set(
+                spv::WriterFlags::EMIT_DEBUG_PRINTF,
+                features.contains(wgt::Features::DEBUG_PRINTF),
+            );
             spv::Options {
                 lang_version: (1, 0),
                 flags,

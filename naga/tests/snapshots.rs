@@ -49,6 +49,8 @@ struct SpirvOutParameters {
     #[serde(default)]
     separate_entry_points: bool,
     #[serde(default)]
+    emit_debug_printf: bool,
+    #[serde(default)]
     #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     binding_map: naga::back::spv::BindingMap,
 }
@@ -57,6 +59,8 @@ struct SpirvOutParameters {
 struct WgslOutParameters {
     #[serde(default)]
     explicit_types: bool,
+    #[serde(default)]
+    emit_debug_printf: bool,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -408,6 +412,10 @@ fn write_output_spv(
     );
     flags.set(spv::WriterFlags::FORCE_POINT_SIZE, params.force_point_size);
     flags.set(spv::WriterFlags::CLAMP_FRAG_DEPTH, params.clamp_frag_depth);
+    flags.set(
+        spv::WriterFlags::EMIT_DEBUG_PRINTF,
+        params.emit_debug_printf,
+    );
 
     let options = spv::Options {
         lang_version: (params.version.0, params.version.1),
@@ -592,6 +600,10 @@ fn write_output_wgsl(
 
     let mut flags = wgsl::WriterFlags::empty();
     flags.set(wgsl::WriterFlags::EXPLICIT_TYPES, params.explicit_types);
+    flags.set(
+        wgsl::WriterFlags::EMIT_DEBUG_PRINTF,
+        params.emit_debug_printf,
+    );
 
     let string = wgsl::write_string(module, info, flags).expect("WGSL write failed");
 

@@ -2338,27 +2338,29 @@ impl<'w> BlockContext<'w> {
                     ref format,
                     ref arguments,
                 } => {
-                    self.writer.use_extension("SPV_KHR_non_semantic_info");
-                    let format_id = self.gen_id();
-                    self.writer
-                        .strings
-                        .push(Instruction::string(format, format_id));
-                    let id = self.gen_id();
+                    if self.writer.flags.contains(WriterFlags::EMIT_DEBUG_PRINTF) {
+                        self.writer.use_extension("SPV_KHR_non_semantic_info");
+                        let format_id = self.gen_id();
+                        self.writer
+                            .strings
+                            .push(Instruction::string(format, format_id));
+                        let id = self.gen_id();
 
-                    self.temp_list.clear();
-                    self.temp_list.push(format_id);
-                    for &argument in arguments {
-                        self.temp_list.push(self.cached[argument]);
+                        self.temp_list.clear();
+                        self.temp_list.push(format_id);
+                        for &argument in arguments {
+                            self.temp_list.push(self.cached[argument]);
+                        }
+
+                        let set_id = self.writer.extension_inst_import("NonSemantic.DebugPrintf");
+                        block.body.push(Instruction::ext_inst(
+                            set_id,
+                            1,
+                            self.writer.void_type,
+                            id,
+                            &self.temp_list,
+                        ));
                     }
-
-                    let set_id = self.writer.extension_inst_import("NonSemantic.DebugPrintf");
-                    block.body.push(Instruction::ext_inst(
-                        set_id,
-                        1,
-                        self.writer.void_type,
-                        id,
-                        &self.temp_list,
-                    ));
                 }
             }
         }
