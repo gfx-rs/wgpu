@@ -44,10 +44,13 @@ For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.
 
 ### Bug Fixes
 
-
 #### WGL
 
 - Create a hidden window per `wgpu::Instance` instead of sharing a global one.
+
+#### Naga MSL-OUT
+
+- Fix issue where local variables were sometimes using variable names from previous functions.
 
 ## v0.18.0 (2023-10-25)
 
