@@ -420,7 +420,7 @@ jobs:
         run: |
           set -e
 
-          cargo xtask test --llvm-cov
+          cargo xtask test --llvm-cov --partition 2
 
       - name: check naga snapshots
         run: git diff --exit-code -- naga/tests/out
@@ -433,21 +433,11 @@ jobs:
             **/*-actual.png
             **/*-difference.png
 
-      - name: generate coverage report
-        id: coverage
-        shell: bash
-        if: always() # We want coverage even if tests fail
-        continue-on-error: true
-        run: |
-          set -e
-
-          cargo llvm-cov report --lcov --output-path lcov.info
-
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
-        if: always() # We want coverage even if tests fail
+        continue-on-error: true
         with:
-          files: lcov.info
+          files: coverage-partition-1.info,coverage-partition-2.info
 
   doctest:
     name: Doctest

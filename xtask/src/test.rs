@@ -1,8 +1,12 @@
+use std::ffi::OsStr;
+
 use anyhow::Context;
 use pico_args::Arguments;
+use walkdir::WalkDir;
 
 pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
+    let partition: Option<u32> = args.value_from_str("--partition").ok();
     // These needs to match the command in "run wgpu-info" in `.github/workflows/ci.yml`
     let llvm_cov_flags: &[_] = if llvm_cov {
         &["llvm-cov", "--no-cfg-coverage", "--no-report"]
@@ -42,16 +46,74 @@ pub fn run_tests(mut args: Arguments) -> anyhow::Result<()> {
         if gpu_count == 1 { "" } else { "s" }
     );
 
-    log::info!("Running cargo tests");
+    if let Some(partition) = partition {
+        log::info!("Running tests over {} partitions", partition);
 
-    xshell::cmd!(
-        shell,
-        "cargo {llvm_cov_nextest_flags...} --all-features --no-fail-fast --retries 2"
-    )
-    .args(args.finish())
-    .quiet()
-    .run()
-    .context("Tests failed")?;
+        let mut failed = false;
+        for i in 1..=partition {
+            let partition_arg = format!("hash:{i}/{partition}");
+            let output_path_arg = format!("coverage-partition-{i}.info");
+
+            log::info!("Running partition {} of {}", i, partition);
+
+            // Execute partition
+            failed |= xshell::cmd!(
+                shell,
+                "cargo llvm-cov --no-cfg-coverage --no-report nextest --all-features --no-fail-fast --retries 2 --partition {partition_arg}"
+            )
+            .args(args.clone().finish())
+            .quiet()
+            .run()
+            .is_err();
+
+            log::info!("Building report to {output_path_arg}");
+
+            // Build report
+            xshell::cmd!(
+                shell,
+                "cargo llvm-cov report --lcov --output-path {output_path_arg}"
+            )
+            .quiet()
+            .run()
+            .context("Report failed")?;
+
+            log::info!("Clearing profraw files");
+
+            // Clear profraw
+
+            let mut output_bytes = 0_u64;
+
+            for entry in WalkDir::new(".").into_iter() {
+                if let Ok(entry) = entry {
+                    if entry.path().extension().and_then(OsStr::to_str) == Some("profraw") {
+                        output_bytes += entry.metadata().expect("Could not find metadata").len();
+                        std::fs::remove_file(entry.path()).expect("Could not remove file");
+                    }
+                }
+            }
+
+            log::info!(
+                "Partition {} of {} finished, {:.0} megabytes of profraw files removed",
+                i,
+                partition,
+                output_bytes as f32 / (1024.0 * 1024.0)
+            );
+        }
+        if failed {
+            anyhow::bail!("Some partitions failed");
+        }
+    } else {
+        log::info!("Running tests");
+
+        xshell::cmd!(
+            shell,
+            "cargo {llvm_cov_nextest_flags...} --all-features --no-fail-fast --retries 2"
+        )
+        .args(args.finish())
+        .quiet()
+        .run()
+        .context("Running tests failed")?;
+    };
 
     log::info!("Finished tests");
 
