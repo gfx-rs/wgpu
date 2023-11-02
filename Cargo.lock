@@ -602,10 +602,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
-name = "com-rs"
-version = "0.2.1"
+name = "com"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf43edc576402991846b093a7ca18a3477e0ef9c588cde84964b5d3e43016642"
+checksum = "7e17887fd17353b65b1b2ef1c526c83e26cd72e74f598a8dc1bee13a48f3d9f6"
+dependencies = [
+ "com_macros",
+]
+
+[[package]]
+name = "com_macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d375883580a668c7481ea6631fc1a8863e33cc335bf56bfad8d7e6d4b04b13a5"
+dependencies = [
+ "com_macros_support",
+ "proc-macro2",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "com_macros_support"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad899a1087a9296d5644792d7cb72b8e34c1bec8e7d4fbc002230169a6e8710c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "combine"
@@ -1687,14 +1712,14 @@ dependencies = [
 
 [[package]]
 name = "hassle-rs"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1397650ee315e8891a0df210707f0fc61771b0cc518c3023896064c5407cb3b0"
+checksum = "af2a7e73e1f34c48da31fb668a907f250794837e08faa144fd24f0b8b741e890"
 dependencies = [
- "bitflags 1.3.2",
- "com-rs",
+ "bitflags 2.4.1",
+ "com",
  "libc",
- "libloading 0.7.4",
+ "libloading 0.8.1",
  "thiserror",
  "widestring",
  "winapi",
