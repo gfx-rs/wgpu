@@ -3643,10 +3643,10 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ";")?;
             }
 
-            self.named_expressions.clear();
             self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
+            self.named_expressions.clear();
         }
 
         let mut info = TranslationInfo {
@@ -4313,13 +4313,13 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ";")?;
             }
 
-            self.named_expressions.clear();
             self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
             if ep_index + 1 != module.entry_points.len() {
                 writeln!(self.out)?;
             }
+            self.named_expressions.clear();
         }
 
         Ok(info)
