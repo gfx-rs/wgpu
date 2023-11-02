@@ -420,6 +420,7 @@ jobs:
         run: |
           set -e
 
+          # Partition to save on disk space
           cargo xtask test --llvm-cov --partition 2
 
       - name: check naga snapshots
