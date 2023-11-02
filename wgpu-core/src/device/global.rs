@@ -26,7 +26,9 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{borrow::Cow, iter, mem, ops::Range, ptr};
 
-use super::{BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures};
+use super::{
+    BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures, IMPLICIT_FAILURE,
+};
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_is_surface_supported<A: HalApi>(
@@ -1849,6 +1851,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+        let implicit_error_context = implicit_context.clone();
 
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1897,6 +1900,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+
+        // We also need to assign errors to the pipeline layout and the bind
+        // group layout.
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
+        let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
+        if let Some(ref ids) = implicit_error_context {
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
+
         (id, Some(error))
     }
 
@@ -2022,6 +2037,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.compute_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+        let implicit_error_context = implicit_context.clone();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -2041,7 +2057,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     implicit_context: implicit_context.clone(),
                 });
             }
-
             let pipeline = match device.create_compute_pipeline(
                 device_id,
                 desc,
@@ -2066,6 +2081,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+
+        // We also need to assign errors to the pipeline layout and the bind
+        // group layout.
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
+        let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
+        if let Some(ref ids) = implicit_error_context {
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
+
         (id, Some(error))
     }
 
