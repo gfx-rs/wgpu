@@ -588,14 +588,15 @@ impl crate::Context for Context {
         ))
     }
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .instance_create_surface(display_handle, window_handle, ());
+        let id = unsafe {
+            self.0
+                .instance_create_surface(display_handle, window_handle, ())
+        };
 
         Ok((
             id,

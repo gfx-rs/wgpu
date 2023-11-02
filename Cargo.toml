@@ -113,7 +113,7 @@ raw-window-handle = "0.6"
 renderdoc-sys = "1.0.0"
 ron = "0.8"
 serde = "1"
-serde_json = "1.0.107"
+serde_json = "1.0.108"
 smallvec = "1"
 static_assertions = "1.1.0"
 thiserror = "1"
@@ -123,7 +123,7 @@ wgpu-example = { version = "0.18.0", path = "./examples/common" }
 wgpu-macros = { version = "0.18.0", path = "./wgpu-macros" }
 wgpu-test = { version = "0.18.0", path = "./tests" }
 wgpu-types = { version = "0.18.0", path = "./wgpu-types" }
-winit = { version = "0.29.2", features = [ "android-native-activity" ] }
+winit = { version = "0.29", features = [ "android-native-activity" ] }
 
 # Metal dependencies
 block = "0.1"
@@ -146,7 +146,7 @@ gpu-allocator = { version = "0.23", default_features = false, features = [
 d3d12 = { version = "0.7.0", path = "./d3d12/" }
 range-alloc = "0.1"
 winapi = "0.3"
-hassle-rs = "0.10.0"
+hassle-rs = "0.11.0"
 
 # Gles dependencies
 khronos-egl = "6"
@@ -156,7 +156,7 @@ glutin = "0.29.1"
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.64"
+js-sys = "0.3.65"
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.34"
 wasm-bindgen-test = "0.3"

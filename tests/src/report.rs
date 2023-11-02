@@ -17,6 +17,7 @@ pub(crate) struct GpuReport {
 impl GpuReport {
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     pub(crate) fn from_json(file: &str) -> serde_json::Result<Self> {
+        profiling::scope!("Parsing .gpuconfig");
         serde_json::from_str(file)
     }
 }

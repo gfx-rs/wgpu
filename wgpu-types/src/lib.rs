@@ -4893,9 +4893,9 @@ pub struct SurfaceConfiguration<V> {
     /// The texture format of the swap chain. The only formats that are guaranteed are
     /// `Bgra8Unorm` and `Bgra8UnormSrgb`
     pub format: TextureFormat,
-    /// Width of the swap chain. Must be the same size as the surface.
+    /// Width of the swap chain. Must be the same size as the surface, and nonzero.
     pub width: u32,
-    /// Height of the swap chain. Must be the same size as the surface.
+    /// Height of the swap chain. Must be the same size as the surface, and nonzero.
     pub height: u32,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
     /// FifoRelaxed, Immediate, and Mailbox will crash if unsupported, while AutoVsync and

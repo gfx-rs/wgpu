@@ -2,6 +2,8 @@ use crate::auxil;
 
 impl crate::Instance<super::Api> for super::Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init DX11 Backend");
+
         let enable_dx11 = match std::env::var("WGPU_UNSTABLE_DX11_BACKEND") {
             Ok(string) => string == "1" || string == "true",
             Err(_) => false,

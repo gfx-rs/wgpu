@@ -30,6 +30,8 @@ pub enum ShaderStage {
 }
 
 pub trait Example: 'static + Sized {
+    const SRGB: bool = true;
+
     fn optional_features() -> wgpu::Features {
         wgpu::Features::empty()
     }
@@ -281,7 +283,12 @@ fn start<E: Example>(
     let mut config = surface
         .get_default_config(&adapter, size.width, size.height)
         .expect("Surface isn't supported by the adapter.");
-    let surface_view_format = config.format.add_srgb_suffix();
+    let surface_view_format = if E::SRGB {
+        config.format.add_srgb_suffix()
+    } else {
+        config.format.remove_srgb_suffix()
+    };
+    config.format = surface_view_format;
     config.view_formats.push(surface_view_format);
     surface.configure(&device, &config);
 
@@ -474,6 +481,11 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                 params.base_test_parameters.clone().features(features)
             })
             .run_async(move |ctx| async move {
+                let format = if E::SRGB {
+                    wgpu::TextureFormat::Rgba8UnormSrgb
+                } else {
+                    wgpu::TextureFormat::Rgba8Unorm
+                };
                 let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
                     label: Some("destination"),
                     size: wgpu::Extent3d {
@@ -484,7 +496,7 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                     mip_level_count: 1,
                     sample_count: 1,
                     dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
                 });
@@ -501,12 +513,12 @@ impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuT
                 let mut example = E::init(
                     &wgpu::SurfaceConfiguration {
                         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        format,
                         width: params.width,
                         height: params.height,
                         present_mode: wgpu::PresentMode::Fifo,
                         alpha_mode: wgpu::CompositeAlphaMode::Auto,
-                        view_formats: vec![wgpu::TextureFormat::Rgba8UnormSrgb],
+                        view_formats: vec![format],
                     },
                     &ctx.adapter,
                     &ctx.device,

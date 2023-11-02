@@ -1,7 +1,8 @@
-use super::conv;
+use super::{conv, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use glow::HasContext;
 use std::{
+    cmp::max,
     convert::TryInto,
     ptr,
     sync::{Arc, Mutex},
@@ -29,9 +30,12 @@ struct CompilationContext<'a> {
 impl CompilationContext<'_> {
     fn consume_reflection(
         self,
+        gl: &glow::Context,
         module: &naga::Module,
         ep_info: &naga::valid::FunctionInfo,
         reflection_info: naga::back::glsl::ReflectionInfo,
+        naga_stage: naga::ShaderStage,
+        program: glow::Program,
     ) {
         for (handle, var) in module.global_variables.iter() {
             if ep_info[handle].is_empty() {
@@ -85,6 +89,20 @@ impl CompilationContext<'_> {
             }
         }
 
+        for (name, location) in reflection_info.varying {
+            match naga_stage {
+                naga::ShaderStage::Vertex => {
+                    assert_eq!(location.index, 0);
+                    unsafe { gl.bind_attrib_location(program, location.location, &name) }
+                }
+                naga::ShaderStage::Fragment => {
+                    assert_eq!(location.index, 0);
+                    unsafe { gl.bind_frag_data_location(program, location.location, &name) }
+                }
+                naga::ShaderStage::Compute => {}
+            }
+        }
+      
         *self.push_constant_items = reflection_info.push_constant_items;
     }
 }
@@ -179,6 +197,8 @@ impl super::Device {
             }
             Ok(raw)
         } else {
+            log::error!("\tShader compilation failed: {}", msg);
+            unsafe { gl.delete_shader(raw) };
             Err(crate::PipelineError::Linkage(
                 map_naga_stage(naga_stage),
                 msg,
@@ -191,6 +211,7 @@ impl super::Device {
         naga_stage: naga::ShaderStage,
         stage: &crate::ProgrammableStage<super::Api>,
         context: CompilationContext,
+        program: glow::Program,
     ) -> Result<glow::Shader, crate::PipelineError> {
         use naga::back::glsl;
         let pipeline_options = glsl::PipelineOptions {
@@ -208,9 +229,9 @@ impl super::Device {
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
 
         use naga::proc::BoundsCheckPolicy;
-        // The image bounds checks require the TEXTURE_LEVELS feature available in GL core 1.3+.
+        // The image bounds checks require the TEXTURE_LEVELS feature available in GL core 4.3+.
         let version = gl.version();
-        let image_check = if !version.is_embedded && (version.major, version.minor) >= (1, 3) {
+        let image_check = if !version.is_embedded && (version.major, version.minor) >= (4, 3) {
             BoundsCheckPolicy::ReadZeroSkipWrite
         } else {
             BoundsCheckPolicy::Unchecked
@@ -247,9 +268,12 @@ impl super::Device {
         log::debug!("Naga generated shader:\n{}", output);
 
         context.consume_reflection(
+            gl,
             &shader.module,
             shader.info.get_entry_point(entry_point_index),
             reflection_info,
+            naga_stage,
+            program,
         );
 
         unsafe { Self::compile_shader(gl, &output, naga_stage, stage.module.label.as_deref()) }
@@ -311,7 +335,7 @@ impl super::Device {
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
         glsl_version: naga::back::glsl::Version,
-        private_caps: super::PrivateCapabilities,
+        private_caps: PrivateCapabilities,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let glsl_version = match glsl_version {
             naga::back::glsl::Version::Embedded { version, .. } => format!("{version} es"),
@@ -346,7 +370,7 @@ impl super::Device {
                 multiview,
             };
 
-            let shader = Self::create_shader(gl, naga_stage, stage, context)?;
+            let shader = Self::create_shader(gl, naga_stage, stage, context, program)?;
             shaders_to_delete.push(shader);
         }
 
@@ -733,14 +757,60 @@ impl crate::Device<super::Api> for super::Device {
 
             if conv::is_layered_target(target) {
                 unsafe {
-                    gl.tex_storage_3d(
-                        target,
-                        desc.mip_level_count as i32,
-                        format_desc.internal,
-                        desc.size.width as i32,
-                        desc.size.height as i32,
-                        desc.size.depth_or_array_layers as i32,
-                    )
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::TEXTURE_STORAGE)
+                    {
+                        gl.tex_storage_3d(
+                            target,
+                            desc.mip_level_count as i32,
+                            format_desc.internal,
+                            desc.size.width as i32,
+                            desc.size.height as i32,
+                            desc.size.depth_or_array_layers as i32,
+                        )
+                    } else if target == glow::TEXTURE_3D {
+                        let mut width = desc.size.width;
+                        let mut height = desc.size.width;
+                        let mut depth = desc.size.depth_or_array_layers;
+                        for i in 0..desc.mip_level_count {
+                            gl.tex_image_3d(
+                                target,
+                                i as i32,
+                                format_desc.internal as i32,
+                                width as i32,
+                                height as i32,
+                                depth as i32,
+                                0,
+                                format_desc.external,
+                                format_desc.data_type,
+                                None,
+                            );
+                            width = max(1, width / 2);
+                            height = max(1, height / 2);
+                            depth = max(1, depth / 2);
+                        }
+                    } else {
+                        let mut width = desc.size.width;
+                        let mut height = desc.size.width;
+                        for i in 0..desc.mip_level_count {
+                            gl.tex_image_3d(
+                                target,
+                                i as i32,
+                                format_desc.internal as i32,
+                                width as i32,
+                                height as i32,
+                                desc.size.depth_or_array_layers as i32,
+                                0,
+                                format_desc.external,
+                                format_desc.data_type,
+                                None,
+                            );
+                            width = max(1, width / 2);
+                            height = max(1, height / 2);
+                        }
+                    }
                 };
             } else if desc.sample_count > 1 {
                 unsafe {
@@ -755,13 +825,64 @@ impl crate::Device<super::Api> for super::Device {
                 };
             } else {
                 unsafe {
-                    gl.tex_storage_2d(
-                        target,
-                        desc.mip_level_count as i32,
-                        format_desc.internal,
-                        desc.size.width as i32,
-                        desc.size.height as i32,
-                    )
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::TEXTURE_STORAGE)
+                    {
+                        gl.tex_storage_2d(
+                            target,
+                            desc.mip_level_count as i32,
+                            format_desc.internal,
+                            desc.size.width as i32,
+                            desc.size.height as i32,
+                        )
+                    } else if target == glow::TEXTURE_CUBE_MAP {
+                        let mut width = desc.size.width;
+                        let mut height = desc.size.width;
+                        for i in 0..desc.mip_level_count {
+                            for face in [
+                                glow::TEXTURE_CUBE_MAP_POSITIVE_X,
+                                glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
+                                glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
+                                glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                                glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
+                                glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+                            ] {
+                                gl.tex_image_2d(
+                                    face,
+                                    i as i32,
+                                    format_desc.internal as i32,
+                                    width as i32,
+                                    height as i32,
+                                    0,
+                                    format_desc.external,
+                                    format_desc.data_type,
+                                    None,
+                                );
+                            }
+                            width = max(1, width / 2);
+                            height = max(1, height / 2);
+                        }
+                    } else {
+                        let mut width = desc.size.width;
+                        let mut height = desc.size.width;
+                        for i in 0..desc.mip_level_count {
+                            gl.tex_image_2d(
+                                target,
+                                i as i32,
+                                format_desc.internal as i32,
+                                width as i32,
+                                height as i32,
+                                0,
+                                format_desc.external,
+                                format_desc.data_type,
+                                None,
+                            );
+                            width = max(1, width / 2);
+                            height = max(1, height / 2);
+                        }
+                    }
                 };
             }
 
@@ -1044,8 +1165,8 @@ impl crate::Device<super::Api> for super::Device {
                 }
                 wgt::BindingType::Texture { .. } => {
                     let view = desc.textures[entry.resource_index as usize].view;
-                    if view.mip_levels.start != 0 || view.array_layers.start != 0 {
-                        log::error!("Unable to create a sampled texture binding for non-zero mipmap level or array layer.\n{}",
+                    if view.array_layers.start != 0 {
+                        log::error!("Unable to create a sampled texture binding for non-zero array layer.\n{}",
                             "This is an implementation problem of wgpu-hal/gles backend.")
                     }
                     let (raw, target) = view.inner.as_native();
@@ -1053,6 +1174,7 @@ impl crate::Device<super::Api> for super::Device {
                         raw,
                         target,
                         aspects: view.aspects,
+                        mip_levels: view.mip_levels.clone(),
                     }
                 }
                 wgt::BindingType::StorageTexture {

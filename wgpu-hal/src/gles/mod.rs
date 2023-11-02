@@ -165,6 +165,12 @@ bitflags::bitflags! {
         const TEXTURE_FLOAT_LINEAR = 1 << 10;
         /// Supports query buffer objects.
         const QUERY_BUFFERS = 1 << 11;
+        /// Supports `glTexStorage2D`, etc.
+        const TEXTURE_STORAGE = 1 << 12;
+        /// Supports `push_debug_group`, `pop_debug_group` and `debug_message_insert`.
+        const DEBUG_FNS = 1 << 13;
+        /// Supports framebuffer invalidation.
+        const INVALIDATE_FRAMEBUFFER = 1 << 14;
     }
 }
 
@@ -422,7 +428,8 @@ enum RawBinding {
         raw: glow::Texture,
         target: BindTarget,
         aspects: crate::FormatAspects,
-        //TODO: mip levels, array layers
+        mip_levels: Range<u32>,
+        //TODO: array layers
     },
     Image(ImageBinding),
     Sampler(glow::Sampler),
@@ -867,6 +874,7 @@ enum Command {
         texture: glow::Texture,
         target: BindTarget,
         aspects: crate::FormatAspects,
+        mip_levels: Range<u32>,
     },
     BindImage {
         slot: u32,

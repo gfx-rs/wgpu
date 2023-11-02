@@ -1,0 +1,23 @@
+[package]
+name = "wgpu-srgb-blend-example"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "wgpu sRGB blend example"
+publish = false
+
+[[bin]]
+name = "srgb-blend"
+path = "src/main.rs"
+harness = false
+
+[dependencies]
+bytemuck.workspace = true
+glam.workspace = true
+wasm-bindgen-test.workspace = true
+wgpu-example.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+wgpu-test.workspace = true
