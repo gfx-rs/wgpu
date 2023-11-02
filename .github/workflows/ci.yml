@@ -435,6 +435,7 @@ jobs:
 
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
+        if: always() # We want artifacts even if the tests fail.
         continue-on-error: true
         with:
           files: coverage-partition-1.info,coverage-partition-2.info
