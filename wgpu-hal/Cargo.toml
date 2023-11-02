@@ -127,7 +127,7 @@ gpu-allocator = { version = "0.23", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ], optional = true }
-hassle-rs = { version = "0.10", optional = true }
+hassle-rs = { version = "0.11", optional = true }
 # backend: Gles
 glutin_wgl_sys = { version = "0.5", optional = true }
 
@@ -158,7 +158,7 @@ web-sys = { version = "0.3.64", features = [
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = "0.3.64"
+js-sys = "0.3.65"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

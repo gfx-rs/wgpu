@@ -38,10 +38,11 @@ log.workspace = true
 parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
+profiling.workspace = true
 serde_json.workspace = true
 serde.workspace = true
-wgpu.workspace = true
 wgpu-macros.workspace = true
+wgpu.workspace = true
 wgt = { workspace = true, features = ["replay"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

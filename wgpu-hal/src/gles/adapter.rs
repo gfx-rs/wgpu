@@ -222,6 +222,25 @@ impl super::Adapter {
             .is_none()
             .then_some(())
             .and_then(|_| Self::parse_version(&version).ok());
+        let web_gl = cfg!(target_arch = "wasm32");
+
+        if let Some(full_ver) = full_ver {
+            let core_profile = (full_ver >= (3, 2)).then_some(unsafe {
+                gl.get_parameter_i32(glow::CONTEXT_PROFILE_MASK)
+                    & glow::CONTEXT_CORE_PROFILE_BIT as i32
+                    != 0
+            });
+            log::trace!(
+                "Profile: {}",
+                core_profile
+                    .map(|core_profile| if core_profile {
+                        "Core"
+                    } else {
+                        "Compatibility"
+                    })
+                    .unwrap_or("Legacy")
+            );
+        }
 
         if es_ver.is_none() && full_ver.is_none() {
             log::warn!("Unable to parse OpenGL version");
@@ -584,6 +603,18 @@ impl super::Adapter {
             },
         );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
+        private_caps.set(
+            super::PrivateCapabilities::TEXTURE_STORAGE,
+            supported((3, 0), (4, 2)),
+        );
+        private_caps.set(
+            super::PrivateCapabilities::DEBUG_FNS,
+            supported((3, 2), (4, 3)) && !web_gl,
+        );
+        private_caps.set(
+            super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
+            supported((3, 0), (4, 3)),
+        );
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
