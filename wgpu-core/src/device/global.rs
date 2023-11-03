@@ -1902,12 +1902,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
 
         // We also need to assign errors to the pipeline layout and the bind
-        // group layout.
+        // group layout. We have to remove any existing entries first.
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
         let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
         if let Some(ref ids) = implicit_error_context {
+            if pipeline_layout_guard.contains(ids.root_id) {
+                pipeline_layout_guard.remove(ids.root_id);
+            }
             pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
             for &bgl_id in ids.group_ids.iter() {
+                if bgl_guard.contains(bgl_id) {
+                    bgl_guard.remove(bgl_id);
+                }
                 bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
             }
         }
@@ -2083,12 +2089,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
 
         // We also need to assign errors to the pipeline layout and the bind
-        // group layout.
+        // group layout. We have to remove any existing entries first.
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
         let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
         if let Some(ref ids) = implicit_error_context {
+            if pipeline_layout_guard.contains(ids.root_id) {
+                pipeline_layout_guard.remove(ids.root_id);
+            }
             pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
             for &bgl_id in ids.group_ids.iter() {
+                if bgl_guard.contains(bgl_id) {
+                    bgl_guard.remove(bgl_id);
+                }
                 bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
             }
         }
