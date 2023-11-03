@@ -1662,9 +1662,9 @@ dependencies = [
 
 [[package]]
 name = "gpu-allocator"
-version = "0.23.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40fe17c8a05d60c38c0a4e5a3c802f2f1ceb66b76c67d96ffb34bef0475a7fad"
+checksum = "53d79e648296d0cf46c494e594763b6b362c4567e447177bc82750c733398b2a"
 dependencies = [
  "backtrace",
  "log",
