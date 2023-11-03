@@ -139,7 +139,7 @@ android_system_properties = "0.1.1"
 
 # DX dependencies
 bit-set = "0.5"
-gpu-allocator = { version = "0.23", default_features = false, features = [
+gpu-allocator = { version = "0.24", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ] }
@@ -158,7 +158,7 @@ console_error_panic_hook = "0.1.7"
 console_log = "1"
 js-sys = "0.3.65"
 wasm-bindgen = "0.2.87"
-wasm-bindgen-futures = "0.4.34"
+wasm-bindgen-futures = "0.4.38"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3.64"
 
