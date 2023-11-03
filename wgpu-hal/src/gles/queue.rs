@@ -132,6 +132,7 @@ impl super::Queue {
                     };
                 } else {
                     unsafe {
+                        assert_eq!(view.mip_levels.len(), 1);
                         gl.framebuffer_texture_2d(
                             fbo_target,
                             attachment,
@@ -1356,9 +1357,21 @@ impl super::Queue {
                 texture,
                 target,
                 aspects,
+                ref mip_levels,
             } => {
                 unsafe { gl.active_texture(glow::TEXTURE0 + slot) };
                 unsafe { gl.bind_texture(target, Some(texture)) };
+
+                unsafe {
+                    gl.tex_parameter_i32(target, glow::TEXTURE_BASE_LEVEL, mip_levels.start as i32)
+                };
+                unsafe {
+                    gl.tex_parameter_i32(
+                        target,
+                        glow::TEXTURE_MAX_LEVEL,
+                        (mip_levels.end - 1) as i32,
+                    )
+                };
 
                 let version = gl.version();
                 let is_min_es_3_1 = version.is_embedded && (version.major, version.minor) >= (3, 1);

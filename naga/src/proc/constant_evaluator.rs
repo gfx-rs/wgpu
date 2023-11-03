@@ -442,6 +442,18 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    /// Splat `value` to `size`, without using [`Splat`] expressions.
+    ///
+    /// This constructs [`Compose`] or [`ZeroValue`] expressions to
+    /// build a vector with the given `size` whose components are all
+    /// `value`.
+    ///
+    /// Use `span` as the span of the inserted expressions and
+    /// resulting types.
+    ///
+    /// [`Splat`]: Expression::Splat
+    /// [`Compose`]: Expression::Compose
+    /// [`ZeroValue`]: Expression::ZeroValue
     fn splat(
         &mut self,
         value: Handle<Expression>,
@@ -832,7 +844,12 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    /// Transforms `Expression::ZeroValue` and `Expression::Splat` into either `Expression::Literal` or `Expression::Compose`
+    /// Lower [`ZeroValue`] and [`Splat`] expressions to [`Literal`] and [`Compose`] expressions.
+    ///
+    /// [`ZeroValue`]: Expression::ZeroValue
+    /// [`Splat`]: Expression::Splat
+    /// [`Literal`]: Expression::Literal
+    /// [`Compose`]: Expression::Compose
     fn eval_zero_value_and_splat(
         &mut self,
         expr: Handle<Expression>,
@@ -845,6 +862,11 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
+    ///
+    /// [`ZeroValue`]: Expression::ZeroValue
+    /// [`Literal`]: Expression::Literal
+    /// [`Compose`]: Expression::Compose
     fn eval_zero_value_impl(
         &mut self,
         ty: Handle<Type>,
@@ -921,7 +943,10 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    fn cast(
+    /// Convert the scalar components of `expr` to `kind` and `target_width`.
+    ///
+    /// Treat `span` as the location of the resulting expression.
+    pub fn cast(
         &mut self,
         expr: Handle<Expression>,
         kind: ScalarKind,
