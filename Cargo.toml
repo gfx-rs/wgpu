@@ -139,7 +139,7 @@ android_system_properties = "0.1.1"
 
 # DX dependencies
 bit-set = "0.5"
-gpu-allocator = { version = "0.23", default_features = false, features = [
+gpu-allocator = { version = "0.24", default_features = false, features = [
     "d3d12",
     "public-winapi",
 ] }
