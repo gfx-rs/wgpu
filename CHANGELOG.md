@@ -64,7 +64,7 @@ By @Zoxc in [#4248](https://github.com/gfx-rs/wgpu/pull/4248)
 Timestamp queries are now supported on both Metal and Desktop OpenGL. On Apple chips on Metal, they only support timestamp queries in command buffers or in the renderpass descriptor,
 they do not support them inside a pass.
 
-Metal: By @Wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)  
+Metal: By @Wumpf in [#4008](https://github.com/gfx-rs/wgpu/pull/4008)
 OpenGL: By @Zoxc in [#4267](https://github.com/gfx-rs/wgpu/pull/4267)
 
 ### Render/Compute Pass Query Writes
@@ -187,7 +187,7 @@ let instance = wgpu::Instance::new(InstanceDescriptor {
 });
 ```
 
-`gles_minor_version`: By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)  
+`gles_minor_version`: By @PJB3005 in [#3998](https://github.com/gfx-rs/wgpu/pull/3998)
 `flags`: By @nical in [#4230](https://github.com/gfx-rs/wgpu/pull/4230)
 
 ### Many New Examples!
@@ -233,7 +233,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add trace-level logging for most entry points in wgpu-core By @nical in [4183](https://github.com/gfx-rs/wgpu/pull/4183)
 - Add `Rgb10a2Uint` format. By @teoxoy in [4199](https://github.com/gfx-rs/wgpu/pull/4199)
 - Validate that resources are used on the right device. By @nical in [4207](https://github.com/gfx-rs/wgpu/pull/4207)
-- Expose instance flags. 
+- Expose instance flags.
 - Add support for the bgra8unorm-storage feature. By @jinleili and @nical in [#4228](https://github.com/gfx-rs/wgpu/pull/4228)
 - Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
 - Let the `"strict_asserts"` feature enable check that wgpu-core's lock-ordering tokens are unique per thread. By @jimblandy in [#4258]([https://github.com/gfx-rs/wgpu/pull/4258])
@@ -262,6 +262,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Fix `clear` texture views being leaked when `wgpu::SurfaceTexture` is dropped before it is presented. By @rajveermalviya in [#4057](https://github.com/gfx-rs/wgpu/pull/4057).
 - Add `Feature::SHADER_UNUSED_VERTEX_OUTPUT` to allow unused vertex shader outputs. By @Aaron1011 in [#4116](https://github.com/gfx-rs/wgpu/pull/4116).
 - Fix a panic in `surface_configure`. By @nical in [#4220](https://github.com/gfx-rs/wgpu/pull/4220) and [#4227](https://github.com/gfx-rs/wgpu/pull/4227)
+- Pipelines register their implicit layouts in error cases. By @bradwerth in [#4624](https://github.com/gfx-rs/wgpu/pull/4624)
 
 #### Vulkan
 
