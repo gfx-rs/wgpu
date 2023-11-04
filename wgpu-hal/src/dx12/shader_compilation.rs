@@ -142,9 +142,12 @@ mod dxc {
         log::Level,
     ) {
         profiling::scope!("compile_dxc");
-        let mut compile_flags = arrayvec::ArrayVec::<&str, 4>::new_const();
+        let mut compile_flags = arrayvec::ArrayVec::<&str, 6>::new_const();
         compile_flags.push("-Ges"); // d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS
         compile_flags.push("-Vd"); // Disable implicit validation to work around bugs when dxil.dll isn't in the local directory.
+        compile_flags.push("-HV"); // Use HLSL 2018, Naga doesn't supported 2021 yet.
+        compile_flags.push("2018");
+
         if device
             .private_caps
             .instance_flags
