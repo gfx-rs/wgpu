@@ -486,10 +486,11 @@ struct VertexBufferDesc {
 }
 
 #[derive(Clone, Debug)]
-struct UniformDesc {
+struct PushConstantDesc {
     location: glow::UniformLocation,
+    ty: naga::TypeInner,
     offset: u32,
-    utype: u32,
+    size_bytes: u32,
 }
 
 #[cfg(all(
@@ -497,13 +498,13 @@ struct UniformDesc {
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
-unsafe impl Sync for UniformDesc {}
+unsafe impl Sync for PushConstantDesc {}
 #[cfg(all(
     target_arch = "wasm32",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
-unsafe impl Send for UniformDesc {}
+unsafe impl Send for PushConstantDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
@@ -512,7 +513,7 @@ type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
-    uniforms: ArrayVec<UniformDesc, MAX_PUSH_CONSTANT_COMMANDS>,
+    push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
 }
 
 #[derive(Clone, Debug)]
@@ -884,7 +885,7 @@ enum Command {
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
     SetPushConstants {
-        uniform: UniformDesc,
+        uniform: PushConstantDesc,
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },

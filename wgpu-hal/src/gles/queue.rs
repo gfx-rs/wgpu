@@ -1459,60 +1459,128 @@ impl super::Queue {
 
                 let location = Some(&uniform.location);
 
-                match uniform.utype {
-                    glow::FLOAT => {
+                match uniform.ty {
+                    //
+                    // --- Float 1-4 Component ---
+                    //
+                    naga::TypeInner::Scalar {
+                        kind: naga::ScalarKind::Float,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_f32(location, data) };
                     }
-                    glow::FLOAT_VEC2 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Float,
+                        size: naga::VectorSize::Bi,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 2>(data_bytes, offset) };
                         unsafe { gl.uniform_2_f32_slice(location, data) };
                     }
-                    glow::FLOAT_VEC3 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Float,
+                        size: naga::VectorSize::Tri,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 3>(data_bytes, offset) };
                         unsafe { gl.uniform_3_f32_slice(location, data) };
                     }
-                    glow::FLOAT_VEC4 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Float,
+                        size: naga::VectorSize::Quad,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_4_f32_slice(location, data) };
                     }
-                    glow::INT => {
+
+                    //
+                    // --- Int 1-4 Component ---
+                    //
+                    naga::TypeInner::Scalar {
+                        kind: naga::ScalarKind::Sint,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<i32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_i32(location, data) };
                     }
-                    glow::INT_VEC2 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Sint,
+                        size: naga::VectorSize::Bi,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<i32, 2>(data_bytes, offset) };
                         unsafe { gl.uniform_2_i32_slice(location, data) };
                     }
-                    glow::INT_VEC3 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Sint,
+                        size: naga::VectorSize::Tri,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<i32, 3>(data_bytes, offset) };
                         unsafe { gl.uniform_3_i32_slice(location, data) };
                     }
-                    glow::INT_VEC4 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Sint,
+                        size: naga::VectorSize::Quad,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<i32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_4_i32_slice(location, data) };
                     }
-                    glow::UNSIGNED_INT => {
+
+                    //
+                    // --- Uint 1-4 Component ---
+                    //
+                    naga::TypeInner::Scalar {
+                        kind: naga::ScalarKind::Uint,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<u32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_u32(location, data) };
                     }
-                    glow::UNSIGNED_INT_VEC2 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Uint,
+                        size: naga::VectorSize::Bi,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<u32, 2>(data_bytes, offset) };
                         unsafe { gl.uniform_2_u32_slice(location, data) };
                     }
-                    glow::UNSIGNED_INT_VEC3 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Uint,
+                        size: naga::VectorSize::Tri,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<u32, 3>(data_bytes, offset) };
                         unsafe { gl.uniform_3_u32_slice(location, data) };
                     }
-                    glow::UNSIGNED_INT_VEC4 => {
+                    naga::TypeInner::Vector {
+                        kind: naga::ScalarKind::Uint,
+                        size: naga::VectorSize::Quad,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<u32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_4_u32_slice(location, data) };
                     }
-                    glow::FLOAT_MAT2 => {
+
+                    //
+                    // --- Matrix 2xR ---
+                    //
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Bi,
+                        rows: naga::VectorSize::Bi,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_2_f32_slice(location, false, data) };
                     }
-                    glow::FLOAT_MAT2x3 => {
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Bi,
+                        rows: naga::VectorSize::Tri,
+                        width: 4,
+                    } => {
                         // repack 2 vec3s into 6 values.
                         let unpacked_data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
                         #[rustfmt::skip]
@@ -1522,15 +1590,31 @@ impl super::Queue {
                         ];
                         unsafe { gl.uniform_matrix_2x3_f32_slice(location, false, &packed_data) };
                     }
-                    glow::FLOAT_MAT2x4 => {
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Bi,
+                        rows: naga::VectorSize::Quad,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_2x4_f32_slice(location, false, data) };
                     }
-                    glow::FLOAT_MAT3x2 => {
+
+                    //
+                    // --- Matrix 3xR ---
+                    //
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Tri,
+                        rows: naga::VectorSize::Bi,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 6>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_3x2_f32_slice(location, false, data) };
                     }
-                    glow::FLOAT_MAT3 => {
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Tri,
+                        rows: naga::VectorSize::Tri,
+                        width: 4,
+                    } => {
                         // repack 3 vec3s into 9 values.
                         let unpacked_data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
                         #[rustfmt::skip]
@@ -1541,15 +1625,31 @@ impl super::Queue {
                         ];
                         unsafe { gl.uniform_matrix_3_f32_slice(location, false, &packed_data) };
                     }
-                    glow::FLOAT_MAT3x4 => {
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Tri,
+                        rows: naga::VectorSize::Quad,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_3x4_f32_slice(location, false, data) };
                     }
-                    glow::FLOAT_MAT4x2 => {
+
+                    //
+                    // --- Matrix 4xR ---
+                    //
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Quad,
+                        rows: naga::VectorSize::Bi,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_4x2_f32_slice(location, false, data) };
                     }
-                    glow::FLOAT_MAT4x3 => {
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Quad,
+                        rows: naga::VectorSize::Tri,
+                        width: 4,
+                    } => {
                         // repack 4 vec3s into 12 values.
                         let unpacked_data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
                         #[rustfmt::skip]
@@ -1561,11 +1661,15 @@ impl super::Queue {
                         ];
                         unsafe { gl.uniform_matrix_4x3_f32_slice(location, false, &packed_data) };
                     }
-                    glow::FLOAT_MAT4 => {
+                    naga::TypeInner::Matrix {
+                        columns: naga::VectorSize::Quad,
+                        rows: naga::VectorSize::Quad,
+                        width: 4,
+                    } => {
                         let data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_4_f32_slice(location, false, data) };
                     }
-                    _ => panic!("Unsupported uniform datatype: {:#X}!", uniform.utype),
+                    _ => panic!("Unsupported uniform datatype: {:?}!", uniform.ty),
                 }
             }
         }

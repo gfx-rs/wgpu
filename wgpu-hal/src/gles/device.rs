@@ -102,7 +102,7 @@ impl CompilationContext<'_> {
                 naga::ShaderStage::Compute => {}
             }
         }
-      
+
         *self.push_constant_items = reflection_info.push_constant_items;
     }
 }
@@ -443,25 +443,25 @@ impl super::Device {
 
         for (stage_idx, stage_items) in push_constant_items.into_iter().enumerate() {
             for item in stage_items {
-                let type_inner = &shaders[stage_idx].1.module.naga.module.types[item.ty].inner;
+                let naga_module = &shaders[stage_idx].1.module.naga.module;
+                let type_inner = &naga_module.types[item.ty].inner;
 
-                let location = unsafe { gl.get_uniform_location(program, &item.name) };
+                let location = unsafe { gl.get_uniform_location(program, &item.access_path) };
 
                 log::trace!(
                     "push constant item: name={}, ty={:?}, offset={}, location={:?}",
-                    item.name,
+                    item.access_path,
                     type_inner,
                     item.offset,
                     location,
                 );
 
                 if let Some(location) = location {
-                    let utype = conv::map_naga_uniform_type(type_inner);
-
-                    uniforms.push(super::UniformDesc {
+                    uniforms.push(super::PushConstantDesc {
                         location,
                         offset: item.offset,
-                        utype,
+                        size_bytes: type_inner.size(naga_module.to_ctx()),
+                        ty: type_inner.clone(),
                     });
                 }
             }
@@ -470,7 +470,7 @@ impl super::Device {
         Ok(Arc::new(super::PipelineInner {
             program,
             sampler_map,
-            uniforms,
+            push_constant_descs: uniforms,
         }))
     }
 }

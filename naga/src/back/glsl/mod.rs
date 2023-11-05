@@ -365,7 +365,7 @@ pub struct PushConstantItem {
     /// - _push_constant_binding_cs.array[1]
     /// ```
     ///
-    pub name: String,
+    pub access_path: String,
     /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
     pub ty: Handle<crate::Type>,
     /// The offset in the push constant memory block this uniform maps to.
@@ -4208,7 +4208,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Build the full name, by combining all current segments.
                 let name: String = segments.iter().map(String::as_str).collect();
                 items.push(PushConstantItem {
-                    name,
+                    access_path: name,
                     offset: *offset,
                     ty,
                 });

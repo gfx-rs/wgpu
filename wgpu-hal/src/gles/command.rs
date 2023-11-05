@@ -29,7 +29,7 @@ pub(super) struct State {
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
-    uniform_descs: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
+    push_constant_descs: ArrayVec<super::PushConstantDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
     // The current state of the push constant data block.
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
@@ -57,7 +57,7 @@ impl Default for State {
             instance_vbuf_mask: Default::default(),
             dirty_vbuf_mask: Default::default(),
             active_first_instance: Default::default(),
-            uniform_descs: Default::default(),
+            push_constant_descs: Default::default(),
             current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
             end_of_pass_timestamp: Default::default(),
         }
@@ -206,7 +206,7 @@ impl super::CommandEncoder {
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
-        self.state.uniform_descs = inner.uniforms.clone();
+        self.state.push_constant_descs = inner.push_constant_descs.clone();
 
         // rebind textures, if needed
         let mut dirty_textures = 0u32;
@@ -776,8 +776,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         //
         // Additionally, any statically unused uniform descs will have been removed from this list
         // by OpenGL, so the uniform list is not contiguous.
-        for uniform in self.state.uniform_descs.iter().cloned() {
-            let uniform_size_words = conv::uniform_byte_size(uniform.utype) / 4;
+        for uniform in self.state.push_constant_descs.iter().cloned() {
+            let uniform_size_words = uniform.size_bytes / 4;
             let uniform_start_words = uniform.offset / 4;
             let uniform_end_words = uniform_start_words + uniform_size_words;
 
