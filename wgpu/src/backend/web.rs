@@ -383,7 +383,11 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> web_sys::GpuStencilFa
 }
 
 fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> web_sys::GpuDepthStencilState {
-    let mut mapped = web_sys::GpuDepthStencilState::new(map_compare_function(desc.depth_compare), desc.depth_write_enabled, map_texture_format(desc.format));
+    let mut mapped = web_sys::GpuDepthStencilState::new(
+        map_compare_function(desc.depth_compare),
+        desc.depth_write_enabled,
+        map_texture_format(desc.format),
+    );
     mapped.depth_bias(desc.bias.constant);
     mapped.depth_bias_clamp(desc.bias.clamp);
     mapped.depth_bias_slope_scale(desc.bias.slope_scale);
@@ -2786,9 +2790,11 @@ impl crate::context::Context for Context {
                 );
             }
             None => {
-                encoder_data
-                    .0
-                    .set_vertex_buffer_with_f64(slot, Some(&buffer_data.0), offset as f64);
+                encoder_data.0.set_vertex_buffer_with_f64(
+                    slot,
+                    Some(&buffer_data.0),
+                    offset as f64,
+                );
             }
         };
     }
