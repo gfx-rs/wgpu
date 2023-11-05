@@ -544,16 +544,7 @@ impl<A: HalApi> Buffer<A> {
             let device = &self.device;
             let buffer_id = self.info.id();
 
-            map_closure = match &*self.map_state.lock() {
-                &BufferMapState::Waiting(..) // To get the proper callback behavior.
-                | &BufferMapState::Init { .. }
-                | &BufferMapState::Active { .. }
-                => {
-                    self.buffer_unmap_inner()
-                        .unwrap_or(None)
-                }
-                _ => None,
-            };
+            map_closure = self.buffer_unmap_inner().unwrap_or(None);
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
