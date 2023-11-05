@@ -1,6 +1,7 @@
 use super::{number::consume_number, Error, ExpectedToken};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::{conv, Number};
+use crate::front::wgsl::Scalar;
 use crate::Span;
 
 type TokenSpan<'a> = (Token<'a>, Span);
@@ -374,9 +375,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
-    pub(in crate::front::wgsl) fn next_scalar_generic(
-        &mut self,
-    ) -> Result<(crate::ScalarKind, crate::Bytes), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<Scalar, Error<'a>> {
         self.expect_generic_paren('<')?;
         let pair = match self.next() {
             (Token::Word(word), span) => {
@@ -393,11 +392,11 @@ impl<'a> Lexer<'a> {
     /// Returns the span covering the inner type, excluding the brackets.
     pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
         &mut self,
-    ) -> Result<(crate::ScalarKind, crate::Bytes, Span), Error<'a>> {
+    ) -> Result<(Scalar, Span), Error<'a>> {
         self.expect_generic_paren('<')?;
         let pair = match self.next() {
             (Token::Word(word), span) => conv::get_scalar_type(word)
-                .map(|(a, b)| (a, b, span))
+                .map(|scalar| (scalar, span))
                 .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;

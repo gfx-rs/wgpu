@@ -2549,10 +2549,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
-            ast::Type::Scalar { kind, width } => crate::TypeInner::Scalar { kind, width },
-            ast::Type::Vector { size, kind, width } => {
-                crate::TypeInner::Vector { size, kind, width }
-            }
+            ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
+            ast::Type::Vector { size, scalar } => scalar.to_inner_vector(size),
             ast::Type::Matrix {
                 rows,
                 columns,
@@ -2562,7 +2560,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 rows,
                 width,
             },
-            ast::Type::Atomic { kind, width } => crate::TypeInner::Atomic { kind, width },
+            ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
             ast::Type::Pointer { base, space } => {
                 let base = self.resolve_ast_type(base, ctx)?;
                 crate::TypeInner::Pointer { base, space }

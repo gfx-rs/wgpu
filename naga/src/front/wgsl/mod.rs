@@ -104,9 +104,10 @@ impl crate::TypeInner {
         use crate::TypeInner as Ti;
 
         match *self {
-            Ti::Scalar { kind, width } => kind.to_wgsl(width),
+            Ti::Scalar { kind, width } => Scalar { kind, width }.to_wgsl(),
             Ti::Vector { size, kind, width } => {
-                format!("vec{}<{}>", size as u32, kind.to_wgsl(width))
+                let scalar = Scalar { kind, width };
+                format!("vec{}<{}>", size as u32, scalar.to_wgsl())
             }
             Ti::Matrix {
                 columns,
@@ -117,11 +118,15 @@ impl crate::TypeInner {
                     "mat{}x{}<{}>",
                     columns as u32,
                     rows as u32,
-                    crate::ScalarKind::Float.to_wgsl(width),
+                    Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width
+                    }
+                    .to_wgsl(),
                 )
             }
             Ti::Atomic { kind, width } => {
-                format!("atomic<{}>", kind.to_wgsl(width))
+                format!("atomic<{}>", Scalar { kind, width }.to_wgsl())
             }
             Ti::Pointer { base, .. } => {
                 let base = &gctx.types[base];
@@ -129,7 +134,7 @@ impl crate::TypeInner {
                 format!("ptr<{name}>")
             }
             Ti::ValuePointer { kind, width, .. } => {
-                format!("ptr<{}>", kind.to_wgsl(width))
+                format!("ptr<{}>", Scalar { kind, width }.to_wgsl())
             }
             Ti::Array { base, size, .. } => {
                 let member_type = &gctx.types[base];
@@ -169,7 +174,7 @@ impl crate::TypeInner {
                         // Note: The only valid widths are 4 bytes wide.
                         // The lexer has already verified this, so we can safely assume it here.
                         // https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
-                        let element_type = kind.to_wgsl(4);
+                        let element_type = Scalar { kind, width: 4 }.to_wgsl();
                         format!("<{element_type}>")
                     }
                     crate::ImageClass::Depth { multi: _ } => String::new(),
@@ -287,17 +292,49 @@ mod type_inner_tests {
     }
 }
 
-impl crate::ScalarKind {
+/// Characteristics of a scalar type.
+#[derive(Clone, Copy, Debug)]
+pub struct Scalar {
+    /// How the value's bits are to be interpreted.
+    pub kind: crate::ScalarKind,
+
+    /// The size of the value in bytes.
+    pub width: crate::Bytes,
+}
+
+impl Scalar {
     /// Format a scalar kind+width as a type is written in wgsl.
     ///
     /// Examples: `f32`, `u64`, `bool`.
-    fn to_wgsl(self, width: u8) -> String {
-        let prefix = match self {
+    fn to_wgsl(self) -> String {
+        let prefix = match self.kind {
             crate::ScalarKind::Sint => "i",
             crate::ScalarKind::Uint => "u",
             crate::ScalarKind::Float => "f",
             crate::ScalarKind::Bool => return "bool".to_string(),
         };
-        format!("{}{}", prefix, width * 8)
+        format!("{}{}", prefix, self.width * 8)
+    }
+
+    const fn to_inner_scalar(self) -> crate::TypeInner {
+        crate::TypeInner::Scalar {
+            kind: self.kind,
+            width: self.width,
+        }
+    }
+
+    const fn to_inner_vector(self, size: crate::VectorSize) -> crate::TypeInner {
+        crate::TypeInner::Vector {
+            size,
+            kind: self.kind,
+            width: self.width,
+        }
+    }
+
+    const fn to_inner_atomic(self) -> crate::TypeInner {
+        crate::TypeInner::Atomic {
+            kind: self.kind,
+            width: self.width,
+        }
     }
 }
