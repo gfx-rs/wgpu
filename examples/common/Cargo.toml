@@ -11,10 +11,12 @@ license.workspace = true
 publish = false
 
 [dependencies]
+cfg-if.workspace = true
 env_logger.workspace = true
 log.workspace = true
 pollster.workspace = true
 png.workspace = true
+web-time.workspace = true
 winit.workspace = true
 wgpu.workspace = true
 wgpu-test.workspace = true
