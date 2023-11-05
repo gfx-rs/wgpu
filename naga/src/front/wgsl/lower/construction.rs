@@ -516,13 +516,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut ExpressionContext<'source, '_, 'out>,
     ) -> Result<Constructor<Handle<crate::Type>>, Error<'source>> {
         let handle = match *constructor {
-            ast::ConstructorType::Scalar { width, kind } => {
-                let ty = ctx.ensure_type_exists(crate::TypeInner::Scalar { width, kind });
+            ast::ConstructorType::Scalar(scalar) => {
+                let ty = ctx.ensure_type_exists(scalar.to_inner_scalar());
                 Constructor::Type(ty)
             }
             ast::ConstructorType::PartialVector { size } => Constructor::PartialVector { size },
-            ast::ConstructorType::Vector { size, kind, width } => {
-                let ty = ctx.ensure_type_exists(crate::TypeInner::Vector { size, kind, width });
+            ast::ConstructorType::Vector { size, scalar } => {
+                let ty = ctx.ensure_type_exists(scalar.to_inner_vector(size));
                 Constructor::Type(ty)
             }
             ast::ConstructorType::PartialMatrix { columns, rows } => {
