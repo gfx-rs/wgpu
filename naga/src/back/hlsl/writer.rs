@@ -1266,7 +1266,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             crate::BuiltIn::SubgroupId => {
                                 writeln!(
                                     self.out,
-                                    "(__local_invocation_id.x * {}u + __local_invocation_id.y * {}u + __local_invocation_id.z) / WaveGetLaneCount();",
+                                    "(__local_invocation_id.z * {}u + __local_invocation_id.y * {}u + __local_invocation_id.x) / WaveGetLaneCount();",
                                     ep.workgroup_size[0] * ep.workgroup_size[1],
                                     ep.workgroup_size[1],
                                 )?;
