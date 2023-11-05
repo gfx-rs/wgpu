@@ -38,7 +38,7 @@ void main(uint3 __local_invocation_id : SV_GroupThreadID)
     }
     GroupMemoryBarrierWithGroupSync();
     const uint num_subgroups = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
-    const uint subgroup_id = (__local_invocation_id.x * 1u + __local_invocation_id.y * 1u + __local_invocation_id.z) / WaveGetLaneCount();
+    const uint subgroup_id = (__local_invocation_id.z * 1u + __local_invocation_id.y * 1u + __local_invocation_id.x) / WaveGetLaneCount();
     const uint subgroup_size = WaveGetLaneCount();
     const uint subgroup_invocation_id = WaveGetLaneIndex();
     num_subgroups_1 = num_subgroups;
