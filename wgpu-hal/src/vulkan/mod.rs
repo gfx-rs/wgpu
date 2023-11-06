@@ -85,6 +85,12 @@ struct DebugUtils {
     callback_data: Box<DebugUtilsMessengerUserData>,
 }
 
+pub struct DebugUtilsCreateInfo {
+    severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: Box<DebugUtilsMessengerUserData>,
+}
+
 /// User data needed by `instance::debug_utils_messenger_callback`.
 ///
 /// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
