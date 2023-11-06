@@ -343,11 +343,7 @@ impl FrameCounter {
             let elapsed_ms = elasped_secs * 1000.0;
             let frame_time = elapsed_ms / self.frame_count as f32;
             let fps = self.frame_count as f32 / elasped_secs;
-            log::info!(
-                "Frame time {:.2}ms ({:.1} FPS)",
-                frame_time,
-                fps,
-            );
+            log::info!("Frame time {:.2}ms ({:.1} FPS)", frame_time, fps);
 
             self.last_printed_instant = new_instant;
             self.frame_count = 0;
@@ -403,7 +399,7 @@ async fn start<E: Example>(title: &str) {
                     WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
                         example.as_mut().unwrap().resize(
-                            &surface.config(),
+                            surface.config(),
                             &context.device,
                             &context.queue,
                         );
