@@ -277,13 +277,9 @@ impl DeviceLostClosure {
             DeviceLostClosureInner::C { inner } => unsafe {
                 // We need to pass message as a c_char typed pointer. To avoid
                 // trivial conversion warnings on some platforms, we first coerce
-                // the pointer to u8.
-                let message_u8_ptr: *const u8 = message.as_ptr();
-                (inner.callback)(
-                    inner.user_data,
-                    reason as u8,
-                    message_u8_ptr as *const c_char,
-                )
+                // the pointer.
+                let message_const_c_char_ptr: *const c_char = message.as_ptr() as *const c_char;
+                (inner.callback)(inner.user_data, reason as u8, message_const_c_char_ptr)
             },
         }
     }
