@@ -1470,7 +1470,12 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(device => global.device_destroy(*device));
     }
-    fn device_mark_lost(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData, message: &str) {
+    fn device_mark_lost(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        message: &str,
+    ) {
         // We do not provide a reason to device_lose, because all reasons other than
         // destroyed (which this is not) are "unknown".
         let global = &self.0;

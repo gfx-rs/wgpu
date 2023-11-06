@@ -276,7 +276,12 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         device_lost_callback: DeviceLostCallback,
     );
     fn device_destroy(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
-    fn device_mark_lost(&self, device: &Self::DeviceId, device_data: &Self::DeviceData, message: &str);
+    fn device_mark_lost(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        message: &str,
+    );
     fn device_poll(
         &self,
         device: &Self::DeviceId,
