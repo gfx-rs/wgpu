@@ -80,6 +80,7 @@ ctor = "0.2"
 # https://github.com/SiegeEngine/ddsfile/issues/15 (Updated dependencies)
 ddsfile = { version = "0.5.2-unstable", git = "https://github.com/SiegeEngine/ddsfile.git", rev = "9b597930edc00502391cbb1a39708dadde0fd0ff" }
 env_logger = "0.10"
+fern = "0.6"
 flume = "0.11"
 futures-lite = "1"
 futures-intrusive = "0.5"

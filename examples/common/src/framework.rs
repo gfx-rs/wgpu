@@ -1,4 +1,3 @@
-use web_time::Instant;
 use wgpu::{Instance, Surface, WasmNotSend, WasmNotSync};
 use wgpu_test::GpuTestConfiguration;
 use winit::{
@@ -8,20 +7,6 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::Window,
 };
-
-#[allow(dead_code)]
-pub fn cast_slice<T>(data: &[T]) -> &[u8] {
-    use std::{mem::size_of_val, slice::from_raw_parts};
-
-    unsafe { from_raw_parts(data.as_ptr() as *const u8, size_of_val(data)) }
-}
-
-#[allow(dead_code)]
-pub enum ShaderStage {
-    Vertex,
-    Fragment,
-    Compute,
-}
 
 pub trait Example: 'static + Sized {
     const SRGB: bool = true;
@@ -65,54 +50,83 @@ pub trait Example: 'static + Sized {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue);
 }
 
+// Initialize logging in platform dependant ways.
 fn init_logger() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
+            // As we don't have an environment to pull logging level from, we use the query string.
             let query_string = web_sys::window().unwrap().location().search().unwrap();
-            let level: log::Level = parse_url_query_string(&query_string, "RUST_LOG")
-                .and_then(|x| x.parse().ok())
-                .unwrap_or(log::Level::Error);
-            console_log::init_with_level(level).expect("could not initialize logger");
+            let query_level: Option<log::LevelFilter> = parse_url_query_string(&query_string, "RUST_LOG")
+                .and_then(|x| x.parse().ok());
+
+            // We keep wgpu at Error level, as it's very noisy.
+            let base_level = query_level.unwrap_or(log::LevelFilter::Info);
+            let wgpu_level = query_level.unwrap_or(log::LevelFilter::Error);
+
+            // On web, we use fern, as console_log doesn't have filtering on a per-module level.
+            fern::Dispatch::new()
+                .level(base_level)
+                .level_for("wgpu_core", wgpu_level)
+                .level_for("wgpu_hal", wgpu_level)
+                .level_for("naga", wgpu_level)
+                .chain(fern::Output::call(console_log::log))
+                .apply()
+                .unwrap();
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         } else {
-            env_logger::init();
+            // parse_default_env will read the RUST_LOG environment variable and apply it on top
+            // of these default filters.
+            env_logger::builder()
+                .filter_level(log::LevelFilter::Info)
+                // We keep wgpu at Error level, as it's very noisy.
+                .filter_module("wgpu_core", log::LevelFilter::Error)
+                .filter_module("wgpu_hal", log::LevelFilter::Error)
+                .filter_module("naga", log::LevelFilter::Error)
+                .parse_default_env()
+                .init();
         }
     }
 }
 
-struct WindowLoop {
+struct EventLoopWrapper {
     event_loop: EventLoop<()>,
     window: Window,
 }
 
-fn init_event_loop(title: &str) -> WindowLoop {
-    let event_loop = EventLoop::new().unwrap();
-    let mut builder = winit::window::WindowBuilder::new();
-    builder = builder.with_title(title);
-    let window = builder.build(&event_loop).unwrap();
+impl EventLoopWrapper {
+    pub fn new(title: &str) -> Self {
+        let event_loop = EventLoop::new().unwrap();
+        let mut builder = winit::window::WindowBuilder::new();
+        builder = builder.with_title(title);
+        let window = builder.build(&event_loop).unwrap();
 
-    #[cfg(target_arch = "wasm32")]
-    {
-        use winit::platform::web::WindowExtWebSys;
-        let canvas = window.canvas().expect("Couldn't get canvas");
-        canvas.style().set_css_text("height: 500px; width: 500px;");
-        // On wasm, append the canvas to the document body
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| doc.body())
-            .and_then(|body| body.append_child(&canvas).ok())
-            .expect("couldn't append canvas to document body");
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::WindowExtWebSys;
+            let canvas = window.canvas().expect("Couldn't get canvas");
+            canvas.style().set_css_text("height: 100%; width: 100%;");
+            // On wasm, append the canvas to the document body
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| doc.body())
+                .and_then(|body| body.append_child(&canvas).ok())
+                .expect("couldn't append canvas to document body");
+        }
+
+        Self { event_loop, window }
     }
-
-    WindowLoop { event_loop, window }
 }
 
-struct SurfaceContainer {
+/// Wrapper type which manages the surface and surface configuration.
+///
+/// As surface usage varies per platform, wrapping this up cleans up the event loop code.
+struct SurfaceWrapper {
     surface: Option<wgpu::Surface>,
     config: Option<wgpu::SurfaceConfiguration>,
 }
 
-impl SurfaceContainer {
+impl SurfaceWrapper {
+    /// Create a new surface wrapper with no surface or configuration.
     fn new() -> Self {
         Self {
             surface: None,
@@ -120,37 +134,73 @@ impl SurfaceContainer {
         }
     }
 
+    /// Called after the instance is created, but before we request an adapter.
+    ///
+    /// On wasm, we need to create the surface here, as the WebGL backend needs
+    /// a surface (and hence a canvas) to be present to create the adapter.
+    ///
+    /// We cannot unconditionally create a surface here, as Android requires
+    /// us to wait until we recieve the `Resumed` event to do so.
     fn pre_adapter(&mut self, instance: &Instance, window: &Window) {
         if cfg!(target_arch = "wasm32") {
             self.surface = Some(unsafe { instance.create_surface(&window).unwrap() });
         }
     }
 
+    /// Check if the event is the start condition for the surface.
+    fn start_condition(e: &Event<()>) -> bool {
+        match e {
+            // On all other platforms, we can create the surface immediately.
+            Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
+            // On android we need to wait for a resumed event to create the surface.
+            Event::Resumed => cfg!(target_os = "android"),
+            _ => false,
+        }
+    }
+
+    /// Called when an event which matches [`Self::start_condition`] is recieved.
+    ///
+    /// On all native platforms, this is where we create the surface.
+    ///
+    /// Additionally, we configure the surface based on the (now valid) window size.
     fn resume(&mut self, context: &ExampleContext, window: &Window, srgb: bool) {
+        // Window size is only actually valid after we enter the event loop.
+        let window_size = window.inner_size();
+
+        log::info!("Surface resume {window_size:?}");
+
+        // We didn't create the surface in pre_adapter, so we need to do so now.
         if !cfg!(target_arch = "wasm32") {
             self.surface = Some(unsafe { context.instance.create_surface(&window).unwrap() });
         }
 
+        // From here on, self.surface should be Some.
+
         let surface = self.surface.as_ref().unwrap();
 
-        let window_size = window.inner_size();
-
-        let config = self.config.insert(
-            surface
-                .get_default_config(&context.adapter, window_size.width, window_size.height)
-                .expect("Surface isn't supported by the adapter."),
-        );
-        let surface_view_format = if srgb {
-            config.format.add_srgb_suffix()
+        // Get the default configuration,
+        let mut config = surface
+            .get_default_config(&context.adapter, window_size.width, window_size.height)
+            .expect("Surface isn't supported by the adapter.");
+        if srgb {
+            // Not all platforms (WebGPU) support sRGB swapchains, so we need to use view formats
+            let view_format = config.format.add_srgb_suffix();
+            config.view_formats.push(view_format);
         } else {
-            config.format.remove_srgb_suffix()
+            // All platforms support non-sRGB swapchains, so we can just use the format directly.
+            let format = config.format.remove_srgb_suffix();
+            config.format = format;
+            config.view_formats.push(format);
         };
-        config.view_formats.push(surface_view_format);
 
         surface.configure(&context.device, &config);
+        self.config = Some(config);
     }
 
+    /// Resize the surface, making sure to not resize to zero.
     fn resize(&mut self, context: &ExampleContext, size: PhysicalSize<u32>) {
+        log::info!("Surface resize {size:?}");
+
         let config = self.config.as_mut().unwrap();
         config.width = size.width.max(1);
         config.height = size.height.max(1);
@@ -158,8 +208,9 @@ impl SurfaceContainer {
         surface.configure(&context.device, config);
     }
 
+    /// Acquire the next surface texture.
     fn acquire(&mut self, context: &ExampleContext) -> wgpu::SurfaceTexture {
-        let surface = self.get().unwrap();
+        let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {
             Ok(frame) => frame,
@@ -172,8 +223,11 @@ impl SurfaceContainer {
         }
     }
 
+    /// On suspend on android, we drop the surface, as it's no longer valid.
+    ///
+    /// A suspend event is always followed by at least one resume event.
     fn suspend(&mut self) {
-        if !cfg!(target_arch = "wasm32") {
+        if cfg!(target_os = "android") {
             self.surface = None;
         }
     }
@@ -187,6 +241,7 @@ impl SurfaceContainer {
     }
 }
 
+/// Context containing global wgpu resources.
 struct ExampleContext {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
@@ -194,7 +249,8 @@ struct ExampleContext {
     queue: wgpu::Queue,
 }
 impl ExampleContext {
-    async fn init_async<E: Example>(surface: &mut SurfaceContainer, window: &Window) -> Self {
+    /// Initializes the example context.
+    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: &Window) -> Self {
         log::info!("Initializing wgpu...");
 
         let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
@@ -264,15 +320,50 @@ impl ExampleContext {
     }
 }
 
+struct FrameCounter {
+    // Instant of the last time we printed the frame time.
+    last_printed_instant: web_time::Instant,
+    // Number of frames since the last time we printed the frame time.
+    frame_count: u32,
+}
+
+impl FrameCounter {
+    fn new() -> Self {
+        Self {
+            last_printed_instant: web_time::Instant::now(),
+            frame_count: 0,
+        }
+    }
+
+    fn update(&mut self) {
+        self.frame_count += 1;
+        let new_instant = web_time::Instant::now();
+        let elasped_secs = (new_instant - self.last_printed_instant).as_secs_f32();
+        if elasped_secs > 1.0 {
+            let elapsed_ms = elasped_secs * 1000.0;
+            let frame_time = elapsed_ms / self.frame_count as f32;
+            let fps = self.frame_count as f32 / elasped_secs;
+            log::info!(
+                "Frame time {:.2}ms ({:.1} FPS)",
+                frame_time,
+                fps,
+            );
+
+            self.last_printed_instant = new_instant;
+            self.frame_count = 0;
+        }
+    }
+}
+
 async fn start<E: Example>(title: &str) {
     init_logger();
-    let window_loop = init_event_loop(title);
-    let mut surface = SurfaceContainer::new();
+    let window_loop = EventLoopWrapper::new(title);
+    let mut surface = SurfaceWrapper::new();
     let context = ExampleContext::init_async::<E>(&mut surface, &window_loop.window).await;
 
-    let mut last_frame_inst = web_time::Instant::now();
-    let (mut frame_count, mut accum_time) = (0, 0.0);
+    let mut frame_counter = FrameCounter::new();
 
+    // We wait to create the example until we have a valid surface.
     let mut example = None;
 
     cfg_if::cfg_if! {
@@ -288,36 +379,28 @@ async fn start<E: Example>(title: &str) {
     let _ = (event_loop_function)(
         window_loop.event_loop,
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
+            // We set to refresh as fast as possible.
             target.set_control_flow(ControlFlow::Poll);
 
-            fn start_condition(e: &Event<()>) -> bool {
-                match e {
-                    Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
-                    Event::Resumed => cfg!(target_os = "android"),
-                    _ => false,
-                }
-            }
-
             match event {
-                ref e if start_condition(e) => {
-                    log::error!("Surface resume");
+                ref e if SurfaceWrapper::start_condition(e) => {
                     surface.resume(&context, &window_loop.window, E::SRGB);
 
-                    example = Some(E::init(
-                        surface.config(),
-                        &context.adapter,
-                        &context.device,
-                        &context.queue,
-                    ));
+                    // If we haven't created the example yet, do so now.
+                    if example.is_none() {
+                        example = Some(E::init(
+                            surface.config(),
+                            &context.adapter,
+                            &context.device,
+                            &context.queue,
+                        ));
+                    }
                 }
                 Event::Suspended => {
-                    log::error!("Surface suspend");
                     surface.suspend();
-                    example = None;
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
-                        log::error!("Surface resize {size:?}");
                         surface.resize(&context, size);
                         example.as_mut().unwrap().resize(
                             &surface.config(),
@@ -350,17 +433,7 @@ async fn start<E: Example>(title: &str) {
                         println!("{:#?}", context.instance.generate_report());
                     }
                     WindowEvent::RedrawRequested => {
-                        accum_time += last_frame_inst.elapsed().as_secs_f32();
-                        last_frame_inst = Instant::now();
-                        frame_count += 1;
-                        if frame_count == 100 {
-                            println!(
-                                "Avg frame time {}ms",
-                                accum_time * 1000.0 / frame_count as f32
-                            );
-                            accum_time = 0.0;
-                            frame_count = 0;
-                        }
+                        frame_counter.update();
 
                         let frame = surface.acquire(&context);
                         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
