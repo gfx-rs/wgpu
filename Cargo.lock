@@ -1277,6 +1277,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fern"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9f0c14694cbd524c8720dd69b0e3179344f04ebb5f90f2e4a440c6ea3b2f1ee"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4134,9 +4143,11 @@ dependencies = [
 name = "wgpu-example"
 version = "0.18.0"
 dependencies = [
+ "cfg-if",
  "console_error_panic_hook",
  "console_log",
  "env_logger",
+ "fern",
  "js-sys",
  "log",
  "png",
@@ -4144,6 +4155,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
  "wgpu",
  "wgpu-hal",
  "wgpu-test",
