@@ -362,14 +362,14 @@ fn main() {
         console_log::init().expect("could not initialize logger");
         use winit::platform::web::WindowExtWebSys;
 
+        let canvas = window.canvas().expect("Couldn't get canvas");
+        canvas.style().set_css_text("height: 100%; width: 100%;");
+
         let document = web_sys::window()
             .and_then(|win| win.document())
             .expect("Failed to get document.");
         let body = document.body().unwrap();
-        body.append_child(&web_sys::Element::from(
-            window.canvas().expect("Couldn't get canvas"),
-        ))
-        .unwrap();
+        body.append_child(&canvas).unwrap();
         let controls_text = document
             .create_element("p")
             .expect("Failed to create controls text as element.");
