@@ -1217,7 +1217,7 @@ impl crate::Context for Context {
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
                 log::error!("Shader translation error for stage {:?}: {}", stage, error);
-                log::error!("Please report it to https://github.com/gfx-rs/naga");
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }
             self.handle_error(
                 &device_data.error_sink,
@@ -1262,12 +1262,12 @@ impl crate::Context for Context {
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
-                log::warn!(
+                log::error!(
                     "Shader translation error for stage {:?}: {}",
                     wgt::ShaderStages::COMPUTE,
                     error
                 );
-                log::warn!("Please report it to https://github.com/gfx-rs/naga");
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }
             self.handle_error(
                 &device_data.error_sink,

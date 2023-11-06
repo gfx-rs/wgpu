@@ -798,17 +798,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         layout: &super::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
         let state_pc = &mut self.state.push_constants;
         if state_pc.len() < layout.total_push_constants as usize {
             state_pc.resize(layout.total_push_constants as usize, 0);
         }
-        assert_eq!(offset as usize % WORD_SIZE, 0);
+        debug_assert_eq!(offset_bytes as usize % WORD_SIZE, 0);
 
-        let offset = offset as usize / WORD_SIZE;
-        state_pc[offset..offset + data.len()].copy_from_slice(data);
+        let offset_words = offset_bytes as usize / WORD_SIZE;
+        state_pc[offset_words..offset_words + data.len()].copy_from_slice(data);
 
         if stages.contains(wgt::ShaderStages::COMPUTE) {
             self.state.compute.as_ref().unwrap().set_bytes(

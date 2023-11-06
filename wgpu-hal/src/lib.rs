@@ -97,6 +97,9 @@ use bitflags::bitflags;
 use thiserror::Error;
 use wgt::{WasmNotSend, WasmNotSync};
 
+// - Vertex + Fragment
+// - Compute
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
@@ -500,11 +503,19 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
+    /// Sets a range in push constant data.
+    ///
+    /// IMPORTANT: while the data is passed as words, the offset is in bytes!
+    ///
+    /// # Safety
+    ///
+    /// - `offset_bytes` must be a multiple of 4.
+    /// - The range of push constants written must be valid for the pipeline layout at draw time.
     unsafe fn set_push_constants(
         &mut self,
         layout: &A::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     );
 

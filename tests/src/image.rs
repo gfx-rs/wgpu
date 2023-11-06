@@ -625,12 +625,16 @@ impl ReadbackBuffers {
         buffer_zero && stencil_buffer_zero
     }
 
-    pub fn check_buffer_contents(&self, device: &Device, expected_data: &[u8]) -> bool {
-        let result = self
-            .retrieve_buffer(device, &self.buffer, self.buffer_aspect())
-            .iter()
-            .eq(expected_data.iter());
+    pub fn assert_buffer_contents(&self, device: &Device, expected_data: &[u8]) {
+        let result_buffer = self.retrieve_buffer(device, &self.buffer, self.buffer_aspect());
+        assert!(
+            result_buffer.len() >= expected_data.len(),
+            "Result buffer ({}) smaller than expected buffer ({})",
+            result_buffer.len(),
+            expected_data.len()
+        );
+        let result_buffer = &result_buffer[..expected_data.len()];
+        assert_eq!(result_buffer, expected_data);
         self.buffer.unmap();
-        result
     }
 }

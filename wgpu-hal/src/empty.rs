@@ -327,7 +327,7 @@ impl crate::CommandEncoder<Api> for Encoder {
         &mut self,
         layout: &Resource,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
     }
