@@ -58,7 +58,7 @@ struct Example {
 
 impl Example {
     fn spawn_bunnies(&mut self) {
-        let spawn_count = 64 + self.bunnies.len() / 2;
+        let spawn_count = 64;
         let color = self.rng.generate::<u32>();
         println!(
             "Spawning {} bunnies, total at {}",
@@ -331,7 +331,7 @@ impl wgpu_example::framework::Example for Example {
 
         let rng = WyRand::new_seed(42);
 
-        Example {
+        let mut ex = Example {
             pipeline,
             global_group,
             local_group,
@@ -339,7 +339,11 @@ impl wgpu_example::framework::Example for Example {
             local_buffer,
             extent: [config.width, config.height],
             rng,
-        }
+        };
+
+        ex.spawn_bunnies();
+
+        ex
     }
 
     fn update(&mut self, event: winit::event::WindowEvent) {
@@ -367,11 +371,7 @@ impl wgpu_example::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.spawn_bunnies();
-
-        for _frame_number in 0..3 {
-            self.render_inner(view, device, queue);
-        }
+        self.render_inner(view, device, queue);
     }
 }
 
