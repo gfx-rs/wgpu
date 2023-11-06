@@ -1901,8 +1901,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
 
-        // We also need to assign errors to the pipeline layout and the bind
-        // group layout. We have to remove any existing entries first.
+        // We also need to assign errors to the implicit pipeline layout and the
+        // implicit bind group layout. We have to remove any existing entries first.
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
         let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
         if let Some(ref ids) = implicit_error_context {
@@ -2088,8 +2088,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
 
-        // We also need to assign errors to the pipeline layout and the bind
-        // group layout. We have to remove any existing entries first.
+        // We also need to assign errors to the implicit pipeline layout and the
+        // implicit bind group layout. We have to remove any existing entries first.
         let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
         let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
         if let Some(ref ids) = implicit_error_context {
