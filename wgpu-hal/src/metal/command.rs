@@ -1104,6 +1104,8 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let raw = self.raw_cmd_buf.as_ref().unwrap();
 
         objc::rc::autoreleasepool(|| {
+            // TimeStamp Queries and ComputePassDescriptor were both introduced in Metal 2.3 (macOS 11, iOS 14)
+            // and we currently only need ComputePassDescriptor for timestamp queries
             let encoder = if self.shared.private_caps.timestamp_query_support.is_empty() {
                 raw.new_compute_command_encoder()
             } else {
