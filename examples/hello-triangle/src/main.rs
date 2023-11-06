@@ -6,7 +6,9 @@ use winit::{
 };
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
-    let size = window.inner_size();
+    let mut size = window.inner_size();
+    size.width = size.width.max(1);
+    size.height = size.height.max(1);
 
     let instance = wgpu::Instance::default();
 
@@ -97,8 +99,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 match event {
                     WindowEvent::Resized(new_size) => {
                         // Reconfigure the surface with the new size
-                        config.width = new_size.width;
-                        config.height = new_size.height;
+                        config.width = new_size.width.max(1);
+                        config.height = new_size.height.max(1);
                         surface.configure(&device, &config);
                         // On macos the window needs to be redrawn manually after resizing
                         window.request_redraw();
@@ -158,14 +160,13 @@ fn main() {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
         console_log::init().expect("could not initialize logger");
         use winit::platform::web::WindowExtWebSys;
+        let canvas = window.canvas().expect("Couldn't get canvas");
+        canvas.style().set_css_text("height: 100%; width: 100%;");
         // On wasm, append the canvas to the document body
         web_sys::window()
             .and_then(|win| win.document())
             .and_then(|doc| doc.body())
-            .and_then(|body| {
-                body.append_child(&web_sys::Element::from(window.canvas().unwrap()))
-                    .ok()
-            })
+            .and_then(|body| body.append_child(&canvas).ok())
             .expect("couldn't append canvas to document body");
         wasm_bindgen_futures::spawn_local(run(event_loop, window));
     }

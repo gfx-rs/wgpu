@@ -166,6 +166,8 @@ impl SurfaceWrapper {
     fn resume(&mut self, context: &ExampleContext, window: &Window, srgb: bool) {
         // Window size is only actually valid after we enter the event loop.
         let window_size = window.inner_size();
+        let width = window_size.width.max(1);
+        let height = window_size.height.max(1);
 
         log::info!("Surface resume {window_size:?}");
 
@@ -180,7 +182,7 @@ impl SurfaceWrapper {
 
         // Get the default configuration,
         let mut config = surface
-            .get_default_config(&context.adapter, window_size.width, window_size.height)
+            .get_default_config(&context.adapter, width, height)
             .expect("Surface isn't supported by the adapter.");
         if srgb {
             // Not all platforms (WebGPU) support sRGB swapchains, so we need to use view formats
