@@ -2813,7 +2813,9 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the dimension of a block of texels.
+    /// Returns the dimension of a [block](https://gpuweb.github.io/gpuweb/#texel-block) of texels.
+    ///
+    /// Uncompressed formats have a block dimension of `(1, 1)`.
     pub fn block_dimensions(&self) -> (u32, u32) {
         match *self {
             Self::R8Unorm
@@ -3225,8 +3227,11 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the [texel block size](https://gpuweb.github.io/gpuweb/#texel-block-size)
+    /// Returns the [texel block](https://gpuweb.github.io/gpuweb/#texel-block) size in bytes
     /// of this format.
+    ///
+    /// Note that for uncompressed formats this is the same as the size of a single texel,
+    /// since uncompressed formats have a block size of 1x1.
     ///
     /// Returns `None` if any of the following are true:
     ///  - the format is combined depth-stencil and no `aspect` was provided
