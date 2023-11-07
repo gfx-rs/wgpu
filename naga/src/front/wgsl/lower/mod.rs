@@ -11,6 +11,7 @@ use crate::proc::{
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
+mod compact;
 mod construction;
 
 /// Resolves the inner type of a given expression.
@@ -970,6 +971,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
             }
         }
+
+        compact::compact(&mut module);
 
         Ok(module)
     }

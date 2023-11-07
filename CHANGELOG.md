@@ -58,6 +58,11 @@ For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.
 
 - Fix issue where local variables were sometimes using variable names from previous functions.
 
+### Changes
+#### Naga
+
+- [wgsl-in] Omit unused constant expressions from the Module's `const_expressions` arena, in preparation for supporting abstract types. By @jimblandy in [#4648](https://github.com/gfx-rs/wgpu/pull/4648).
+
 ## v0.18.0 (2023-10-25)
 
 ### Desktop OpenGL 3.3+ Support on Windows
