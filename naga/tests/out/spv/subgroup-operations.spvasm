@@ -63,7 +63,7 @@ OpControlBarrier %21 %22 %23
 %43 = OpGroupNonUniformIAdd  %3  %21 InclusiveScan %14
 %44 = OpGroupNonUniformIMul  %3  %21 InclusiveScan %14
 %45 = OpGroupNonUniformBroadcastFirst  %3  %21 %14
-%46 = OpGroupNonUniformBroadcast  %3  %21 %14 %19
+%46 = OpGroupNonUniformShuffle  %3  %21 %14 %19
 %47 = OpISub  %3  %12 %17
 %48 = OpISub  %3  %47 %14
 %49 = OpGroupNonUniformShuffle  %3  %21 %14 %48

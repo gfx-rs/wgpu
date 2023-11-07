@@ -182,7 +182,11 @@ impl<'w> BlockContext<'w> {
                 let index_id = self.cached[index];
                 let op = match *mode {
                     crate::GatherMode::BroadcastFirst => unreachable!(),
-                    crate::GatherMode::Broadcast(_) => spirv::Op::GroupNonUniformBroadcast,
+                    // Use shuffle to emit broadcast to allow the index to
+                    // be dynamically uniform on Vulkan 1.1. The argument to
+                    // OpGroupNonUniformBroadcast must be a constant pre SPIR-V
+                    // 1.5 (vulkan 1.2)
+                    crate::GatherMode::Broadcast(_) => spirv::Op::GroupNonUniformShuffle,
                     crate::GatherMode::Shuffle(_) => spirv::Op::GroupNonUniformShuffle,
                     crate::GatherMode::ShuffleDown(_) => spirv::Op::GroupNonUniformShuffleDown,
                     crate::GatherMode::ShuffleUp(_) => spirv::Op::GroupNonUniformShuffleUp,
