@@ -697,7 +697,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_size = dst
             .desc
             .format
-            .block_size(Some(destination.aspect))
+            .block_size_in_bytes(Some(destination.aspect))
             .unwrap();
         let bytes_per_row_alignment =
             get_lowest_common_denom(device.alignments.buffer_copy_pitch.get() as u32, block_size);

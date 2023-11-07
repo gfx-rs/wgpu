@@ -564,7 +564,7 @@ impl super::Queue {
                 ref copy,
             } => {
                 let (block_width, block_height) = dst_format.block_dimensions();
-                let block_size = dst_format.block_size(None).unwrap();
+                let block_size = dst_format.block_size_in_bytes(None).unwrap();
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 let row_texels = copy
                     .buffer_layout
@@ -702,7 +702,7 @@ impl super::Queue {
                 dst_target: _,
                 ref copy,
             } => {
-                let block_size = src_format.block_size(None).unwrap();
+                let block_size = src_format.block_size_in_bytes(None).unwrap();
                 if src_format.is_compressed() {
                     log::error!("Not implemented yet: compressed texture copy to buffer");
                     return;

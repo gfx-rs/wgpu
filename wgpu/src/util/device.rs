@@ -88,7 +88,7 @@ impl DeviceExt for crate::Device {
         // Will return None only if it's a combined depth-stencil format
         // If so, default to 4, validation will fail later anyway since the depth or stencil
         // aspect needs to be written to individually
-        let block_size = desc.format.block_size(None).unwrap_or(4);
+        let block_size = desc.format.block_size_in_bytes(None).unwrap_or(4);
         let (block_width, block_height) = desc.format.block_dimensions();
         let layer_iterations = desc.array_layer_count();
 
