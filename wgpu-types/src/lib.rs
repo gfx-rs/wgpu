@@ -3227,8 +3227,9 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the [texel block](https://gpuweb.github.io/gpuweb/#texel-block) size in bytes
-    /// of this format.
+    /// The number of bytes one [texel block](https://gpuweb.github.io/gpuweb/#texel-block) occupies during an image copy, if applicable.
+    ///
+    /// Known also as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
     ///
     /// Note that for uncompressed formats this is the same as the size of a single texel,
     /// since uncompressed formats have a block size of 1x1.
@@ -3242,8 +3243,9 @@ impl TextureFormat {
         self.block_size_in_bytes(aspect)
     }
 
-    /// Returns the [texel block](https://gpuweb.github.io/gpuweb/#texel-block) size in bytes
-    /// of this format.
+    /// The number of bytes one [texel block](https://gpuweb.github.io/gpuweb/#texel-block) occupies during an image copy, if applicable.
+    ///
+    /// Known also as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
     ///
     /// Note that for uncompressed formats this is the same as the size of a single texel,
     /// since uncompressed formats have a block size of 1x1.
