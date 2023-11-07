@@ -47,6 +47,7 @@ For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.
 #### General
 
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
+- `TextureFormat::block_size` is deprecated, use `TextureFormat::block_size_in_bytes` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
 
 ### Bug Fixes
 
