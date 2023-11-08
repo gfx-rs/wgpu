@@ -1776,5 +1776,6 @@ fn supports_bgra8unorm_storage(
 
         features2.contains(vk::FormatFeatureFlags::STORAGE_IMAGE)
             && features3.contains(vk::FormatFeatureFlags2::STORAGE_WRITE_WITHOUT_FORMAT)
+            && features3.contains(vk::FormatFeatureFlags2::STORAGE_READ_WITHOUT_FORMAT)
     }
 }
