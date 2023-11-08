@@ -3,7 +3,9 @@ use crate::device::trace;
 use crate::{
     binding_model::{self, BindGroupLayout},
     command, conv,
-    device::{life::WaitIdleError, map_buffer, queue, Device, DeviceError, HostMap},
+    device::{
+        life::WaitIdleError, map_buffer, queue, Device, DeviceError, DeviceLostClosure, HostMap,
+    },
     global::Global,
     hal_api::HalApi,
     hub::Token,
@@ -2672,6 +2674,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    pub fn device_set_device_lost_closure<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+        device_lost_closure: DeviceLostClosure,
+    ) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            let mut life_tracker = device.lock_life(&mut token);
+            life_tracker.device_lost_closure = Some(device_lost_closure);
+        }
+    }
+
     pub fn device_destroy<A: HalApi>(&self, device_id: DeviceId) {
         log::trace!("Device::destroy {device_id:?}");
 
@@ -2683,36 +2700,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // Follow the steps at
             // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
 
-            // It's legal to call destroy multiple times, but if the device
-            // is already invalid, there's nothing more to do. There's also
-            // no need to return an error.
-            if !device.valid {
-                return;
-            }
-
             // The last part of destroy is to lose the device. The spec says
             // delay that until all "currently-enqueued operations on any
-            // queue on this device are completed."
-
-            // TODO: implement this delay.
-
-            // Finish by losing the device.
-
-            // TODO: associate this "destroyed" reason more tightly with
-            // the GPUDeviceLostReason defined in webgpu.idl.
-            device.lose(Some("destroyed"));
+            // queue on this device are completed." This is accomplished by
+            // setting valid to false, and then relying upon maintain to
+            // check for empty queues and a DeviceLostClosure. At that time,
+            // the DeviceLostClosure will be called with "destroyed" as the
+            // reason.
+            device.valid = false;
         }
     }
 
-    pub fn device_lose<A: HalApi>(&self, device_id: DeviceId, reason: Option<&str>) {
-        log::trace!("Device::lose {device_id:?}");
+    pub fn device_mark_lost<A: HalApi>(&self, device_id: DeviceId, message: &str) {
+        log::trace!("Device::mark_lost {device_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
 
-        let (mut device_guard, _) = hub.devices.write(&mut token);
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
         if let Ok(device) = device_guard.get_mut(device_id) {
-            device.lose(reason);
+            device.lose(&mut token, message);
         }
     }
 
