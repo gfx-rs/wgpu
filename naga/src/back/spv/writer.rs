@@ -1187,6 +1187,9 @@ impl Writer {
             }
             crate::Literal::Bool(true) => Instruction::constant_true(type_id, id),
             crate::Literal::Bool(false) => Instruction::constant_false(type_id, id),
+            crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                unreachable!("Abstract types should not appear in IR presented to backends");
+            }
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);

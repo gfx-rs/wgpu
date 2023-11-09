@@ -1279,6 +1279,9 @@ impl<W: Write> Writer<W> {
                 crate::Literal::Bool(value) => {
                     write!(self.out, "{value}")?;
                 }
+                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                    return Err(Error::Validation);
+                }
             },
             crate::Expression::Constant(handle) => {
                 let constant = &module.constants[handle];
