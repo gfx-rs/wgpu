@@ -495,8 +495,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Buffer::destroy {buffer_id:?}");
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-            let buffer = buffer_guard
-                .get_mut(buffer_id)
+            let mut buffer = buffer_guard
+                .take_and_mark_destroyed(buffer_id)
                 .map_err(|_| resource::DestroyError::Invalid)?;
 
             let device = &mut device_guard[buffer.device_id.value];
@@ -506,7 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 | &BufferMapState::Init { .. }
                 | &BufferMapState::Active { .. }
                 => {
-                    self.buffer_unmap_inner(buffer_id, buffer, device)
+                    self.buffer_unmap_inner(buffer_id, &mut buffer, device)
                         .unwrap_or(None)
                 }
                 _ => None,
@@ -800,8 +800,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
         let (mut texture_guard, _) = hub.textures.write(&mut token);
-        let texture = texture_guard
-            .get_mut(texture_id)
+        let mut texture = texture_guard
+            .take_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let device = &mut device_guard[texture.device_id.value];

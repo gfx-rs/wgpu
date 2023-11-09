@@ -16,6 +16,7 @@ mod device;
 mod encoder;
 mod external_texture;
 mod instance;
+mod life_cycle;
 mod occlusion_query;
 mod partially_bounded_arrays;
 mod pipeline;
