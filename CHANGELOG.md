@@ -274,6 +274,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add `Feature::SHADER_UNUSED_VERTEX_OUTPUT` to allow unused vertex shader outputs. By @Aaron1011 in [#4116](https://github.com/gfx-rs/wgpu/pull/4116).
 - Fix a panic in `surface_configure`. By @nical in [#4220](https://github.com/gfx-rs/wgpu/pull/4220) and [#4227](https://github.com/gfx-rs/wgpu/pull/4227)
 - Pipelines register their implicit layouts in error cases. By @bradwerth in [#4624](https://github.com/gfx-rs/wgpu/pull/4624)
+- Better handle explicit destruction of textures and buffers. By @nical in [#4657](https://github.com/gfx-rs/wgpu/pull/4657)
 
 #### Vulkan
 
