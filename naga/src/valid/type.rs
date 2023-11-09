@@ -143,6 +143,9 @@ pub enum WidthError {
 
     #[error("64-bit integers are not yet supported")]
     Unsupported64Bit,
+
+    #[error("Abstract types may only appear in constant expressions")]
+    Abstract,
 }
 
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
@@ -248,6 +251,9 @@ impl super::Validator {
                 }
                 scalar.width == 4
             }
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                return Err(WidthError::Abstract);
+            }
         };
         if good {
             Ok(())
@@ -325,7 +331,10 @@ impl super::Validator {
             }
             Ti::Atomic(crate::Scalar { kind, width }) => {
                 let good = match kind {
-                    crate::ScalarKind::Bool | crate::ScalarKind::Float => false,
+                    crate::ScalarKind::Bool
+                    | crate::ScalarKind::Float
+                    | crate::ScalarKind::AbstractInt
+                    | crate::ScalarKind::AbstractFloat => false,
                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
                 };
                 if !good {

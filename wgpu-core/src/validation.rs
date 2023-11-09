@@ -560,7 +560,9 @@ impl Resource {
                             }
                             naga::ScalarKind::Sint => wgt::TextureSampleType::Sint,
                             naga::ScalarKind::Uint => wgt::TextureSampleType::Uint,
-                            naga::ScalarKind::Bool => unreachable!(),
+                            naga::ScalarKind::AbstractInt
+                            | naga::ScalarKind::AbstractFloat
+                            | naga::ScalarKind::Bool => unreachable!(),
                         },
                         view_dimension,
                         multisampled: multi,

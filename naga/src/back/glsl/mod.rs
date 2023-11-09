@@ -3555,6 +3555,9 @@ impl<'a, W: Write> Writer<'a, W> {
                             (Sk::Sint | Sk::Uint | Sk::Float, Sk::Bool, None) => {
                                 write!(self.out, "bool")?
                             }
+
+                            (Sk::AbstractInt | Sk::AbstractFloat, _, _)
+                            | (_, Sk::AbstractInt | Sk::AbstractFloat, _) => unreachable!(),
                         };
 
                         write!(self.out, "(")?;
@@ -4117,6 +4120,11 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::ScalarKind::Uint => write!(self.out, "0u")?,
             crate::ScalarKind::Float => write!(self.out, "0.0")?,
             crate::ScalarKind::Sint => write!(self.out, "0")?,
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                return Err(Error::Custom(
+                    "Abstract types should not appear in IR presented to backends".to_string(),
+                ))
+            }
         }
 
         Ok(())
@@ -4345,6 +4353,9 @@ const fn glsl_scalar(scalar: crate::Scalar) -> Result<ScalarString<'static>, Err
             prefix: "b",
             full: "bool",
         },
+        Sk::AbstractInt | Sk::AbstractFloat => {
+            return Err(Error::UnsupportedScalar(scalar));
+        }
     })
 }
 

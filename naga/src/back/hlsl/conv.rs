@@ -10,7 +10,7 @@ impl crate::ScalarKind {
             Self::Float => "asfloat",
             Self::Sint => "asint",
             Self::Uint => "asuint",
-            Self::Bool => unreachable!(),
+            Self::Bool | Self::AbstractInt | Self::AbstractFloat => unreachable!(),
         }
     }
 }
@@ -30,6 +30,9 @@ impl crate::Scalar {
                 _ => Err(Error::UnsupportedScalar(self)),
             },
             crate::ScalarKind::Bool => Ok("bool"),
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                Err(Error::UnsupportedScalar(self))
+            }
         }
     }
 }

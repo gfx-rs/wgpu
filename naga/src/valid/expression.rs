@@ -670,7 +670,11 @@ impl super::Validator {
                 let good = match op {
                     Bo::Add | Bo::Subtract => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
-                            Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
+                            Sk::Uint
+                            | Sk::Sint
+                            | Sk::Float
+                            | Sk::AbstractInt
+                            | Sk::AbstractFloat => left_inner == right_inner,
                             Sk::Bool => false,
                         },
                         Ti::Matrix { .. } => left_inner == right_inner,
@@ -678,14 +682,24 @@ impl super::Validator {
                     },
                     Bo::Divide | Bo::Modulo => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
-                            Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
+                            Sk::Uint
+                            | Sk::Sint
+                            | Sk::Float
+                            | Sk::AbstractInt
+                            | Sk::AbstractFloat => left_inner == right_inner,
                             Sk::Bool => false,
                         },
                         _ => false,
                     },
                     Bo::Multiply => {
                         let kind_allowed = match left_inner.scalar_kind() {
-                            Some(Sk::Uint | Sk::Sint | Sk::Float) => true,
+                            Some(
+                                Sk::Uint
+                                | Sk::Sint
+                                | Sk::Float
+                                | Sk::AbstractInt
+                                | Sk::AbstractFloat,
+                            ) => true,
                             Some(Sk::Bool) | None => false,
                         };
                         let types_match = match (left_inner, right_inner) {
@@ -762,7 +776,11 @@ impl super::Validator {
                     Bo::Less | Bo::LessEqual | Bo::Greater | Bo::GreaterEqual => {
                         match *left_inner {
                             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
-                                Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
+                                Sk::Uint
+                                | Sk::Sint
+                                | Sk::Float
+                                | Sk::AbstractInt
+                                | Sk::AbstractFloat => left_inner == right_inner,
                                 Sk::Bool => false,
                             },
                             ref other => {
@@ -784,8 +802,10 @@ impl super::Validator {
                     },
                     Bo::And | Bo::InclusiveOr => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
-                            Sk::Bool | Sk::Sint | Sk::Uint => left_inner == right_inner,
-                            Sk::Float => false,
+                            Sk::Bool | Sk::Sint | Sk::Uint | Sk::AbstractInt => {
+                                left_inner == right_inner
+                            }
+                            Sk::Float | Sk::AbstractFloat => false,
                         },
                         ref other => {
                             log::error!("Op {:?} left type {:?}", op, other);
@@ -794,8 +814,8 @@ impl super::Validator {
                     },
                     Bo::ExclusiveOr => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
-                            Sk::Sint | Sk::Uint => left_inner == right_inner,
-                            Sk::Bool | Sk::Float => false,
+                            Sk::Sint | Sk::Uint | Sk::AbstractInt => left_inner == right_inner,
+                            Sk::Bool | Sk::Float | Sk::AbstractFloat => false,
                         },
                         ref other => {
                             log::error!("Op {:?} left type {:?}", op, other);
@@ -823,8 +843,10 @@ impl super::Validator {
                             }
                         };
                         match base_scalar.kind {
-                            Sk::Sint | Sk::Uint => base_size.is_ok() && base_size == shift_size,
-                            Sk::Float | Sk::Bool => false,
+                            Sk::Sint | Sk::Uint | Sk::AbstractInt => {
+                                base_size.is_ok() && base_size == shift_size
+                            }
+                            Sk::Float | Sk::AbstractFloat | Sk::Bool => false,
                         }
                     }
                 };
