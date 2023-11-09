@@ -338,6 +338,10 @@ impl crate::Scalar {
                 kind: Sk::Bool,
                 width: _,
             } => "bool",
+            Self {
+                kind: Sk::AbstractInt | Sk::AbstractFloat,
+                width: _,
+            } => unreachable!(),
         }
     }
 }

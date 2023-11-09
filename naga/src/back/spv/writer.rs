@@ -824,6 +824,9 @@ impl Writer {
                 Instruction::type_float(id, bits)
             }
             Sk::Bool => Instruction::type_bool(id),
+            Sk::AbstractInt | Sk::AbstractFloat => {
+                unreachable!("abstract types should never reach the backend");
+            }
         }
     }
 
@@ -1591,6 +1594,11 @@ impl Writer {
                         | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Bool => true,
                             Sk::Float => false,
+                            Sk::AbstractInt | Sk::AbstractFloat => {
+                                return Err(Error::Validation(
+                                    "Abstract types should not appear in IR presented to backends",
+                                ))
+                            }
                         },
                         _ => false,
                     };

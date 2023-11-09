@@ -470,6 +470,16 @@ pub enum ScalarKind {
     Float,
     /// Boolean type.
     Bool,
+
+    /// WGSL abstract integer type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractInt,
+
+    /// Abstract floating-point type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractFloat,
 }
 
 /// Characteristics of a scalar type.

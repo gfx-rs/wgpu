@@ -140,6 +140,8 @@ impl crate::Scalar {
             crate::ScalarKind::Uint => "u",
             crate::ScalarKind::Float => "f",
             crate::ScalarKind::Bool => return "bool".to_string(),
+            crate::ScalarKind::AbstractInt => return "{AbstractInt}".to_string(),
+            crate::ScalarKind::AbstractFloat => return "{AbstractFloat}".to_string(),
         };
         format!("{}{}", prefix, self.width * 8)
     }

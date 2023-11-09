@@ -71,7 +71,11 @@ impl From<super::StorageFormat> for super::ScalarKind {
 impl super::ScalarKind {
     pub const fn is_numeric(self) -> bool {
         match self {
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint | crate::ScalarKind::Float => true,
+            crate::ScalarKind::Sint
+            | crate::ScalarKind::Uint
+            | crate::ScalarKind::Float
+            | crate::ScalarKind::AbstractInt
+            | crate::ScalarKind::AbstractFloat => true,
             crate::ScalarKind::Bool => false,
         }
     }
