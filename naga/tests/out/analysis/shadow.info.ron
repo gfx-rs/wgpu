@@ -119,10 +119,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -131,10 +131,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -143,10 +143,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -155,10 +155,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -194,10 +194,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -226,8 +226,10 @@
                     assignable_global: None,
                     ty: Value(Vector(
                         size: Bi,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                     )),
                 ),
                 (
@@ -246,10 +248,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -258,10 +260,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -270,10 +272,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -282,10 +284,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -303,10 +305,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -315,10 +317,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -345,10 +347,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -357,10 +359,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -378,10 +380,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -390,10 +392,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Sint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -402,10 +404,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
             ],
             sampling: [],
@@ -695,8 +697,10 @@
                     assignable_global: Some(3),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Uint,
-                        width: 4,
+                        scalar: (
+                            kind: Uint,
+                            width: 4,
+                        ),
                         space: Uniform,
                     )),
                 ),
@@ -707,10 +711,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -719,10 +723,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -731,10 +735,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -832,8 +836,10 @@
                     assignable_global: None,
                     ty: Value(Vector(
                         size: Quad,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                     )),
                 ),
                 (
@@ -923,8 +929,10 @@
                     assignable_global: Some(4),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Storage(
                             access: ("LOAD"),
                         ),
@@ -937,10 +945,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1002,8 +1010,10 @@
                     assignable_global: Some(4),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Storage(
                             access: ("LOAD"),
                         ),
@@ -1016,10 +1026,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1081,8 +1091,10 @@
                     assignable_global: Some(4),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Storage(
                             access: ("LOAD"),
                         ),
@@ -1095,10 +1107,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1118,8 +1130,10 @@
                     assignable_global: Some(5),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Private,
                     )),
                 ),
@@ -1130,10 +1144,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1144,8 +1158,10 @@
                     assignable_global: Some(5),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Private,
                     )),
                 ),
@@ -1156,10 +1172,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1170,8 +1186,10 @@
                     assignable_global: Some(5),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Private,
                     )),
                 ),
@@ -1182,10 +1200,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1221,10 +1239,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1304,8 +1322,10 @@
                     assignable_global: Some(4),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Storage(
                             access: ("LOAD"),
                         ),
@@ -1318,10 +1338,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1383,8 +1403,10 @@
                     assignable_global: Some(4),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Storage(
                             access: ("LOAD"),
                         ),
@@ -1397,10 +1419,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1462,8 +1484,10 @@
                     assignable_global: Some(4),
                     ty: Value(ValuePointer(
                         size: None,
-                        kind: Float,
-                        width: 4,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
                         space: Storage(
                             access: ("LOAD"),
                         ),
@@ -1476,10 +1500,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Float,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1643,81 +1667,81 @@
         ),
     ],
     const_expression_types: [
-        Value(Scalar(
+        Value(Scalar((
             kind: Float,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Float,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Float,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Float,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Float,
             width: 4,
-        )),
+        ))),
         Handle(1),
         Handle(1),
         Handle(1),
         Handle(2),
-        Value(Scalar(
+        Value(Scalar((
             kind: Uint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Uint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Uint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
-        Value(Scalar(
+        ))),
+        Value(Scalar((
             kind: Sint,
             width: 4,
-        )),
+        ))),
     ],
 )

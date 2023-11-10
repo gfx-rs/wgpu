@@ -912,8 +912,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 } if member.binding.is_none() && rows == crate::VectorSize::Bi => {
                     let vec_ty = crate::TypeInner::Vector {
                         size: rows,
-                        kind: crate::ScalarKind::Float,
-                        width,
+                        scalar: crate::Scalar::float(width),
                     };
                     let field_name_key = NameKey::StructMember(handle, index as u32);
 
@@ -1024,14 +1023,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     /// Adds no trailing or leading whitespace
     pub(super) fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
-            TypeInner::Scalar { kind, width } | TypeInner::Atomic { kind, width } => {
-                write!(self.out, "{}", kind.to_hlsl_str(width)?)?;
+            TypeInner::Scalar(scalar) | TypeInner::Atomic(scalar) => {
+                write!(self.out, "{}", scalar.to_hlsl_str()?)?;
             }
-            TypeInner::Vector { size, kind, width } => {
+            TypeInner::Vector { size, scalar } => {
                 write!(
                     self.out,
                     "{}{}",
-                    kind.to_hlsl_str(width)?,
+                    scalar.to_hlsl_str()?,
                     back::vector_size_str(size)
                 )?;
             }
@@ -1047,7 +1046,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(
                     self.out,
                     "{}{}x{}",
-                    crate::ScalarKind::Float.to_hlsl_str(width)?,
+                    crate::Scalar::float(width).to_hlsl_str()?,
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
                 )?;
@@ -2484,7 +2483,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
 
                 // return x component if return type is scalar
-                if let TypeInner::Scalar { .. } = *func_ctx.resolve_type(expr, &module.types) {
+                if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
                     write!(self.out, ".x")?;
                 }
             }
@@ -2567,23 +2566,27 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let inner = func_ctx.resolve_type(expr, &module.types);
                 match convert {
                     Some(dst_width) => {
+                        let scalar = crate::Scalar {
+                            kind,
+                            width: dst_width,
+                        };
                         match *inner {
                             TypeInner::Vector { size, .. } => {
                                 write!(
                                     self.out,
                                     "{}{}(",
-                                    kind.to_hlsl_str(dst_width)?,
+                                    scalar.to_hlsl_str()?,
                                     back::vector_size_str(size)
                                 )?;
                             }
-                            TypeInner::Scalar { .. } => {
-                                write!(self.out, "{}(", kind.to_hlsl_str(dst_width)?,)?;
+                            TypeInner::Scalar(_) => {
+                                write!(self.out, "{}(", scalar.to_hlsl_str()?,)?;
                             }
                             TypeInner::Matrix { columns, rows, .. } => {
                                 write!(
                                     self.out,
                                     "{}{}x{}(",
-                                    kind.to_hlsl_str(dst_width)?,
+                                    scalar.to_hlsl_str()?,
                                     back::vector_size_str(columns),
                                     back::vector_size_str(rows)
                                 )?;
@@ -2964,14 +2967,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     Function::CountTrailingZeros => {
                         match *func_ctx.resolve_type(arg, &module.types) {
-                            TypeInner::Vector { size, kind, .. } => {
+                            TypeInner::Vector { size, scalar } => {
                                 let s = match size {
                                     crate::VectorSize::Bi => ".xx",
                                     crate::VectorSize::Tri => ".xxx",
                                     crate::VectorSize::Quad => ".xxxx",
                                 };
 
-                                if let ScalarKind::Uint = kind {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min((32u){s}, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -2981,8 +2984,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     write!(self.out, ")))")?;
                                 }
                             }
-                            TypeInner::Scalar { kind, .. } => {
-                                if let ScalarKind::Uint = kind {
+                            TypeInner::Scalar(scalar) => {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min(32u, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -2999,14 +3002,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     Function::CountLeadingZeros => {
                         match *func_ctx.resolve_type(arg, &module.types) {
-                            TypeInner::Vector { size, kind, .. } => {
+                            TypeInner::Vector { size, scalar } => {
                                 let s = match size {
                                     crate::VectorSize::Bi => ".xx",
                                     crate::VectorSize::Tri => ".xxx",
                                     crate::VectorSize::Quad => ".xxxx",
                                 };
 
-                                if let ScalarKind::Uint = kind {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "((31u){s} - firstbithigh(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -3021,8 +3024,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     write!(self.out, ")))")?;
                                 }
                             }
-                            TypeInner::Scalar { kind, .. } => {
-                                if let ScalarKind::Uint = kind {
+                            TypeInner::Scalar(scalar) => {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "(31u - firstbithigh(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;

@@ -1413,22 +1413,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let (kind, width) = match *resolve_inner!(ectx, target_handle) {
+                let scalar = match *resolve_inner!(ectx, target_handle) {
                     crate::TypeInner::ValuePointer {
-                        size: None,
-                        kind,
-                        width,
-                        ..
-                    } => (kind, width),
+                        size: None, scalar, ..
+                    } => scalar,
                     crate::TypeInner::Pointer { base, .. } => match ectx.module.types[base].inner {
-                        crate::TypeInner::Scalar { kind, width } => (kind, width),
+                        crate::TypeInner::Scalar(scalar) => scalar,
                         _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
                     },
                     _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
                 };
-                let literal = match kind {
+                let literal = match scalar.kind {
                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                        crate::Literal::one(kind, width)
+                        crate::Literal::one(scalar)
                             .ok_or(Error::BadIncrDecrReferenceType(value_span))?
                     }
                     _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
@@ -1608,21 +1605,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         match *inner {
                             crate::TypeInner::Pointer { base, .. } => &ctx.module.types[base].inner,
                             crate::TypeInner::ValuePointer {
-                                size: None,
-                                kind,
-                                width,
-                                ..
+                                size: None, scalar, ..
                             } => {
-                                temp_inner = crate::TypeInner::Scalar { kind, width };
+                                temp_inner = crate::TypeInner::Scalar(scalar);
                                 &temp_inner
                             }
                             crate::TypeInner::ValuePointer {
                                 size: Some(size),
-                                kind,
-                                width,
+                                scalar,
                                 ..
                             } => {
-                                temp_inner = crate::TypeInner::Vector { size, kind, width };
+                                temp_inner = crate::TypeInner::Vector { size, scalar };
                                 &temp_inner
                             }
                             _ => unreachable!(
@@ -1679,9 +1672,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let expr = self.expression(expr, ctx)?;
                 let to_resolved = self.resolve_ast_type(to, &mut ctx.as_global())?;
 
-                let kind = match ctx.module.types[to_resolved].inner {
-                    crate::TypeInner::Scalar { kind, .. } => kind,
-                    crate::TypeInner::Vector { kind, .. } => kind,
+                let element_scalar = match ctx.module.types[to_resolved].inner {
+                    crate::TypeInner::Scalar(scalar) => scalar,
+                    crate::TypeInner::Vector { scalar, .. } => scalar,
                     _ => {
                         let ty = resolve!(ctx, expr);
                         return Err(Error::BadTypeCast {
@@ -1694,7 +1687,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 Typed::Plain(crate::Expression::As {
                     expr,
-                    kind,
+                    kind: element_scalar.kind,
                     convert: None,
                 })
             }
@@ -1785,10 +1778,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ) && {
                         matches!(
                             resolve_inner!(ctx, argument),
-                            &crate::TypeInner::Scalar {
+                            &crate::TypeInner::Scalar(crate::Scalar {
                                 kind: crate::ScalarKind::Bool,
                                 ..
-                            }
+                            })
                         )
                     };
 
@@ -1828,10 +1821,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
                         if let Some((size, width)) = match *resolve_inner!(ctx, arg) {
-                            crate::TypeInner::Scalar { width, .. } => Some((None, width)),
-                            crate::TypeInner::Vector { size, width, .. } => {
-                                Some((Some(size), width))
+                            crate::TypeInner::Scalar(crate::Scalar { width, .. }) => {
+                                Some((None, width))
                             }
+                            crate::TypeInner::Vector {
+                                size,
+                                scalar: crate::Scalar { width, .. },
+                                ..
+                            } => Some((Some(size), width)),
                             _ => None,
                         } {
                             ctx.module.generate_predeclared_type(
@@ -1976,13 +1973,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             args.finish()?;
 
                             let expression = match *resolve_inner!(ctx, value) {
-                                crate::TypeInner::Scalar { kind, width } => {
+                                crate::TypeInner::Scalar(scalar) => {
                                     crate::Expression::AtomicResult {
                                         ty: ctx.module.generate_predeclared_type(
-                                            crate::PredeclaredType::AtomicCompareExchangeWeakResult {
-                                                kind,
-                                                width,
-                                            },
+                                            crate::PredeclaredType::AtomicCompareExchangeWeakResult(
+                                                scalar,
+                                            ),
                                         ),
                                         comparison: true,
                                     }

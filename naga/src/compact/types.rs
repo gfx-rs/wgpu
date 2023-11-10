@@ -54,10 +54,10 @@ impl ModuleMap {
         use crate::TypeInner as Ti;
         match ty.inner {
             // Types that do not contain handles.
-            Ti::Scalar { .. }
+            Ti::Scalar(_)
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
-            | Ti::Atomic { .. }
+            | Ti::Atomic(_)
             | Ti::ValuePointer { .. }
             | Ti::Image { .. }
             | Ti::Sampler { .. }

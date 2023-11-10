@@ -17,6 +17,7 @@ use thiserror::Error;
 
 pub use crate::front::wgsl::error::ParseError;
 use crate::front::wgsl::lower::Lowerer;
+use crate::Scalar;
 
 pub struct Frontend {
     parser: Parser,
@@ -104,9 +105,8 @@ impl crate::TypeInner {
         use crate::TypeInner as Ti;
 
         match *self {
-            Ti::Scalar { kind, width } => Scalar { kind, width }.to_wgsl(),
-            Ti::Vector { size, kind, width } => {
-                let scalar = Scalar { kind, width };
+            Ti::Scalar(scalar) => scalar.to_wgsl(),
+            Ti::Vector { size, scalar } => {
                 format!("vec{}<{}>", size as u32, scalar.to_wgsl())
             }
             Ti::Matrix {
@@ -118,23 +118,19 @@ impl crate::TypeInner {
                     "mat{}x{}<{}>",
                     columns as u32,
                     rows as u32,
-                    Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width
-                    }
-                    .to_wgsl(),
+                    Scalar::float(width).to_wgsl(),
                 )
             }
-            Ti::Atomic { kind, width } => {
-                format!("atomic<{}>", Scalar { kind, width }.to_wgsl())
+            Ti::Atomic(scalar) => {
+                format!("atomic<{}>", scalar.to_wgsl())
             }
             Ti::Pointer { base, .. } => {
                 let base = &gctx.types[base];
                 let name = base.name.as_deref().unwrap_or("unknown");
                 format!("ptr<{name}>")
             }
-            Ti::ValuePointer { kind, width, .. } => {
-                format!("ptr<{}>", Scalar { kind, width }.to_wgsl())
+            Ti::ValuePointer { scalar, .. } => {
+                format!("ptr<{}>", scalar.to_wgsl())
             }
             Ti::Array { base, size, .. } => {
                 let member_type = &gctx.types[base];
@@ -292,16 +288,6 @@ mod type_inner_tests {
     }
 }
 
-/// Characteristics of a scalar type.
-#[derive(Clone, Copy, Debug)]
-pub struct Scalar {
-    /// How the value's bits are to be interpreted.
-    pub kind: crate::ScalarKind,
-
-    /// The size of the value in bytes.
-    pub width: crate::Bytes,
-}
-
 impl Scalar {
     /// Format a scalar kind+width as a type is written in wgsl.
     ///
@@ -314,27 +300,5 @@ impl Scalar {
             crate::ScalarKind::Bool => return "bool".to_string(),
         };
         format!("{}{}", prefix, self.width * 8)
-    }
-
-    const fn to_inner_scalar(self) -> crate::TypeInner {
-        crate::TypeInner::Scalar {
-            kind: self.kind,
-            width: self.width,
-        }
-    }
-
-    const fn to_inner_vector(self, size: crate::VectorSize) -> crate::TypeInner {
-        crate::TypeInner::Vector {
-            size,
-            kind: self.kind,
-            width: self.width,
-        }
-    }
-
-    const fn to_inner_atomic(self) -> crate::TypeInner {
-        crate::TypeInner::Atomic {
-            kind: self.kind,
-            width: self.width,
-        }
     }
 }

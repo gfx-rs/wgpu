@@ -77,6 +77,52 @@ impl super::ScalarKind {
     }
 }
 
+impl super::Scalar {
+    pub const I32: Self = Self {
+        kind: crate::ScalarKind::Sint,
+        width: 4,
+    };
+    pub const U32: Self = Self {
+        kind: crate::ScalarKind::Uint,
+        width: 4,
+    };
+    pub const F32: Self = Self {
+        kind: crate::ScalarKind::Float,
+        width: 4,
+    };
+    pub const F64: Self = Self {
+        kind: crate::ScalarKind::Float,
+        width: 8,
+    };
+    pub const BOOL: Self = Self {
+        kind: crate::ScalarKind::Bool,
+        width: crate::BOOL_WIDTH,
+    };
+
+    /// Construct a float `Scalar` with the given width.
+    ///
+    /// This is especially common when dealing with
+    /// `TypeInner::Matrix`, where the scalar kind is implicit.
+    pub const fn float(width: crate::Bytes) -> Self {
+        Self {
+            kind: crate::ScalarKind::Float,
+            width,
+        }
+    }
+
+    pub const fn to_inner_scalar(self) -> crate::TypeInner {
+        crate::TypeInner::Scalar(self)
+    }
+
+    pub const fn to_inner_vector(self, size: crate::VectorSize) -> crate::TypeInner {
+        crate::TypeInner::Vector { size, scalar: self }
+    }
+
+    pub const fn to_inner_atomic(self) -> crate::TypeInner {
+        crate::TypeInner::Atomic(self)
+    }
+}
+
 impl PartialEq for crate::Literal {
     fn eq(&self, other: &Self) -> bool {
         match (*self, *other) {
@@ -118,8 +164,8 @@ impl std::hash::Hash for crate::Literal {
 }
 
 impl crate::Literal {
-    pub const fn new(value: u8, kind: crate::ScalarKind, width: crate::Bytes) -> Option<Self> {
-        match (value, kind, width) {
+    pub const fn new(value: u8, scalar: crate::Scalar) -> Option<Self> {
+        match (value, scalar.kind, scalar.width) {
             (value, crate::ScalarKind::Float, 8) => Some(Self::F64(value as _)),
             (value, crate::ScalarKind::Float, 4) => Some(Self::F32(value as _)),
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
@@ -130,12 +176,12 @@ impl crate::Literal {
         }
     }
 
-    pub const fn zero(kind: crate::ScalarKind, width: crate::Bytes) -> Option<Self> {
-        Self::new(0, kind, width)
+    pub const fn zero(scalar: crate::Scalar) -> Option<Self> {
+        Self::new(0, scalar)
     }
 
-    pub const fn one(kind: crate::ScalarKind, width: crate::Bytes) -> Option<Self> {
-        Self::new(1, kind, width)
+    pub const fn one(scalar: crate::Scalar) -> Option<Self> {
+        Self::new(1, scalar)
     }
 
     pub const fn width(&self) -> crate::Bytes {
@@ -145,44 +191,41 @@ impl crate::Literal {
             Self::Bool(_) => 1,
         }
     }
-    pub const fn scalar_kind(&self) -> crate::ScalarKind {
+    pub const fn scalar(&self) -> crate::Scalar {
         match *self {
-            Self::F64(_) | Self::F32(_) => crate::ScalarKind::Float,
-            Self::U32(_) => crate::ScalarKind::Uint,
-            Self::I32(_) => crate::ScalarKind::Sint,
-            Self::Bool(_) => crate::ScalarKind::Bool,
+            crate::Literal::F64(_) => crate::Scalar::F64,
+            crate::Literal::F32(_) => crate::Scalar::F32,
+            crate::Literal::U32(_) => crate::Scalar::U32,
+            crate::Literal::I32(_) => crate::Scalar::I32,
+            crate::Literal::Bool(_) => crate::Scalar::BOOL,
         }
     }
+    pub const fn scalar_kind(&self) -> crate::ScalarKind {
+        self.scalar().kind
+    }
     pub const fn ty_inner(&self) -> crate::TypeInner {
-        crate::TypeInner::Scalar {
-            kind: self.scalar_kind(),
-            width: self.width(),
-        }
+        crate::TypeInner::Scalar(self.scalar())
     }
 }
 
 pub const POINTER_SPAN: u32 = 4;
 
 impl super::TypeInner {
-    pub const fn scalar_kind(&self) -> Option<super::ScalarKind> {
+    pub const fn scalar(&self) -> Option<super::Scalar> {
+        use crate::TypeInner as Ti;
         match *self {
-            super::TypeInner::Scalar { kind, .. } | super::TypeInner::Vector { kind, .. } => {
-                Some(kind)
-            }
-            super::TypeInner::Matrix { .. } => Some(super::ScalarKind::Float),
+            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
+            Ti::Matrix { width, .. } => Some(super::Scalar::float(width)),
             _ => None,
         }
     }
 
-    pub const fn scalar_width(&self) -> Option<u8> {
-        // Multiply by 8 to get the bit width
-        match *self {
-            super::TypeInner::Scalar { width, .. } | super::TypeInner::Vector { width, .. } => {
-                Some(width * 8)
-            }
-            super::TypeInner::Matrix { width, .. } => Some(width * 8),
-            _ => None,
-        }
+    pub fn scalar_kind(&self) -> Option<super::ScalarKind> {
+        self.scalar().map(|scalar| scalar.kind)
+    }
+
+    pub fn scalar_width(&self) -> Option<u8> {
+        self.scalar().map(|scalar| scalar.width * 8)
     }
 
     pub const fn pointer_space(&self) -> Option<crate::AddressSpace> {
@@ -206,12 +249,8 @@ impl super::TypeInner {
     /// Get the size of this type.
     pub fn size(&self, _gctx: GlobalCtx) -> u32 {
         match *self {
-            Self::Scalar { kind: _, width } | Self::Atomic { kind: _, width } => width as u32,
-            Self::Vector {
-                size,
-                kind: _,
-                width,
-            } => size as u32 * width as u32,
+            Self::Scalar(scalar) | Self::Atomic(scalar) => scalar.width as u32,
+            Self::Vector { size, scalar } => size as u32 * scalar.width as u32,
             // matrices are treated as arrays of aligned columns
             Self::Matrix {
                 columns,
@@ -255,16 +294,14 @@ impl super::TypeInner {
         use crate::TypeInner as Ti;
         match *self {
             Ti::Pointer { base, space } => match types[base].inner {
-                Ti::Scalar { kind, width } => Some(Ti::ValuePointer {
+                Ti::Scalar(scalar) => Some(Ti::ValuePointer {
                     size: None,
-                    kind,
-                    width,
+                    scalar,
                     space,
                 }),
-                Ti::Vector { size, kind, width } => Some(Ti::ValuePointer {
+                Ti::Vector { size, scalar } => Some(Ti::ValuePointer {
                     size: Some(size),
-                    kind,
-                    width,
+                    scalar,
                     space,
                 }),
                 _ => None,
@@ -318,13 +355,10 @@ impl super::TypeInner {
 
     pub fn component_type(&self, index: usize) -> Option<TypeResolution> {
         Some(match *self {
-            Self::Vector { kind, width, .. } => {
-                TypeResolution::Value(crate::TypeInner::Scalar { kind, width })
-            }
+            Self::Vector { scalar, .. } => TypeResolution::Value(crate::TypeInner::Scalar(scalar)),
             Self::Matrix { rows, width, .. } => TypeResolution::Value(crate::TypeInner::Vector {
                 size: rows,
-                kind: crate::ScalarKind::Float,
-                width,
+                scalar: crate::Scalar::float(width),
             }),
             Self::Array {
                 base,
@@ -628,7 +662,7 @@ impl GlobalCtx<'_> {
             match arena[handle] {
                 crate::Expression::Literal(literal) => Some(literal),
                 crate::Expression::ZeroValue(ty) => match gctx.types[ty].inner {
-                    crate::TypeInner::Scalar { kind, width } => crate::Literal::zero(kind, width),
+                    crate::TypeInner::Scalar(scalar) => crate::Literal::zero(scalar),
                     _ => None,
                 },
                 _ => None,

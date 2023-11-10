@@ -159,10 +159,10 @@ impl ExpressionInfo {
             ref_count: 0,
             assignable_global: None,
             // this doesn't matter at this point, will be overwritten
-            ty: TypeResolution::Value(crate::TypeInner::Scalar {
+            ty: TypeResolution::Value(crate::TypeInner::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Bool,
                 width: 0,
-            }),
+            })),
         }
     }
 }
@@ -1070,8 +1070,7 @@ fn uniform_control_flow() {
             name: None,
             inner: crate::TypeInner::Vector {
                 size: crate::VectorSize::Bi,
-                kind: crate::ScalarKind::Float,
-                width: 4,
+                scalar: crate::Scalar::F32,
             },
         },
         Default::default(),

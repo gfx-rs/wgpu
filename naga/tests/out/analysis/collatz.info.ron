@@ -47,10 +47,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -80,10 +80,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -92,10 +92,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -113,10 +113,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -134,10 +134,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -146,10 +146,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Bool,
                         width: 1,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -167,10 +167,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -188,10 +188,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -218,10 +218,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -248,10 +248,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -334,10 +334,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -388,10 +388,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Value(Scalar(
+                    ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
-                    )),
+                    ))),
                 ),
                 (
                     uniformity: (
