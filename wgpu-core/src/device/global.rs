@@ -485,9 +485,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         log::debug!("Buffer {:?} is asked to be dropped", buffer_id);
-        let buffer = hub
-            .buffers
-            .get(buffer_id)
+        let mut buffer_guard = hub.buffers.write();
+        let buffer = buffer_guard
+            .take_and_mark_destroyed(buffer_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
         buffer.destroy()
     }
