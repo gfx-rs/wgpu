@@ -2,40 +2,46 @@
     types: [
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Float,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
             inner: Vector(
                 size: Tri,
-                kind: Float,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Uint,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
             inner: Vector(
                 size: Quad,
-                kind: Float,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
             name: None,
             inner: Vector(
                 size: Bi,
-                kind: Float,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -50,17 +56,19 @@
         ),
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Sint,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
             inner: Vector(
                 size: Quad,
-                kind: Uint,
-                width: 4,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
             ),
         ),
         (

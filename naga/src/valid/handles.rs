@@ -678,10 +678,7 @@ fn constant_deps() {
     let i32_handle = types.insert(
         Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: crate::ScalarKind::Sint,
-                width: 4,
-            },
+            inner: TypeInner::Scalar(crate::Scalar::I32),
         },
         nowhere,
     );

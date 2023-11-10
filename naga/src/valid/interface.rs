@@ -142,9 +142,7 @@ impl VaryingContext<'_> {
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<(), VaryingError> {
-        use crate::{
-            BuiltIn as Bi, ScalarKind as Sk, ShaderStage as St, TypeInner as Ti, VectorSize as Vs,
-        };
+        use crate::{BuiltIn as Bi, ShaderStage as St, TypeInner as Ti, VectorSize as Vs};
 
         let ty_inner = &self.types[ty].inner;
         match *binding {
@@ -174,44 +172,30 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::UnsupportedCapability(required));
                 }
 
-                let width = 4;
                 let (visible, type_good) = match built_in {
                     Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
                         self.stage == St::Vertex && !self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Uint,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::ClipDistance | Bi::CullDistance => (
                         self.stage == St::Vertex && self.output,
                         match *ty_inner {
                             Ti::Array { base, .. } => {
-                                self.types[base].inner
-                                    == Ti::Scalar {
-                                        kind: Sk::Float,
-                                        width,
-                                    }
+                                self.types[base].inner == Ti::Scalar(crate::Scalar::F32)
                             }
                             _ => false,
                         },
                     ),
                     Bi::PointSize => (
                         self.stage == St::Vertex && self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Float,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::F32),
                     ),
                     Bi::PointCoord => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
                             == Ti::Vector {
                                 size: Vs::Bi,
-                                kind: Sk::Float,
-                                width,
+                                scalar: crate::Scalar::F32,
                             },
                     ),
                     Bi::Position { .. } => (
@@ -223,8 +207,7 @@ impl VaryingContext<'_> {
                         *ty_inner
                             == Ti::Vector {
                                 size: Vs::Quad,
-                                kind: Sk::Float,
-                                width,
+                                scalar: crate::Scalar::F32,
                             },
                     ),
                     Bi::ViewIndex => (
@@ -232,59 +215,31 @@ impl VaryingContext<'_> {
                             St::Vertex | St::Fragment => !self.output,
                             St::Compute => false,
                         },
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Sint,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::I32),
                     ),
                     Bi::FragDepth => (
                         self.stage == St::Fragment && self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Float,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::F32),
                     ),
                     Bi::FrontFacing => (
                         self.stage == St::Fragment && !self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Bool,
-                                width: crate::BOOL_WIDTH,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::BOOL),
                     ),
                     Bi::PrimitiveIndex => (
                         self.stage == St::Fragment && !self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Uint,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::SampleIndex => (
                         self.stage == St::Fragment && !self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Uint,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::SampleMask => (
                         self.stage == St::Fragment,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Uint,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::LocalInvocationIndex => (
                         self.stage == St::Compute && !self.output,
-                        *ty_inner
-                            == Ti::Scalar {
-                                kind: Sk::Uint,
-                                width,
-                            },
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::GlobalInvocationId
                     | Bi::LocalInvocationId
@@ -295,8 +250,7 @@ impl VaryingContext<'_> {
                         *ty_inner
                             == Ti::Vector {
                                 size: Vs::Tri,
-                                kind: Sk::Uint,
-                                width,
+                                scalar: crate::Scalar::U32,
                             },
                     ),
                 };

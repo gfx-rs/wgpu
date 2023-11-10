@@ -241,8 +241,8 @@ pub struct ReflectionInfo {
 pub enum Error {
     #[error(transparent)]
     IoError(#[from] FmtError),
-    #[error("A scalar with an unsupported width was requested: {0:?} {1:?}")]
-    UnsupportedScalar(crate::ScalarKind, crate::Bytes),
+    #[error("A scalar with an unsupported width was requested: {0:?}")]
+    UnsupportedScalar(crate::Scalar),
     #[error("{0}")]
     Unimplemented(String), // TODO: Error used only during development
     #[error("{0}")]

@@ -307,10 +307,7 @@ impl Parser {
             "vec2f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Bi,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    },
+                    scalar: Scalar::F32,
                 }))
             }
             "vec3" => ast::ConstructorType::PartialVector {
@@ -319,28 +316,19 @@ impl Parser {
             "vec3i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                    },
+                    scalar: Scalar::I32,
                 }))
             }
             "vec3u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                    },
+                    scalar: Scalar::U32,
                 }))
             }
             "vec3f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    },
+                    scalar: Scalar::F32,
                 }))
             }
             "vec4" => ast::ConstructorType::PartialVector {
@@ -349,28 +337,19 @@ impl Parser {
             "vec4i" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Sint,
-                        width: 4,
-                    },
+                    scalar: Scalar::I32,
                 }))
             }
             "vec4u" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Uint,
-                        width: 4,
-                    },
+                    scalar: Scalar::U32,
                 }))
             }
             "vec4f" => {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Quad,
-                    scalar: Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    },
+                    scalar: Scalar::F32,
                 }))
             }
             "mat2x2" => ast::ConstructorType::PartialMatrix {
@@ -1109,10 +1088,7 @@ impl Parser {
             },
             "vec2f" => ast::Type::Vector {
                 size: crate::VectorSize::Bi,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                },
+                scalar: Scalar::F32,
             },
             "vec3" => {
                 let scalar = lexer.next_scalar_generic()?;
@@ -1137,10 +1113,7 @@ impl Parser {
             },
             "vec3f" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                },
+                scalar: Scalar::F32,
             },
             "vec4" => {
                 let scalar = lexer.next_scalar_generic()?;
@@ -1165,10 +1138,7 @@ impl Parser {
             },
             "vec4f" => ast::Type::Vector {
                 size: crate::VectorSize::Quad,
-                scalar: Scalar {
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
-                },
+                scalar: Scalar::F32,
             },
             "mat2x2" => {
                 self.matrix_scalar_type(lexer, crate::VectorSize::Bi, crate::VectorSize::Bi)?

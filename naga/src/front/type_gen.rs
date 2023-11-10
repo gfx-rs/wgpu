@@ -25,24 +25,17 @@ impl crate::Module {
             return handle;
         }
 
-        let width = 4;
         let ty_flag = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Scalar {
-                    width,
-                    kind: crate::ScalarKind::Uint,
-                },
+                inner: crate::TypeInner::Scalar(crate::Scalar::U32),
             },
             Span::UNDEFINED,
         );
         let ty_scalar = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Scalar {
-                    width,
-                    kind: crate::ScalarKind::Float,
-                },
+                inner: crate::TypeInner::Scalar(crate::Scalar::F32),
             },
             Span::UNDEFINED,
         );
@@ -51,8 +44,7 @@ impl crate::Module {
                 name: None,
                 inner: crate::TypeInner::Vector {
                     size: crate::VectorSize::Tri,
-                    kind: crate::ScalarKind::Float,
-                    width,
+                    scalar: crate::Scalar::F32,
                 },
             },
             Span::UNDEFINED,
@@ -127,24 +119,17 @@ impl crate::Module {
             return handle;
         }
 
-        let width = 4;
         let ty_flag = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Scalar {
-                    width,
-                    kind: crate::ScalarKind::Uint,
-                },
+                inner: crate::TypeInner::Scalar(crate::Scalar::U32),
             },
             Span::UNDEFINED,
         );
         let ty_scalar = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Scalar {
-                    width,
-                    kind: crate::ScalarKind::Float,
-                },
+                inner: crate::TypeInner::Scalar(crate::Scalar::F32),
             },
             Span::UNDEFINED,
         );
@@ -152,9 +137,8 @@ impl crate::Module {
             crate::Type {
                 name: None,
                 inner: crate::TypeInner::Vector {
-                    width,
                     size: crate::VectorSize::Bi,
-                    kind: crate::ScalarKind::Float,
+                    scalar: crate::Scalar::F32,
                 },
             },
             Span::UNDEFINED,
@@ -162,10 +146,7 @@ impl crate::Module {
         let ty_bool = self.types.insert(
             crate::Type {
                 name: None,
-                inner: crate::TypeInner::Scalar {
-                    width: crate::BOOL_WIDTH,
-                    kind: crate::ScalarKind::Bool,
-                },
+                inner: crate::TypeInner::Scalar(crate::Scalar::BOOL),
             },
             Span::UNDEFINED,
         );
@@ -175,7 +156,7 @@ impl crate::Module {
                 inner: crate::TypeInner::Matrix {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Tri,
-                    width,
+                    width: 4,
                 },
             },
             Span::UNDEFINED,
@@ -277,28 +258,26 @@ impl crate::Module {
         }
 
         let ty = match special_type {
-            crate::PredeclaredType::AtomicCompareExchangeWeakResult { kind, width } => {
+            crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
                 let bool_ty = self.types.insert(
                     crate::Type {
                         name: None,
-                        inner: crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Bool,
-                            width: crate::BOOL_WIDTH,
-                        },
+                        inner: crate::TypeInner::Scalar(crate::Scalar::BOOL),
                     },
                     Span::UNDEFINED,
                 );
                 let scalar_ty = self.types.insert(
                     crate::Type {
                         name: None,
-                        inner: crate::TypeInner::Scalar { kind, width },
+                        inner: crate::TypeInner::Scalar(scalar),
                     },
                     Span::UNDEFINED,
                 );
 
                 crate::Type {
                     name: Some(format!(
-                        "__atomic_compare_exchange_result<{kind:?},{width}>"
+                        "__atomic_compare_exchange_result<{:?},{}>",
+                        scalar.kind, scalar.width,
                     )),
                     inner: crate::TypeInner::Struct {
                         members: vec![
@@ -323,10 +302,7 @@ impl crate::Module {
                 let float_ty = self.types.insert(
                     crate::Type {
                         name: None,
-                        inner: crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Float,
-                            width,
-                        },
+                        inner: crate::TypeInner::Scalar(crate::Scalar::float(width)),
                     },
                     Span::UNDEFINED,
                 );
@@ -337,8 +313,7 @@ impl crate::Module {
                             name: None,
                             inner: crate::TypeInner::Vector {
                                 size,
-                                kind: crate::ScalarKind::Float,
-                                width,
+                                scalar: crate::Scalar::float(width),
                             },
                         },
                         Span::UNDEFINED,
@@ -379,10 +354,7 @@ impl crate::Module {
                 let float_ty = self.types.insert(
                     crate::Type {
                         name: None,
-                        inner: crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Float,
-                            width,
-                        },
+                        inner: crate::TypeInner::Scalar(crate::Scalar::float(width)),
                     },
                     Span::UNDEFINED,
                 );
@@ -390,10 +362,10 @@ impl crate::Module {
                 let int_ty = self.types.insert(
                     crate::Type {
                         name: None,
-                        inner: crate::TypeInner::Scalar {
+                        inner: crate::TypeInner::Scalar(crate::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width,
-                        },
+                        }),
                     },
                     Span::UNDEFINED,
                 );
@@ -404,8 +376,7 @@ impl crate::Module {
                             name: None,
                             inner: crate::TypeInner::Vector {
                                 size,
-                                kind: crate::ScalarKind::Float,
-                                width,
+                                scalar: crate::Scalar::float(width),
                             },
                         },
                         Span::UNDEFINED,
@@ -415,8 +386,10 @@ impl crate::Module {
                             name: None,
                             inner: crate::TypeInner::Vector {
                                 size,
-                                kind: crate::ScalarKind::Sint,
-                                width,
+                                scalar: crate::Scalar {
+                                    kind: crate::ScalarKind::Sint,
+                                    width,
+                                },
                             },
                         },
                         Span::UNDEFINED,

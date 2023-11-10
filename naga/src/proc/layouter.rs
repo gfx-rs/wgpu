@@ -171,17 +171,16 @@ impl Layouter {
         for (ty_handle, ty) in gctx.types.iter().skip(self.layouts.len()) {
             let size = ty.inner.size(gctx);
             let layout = match ty.inner {
-                Ti::Scalar { width, .. } | Ti::Atomic { width, .. } => {
-                    let alignment = Alignment::new(width as u32)
+                Ti::Scalar(scalar) | Ti::Atomic(scalar) => {
+                    let alignment = Alignment::new(scalar.width as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
                     TypeLayout { size, alignment }
                 }
                 Ti::Vector {
                     size: vec_size,
-                    width,
-                    ..
+                    scalar,
                 } => {
-                    let alignment = Alignment::new(width as u32)
+                    let alignment = Alignment::new(scalar.width as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
                     TypeLayout {
                         size,

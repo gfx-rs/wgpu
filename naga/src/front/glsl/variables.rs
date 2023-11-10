@@ -6,8 +6,8 @@ use super::{
 };
 use crate::{
     AddressSpace, Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
-    LocalVariable, ResourceBinding, ScalarKind, ShaderStage, SwizzleComponent, Type, TypeInner,
-    VectorSize,
+    LocalVariable, ResourceBinding, Scalar, ScalarKind, ShaderStage, SwizzleComponent, Type,
+    TypeInner, VectorSize,
 };
 
 pub struct VarDeclaration<'a, 'key> {
@@ -109,8 +109,7 @@ impl Frontend {
             "gl_Position" => BuiltInData {
                 inner: TypeInner::Vector {
                     size: VectorSize::Quad,
-                    kind: ScalarKind::Float,
-                    width: 4,
+                    scalar: Scalar::F32,
                 },
                 builtin: BuiltIn::Position { invariant: false },
                 mutable: true,
@@ -119,8 +118,7 @@ impl Frontend {
             "gl_FragCoord" => BuiltInData {
                 inner: TypeInner::Vector {
                     size: VectorSize::Quad,
-                    kind: ScalarKind::Float,
-                    width: 4,
+                    scalar: Scalar::F32,
                 },
                 builtin: BuiltIn::Position { invariant: false },
                 mutable: false,
@@ -129,8 +127,7 @@ impl Frontend {
             "gl_PointCoord" => BuiltInData {
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    kind: ScalarKind::Float,
-                    width: 4,
+                    scalar: Scalar::F32,
                 },
                 builtin: BuiltIn::PointCoord,
                 mutable: false,
@@ -143,8 +140,7 @@ impl Frontend {
             | "gl_LocalInvocationID" => BuiltInData {
                 inner: TypeInner::Vector {
                     size: VectorSize::Tri,
-                    kind: ScalarKind::Uint,
-                    width: 4,
+                    scalar: Scalar::U32,
                 },
                 builtin: match name {
                     "gl_GlobalInvocationID" => BuiltIn::GlobalInvocationId,
@@ -158,19 +154,13 @@ impl Frontend {
                 storage: StorageQualifier::Input,
             },
             "gl_FrontFacing" => BuiltInData {
-                inner: TypeInner::Scalar {
-                    kind: ScalarKind::Bool,
-                    width: crate::BOOL_WIDTH,
-                },
+                inner: TypeInner::Scalar(Scalar::BOOL),
                 builtin: BuiltIn::FrontFacing,
                 mutable: false,
                 storage: StorageQualifier::Input,
             },
             "gl_PointSize" | "gl_FragDepth" => BuiltInData {
-                inner: TypeInner::Scalar {
-                    kind: ScalarKind::Float,
-                    width: 4,
-                },
+                inner: TypeInner::Scalar(Scalar::F32),
                 builtin: match name {
                     "gl_PointSize" => BuiltIn::PointSize,
                     "gl_FragDepth" => BuiltIn::FragDepth,
@@ -183,10 +173,7 @@ impl Frontend {
                 let base = ctx.module.types.insert(
                     Type {
                         name: None,
-                        inner: TypeInner::Scalar {
-                            kind: ScalarKind::Float,
-                            width: 4,
-                        },
+                        inner: TypeInner::Scalar(Scalar::F32),
                     },
                     meta,
                 );
@@ -219,10 +206,7 @@ impl Frontend {
                 };
 
                 BuiltInData {
-                    inner: TypeInner::Scalar {
-                        kind: ScalarKind::Uint,
-                        width: 4,
-                    },
+                    inner: TypeInner::Scalar(Scalar::U32),
                     builtin,
                     mutable: false,
                     storage: StorageQualifier::Input,

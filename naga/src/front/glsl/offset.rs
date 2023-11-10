@@ -16,7 +16,7 @@ use super::{
     error::{Error, ErrorKind},
     Span,
 };
-use crate::{proc::Alignment, Handle, Type, TypeInner, UniqueArena};
+use crate::{proc::Alignment, Handle, Scalar, Type, TypeInner, UniqueArena};
 
 /// Struct with information needed for defining a struct member.
 ///
@@ -53,12 +53,15 @@ pub fn calculate_offset(
     let (align, span) = match types[ty].inner {
         // 1. If the member is a scalar consuming N basic machine units,
         // the base alignment is N.
-        TypeInner::Scalar { width, .. } => (Alignment::from_width(width), width as u32),
+        TypeInner::Scalar(Scalar { width, .. }) => (Alignment::from_width(width), width as u32),
         // 2. If the member is a two- or four-component vector with components
         // consuming N basic machine units, the base alignment is 2N or 4N, respectively.
         // 3. If the member is a three-component vector with components consuming N
         // basic machine units, the base alignment is 4N.
-        TypeInner::Vector { size, width, .. } => (
+        TypeInner::Vector {
+            size,
+            scalar: Scalar { width, .. },
+        } => (
             Alignment::from(size) * Alignment::from_width(width),
             size as u32 * width as u32,
         ),

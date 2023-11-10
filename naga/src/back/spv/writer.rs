@@ -238,8 +238,7 @@ impl Writer {
     pub(super) fn get_uint_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Uint,
-            width: 4,
+            scalar: crate::Scalar::U32,
             pointer_space: None,
         };
         self.get_type_id(local_type.into())
@@ -248,8 +247,7 @@ impl Writer {
     pub(super) fn get_float_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Float,
-            width: 4,
+            scalar: crate::Scalar::F32,
             pointer_space: None,
         };
         self.get_type_id(local_type.into())
@@ -258,8 +256,7 @@ impl Writer {
     pub(super) fn get_uint3_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: Some(crate::VectorSize::Tri),
-            kind: crate::ScalarKind::Uint,
-            width: 4,
+            scalar: crate::Scalar::U32,
             pointer_space: None,
         };
         self.get_type_id(local_type.into())
@@ -268,8 +265,7 @@ impl Writer {
     pub(super) fn get_float_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let lookup_type = LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Float,
-            width: 4,
+            scalar: crate::Scalar::F32,
             pointer_space: Some(class),
         });
         if let Some(&id) = self.lookup_type.get(&lookup_type) {
@@ -287,8 +283,7 @@ impl Writer {
     pub(super) fn get_uint3_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let lookup_type = LookupType::Local(LocalType::Value {
             vector_size: Some(crate::VectorSize::Tri),
-            kind: crate::ScalarKind::Uint,
-            width: 4,
+            scalar: crate::Scalar::U32,
             pointer_space: Some(class),
         });
         if let Some(&id) = self.lookup_type.get(&lookup_type) {
@@ -306,8 +301,7 @@ impl Writer {
     pub(super) fn get_bool_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Bool,
-            width: 1,
+            scalar: crate::Scalar::BOOL,
             pointer_space: None,
         };
         self.get_type_id(local_type.into())
@@ -316,8 +310,7 @@ impl Writer {
     pub(super) fn get_bool3_type_id(&mut self) -> Word {
         let local_type = LocalType::Value {
             vector_size: Some(crate::VectorSize::Tri),
-            kind: crate::ScalarKind::Bool,
-            width: 1,
+            scalar: crate::Scalar::BOOL,
             pointer_space: None,
         };
         self.get_type_id(local_type.into())
@@ -802,18 +795,13 @@ impl Writer {
         ))
     }
 
-    fn make_scalar(
-        &mut self,
-        id: Word,
-        kind: crate::ScalarKind,
-        width: crate::Bytes,
-    ) -> Instruction {
+    fn make_scalar(&mut self, id: Word, scalar: crate::Scalar) -> Instruction {
         use crate::ScalarKind as Sk;
 
-        let bits = (width * BITS_PER_BYTE) as u32;
-        match kind {
+        let bits = (scalar.width * BITS_PER_BYTE) as u32;
+        match scalar.kind {
             Sk::Sint | Sk::Uint => {
-                let signedness = if kind == Sk::Sint {
+                let signedness = if scalar.kind == Sk::Sint {
                     super::instructions::Signedness::Signed
                 } else {
                     super::instructions::Signedness::Unsigned
@@ -894,20 +882,17 @@ impl Writer {
         let instruction = match local_ty {
             LocalType::Value {
                 vector_size: None,
-                kind,
-                width,
+                scalar,
                 pointer_space: None,
-            } => self.make_scalar(id, kind, width),
+            } => self.make_scalar(id, scalar),
             LocalType::Value {
                 vector_size: Some(size),
-                kind,
-                width,
+                scalar,
                 pointer_space: None,
             } => {
                 let scalar_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: None,
-                    kind,
-                    width,
+                    scalar,
                     pointer_space: None,
                 }));
                 Instruction::type_vector(id, scalar_id, size)
@@ -919,8 +904,7 @@ impl Writer {
             } => {
                 let vector_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: Some(rows),
-                    kind: crate::ScalarKind::Float,
-                    width,
+                    scalar: crate::Scalar::float(width),
                     pointer_space: None,
                 }));
                 Instruction::type_matrix(id, vector_id, columns)
@@ -931,14 +915,12 @@ impl Writer {
             }
             LocalType::Value {
                 vector_size,
-                kind,
-                width,
+                scalar,
                 pointer_space: Some(class),
             } => {
                 let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size,
-                    kind,
-                    width,
+                    scalar,
                     pointer_space: None,
                 }));
                 Instruction::type_pointer(id, class, type_id)
@@ -946,8 +928,10 @@ impl Writer {
             LocalType::Image(image) => {
                 let local_type = LocalType::Value {
                     vector_size: None,
-                    kind: image.sampled_type,
-                    width: 4,
+                    scalar: crate::Scalar {
+                        kind: image.sampled_type,
+                        width: 4,
+                    },
                     pointer_space: None,
                 };
                 let type_id = self.get_type_id(LookupType::Local(local_type));
@@ -1060,8 +1044,8 @@ impl Writer {
 
                 // These all have TypeLocal representations, so they should have been
                 // handled by `write_type_declaration_local` above.
-                crate::TypeInner::Scalar { .. }
-                | crate::TypeInner::Atomic { .. }
+                crate::TypeInner::Scalar(_)
+                | crate::TypeInner::Atomic(_)
                 | crate::TypeInner::Vector { .. }
                 | crate::TypeInner::Matrix { .. }
                 | crate::TypeInner::Pointer { .. }
@@ -1151,11 +1135,10 @@ impl Writer {
     pub(super) fn get_constant_scalar_with(
         &mut self,
         value: u8,
-        kind: crate::ScalarKind,
-        width: crate::Bytes,
+        scalar: crate::Scalar,
     ) -> Result<Word, Error> {
         Ok(
-            self.get_constant_scalar(crate::Literal::new(value, kind, width).ok_or(
+            self.get_constant_scalar(crate::Literal::new(value, scalar).ok_or(
                 Error::Validation("Unexpected kind and/or width for Literal"),
             )?),
         )
@@ -1185,8 +1168,7 @@ impl Writer {
         }
         let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: value.scalar_kind(),
-            width: value.width(),
+            scalar: value.scalar(),
             pointer_space: None,
         }));
         let instruction = match *value {
@@ -1602,8 +1584,8 @@ impl Writer {
                 // > shader, must be decorated Flat
                 if class == spirv::StorageClass::Input && stage == crate::ShaderStage::Fragment {
                     let is_flat = match ir_module.types[ty].inner {
-                        crate::TypeInner::Scalar { kind, .. }
-                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                        crate::TypeInner::Scalar(scalar)
+                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Bool => true,
                             Sk::Float => false,
                         },
