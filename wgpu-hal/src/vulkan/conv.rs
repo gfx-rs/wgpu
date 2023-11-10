@@ -451,8 +451,7 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
     } else if mode == vk::PresentModeKHR::FIFO {
         Some(wgt::PresentMode::Fifo)
     } else if mode == vk::PresentModeKHR::FIFO_RELAXED {
-        //Some(wgt::PresentMode::Relaxed)
-        None
+        Some(wgt::PresentMode::FifoRelaxed)
     } else {
         log::warn!("Unrecognized present mode {:?}", mode);
         None
