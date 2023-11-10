@@ -2,7 +2,10 @@
 use crate::device::trace;
 use crate::{
     binding_model, command, conv,
-    device::{life::WaitIdleError, map_buffer, queue, DeviceError, HostMap},
+    device::{
+        life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
+        IMPLICIT_FAILURE,
+    },
     global::Global,
     hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
@@ -21,7 +24,7 @@ use parking_lot::RwLock;
 
 use wgt::{BufferAddress, TextureFormat};
 
-use std::{borrow::Cow, iter, ops::Range, ptr};
+use std::{borrow::Cow, iter, ops::Range, ptr, sync::atomic::Ordering};
 
 use super::{ImplicitPipelineIds, InvalidDevice, UserClosures};
 
@@ -1549,6 +1552,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.render_pipelines.prepare::<G>(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+        let implicit_error_context = implicit_context.clone();
 
         let error = loop {
             let device = match hub.devices.get(device_id) {
@@ -1586,6 +1590,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
+
+        // We also need to assign errors to the implicit pipeline layout and the
+        // implicit bind group layout. We have to remove any existing entries first.
+        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+        let mut bgl_guard = hub.bind_group_layouts.write();
+        if let Some(ref ids) = implicit_error_context {
+            if pipeline_layout_guard.contains(ids.root_id) {
+                pipeline_layout_guard.remove(ids.root_id);
+            }
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                if bgl_guard.contains(bgl_id) {
+                    bgl_guard.remove(bgl_id);
+                }
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
+
         (id, Some(error))
     }
 
@@ -1668,6 +1690,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.compute_pipelines.prepare::<G>(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+        let implicit_error_context = implicit_context.clone();
 
         let error = loop {
             let device = match hub.devices.get(device_id) {
@@ -1686,7 +1709,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     implicit_context: implicit_context.clone(),
                 });
             }
-
             let pipeline = match device.create_compute_pipeline(desc, implicit_context, hub) {
                 Ok(pair) => pair,
                 Err(e) => break e,
@@ -1704,6 +1726,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default());
+
+        // We also need to assign errors to the implicit pipeline layout and the
+        // implicit bind group layout. We have to remove any existing entries first.
+        let mut pipeline_layout_guard = hub.pipeline_layouts.write();
+        let mut bgl_guard = hub.bind_group_layouts.write();
+        if let Some(ref ids) = implicit_error_context {
+            if pipeline_layout_guard.contains(ids.root_id) {
+                pipeline_layout_guard.remove(ids.root_id);
+            }
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                if bgl_guard.contains(bgl_id) {
+                    bgl_guard.remove(bgl_id);
+                }
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
         (id, Some(error))
     }
 
@@ -2203,7 +2242,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
-
         log::debug!("Device {:?} is asked to be dropped", device_id);
 
         let hub = A::hub(self);
@@ -2223,6 +2261,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
+    pub fn device_set_device_lost_closure<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+        device_lost_closure: DeviceLostClosure,
+    ) {
+        let hub = A::hub(self);
+
+        if let Ok(device) = hub.devices.get(device_id) {
+            let mut life_tracker = device.lock_life();
+            life_tracker.device_lost_closure = Some(device_lost_closure);
+        }
+    }
+
     pub fn device_destroy<A: HalApi>(&self, device_id: DeviceId) {
         log::trace!("Device::destroy {device_id:?}");
 
@@ -2231,7 +2282,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Ok(device) = hub.devices.get(device_id) {
             // Follow the steps at
             // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
-
             // It's legal to call destroy multiple times, but if the device
             // is already invalid, there's nothing more to do. There's also
             // no need to return an error.
@@ -2241,24 +2291,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // The last part of destroy is to lose the device. The spec says
             // delay that until all "currently-enqueued operations on any
-            // queue on this device are completed."
-
-            // TODO: implement this delay.
-
-            // Finish by losing the device.
-
-            // TODO: associate this "destroyed" reason more tightly with
-            // the GPUDeviceLostReason defined in webgpu.idl.
-            device.lose(Some("destroyed"));
+            // queue on this device are completed." This is accomplished by
+            // setting valid to false, and then relying upon maintain to
+            // check for empty queues and a DeviceLostClosure. At that time,
+            // the DeviceLostClosure will be called with "destroyed" as the
+            // reason.
+            device.valid.store(false, Ordering::Relaxed);
         }
     }
 
-    pub fn device_lose<A: HalApi>(&self, device_id: DeviceId, reason: Option<&str>) {
-        log::trace!("Device::lose {device_id:?}");
+    pub fn device_mark_lost<A: HalApi>(&self, device_id: DeviceId, message: &str) {
+        log::trace!("Device::mark_lost {device_id:?}");
 
         let hub = A::hub(self);
+
         if let Ok(device) = hub.devices.get(device_id) {
-            device.lose(reason);
+            device.lose(message);
         }
     }
 

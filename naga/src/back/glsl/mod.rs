@@ -309,6 +309,8 @@ pub struct ReflectionInfo {
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
     /// Mapping between names and attribute locations.
     pub varying: crate::FastHashMap<String, VaryingLocation>,
+    /// List of push constant items in the shader.
+    pub push_constant_items: Vec<PushConstantItem>,
 }
 
 /// Mapping between a texture and its sampler, if it exists.
@@ -326,6 +328,50 @@ pub struct TextureMapping {
     pub texture: Handle<crate::GlobalVariable>,
     /// Handle to the associated sampler global variable, if it exists.
     pub sampler: Option<Handle<crate::GlobalVariable>>,
+}
+
+/// All information to bind a single uniform value to the shader.
+///
+/// Push constants are emulated using traditional uniforms in OpenGL.
+///
+/// These are composed of a set of primatives (scalar, vector, matrix) that
+/// are given names. Because they are not backed by the concept of a buffer,
+/// we must do the work of calculating the offset of each primative in the
+/// push constant block.
+#[derive(Debug, Clone)]
+pub struct PushConstantItem {
+    /// GL uniform name for the item. This name is the same as if you were
+    /// to access it directly from a GLSL shader.
+    ///
+    /// The with the following example, the following names will be generated,
+    /// one name per GLSL uniform.
+    ///
+    /// ```glsl
+    /// struct InnerStruct {
+    ///     value: f32,
+    /// }
+    ///
+    /// struct PushConstant {
+    ///     InnerStruct inner;
+    ///     vec4 array[2];
+    /// }
+    ///
+    /// uniform PushConstants _push_constant_binding_cs;
+    /// ```
+    ///
+    /// ```text
+    /// - _push_constant_binding_cs.inner.value
+    /// - _push_constant_binding_cs.array[0]
+    /// - _push_constant_binding_cs.array[1]
+    /// ```
+    ///
+    pub access_path: String,
+    /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
+    pub ty: Handle<crate::Type>,
+    /// The offset in the push constant memory block this uniform maps to.
+    ///
+    /// The size of the uniform can be derived from the type.
+    pub offset: u32,
 }
 
 /// Helper structure that generates a number
@@ -1264,8 +1310,8 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> String {
-        match global.binding {
-            Some(ref br) => {
+        match (&global.binding, global.space) {
+            (&Some(ref br), _) => {
                 format!(
                     "_group_{}_binding_{}_{}",
                     br.group,
@@ -1273,7 +1319,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.entry_point.stage.to_str()
                 )
             }
-            None => self.names[&NameKey::GlobalVariable(handle)].clone(),
+            (&None, crate::AddressSpace::PushConstant) => {
+                format!("_push_constant_binding_{}", self.entry_point.stage.to_str())
+            }
+            (&None, _) => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
     }
 
@@ -1283,15 +1332,20 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> BackendResult {
-        match global.binding {
-            Some(ref br) => write!(
+        match (&global.binding, global.space) {
+            (&Some(ref br), _) => write!(
                 self.out,
                 "_group_{}_binding_{}_{}",
                 br.group,
                 br.binding,
                 self.entry_point.stage.to_str()
             )?,
-            None => write!(
+            (&None, crate::AddressSpace::PushConstant) => write!(
+                self.out,
+                "_push_constant_binding_{}",
+                self.entry_point.stage.to_str()
+            )?,
+            (&None, _) => write!(
                 self.out,
                 "{}",
                 &self.names[&NameKey::GlobalVariable(handle)]
@@ -4069,6 +4123,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
+        let mut push_constant_info = None;
         for (handle, var) in self.module.global_variables.iter() {
             if info[handle].is_empty() {
                 continue;
@@ -4093,16 +4148,104 @@ impl<'a, W: Write> Writer<'a, W> {
                         let name = self.reflection_names_globals[&handle].clone();
                         uniforms.insert(handle, name);
                     }
+                    crate::AddressSpace::PushConstant => {
+                        let name = self.reflection_names_globals[&handle].clone();
+                        push_constant_info = Some((name, var.ty));
+                    }
                     _ => (),
                 },
             }
+        }
+
+        let mut push_constant_segments = Vec::new();
+        let mut push_constant_items = vec![];
+
+        if let Some((name, ty)) = push_constant_info {
+            // We don't have a layouter available to us, so we need to create one.
+            //
+            // This is potentially a bit wasteful, but the set of types in the program
+            // shouldn't be too large.
+            let mut layouter = crate::proc::Layouter::default();
+            layouter.update(self.module.to_ctx()).unwrap();
+
+            // We start with the name of the binding itself.
+            push_constant_segments.push(name);
+
+            // We then recursively collect all the uniform fields of the push constant.
+            self.collect_push_constant_items(
+                ty,
+                &mut push_constant_segments,
+                &layouter,
+                &mut 0,
+                &mut push_constant_items,
+            );
         }
 
         Ok(ReflectionInfo {
             texture_mapping,
             uniforms,
             varying: mem::take(&mut self.varying),
+            push_constant_items,
         })
+    }
+
+    fn collect_push_constant_items(
+        &mut self,
+        ty: Handle<crate::Type>,
+        segments: &mut Vec<String>,
+        layouter: &crate::proc::Layouter,
+        offset: &mut u32,
+        items: &mut Vec<PushConstantItem>,
+    ) {
+        // At this point in the recursion, `segments` contains the path
+        // needed to access `ty` from the root.
+
+        let layout = &layouter[ty];
+        *offset = layout.alignment.round_up(*offset);
+        match self.module.types[ty].inner {
+            // All these types map directly to GL uniforms.
+            TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
+                // Build the full name, by combining all current segments.
+                let name: String = segments.iter().map(String::as_str).collect();
+                items.push(PushConstantItem {
+                    access_path: name,
+                    offset: *offset,
+                    ty,
+                });
+                *offset += layout.size;
+            }
+            // Arrays are recursed into.
+            TypeInner::Array { base, size, .. } => {
+                let crate::ArraySize::Constant(count) = size else {
+                    unreachable!("Cannot have dynamic arrays in push constants");
+                };
+
+                for i in 0..count.get() {
+                    // Add the array accessor and recurse.
+                    segments.push(format!("[{}]", i));
+                    self.collect_push_constant_items(base, segments, layouter, offset, items);
+                    segments.pop();
+                }
+
+                // Ensure the stride is kept by rounding up to the alignment.
+                *offset = layout.alignment.round_up(*offset)
+            }
+            TypeInner::Struct { ref members, .. } => {
+                for (index, member) in members.iter().enumerate() {
+                    // Add struct accessor and recurse.
+                    segments.push(format!(
+                        ".{}",
+                        self.names[&NameKey::StructMember(ty, index as u32)]
+                    ));
+                    self.collect_push_constant_items(member.ty, segments, layouter, offset, items);
+                    segments.pop();
+                }
+
+                // Ensure ending padding is kept by rounding up to the alignment.
+                *offset = layout.alignment.round_up(*offset)
+            }
+            _ => unreachable!(),
+        }
     }
 }
 

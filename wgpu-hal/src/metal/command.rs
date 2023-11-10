@@ -798,17 +798,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         layout: &super::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
         let state_pc = &mut self.state.push_constants;
         if state_pc.len() < layout.total_push_constants as usize {
             state_pc.resize(layout.total_push_constants as usize, 0);
         }
-        assert_eq!(offset as usize % WORD_SIZE, 0);
+        debug_assert_eq!(offset_bytes as usize % WORD_SIZE, 0);
 
-        let offset = offset as usize / WORD_SIZE;
-        state_pc[offset..offset + data.len()].copy_from_slice(data);
+        let offset_words = offset_bytes as usize / WORD_SIZE;
+        state_pc[offset_words..offset_words + data.len()].copy_from_slice(data);
 
         if stages.contains(wgt::ShaderStages::COMPUTE) {
             self.state.compute.as_ref().unwrap().set_bytes(
@@ -1104,48 +1104,55 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let raw = self.raw_cmd_buf.as_ref().unwrap();
 
         objc::rc::autoreleasepool(|| {
-            let descriptor = metal::ComputePassDescriptor::new();
+            // TimeStamp Queries and ComputePassDescriptor were both introduced in Metal 2.3 (macOS 11, iOS 14)
+            // and we currently only need ComputePassDescriptor for timestamp queries
+            let encoder = if self.shared.private_caps.timestamp_query_support.is_empty() {
+                raw.new_compute_command_encoder()
+            } else {
+                let descriptor = metal::ComputePassDescriptor::new();
 
-            let mut sba_index = 0;
-            let mut next_sba_descriptor = || {
-                let sba_descriptor = descriptor
-                    .sample_buffer_attachments()
-                    .object_at(sba_index)
-                    .unwrap();
-                sba_index += 1;
-                sba_descriptor
+                let mut sba_index = 0;
+                let mut next_sba_descriptor = || {
+                    let sba_descriptor = descriptor
+                        .sample_buffer_attachments()
+                        .object_at(sba_index)
+                        .unwrap();
+                    sba_index += 1;
+                    sba_descriptor
+                };
+
+                for (set, index) in self.state.pending_timer_queries.drain(..) {
+                    let sba_descriptor = next_sba_descriptor();
+                    sba_descriptor.set_sample_buffer(set.counter_sample_buffer.as_ref().unwrap());
+                    sba_descriptor.set_start_of_encoder_sample_index(index as _);
+                    sba_descriptor.set_end_of_encoder_sample_index(metal::COUNTER_DONT_SAMPLE);
+                }
+
+                if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
+                    let sba_descriptor = next_sba_descriptor();
+                    sba_descriptor.set_sample_buffer(
+                        timestamp_writes
+                            .query_set
+                            .counter_sample_buffer
+                            .as_ref()
+                            .unwrap(),
+                    );
+
+                    sba_descriptor.set_start_of_encoder_sample_index(
+                        timestamp_writes
+                            .beginning_of_pass_write_index
+                            .map_or(metal::COUNTER_DONT_SAMPLE, |i| i as _),
+                    );
+                    sba_descriptor.set_end_of_encoder_sample_index(
+                        timestamp_writes
+                            .end_of_pass_write_index
+                            .map_or(metal::COUNTER_DONT_SAMPLE, |i| i as _),
+                    );
+                }
+
+                raw.compute_command_encoder_with_descriptor(descriptor)
             };
 
-            for (set, index) in self.state.pending_timer_queries.drain(..) {
-                let sba_descriptor = next_sba_descriptor();
-                sba_descriptor.set_sample_buffer(set.counter_sample_buffer.as_ref().unwrap());
-                sba_descriptor.set_start_of_encoder_sample_index(index as _);
-                sba_descriptor.set_end_of_encoder_sample_index(metal::COUNTER_DONT_SAMPLE);
-            }
-
-            if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
-                let sba_descriptor = next_sba_descriptor();
-                sba_descriptor.set_sample_buffer(
-                    timestamp_writes
-                        .query_set
-                        .counter_sample_buffer
-                        .as_ref()
-                        .unwrap(),
-                );
-
-                sba_descriptor.set_start_of_encoder_sample_index(
-                    timestamp_writes
-                        .beginning_of_pass_write_index
-                        .map_or(metal::COUNTER_DONT_SAMPLE, |i| i as _),
-                );
-                sba_descriptor.set_end_of_encoder_sample_index(
-                    timestamp_writes
-                        .end_of_pass_write_index
-                        .map_or(metal::COUNTER_DONT_SAMPLE, |i| i as _),
-                );
-            }
-
-            let encoder = raw.compute_command_encoder_with_descriptor(descriptor);
             if let Some(label) = desc.label {
                 encoder.set_label(label);
             }

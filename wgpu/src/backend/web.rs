@@ -1937,7 +1937,12 @@ impl crate::context::Context for Context {
         device_data.0.destroy();
     }
 
-    fn device_lose(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+    fn device_mark_lost(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        _message: &str,
+    ) {
         // TODO: figure out the GPUDevice implementation of this, including resolving
         // the device.lost promise, which will require a different invocation pattern
         // with a callback.
@@ -1945,6 +1950,15 @@ impl crate::context::Context for Context {
 
     fn queue_drop(&self, _queue: &Self::QueueId, _queue_data: &Self::QueueData) {
         // Queue is dropped automatically
+    }
+
+    fn device_set_device_lost_callback(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        _device_lost_callback: crate::context::DeviceLostCallback,
+    ) {
+        unimplemented!();
     }
 
     fn device_poll(

@@ -6,8 +6,8 @@ use crate::{
     device::life::{LifetimeTracker, WaitIdleError},
     device::queue::PendingWrites,
     device::{
-        AttachmentData, CommandAllocator, MissingDownlevelFlags, MissingFeatures,
-        RenderPassContext, CLEANUP_WAIT_MS,
+        AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
+        MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
     hal_api::HalApi,
     hal_label,
@@ -37,7 +37,7 @@ use parking_lot::{Mutex, MutexGuard, RwLock};
 
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{TextureFormat, TextureSampleType, TextureViewDimension};
+use wgt::{DeviceLostReason, TextureFormat, TextureSampleType, TextureViewDimension};
 
 use std::{
     borrow::Cow,
@@ -371,9 +371,27 @@ impl<A: HalApi> Device<A> {
         //Cleaning up resources and released all unused suspected ones
         life_tracker.cleanup();
 
+        // Detect if we have been destroyed and now need to lose the device.
+        // If we are invalid (set at start of destroy) and our queue is empty,
+        // and we have a DeviceLostClosure, return the closure to be called by
+        // our caller. This will complete the steps for both destroy and for
+        // "lose the device".
+        let mut device_lost_invocations = SmallVec::new();
+        if !self.is_valid()
+            && life_tracker.queue_empty()
+            && life_tracker.device_lost_closure.is_some()
+        {
+            device_lost_invocations.push(DeviceLostInvocation {
+                closure: life_tracker.device_lost_closure.take().unwrap(),
+                reason: DeviceLostReason::Destroyed,
+                message: String::new(),
+            });
+        }
+
         let closures = UserClosures {
             mappings: mapping_closures,
             submissions: submission_closures,
+            device_lost_invocations,
         };
         Ok((closures, life_tracker.queue_empty()))
     }
@@ -1324,18 +1342,19 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
         );
 
-        let debug_source = if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) {
-            Some(hal::DebugSource {
-                file_name: Cow::Owned(
-                    desc.label
-                        .as_ref()
-                        .map_or("shader".to_string(), |l| l.to_string()),
-                ),
-                source_code: Cow::Owned(source.clone()),
-            })
-        } else {
-            None
-        };
+        let debug_source =
+            if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) && !source.is_empty() {
+                Some(hal::DebugSource {
+                    file_name: Cow::Owned(
+                        desc.label
+                            .as_ref()
+                            .map_or("shader".to_string(), |l| l.to_string()),
+                    ),
+                    source_code: Cow::Owned(source.clone()),
+                })
+            } else {
+                None
+            };
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
@@ -3250,17 +3269,19 @@ impl<A: HalApi> Device<A> {
         })
     }
 
-    pub(crate) fn lose(&self, _reason: Option<&str>) {
+    pub(crate) fn lose(&self, message: &str) {
         // Follow the steps at https://gpuweb.github.io/gpuweb/#lose-the-device.
 
         // Mark the device explicitly as invalid. This is checked in various
         // places to prevent new work from being submitted.
         self.valid.store(false, Ordering::Release);
 
-        // The following steps remain in "lose the device":
         // 1) Resolve the GPUDevice device.lost promise.
-
-        // TODO: triggger this passively or actively, and supply the reason.
+        let mut life_tracker = self.lock_life();
+        if life_tracker.device_lost_closure.is_some() {
+            let device_lost_closure = life_tracker.device_lost_closure.take().unwrap();
+            device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
+        }
 
         // 2) Complete any outstanding mapAsync() steps.
         // 3) Complete any outstanding onSubmittedWorkDone() steps.

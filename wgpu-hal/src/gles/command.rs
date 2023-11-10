@@ -8,7 +8,6 @@ struct TextureSlotDesc {
     sampler_index: Option<u8>,
 }
 
-#[derive(Default)]
 pub(super) struct State {
     topology: u32,
     primitive: super::PrimitiveState,
@@ -30,8 +29,39 @@ pub(super) struct State {
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
-    push_offset_to_uniform: ArrayVec<super::UniformDesc, { super::MAX_PUSH_CONSTANTS }>,
+    push_constant_descs: ArrayVec<super::PushConstantDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
+    // The current state of the push constant data block.
+    current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            topology: Default::default(),
+            primitive: Default::default(),
+            index_format: Default::default(),
+            index_offset: Default::default(),
+            vertex_buffers: Default::default(),
+            vertex_attributes: Default::default(),
+            color_targets: Default::default(),
+            stencil: Default::default(),
+            depth_bias: Default::default(),
+            alpha_to_coverage_enabled: Default::default(),
+            samplers: Default::default(),
+            texture_slots: Default::default(),
+            render_size: Default::default(),
+            resolve_attachments: Default::default(),
+            invalidate_attachments: Default::default(),
+            has_pass_label: Default::default(),
+            instance_vbuf_mask: Default::default(),
+            dirty_vbuf_mask: Default::default(),
+            active_first_instance: Default::default(),
+            push_constant_descs: Default::default(),
+            current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
+            end_of_pass_timestamp: Default::default(),
+        }
+    }
 }
 
 impl super::CommandBuffer {
@@ -176,10 +206,7 @@ impl super::CommandEncoder {
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
-        self.state.push_offset_to_uniform.clear();
-        self.state
-            .push_offset_to_uniform
-            .extend(inner.uniforms.iter().cloned());
+        self.state.push_constant_descs = inner.push_constant_descs.clone();
 
         // rebind textures, if needed
         let mut dirty_textures = 0u32;
@@ -729,24 +756,46 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         _layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,
-        start_offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
-        let range = self.cmd_buffer.add_push_constant_data(data);
+        // There is nothing preventing the user from trying to update a single value within
+        // a vector or matrix in the set_push_constant call, as to the user, all of this is
+        // just memory. However OpenGL does not allow parital uniform updates.
+        //
+        // As such, we locally keep a copy of the current state of the push constant memory
+        // block. If the user tries to update a single value, we have the data to update the entirety
+        // of the uniform.
+        let start_words = offset_bytes / 4;
+        let end_words = start_words + data.len() as u32;
+        self.state.current_push_constant_data[start_words as usize..end_words as usize]
+            .copy_from_slice(data);
 
-        let end = start_offset + data.len() as u32 * 4;
-        let mut offset = start_offset;
-        while offset < end {
-            let uniform = self.state.push_offset_to_uniform[offset as usize / 4].clone();
-            let size = uniform.size;
-            if uniform.location.is_none() {
-                panic!("No uniform for push constant");
+        // We iterate over the uniform list as there may be multiple uniforms that need
+        // updating from the same push constant memory (one for each shader stage).
+        //
+        // Additionally, any statically unused uniform descs will have been removed from this list
+        // by OpenGL, so the uniform list is not contiguous.
+        for uniform in self.state.push_constant_descs.iter().cloned() {
+            let uniform_size_words = uniform.size_bytes / 4;
+            let uniform_start_words = uniform.offset / 4;
+            let uniform_end_words = uniform_start_words + uniform_size_words;
+
+            // Is true if any word within the uniform binding was updated
+            let needs_updating =
+                start_words < uniform_end_words || uniform_start_words <= end_words;
+
+            if needs_updating {
+                let uniform_data = &self.state.current_push_constant_data
+                    [uniform_start_words as usize..uniform_end_words as usize];
+
+                let range = self.cmd_buffer.add_push_constant_data(uniform_data);
+
+                self.cmd_buffer.commands.push(C::SetPushConstants {
+                    uniform,
+                    offset: range.start,
+                });
             }
-            self.cmd_buffer.commands.push(C::SetPushConstants {
-                uniform,
-                offset: range.start + offset,
-            });
-            offset += size;
         }
     }
 

@@ -1,4 +1,5 @@
 mod regression {
+    mod issue_3349;
     mod issue_3457;
     mod issue_4024;
     mod issue_4122;
@@ -15,11 +16,13 @@ mod device;
 mod encoder;
 mod external_texture;
 mod instance;
+mod life_cycle;
 mod mem_leaks;
 mod occlusion_query;
 mod partially_bounded_arrays;
 mod pipeline;
 mod poll;
+mod push_constants;
 mod query_set;
 mod queue_transfer;
 mod resource_descriptor_accessor;

@@ -152,6 +152,21 @@ where
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
+    pub(crate) fn take_and_mark_destroyed(&mut self, id: I) -> Result<Arc<T>, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        match std::mem::replace(
+            &mut self.map[index as usize],
+            Element::Error(epoch, String::new()),
+        ) {
+            Element::Vacant => panic!("Cannot mark a vacant resource destroyed"),
+            Element::Occupied(value, storage_epoch) => {
+                assert_eq!(epoch, storage_epoch);
+                Ok(value)
+            }
+            _ => Err(InvalidId),
+        }
+    }
+
     pub(crate) fn force_replace(&mut self, id: I, value: T) {
         log::info!("User is replacing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
