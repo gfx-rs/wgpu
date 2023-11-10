@@ -59,7 +59,11 @@ For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.
 
 - Create a hidden window per `wgpu::Instance` instead of sharing a global one.
 
-#### Naga MSL-OUT
+#### Naga
+
+- Improve algorithm used by module compaction. By @jimblandy in [#4662](https://github.com/gfx-rs/wgpu/pull/4662).
+
+##### MSL-OUT
 
 - Fix issue where local variables were sometimes using variable names from previous functions.
 

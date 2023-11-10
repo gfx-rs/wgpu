@@ -1,10 +1,9 @@
 use super::handle_set_map::HandleSet;
 use super::{FunctionMap, ModuleMap};
-use crate::arena::Handle;
 
 pub struct FunctionTracer<'a> {
-    pub module: &'a crate::Module,
     pub function: &'a crate::Function,
+    pub constants: &'a crate::Arena<crate::Constant>,
 
     pub types_used: &'a mut HandleSet<crate::Type>,
     pub constants_used: &'a mut HandleSet<crate::Constant>,
@@ -17,57 +16,43 @@ pub struct FunctionTracer<'a> {
 impl<'a> FunctionTracer<'a> {
     pub fn trace(&mut self) {
         for argument in self.function.arguments.iter() {
-            self.trace_type(argument.ty);
+            self.types_used.insert(argument.ty);
         }
 
         if let Some(ref result) = self.function.result {
-            self.trace_type(result.ty);
+            self.types_used.insert(result.ty);
         }
 
         for (_, local) in self.function.local_variables.iter() {
-            self.trace_type(local.ty);
+            self.types_used.insert(local.ty);
             if let Some(init) = local.init {
-                self.trace_expression(init);
+                self.expressions_used.insert(init);
             }
         }
 
         // Treat named expressions as alive, for the sake of our test suite,
         // which uses `let blah = expr;` to exercise lots of things.
-        for (value, _name) in &self.function.named_expressions {
-            self.trace_expression(*value);
+        for (&value, _name) in &self.function.named_expressions {
+            self.expressions_used.insert(value);
         }
 
         self.trace_block(&self.function.body);
-    }
 
-    pub fn trace_type(&mut self, ty: Handle<crate::Type>) {
-        self.as_type().trace_type(ty)
-    }
-
-    pub fn trace_expression(&mut self, expr: Handle<crate::Expression>) {
-        self.as_expression().trace_expression(expr);
-    }
-
-    fn as_type(&mut self) -> super::types::TypeTracer {
-        super::types::TypeTracer {
-            types: &self.module.types,
-            types_used: self.types_used,
-        }
+        // Given that `trace_block` has marked the expressions used
+        // directly by statements, walk the arena to find all
+        // expressions used, directly or indirectly.
+        self.as_expression().trace_expressions();
     }
 
     fn as_expression(&mut self) -> super::expressions::ExpressionTracer {
         super::expressions::ExpressionTracer {
-            types: &self.module.types,
-            constants: &self.module.constants,
+            constants: self.constants,
             expressions: &self.function.expressions,
 
             types_used: self.types_used,
             constants_used: self.constants_used,
             expressions_used: &mut self.expressions_used,
-            const_expressions: Some((
-                &self.module.const_expressions,
-                &mut self.const_expressions_used,
-            )),
+            const_expressions_used: Some(&mut self.const_expressions_used),
         }
     }
 }
