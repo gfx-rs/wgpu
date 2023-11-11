@@ -6,58 +6,42 @@
 [![Dev Matrix  ](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org)
 [![User Matrix ](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org)
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
-[![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/master/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
+[![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/trunk/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
-`wgpu` is a cross-platform, safe, pure-rust graphics api. It runs natively on Vulkan, Metal, D3D12, D3D11, and OpenGLES; and on top of WebGPU on wasm.
+`wgpu` is a cross-platform, safe, pure-rust graphics api. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
-The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
+The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox and Deno.
 
 ## Repo Overview
 
 The repository hosts the following libraries:
 
 - [![Crates.io](https://img.shields.io/crates/v/wgpu.svg?label=wgpu)](https://crates.io/crates/wgpu) [![docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu/) - User facing Rust API.
-- [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - Internal WebGPU implementation.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - Internal safe implementation.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-hal.svg?label=wgpu-hal)](https://crates.io/crates/wgpu-hal) [![docs.rs](https://docs.rs/wgpu-hal/badge.svg)](https://docs.rs/wgpu-hal/) - Internal unsafe GPU API abstraction layer.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between all crates.
+- [![Crates.io](https://img.shields.io/crates/v/naga.svg?label=naga)](https://crates.io/crates/naga) [![docs.rs](https://docs.rs/naga/badge.svg)](https://docs.rs/naga/) - Stand-alone shader translation library.
+- [![Crates.io](https://img.shields.io/crates/v/d3d12.svg?label=d3d12)](https://crates.io/crates/d3d12) [![docs.rs](https://docs.rs/d3d12/badge.svg)](https://docs.rs/d3d12/) - Collection of thin abstractions over d3d12.
 - [![Crates.io](https://img.shields.io/crates/v/deno_webgpu.svg?label=deno_webgpu)](https://crates.io/crates/deno_webgpu) - WebGPU implementation for the Deno JavaScript/TypeScript runtime
 
 The following binaries:
 
+- [![Crates.io](https://img.shields.io/crates/v/naga-cli.svg?label=naga-cli)](https://crates.io/crates/naga-cli) - Tool for translating shaders between different languages using naga.
+- [![Crates.io](https://img.shields.io/crates/v/wgpu-info.svg?label=wgpu-info)](https://crates.io/crates/wgpu-info) - Tool for getting information on GPUs in the system.
 - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
 - `player` - standalone application for replaying the API traces.
-- `wgpu-info` - program that prints out information about all the adapters on the system or invokes a command for every adapter.
 
 For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
-
-### MSRV policy
-
-Minimum Supported Rust Version is **1.65**.
-It is enforced on CI (in "/.github/workflows/ci.yml") with `RUST_VERSION` variable.
-This version can only be upgraded in breaking releases.
-
-The `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
-require an MSRV ahead of Firefox's MSRV for nightly builds, as
-determined by the value of `MINIMUM_RUST_VERSION` in
-[`python/mozboot/mozboot/util.py`][util]. However, Firefox uses `cargo
-vendor` to extract only those crates it actually uses, so the
-workspace's other crates can have more recent MSRVs.
-
-_Note for Rust 1.64_: The workspace itself can even use a newer MSRV
-than Firefox, as long as the vendoring step's `Cargo.toml` rewriting
-removes any features Firefox's MSRV couldn't handle. For example,
-`wgpu` can use manifest key inheritance, added in Rust 1.64, even
-before Firefox reaches that MSRV, because `cargo vendor` copies
-inherited values directly into the individual crates' `Cargo.toml`
-files, producing 1.63-compatible files.
-
-[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
 
 ## Getting Started
 
 ### Rust
 
-Rust examples can be found at `wgpu/examples`. You can run the examples with `cargo run --bin name`. See the [list of examples](examples). For detailed instructions, look at [Running the examples](https://github.com/gfx-rs/wgpu/wiki/Running-the-examples) on the wiki.
+Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin <name>`. See the [list of examples](examples).
+
+To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin <name>`. Then connect to `http://localhost:8000` in your WebGPU enabled browser.
+
+To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin <name> --features webgl`. Then connect to `http://localhost:8000` in your WebGL enabled browser.
 
 If you are looking for a wgpu tutorial, look at the following:
 
@@ -79,8 +63,9 @@ If you want to use wgpu in other languages, there are many bindings to wgpu-nati
 
 We have the Matrix space [![Matrix Space](https://img.shields.io/static/v1?label=Space&message=%23Wgpu&color=blue&logo=matrix)](https://matrix.to/#/#Wgpu:matrix.org) with a few different rooms that form the wgpu community:
 
-- [![Dev Matrix](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of the library's development.
-- [![User Matrix](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
+- [![Wgpu Matrix](https://img.shields.io/static/v1?label=wgpu-devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of the wgpu's development.
+- [![Naga Matrix](https://img.shields.io/static/v1?label=naga-devs&message=%23naga&color=blueviolet&logo=matrix)](https://matrix.to/#/#naga:matrix.org) - discussion of the naga's development.
+- [![User Matrix](https://img.shields.io/static/v1?label=wgpu-users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
 - [![Random Matrix](https://img.shields.io/static/v1?label=random&message=%23wgpu-random&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-random:matrix.org) - discussion of everything else.
 
 ## Wiki
@@ -89,16 +74,20 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 ## Supported Platforms
 
-| API    | Windows                        | Linux & Android    | macOS & iOS               |
-| ------ | ------------------------------ | ------------------ | ------------------------- |
-| Vulkan | :white_check_mark:             | :white_check_mark: | :ok: (vulkan-portability) |
-| Metal  |                                |                    | :white_check_mark:        |
-| DX12   | :white_check_mark: (W10+ only) |                    |                           |
-| DX11   | :hammer_and_wrench:            |                    |                           |
-| GLES3  |                                | :ok:               |                           |
-| Angle  | :ok:                           | :ok:               | :ok: (macOS only)         |
+| API         | Windows                        | Linux/Android      | macOS/iOS                 | Web (wasm)                |
+| ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
+| Vulkan      | :white_check_mark:             | :white_check_mark: | :volcano:                 |                           |
+| Metal       |                                |                    | :white_check_mark:        |                           |
+| DX12        | :white_check_mark:             |                    |                           |                           | 
+| DX11        | :hammer_and_wrench:            |                    |                           |                           |
+| OpenGL      | :ok: (GL 3.3+)                 | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
+| WebGPU      |                                |                    |                           | :white_check_mark:        |
 
-:white_check_mark: = First Class Support — :ok: = Best Effort Support — :hammer_and_wrench: = Unsupported, but support in progress
+:white_check_mark: = First Class Support  
+:ok: = Downlevel/Best Effort Support  
+:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)
+:volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
+:hammer_and_wrench: = Unsupported, though open to contributions  
 
 ### Shader Support
 
@@ -122,12 +111,28 @@ To enable GLSL shaders, enable the `glsl` feature of wgpu.
 ### Angle
 
 [Angle](http://angleproject.org) is a translation layer from GLES to other backends, developed by Google.
-We support running our GLES3 backend over it in order to reach platforms with GLES2 or DX11 support, which aren't accessible otherwise.
+We support running our GLES3 backend over it in order to reach platforms DX11 support, which aren't accessible otherwise.
 In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
 These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts, [manual compilation](https://github.com/google/angle/blob/main/doc/DevSetup.md) may be required on Macs with Apple silicon.
 
 On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
 On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
+
+### MSRV policy
+
+Due to complex dependants, we have two MSRV policies:
+ - `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
+ - The rest of the workspace has the MSRV of **1.70**.
+
+It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
+This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
+
+The `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
+require an MSRV ahead of Firefox's MSRV for nightly builds, as
+determined by the value of `MINIMUM_RUST_VERSION` in
+[`python/mozboot/mozboot/util.py`][util].
+
+[util]: https://searchfox.org/mozilla-central/source/python/mozboot/mozboot/util.py
 
 ## Environment Variables
 
@@ -143,46 +148,37 @@ When running the CTS, use the variables `DENO_WEBGPU_ADAPTER_NAME`, `DENO_WEBGPU
 
 ## Testing
 
-We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI if possible. The current state of CI testing:
+We have multiple methods of testing, each of which tests different qualities about wgpu. We automatically run our tests on CI. The current state of CI testing:
 
-| Backend/Platform | Tests              | CTS                | Notes                                 |
-| ---------------- | ------------------ | ------------------ | ------------------------------------- |
-| DX12/Windows 10  | :heavy_check_mark: | :heavy_check_mark: | using WARP                            |
-| DX11/Windows 10  | :construction:     | —                  | using WARP                            |
-| Metal/MacOS      | —                  | —                  | metal requires GPU                    |
-| Vulkan/Linux     | :heavy_check_mark: | :x:                | using lavapipe, [cts hangs][cts-hang] |
-| GLES/Linux       | :heavy_check_mark: | —                  | using llvmpipe                        |
-
-[cts-hang]: https://github.com/gfx-rs/wgpu/issues/1974
+| Platform/Backend | Tests              | Notes                                 |
+| ---------------- | ------------------ | ------------------------------------- |
+| Windows/DX12     | :heavy_check_mark: | using WARP                            |
+| Windows/OpenGL   | :heavy_check_mark: | using llvmpipe                        |
+| MacOS/Metal      | :heavy_check_mark: | using hardware runner                 |
+| Linux/Vulkan     | :heavy_check_mark: | using lavapipe                        |
+| Linux/OpenGL ES  | :heavy_check_mark: | using llvmpipe                        |
+| Chrome/WebGL     | :heavy_check_mark: | using swiftshader                     |
+| Chrome/WebGPU    | :x:                | not set up                            |
 
 ### Core Test Infrastructure
 
 We use a tool called [`cargo nextest`](https://github.com/nextest-rs/nextest) to run our tests.
 To install it, run `cargo install cargo-nextest`.
 
-To run the test suite on the default device:
+To run the test suite:
 
 ```
-cargo nextest run --no-fail-fast
+cargo xtask test
 ```
 
-`wgpu-info` can run the tests once for each adapter on your system.
+To run the test suite on WebGL (currently incomplete):
 
 ```
-cargo run --bin wgpu-info -- cargo nextest run --no-fail-fast
+cd wgpu
+wasm-pack test --headless --chrome --features webgl --workspace
 ```
 
-Then to run an example's image comparison tests, run:
-
-```
-cargo nextest run <example-test-name> --no-fail-fast
-```
-
-Or run a part of the integration test suite:
-
-```
-cargo nextest run -p wgpu -- <name-of-test>
-```
+This will automatically run the tests using a packaged browser. Remove `--headless` to run the tests with whatever browser you wish at `http://localhost:8000`.
 
 If you are a user and want a way to help contribute to wgpu, we always need more help writing test cases.
 
@@ -203,7 +199,7 @@ To run a given set of tests:
 
 ```
 # Must be inside the cts folder we just checked out, else this will fail
-cargo run --manifest-path ../cts_runner/Cargo.toml -- ./tools/run_deno --verbose "<test string>"
+cargo run --manifest-path ../Cargo.toml --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
 ```
 
 To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).

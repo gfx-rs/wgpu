@@ -9,7 +9,7 @@ mod device;
 mod instance;
 mod library;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
@@ -101,8 +101,8 @@ pub struct Sampler {}
 pub struct QuerySet {}
 #[derive(Debug)]
 pub struct Fence {}
-#[derive(Debug)]
 
+#[derive(Debug)]
 pub struct BindGroupLayout {}
 #[derive(Debug)]
 pub struct BindGroup {}

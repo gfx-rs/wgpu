@@ -14,8 +14,10 @@ use crate::{
     error::{ErrorFormatter, PrettyError},
     global::Global,
     hal_api::HalApi,
+    hal_label,
     hub::Token,
     id,
+    id::DeviceId,
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
     pipeline,
@@ -193,6 +195,8 @@ pub enum ComputePassErrorInner {
     Encoder(#[from] CommandEncoderError),
     #[error("Bind group {0:?} is invalid")]
     InvalidBindGroup(id::BindGroupId),
+    #[error("Device {0:?} is invalid")]
+    InvalidDevice(DeviceId),
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u32, max: u32 },
     #[error("Compute pipeline {0:?} is invalid")]
@@ -390,6 +394,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let raw = cmd_buf.encoder.open();
 
         let device = &device_guard[cmd_buf.device_id.value];
+        if !device.is_valid() {
+            return Err(ComputePassErrorInner::InvalidDevice(
+                cmd_buf.device_id.value.0,
+            ))
+            .map_pass_err(init_scope);
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf.commands {
@@ -467,8 +477,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(&*query_set_guard),
         );
 
+        let discard_hal_labels = self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
         let hal_desc = hal::ComputePassDescriptor {
-            label: base.label,
+            label: hal_label(base.label, self.instance.flags),
             timestamp_writes,
         };
 
@@ -762,13 +776,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::PushDebugGroup { color: _, len } => {
                     state.debug_scope_depth += 1;
-                    let label =
-                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                            .unwrap();
-                    string_offset += len;
-                    unsafe {
-                        raw.begin_debug_marker(label);
+                    if !discard_hal_labels {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        unsafe {
+                            raw.begin_debug_marker(label);
+                        }
                     }
+                    string_offset += len;
                 }
                 ComputeCommand::PopDebugGroup => {
                     let scope = PassErrorScope::PopDebugGroup;
@@ -778,16 +794,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope);
                     }
                     state.debug_scope_depth -= 1;
-                    unsafe {
-                        raw.end_debug_marker();
+                    if !discard_hal_labels {
+                        unsafe {
+                            raw.end_debug_marker();
+                        }
                     }
                 }
                 ComputeCommand::InsertDebugMarker { color: _, len } => {
-                    let label =
-                        str::from_utf8(&base.string_data[string_offset..string_offset + len])
-                            .unwrap();
+                    if !discard_hal_labels {
+                        let label =
+                            str::from_utf8(&base.string_data[string_offset..string_offset + len])
+                                .unwrap();
+                        unsafe { raw.insert_debug_marker(label) }
+                    }
                     string_offset += len;
-                    unsafe { raw.insert_debug_marker(label) }
                 }
                 ComputeCommand::WriteTimestamp {
                     query_set_id,

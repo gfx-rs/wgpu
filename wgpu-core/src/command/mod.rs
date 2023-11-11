@@ -127,14 +127,14 @@ impl<A: HalApi> CommandBuffer<A> {
         _downlevel: wgt::DownlevelCapabilities,
         features: wgt::Features,
         #[cfg(feature = "trace")] enable_tracing: bool,
-        label: &Label,
+        label: Option<String>,
     ) -> Self {
         CommandBuffer {
             encoder: CommandEncoder {
                 raw: encoder,
                 is_open: false,
                 list: Vec::new(),
-                label: crate::LabelHelpers::borrow_option(label).map(|s| s.to_string()),
+                label,
             },
             status: CommandEncoderStatus::Recording,
             device_id,
@@ -391,6 +391,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::push_debug_group");
+        log::trace!("CommandEncoder::push_debug_group {label}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -404,8 +405,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let cmd_buf_raw = cmd_buf.encoder.open();
-        unsafe {
-            cmd_buf_raw.begin_debug_marker(label);
+        if !self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+        {
+            unsafe {
+                cmd_buf_raw.begin_debug_marker(label);
+            }
         }
         Ok(())
     }
@@ -416,6 +423,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::insert_debug_marker");
+        log::trace!("CommandEncoder::insert_debug_marker {label}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -428,9 +436,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             list.push(TraceCommand::InsertDebugMarker(label.to_string()));
         }
 
-        let cmd_buf_raw = cmd_buf.encoder.open();
-        unsafe {
-            cmd_buf_raw.insert_debug_marker(label);
+        if !self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+        {
+            let cmd_buf_raw = cmd_buf.encoder.open();
+            unsafe {
+                cmd_buf_raw.insert_debug_marker(label);
+            }
         }
         Ok(())
     }
@@ -440,6 +454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::pop_debug_marker");
+        log::trace!("CommandEncoder::pop_debug_group");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -453,8 +468,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let cmd_buf_raw = cmd_buf.encoder.open();
-        unsafe {
-            cmd_buf_raw.end_debug_marker();
+        if !self
+            .instance
+            .flags
+            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+        {
+            unsafe {
+                cmd_buf_raw.end_debug_marker();
+            }
         }
         Ok(())
     }

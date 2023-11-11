@@ -1,0 +1,44 @@
+;; Make sure we handle globals whose assigned name is "".
+;;
+;; In MSL, the anonymous global sometimes ends up looking like
+;;
+;;     struct Blah { int member; } ;
+;;
+;; where the null name just becomes an empty string before that last semicolon.
+;; This is, unfortunately, valid MSL, simply declaring the type Blah, so it will
+;; pass validation. However, an attempt to *use* the global will generate a
+;; garbage expression like ".member", so we include a function that returns the
+;; member's value.
+
+                        OpCapability Shader
+                        OpMemoryModel Logical GLSL450
+                        OpEntryPoint GLCompute %main "main" %global
+                        OpExecutionMode %main LocalSize 1 1 1
+
+                        OpName %global ""
+                        OpDecorate %block Block
+                        OpMemberDecorate %block 0 Offset 0
+                        OpDecorate %global DescriptorSet 0
+                        OpDecorate %global Binding 0
+
+                %void = OpTypeVoid
+                 %int = OpTypeInt 32 1
+               %block = OpTypeStruct %int
+             %ptr_int = OpTypePointer StorageBuffer %int
+           %ptr_block = OpTypePointer StorageBuffer %block
+             %fn_void = OpTypeFunction %void
+              %fn_int = OpTypeFunction %int
+                %zero = OpConstant %int 0
+                 %one = OpConstant %int 1
+
+;; This global is said to have a name of "".
+              %global = OpVariable %ptr_block StorageBuffer
+
+                %main = OpFunction %void None %fn_void
+        %main_prelude = OpLabel
+          %member_ptr = OpAccessChain %ptr_int %global %zero
+          %member_val = OpLoad %int %member_ptr
+            %plus_one = OpIAdd %int %member_val %one
+                        OpStore %member_ptr %plus_one
+                        OpReturn
+                        OpFunctionEnd

@@ -299,8 +299,8 @@ pub enum ColorStateError {
     FormatNotBlendable(wgt::TextureFormat),
     #[error("Format {0:?} does not have a color aspect")]
     FormatNotColor(wgt::TextureFormat),
-    #[error("Format {0:?} can't be multisampled")]
-    FormatNotMultisampled(wgt::TextureFormat),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Output format {pipeline} is incompatible with the shader {shader}")]
     IncompatibleFormat {
         pipeline: validation::NumericType,
@@ -321,8 +321,8 @@ pub enum DepthStencilStateError {
     FormatNotDepth(wgt::TextureFormat),
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]
     FormatNotStencil(wgt::TextureFormat),
-    #[error("Format {0:?} can't be multisampled")]
-    FormatNotMultisampled(wgt::TextureFormat),
+    #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarentees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
+    InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -384,6 +384,15 @@ pub enum CreateRenderPipelineError {
     },
     #[error("In the provided shader, the type given for group {group} binding {binding} has a size of {size}. As the device does not support `DownlevelFlags::BUFFER_BINDINGS_NOT_16_BYTE_ALIGNED`, the type must have a size that is a multiple of 16 bytes.")]
     UnalignedShader { group: u32, binding: u32, size: u64 },
+    #[error("Using the blend factor {factor:?} for render target {target} is not possible. Only the first render target may be used when dual-source blending.")]
+    BlendFactorOnUnsupportedTarget {
+        factor: wgt::BlendFactor,
+        target: u32,
+    },
+    #[error("Pipeline expects the shader entry point to make use of dual-source blending.")]
+    PipelineExpectsShaderToUseDualSourceBlending,
+    #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
+    ShaderExpectsPipelineToUseDualSourceBlending,
 }
 
 bitflags::bitflags! {

@@ -3,7 +3,7 @@
 //! To start using the API, create an [`Instance`].
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
+#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(missing_docs, unsafe_op_in_unsafe_fn)]
 
 mod backend;
@@ -32,19 +32,19 @@ pub use wgt::{
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
     BufferBindingType, BufferSize, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, DepthBiasState,
-    DepthStencilState, DeviceType, DownlevelCapabilities, DownlevelFlags, Dx12Compiler,
-    DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace, Gles3MinorVersion,
-    ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor, Limits,
-    MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes, PolygonMode, PowerPreference,
-    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
-    PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType, SamplerBorderColor,
-    ShaderLocation, ShaderModel, ShaderStages, StencilFaceState, StencilOperation, StencilState,
-    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureUsages, TextureViewDimension, VertexAttribute, VertexFormat, VertexStepMode,
-    WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_STRIDE_ALIGNMENT,
+    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
+    Dx12Compiler, DynamicOffset, Extent3d, Face, Features, FilterMode, FrontFace,
+    Gles3MinorVersion, ImageDataLayout, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, Limits, MultisampleState, Origin2d, Origin3d, PipelineStatisticsTypes,
+    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
+    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
+    SurfaceStatus, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
+    TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
+    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
 
 #[cfg(any(
@@ -54,6 +54,8 @@ pub use wgt::{
 ))]
 #[doc(hidden)]
 pub use ::hal;
+#[cfg(feature = "naga")]
+pub use ::naga;
 #[cfg(any(
     not(target_arch = "wasm32"),
     feature = "webgl",
@@ -523,7 +525,7 @@ impl Drop for ShaderModule {
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 #[cfg_attr(feature = "naga", allow(clippy::large_enum_variant))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
     /// SPIR-V module represented as a slice of words.
@@ -560,7 +562,7 @@ static_assertions::assert_impl_all!(ShaderSource: Send, Sync);
 ///
 /// Corresponds to [WebGPU `GPUShaderModuleDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpushadermoduledescriptor).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ShaderModuleDescriptor<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -574,6 +576,7 @@ static_assertions::assert_impl_all!(ShaderModuleDescriptor: Send, Sync);
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
+#[derive(Debug)]
 pub struct ShaderModuleDescriptorSpirV<'a> {
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
@@ -1006,16 +1009,24 @@ static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// Operation to perform to the output attachment at the start of a render pass.
 ///
-/// The render target must be cleared at least once before its content is loaded.
-///
-/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop).
+/// Corresponds to [WebGPU `GPULoadOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpuloadop),
+/// plus the corresponding clearValue.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum LoadOp<V> {
-    /// Clear with a specified value.
+    /// Loads the specified value for this attachment into the render pass.
+    ///
+    /// On some GPU hardware (primarily mobile), "clear" is significantly cheaper
+    /// because it avoids loading data from main memory into tile-local memory.
+    ///
+    /// On other GPU hardware, there isn’t a significant difference.
+    ///
+    /// As a result, it is recommended to use "clear" rather than "load" in cases
+    /// where the initial value doesn’t matter
+    /// (e.g. the render target will be cleared using a skybox).
     Clear(V),
-    /// Load from memory.
+    /// Loads the existing value for this attachment into the render pass.
     Load,
 }
 
@@ -1023,6 +1034,28 @@ impl<V: Default> Default for LoadOp<V> {
     fn default() -> Self {
         Self::Clear(Default::default())
     }
+}
+
+/// Operation to perform to the output attachment at the end of a render pass.
+///
+/// Corresponds to [WebGPU `GPUStoreOp`](https://gpuweb.github.io/gpuweb/#enumdef-gpustoreop).
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum StoreOp {
+    /// Stores the resulting value of the render pass for this attachment.
+    #[default]
+    Store,
+    /// Discards the resulting value of the render pass for this attachment.
+    ///
+    /// The attachment will be treated as uninitialized afterwards.
+    /// (If only either Depth or Stencil texture-aspects is set to `Discard`,
+    /// the respective other texture-aspect will be preserved.)
+    ///
+    /// This can be significantly faster on tile-based render hardware.
+    ///
+    /// Prefer this if the attachment is not read by subsequent passes.
+    Discard,
 }
 
 /// Pair of load and store operations for an attachment aspect.
@@ -1036,14 +1069,18 @@ pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
     /// Whether data will be written to through this attachment.
-    pub store: bool,
+    ///
+    /// Note that resolve textures (if specified) are always written to,
+    /// regardless of this setting.
+    pub store: StoreOp,
 }
 
 impl<V: Default> Default for Operations<V> {
+    #[inline]
     fn default() -> Self {
         Self {
-            load: Default::default(),
-            store: true,
+            load: LoadOp::<V>::default(),
+            store: StoreOp::default(),
         }
     }
 }
@@ -1084,6 +1121,8 @@ pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
     /// The view that will receive the resolved output if multisampling is used.
+    ///
+    /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
     pub resolve_target: Option<&'tex TextureView>,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
@@ -1898,16 +1937,30 @@ impl Instance {
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
     pub unsafe fn create_surface<
-        W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle,
+        W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
     >(
         &self,
         window: &W,
     ) -> Result<Surface, CreateSurfaceError> {
-        let (id, data) = DynContext::instance_create_surface(
-            &*self.context,
-            raw_window_handle::HasRawDisplayHandle::raw_display_handle(window),
-            raw_window_handle::HasRawWindowHandle::raw_window_handle(window),
-        )?;
+        let raw_display_handle = window
+            .display_handle()
+            .map_err(|e| CreateSurfaceError {
+                inner: CreateSurfaceErrorKind::RawHandle(e),
+            })?
+            .as_raw();
+        let raw_window_handle = window
+            .window_handle()
+            .map_err(|e| CreateSurfaceError {
+                inner: CreateSurfaceErrorKind::RawHandle(e),
+            })?
+            .as_raw();
+        let (id, data) = unsafe {
+            DynContext::instance_create_surface(
+                &*self.context,
+                raw_display_handle,
+                raw_window_handle,
+            )
+        }?;
         Ok(Surface {
             context: Arc::clone(&self.context),
             id,
@@ -1979,6 +2032,31 @@ impl Instance {
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
                 .create_surface_from_surface_handle(surface_handle)
+        };
+        Surface {
+            context: Arc::clone(&self.context),
+            id: ObjectId::from(surface.id()),
+            data: Box::new(surface),
+            config: Mutex::new(None),
+        }
+    }
+
+    /// Creates a surface from `SwapChainPanel`.
+    ///
+    /// # Safety
+    ///
+    /// - visual must be a valid SwapChainPanel to create a surface upon.
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = unsafe {
+            self.context
+                .as_any()
+                .downcast_ref::<crate::backend::Context>()
+                .unwrap()
+                .create_surface_from_swap_chain_panel(swap_chain_panel)
         };
         Surface {
             context: Arc::clone(&self.context),
@@ -2728,6 +2806,24 @@ impl Device {
                 )
         }
     }
+
+    /// Destroy this device.
+    pub fn destroy(&self) {
+        DynContext::device_destroy(&*self.context, &self.id, self.data.as_ref())
+    }
+
+    /// Set a DeviceLostCallback on this device.
+    pub fn set_device_lost_callback(
+        &self,
+        callback: impl FnOnce(DeviceLostReason, String) + Send + 'static,
+    ) {
+        DynContext::device_set_device_lost_callback(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            Box::new(callback),
+        )
+    }
 }
 
 impl Drop for Device {
@@ -2738,18 +2834,103 @@ impl Drop for Device {
     }
 }
 
-/// Requesting a device failed.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct RequestDeviceError;
+/// Requesting a device from an [`Adapter`] failed.
+#[derive(Clone, Debug)]
+pub struct RequestDeviceError {
+    inner: RequestDeviceErrorKind,
+}
+#[derive(Clone, Debug)]
+enum RequestDeviceErrorKind {
+    /// Error from [`wgpu_core`].
+    // must match dependency cfg
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        feature = "webgl",
+        target_os = "emscripten"
+    ))]
+    Core(core::instance::RequestDeviceError),
+
+    /// Error from web API that was called by `wgpu` to request a device.
+    ///
+    /// (This is currently never used by the webgl backend, but it could be.)
+    #[cfg(all(
+        target_arch = "wasm32",
+        not(any(target_os = "emscripten", feature = "webgl"))
+    ))]
+    Web(wasm_bindgen::JsValue),
+}
+
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for RequestDeviceErrorKind {}
+#[cfg(all(
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for RequestDeviceErrorKind {}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Requesting a device failed")
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.fmt(f),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(error_js_value) => {
+                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
+                write!(f, "{error_js_value:?}")
+            }
+        }
     }
 }
 
-impl error::Error for RequestDeviceError {}
+impl error::Error for RequestDeviceError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match &self.inner {
+            #[cfg(any(
+                not(target_arch = "wasm32"),
+                feature = "webgl",
+                target_os = "emscripten"
+            ))]
+            RequestDeviceErrorKind::Core(error) => error.source(),
+            #[cfg(all(
+                target_arch = "wasm32",
+                not(any(target_os = "emscripten", feature = "webgl"))
+            ))]
+            RequestDeviceErrorKind::Web(_) => None,
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    feature = "webgl",
+    target_os = "emscripten"
+))]
+impl From<core::instance::RequestDeviceError> for RequestDeviceError {
+    fn from(error: core::instance::RequestDeviceError) -> Self {
+        Self {
+            inner: RequestDeviceErrorKind::Core(error),
+        }
+    }
+}
 
 /// [`Instance::create_surface()`] or a related function failed.
 #[derive(Clone, Debug)]
@@ -2771,6 +2952,10 @@ enum CreateSurfaceErrorKind {
     /// Error from WebGPU surface creation.
     #[allow(dead_code)] // may be unused depending on target and features
     Web(String),
+
+    /// Error when trying to get a [`DisplayHandle`] or a [`WindowHandle`] from
+    /// `raw_window_handle`.
+    RawHandle(raw_window_handle::HandleError),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
@@ -2784,6 +2969,7 @@ impl fmt::Display for CreateSurfaceError {
             ))]
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
+            CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
         }
     }
 }
@@ -2798,6 +2984,7 @@ impl error::Error for CreateSurfaceError {
             ))]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            CreateSurfaceErrorKind::RawHandle(e) => e.source(),
         }
     }
 }
@@ -4477,7 +4664,7 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// A read-only view into a staging buffer.
+/// A write-only view into a staging buffer.
 ///
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
@@ -4767,6 +4954,7 @@ impl Surface {
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
     /// - Texture format requested is unsupported on the surface.
+    /// - `config.width` or `config.height` is zero.
     pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
         DynContext::surface_configure(
             &*self.context,

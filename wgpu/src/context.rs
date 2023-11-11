@@ -2,7 +2,7 @@ use std::{any::Any, fmt::Debug, future::Future, num::NonZeroU64, ops::Range, pin
 
 use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
-    DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
+    DeviceLostReason, DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
     TextureFormatFeatures, WasmNotSend, WasmNotSync,
 };
@@ -96,7 +96,7 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
     type PopErrorScopeFuture: Future<Output = Option<Error>> + WasmNotSend + 'static;
 
     fn init(instance_desc: wgt::InstanceDescriptor) -> Self;
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
@@ -269,6 +269,19 @@ pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData);
     fn device_drop(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+    fn device_set_device_lost_callback(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        device_lost_callback: DeviceLostCallback,
+    );
+    fn device_destroy(&self, device: &Self::DeviceId, device_data: &Self::DeviceData);
+    fn device_mark_lost(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        message: &str,
+    );
     fn device_poll(
         &self,
         device: &Self::DeviceId,
@@ -1197,12 +1210,28 @@ pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + Send + 'static>;
     )
 )))]
 pub type SubmittedWorkDoneCallback = Box<dyn FnOnce() + 'static>;
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
 pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
     fn as_any(&self) -> &dyn Any;
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
@@ -1363,6 +1392,14 @@ pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
         desc: &RenderBundleEncoderDescriptor,
     ) -> (ObjectId, Box<crate::Data>);
     fn device_drop(&self, device: &ObjectId, device_data: &crate::Data);
+    fn device_set_device_lost_callback(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        device_lost_callback: DeviceLostCallback,
+    );
+    fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data);
+    fn device_mark_lost(&self, device: &ObjectId, device_data: &crate::Data, message: &str);
     fn device_poll(&self, device: &ObjectId, device_data: &crate::Data, maintain: Maintain)
         -> bool;
     fn device_on_uncaptured_error(
@@ -2054,13 +2091,13 @@ where
         self
     }
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<(ObjectId, Box<crate::Data>), crate::CreateSurfaceError> {
         let (surface, data) =
-            Context::instance_create_surface(self, display_handle, window_handle)?;
+            unsafe { Context::instance_create_surface(self, display_handle, window_handle) }?;
         Ok((surface.into(), Box::new(data) as _))
     }
 
@@ -2422,6 +2459,29 @@ where
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
         Context::device_drop(self, &device, device_data)
+    }
+
+    fn device_set_device_lost_callback(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        device_lost_callback: DeviceLostCallback,
+    ) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_set_device_lost_callback(self, &device, device_data, device_lost_callback)
+    }
+
+    fn device_destroy(&self, device: &ObjectId, device_data: &crate::Data) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_destroy(self, &device, device_data)
+    }
+
+    fn device_mark_lost(&self, device: &ObjectId, device_data: &crate::Data, message: &str) {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        Context::device_mark_lost(self, &device, device_data, message)
     }
 
     fn device_poll(

@@ -97,6 +97,9 @@ use bitflags::bitflags;
 use thiserror::Error;
 use wgt::{WasmNotSend, WasmNotSync};
 
+// - Vertex + Fragment
+// - Compute
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
@@ -189,7 +192,7 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + Sized {
+pub trait Api: Clone + fmt::Debug + Sized {
     type Instance: Instance<Self>;
     type Surface: Surface<Self>;
     type Adapter: Adapter<Self>;
@@ -207,7 +210,7 @@ pub trait Api: Clone + Sized {
     type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
     type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
 
-    type BindGroupLayout: WasmNotSend + WasmNotSync;
+    type BindGroupLayout: fmt::Debug + WasmNotSend + WasmNotSync;
     type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
     type PipelineLayout: WasmNotSend + WasmNotSync;
     type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
@@ -519,11 +522,19 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
+    /// Sets a range in push constant data.
+    ///
+    /// IMPORTANT: while the data is passed as words, the offset is in bytes!
+    ///
+    /// # Safety
+    ///
+    /// - `offset_bytes` must be a multiple of 4.
+    /// - The range of push constants written must be valid for the pipeline layout at draw time.
     unsafe fn set_push_constants(
         &mut self,
         layout: &A::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     );
 
@@ -646,17 +657,6 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
         barrier: AccelerationStructureBarrier,
     );
 }
-
-bitflags!(
-    /// Instance initialization flags.
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub struct InstanceFlags: u32 {
-        /// Generate debug information in shaders and objects.
-        const DEBUG = 1 << 0;
-        /// Enable validation, if possible.
-        const VALIDATION = 1 << 1;
-    }
-);
 
 bitflags!(
     /// Pipeline layout creation flags.
@@ -876,7 +876,7 @@ bitflags::bitflags! {
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
-    pub flags: InstanceFlags,
+    pub flags: wgt::InstanceFlags,
     pub dx12_shader_compiler: wgt::Dx12Compiler,
     pub gles_minor_version: wgt::Gles3MinorVersion,
 }
@@ -1151,6 +1151,8 @@ pub struct NagaShader {
     pub module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     pub info: naga::valid::ModuleInfo,
+    /// Source codes for debug
+    pub debug_source: Option<DebugSource>,
 }
 
 // Custom implementation avoids the need to generate Debug impl code
@@ -1171,6 +1173,12 @@ pub enum ShaderInput<'a> {
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
     pub runtime_checks: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DebugSource {
+    pub file_name: Cow<'static, str>,
+    pub source_code: Cow<'static, str>,
 }
 
 /// Describes a programmable pipeline stage.

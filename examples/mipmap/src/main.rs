@@ -163,7 +163,7 @@ impl Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -467,13 +467,7 @@ impl wgpu_example::framework::Example for Example {
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -490,7 +484,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -506,36 +500,38 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("mipmap");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn mipmap() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "mipmap",
         image_path: "/examples/mipmap/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default()
-            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn mipmap_query() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_QUERY: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "mipmap-query",
         image_path: "/examples/mipmap/screenshot-query.png",
         width: 1024,
         height: 768,
         optional_features: QUERY_FEATURES,
-        base_test_parameters: wgpu_test::TestParameters::default()
-            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
-        comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
-    });
-}
+        base_test_parameters: wgpu_test::TestParameters::default(),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.025)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

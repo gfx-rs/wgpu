@@ -911,15 +911,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     ) {
+        let offset_words = offset_bytes as usize / 4;
+
         let info = layout.shared.root_constant_info.as_ref().unwrap();
 
         self.pass.root_elements[info.root_index as usize] = super::RootElement::Constant;
 
-        self.pass.constant_data[(offset as usize)..(offset as usize + data.len())]
-            .copy_from_slice(data);
+        self.pass.constant_data[offset_words..(offset_words + data.len())].copy_from_slice(data);
 
         if self.pass.layout.signature == layout.shared.signature {
             self.pass.dirty_root_elements |= 1 << info.root_index;

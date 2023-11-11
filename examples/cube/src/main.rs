@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, future::Future, mem, pin::Pin, task};
+use std::{borrow::Cow, f32::consts, mem};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -78,28 +78,6 @@ fn create_texels(size: usize) -> Vec<u8> {
             count
         })
         .collect()
-}
-
-/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
-///
-/// Given a future `inner` of an `Option<E>` for some error type `E`,
-/// wait for the future to be ready, and panic if its value is `Some`.
-///
-/// This can be done simpler with `FutureExt`, but we don't want to add
-/// a dependency just for this small case.
-struct ErrorFuture<F> {
-    inner: F,
-}
-impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
-        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
-        inner.poll(cx).map(|error| {
-            if let Some(e) = error {
-                panic!("Rendering {e}");
-            }
-        })
-    }
 }
 
 struct Example {
@@ -352,14 +330,7 @@ impl wgpu_example::framework::Example for Example {
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        spawner: &wgpu_example::framework::Spawner,
-    ) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -375,7 +346,7 @@ impl wgpu_example::framework::Example for Example {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -397,24 +368,19 @@ impl wgpu_example::framework::Example for Example {
         }
 
         queue.submit(Some(encoder.finish()));
-
-        // If an error occurs, report it and panic.
-        spawner.spawn_local(ErrorFuture {
-            inner: device.pop_error_scope(),
-        });
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("cube");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "cube",
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot.png",
         width: 1024,
@@ -424,13 +390,14 @@ fn cube() {
         comparisons: &[
             wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube_lines() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_LINES: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "cube-lines",
         // Generated on 1080ti on Vk/Windows
         image_path: "/examples/cube/screenshot-lines.png",
         width: 1024,
@@ -445,5 +412,8 @@ fn cube_lines() {
                 threshold: 0.36,
             }, // Bounded by 1080ti on DX12
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

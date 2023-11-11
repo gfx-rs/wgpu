@@ -14,6 +14,25 @@ pub enum DxgiFactoryType {
     Factory6,
 }
 
+fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
+    let mut desc = unsafe { std::mem::zeroed() };
+    unsafe { adapter.GetDesc1(&mut desc) };
+
+    // If run completely headless, windows will show two different WARP adapters, one
+    // which is lying about being an integrated card. This is so that programs
+    // that ignore software adapters will actually run on headless/gpu-less machines.
+    //
+    // We don't want that and discorage that kind of filtering anyway, so we skip the integrated WARP.
+    if desc.VendorId == 5140 && (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) == 0 {
+        let adapter_name = super::conv::map_adapter_name(desc.Description);
+        if adapter_name.contains("Microsoft Basic Render Driver") {
+            return false;
+        }
+    }
+
+    true
+}
+
 pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter> {
     let mut adapters = Vec::with_capacity(8);
 
@@ -39,6 +58,10 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                 break;
             }
 
+            if !should_keep_adapter(&adapter4) {
+                continue;
+            }
+
             adapters.push(d3d12::DxgiAdapter::Adapter4(adapter4));
             continue;
         }
@@ -53,6 +76,10 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
         if let Err(err) = hr.into_result() {
             log::error!("Failed enumerating adapters: {}", err);
             break;
+        }
+
+        if !should_keep_adapter(&adapter1) {
+            continue;
         }
 
         // Do the most aggressive casts first, skipping Adpater4 as we definitely don't have dxgi1_6.
@@ -94,7 +121,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
 /// created.
 pub fn create_factory(
     required_factory_type: DxgiFactoryType,
-    instance_flags: crate::InstanceFlags,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(d3d12::DxgiLib, d3d12::DxgiFactory), crate::InstanceError> {
     let lib_dxgi = d3d12::DxgiLib::new().map_err(|e| {
         crate::InstanceError::with_source(String::from("failed to load dxgi.dll"), e)
@@ -102,7 +129,7 @@ pub fn create_factory(
 
     let mut factory_flags = d3d12::FactoryCreationFlags::empty();
 
-    if instance_flags.contains(crate::InstanceFlags::VALIDATION) {
+    if instance_flags.contains(wgt::InstanceFlags::VALIDATION) {
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.

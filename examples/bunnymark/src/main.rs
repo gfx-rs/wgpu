@@ -2,6 +2,10 @@ use bytemuck::{Pod, Zeroable};
 use nanorand::{Rng, WyRand};
 use std::{borrow::Cow, mem};
 use wgpu::util::DeviceExt;
+use winit::{
+    event::{ElementState, KeyEvent},
+    keyboard::{Key, NamedKey},
+};
 
 const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
@@ -18,11 +22,27 @@ struct Globals {
 
 #[repr(C, align(256))]
 #[derive(Clone, Copy, Zeroable)]
-struct Locals {
+struct Bunny {
     position: [f32; 2],
     velocity: [f32; 2],
     color: u32,
     _pad: u32,
+}
+
+impl Bunny {
+    fn update_data(&mut self, delta: f32, extent: &[u32; 2]) {
+        self.position[0] += self.velocity[0] * delta;
+        self.position[1] += self.velocity[1] * delta;
+        self.velocity[1] += GRAVITY * delta;
+        if (self.velocity[0] > 0.0 && self.position[0] + 0.5 * BUNNY_SIZE > extent[0] as f32)
+            || (self.velocity[0] < 0.0 && self.position[0] - 0.5 * BUNNY_SIZE < 0.0)
+        {
+            self.velocity[0] *= -1.0;
+        }
+        if self.velocity[1] < 0.0 && self.position[1] < 0.5 * BUNNY_SIZE {
+            self.velocity[1] *= -1.0;
+        }
+    }
 }
 
 /// Example struct holds references to wgpu resources and frame persistent data
@@ -30,10 +50,85 @@ struct Example {
     global_group: wgpu::BindGroup,
     local_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
-    bunnies: Vec<Locals>,
+    bunnies: Vec<Bunny>,
     local_buffer: wgpu::Buffer,
     extent: [u32; 2],
     rng: WyRand,
+}
+
+impl Example {
+    fn spawn_bunnies(&mut self) {
+        let spawn_count = 64;
+        let color = self.rng.generate::<u32>();
+        println!(
+            "Spawning {} bunnies, total at {}",
+            spawn_count,
+            self.bunnies.len() + spawn_count
+        );
+        for _ in 0..spawn_count {
+            let speed = self.rng.generate::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
+            self.bunnies.push(Bunny {
+                position: [0.0, 0.5 * (self.extent[1] as f32)],
+                velocity: [speed, 0.0],
+                color,
+                _pad: 0,
+            });
+        }
+    }
+
+    fn render_inner(
+        &mut self,
+        view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        let delta = 0.01;
+        for bunny in self.bunnies.iter_mut() {
+            bunny.update_data(delta, &self.extent);
+        }
+
+        let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
+        queue.write_buffer(&self.local_buffer, 0, unsafe {
+            std::slice::from_raw_parts(
+                self.bunnies.as_ptr() as *const u8,
+                self.bunnies.len() * uniform_alignment as usize,
+            )
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let clear_color = wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            };
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(clear_color),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            rpass.set_pipeline(&self.pipeline);
+            rpass.set_bind_group(0, &self.global_group, &[]);
+            for i in 0..self.bunnies.len() {
+                let offset =
+                    (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
+                rpass.set_bind_group(1, &self.local_group, &[offset]);
+                rpass.draw(0..4, 0..1);
+            }
+        }
+
+        queue.submit(Some(encoder.finish()));
+    }
 }
 
 impl wgpu_example::framework::Example for Example {
@@ -90,7 +185,7 @@ impl wgpu_example::framework::Example for Example {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(mem::size_of::<Locals>() as _),
+                        min_binding_size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
                     },
                     count: None,
                 }],
@@ -228,7 +323,7 @@ impl wgpu_example::framework::Example for Example {
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &local_buffer,
                     offset: 0,
-                    size: wgpu::BufferSize::new(mem::size_of::<Locals>() as _),
+                    size: wgpu::BufferSize::new(mem::size_of::<Bunny>() as _),
                 }),
             }],
             label: None,
@@ -236,7 +331,7 @@ impl wgpu_example::framework::Example for Example {
 
         let rng = WyRand::new_seed(42);
 
-        Example {
+        let mut ex = Example {
             pipeline,
             global_group,
             local_group,
@@ -244,36 +339,25 @@ impl wgpu_example::framework::Example for Example {
             local_buffer,
             extent: [config.width, config.height],
             rng,
-        }
+        };
+
+        ex.spawn_bunnies();
+
+        ex
     }
 
     fn update(&mut self, event: winit::event::WindowEvent) {
         if let winit::event::WindowEvent::KeyboardInput {
-            input:
-                winit::event::KeyboardInput {
-                    virtual_keycode: Some(winit::event::VirtualKeyCode::Space),
-                    state: winit::event::ElementState::Pressed,
+            event:
+                KeyEvent {
+                    logical_key: Key::Named(NamedKey::Space),
+                    state: ElementState::Pressed,
                     ..
                 },
             ..
         } = event
         {
-            let spawn_count = 64 + self.bunnies.len() / 2;
-            let color = self.rng.generate::<u32>();
-            println!(
-                "Spawning {} bunnies, total at {}",
-                spawn_count,
-                self.bunnies.len() + spawn_count
-            );
-            for _ in 0..spawn_count {
-                let speed = self.rng.generate::<f32>() * MAX_VELOCITY - (MAX_VELOCITY * 0.5);
-                self.bunnies.push(Locals {
-                    position: [0.0, 0.5 * (self.extent[1] as f32)],
-                    velocity: [speed, 0.0],
-                    color,
-                    _pad: 0,
-                });
-            }
+            self.spawn_bunnies();
         }
     }
 
@@ -286,83 +370,21 @@ impl wgpu_example::framework::Example for Example {
         //empty
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
-        let delta = 0.01;
-        for bunny in self.bunnies.iter_mut() {
-            bunny.position[0] += bunny.velocity[0] * delta;
-            bunny.position[1] += bunny.velocity[1] * delta;
-            bunny.velocity[1] += GRAVITY * delta;
-            if (bunny.velocity[0] > 0.0
-                && bunny.position[0] + 0.5 * BUNNY_SIZE > self.extent[0] as f32)
-                || (bunny.velocity[0] < 0.0 && bunny.position[0] - 0.5 * BUNNY_SIZE < 0.0)
-            {
-                bunny.velocity[0] *= -1.0;
-            }
-            if bunny.velocity[1] < 0.0 && bunny.position[1] < 0.5 * BUNNY_SIZE {
-                bunny.velocity[1] *= -1.0;
-            }
-        }
-
-        let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
-        queue.write_buffer(&self.local_buffer, 0, unsafe {
-            std::slice::from_raw_parts(
-                self.bunnies.as_ptr() as *const u8,
-                self.bunnies.len() * uniform_alignment as usize,
-            )
-        });
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        {
-            let clear_color = wgpu::Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
-                a: 1.0,
-            };
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(clear_color),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.global_group, &[]);
-            for i in 0..self.bunnies.len() {
-                let offset =
-                    (i as wgpu::DynamicOffset) * (uniform_alignment as wgpu::DynamicOffset);
-                rpass.set_bind_group(1, &self.local_group, &[offset]);
-                rpass.draw(0..4, 0..1);
-            }
-        }
-
-        queue.submit(Some(encoder.finish()));
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
+        self.render_inner(view, device, queue);
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("bunnymark");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn bunnymark() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "bunnymark",
         image_path: "/examples/bunnymark/screenshot.png",
         width: 1024,
         height: 768,
@@ -372,9 +394,12 @@ fn bunnymark() {
         comparisons: &[
             wgpu_test::ComparisonType::Mean(0.05),
             wgpu_test::ComparisonType::Percentile {
-                percentile: 0.95,
-                threshold: 0.05,
+                percentile: 0.99,
+                threshold: 0.19,
             },
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

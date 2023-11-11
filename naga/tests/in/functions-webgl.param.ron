@@ -1,0 +1,11 @@
+(
+	glsl: (
+		version: Embedded(
+			version: 320,
+			is_webgl: false
+		),
+		writer_flags: (""),
+		binding_map: {},
+		zero_initialize_workgroup_memory: true,
+	),
+)

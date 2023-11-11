@@ -1,0 +1,291 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos SPIR-V Tools Assembler; 0
+; Bound: 221
+; Schema: 0
+               OpCapability Shader
+               OpExtension "SPV_KHR_storage_buffer_storage_class"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %fs_main "fs_main" %in_normal_fs %in_position_fs %out_color_fs
+               OpExecutionMode %fs_main OriginUpperLeft
+               OpSource GLSL 450
+               OpName %t_shadow "t_shadow"
+               OpName %sampler_shadow "sampler_shadow"
+               OpName %color "color"
+               OpName %i "i"
+               OpName %Globals "Globals"
+               OpMemberName %Globals 0 "num_lights"
+               OpName %u_globals "u_globals"
+               OpName %Light "Light"
+               OpMemberName %Light 0 "proj"
+               OpMemberName %Light 1 "pos"
+               OpMemberName %Light 2 "color"
+               OpName %Lights "Lights"
+               OpMemberName %Lights 0 "data"
+               OpName %s_lights "s_lights"
+               OpName %in_position_fs "in_position_fs"
+               OpName %in_normal_fs "in_normal_fs"
+               OpName %out_color_fs "out_color_fs"
+               OpName %fs_main "fs_main"
+               OpDecorate %t_shadow DescriptorSet 0
+               OpDecorate %t_shadow Binding 2
+               OpDecorate %sampler_shadow DescriptorSet 0
+               OpDecorate %sampler_shadow Binding 3
+               OpDecorate %Globals Block
+               OpMemberDecorate %Globals 0 Offset 0
+               OpDecorate %u_globals DescriptorSet 0
+               OpDecorate %u_globals Binding 0
+               OpMemberDecorate %Light 0 Offset 0
+               OpMemberDecorate %Light 0 ColMajor
+               OpMemberDecorate %Light 0 MatrixStride 16
+               OpMemberDecorate %Light 1 Offset 64
+               OpMemberDecorate %Light 2 Offset 80
+               OpDecorate %_runtimearr_Light ArrayStride 96
+               OpDecorate %Lights BufferBlock
+               OpMemberDecorate %Lights 0 Offset 0
+               OpMemberDecorate %Lights 0 NonWritable
+               OpDecorate %s_lights DescriptorSet 0
+               OpDecorate %s_lights Binding 1
+               OpDecorate %in_position_fs Location 1
+               OpDecorate %in_normal_fs Location 0
+               OpDecorate %out_color_fs Location 0
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+    %float_0 = OpConstant %float 0
+    %float_1 = OpConstant %float 1
+  %float_0_5 = OpConstant %float 0.5
+ %float_n0_5 = OpConstant %float -0.5
+%float_0_0500000007 = OpConstant %float 0.0500000007
+    %v3float = OpTypeVector %float 3
+          %9 = OpConstantComposite %v3float %float_0_0500000007 %float_0_0500000007 %float_0_0500000007
+       %uint = OpTypeInt 32 0
+    %uint_10 = OpConstant %uint 10
+     %uint_0 = OpConstant %uint 0
+     %uint_1 = OpConstant %uint 1
+    %v4float = OpTypeVector %float 4
+         %19 = OpTypeFunction %float %uint %v4float
+       %bool = OpTypeBool
+         %27 = OpTypeImage %float 2D 1 1 0 1 Unknown
+%_ptr_UniformConstant_27 = OpTypePointer UniformConstant %27
+   %t_shadow = OpVariable %_ptr_UniformConstant_27 UniformConstant
+         %31 = OpTypeSampledImage %27
+         %32 = OpTypeSampler
+%_ptr_UniformConstant_32 = OpTypePointer UniformConstant %32
+%sampler_shadow = OpVariable %_ptr_UniformConstant_32 UniformConstant
+    %v2float = OpTypeVector %float 2
+        %int = OpTypeInt 32 1
+  %float_0_0 = OpConstant %float 0
+%_ptr_Function_v3float = OpTypePointer Function %v3float
+%_ptr_Function_uint = OpTypePointer Function %uint
+         %65 = OpTypeFunction %void
+     %v4uint = OpTypeVector %uint 4
+    %Globals = OpTypeStruct %v4uint
+%_ptr_Uniform_Globals = OpTypePointer Uniform %Globals
+  %u_globals = OpVariable %_ptr_Uniform_Globals Uniform
+%_ptr_Uniform_v4uint = OpTypePointer Uniform %v4uint
+      %int_0 = OpConstant %int 0
+%_ptr_Uniform_uint = OpTypePointer Uniform %uint
+    %int_0_0 = OpConstant %int 0
+%mat4v4float = OpTypeMatrix %v4float 4
+      %Light = OpTypeStruct %mat4v4float %v4float %v4float
+%_runtimearr_Light = OpTypeRuntimeArray %Light
+     %Lights = OpTypeStruct %_runtimearr_Light
+%_ptr_StorageBuffer_Lights = OpTypePointer StorageBuffer %Lights
+   %s_lights = OpVariable %_ptr_StorageBuffer_Lights StorageBuffer
+%_ptr_StorageBuffer__runtimearr_Light = OpTypePointer StorageBuffer %_runtimearr_Light
+    %int_0_1 = OpConstant %int 0
+%_ptr_StorageBuffer_Light = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_mat4v4float = OpTypePointer StorageBuffer %mat4v4float
+    %int_0_2 = OpConstant %int 0
+%_ptr_Input_v4float = OpTypePointer Input %v4float
+%in_position_fs = OpVariable %_ptr_Input_v4float Input
+%_ptr_Input_v3float = OpTypePointer Input %v3float
+%in_normal_fs = OpVariable %_ptr_Input_v3float Input
+%_ptr_StorageBuffer__runtimearr_Light_0 = OpTypePointer StorageBuffer %_runtimearr_Light
+    %int_0_3 = OpConstant %int 0
+%_ptr_StorageBuffer_Light_0 = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_v4float = OpTypePointer StorageBuffer %v4float
+      %int_1 = OpConstant %int 1
+%_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
+    %int_0_4 = OpConstant %int 0
+%_ptr_StorageBuffer__runtimearr_Light_1 = OpTypePointer StorageBuffer %_runtimearr_Light
+    %int_0_5 = OpConstant %int 0
+%_ptr_StorageBuffer_Light_1 = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_v4float_0 = OpTypePointer StorageBuffer %v4float
+    %int_1_0 = OpConstant %int 1
+%_ptr_StorageBuffer_float_0 = OpTypePointer StorageBuffer %float
+    %int_1_1 = OpConstant %int 1
+%_ptr_StorageBuffer__runtimearr_Light_2 = OpTypePointer StorageBuffer %_runtimearr_Light
+    %int_0_6 = OpConstant %int 0
+%_ptr_StorageBuffer_Light_2 = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_v4float_1 = OpTypePointer StorageBuffer %v4float
+    %int_1_2 = OpConstant %int 1
+%_ptr_StorageBuffer_float_1 = OpTypePointer StorageBuffer %float
+      %int_2 = OpConstant %int 2
+%_ptr_Input_float = OpTypePointer Input %float
+    %int_0_7 = OpConstant %int 0
+%_ptr_Input_float_0 = OpTypePointer Input %float
+    %int_1_3 = OpConstant %int 1
+%_ptr_Input_float_1 = OpTypePointer Input %float
+    %int_2_0 = OpConstant %int 2
+%_ptr_StorageBuffer__runtimearr_Light_3 = OpTypePointer StorageBuffer %_runtimearr_Light
+    %int_0_8 = OpConstant %int 0
+%_ptr_StorageBuffer_Light_3 = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_v4float_2 = OpTypePointer StorageBuffer %v4float
+    %int_2_1 = OpConstant %int 2
+%_ptr_StorageBuffer_float_2 = OpTypePointer StorageBuffer %float
+    %int_0_9 = OpConstant %int 0
+%_ptr_StorageBuffer__runtimearr_Light_4 = OpTypePointer StorageBuffer %_runtimearr_Light
+   %int_0_10 = OpConstant %int 0
+%_ptr_StorageBuffer_Light_4 = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_v4float_3 = OpTypePointer StorageBuffer %v4float
+    %int_2_2 = OpConstant %int 2
+%_ptr_StorageBuffer_float_3 = OpTypePointer StorageBuffer %float
+    %int_1_4 = OpConstant %int 1
+%_ptr_StorageBuffer__runtimearr_Light_5 = OpTypePointer StorageBuffer %_runtimearr_Light
+   %int_0_11 = OpConstant %int 0
+%_ptr_StorageBuffer_Light_5 = OpTypePointer StorageBuffer %Light
+%_ptr_StorageBuffer_v4float_4 = OpTypePointer StorageBuffer %v4float
+    %int_2_3 = OpConstant %int 2
+%_ptr_StorageBuffer_float_4 = OpTypePointer StorageBuffer %float
+    %int_2_4 = OpConstant %int 2
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%out_color_fs = OpVariable %_ptr_Output_v4float Output
+         %18 = OpFunction %float None %19
+         %15 = OpFunctionParameter %uint
+         %16 = OpFunctionParameter %v4float
+         %20 = OpLabel
+         %23 = OpCompositeExtract %float %16 3
+         %22 = OpFOrdLessThanEqual %bool %23 %float_0
+               OpSelectionMerge %24 None
+               OpBranchConditional %22 %25 %26
+         %25 = OpLabel
+               OpReturnValue %float_1
+         %26 = OpLabel
+               OpBranch %24
+         %24 = OpLabel
+         %30 = OpLoad %27 %t_shadow
+         %35 = OpLoad %32 %sampler_shadow
+         %40 = OpCompositeExtract %float %16 0
+         %41 = OpCompositeExtract %float %16 1
+         %42 = OpCompositeConstruct %v2float %40 %41
+         %43 = OpCompositeConstruct %v2float %float_0_5 %float_n0_5
+         %39 = OpFMul %v2float %42 %43
+         %45 = OpCompositeExtract %float %16 3
+         %44 = OpFDiv %float %float_1 %45
+         %38 = OpVectorTimesScalar %v2float %39 %44
+         %46 = OpCompositeConstruct %v2float %float_0_5 %float_0_5
+         %37 = OpFAdd %v2float %38 %46
+         %47 = OpCompositeExtract %float %37 0
+         %48 = OpCompositeExtract %float %37 1
+         %51 = OpBitcast %int %15
+         %49 = OpConvertUToF %float %51
+         %52 = OpCompositeConstruct %v3float %47 %48 %49
+         %53 = OpSampledImage %31 %30 %35
+         %56 = OpCompositeExtract %float %16 2
+         %58 = OpCompositeExtract %float %16 3
+         %57 = OpFDiv %float %float_1 %58
+         %55 = OpFMul %float %56 %57
+         %54 = OpImageSampleDrefExplicitLod %float %53 %52 %55 Lod %float_0_0
+               OpReturnValue %54
+               OpFunctionEnd
+    %fs_main = OpFunction %void None %65
+         %66 = OpLabel
+      %color = OpVariable %_ptr_Function_v3float Function %9
+          %i = OpVariable %_ptr_Function_uint Function %uint_0
+               OpBranch %67
+         %67 = OpLabel
+               OpLoopMerge %68 %70 None
+               OpBranch %69
+         %69 = OpLabel
+         %72 = OpLoad %uint %i
+         %75 = OpAccessChain %_ptr_Uniform_v4uint %u_globals %int_0
+         %73 = OpAccessChain %_ptr_Uniform_uint %75 %int_0_0
+         %83 = OpLoad %uint %73
+         %84 = OpExtInst %uint %1 UMin %83 %uint_10
+         %71 = OpUGreaterThanEqual %bool %72 %84
+               OpSelectionMerge %85 None
+               OpBranchConditional %71 %86 %87
+         %86 = OpLabel
+               OpBranch %68
+         %87 = OpLabel
+               OpBranch %85
+         %85 = OpLabel
+         %89 = OpLoad %v3float %color
+         %93 = OpLoad %uint %i
+        %100 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light %s_lights %int_0_1
+        %106 = OpLoad %uint %i
+         %98 = OpAccessChain %_ptr_StorageBuffer_Light %100 %106
+         %96 = OpAccessChain %_ptr_StorageBuffer_mat4v4float %98 %int_0_2
+        %110 = OpLoad %mat4v4float %96
+        %113 = OpLoad %v4float %in_position_fs
+         %94 = OpMatrixTimesVector %v4float %110 %113
+         %92 = OpFunctionCall %float %18 %93 %94
+        %116 = OpLoad %v3float %in_normal_fs
+        %117 = OpExtInst %v3float %1 Normalize %116
+        %122 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light_0 %s_lights %int_0_3
+        %125 = OpLoad %uint %i
+        %121 = OpAccessChain %_ptr_StorageBuffer_Light_0 %122 %125
+        %120 = OpAccessChain %_ptr_StorageBuffer_v4float %121 %int_1
+        %119 = OpAccessChain %_ptr_StorageBuffer_float %120 %int_0_4
+        %131 = OpLoad %float %119
+        %135 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light_1 %s_lights %int_0_5
+        %138 = OpLoad %uint %i
+        %134 = OpAccessChain %_ptr_StorageBuffer_Light_1 %135 %138
+        %133 = OpAccessChain %_ptr_StorageBuffer_v4float_0 %134 %int_1_0
+        %132 = OpAccessChain %_ptr_StorageBuffer_float_0 %133 %int_1_1
+        %144 = OpLoad %float %132
+        %148 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light_2 %s_lights %int_0_6
+        %151 = OpLoad %uint %i
+        %147 = OpAccessChain %_ptr_StorageBuffer_Light_2 %148 %151
+        %146 = OpAccessChain %_ptr_StorageBuffer_v4float_1 %147 %int_1_2
+        %145 = OpAccessChain %_ptr_StorageBuffer_float_1 %146 %int_2
+        %157 = OpLoad %float %145
+        %158 = OpCompositeConstruct %v3float %131 %144 %157
+        %159 = OpAccessChain %_ptr_Input_float %in_position_fs %int_0_7
+        %162 = OpLoad %float %159
+        %163 = OpAccessChain %_ptr_Input_float_0 %in_position_fs %int_1_3
+        %166 = OpLoad %float %163
+        %167 = OpAccessChain %_ptr_Input_float_1 %in_position_fs %int_2_0
+        %170 = OpLoad %float %167
+        %171 = OpCompositeConstruct %v3float %162 %166 %170
+        %118 = OpFSub %v3float %158 %171
+        %172 = OpExtInst %v3float %1 Normalize %118
+        %173 = OpDot %float %117 %172
+        %174 = OpExtInst %float %1 FMax %float_0 %173
+         %91 = OpFMul %float %92 %174
+        %178 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light_3 %s_lights %int_0_8
+        %181 = OpLoad %uint %i
+        %177 = OpAccessChain %_ptr_StorageBuffer_Light_3 %178 %181
+        %176 = OpAccessChain %_ptr_StorageBuffer_v4float_2 %177 %int_2_1
+        %175 = OpAccessChain %_ptr_StorageBuffer_float_2 %176 %int_0_9
+        %187 = OpLoad %float %175
+        %191 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light_4 %s_lights %int_0_10
+        %194 = OpLoad %uint %i
+        %190 = OpAccessChain %_ptr_StorageBuffer_Light_4 %191 %194
+        %189 = OpAccessChain %_ptr_StorageBuffer_v4float_3 %190 %int_2_2
+        %188 = OpAccessChain %_ptr_StorageBuffer_float_3 %189 %int_1_4
+        %200 = OpLoad %float %188
+        %204 = OpAccessChain %_ptr_StorageBuffer__runtimearr_Light_5 %s_lights %int_0_11
+        %207 = OpLoad %uint %i
+        %203 = OpAccessChain %_ptr_StorageBuffer_Light_5 %204 %207
+        %202 = OpAccessChain %_ptr_StorageBuffer_v4float_4 %203 %int_2_3
+        %201 = OpAccessChain %_ptr_StorageBuffer_float_4 %202 %int_2_4
+        %213 = OpLoad %float %201
+        %214 = OpCompositeConstruct %v3float %187 %200 %213
+         %90 = OpVectorTimesScalar %v3float %214 %91
+         %88 = OpFAdd %v3float %89 %90
+               OpStore %color %88
+               OpBranch %70
+         %70 = OpLabel
+        %216 = OpLoad %uint %i
+        %215 = OpIAdd %uint %216 %uint_1
+               OpStore %i %215
+               OpBranch %67
+         %68 = OpLabel
+        %219 = OpLoad %v3float %color
+        %220 = OpCompositeConstruct %v4float %219 %float_1
+               OpStore %out_color_fs %220
+               OpReturn
+               OpFunctionEnd

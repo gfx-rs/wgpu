@@ -1,7 +1,7 @@
 // Copyright 2018-2023 the Deno authors. All rights reserved. MIT license.
 
 use deno_core::error::AnyError;
-use deno_core::op;
+use deno_core::op2;
 use deno_core::OpState;
 use deno_core::Resource;
 use deno_core::ResourceId;
@@ -48,7 +48,7 @@ impl Resource for WebGpuTextureView {
 #[serde(rename_all = "camelCase")]
 pub struct CreateTextureArgs {
     device_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     size: wgpu_types::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
@@ -58,10 +58,11 @@ pub struct CreateTextureArgs {
     view_formats: Vec<wgpu_types::TextureFormat>,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_texture(
     state: &mut OpState,
-    args: CreateTextureArgs,
+    #[serde] args: CreateTextureArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let device_resource = state
@@ -70,7 +71,7 @@ pub fn op_webgpu_create_texture(
     let device = device_resource.1;
 
     let descriptor = wgpu_core::resource::TextureDescriptor {
-        label: args.label.map(Cow::from),
+        label: Some(Cow::Owned(args.label)),
         size: args.size,
         mip_level_count: args.mip_level_count,
         sample_count: args.sample_count,
@@ -99,17 +100,18 @@ pub fn op_webgpu_create_texture(
 #[serde(rename_all = "camelCase")]
 pub struct CreateTextureViewArgs {
     texture_rid: ResourceId,
-    label: Option<String>,
+    label: String,
     format: Option<wgpu_types::TextureFormat>,
     dimension: Option<wgpu_types::TextureViewDimension>,
     #[serde(flatten)]
     range: wgpu_types::ImageSubresourceRange,
 }
 
-#[op]
+#[op2]
+#[serde]
 pub fn op_webgpu_create_texture_view(
     state: &mut OpState,
-    args: CreateTextureViewArgs,
+    #[serde] args: CreateTextureViewArgs,
 ) -> Result<WebGpuResult, AnyError> {
     let instance = state.borrow::<super::Instance>();
     let texture_resource = state
@@ -118,7 +120,7 @@ pub fn op_webgpu_create_texture_view(
     let texture = texture_resource.id;
 
     let descriptor = wgpu_core::resource::TextureViewDescriptor {
-        label: args.label.map(Cow::from),
+        label: Some(Cow::Owned(args.label)),
         format: args.format,
         dimension: args.dimension,
         range: args.range,

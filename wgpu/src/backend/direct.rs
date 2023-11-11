@@ -4,7 +4,7 @@ use crate::{
     BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
     DownlevelCapabilities, Features, Label, Limits, LoadOp, MapMode, Operations,
     PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource,
+    SamplerDescriptor, ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, ShaderSource, StoreOp,
     SurfaceStatus, TextureDescriptor, TextureViewDescriptor, UncapturedErrorHandler,
 };
 
@@ -22,6 +22,7 @@ use std::{
     sync::Arc,
 };
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
+use wgc::device::DeviceLostClosure;
 use wgc::id::TypedId;
 use wgt::{WasmNotSend, WasmNotSync};
 
@@ -287,6 +288,21 @@ impl Context {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    pub unsafe fn create_surface_from_swap_chain_panel(
+        &self,
+        swap_chain_panel: *mut std::ffi::c_void,
+    ) -> Surface {
+        let id = unsafe {
+            self.0
+                .instance_create_surface_from_swap_chain_panel(swap_chain_panel, ())
+        };
+        Surface {
+            id,
+            configured_device: Mutex::default(),
+        }
+    }
+
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
@@ -392,6 +408,13 @@ fn map_texture_tagged_copy_view(
     }
 }
 
+fn map_store_op(op: StoreOp) -> wgc::command::StoreOp {
+    match op {
+        StoreOp::Store => wgc::command::StoreOp::Store,
+        StoreOp::Discard => wgc::command::StoreOp::Discard,
+    }
+}
+
 fn map_pass_channel<V: Copy + Default>(
     ops: Option<&Operations<V>>,
 ) -> wgc::command::PassChannel<V> {
@@ -401,11 +424,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Clear,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value,
             read_only: false,
         },
@@ -414,11 +433,7 @@ fn map_pass_channel<V: Copy + Default>(
             store,
         }) => wgc::command::PassChannel {
             load_op: wgc::command::LoadOp::Load,
-            store_op: if store {
-                wgc::command::StoreOp::Store
-            } else {
-                wgc::command::StoreOp::Discard
-            },
+            store_op: map_store_op(store),
             clear_value: V::default(),
             read_only: false,
         },
@@ -574,14 +589,15 @@ impl crate::Context for Context {
         ))
     }
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<(Self::SurfaceId, Self::SurfaceData), crate::CreateSurfaceError> {
-        let id = self
-            .0
-            .instance_create_surface(display_handle, window_handle, ());
+        let id = unsafe {
+            self.0
+                .instance_create_surface(display_handle, window_handle, ())
+        };
 
         Ok((
             id,
@@ -622,8 +638,7 @@ impl crate::Context for Context {
             ()
         ));
         if let Some(err) = error {
-            log::error!("Error in Adapter::request_device: {}", err);
-            return ready(Err(crate::RequestDeviceError));
+            return ready(Err(err.into()));
         }
         let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
         let device = Device {
@@ -1203,7 +1218,7 @@ impl crate::Context for Context {
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
                 log::error!("Shader translation error for stage {:?}: {}", stage, error);
-                log::error!("Please report it to https://github.com/gfx-rs/naga");
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }
             self.handle_error(
                 &device_data.error_sink,
@@ -1248,12 +1263,12 @@ impl crate::Context for Context {
         ));
         if let Some(cause) = error {
             if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
-                log::warn!(
+                log::error!(
                     "Shader translation error for stage {:?}: {}",
                     wgt::ShaderStages::COMPUTE,
                     error
                 );
-                log::warn!("Please report it to https://github.com/gfx-rs/naga");
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }
             self.handle_error(
                 &device_data.error_sink,
@@ -1440,6 +1455,31 @@ impl crate::Context for Context {
         }
 
         wgc::gfx_select!(device => global.device_drop(*device));
+    }
+    fn device_set_device_lost_callback(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        device_lost_callback: crate::context::DeviceLostCallback,
+    ) {
+        let global = &self.0;
+        let device_lost_closure = DeviceLostClosure::from_rust(device_lost_callback);
+        wgc::gfx_select!(device => global.device_set_device_lost_closure(*device, device_lost_closure));
+    }
+    fn device_destroy(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_destroy(*device));
+    }
+    fn device_mark_lost(
+        &self,
+        device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        message: &str,
+    ) {
+        // We do not provide a reason to device_lose, because all reasons other than
+        // destroyed (which this is not) are "unknown".
+        let global = &self.0;
+        wgc::gfx_select!(device => global.device_mark_lost(*device, message));
     }
     fn device_poll(
         &self,
@@ -2304,6 +2344,11 @@ impl crate::Context for Context {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         };
+
+        for cmdbuf in &temp_command_buffers {
+            wgc::gfx_select!(*queue => global.command_buffer_drop(*cmdbuf));
+        }
+
         (Unused, index)
     }
 

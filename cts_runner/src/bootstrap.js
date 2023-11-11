@@ -42,6 +42,64 @@ import "ext:deno_web/14_compression.js";
 
 let globalThis_;
 
+const { BadResource, Interrupted } = core;
+
+class NotFound extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "NotFound";
+  }
+}
+
+class BrokenPipe extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "BrokenPipe";
+  }
+}
+
+class AlreadyExists extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "AlreadyExists";
+  }
+}
+
+class InvalidData extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "InvalidData";
+  }
+}
+
+class TimedOut extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "TimedOut";
+  }
+}
+
+class WriteZero extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "WriteZero";
+  }
+}
+
+class UnexpectedEof extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "UnexpectedEof";
+  }
+}
+
+class NotSupported extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = "NotSupported";
+  }
+}
+
 const util = {
   writable(value) {
     return {
@@ -88,7 +146,7 @@ const NavigatorPrototype = Navigator.prototype;
 
 const navigator = webidl.createBranded(Navigator);
 
-ObjectDefineProperties(Navigator.prototype, {
+ObjectDefineProperties(NavigatorPrototype, {
   gpu: {
     configurable: true,
     enumerable: true,
@@ -108,6 +166,7 @@ const windowOrWorkerGlobalScope = {
   EventTarget: util.nonEnumerable(event.EventTarget),
   Navigator: util.nonEnumerable(Navigator),
   navigator: util.getterOnly(() => navigator),
+  MessageEvent: util.nonEnumerable(event.MessageEvent),
   Performance: util.nonEnumerable(performance.Performance),
   PerformanceEntry: util.nonEnumerable(performance.PerformanceEntry),
   PerformanceMark: util.nonEnumerable(performance.PerformanceMark),
@@ -127,15 +186,17 @@ const windowOrWorkerGlobalScope = {
 
   GPU: util.nonEnumerable(webgpu.GPU),
   GPUAdapter: util.nonEnumerable(webgpu.GPUAdapter),
-  GPUAdapterLimits: util.nonEnumerable(webgpu.GPUAdapterLimits),
+  GPUAdapterInfo: util.nonEnumerable(webgpu.GPUAdapterInfo),
+  GPUSupportedLimits: util.nonEnumerable(webgpu.GPUSupportedLimits),
   GPUSupportedFeatures: util.nonEnumerable(webgpu.GPUSupportedFeatures),
+  GPUDeviceLostInfo: util.nonEnumerable(webgpu.GPUDeviceLostInfo),
   GPUDevice: util.nonEnumerable(webgpu.GPUDevice),
   GPUQueue: util.nonEnumerable(webgpu.GPUQueue),
   GPUBuffer: util.nonEnumerable(webgpu.GPUBuffer),
   GPUBufferUsage: util.nonEnumerable(webgpu.GPUBufferUsage),
   GPUMapMode: util.nonEnumerable(webgpu.GPUMapMode),
-  GPUTexture: util.nonEnumerable(webgpu.GPUTexture),
   GPUTextureUsage: util.nonEnumerable(webgpu.GPUTextureUsage),
+  GPUTexture: util.nonEnumerable(webgpu.GPUTexture),
   GPUTextureView: util.nonEnumerable(webgpu.GPUTextureView),
   GPUSampler: util.nonEnumerable(webgpu.GPUSampler),
   GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
@@ -153,8 +214,9 @@ const windowOrWorkerGlobalScope = {
   GPURenderBundleEncoder: util.nonEnumerable(webgpu.GPURenderBundleEncoder),
   GPURenderBundle: util.nonEnumerable(webgpu.GPURenderBundle),
   GPUQuerySet: util.nonEnumerable(webgpu.GPUQuerySet),
-  GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
+  GPUError: util.nonEnumerable(webgpu.GPUError),
   GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
+  GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
 };
 
 windowOrWorkerGlobalScope.console.enumerable = false;
@@ -167,26 +229,53 @@ const mainRuntimeGlobalProperties = {
 
 const denoNs = {
   exit(code) {
-    core.opSync("op_exit", code);
+    core.ops.op_exit(code);
   },
   readFileSync(path) {
-    return core.opSync("op_read_file_sync", pathFromURL(path));
+    return core.ops.op_read_file_sync(pathFromURL(path));
   },
   readTextFileSync(path) {
-    const buf = core.opSync("op_read_file_sync", pathFromURL(path));
+    const buf = core.ops.op_read_file_sync(pathFromURL(path));
     const decoder = new TextDecoder();
     return decoder.decode(buf);
   },
   writeFileSync(path, buf) {
-    return core.opSync("op_write_file_sync", pathFromURL(path), buf);
+    return core.ops.op_write_file_sync(pathFromURL(path), buf);
   },
 };
 
+core.registerErrorClass("NotFound", NotFound);
+core.registerErrorClass("AlreadyExists", AlreadyExists);
+core.registerErrorClass("InvalidData", InvalidData);
+core.registerErrorClass("TimedOut", TimedOut);
+core.registerErrorClass("Interrupted", Interrupted);
+core.registerErrorClass("WriteZero", WriteZero);
+core.registerErrorClass("UnexpectedEof", UnexpectedEof);
+core.registerErrorClass("BadResource", BadResource);
+core.registerErrorClass("NotSupported", NotSupported);
 core.registerErrorBuilder(
   "DOMExceptionOperationError",
   function DOMExceptionOperationError(msg) {
     return new DOMException(msg, "OperationError");
   },
+);
+core.registerErrorBuilder(
+    "DOMExceptionAbortError",
+    function DOMExceptionAbortError(msg) {
+      return new domException.DOMException(msg, "AbortError");
+    },
+);
+core.registerErrorBuilder(
+    "DOMExceptionInvalidCharacterError",
+    function DOMExceptionInvalidCharacterError(msg) {
+      return new domException.DOMException(msg, "InvalidCharacterError");
+    },
+);
+core.registerErrorBuilder(
+    "DOMExceptionDataError",
+    function DOMExceptionDataError(msg) {
+      return new domException.DOMException(msg, "DataError");
+    },
 );
 
 let hasBootstrapped = false;

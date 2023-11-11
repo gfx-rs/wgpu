@@ -43,7 +43,7 @@ use parking_lot::Mutex;
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
@@ -86,6 +86,12 @@ struct DebugUtils {
     callback_data: Box<DebugUtilsMessengerUserData>,
 }
 
+pub struct DebugUtilsCreateInfo {
+    severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: Box<DebugUtilsMessengerUserData>,
+}
+
 /// User data needed by `instance::debug_utils_messenger_callback`.
 ///
 /// When we create the [`vk::DebugUtilsMessengerEXT`], the `pUserData`
@@ -107,13 +113,19 @@ pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
-    flags: crate::InstanceFlags,
+    flags: wgt::InstanceFlags,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::GetPhysicalDeviceProperties2>,
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,
-    driver_api_version: u32,
+    /// The instance API version.
+    ///
+    /// Which is the version of Vulkan supported for instance-level functionality.
+    ///
+    /// It is associated with a `VkInstance` and its children,
+    /// except for a `VkPhysicalDevice` and its children.
+    instance_api_version: u32,
 }
 
 pub struct Instance {
@@ -203,6 +215,7 @@ struct PrivateCapabilities {
     robust_buffer_access2: bool,
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
+    image_format_list: bool,
 }
 
 bitflags::bitflags!(

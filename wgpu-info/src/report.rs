@@ -7,6 +7,9 @@ use wgpu::{
 
 use crate::texture;
 
+/// Report specifying the capabilities of the GPUs on the system.
+///
+/// Must be synchronized with the definition on tests/src/report.rs.
 #[derive(Deserialize, Serialize)]
 pub struct GpuReport {
     pub devices: Vec<AdapterReport>,
@@ -14,7 +17,12 @@ pub struct GpuReport {
 
 impl GpuReport {
     pub fn generate() -> Self {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::util::backend_bits_from_env().unwrap_or_default(),
+            flags: wgpu::InstanceFlags::debugging().with_env(),
+            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+            gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+        });
         let adapters = instance.enumerate_adapters(wgpu::Backends::all());
 
         let mut devices = Vec::with_capacity(adapters.len());
@@ -48,6 +56,9 @@ impl GpuReport {
     }
 }
 
+/// A single report of the capabilities of an Adapter.
+///
+/// Must be synchronized with the definition on tests/src/report.rs.
 #[derive(Deserialize, Serialize)]
 pub struct AdapterReport {
     pub info: AdapterInfo,

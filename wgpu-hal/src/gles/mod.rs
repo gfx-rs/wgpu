@@ -57,12 +57,14 @@ To address this, we invalidate the vertex buffers based on:
 */
 
 ///cbindgen:ignore
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(not(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten")))))]
 mod egl;
 #[cfg(target_os = "emscripten")]
 mod emscripten;
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 mod web;
+#[cfg(windows)]
+mod wgl;
 
 mod adapter;
 mod command;
@@ -72,15 +74,20 @@ mod queue;
 
 use crate::{CopyExtent, TextureDescriptor};
 
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(not(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten")))))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
+#[cfg(not(any(windows, all(target_arch = "wasm32", not(target_os = "emscripten")))))]
 use self::egl::{Instance, Surface};
 
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 pub use self::web::AdapterContext;
 #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
 use self::web::{Instance, Surface};
+
+#[cfg(windows)]
+use self::wgl::AdapterContext;
+#[cfg(windows)]
+use self::wgl::{Instance, Surface};
 
 use arrayvec::ArrayVec;
 
@@ -91,7 +98,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::{fmt, ops::Range, sync::Arc};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Api;
 
 //Note: we can support more samplers if not every one of them is used at a time,
@@ -101,6 +108,8 @@ const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
 const MAX_PUSH_CONSTANTS: usize = 64;
+// We have to account for each push constant may need to be set for every shader.
+const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -147,8 +156,6 @@ bitflags::bitflags! {
         /// Indicates that buffers used as `GL_ELEMENT_ARRAY_BUFFER` may be created / initialized / used
         /// as other targets, if not present they must not be mixed with other targets.
         const INDEX_BUFFER_ROLE_CHANGE = 1 << 5;
-        /// Indicates that the device supports disabling draw buffers
-        const CAN_DISABLE_DRAW_BUFFER = 1 << 6;
         /// Supports `glGetBufferSubData`
         const GET_BUFFER_SUB_DATA = 1 << 7;
         /// Supports `f16` color buffers
@@ -157,6 +164,14 @@ bitflags::bitflags! {
         const COLOR_BUFFER_FLOAT = 1 << 9;
         /// Supports linear flitering `f32` textures.
         const TEXTURE_FLOAT_LINEAR = 1 << 10;
+        /// Supports query buffer objects.
+        const QUERY_BUFFERS = 1 << 11;
+        /// Supports `glTexStorage2D`, etc.
+        const TEXTURE_STORAGE = 1 << 12;
+        /// Supports `push_debug_group`, `pop_debug_group` and `debug_message_insert`.
+        const DEBUG_FNS = 1 << 13;
+        /// Supports framebuffer invalidation.
+        const INVALIDATE_FRAMEBUFFER = 1 << 14;
     }
 }
 
@@ -207,6 +222,7 @@ struct AdapterShared {
     max_texture_size: u32,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
+    es: bool,
 }
 
 pub struct Adapter {
@@ -312,7 +328,6 @@ pub struct Texture {
     #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
-    pub is_cubemap: bool,
 }
 
 impl Texture {
@@ -333,24 +348,23 @@ impl Texture {
                 height: 0,
                 depth: 0,
             },
-            is_cubemap: false,
         }
     }
 
     /// Returns the `target`, whether the image is 3d and whether the image is a cubemap.
-    fn get_info_from_desc(desc: &TextureDescriptor) -> (u32, bool, bool) {
+    fn get_info_from_desc(desc: &TextureDescriptor) -> u32 {
         match desc.dimension {
-            wgt::TextureDimension::D1 => (glow::TEXTURE_2D, false, false),
+            wgt::TextureDimension::D1 => glow::TEXTURE_2D,
             wgt::TextureDimension::D2 => {
                 // HACK: detect a cube map; forces cube compatible textures to be cube textures
                 match (desc.is_cube_compatible(), desc.size.depth_or_array_layers) {
-                    (false, 1) => (glow::TEXTURE_2D, false, false),
-                    (false, _) => (glow::TEXTURE_2D_ARRAY, true, false),
-                    (true, 6) => (glow::TEXTURE_CUBE_MAP, false, true),
-                    (true, _) => (glow::TEXTURE_CUBE_MAP_ARRAY, true, true),
+                    (false, 1) => glow::TEXTURE_2D,
+                    (false, _) => glow::TEXTURE_2D_ARRAY,
+                    (true, 6) => glow::TEXTURE_CUBE_MAP,
+                    (true, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
                 }
             }
-            wgt::TextureDimension::D3 => (glow::TEXTURE_3D, true, false),
+            wgt::TextureDimension::D3 => glow::TEXTURE_3D,
         }
     }
 }
@@ -369,6 +383,7 @@ pub struct Sampler {
     raw: glow::Sampler,
 }
 
+#[derive(Debug)]
 pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
@@ -414,7 +429,8 @@ enum RawBinding {
         raw: glow::Texture,
         target: BindTarget,
         aspects: crate::FormatAspects,
-        //TODO: mip levels, array layers
+        mip_levels: Range<u32>,
+        //TODO: array layers
     },
     Image(ImageBinding),
     Sampler(glow::Sampler),
@@ -470,11 +486,12 @@ struct VertexBufferDesc {
     stride: u32,
 }
 
-#[derive(Clone, Debug, Default)]
-struct UniformDesc {
-    location: Option<glow::UniformLocation>,
-    size: u32,
-    utype: u32,
+#[derive(Clone, Debug)]
+struct PushConstantDesc {
+    location: glow::UniformLocation,
+    ty: naga::TypeInner,
+    offset: u32,
+    size_bytes: u32,
 }
 
 #[cfg(all(
@@ -482,13 +499,13 @@ struct UniformDesc {
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
-unsafe impl Sync for UniformDesc {}
+unsafe impl Sync for PushConstantDesc {}
 #[cfg(all(
     target_arch = "wasm32",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
-unsafe impl Send for UniformDesc {}
+unsafe impl Send for PushConstantDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
@@ -497,7 +514,7 @@ type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
-    uniforms: [UniformDesc; MAX_PUSH_CONSTANTS],
+    push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
 }
 
 #[derive(Clone, Debug)]
@@ -749,7 +766,6 @@ enum Command {
         dst: glow::Texture,
         dst_target: BindTarget,
         copy: crate::TextureCopy,
-        dst_is_cubemap: bool,
     },
     CopyBufferToTexture {
         src: Buffer,
@@ -772,6 +788,7 @@ enum Command {
     SetIndexBuffer(glow::Buffer),
     BeginQuery(glow::Query, BindTarget),
     EndQuery(BindTarget),
+    TimestampQuery(glow::Query),
     CopyQueryResults {
         query_range: Range<u32>,
         dst: Buffer,
@@ -859,6 +876,7 @@ enum Command {
         texture: glow::Texture,
         target: BindTarget,
         aspects: crate::FormatAspects,
+        mip_levels: Range<u32>,
     },
     BindImage {
         slot: u32,
@@ -868,7 +886,7 @@ enum Command {
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
     SetPushConstants {
-        uniform: UniformDesc,
+        uniform: PushConstantDesc,
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },
@@ -907,5 +925,55 @@ impl fmt::Debug for CommandEncoder {
         f.debug_struct("CommandEncoder")
             .field("cmd_buffer", &self.cmd_buffer)
             .finish()
+    }
+}
+
+#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
+    let source_str = match source {
+        glow::DEBUG_SOURCE_API => "API",
+        glow::DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
+        glow::DEBUG_SOURCE_SHADER_COMPILER => "ShaderCompiler",
+        glow::DEBUG_SOURCE_THIRD_PARTY => "Third Party",
+        glow::DEBUG_SOURCE_APPLICATION => "Application",
+        glow::DEBUG_SOURCE_OTHER => "Other",
+        _ => unreachable!(),
+    };
+
+    let log_severity = match severity {
+        glow::DEBUG_SEVERITY_HIGH => log::Level::Error,
+        glow::DEBUG_SEVERITY_MEDIUM => log::Level::Warn,
+        glow::DEBUG_SEVERITY_LOW => log::Level::Info,
+        glow::DEBUG_SEVERITY_NOTIFICATION => log::Level::Trace,
+        _ => unreachable!(),
+    };
+
+    let type_str = match gltype {
+        glow::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "Deprecated Behavior",
+        glow::DEBUG_TYPE_ERROR => "Error",
+        glow::DEBUG_TYPE_MARKER => "Marker",
+        glow::DEBUG_TYPE_OTHER => "Other",
+        glow::DEBUG_TYPE_PERFORMANCE => "Performance",
+        glow::DEBUG_TYPE_POP_GROUP => "Pop Group",
+        glow::DEBUG_TYPE_PORTABILITY => "Portability",
+        glow::DEBUG_TYPE_PUSH_GROUP => "Push Group",
+        glow::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "Undefined Behavior",
+        _ => unreachable!(),
+    };
+
+    let _ = std::panic::catch_unwind(|| {
+        log::log!(
+            log_severity,
+            "GLES: [{}/{}] ID {} : {}",
+            source_str,
+            type_str,
+            id,
+            message
+        );
+    });
+
+    if cfg!(debug_assertions) && log_severity == log::Level::Error {
+        // Set canary and continue
+        crate::VALIDATION_CANARY.set();
     }
 }

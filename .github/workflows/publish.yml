@@ -2,9 +2,8 @@ name: Publish
 
 on:
   push:
-    branches: ["*"]
-  pull_request:
-  merge_group:
+    branches:
+      - trunk
 
 env:
   CARGO_INCREMENTAL: false
@@ -24,11 +23,16 @@ jobs:
       - name: Install Rust WASM target
         run: rustup target add wasm32-unknown-unknown
 
-      - name: Install wasm-bindgen-cli
-        run: cargo +stable install wasm-bindgen-cli --version=0.2.87
+      - name: Get wasm-bindgen version
+        run: |
+          WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 --all-features | jq '.packages[] | select(.name == "wasm-bindgen") | .version' | tr -d '"')
 
-      - name: Pin wasm-bindgen version
-        run: cargo update -p wasm-bindgen --precise 0.2.87
+          echo $WASM_BINDGEN_VERSION
+
+          echo "WASM_BINDGEN_VERSION=$WASM_BINDGEN_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install wasm-bindgen
+        run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
       - name: Build WebGPU examples
         run: cargo build --release --target wasm32-unknown-unknown

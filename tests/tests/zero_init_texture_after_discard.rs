@@ -1,58 +1,81 @@
-use wasm_bindgen_test::*;
 use wgpu::*;
 use wgpu_test::{
-    image::ReadbackBuffers, initialize_test, FailureCase, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
+    TestingContext,
 };
 
 // Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in after submit of the encoder.
-#[test]
-#[wasm_bindgen_test]
-fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_after_submit() {
-    initialize_test(
-        TestParameters::default().skip(FailureCase::webgl2()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
-            case.create_command_encoder();
-            case.discard();
-            case.submit_command_encoder();
+#[gpu_test]
+static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_AFTER_SUBMIT:
+    GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|mut ctx| {
+        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+        case.create_command_encoder();
+        case.discard();
+        case.submit_command_encoder();
 
-            case.create_command_encoder();
-            case.copy_texture_to_buffer();
-            case.submit_command_encoder();
+        case.create_command_encoder();
+        case.copy_texture_to_buffer();
+        case.submit_command_encoder();
 
-            case.assert_buffers_are_zero();
-        },
-    );
-}
+        case.assert_buffers_are_zero();
+    });
 
-// Checks if discarding a color target resets its init state, causing a zero read of this texture when copied in the same encoder to a buffer.
-#[test]
-#[wasm_bindgen_test]
-fn discarding_color_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(
-        TestParameters::default().skip(FailureCase::webgl2()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
-            case.create_command_encoder();
-            case.discard();
-            case.copy_texture_to_buffer();
-            case.submit_command_encoder();
+#[gpu_test]
+static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
+    GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .run_sync(|mut ctx| {
+        let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
+        case.create_command_encoder();
+        case.discard();
+        case.copy_texture_to_buffer();
+        case.submit_command_encoder();
 
-            case.assert_buffers_are_zero();
-        },
-    );
-}
+        case.assert_buffers_are_zero();
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_same_encoder() {
-    initialize_test(
+#[gpu_test]
+static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_IN_SAME_ENCODER:
+    GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .downlevel_flags(
                 DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
             )
             .limits(Limits::downlevel_defaults()),
-        |mut ctx| {
+    )
+    .run_sync(|mut ctx| {
+        for format in [
+            TextureFormat::Stencil8,
+            TextureFormat::Depth16Unorm,
+            TextureFormat::Depth24Plus,
+            TextureFormat::Depth24PlusStencil8,
+            TextureFormat::Depth32Float,
+        ] {
+            let mut case = TestCase::new(&mut ctx, format);
+            case.create_command_encoder();
+            case.discard();
+            case.copy_texture_to_buffer();
+            case.submit_command_encoder();
+
+            case.assert_buffers_are_zero();
+        }
+    });
+
+#[gpu_test]
+static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(
+            TestParameters::default()
+                .downlevel_flags(
+                    DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
+                        | DownlevelFlags::COMPUTE_SHADERS,
+                )
+                .limits(Limits::downlevel_defaults()),
+        )
+        .run_sync(|mut ctx| {
             for format in [
                 TextureFormat::Stencil8,
                 TextureFormat::Depth16Unorm,
@@ -62,43 +85,20 @@ fn discarding_depth_target_resets_texture_init_state_check_visible_on_copy_in_sa
             ] {
                 let mut case = TestCase::new(&mut ctx, format);
                 case.create_command_encoder();
-                case.discard();
+                case.discard_depth();
+                case.submit_command_encoder();
+
+                case.create_command_encoder();
+                case.discard_stencil();
+                case.submit_command_encoder();
+
+                case.create_command_encoder();
                 case.copy_texture_to_buffer();
                 case.submit_command_encoder();
 
                 case.assert_buffers_are_zero();
             }
-        },
-    );
-}
-
-#[test]
-#[wasm_bindgen_test]
-fn discarding_either_depth_or_stencil_aspect() {
-    initialize_test(
-        TestParameters::default()
-            .downlevel_flags(
-                DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES | DownlevelFlags::COMPUTE_SHADERS,
-            )
-            .limits(Limits::downlevel_defaults()),
-        |mut ctx| {
-            let mut case = TestCase::new(&mut ctx, TextureFormat::Depth24PlusStencil8);
-            case.create_command_encoder();
-            case.discard_depth();
-            case.submit_command_encoder();
-
-            case.create_command_encoder();
-            case.discard_stencil();
-            case.submit_command_encoder();
-
-            case.create_command_encoder();
-            case.copy_texture_to_buffer();
-            case.submit_command_encoder();
-
-            case.assert_buffers_are_zero();
-        },
-    );
-}
+        });
 
 struct TestCase<'ctx> {
     ctx: &'ctx mut TestingContext,
@@ -155,11 +155,11 @@ impl<'ctx> TestCase<'ctx> {
                     view: &texture.create_view(&TextureViewDescriptor::default()),
                     depth_ops: format.has_depth_aspect().then_some(Operations {
                         load: LoadOp::Clear(1.0),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                     stencil_ops: format.has_stencil_aspect().then_some(Operations {
                         load: LoadOp::Clear(0xFFFFFFFF),
-                        store: true,
+                        store: StoreOp::Store,
                     }),
                 }),
                 timestamp_writes: None,
@@ -230,7 +230,7 @@ impl<'ctx> TestCase<'ctx> {
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         },
                     },
                 )],
@@ -239,11 +239,11 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                         stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                     },
                 ),
@@ -264,11 +264,11 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: Some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                         stencil_ops: self.format.has_stencil_aspect().then_some(Operations {
                             load: LoadOp::Clear(0),
-                            store: true,
+                            store: StoreOp::Store,
                         }),
                     },
                 ),
@@ -289,11 +289,11 @@ impl<'ctx> TestCase<'ctx> {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
                         depth_ops: self.format.has_depth_aspect().then_some(Operations {
                             load: LoadOp::Clear(0.0),
-                            store: true,
+                            store: StoreOp::Store,
                         }),
                         stencil_ops: Some(Operations {
                             load: LoadOp::Load,
-                            store: false, // discard!
+                            store: StoreOp::Discard,
                         }),
                     },
                 ),

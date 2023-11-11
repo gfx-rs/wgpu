@@ -1,12 +1,10 @@
 //! Tests for buffer copy validation.
 
-use wasm_bindgen_test::*;
-use wgpu_test::{fail, initialize_test, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 
-#[test]
-#[wasm_bindgen_test]
-fn queue_write_texture_overflow() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
@@ -47,4 +45,3 @@ fn queue_write_texture_overflow() {
             );
         });
     });
-}

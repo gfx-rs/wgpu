@@ -3,7 +3,7 @@ extern crate wgpu_hal as hal;
 use hal::{
     Adapter as _, CommandEncoder as _, Device as _, Instance as _, Queue as _, Surface as _,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use glam::{Affine3A, Mat4, Vec3};
 use std::{
@@ -217,22 +217,27 @@ struct Example<A: hal::Api> {
 }
 
 impl<A: hal::Api> Example<A> {
-    fn init(window: &winit::window::Window) -> Result<Self, hal::InstanceError> {
+    fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: if cfg!(debug_assertions) {
-                hal::InstanceFlags::all()
+                wgt::InstanceFlags::all()
             } else {
-                hal::InstanceFlags::empty()
+                wgt::InstanceFlags::empty()
             },
             dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = unsafe {
-            instance
-                .create_surface(window.raw_display_handle(), window.raw_window_handle())
-                .unwrap()
+        let mut surface = {
+            let raw_window_handle = window.window_handle()?.as_raw();
+            let raw_display_handle = window.display_handle()?.as_raw();
+
+            unsafe {
+                instance
+                    .create_surface(raw_display_handle, raw_window_handle)
+                    .unwrap()
+            }
         };
 
         let (adapter, features) = unsafe {
@@ -1071,9 +1076,9 @@ cfg_if::cfg_if! {
 fn main() {
     env_logger::init();
 
-    let event_loop = winit::event_loop::EventLoop::new();
+    let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = winit::window::WindowBuilder::new()
-        .with_title("hal-bunnymark")
+        .with_title("hal-ray-traced-triangle")
         .with_inner_size(winit::dpi::PhysicalSize {
             width: 512,
             height: 512,
@@ -1086,39 +1091,39 @@ fn main() {
     let example_result = Example::<Api>::init(&window);
     let mut example = Some(example_result.expect("Selected backend is not supported"));
 
-    event_loop.run(move |event, _, control_flow| {
-        let _ = &window; // force ownership by the closure
-        *control_flow = winit::event_loop::ControlFlow::Poll;
-        match event {
-            winit::event::Event::RedrawEventsCleared => {
-                window.request_redraw();
-            }
-            winit::event::Event::WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::KeyboardInput {
-                    input:
-                        winit::event::KeyboardInput {
-                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
-                            state: winit::event::ElementState::Pressed,
-                            ..
-                        },
-                    ..
+    event_loop
+        .run(move |event, target| {
+            let _ = &window; // force ownership by the closure
+            target.set_control_flow(winit::event_loop::ControlFlow::Poll);
+            match event {
+                winit::event::Event::WindowEvent { event, .. } => match event {
+                    winit::event::WindowEvent::CloseRequested => {
+                        target.exit();
+                    }
+                    winit::event::WindowEvent::KeyboardInput { event, .. }
+                        if event.physical_key
+                            == winit::keyboard::PhysicalKey::Code(
+                                winit::keyboard::KeyCode::Escape,
+                            ) =>
+                    {
+                        target.exit();
+                    }
+                    winit::event::WindowEvent::RedrawRequested => {
+                        let ex = example.as_mut().unwrap();
+                        ex.render();
+                    }
+                    _ => {
+                        example.as_mut().unwrap().update(event);
+                    }
+                },
+                winit::event::Event::LoopExiting => {
+                    example.take().unwrap().exit();
                 }
-                | winit::event::WindowEvent::CloseRequested => {
-                    *control_flow = winit::event_loop::ControlFlow::Exit;
+                winit::event::Event::AboutToWait => {
+                    window.request_redraw();
                 }
-                _ => {
-                    example.as_mut().unwrap().update(event);
-                }
-            },
-            winit::event::Event::RedrawRequested(_) => {
-                let ex = example.as_mut().unwrap();
-
-                ex.render();
+                _ => {}
             }
-            winit::event::Event::LoopDestroyed => {
-                example.take().unwrap().exit();
-            }
-            _ => {}
-        }
-    });
+        })
+        .unwrap();
 }

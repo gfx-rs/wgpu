@@ -12,8 +12,9 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::Device as _;
 use smallvec::SmallVec;
+use std::os::raw::c_char;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat};
+use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
 use std::{iter, num::NonZeroU32, ptr};
 
@@ -169,12 +170,15 @@ pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
+    pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
 
 impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.submissions.extend(other.submissions);
+        self.device_lost_invocations
+            .extend(other.device_lost_invocations);
     }
 
     fn fire(self) {
@@ -188,6 +192,98 @@ impl UserClosures {
         }
         for closure in self.submissions {
             closure.call();
+        }
+        for invocation in self.device_lost_invocations {
+            invocation
+                .closure
+                .call(invocation.reason, invocation.message);
+        }
+    }
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+
+#[repr(C)]
+pub struct DeviceLostClosureC {
+    pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
+    pub user_data: *mut u8,
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+unsafe impl Send for DeviceLostClosureC {}
+
+pub struct DeviceLostClosure {
+    // We wrap this so creating the enum in the C variant can be unsafe,
+    // allowing our call function to be safe.
+    inner: DeviceLostClosureInner,
+}
+
+pub struct DeviceLostInvocation {
+    closure: DeviceLostClosure,
+    reason: DeviceLostReason,
+    message: String,
+}
+
+enum DeviceLostClosureInner {
+    Rust { callback: DeviceLostCallback },
+    C { inner: DeviceLostClosureC },
+}
+
+impl DeviceLostClosure {
+    pub fn from_rust(callback: DeviceLostCallback) -> Self {
+        Self {
+            inner: DeviceLostClosureInner::Rust { callback },
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - The callback pointer must be valid to call with the provided `user_data`
+    ///   pointer.
+    ///
+    /// - Both pointers must point to `'static` data, as the callback may happen at
+    ///   an unspecified time.
+    pub unsafe fn from_c(inner: DeviceLostClosureC) -> Self {
+        Self {
+            inner: DeviceLostClosureInner::C { inner },
+        }
+    }
+
+    #[allow(trivial_casts)]
+    pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
+        match self.inner {
+            DeviceLostClosureInner::Rust { callback } => callback(reason, message),
+            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
+            DeviceLostClosureInner::C { inner } => unsafe {
+                // We need to pass message as a c_char typed pointer. To avoid trivial
+                // conversion warnings on some platforms, we use the allow lint.
+                (inner.callback)(
+                    inner.user_data,
+                    reason as u8,
+                    message.as_ptr() as *const c_char,
+                )
+            },
         }
     }
 }
@@ -292,14 +388,16 @@ pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
 pub enum DeviceError {
-    #[error("Parent device is invalid")]
+    #[error("Parent device is invalid.")]
     Invalid,
     #[error("Parent device is lost")]
     Lost,
-    #[error("Not enough memory left")]
+    #[error("Not enough memory left.")]
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("Attempt to use a resource with a different device from the one that created it")]
+    WrongDevice,
 }
 
 impl From<hal::DeviceError> for DeviceError {

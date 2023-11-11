@@ -124,6 +124,7 @@ unsafe impl Send for Instance {}
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init OpenGL (WebGL) Backend");
         Ok(Instance {
             webgl2_context: Mutex::new(None),
         })
@@ -215,8 +216,9 @@ impl Surface {
     pub(super) unsafe fn present(
         &mut self,
         _suf_texture: super::Texture,
-        gl: &glow::Context,
+        context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
+        let gl = &context.glow_context;
         let swapchain = self.swapchain.as_ref().ok_or(crate::SurfaceError::Other(
             "need to configure surface before presenting",
         ))?;
@@ -413,7 +415,6 @@ impl crate::Surface<super::Api> for Surface {
                 height: sc.extent.height,
                 depth: 1,
             },
-            is_cubemap: false,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,

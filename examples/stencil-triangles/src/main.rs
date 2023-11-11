@@ -15,7 +15,7 @@ fn vertex(x: f32, y: f32) -> Vertex {
     }
 }
 
-struct Triangles {
+struct Example {
     outer_vertex_buffer: wgpu::Buffer,
     mask_vertex_buffer: wgpu::Buffer,
     outer_pipeline: wgpu::RenderPipeline,
@@ -23,7 +23,7 @@ struct Triangles {
     stencil_buffer: wgpu::Texture,
 }
 
-impl wgpu_example::framework::Example for Triangles {
+impl wgpu_example::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -155,7 +155,7 @@ impl wgpu_example::framework::Example for Triangles {
         });
 
         // Done
-        Triangles {
+        Example {
             outer_vertex_buffer,
             mask_vertex_buffer,
             outer_pipeline,
@@ -177,13 +177,7 @@ impl wgpu_example::framework::Example for Triangles {
         // empty
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -200,7 +194,7 @@ impl wgpu_example::framework::Example for Triangles {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
@@ -208,7 +202,7 @@ impl wgpu_example::framework::Example for Triangles {
                     depth_ops: None,
                     stencil_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(0),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                 }),
                 timestamp_writes: None,
@@ -230,21 +224,24 @@ impl wgpu_example::framework::Example for Triangles {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
-    wgpu_example::framework::run::<Triangles>("stencil-triangles");
+    wgpu_example::framework::run::<Example>("stencil-triangles");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn stencil_triangles() {
-    wgpu_example::framework::test::<Triangles>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "stencil-triangles",
         image_path: "/examples/stencil-triangles/screenshot.png",
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::default(),
         base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.03)],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

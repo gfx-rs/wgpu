@@ -9,6 +9,7 @@ publish = false
 [[bin]]
 name = "skybox"
 path = "src/main.rs"
+harness = false
 
 [dependencies]
 bytemuck.workspace = true
@@ -16,10 +17,12 @@ ddsfile.workspace = true
 glam.workspace = true
 obj.workspace = true
 log.workspace = true
-wasm-bindgen-test.workspace = true
 wgpu-example.workspace = true
 wgpu.workspace = true
 winit.workspace = true
 
 [dev-dependencies]
 wgpu-test.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true

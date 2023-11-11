@@ -14,6 +14,10 @@ use wgpu::util::DeviceExt;
 
 #[cfg(test)]
 use wgpu_test::FailureCase;
+use winit::{
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{Key, NamedKey},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -215,27 +219,31 @@ impl wgpu_example::framework::Example for Example {
     #[allow(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
-            winit::event::WindowEvent::KeyboardInput { input, .. } => {
-                if let winit::event::ElementState::Pressed = input.state {
-                    match input.virtual_keycode {
-                        // TODO: Switch back to full scans of possible options when we expose
-                        //       supported sample counts to the user.
-                        Some(winit::event::VirtualKeyCode::Left) => {
-                            if self.sample_count == self.max_sample_count {
-                                self.sample_count = 1;
-                                self.rebuild_bundle = true;
-                            }
-                        }
-                        Some(winit::event::VirtualKeyCode::Right) => {
-                            if self.sample_count == 1 {
-                                self.sample_count = self.max_sample_count;
-                                self.rebuild_bundle = true;
-                            }
-                        }
-                        _ => {}
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => match logical_key {
+                // TODO: Switch back to full scans of possible options when we expose
+                //       supported sample counts to the user.
+                Key::Named(NamedKey::ArrowLeft) => {
+                    if self.sample_count == self.max_sample_count {
+                        self.sample_count = 1;
+                        self.rebuild_bundle = true;
                     }
                 }
-            }
+                Key::Named(NamedKey::ArrowRight) => {
+                    if self.sample_count == 1 {
+                        self.sample_count = self.max_sample_count;
+                        self.rebuild_bundle = true;
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -251,13 +259,7 @@ impl wgpu_example::framework::Example for Example {
             Example::create_multisampled_framebuffer(device, config, self.sample_count);
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(
                 device,
@@ -282,7 +284,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }
             } else {
@@ -293,7 +295,7 @@ impl wgpu_example::framework::Example for Example {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         // Storing pre-resolve MSAA data is unnecessary if it isn't used later.
                         // On tile-based GPU, avoid store can reduce your app's memory footprint.
-                        store: false,
+                        store: wgpu::StoreOp::Discard,
                     },
                 }
             };
@@ -313,16 +315,16 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("msaa-line");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn msaa_line() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "msaa-line",
         image_path: "/examples/msaa-line/screenshot.png",
         width: 1024,
         height: 768,
@@ -343,5 +345,8 @@ fn msaa_line() {
                 threshold: 0.29,
             },
         ],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

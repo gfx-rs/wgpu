@@ -1,8 +1,11 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model, command, conv,
-    device::{life::WaitIdleError, map_buffer, queue, Device, DeviceError, HostMap},
+    binding_model::{self, BindGroupLayout},
+    command, conv,
+    device::{
+        life::WaitIdleError, map_buffer, queue, Device, DeviceError, DeviceLostClosure, HostMap,
+    },
     global::Global,
     hal_api::HalApi,
     hub::Token,
@@ -25,7 +28,9 @@ use wgt::{BufferAddress, TextureFormat};
 
 use std::{borrow::Cow, iter, mem, ops::Range, ptr};
 
-use super::{BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures};
+use super::{
+    BufferMapPendingClosure, ImplicitPipelineIds, InvalidDevice, UserClosures, IMPLICIT_FAILURE,
+};
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_is_surface_supported<A: HalApi>(
@@ -102,6 +107,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
 
         Ok(device.features)
     }
@@ -114,6 +122,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
 
         Ok(device.limits.clone())
     }
@@ -126,6 +137,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
 
         Ok(device.downlevel.clone())
     }
@@ -148,6 +162,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
 
             if desc.usage.is_empty() {
                 // Per spec, `usage` must not be zero.
@@ -250,7 +267,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(buffer, &mut token);
-            log::info!("Created buffer {:?} with {:?}", id, desc);
+            log::trace!("Device::create_buffer -> {:?}", id.0);
 
             device
                 .trackers
@@ -366,6 +383,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.valid {
+            return Err(DeviceError::Lost.into());
+        }
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
@@ -423,6 +443,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
+        if !device.valid {
+            return Err(DeviceError::Lost.into());
+        }
         let buffer = buffer_guard
             .get_mut(buffer_id)
             .map_err(|_| BufferAccessError::Invalid)?;
@@ -470,10 +493,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             //TODO: lock pending writes separately, keep the device read-only
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-            log::info!("Buffer {:?} is destroyed", buffer_id);
+            log::trace!("Buffer::destroy {buffer_id:?}");
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-            let buffer = buffer_guard
-                .get_mut(buffer_id)
+            let mut buffer = buffer_guard
+                .take_and_mark_destroyed(buffer_id)
                 .map_err(|_| resource::DestroyError::Invalid)?;
 
             let device = &mut device_guard[buffer.device_id.value];
@@ -483,7 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 | &BufferMapState::Init { .. }
                 | &BufferMapState::Active { .. }
                 => {
-                    self.buffer_unmap_inner(buffer_id, buffer, device)
+                    self.buffer_unmap_inner(buffer_id, &mut buffer, device)
                         .unwrap_or(None)
                 }
                 _ => None,
@@ -521,7 +544,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
         profiling::scope!("Buffer::drop");
-        log::debug!("buffer {:?} is dropped", buffer_id);
+        log::trace!("Buffer::drop {buffer_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -586,6 +609,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -601,7 +627,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
-            log::info!("Created texture {:?} with {:?}", id, desc);
+            log::trace!("Device::create_texture -> {:?}", id.0);
 
             device.trackers.lock().textures.insert_single(
                 id.0,
@@ -628,7 +654,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> (id::TextureId, Option<resource::CreateTextureError>) {
-        profiling::scope!("Device::create_texture");
+        profiling::scope!("Device::create_texture_from_hal");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -641,6 +667,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
 
             // NB: Any change done through the raw texture handle will not be
             // recorded in the replay
@@ -678,7 +707,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = texture.life_guard.add_ref();
 
             let id = fid.assign(texture, &mut token);
-            log::info!("Created texture {:?} with {:?}", id, desc);
+            log::trace!("Device::create_texture -> {:?}", id.0);
 
             device.trackers.lock().textures.insert_single(
                 id.0,
@@ -717,6 +746,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
 
             // NB: Any change done through the raw buffer handle will not be
             // recorded in the replay
@@ -735,7 +767,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = buffer.life_guard.add_ref();
 
             let id = fid.assign(buffer, &mut token);
-            log::info!("Created buffer {:?} with {:?}", id, desc);
+            log::trace!("Device::create_buffer -> {:?}", id.0);
 
             device
                 .trackers
@@ -759,6 +791,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("Texture::destroy");
+        log::trace!("Texture::destroy {texture_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -766,10 +799,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: lock pending writes separately, keep the device read-only
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
-        log::info!("Buffer {:?} is destroyed", texture_id);
         let (mut texture_guard, _) = hub.textures.write(&mut token);
-        let texture = texture_guard
-            .get_mut(texture_id)
+        let mut texture = texture_guard
+            .take_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let device = &mut device_guard[texture.device_id.value];
@@ -816,7 +848,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
         profiling::scope!("Texture::drop");
-        log::debug!("texture {:?} is dropped", texture_id);
+        log::trace!("Texture::drop {texture_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -900,8 +932,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(view, &mut token);
 
             device.trackers.lock().views.insert_single(id, ref_count);
+
+            log::trace!("Texture::create_view {:?} -> {:?}", texture_id, id.0);
+
             return (id.0, None);
         };
+
+        log::error!("Texture::create_view {:?} error {:?}", texture_id, error);
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
         (id, Some(error))
@@ -917,7 +954,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         profiling::scope!("TextureView::drop");
-        log::debug!("texture view {:?} is dropped", texture_view_id);
+        log::trace!("TextureView::drop {:?}", texture_view_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -978,6 +1015,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -994,6 +1035,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             device.trackers.lock().samplers.insert_single(id, ref_count);
 
+            log::trace!("Device::create_sampler -> {:?}", id.0);
+
             return (id.0, None);
         };
 
@@ -1007,7 +1050,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
         profiling::scope!("Sampler::drop");
-        log::debug!("sampler {:?} is dropped", sampler_id);
+        log::trace!("Sampler::drop {sampler_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1056,6 +1099,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1079,7 +1126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mut compatible_layout = None;
-            {
+            let layout = {
                 let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
                 if let Some(id) =
                     Device::deduplicate_bind_group_layout(device_id, &entry_map, &*bgl_guard)
@@ -1092,25 +1139,38 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     //    the branch and instead rely on the indirection to use the
                     //    proper bind group layout id.
                     if G::ids_are_generated_in_wgpu() {
+                        log::trace!("Device::create_bind_group_layout (duplicate of {id:?})");
                         return (id, None);
                     }
 
                     compatible_layout = Some(id::Valid(id));
                 }
-            }
 
-            let mut layout = match device.create_bind_group_layout(
-                device_id,
-                desc.label.borrow_option(),
-                entry_map,
-            ) {
-                Ok(layout) => layout,
-                Err(e) => break e,
+                if let Some(original_id) = compatible_layout {
+                    let original = &bgl_guard[original_id];
+                    BindGroupLayout {
+                        device_id: original.device_id.clone(),
+                        inner: crate::binding_model::BglOrDuplicate::Duplicate(original_id),
+                        multi_ref_count: crate::MultiRefCount::new(),
+                    }
+                } else {
+                    match device.create_bind_group_layout(device_id, &desc.label, entry_map) {
+                        Ok(layout) => layout,
+                        Err(e) => break e,
+                    }
+                }
             };
 
-            layout.compatible_layout = compatible_layout;
-
             let id = fid.assign(layout, &mut token);
+
+            if let Some(dupe) = compatible_layout {
+                log::trace!(
+                    "Device::create_bind_group_layout (duplicate of {dupe:?}) -> {:?}",
+                    id.0
+                );
+            } else {
+                log::trace!("Device::create_bind_group_layout -> {:?}", id.0);
+            }
 
             return (id.0, None);
         };
@@ -1125,7 +1185,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
         profiling::scope!("BindGroupLayout::drop");
-        log::debug!("bind group layout {:?} is dropped", bind_group_layout_id);
+        log::trace!("BindGroupLayout::drop {:?}", bind_group_layout_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1170,6 +1230,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1186,6 +1250,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let id = fid.assign(layout, &mut token);
+
+            log::trace!("Device::create_pipeline_layout -> {:?}", id.0);
+
             return (id.0, None);
         };
 
@@ -1199,7 +1266,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         profiling::scope!("PipelineLayout::drop");
-        log::debug!("pipeline layout {:?} is dropped", pipeline_layout_id);
+        log::trace!("PipelineLayout::drop {:?}", pipeline_layout_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1249,6 +1316,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace
@@ -1261,8 +1332,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(..) => break binding_model::CreateBindGroupError::InvalidLayout,
             };
 
+            if bind_group_layout.device_id.value.0 != device_id {
+                break DeviceError::WrongDevice.into();
+            }
+
             let mut layout_id = id::Valid(desc.layout);
-            if let Some(id) = bind_group_layout.compatible_layout {
+            if let Some(id) = bind_group_layout.as_duplicate() {
                 layout_id = id;
                 bind_group_layout = &bind_group_layout_guard[id];
             }
@@ -1281,7 +1356,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = bind_group.life_guard.add_ref();
 
             let id = fid.assign(bind_group, &mut token);
-            log::debug!("Bind group {:?}", id,);
+
+            log::trace!("Device::create_bind_group -> {:?}", id.0);
 
             device
                 .trackers
@@ -1301,7 +1377,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
         profiling::scope!("BindGroup::drop");
-        log::debug!("bind group {:?} is dropped", bind_group_id);
+        log::trace!("BindGroup::drop {:?}", bind_group_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1351,6 +1427,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
@@ -1381,6 +1461,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let id = fid.assign(shader, &mut token);
+
+            log::trace!("Device::create_shader_module -> {:?}", id.0);
+
             return (id.0, None);
         };
 
@@ -1416,6 +1499,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 let mut trace = trace.lock();
@@ -1448,7 +1535,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
         profiling::scope!("ShaderModule::drop");
-        log::debug!("shader module {:?} is dropped", shader_module_id);
+        log::trace!("ShaderModule::drop {:?}", shader_module_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1486,6 +1573,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid,
             };
+            if !device.valid {
+                break DeviceError::Lost;
+            }
+
             let dev_stored = Stored {
                 value: id::Valid(device_id),
                 ref_count: device.life_guard.add_ref(),
@@ -1506,10 +1597,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.features,
                 #[cfg(feature = "trace")]
                 device.trace.is_some(),
-                &desc.label,
+                desc.label
+                    .to_hal(device.instance_flags)
+                    .map(|s| s.to_string()),
             );
 
             let id = fid.assign(command_buffer, &mut token);
+
+            log::trace!("Device::create_command_encoder -> {:?}", id.0);
+
             return (id.0, None);
         };
 
@@ -1523,7 +1619,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("CommandEncoder::drop");
-        log::debug!("command encoder {:?} is dropped", command_encoder_id);
+        log::trace!("CommandEncoder::drop {:?}", command_encoder_id);
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1541,7 +1637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
-        log::debug!("command buffer {:?} is dropped", command_buffer_id);
+        log::trace!("CommandBuffer::drop {:?}", command_buffer_id);
         self.command_encoder_drop::<A>(command_buffer_id)
     }
 
@@ -1554,6 +1650,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Option<command::CreateRenderBundleError>,
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
+        log::trace!("Device::device_create_render_bundle_encoder");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -1579,6 +1676,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break command::RenderBundleError::INVALID_DEVICE,
             };
+            if !device.valid {
+                break command::RenderBundleError::INVALID_DEVICE;
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateRenderBundle {
@@ -1603,6 +1704,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let id = fid.assign(render_bundle, &mut token);
 
             device.trackers.lock().bundles.insert_single(id, ref_count);
+
+            log::trace!("RenderBundleEncoder::finish -> {:?}", id.0);
+
             return (id.0, None);
         };
 
@@ -1616,7 +1720,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
         profiling::scope!("RenderBundle::drop");
-        log::debug!("render bundle {:?} is dropped", render_bundle_id);
+        log::trace!("RenderBundle::drop {:?}", render_bundle_id);
         let hub = A::hub(self);
         let mut token = Token::root();
 
@@ -1661,6 +1765,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateQuerySet {
@@ -1687,12 +1795,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error("", &mut token);
+
+        log::trace!("Device::create_query_set -> {:?}", id);
+
         (id, Some(error))
     }
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
         profiling::scope!("QuerySet::drop");
-        log::debug!("query set {:?} is dropped", query_set_id);
+        log::trace!("QuerySet::drop {query_set_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -1742,6 +1853,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+        let implicit_error_context = implicit_context.clone();
 
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1750,6 +1862,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             let adapter = &adapter_guard[device.adapter_id.value];
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
@@ -1774,7 +1890,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
-            log::info!("Created render pipeline {:?} with {:?}", id, desc);
+            log::trace!("Device::create_render_pipeline -> {:?}", id.0);
 
             device
                 .trackers
@@ -1786,6 +1902,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+
+        // We also need to assign errors to the implicit pipeline layout and the
+        // implicit bind group layout. We have to remove any existing entries first.
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
+        let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
+        if let Some(ref ids) = implicit_error_context {
+            if pipeline_layout_guard.contains(ids.root_id) {
+                pipeline_layout_guard.remove(ids.root_id);
+            }
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                if bgl_guard.contains(bgl_id) {
+                    bgl_guard.remove(bgl_id);
+                }
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
+
         (id, Some(error))
     }
 
@@ -1802,26 +1936,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
         let error = loop {
-            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let (_, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
+            let device_id;
+            let id;
 
-            let pipeline = match pipeline_guard.get(pipeline_id) {
-                Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
-            };
-            let id = match pipeline_layout_guard[pipeline.layout_id.value]
-                .bind_group_layout_ids
-                .get(index as usize)
             {
-                Some(id) => id,
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+
+                let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+                let (_, mut token) = hub.bind_groups.read(&mut token);
+                let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
+
+                let pipeline = match pipeline_guard.get(pipeline_id) {
+                    Ok(pipeline) => pipeline,
+                    Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                };
+                id = match pipeline_layout_guard[pipeline.layout_id.value]
+                    .bind_group_layout_ids
+                    .get(index as usize)
+                {
+                    Some(id) => *id,
+                    None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                };
+
+                let layout = &bgl_guard[id];
+                layout.multi_ref_count.inc();
+
+                if G::ids_are_generated_in_wgpu() {
+                    return (id.0, None);
+                }
+
+                device_id = layout.device_id.clone();
+            }
+
+            // The ID is provided externally, so we must create a new bind group layout
+            // with the given ID as a duplicate of the existing one.
+            let new_layout = BindGroupLayout {
+                device_id,
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(id),
+                multi_ref_count: crate::MultiRefCount::new(),
             };
 
-            bgl_guard[*id].multi_ref_count.inc();
+            let fid = hub.bind_group_layouts.prepare(id_in);
+            let id = fid.assign(new_layout, &mut token);
+
             return (id.0, None);
         };
 
@@ -1838,7 +1997,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
         profiling::scope!("RenderPipeline::drop");
-        log::debug!("render pipeline {:?} is dropped", render_pipeline_id);
+        log::trace!("RenderPipeline::drop {:?}", render_pipeline_id);
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1886,6 +2045,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.compute_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+        let implicit_error_context = implicit_context.clone();
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let error = loop {
@@ -1893,6 +2053,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
+            if !device.valid {
+                break DeviceError::Lost.into();
+            }
+
             #[cfg(feature = "trace")]
             if let Some(ref trace) = device.trace {
                 trace.lock().add(trace::Action::CreateComputePipeline {
@@ -1901,7 +2065,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     implicit_context: implicit_context.clone(),
                 });
             }
-
             let pipeline = match device.create_compute_pipeline(
                 device_id,
                 desc,
@@ -1915,7 +2078,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ref_count = pipeline.life_guard.add_ref();
 
             let id = fid.assign(pipeline, &mut token);
-            log::info!("Created compute pipeline {:?} with {:?}", id, desc);
+            log::trace!("Device::create_compute_pipeline -> {:?}", id.0);
 
             device
                 .trackers
@@ -1926,6 +2089,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+
+        // We also need to assign errors to the implicit pipeline layout and the
+        // implicit bind group layout. We have to remove any existing entries first.
+        let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
+        let (mut bgl_guard, _token) = hub.bind_group_layouts.write(&mut token);
+        if let Some(ref ids) = implicit_error_context {
+            if pipeline_layout_guard.contains(ids.root_id) {
+                pipeline_layout_guard.remove(ids.root_id);
+            }
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            for &bgl_id in ids.group_ids.iter() {
+                if bgl_guard.contains(bgl_id) {
+                    bgl_guard.remove(bgl_id);
+                }
+                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+            }
+        }
+
         (id, Some(error))
     }
 
@@ -1942,26 +2123,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         let hub = A::hub(self);
         let mut token = Token::root();
-        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
 
         let error = loop {
-            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let (_, mut token) = hub.bind_groups.read(&mut token);
-            let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+            let device_id;
+            let id;
 
-            let pipeline = match pipeline_guard.get(pipeline_id) {
-                Ok(pipeline) => pipeline,
-                Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
-            };
-            let id = match pipeline_layout_guard[pipeline.layout_id.value]
-                .bind_group_layout_ids
-                .get(index as usize)
             {
-                Some(id) => id,
-                None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+
+                let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+                let (_, mut token) = hub.bind_groups.read(&mut token);
+                let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+
+                let pipeline = match pipeline_guard.get(pipeline_id) {
+                    Ok(pipeline) => pipeline,
+                    Err(_) => break binding_model::GetBindGroupLayoutError::InvalidPipeline,
+                };
+                id = match pipeline_layout_guard[pipeline.layout_id.value]
+                    .bind_group_layout_ids
+                    .get(index as usize)
+                {
+                    Some(id) => *id,
+                    None => break binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index),
+                };
+
+                let layout = &bgl_guard[id];
+                layout.multi_ref_count.inc();
+
+                if G::ids_are_generated_in_wgpu() {
+                    return (id.0, None);
+                }
+
+                device_id = layout.device_id.clone();
+            }
+
+            // The ID is provided externally, so we must create a new bind group layout
+            // with the given ID as a duplicate of the existing one.
+            let new_layout = BindGroupLayout {
+                device_id,
+                inner: crate::binding_model::BglOrDuplicate::<A>::Duplicate(id),
+                multi_ref_count: crate::MultiRefCount::new(),
             };
 
-            bgl_guard[*id].multi_ref_count.inc();
+            let fid = hub.bind_group_layouts.prepare(id_in);
+            let id = fid.assign(new_layout, &mut token);
+
             return (id.0, None);
         };
 
@@ -1978,7 +2184,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
         profiling::scope!("ComputePipeline::drop");
-        log::debug!("compute pipeline {:?} is dropped", compute_pipeline_id);
+        log::trace!("ComputePipeline::drop {:?}", compute_pipeline_id);
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -2129,130 +2335,148 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         log::info!("configuring surface with {:?}", config);
-        let hub = A::hub(self);
-        let mut token = Token::root();
-
-        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
-        let (device_guard, mut token) = hub.devices.read(&mut token);
 
         let error = 'outer: loop {
-            let device = match device_guard.get(device_id) {
-                Ok(device) => device,
-                Err(_) => break DeviceError::Invalid.into(),
-            };
-            #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace
-                    .lock()
-                    .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
-            }
+            // User callbacks must not be called while we are holding locks.
+            let user_callbacks;
+            {
+                let hub = A::hub(self);
+                let mut token = Token::root();
 
-            let surface = match surface_guard.get_mut(surface_id) {
-                Ok(surface) => surface,
-                Err(_) => break E::InvalidSurface,
-            };
+                let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+                let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+                let (device_guard, mut token) = hub.devices.read(&mut token);
 
-            let caps = unsafe {
-                let suf = A::get_surface(surface);
-                let adapter = &adapter_guard[device.adapter_id.value];
-                match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
-                    Some(caps) => caps,
-                    None => break E::UnsupportedQueueFamily,
+                let device = match device_guard.get(device_id) {
+                    Ok(device) => device,
+                    Err(_) => break DeviceError::Invalid.into(),
+                };
+                if !device.valid {
+                    break DeviceError::Lost.into();
                 }
-            };
 
-            let mut hal_view_formats = vec![];
-            for format in config.view_formats.iter() {
-                if *format == config.format {
-                    continue;
+                #[cfg(feature = "trace")]
+                if let Some(ref trace) = device.trace {
+                    trace
+                        .lock()
+                        .add(trace::Action::ConfigureSurface(surface_id, config.clone()));
                 }
-                if !caps.formats.contains(&config.format) {
-                    break 'outer E::UnsupportedFormat {
-                        requested: config.format,
-                        available: caps.formats,
-                    };
+
+                let surface = match surface_guard.get_mut(surface_id) {
+                    Ok(surface) => surface,
+                    Err(_) => break E::InvalidSurface,
+                };
+
+                let caps = unsafe {
+                    let suf = A::get_surface(surface);
+                    let adapter = &adapter_guard[device.adapter_id.value];
+                    match adapter.raw.adapter.surface_capabilities(&suf.unwrap().raw) {
+                        Some(caps) => caps,
+                        None => break E::UnsupportedQueueFamily,
+                    }
+                };
+
+                let mut hal_view_formats = vec![];
+                for format in config.view_formats.iter() {
+                    if *format == config.format {
+                        continue;
+                    }
+                    if !caps.formats.contains(&config.format) {
+                        break 'outer E::UnsupportedFormat {
+                            requested: config.format,
+                            available: caps.formats,
+                        };
+                    }
+                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                        break 'outer E::InvalidViewFormat(*format, config.format);
+                    }
+                    hal_view_formats.push(*format);
                 }
-                if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
-                    break 'outer E::InvalidViewFormat(*format, config.format);
+
+                if !hal_view_formats.is_empty() {
+                    if let Err(missing_flag) =
+                        device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                    {
+                        break 'outer E::MissingDownlevelFlags(missing_flag);
+                    }
                 }
-                hal_view_formats.push(*format);
-            }
 
-            if !hal_view_formats.is_empty() {
-                if let Err(missing_flag) =
-                    device.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
-                {
-                    break 'outer E::MissingDownlevelFlags(missing_flag);
+                let num_frames = present::DESIRED_NUM_FRAMES
+                    .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
+                let mut hal_config = hal::SurfaceConfiguration {
+                    swap_chain_size: num_frames,
+                    present_mode: config.present_mode,
+                    composite_alpha_mode: config.alpha_mode,
+                    format: config.format,
+                    extent: wgt::Extent3d {
+                        width: config.width,
+                        height: config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                    view_formats: hal_view_formats,
+                };
+
+                if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
+                    break error;
                 }
-            }
 
-            let num_frames = present::DESIRED_NUM_FRAMES
-                .clamp(*caps.swap_chain_sizes.start(), *caps.swap_chain_sizes.end());
-            let mut hal_config = hal::SurfaceConfiguration {
-                swap_chain_size: num_frames,
-                present_mode: config.present_mode,
-                composite_alpha_mode: config.alpha_mode,
-                format: config.format,
-                extent: wgt::Extent3d {
-                    width: config.width,
-                    height: config.height,
-                    depth_or_array_layers: 1,
-                },
-                usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
-                view_formats: hal_view_formats,
-            };
-
-            if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
-                break error;
-            }
-
-            // Wait for all work to finish before configuring the surface.
-            if let Err(e) = device.maintain(hub, wgt::Maintain::Wait, &mut token) {
-                break e.into();
-            }
-
-            // All textures must be destroyed before the surface can be re-configured.
-            if let Some(present) = surface.presentation.take() {
-                if present.acquired_texture.is_some() {
-                    break E::PreviousOutputExists;
+                // Wait for all work to finish before configuring the surface.
+                match device.maintain(hub, wgt::Maintain::Wait, &mut token) {
+                    Ok((closures, _)) => {
+                        user_callbacks = closures;
+                    }
+                    Err(e) => {
+                        break e.into();
+                    }
                 }
-            }
 
-            // TODO: Texture views may still be alive that point to the texture.
-            // this will allow the user to render to the surface texture, long after
-            // it has been removed.
-            //
-            // https://github.com/gfx-rs/wgpu/issues/4105
+                // All textures must be destroyed before the surface can be re-configured.
+                if let Some(present) = surface.presentation.take() {
+                    if present.acquired_texture.is_some() {
+                        break E::PreviousOutputExists;
+                    }
+                }
 
-            match unsafe {
-                A::get_surface_mut(surface)
-                    .unwrap()
-                    .raw
-                    .configure(&device.raw, &hal_config)
-            } {
-                Ok(()) => (),
-                Err(error) => {
-                    break match error {
-                        hal::SurfaceError::Outdated | hal::SurfaceError::Lost => E::InvalidSurface,
-                        hal::SurfaceError::Device(error) => E::Device(error.into()),
-                        hal::SurfaceError::Other(message) => {
-                            log::error!("surface configuration failed: {}", message);
-                            E::InvalidSurface
+                // TODO: Texture views may still be alive that point to the texture.
+                // this will allow the user to render to the surface texture, long after
+                // it has been removed.
+                //
+                // https://github.com/gfx-rs/wgpu/issues/4105
+
+                match unsafe {
+                    A::get_surface_mut(surface)
+                        .unwrap()
+                        .raw
+                        .configure(&device.raw, &hal_config)
+                } {
+                    Ok(()) => (),
+                    Err(error) => {
+                        break match error {
+                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
+                                E::InvalidSurface
+                            }
+                            hal::SurfaceError::Device(error) => E::Device(error.into()),
+                            hal::SurfaceError::Other(message) => {
+                                log::error!("surface configuration failed: {}", message);
+                                E::InvalidSurface
+                            }
                         }
                     }
                 }
+
+                surface.presentation = Some(present::Presentation {
+                    device_id: Stored {
+                        value: id::Valid(device_id),
+                        ref_count: device.life_guard.add_ref(),
+                    },
+                    config: config.clone(),
+                    num_frames,
+                    acquired_texture: None,
+                });
             }
 
-            surface.presentation = Some(present::Presentation {
-                device_id: Stored {
-                    value: id::Valid(device_id),
-                    ref_count: device.life_guard.add_ref(),
-                },
-                config: config.clone(),
-                num_frames,
-                acquired_texture: None,
-            });
+            user_callbacks.fire();
 
             return None;
         };
@@ -2268,6 +2492,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = device_guard.get(device_id).map_err(|_| InvalidDevice)?;
+        if !device.valid {
+            return Err(InvalidDevice);
+        }
         device.lock_life(&mut token).triage_suspected(
             hub,
             &device.trackers,
@@ -2286,6 +2513,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
+        log::trace!("Device::poll");
+
         let (closures, queue_empty) = {
             if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
                 if submission_index.queue_id != device_id {
@@ -2401,26 +2630,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_start_capture<A: HalApi>(&self, id: DeviceId) {
+        log::trace!("Device::start_capture");
+
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         if let Ok(device) = device_guard.get(id) {
+            if !device.valid {
+                return;
+            }
             unsafe { device.raw.start_capture() };
         }
     }
 
     pub fn device_stop_capture<A: HalApi>(&self, id: DeviceId) {
+        log::trace!("Device::stop_capture");
+
         let hub = A::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         if let Ok(device) = device_guard.get(id) {
+            if !device.valid {
+                return;
+            }
             unsafe { device.raw.stop_capture() };
         }
     }
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
-        log::debug!("device {:?} is dropped", device_id);
+        log::trace!("Device::drop {device_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -2432,6 +2671,55 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut device_guard, _) = hub.devices.write(&mut token);
         if let Ok(device) = device_guard.get_mut(device_id) {
             device.life_guard.ref_count.take().unwrap();
+        }
+    }
+
+    pub fn device_set_device_lost_closure<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+        device_lost_closure: DeviceLostClosure,
+    ) {
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            let mut life_tracker = device.lock_life(&mut token);
+            life_tracker.device_lost_closure = Some(device_lost_closure);
+        }
+    }
+
+    pub fn device_destroy<A: HalApi>(&self, device_id: DeviceId) {
+        log::trace!("Device::destroy {device_id:?}");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, _) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            // Follow the steps at
+            // https://gpuweb.github.io/gpuweb/#dom-gpudevice-destroy.
+
+            // The last part of destroy is to lose the device. The spec says
+            // delay that until all "currently-enqueued operations on any
+            // queue on this device are completed." This is accomplished by
+            // setting valid to false, and then relying upon maintain to
+            // check for empty queues and a DeviceLostClosure. At that time,
+            // the DeviceLostClosure will be called with "destroyed" as the
+            // reason.
+            device.valid = false;
+        }
+    }
+
+    pub fn device_mark_lost<A: HalApi>(&self, device_id: DeviceId, message: &str) {
+        log::trace!("Device::mark_lost {device_id:?}");
+
+        let hub = A::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        if let Ok(device) = device_guard.get_mut(device_id) {
+            device.lose(&mut token, message);
         }
     }
 
@@ -2472,6 +2760,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
+        log::trace!("Buffer::map_async {buffer_id:?}");
+
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
         // into errors).
@@ -2519,6 +2809,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
+            let device = &device_guard[buffer.device_id.value];
+            if !device.valid {
+                return Err((op, DeviceError::Lost.into()));
+            }
+
             if let Err(e) = check_buffer_usage(buffer.usage, pub_usage) {
                 return Err((op, e.into()));
             }
@@ -2559,8 +2854,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
-            let device = &device_guard[buffer.device_id.value];
-
             let ret = (buffer.device_id.value, buffer.life_guard.add_ref());
 
             let mut trackers = device.trackers.lock();
@@ -2573,7 +2866,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &device_guard[device_id];
-
+        // Validity of device was confirmed in the code block that set device_id.
         device
             .lock_life(&mut token)
             .map(id::Valid(buffer_id), ref_count);
@@ -2588,6 +2881,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
+        log::trace!("Buffer::get_mapped_range {buffer_id:?}");
 
         let hub = A::hub(self);
         let mut token = Token::root();
@@ -2748,6 +3042,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn buffer_unmap<A: HalApi>(&self, buffer_id: id::BufferId) -> BufferAccessResult {
         profiling::scope!("unmap", "Buffer");
+        log::trace!("Buffer::unmap {buffer_id:?}");
 
         let closure;
         {
@@ -2761,6 +3056,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get_mut(buffer_id)
                 .map_err(|_| BufferAccessError::Invalid)?;
             let device = &mut device_guard[buffer.device_id.value];
+            if !device.valid {
+                return Err(DeviceError::Lost.into());
+            }
 
             closure = self.buffer_unmap_inner(buffer_id, buffer, device)
         }

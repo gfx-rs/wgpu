@@ -10,9 +10,14 @@ on:
 env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
+  WGPU_DX12_COMPILER: dxc
   RUST_LOG: info
   RUST_BACKTRACE: full
-  MSRV: 1.65
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.70"
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # to ensure that they can be used with firefox.
+  CORE_MSRV: "1.65"
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: --cfg=web_sys_unstable_apis -D warnings
   RUSTDOCFLAGS: -Dwarnings
@@ -32,7 +37,7 @@ env:
 # It adds overhead to the build and another point of failure.
 
 jobs:
-  check-msrv:
+  check:
     strategy:
       fail-fast: false
       matrix:
@@ -95,10 +100,11 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
-      - name: Install MSRV toolchain
+      - name: Install Repo MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -113,7 +119,7 @@ jobs:
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
-      - name: install aarch64-linux-gnu g++
+      - name: (linux aarch64) install aarch64-linux-gnu g++
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           set -e
@@ -122,7 +128,7 @@ jobs:
 
           sudo apt-get install g++-aarch64-linux-gnu
 
-      - name: add android apk to path
+      - name: (android) add android apk to path
         if: matrix.target == 'aarch64-linux-android'
         run: |
           # clang++ will be detected correctly by CC from path
@@ -176,12 +182,122 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} --all-features --no-deps
 
+  # We run minimal checks on the MSRV of the core crates, ensuring that
+  # its dependency tree does not cause issues for firefox.
+  #
+  # We don't test all platforms, just ones with different dependency stacks.
+  check-core-msrv:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+          # MacOS
+          - name: MacOS x86_64
+            os: macos-12
+            target: x86_64-apple-darwin
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+
+    name: MSRV Check ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Core MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup override set ${{ env.CORE_MSRV }}
+          cargo -V
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+
+      - name: check native
+        shell: bash
+        run: |
+          set -e
+
+          # check wgpu-core with all features. This will also get wgpu-hal and wgpu-types.
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
+
+  naga-minimal-versions:
+    name: MSRV naga Minimal Versions
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Core MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup override set ${{ env.CORE_MSRV }}
+          cargo -V
+
+      - name: Install Nightly toolchain
+        run: |
+          rustup toolchain install nightly --no-self-update --profile=minimal --component clippy
+          cargo +nightly -V
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+
+      - name: disable debug
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: Set Minimal Versions
+        shell: bash
+        run: |
+          set -e
+
+          cargo +nightly hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+
+      - name: Clippy
+        shell: bash
+        run: |
+          set -e
+
+          cargo clippy --all-features -p naga -p naga-cli
+
   wasm-test:
     name: Test WebAssembly
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
+
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target wasm32-unknown-unknown
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: Install wasm-pack
         uses: taiki-e/install-action@v2
@@ -201,18 +317,14 @@ jobs:
           # Windows
           - name: Windows x86_64
             os: windows-2022
-            backends: dx12
 
           # Mac
           - name: Mac aarch64
             os: [self-hosted, macOS]
-            backends: vulkan metal
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-22.04
-            backends: vulkan gl
-
 
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -221,23 +333,61 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
+          cargo -V
+
       - name: Install cargo-nextest and cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
-      - name: install swiftshader
-        if: matrix.os == 'ubuntu-22.04'
+        # Cache step must go before warp and mesa install on windows as they write into the
+        # target directory, and rust-cache will overwrite the entirety of the target directory.
+      - name: caching
+        uses: Swatinem/rust-cache@v2
+        if: matrix.os[0] != 'self-hosted'
+        with:
+          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          workspaces: |
+            . -> target
+            xtask -> xtask/target
+
+      - name: (windows) install dxc
+        if: matrix.os == 'windows-2022'
+        uses: napokue/setup-dxc@v1.1.0
+
+      - name: (windows) install warp
+        if: matrix.os == 'windows-2022'
         shell: bash
         run: |
           set -e
 
-          mkdir -p swiftshader
-          curl -LsSf https://github.com/gfx-rs/ci-build/releases/latest/download/swiftshader-linux-x86_64.tar.xz | tar -xf - -C swiftshader
+          curl.exe -L https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.7.1 -o warp.zip
+          7z.exe e warp.zip -owarp build/native/amd64/d3d10warp.dll
 
-          echo "VK_ICD_FILENAMES=$PWD/swiftshader/vk_swiftshader_icd.json" >> $GITHUB_ENV
+          mkdir -p target/llvm-cov-target/debug/deps
 
-      - name: install llvmpipe, vulkan sdk
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/
+          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/deps
+
+      - name: (windows) install mesa
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z -o mesa.7z
+          7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
+
+          cp -v mesa/* target/llvm-cov-target/debug/
+          cp -v mesa/* target/llvm-cov-target/debug/deps
+
+          echo "VK_DRIVER_FILES=$PWD/mesa/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
+          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+
+      - name: (linux) install llvmpipe, lavapipe, vulkan sdk
         if: matrix.os == 'ubuntu-22.04'
         shell: bash
         run: |
@@ -249,8 +399,10 @@ jobs:
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
           sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
 
+          sudo add-apt-repository ppa:kisak/kisak-mesa
+
           sudo apt-get update
-          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk
+          sudo apt install -y libegl1-mesa libgl1-mesa-dri libxcb-xfixes0-dev vulkan-sdk mesa-vulkan-drivers
 
       - name: disable debug
         shell: bash
@@ -260,28 +412,25 @@ jobs:
           [profile.dev]
           debug = 1" >> .cargo/config.toml
 
-      - name: caching
-        uses: Swatinem/rust-cache@v2
-        if: matrix.os[0] != 'self-hosted'
-        with:
-          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
-
       - name: run wgpu-info
         shell: bash
         run: |
-          set -e
+          echo "$PATH"
+          
+          export RUST_LOG=trace
 
-          cargo llvm-cov --no-cfg-coverage run --bin wgpu-info --no-report --features vulkan-portability
+          # This needs to match the command in xtask/tests.rs
+          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info
 
       - name: run tests
         shell: bash
         run: |
           set -e
 
-          for backend in ${{ matrix.backends }}; do
-            echo "======= NATIVE TESTS $backend ======";
-            WGPU_BACKEND=$backend cargo llvm-cov --no-cfg-coverage nextest --no-fail-fast --no-report --features vulkan-portability
-          done
+          cargo xtask test --llvm-cov
+
+      - name: check naga snapshots
+        run: git diff --exit-code -- naga/tests/out
 
       - uses: actions/upload-artifact@v3
         if: always() # We want artifacts even if the tests fail.
@@ -292,7 +441,9 @@ jobs:
             **/*-difference.png
 
       - name: generate coverage report
+        id: coverage
         shell: bash
+        continue-on-error: true
         run: |
           set -e
 
@@ -300,6 +451,7 @@ jobs:
 
       - name: upload coverage report to codecov
         uses: codecov/codecov-action@v3
+        if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
 
@@ -311,6 +463,12 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
       - name: disable debug
         shell: bash
         run: |
@@ -322,7 +480,7 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+          key: doctests-${{ env.CACHE_SUFFIX }}
 
       - name: run doctests
         shell: bash
@@ -338,11 +496,18 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
 
+      - name: Install Repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
       - name: run rustfmt
         run: |
           cargo fmt -- --check
+          cargo fmt --manifest-path xtask/Cargo.toml -- --check
 
-  check-msrv-cts_runner:
+  check-cts-runner:
     name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
@@ -351,8 +516,9 @@ jobs:
 
       - name: Install MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup default ${{ env.MSRV }}
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: disable debug
         shell: bash
@@ -365,14 +531,17 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: cts_runner-${{ env.CACHE_SUFFIX }}
+          key: cts-runner-${{ env.CACHE_SUFFIX }}
 
       - name: build Deno
         run: |
           cargo clippy --manifest-path cts_runner/Cargo.toml
 
+  # Separate job so that new advisories don't block CI.
+  #
+  # This job is not required to pass for PRs to be merged.
   cargo-deny-check-advisories:
-    name: "Run `cargo deny check advisories`"
+    name: "cargo-deny advisories"
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
@@ -383,10 +552,10 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
-          rust-version: ${{ env.MSRV }}
+          rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
-    name: "Run `cargo deny check`"
+    name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:
       - name: checkout repo
@@ -397,4 +566,4 @@ jobs:
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
-          rust-version: ${{ env.MSRV }}
+          rust-version: ${{ env.REPO_MSRV }}

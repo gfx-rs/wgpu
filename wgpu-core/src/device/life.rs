@@ -3,7 +3,7 @@ use crate::device::trace;
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
-        DeviceError,
+        DeviceError, DeviceLostClosure,
     },
     hal_api::HalApi,
     hub::{Hub, Token},
@@ -313,6 +313,11 @@ pub(super) struct LifetimeTracker<A: hal::Api> {
     /// must happen _after_ all mapped buffer callbacks are mapped, so we defer them
     /// here until the next time the device is maintained.
     work_done_closures: SmallVec<[SubmittedWorkDoneClosure; 1]>,
+
+    /// Closure to be called on "lose the device". This is invoked directly by
+    /// device.lose or by the UserCallbacks returned from maintain when the device
+    /// has been destroyed and its queues are empty.
+    pub device_lost_closure: Option<DeviceLostClosure>,
 }
 
 impl<A: hal::Api> LifetimeTracker<A> {
@@ -326,6 +331,7 @@ impl<A: hal::Api> LifetimeTracker<A> {
             free_resources: NonReferencedResources::new(),
             ready_to_map: Vec::new(),
             work_done_closures: SmallVec::new(),
+            device_lost_closure: None,
         }
     }
 
@@ -776,7 +782,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                     if bgl.multi_ref_count.dec_and_check_empty() {
                         // If This layout points to a compatible one, go over the latter
                         // to decrement the ref count and potentially destroy it.
-                        bgl_to_check = bgl.compatible_layout;
+                        bgl_to_check = bgl.as_duplicate();
 
                         log::debug!("Bind group layout {:?} will be destroyed", id);
                         #[cfg(feature = "trace")]
@@ -786,7 +792,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                         if let Some(lay) =
                             hub.bind_group_layouts.unregister_locked(id.0, &mut *guard)
                         {
-                            self.free_resources.bind_group_layouts.push(lay.raw);
+                            if let Some(inner) = lay.into_inner() {
+                                self.free_resources.bind_group_layouts.push(inner.raw);
+                            }
                         }
                     }
                 }

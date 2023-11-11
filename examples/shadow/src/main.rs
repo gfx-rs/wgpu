@@ -1,4 +1,4 @@
-use std::{borrow::Cow, f32::consts, iter, mem, ops::Range, rc::Rc};
+use std::{borrow::Cow, f32::consts, iter, mem, ops::Range, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};
@@ -80,8 +80,8 @@ struct Entity {
     mx_world: glam::Mat4,
     rotation_speed: f32,
     color: wgpu::Color,
-    vertex_buf: Rc<wgpu::Buffer>,
-    index_buf: Rc<wgpu::Buffer>,
+    vertex_buf: Arc<wgpu::Buffer>,
+    index_buf: Arc<wgpu::Buffer>,
     index_format: wgpu::IndexFormat,
     index_count: usize,
     uniform_offset: wgpu::DynamicOffset,
@@ -221,7 +221,7 @@ impl wgpu_example::framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
-        let cube_vertex_buf = Rc::new(device.create_buffer_init(
+        let cube_vertex_buf = Arc::new(device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Cubes Vertex Buffer"),
                 contents: bytemuck::cast_slice(&cube_vertex_data),
@@ -229,7 +229,7 @@ impl wgpu_example::framework::Example for Example {
             },
         ));
 
-        let cube_index_buf = Rc::new(device.create_buffer_init(
+        let cube_index_buf = Arc::new(device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Cubes Index Buffer"),
                 contents: bytemuck::cast_slice(&cube_index_data),
@@ -306,8 +306,8 @@ impl wgpu_example::framework::Example for Example {
                 mx_world: glam::Mat4::IDENTITY,
                 rotation_speed: 0.0,
                 color: wgpu::Color::WHITE,
-                vertex_buf: Rc::new(plane_vertex_buf),
-                index_buf: Rc::new(plane_index_buf),
+                vertex_buf: Arc::new(plane_vertex_buf),
+                index_buf: Arc::new(plane_index_buf),
                 index_format,
                 index_count: plane_index_data.len(),
                 uniform_offset: 0,
@@ -327,8 +327,8 @@ impl wgpu_example::framework::Example for Example {
                 mx_world,
                 rotation_speed: cube.rotation,
                 color: wgpu::Color::GREEN,
-                vertex_buf: Rc::clone(&cube_vertex_buf),
-                index_buf: Rc::clone(&cube_index_buf),
+                vertex_buf: Arc::clone(&cube_vertex_buf),
+                index_buf: Arc::clone(&cube_index_buf),
                 index_format,
                 index_count: cube_index_data.len(),
                 uniform_offset: ((i + 1) * uniform_alignment as usize) as _,
@@ -703,13 +703,7 @@ impl wgpu_example::framework::Example for Example {
         self.forward_depth = Self::create_depth_texture(config, device);
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        _spawner: &wgpu_example::framework::Spawner,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         // update uniforms
         for entity in self.entities.iter_mut() {
             if entity.rotation_speed != 0.0 {
@@ -773,7 +767,7 @@ impl wgpu_example::framework::Example for Example {
                         view: &light.target_view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
+                            store: wgpu::StoreOp::Store,
                         }),
                         stencil_ops: None,
                     }),
@@ -810,14 +804,14 @@ impl wgpu_example::framework::Example for Example {
                             b: 0.3,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.forward_depth,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: false,
+                        store: wgpu::StoreOp::Discard,
                     }),
                     stencil_ops: None,
                 }),
@@ -840,16 +834,16 @@ impl wgpu_example::framework::Example for Example {
     }
 }
 
+#[cfg(not(test))]
 fn main() {
     wgpu_example::framework::run::<Example>("shadow");
 }
 
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn shadow() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST: wgpu_example::framework::ExampleTestParams =
+    wgpu_example::framework::ExampleTestParams {
+        name: "shadow",
         image_path: "/examples/shadow/screenshot.png",
         width: 1024,
         height: 768,
@@ -860,12 +854,10 @@ fn shadow() {
             .expect_fail(wgpu_test::FailureCase::backend_adapter(
                 wgpu::Backends::VULKAN,
                 "V3D",
-            ))
-            // llvmpipe versions in CI are flaky: https://github.com/gfx-rs/wgpu/issues/2594
-            .skip(wgpu_test::FailureCase::backend_adapter(
-                wgpu::Backends::VULKAN,
-                "llvmpipe",
             )),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
-    });
-}
+        _phantom: std::marker::PhantomData::<Example>,
+    };
+
+#[cfg(test)]
+wgpu_test::gpu_test_main!();

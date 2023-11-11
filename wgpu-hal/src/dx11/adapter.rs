@@ -152,6 +152,9 @@ impl super::Adapter {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
+        // bgra8unorm-storage is never supported on dx11 according to:
+        // https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/format-support-for-direct3d-11-0-feature-level-hardware#dxgi_format_b8g8r8a8_unormfcs-87
+
         //
         // Fill out limits and alignments
         //
@@ -170,7 +173,8 @@ impl super::Adapter {
         let max_vertex_buffers = match feature_level {
             FL9_1..=FL9_3 => 16,
             _ => 32,
-        };
+        }
+        .min(crate::MAX_VERTEX_BUFFERS as u32);
         let max_compute_workgroup_storage_size = match feature_level {
             FL9_1..=FL9_3 => 0,
             FL10_0 | FL10_1 => 4096 * 4, // This doesn't have an equiv SM4 constant :\

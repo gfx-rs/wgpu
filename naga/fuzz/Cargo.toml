@@ -1,0 +1,43 @@
+[package]
+name = "naga-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
+arbitrary = { version = "1.3.2", features = ["derive"] }
+libfuzzer-sys = "0.4"
+
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies.naga]
+path = ".."
+version = "0.14.0"
+features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in", "validate"]
+
+[[bin]]
+name = "spv_parser"
+path = "fuzz_targets/spv_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "wgsl_parser"
+path = "fuzz_targets/wgsl_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "glsl_parser"
+path = "fuzz_targets/glsl_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ir"
+path = "fuzz_targets/ir.rs"
+test = false
+doc = false

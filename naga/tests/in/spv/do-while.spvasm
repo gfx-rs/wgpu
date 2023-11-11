@@ -1,0 +1,64 @@
+;; Ensure that `do`-`while`-style loops, with conditional backedges, are properly
+;; supported, via `break if` (as `continuing { ... if c { break; } }` is illegal).
+;;
+;; The SPIR-V below was compiled from this GLSL fragment shader:
+;; ```glsl
+;; #version 450
+;;
+;; void f(bool cond) {
+;;     do {} while(cond);
+;; }
+;;
+;; void main() {
+;;     f(false);
+;; }
+;; ```
+
+               OpCapability Shader
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main"
+               OpExecutionMode %main OriginUpperLeft
+               OpSource GLSL 450
+               OpName %main "main"
+               OpName %f_b1_ "f(b1;"
+               OpName %cond "cond"
+               OpName %param "param"
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %bool = OpTypeBool
+%_ptr_Function_bool = OpTypePointer Function %bool
+          %8 = OpTypeFunction %void %_ptr_Function_bool
+      %false = OpConstantFalse %bool
+
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+      %param = OpVariable %_ptr_Function_bool Function
+               OpStore %param %false
+         %19 = OpFunctionCall %void %f_b1_ %param
+               OpReturn
+               OpFunctionEnd
+
+      %f_b1_ = OpFunction %void None %8
+       %cond = OpFunctionParameter %_ptr_Function_bool
+
+         %11 = OpLabel
+               OpBranch %12
+
+         %12 = OpLabel
+               OpLoopMerge %14 %15 None
+               OpBranch %13
+
+         %13 = OpLabel
+               OpBranch %15
+
+;; This is the "continuing" block, and it contains a conditional branch between
+;; the backedge (back to the loop header) and the loop merge ("break") target.
+         %15 = OpLabel
+         %16 = OpLoad %bool %cond
+               OpBranchConditional %16 %12 %14
+
+         %14 = OpLabel
+               OpReturn
+
+               OpFunctionEnd

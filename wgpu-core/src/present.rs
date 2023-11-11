@@ -18,6 +18,7 @@ use crate::{
     device::{DeviceError, MissingDownlevelFlags, WaitIdleError},
     global::Global,
     hal_api::HalApi,
+    hal_label,
     hub::Token,
     id::{DeviceId, SurfaceId, TextureId, Valid},
     identity::{GlobalIdentityHandlerFactory, Input},
@@ -138,6 +139,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device, config) = match surface.presentation {
             Some(ref present) => {
                 let device = &device_guard[present.device_id.value];
+                if !device.is_valid() {
+                    return Err(DeviceError::Lost.into());
+                }
                 (device, present.config.clone())
             }
             None => return Err(SurfaceError::NotConfigured),
@@ -163,7 +167,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         } {
             Ok(Some(ast)) => {
                 let clear_view_desc = hal::TextureViewDescriptor {
-                    label: Some("(wgpu internal) clear surface texture view"),
+                    label: hal_label(
+                        Some("(wgpu internal) clear surface texture view"),
+                        self.instance.flags,
+                    ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,
@@ -290,6 +297,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &mut device_guard[present.device_id.value];
+        if !device.is_valid() {
+            return Err(DeviceError::Lost.into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {
@@ -376,6 +386,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &mut device_guard[present.device_id.value];
+        if !device.is_valid() {
+            return Err(DeviceError::Lost.into());
+        }
 
         #[cfg(feature = "trace")]
         if let Some(ref trace) = device.trace {

@@ -1,6 +1,6 @@
-use wasm_bindgen_test::*;
 use wgpu_test::{
-    image::ReadbackBuffers, initialize_test, FailureCase, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
+    TestingContext,
 };
 
 static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
@@ -24,6 +24,7 @@ static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Rgba8Sint,
     wgpu::TextureFormat::Bgra8Unorm,
     wgpu::TextureFormat::Bgra8UnormSrgb,
+    wgpu::TextureFormat::Rgb10a2Uint,
     wgpu::TextureFormat::Rgb10a2Unorm,
     wgpu::TextureFormat::Rg11b10Float,
     wgpu::TextureFormat::Rg32Uint,
@@ -325,81 +326,71 @@ fn clear_texture_tests(ctx: &TestingContext, formats: &[wgpu::TextureFormat]) {
     }
 }
 
-#[test]
-#[wasm_bindgen_test]
-fn clear_texture_uncompressed_gles_compat() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
-            .skip(FailureCase::webgl2())
-            .features(wgpu::Features::CLEAR_TEXTURE),
-        |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
-        },
+            .features(wgpu::Features::CLEAR_TEXTURE)
+            .skip(FailureCase::webgl2()),
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT);
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn clear_texture_uncompressed() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
-            .skip(FailureCase::webgl2())
             .expect_fail(FailureCase::backend(wgpu::Backends::GL))
             .features(wgpu::Features::CLEAR_TEXTURE),
-        |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED);
-        },
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, TEXTURE_FORMATS_UNCOMPRESSED);
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn clear_texture_depth() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_DEPTH: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
-            .skip(FailureCase::webgl2())
             .downlevel_flags(
                 wgpu::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                     | wgpu::DownlevelFlags::COMPUTE_SHADERS,
             )
+            .skip(FailureCase::webgl2())
             .limits(wgpu::Limits::downlevel_defaults())
             .features(wgpu::Features::CLEAR_TEXTURE),
-        |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH);
-        },
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, TEXTURE_FORMATS_DEPTH);
+    });
 
-#[test]
-#[wasm_bindgen_test]
-fn clear_texture_d32_s8() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_DEPTH32_STENCIL8: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::DEPTH32FLOAT_STENCIL8),
-        |ctx| {
-            clear_texture_tests(&ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]);
-        },
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, &[wgpu::TextureFormat::Depth32FloatStencil8]);
+    });
 
-#[test]
-fn clear_texture_bc() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_BC)
             // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
             .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
             // compressed texture copy to buffer not yet implemented
             .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
-        |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
-        },
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, TEXTURE_FORMATS_BC);
+    });
 
-#[test]
-fn clear_texture_astc() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC)
             .limits(wgpu::Limits {
@@ -410,23 +401,21 @@ fn clear_texture_astc() {
             .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
             // compressed texture copy to buffer not yet implemented
             .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
-        |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
-        },
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, TEXTURE_FORMATS_ASTC);
+    });
 
-#[test]
-fn clear_texture_etc2() {
-    initialize_test(
+#[gpu_test]
+static CLEAR_TEXTURE_COMPRESSED_ETC2: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
         TestParameters::default()
             .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ETC2)
             // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
             .expect_fail(FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"))
             // compressed texture copy to buffer not yet implemented
             .expect_fail(FailureCase::backend(wgpu::Backends::GL)),
-        |ctx| {
-            clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);
-        },
     )
-}
+    .run_sync(|ctx| {
+        clear_texture_tests(&ctx, TEXTURE_FORMATS_ETC2);
+    });

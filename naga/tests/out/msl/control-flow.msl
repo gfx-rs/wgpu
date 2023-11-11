@@ -1,0 +1,116 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void switch_default_break(
+    int i
+) {
+    switch(i) {
+        default: {
+            break;
+        }
+    }
+}
+
+void switch_case_break(
+) {
+    switch(0) {
+        case 0: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    return;
+}
+
+void loop_switch_continue(
+    int x
+) {
+    while(true) {
+        switch(x) {
+            case 1: {
+                continue;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    return;
+}
+
+struct main_Input {
+};
+kernel void main_(
+  metal::uint3 global_id [[thread_position_in_grid]]
+) {
+    int pos = {};
+    metal::threadgroup_barrier(metal::mem_flags::mem_device);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    switch(1) {
+        default: {
+            pos = 1;
+            break;
+        }
+    }
+    int _e4 = pos;
+    switch(_e4) {
+        case 1: {
+            pos = 0;
+            break;
+        }
+        case 2: {
+            pos = 1;
+            break;
+        }
+        case 3:
+        case 4: {
+            pos = 2;
+            break;
+        }
+        case 5: {
+            pos = 3;
+            break;
+        }
+        default:
+        case 6: {
+            pos = 4;
+            break;
+        }
+    }
+    switch(0u) {
+        case 0u: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    int _e11 = pos;
+    switch(_e11) {
+        case 1: {
+            pos = 0;
+            break;
+        }
+        case 2: {
+            pos = 1;
+            return;
+        }
+        case 3: {
+            pos = 2;
+            return;
+        }
+        case 4: {
+            return;
+        }
+        default: {
+            pos = 3;
+            return;
+        }
+    }
+}

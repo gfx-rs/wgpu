@@ -1,0 +1,18 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_1 {
+    float inner[2];
+};
+struct Ah {
+    type_1 inner;
+};
+
+kernel void cs_main(
+  device Ah const& ah [[user(fake0)]]
+) {
+    Ah ah_1 = ah;
+}

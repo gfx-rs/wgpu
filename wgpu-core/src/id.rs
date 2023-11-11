@@ -122,13 +122,19 @@ impl<T> Copy for Id<T> {}
 
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
-        Self(self.0, PhantomData)
+        *self
     }
 }
 
 impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        self.unzip().fmt(formatter)
+        let (index, epoch, backend) = self.unzip();
+        formatter
+            .debug_struct("Id")
+            .field("index", &index)
+            .field("epoch", &epoch)
+            .field("backend", &backend)
+            .finish()
     }
 }
 

@@ -1,7 +1,6 @@
 use std::{num::NonZeroU64, ops::Range};
 
-use wasm_bindgen_test::wasm_bindgen_test;
-use wgpu_test::{initialize_test, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
 
 fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -88,10 +87,9 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
 /// certain conditions. See https://github.com/gfx-rs/wgpu/issues/4122 for more information.
 ///
 /// This test will fail on nvidia if the bug is not properly worked around.
-#[wasm_bindgen_test]
-#[test]
-fn clear_buffer_bug() {
-    initialize_test(TestParameters::default(), |ctx| {
+#[gpu_test]
+static CLEAR_BUFFER_RANGE_RESPECTED: GpuTestConfiguration =
+    GpuTestConfiguration::new().run_sync(|ctx| {
         // This hits most of the cases in nvidia's clear buffer bug
         let mut succeeded = true;
         for power in 4..14 {
@@ -107,4 +105,3 @@ fn clear_buffer_bug() {
         }
         assert!(succeeded);
     });
-}

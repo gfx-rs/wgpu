@@ -197,6 +197,9 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
         // Packed 32-bit formats
         TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
+        TextureFormat::Rgb10a2Uint => {
+            unimplemented!("Current version of web_sys is missing {texture_format:?}")
+        }
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Float => tf::Rg11b10ufloat,
         // 64-bit formats
@@ -340,6 +343,18 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> web_sys::GpuPrimitive
     //TODO:
     //mapped.unclipped_depth(primitive.unclipped_depth);
 
+    match primitive.polygon_mode {
+        wgt::PolygonMode::Fill => {}
+        wgt::PolygonMode::Line => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_LINE
+        ),
+        wgt::PolygonMode::Point => panic!(
+            "{:?} is not enabled for this backend",
+            wgt::Features::POLYGON_MODE_POINT
+        ),
+    }
+
     mapped
 }
 
@@ -421,6 +436,15 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> web_sys::GpuBlendFactor {
         BlendFactor::SrcAlphaSaturated => bf::SrcAlphaSaturated,
         BlendFactor::Constant => bf::Constant,
         BlendFactor::OneMinusConstant => bf::OneMinusConstant,
+        BlendFactor::Src1
+        | BlendFactor::OneMinusSrc1
+        | BlendFactor::Src1Alpha
+        | BlendFactor::OneMinusSrc1Alpha => {
+            panic!(
+                "{:?} is not enabled for this backend",
+                wgt::Features::DUAL_SOURCE_BLENDING
+            )
+        }
     }
 }
 
@@ -621,11 +645,10 @@ fn map_color(color: wgt::Color) -> web_sys::GpuColorDict {
     web_sys::GpuColorDict::new(color.a, color.b, color.g, color.r)
 }
 
-fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
-    if store {
-        web_sys::GpuStoreOp::Store
-    } else {
-        web_sys::GpuStoreOp::Discard
+fn map_store_op(store: crate::StoreOp) -> web_sys::GpuStoreOp {
+    match store {
+        crate::StoreOp::Store => web_sys::GpuStoreOp::Store,
+        crate::StoreOp::Discard => web_sys::GpuStoreOp::Discard,
     }
 }
 
@@ -636,7 +659,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 9] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -673,6 +696,10 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 9] = [
     (
         wgt::Features::RG11B10UFLOAT_RENDERABLE,
         web_sys::GpuFeatureName::Rg11b10ufloatRenderable,
+    ),
+    (
+        wgt::Features::BGRA8UNORM_STORAGE,
+        web_sys::GpuFeatureName::Bgra8unormStorage,
     ),
 ];
 
@@ -812,7 +839,9 @@ fn future_request_device(
 
             (device_id, device_data, queue_id, queue_data)
         })
-        .map_err(|_| crate::RequestDeviceError)
+        .map_err(|error_value| crate::RequestDeviceError {
+            inner: crate::RequestDeviceErrorKind::Web(error_value),
+        })
 }
 
 fn future_pop_error_scope(result: JsFutureResult) -> Option<crate::Error> {
@@ -1056,7 +1085,7 @@ impl crate::context::Context for Context {
         Context(gpu)
     }
 
-    fn instance_create_surface(
+    unsafe fn instance_create_surface(
         &self,
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
@@ -1903,6 +1932,30 @@ impl crate::context::Context for Context {
 
     fn device_drop(&self, _device: &Self::DeviceId, _device_data: &Self::DeviceData) {
         // Device is dropped automatically
+    }
+
+    fn device_destroy(&self, _buffer: &Self::DeviceId, device_data: &Self::DeviceData) {
+        device_data.0.destroy();
+    }
+
+    fn device_mark_lost(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        _message: &str,
+    ) {
+        // TODO: figure out the GPUDevice implementation of this, including resolving
+        // the device.lost promise, which will require a different invocation pattern
+        // with a callback.
+    }
+
+    fn device_set_device_lost_callback(
+        &self,
+        _device: &Self::DeviceId,
+        _device_data: &Self::DeviceData,
+        _device_lost_callback: crate::context::DeviceLostCallback,
+    ) {
+        unimplemented!();
     }
 
     fn device_poll(

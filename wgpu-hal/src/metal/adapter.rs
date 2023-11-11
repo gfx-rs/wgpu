@@ -5,6 +5,8 @@ use wgt::{AstcBlock, AstcChannel};
 
 use std::{sync::Arc, thread};
 
+use super::TimestampQuerySupport;
+
 const MAX_COMMAND_BUFFERS: u64 = 2048;
 
 unsafe impl Send for super::Adapter {}
@@ -162,6 +164,11 @@ impl crate::Adapter<super::Api> for super::Adapter {
             Tf::Rgba8UnormSrgb | Tf::Bgra8UnormSrgb => {
                 let mut flags = all_caps;
                 flags.set(Tfc::STORAGE, pc.format_rgba8_srgb_all);
+                flags
+            }
+            Tf::Rgb10a2Uint => {
+                let mut flags = Tfc::COLOR_ATTACHMENT | msaa_count;
+                flags.set(Tfc::STORAGE, pc.format_rgb10a2_uint_write);
                 flags
             }
             Tf::Rgb10a2Unorm => {
@@ -397,7 +404,7 @@ const RGB10A2UNORM_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-const RGB10A2UINT_COLOR_WRITE: &[MTLFeatureSet] = &[
+const RGB10A2UINT_WRITE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
@@ -536,6 +543,26 @@ impl super::PrivateCapabilities {
             MTLReadWriteTextureTier::TierNone
         };
 
+        let mut timestamp_query_support = TimestampQuerySupport::empty();
+        if version.at_least((11, 0), (14, 0), os_is_mac)
+            && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary)
+        {
+            // If we don't support at stage boundary, don't support anything else.
+            timestamp_query_support.insert(TimestampQuerySupport::STAGE_BOUNDARIES);
+
+            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary) {
+                timestamp_query_support.insert(TimestampQuerySupport::ON_RENDER_ENCODER);
+            }
+            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary)
+            {
+                timestamp_query_support.insert(TimestampQuerySupport::ON_COMPUTE_ENCODER);
+            }
+            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtBlitBoundary) {
+                timestamp_query_support.insert(TimestampQuerySupport::ON_BLIT_ENCODER);
+            }
+            // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
+        }
+
         Self {
             family_check,
             msl_version: if os_is_xr || version.at_least((12, 0), (15, 0), os_is_mac) {
@@ -614,8 +641,7 @@ impl super::PrivateCapabilities {
             format_rgba8_srgb_no_write: !Self::supports_any(device, RGBA8_SRGB),
             format_rgb10a2_unorm_all: Self::supports_any(device, RGB10A2UNORM_ALL),
             format_rgb10a2_unorm_no_write: !Self::supports_any(device, RGB10A2UNORM_ALL),
-            format_rgb10a2_uint_color: !Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
-            format_rgb10a2_uint_color_write: Self::supports_any(device, RGB10A2UINT_COLOR_WRITE),
+            format_rgb10a2_uint_write: Self::supports_any(device, RGB10A2UINT_WRITE),
             format_rg11b10_all: Self::supports_any(device, RG11B10FLOAT_ALL),
             format_rg11b10_no_write: !Self::supports_any(device, RG11B10FLOAT_ALL),
             format_rgb9e5_all: Self::supports_any(device, RGB9E5FLOAT_ALL),
@@ -649,7 +675,7 @@ impl super::PrivateCapabilities {
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
             format_bgr10a2_no_write: !Self::supports_any(device, BGR10A2_ALL),
             max_buffers_per_stage: 31,
-            max_vertex_buffers: 31,
+            max_vertex_buffers: 31.min(crate::MAX_VERTEX_BUFFERS as u32),
             max_textures_per_stage: if os_is_mac
                 || (family_check && device.supports_family(MTLGPUFamily::Apple6))
             {
@@ -773,13 +799,7 @@ impl super::PrivateCapabilities {
             } else {
                 None
             },
-            support_timestamp_query: version.at_least((11, 0), (14, 0), os_is_mac)
-                && device
-                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary),
-            support_timestamp_query_in_passes: version.at_least((11, 0), (14, 0), os_is_mac)
-                && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary)
-                && device
-                    .supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary),
+            timestamp_query_support,
         }
     }
 
@@ -805,14 +825,23 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
-            | F::MULTI_DRAW_INDIRECT;
+            | F::MULTI_DRAW_INDIRECT
+            | F::BGRA8UNORM_STORAGE;
 
-        features.set(F::TIMESTAMP_QUERY, self.support_timestamp_query);
-        // TODO: Not yet implemented.
-        // features.set(
-        //     F::TIMESTAMP_QUERY_INSIDE_PASSES,
-        //     self.support_timestamp_query_in_passes,
-        // );
+        features.set(
+            F::TIMESTAMP_QUERY,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::STAGE_BOUNDARIES),
+        );
+        features.set(
+            F::TIMESTAMP_QUERY_INSIDE_PASSES,
+            self.timestamp_query_support
+                .contains(TimestampQuerySupport::INSIDE_WGPU_PASSES),
+        );
+        features.set(
+            F::DUAL_SOURCE_BLENDING,
+            self.msl_version >= MTLLanguageVersion::V1_2 && self.dual_source_blending,
+        );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
@@ -847,6 +876,7 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
+        features.set(F::SHADER_UNUSED_VERTEX_OUTPUT, true);
 
         features
     }
@@ -946,6 +976,7 @@ impl super::PrivateCapabilities {
             Tf::Bgra8Unorm => BGRA8Unorm,
             Tf::Rgba8Uint => RGBA8Uint,
             Tf::Rgba8Sint => RGBA8Sint,
+            Tf::Rgb10a2Uint => RGB10A2Uint,
             Tf::Rgb10a2Unorm => RGB10A2Unorm,
             Tf::Rg11b10Float => RG11B10Float,
             Tf::Rg32Uint => RG32Uint,

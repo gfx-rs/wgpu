@@ -87,15 +87,31 @@ pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
     fn borrow_option(&'a self) -> Option<&'a str>;
+    fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str>;
     fn borrow_or_default(&'a self) -> &'a str;
 }
 impl<'a> LabelHelpers<'a> for Label<'a> {
     fn borrow_option(&'a self) -> Option<&'a str> {
         self.as_ref().map(|cow| cow.as_ref())
     }
+    fn to_hal(&'a self, flags: wgt::InstanceFlags) -> Option<&'a str> {
+        if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
+            return None;
+        }
+
+        self.as_ref().map(|cow| cow.as_ref())
+    }
     fn borrow_or_default(&'a self) -> &'a str {
         self.borrow_option().unwrap_or_default()
     }
+}
+
+pub fn hal_label(opt: Option<&str>, flags: wgt::InstanceFlags) -> Option<&str> {
+    if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
+        return None;
+    }
+
+    opt
 }
 
 /// Reference count object that is 1:1 with each reference.
