@@ -3229,7 +3229,7 @@ impl TextureFormat {
 
     /// The number of bytes one [texel block](https://gpuweb.github.io/gpuweb/#texel-block) occupies during an image copy, if applicable.
     ///
-    /// Known also as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
+    /// Known as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
     ///
     /// Note that for uncompressed formats this is the same as the size of a single texel,
     /// since uncompressed formats have a block size of 1x1.
@@ -3238,14 +3238,14 @@ impl TextureFormat {
     ///  - the format is combined depth-stencil and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
-    #[deprecated(since = "0.19.0", note = "Use `block_size_in_bytes` instead.")]
+    #[deprecated(since = "0.19.0", note = "Use `block_copy_size` instead.")]
     pub fn block_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
-        self.block_size_in_bytes(aspect)
+        self.block_copy_size(aspect)
     }
 
     /// The number of bytes one [texel block](https://gpuweb.github.io/gpuweb/#texel-block) occupies during an image copy, if applicable.
     ///
-    /// Known also as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
+    /// Known as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
     ///
     /// Note that for uncompressed formats this is the same as the size of a single texel,
     /// since uncompressed formats have a block size of 1x1.
@@ -3254,7 +3254,7 @@ impl TextureFormat {
     ///  - the format is combined depth-stencil and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
-    pub fn block_size_in_bytes(&self, aspect: Option<TextureAspect>) -> Option<u32> {
+    pub fn block_copy_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
         match *self {
             Self::R8Unorm | Self::R8Snorm | Self::R8Uint | Self::R8Sint => Some(1),
 
