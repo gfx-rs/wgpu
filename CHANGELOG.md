@@ -248,6 +248,8 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
 - Let the `"strict_asserts"` feature enable check that wgpu-core's lock-ordering tokens are unique per thread. By @jimblandy in [#4258]([https://github.com/gfx-rs/wgpu/pull/4258])
 - Allow filtering labels out before they are passed to GPU drivers by @nical in [https://github.com/gfx-rs/wgpu/pull/4246](4246)
+- `DeviceLostClosure` callback mechanism provided so user agents can resolve `GPUDevice.lost` Promises at the appropriate time by @bradwerth in [#4645](https://github.com/gfx-rs/wgpu/pull/4645)
+
 
 #### Vulkan
 
@@ -273,6 +275,7 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Add `Feature::SHADER_UNUSED_VERTEX_OUTPUT` to allow unused vertex shader outputs. By @Aaron1011 in [#4116](https://github.com/gfx-rs/wgpu/pull/4116).
 - Fix a panic in `surface_configure`. By @nical in [#4220](https://github.com/gfx-rs/wgpu/pull/4220) and [#4227](https://github.com/gfx-rs/wgpu/pull/4227)
 - Pipelines register their implicit layouts in error cases. By @bradwerth in [#4624](https://github.com/gfx-rs/wgpu/pull/4624)
+- Better handle explicit destruction of textures and buffers. By @nical in [#4657](https://github.com/gfx-rs/wgpu/pull/4657)
 
 #### Vulkan
 

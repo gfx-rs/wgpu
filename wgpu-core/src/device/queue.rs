@@ -1111,12 +1111,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         used_surface_textures.set_size(texture_guard.len());
 
                         #[allow(unused_mut)]
-                        let mut cmdbuf = match hub
-                            .command_buffers
-                            .unregister_locked(cmb_id, &mut *command_buffer_guard)
+                        let mut cmdbuf = match command_buffer_guard.take_and_mark_destroyed(cmb_id)
                         {
-                            Some(cmdbuf) => cmdbuf,
-                            None => continue,
+                            Ok(cmdbuf) => cmdbuf,
+                            Err(_) => continue,
                         };
 
                         if cmdbuf.device_id.value.0 != queue_id {

@@ -14,7 +14,7 @@ path = "src/main.rs"
 bytemuck.workspace = true
 env_logger.workspace = true
 futures-intrusive.workspace = true
-getrandom = { version = "0.2.10", features = ["js"] }
+getrandom = { version = "0.2.11", features = ["js"] }
 log.workspace = true
 pollster.workspace = true
 wgpu.workspace = true
