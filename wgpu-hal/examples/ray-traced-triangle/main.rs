@@ -371,6 +371,7 @@ impl<A: hal::Api> Example<A> {
                 stage: hal::ProgrammableStage {
                     module: &shader_module,
                     entry_point: "main",
+                    constants: &Default::default(),
                 },
             })
         }

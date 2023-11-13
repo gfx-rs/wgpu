@@ -37,6 +37,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",
+                    constants: &Default::default(),
                     buffers: &[],
                 },
                 fragment: None,

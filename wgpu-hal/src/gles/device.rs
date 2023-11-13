@@ -218,6 +218,7 @@ impl super::Device {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_string(),
             multiview: context.multiview,
+            constants: stage.constants.to_owned(),
         };
 
         let shader = &stage.module.naga;
