@@ -53,6 +53,7 @@ impl IdentityManager {
     /// The backend is incorporated into the id, so that ids allocated with
     /// different `backend` values are always distinct.
     pub fn alloc<I: id::TypedId>(&mut self, backend: Backend) -> I {
+        println!("alloc id");
         match self.free.pop() {
             Some(index) => I::zip(index, self.epochs[index as usize], backend),
             None => {
@@ -66,6 +67,7 @@ impl IdentityManager {
 
     /// Free `id`. It will never be returned from `alloc` again.
     pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
+        println!("free id");
         let (index, epoch, _backend) = id.unzip();
         let pe = &mut self.epochs[index as usize];
         assert_eq!(*pe, epoch);

@@ -495,8 +495,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             log::trace!("Buffer::destroy {buffer_id:?}");
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-            let mut buffer = buffer_guard
-                .take_and_mark_destroyed(buffer_id)
+            let buffer = buffer_guard
+                .get_and_mark_destroyed(buffer_id)
                 .map_err(|_| resource::DestroyError::Invalid)?;
 
             let device = &mut device_guard[buffer.device_id.value];
@@ -506,7 +506,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 | &BufferMapState::Init { .. }
                 | &BufferMapState::Active { .. }
                 => {
-                    self.buffer_unmap_inner(buffer_id, &mut buffer, device)
+                    self.buffer_unmap_inner(buffer_id, buffer, device)
                         .unwrap_or(None)
                 }
                 _ => None,
@@ -551,7 +551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (ref_count, last_submit_index, device_id) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-            match buffer_guard.get_mut(buffer_id) {
+            match buffer_guard.get_occupied_or_destroyed(buffer_id) {
                 Ok(buffer) => {
                     let ref_count = buffer.life_guard.ref_count.take().unwrap();
                     let last_submit_index = buffer.life_guard.life_count();
@@ -800,8 +800,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
 
         let (mut texture_guard, _) = hub.textures.write(&mut token);
-        let mut texture = texture_guard
-            .take_and_mark_destroyed(texture_id)
+        let texture = texture_guard
+            .get_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let device = &mut device_guard[texture.device_id.value];
@@ -855,7 +855,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (ref_count, last_submit_index, device_id) = {
             let (mut texture_guard, _) = hub.textures.write(&mut token);
-            match texture_guard.get_mut(texture_id) {
+            match texture_guard.get_occupied_or_destroyed(texture_id) {
                 Ok(texture) => {
                     let ref_count = texture.life_guard.ref_count.take().unwrap();
                     let last_submit_index = texture.life_guard.life_count();

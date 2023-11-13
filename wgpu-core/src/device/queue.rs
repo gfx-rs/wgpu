@@ -1110,9 +1110,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // it, so make sure to set_size on it.
                         used_surface_textures.set_size(texture_guard.len());
 
+                        // TODO: ideally we would use `get_and_mark_destroyed` but the code here
+                        // wants to consume the command buffer.
                         #[allow(unused_mut)]
-                        let mut cmdbuf = match command_buffer_guard.take_and_mark_destroyed(cmb_id)
-                        {
+                        let mut cmdbuf = match command_buffer_guard.replace_with_error(cmb_id) {
                             Ok(cmdbuf) => cmdbuf,
                             Err(_) => continue,
                         };
