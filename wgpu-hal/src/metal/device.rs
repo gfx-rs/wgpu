@@ -112,6 +112,7 @@ impl super::Device {
                 metal::MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
+            constants: stage.constants.to_owned(),
         };
 
         let (source, info) = naga::back::msl::write_string(
