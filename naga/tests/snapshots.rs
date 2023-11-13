@@ -421,6 +421,7 @@ fn write_output_spv(
             let pipeline_options = spv::PipelineOptions {
                 entry_point: ep.name.clone(),
                 shader_stage: ep.stage,
+                constants: naga::back::PipelineConstants::default(),
             };
             write_output_spv_inner(
                 input,
@@ -509,6 +510,7 @@ fn write_output_glsl(
         shader_stage: stage,
         entry_point: ep_name.to_string(),
         multiview,
+        constants: naga::back::PipelineConstants::default(),
     };
 
     let mut buffer = String::new();
@@ -541,7 +543,9 @@ fn write_output_hlsl(
 
     let mut buffer = String::new();
     let mut writer = hlsl::Writer::new(&mut buffer, options);
-    let reflection_info = writer.write(module, info).expect("HLSL write failed");
+    let reflection_info = writer
+        .write(module, info, &hlsl::PipelineOptions::default())
+        .expect("HLSL write failed");
 
     input.write_output_file("hlsl", "hlsl", buffer);
 

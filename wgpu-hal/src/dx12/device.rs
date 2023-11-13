@@ -210,10 +210,13 @@ impl super::Device {
         //TODO: reuse the writer
         let mut source = String::new();
         let mut writer = hlsl::Writer::new(&mut source, &layout.naga_options);
+        let pipeline_options = hlsl::PipelineOptions {
+            constants: stage.constants.to_owned(),
+        };
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
-                .write(module, &stage.module.naga.info)
+                .write(module, &stage.module.naga.info, &pipeline_options)
                 .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?
         };
 

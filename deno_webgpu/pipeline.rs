@@ -8,6 +8,7 @@ use deno_core::ResourceId;
 use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use super::error::WebGpuError;
@@ -78,7 +79,7 @@ pub enum GPUPipelineLayoutOrGPUAutoLayoutMode {
 pub struct GpuProgrammableStage {
     module: ResourceId,
     entry_point: String,
-    // constants: HashMap<String, GPUPipelineConstantValue>
+    constants: HashMap<String, f64>,
 }
 
 #[op2]
@@ -113,8 +114,8 @@ pub fn op_webgpu_create_compute_pipeline(
         layout: pipeline_layout,
         stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
             module: compute_shader_module_resource.1,
-            entry_point: Cow::from(compute.entry_point),
-            // TODO(lucacasonato): support args.compute.constants
+            entry_point: Cow::Owned(compute.entry_point),
+            constants: Cow::Owned(compute.constants),
         },
     };
     let implicit_pipelines = match layout {
@@ -282,6 +283,7 @@ impl<'a> From<GpuVertexBufferLayout> for wgpu_core::pipeline::VertexBufferLayout
 struct GpuVertexState {
     module: ResourceId,
     entry_point: String,
+    constants: HashMap<String, f64>,
     buffers: Vec<Option<GpuVertexBufferLayout>>,
 }
 
@@ -309,7 +311,7 @@ struct GpuFragmentState {
     targets: Vec<Option<wgpu_types::ColorTargetState>>,
     module: u32,
     entry_point: String,
-    // TODO(lucacasonato): constants
+    constants: HashMap<String, f64>,
 }
 
 #[derive(Deserialize)]
@@ -358,9 +360,10 @@ pub fn op_webgpu_create_render_pipeline(
         Some(wgpu_core::pipeline::FragmentState {
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: fragment_shader_module_resource.1,
-                entry_point: Cow::from(fragment.entry_point),
+                entry_point: Cow::Owned(fragment.entry_point),
+                constants: Cow::Owned(fragment.constants),
             },
-            targets: Cow::from(fragment.targets),
+            targets: Cow::Owned(fragment.targets),
         })
     } else {
         None
@@ -381,6 +384,7 @@ pub fn op_webgpu_create_render_pipeline(
             stage: wgpu_core::pipeline::ProgrammableStageDescriptor {
                 module: vertex_shader_module_resource.1,
                 entry_point: Cow::Owned(args.vertex.entry_point),
+                constants: Cow::Owned(args.vertex.constants),
             },
             buffers: Cow::Owned(vertex_buffers),
         },

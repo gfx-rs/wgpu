@@ -70,17 +70,20 @@ static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfigurat
             write_mask: Default::default(),
         })];
 
+        let constants = std::collections::HashMap::default();
         let desc = wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &module,
                 entry_point: "vs_main",
+                constants: &constants,
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &module,
                 entry_point: "fs_main",
+                constants: &constants,
                 targets,
             }),
             primitive: wgpu::PrimitiveState::default(),
