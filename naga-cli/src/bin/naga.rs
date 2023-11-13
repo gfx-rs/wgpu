@@ -561,6 +561,7 @@ fn write_output(
                     pipeline_options_owned = spv::PipelineOptions {
                         entry_point: name.clone(),
                         shader_stage: module.entry_points[ep_index].stage,
+                        constants: naga::back::PipelineConstants::default(),
                     };
                     Some(&pipeline_options_owned)
                 }
@@ -601,6 +602,7 @@ fn write_output(
                     _ => unreachable!(),
                 },
                 multiview: None,
+                constants: naga::back::PipelineConstants::default(),
             };
 
             let mut buffer = String::new();
@@ -636,6 +638,7 @@ fn write_output(
                         "Generating hlsl output requires validation to \
                          succeed, and it failed in a previous step",
                     ))?,
+                    &hlsl::PipelineOptions::default(),
                 )
                 .unwrap_pretty();
             fs::write(output_path, buffer)?;

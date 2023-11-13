@@ -38,16 +38,18 @@ fn scissor_test_impl(ctx: &TestingContext, scissor_rect: Rect, expected_data: [u
             label: Some("Pipeline"),
             layout: None,
             vertex: wgpu::VertexState {
-                entry_point: "vs_main",
                 module: &shader,
+                entry_point: "vs_main",
+                constants: &Default::default(),
                 buffers: &[],
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
-                entry_point: "fs_main",
                 module: &shader,
+                entry_point: "fs_main",
+                constants: &Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,

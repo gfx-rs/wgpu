@@ -60,10 +60,12 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             module: &shader,
             entry_point: "vs_main",
             buffers: &[],
+            constants: &Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: "fs_main",
+            constants: &Default::default(),
             targets: &[Some(swapchain_format.into())],
         }),
         primitive: wgpu::PrimitiveState::default(),

@@ -1,7 +1,7 @@
 use super::{
     help::{WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess},
     storage::StoreValue,
-    BackendResult, Error, Options,
+    BackendResult, Error, Options, PipelineOptions,
 };
 use crate::{
     back,
@@ -183,6 +183,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         module_info: &valid::ModuleInfo,
+        _pipeline_options: &PipelineOptions,
     ) -> Result<super::ReflectionInfo, Error> {
         self.reset(module);
 
