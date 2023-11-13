@@ -22,6 +22,15 @@ const BAKE_PREFIX: &str = "_e";
 
 type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expression>>;
 
+/// Specifies the values of pipeline-overridable constants in the shader module.
+///
+/// If an `@id` attribute was specified on the declaration,
+/// the key must be the pipeline constant ID as a decimal ASCII number; if not,
+/// the key must be the constant's identifier name.
+///
+/// The value may represent any of WGSL's concrete scalar types.
+pub type PipelineConstants = std::collections::HashMap<String, f64>;
+
 #[derive(Clone, Copy)]
 struct Level(usize);
 

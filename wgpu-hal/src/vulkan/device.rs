@@ -722,6 +722,7 @@ impl super::Device {
                 let pipeline_options = naga::back::spv::PipelineOptions {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
+                    constants: stage.constants.to_owned(),
                 };
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
