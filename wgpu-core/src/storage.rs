@@ -137,10 +137,20 @@ where
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
             Element::Occupied(_, storage_epoch) => {
-                assert_ne!(epoch, storage_epoch, "Index {index:?} of {} is already occupied", T::TYPE);
+                assert_ne!(
+                    epoch,
+                    storage_epoch,
+                    "Index {index:?} of {} is already occupied",
+                    T::TYPE
+                );
             }
             Element::Error(storage_epoch, _) => {
-                assert_ne!(epoch, storage_epoch, "Index {index:?} of {} is already occupied with Error", T::TYPE);
+                assert_ne!(
+                    epoch,
+                    storage_epoch,
+                    "Index {index:?} of {} is already occupied with Error",
+                    T::TYPE
+                );
             }
         }
     }
@@ -154,7 +164,11 @@ where
     pub(crate) fn insert_error(&mut self, id: I, label: &str) {
         log::info!("User is insering as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
-        self.insert_impl(index as usize, epoch, Element::Error(epoch, label.to_string()))
+        self.insert_impl(
+            index as usize,
+            epoch,
+            Element::Error(epoch, label.to_string()),
+        )
     }
 
     pub(crate) fn take_and_mark_destroyed(&mut self, id: I) -> Result<Arc<T>, InvalidId> {
