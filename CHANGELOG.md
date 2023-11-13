@@ -42,11 +42,10 @@ Bottom level categories:
 
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
-### Major changes
+### Changes
+
 - Arcanization of wgpu core resources: Removed 'Token' and 'LifeTime' related management,
 removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal reference count, removing mut from resources and added instead internal members locks on demand or atomics operations, resources now implement Drop and destroy stuff when last 'Arc' resources is released, resources hold an 'Arc' in order to be able to implement Drop, resources have an utility to retrieve the id of the resource itself, removed all guards and just retrive the 'Arc' needed on-demand to unlock registry of resources asap removing locking from hot paths. By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
-
-### Changes
 
 #### General
 
@@ -377,16 +376,11 @@ By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904) and [#3905](ht
 #### Misc Breaking Changes
 
 - Change `AdapterInfo::{device,vendor}` to be `u32` instead of `usize`. By @ameknite in [#3760](https://github.com/gfx-rs/wgpu/pull/3760)
-- Remove the `backend_bits` parameter in `initialize_adapter_from_env` and `initialize_adapter_from_env_or_default` - use [InstanceDescriptor::backends](https://docs.rs/wgpu/latest/wgpu/struct.InstanceDescriptor.html#structfield.backends) instead. By @fornwall in [#3904](https://github.com/gfx-rs/wgpu/pull/3904)
-
-#### DX12
-
-- Increase the `max_storage_buffers_per_shader_stage` and `max_storage_textures_per_shader_stage` limits based on what the hardware supports. by @Elabajaba in [#3798]https://github.com/gfx-rs/wgpu/pull/3798
-- Add a `compatible_surface` parameter to `initialize_adapter_from_env` and use that to make `initialize_adapter_from_env_or_default` always respect its `compatible_surface` parameter. By @fornwall in [#3905](https://github.com/gfx-rs/wgpu/pull/3905)
 
 ### Changes
 
 - Added support for importing external buffers using `buffer_from_raw` (Dx12, Metal, Vulkan) and `create_buffer_from_hal`. By @AdrianEddy in [#3355](https://github.com/gfx-rs/wgpu/pull/3355)
+
 
 #### Vulkan
 
@@ -1088,7 +1082,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 #### Vulkan
 
-- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
+- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
 - Update to Naga b209d911 (2022-9-1) to avoid generating SPIR-V that
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in
