@@ -276,7 +276,7 @@ impl Default for Options {
 }
 
 /// A subset of options meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -288,6 +288,8 @@ pub struct PipelineOptions {
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
     pub multiview: Option<std::num::NonZeroU32>,
+    /// Pipeline constants.
+    pub constants: back::PipelineConstants,
 }
 
 #[derive(Debug)]

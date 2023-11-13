@@ -198,6 +198,7 @@ fn backends(c: &mut Criterion) {
                     let pipeline_options = naga::back::spv::PipelineOptions {
                         shader_stage: ep.stage,
                         entry_point: ep.name.clone(),
+                        constants: naga::back::PipelineConstants::default(),
                     };
                     writer
                         .write(module, info, Some(&pipeline_options), &None, &mut data)
@@ -228,10 +229,11 @@ fn backends(c: &mut Criterion) {
     group.bench_function("hlsl", |b| {
         b.iter(|| {
             let options = naga::back::hlsl::Options::default();
+            let pipeline_options = naga::back::hlsl::PipelineOptions::default();
             let mut string = String::new();
             for &(ref module, ref info) in inputs.iter() {
                 let mut writer = naga::back::hlsl::Writer::new(&mut string, &options);
-                let _ = writer.write(module, info); // may fail on unimplemented things
+                let _ = writer.write(module, info, &pipeline_options); // may fail on unimplemented things
                 string.clear();
             }
         });
@@ -253,6 +255,7 @@ fn backends(c: &mut Criterion) {
                         shader_stage: ep.stage,
                         entry_point: ep.name.clone(),
                         multiview: None,
+                        constants: naga::back::PipelineConstants::default(),
                     };
 
                     // might be `Err` if missing features
