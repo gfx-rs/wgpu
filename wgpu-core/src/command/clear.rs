@@ -331,7 +331,7 @@ fn clear_texture_via_buffer_copies<A: hal::Api>(
     let mut zero_buffer_copy_regions = Vec::new();
     let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;
     let (block_width, block_height) = texture_desc.format.block_dimensions();
-    let block_size = texture_desc.format.block_size(None).unwrap();
+    let block_size = texture_desc.format.block_copy_size(None).unwrap();
 
     let bytes_per_row_alignment = get_lowest_common_denom(buffer_copy_pitch, block_size);
 

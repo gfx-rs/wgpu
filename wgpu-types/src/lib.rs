@@ -2813,7 +2813,9 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the dimension of a block of texels.
+    /// Returns the dimension of a [block](https://gpuweb.github.io/gpuweb/#texel-block) of texels.
+    ///
+    /// Uncompressed formats have a block dimension of `(1, 1)`.
     pub fn block_dimensions(&self) -> (u32, u32) {
         match *self {
             Self::R8Unorm
@@ -3225,14 +3227,34 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the [texel block size](https://gpuweb.github.io/gpuweb/#texel-block-size)
-    /// of this format.
+    /// The number of bytes one [texel block](https://gpuweb.github.io/gpuweb/#texel-block) occupies during an image copy, if applicable.
+    ///
+    /// Known as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
+    ///
+    /// Note that for uncompressed formats this is the same as the size of a single texel,
+    /// since uncompressed formats have a block size of 1x1.
     ///
     /// Returns `None` if any of the following are true:
     ///  - the format is combined depth-stencil and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
+    #[deprecated(since = "0.19.0", note = "Use `block_copy_size` instead.")]
     pub fn block_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
+        self.block_copy_size(aspect)
+    }
+
+    /// The number of bytes one [texel block](https://gpuweb.github.io/gpuweb/#texel-block) occupies during an image copy, if applicable.
+    ///
+    /// Known as the [texel block copy footprint](https://gpuweb.github.io/gpuweb/#texel-block-copy-footprint).
+    ///
+    /// Note that for uncompressed formats this is the same as the size of a single texel,
+    /// since uncompressed formats have a block size of 1x1.
+    ///
+    /// Returns `None` if any of the following are true:
+    ///  - the format is combined depth-stencil and no `aspect` was provided
+    ///  - the format is `Depth24Plus`
+    ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
+    pub fn block_copy_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
         match *self {
             Self::R8Unorm | Self::R8Snorm | Self::R8Uint | Self::R8Sint => Some(1),
 

@@ -23,7 +23,7 @@ impl super::Texture {
                 buffer_offset: r.buffer_layout.offset,
                 buffer_row_length: r.buffer_layout.bytes_per_row.map_or(0, |bpr| {
                     let block_size = format
-                        .block_size(Some(r.texture_base.aspect.map()))
+                        .block_copy_size(Some(r.texture_base.aspect.map()))
                         .unwrap();
                     block_width * (bpr / block_size)
                 }),

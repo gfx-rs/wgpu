@@ -39,7 +39,7 @@ impl crate::BufferTextureCopy {
                     let actual = self.buffer_layout.bytes_per_row.unwrap_or_else(|| {
                         // this may happen for single-line updates
                         let block_size = format
-                            .block_size(Some(self.texture_base.aspect.map()))
+                            .block_copy_size(Some(self.texture_base.aspect.map()))
                             .unwrap();
                         (self.size.width / block_width) * block_size
                     });

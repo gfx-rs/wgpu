@@ -254,7 +254,7 @@ pub(crate) fn validate_linear_texture_data(
 
     let offset = layout.offset;
 
-    let block_size = format.block_size(Some(aspect)).unwrap() as BufferAddress;
+    let block_size = format.block_copy_size(Some(aspect)).unwrap() as BufferAddress;
     let (block_width, block_height) = format.block_dimensions();
     let block_width = block_width as BufferAddress;
     let block_height = block_height as BufferAddress;
