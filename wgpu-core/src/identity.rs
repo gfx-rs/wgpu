@@ -53,7 +53,7 @@ impl IdentityValues {
             Some((index, epoch)) => I::zip(index, epoch + 1, backend),
             None => {
                 let epoch = 1;
-                let used = self.used.entry(epoch).or_default();
+                let used = self.used.entry(epoch).or_insert_with(Default::default);
                 let index = if let Some(i) = used.iter().max_by_key(|v| *v) {
                     i + 1
                 } else {
@@ -68,7 +68,7 @@ impl IdentityValues {
     pub fn mark_as_used<I: id::TypedId>(&mut self, id: I) -> I {
         self.count += 1;
         let (index, epoch, _backend) = id.unzip();
-        let used = self.used.entry(epoch).or_default();
+        let used = self.used.entry(epoch).or_insert_with(Default::default);
         used.push(index);
         id
     }

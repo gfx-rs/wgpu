@@ -13,11 +13,8 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
-        case.submit_command_encoder();
-
-        case.create_command_encoder();
         case.copy_texture_to_buffer();
-        case.submit_command_encoder();
+        case.submit_command_encoder_and_wait();
 
         case.assert_buffers_are_zero();
     });
@@ -31,7 +28,7 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
         case.create_command_encoder();
         case.discard();
         case.copy_texture_to_buffer();
-        case.submit_command_encoder();
+        case.submit_command_encoder_and_wait();
 
         case.assert_buffers_are_zero();
     });
@@ -58,7 +55,7 @@ static DISCARDING_DEPTH_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_I
             case.create_command_encoder();
             case.discard();
             case.copy_texture_to_buffer();
-            case.submit_command_encoder();
+            case.submit_command_encoder_and_wait();
 
             case.assert_buffers_are_zero();
         }
@@ -85,12 +82,10 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
             ] {
                 let mut case = TestCase::new(&mut ctx, format);
                 case.create_command_encoder();
-
                 case.discard_depth();
                 case.discard_stencil();
                 case.copy_texture_to_buffer();
-
-                case.submit_command_encoder();
+                case.submit_command_encoder_and_wait();
 
                 case.assert_buffers_are_zero();
             }
@@ -208,10 +203,11 @@ impl<'ctx> TestCase<'ctx> {
         )
     }
 
-    pub fn submit_command_encoder(&mut self) {
+    pub fn submit_command_encoder_and_wait(&mut self) {
         self.ctx
             .queue
             .submit([self.encoder.take().unwrap().finish()]);
+        self.ctx.device.poll(MaintainBase::Wait);
     }
 
     pub fn discard(&mut self) {

@@ -130,26 +130,31 @@ where
         }
     }
 
-    fn insert_impl(&mut self, index: usize, element: Element<T>) {
+    fn insert_impl(&mut self, index: usize, epoch: Epoch, element: Element<T>) {
         if index >= self.map.len() {
             self.map.resize_with(index + 1, || Element::Vacant);
         }
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
-            _ => panic!("Index {index:?} is already occupied"),
+            Element::Occupied(_, storage_epoch) => {
+                assert_ne!(epoch, storage_epoch, "Index {index:?} of {} is already occupied", T::TYPE);
+            }
+            Element::Error(storage_epoch, _) => {
+                assert_ne!(epoch, storage_epoch, "Index {index:?} of {} is already occupied with Error", T::TYPE);
+            }
         }
     }
 
     pub(crate) fn insert(&mut self, id: I, value: Arc<T>) {
         log::info!("User is inserting {}{:?}", T::TYPE, id);
         let (index, epoch, _backend) = id.unzip();
-        self.insert_impl(index as usize, Element::Occupied(value, epoch))
+        self.insert_impl(index as usize, epoch, Element::Occupied(value, epoch))
     }
 
     pub(crate) fn insert_error(&mut self, id: I, label: &str) {
         log::info!("User is insering as error {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
-        self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
+        self.insert_impl(index as usize, epoch, Element::Error(epoch, label.to_string()))
     }
 
     pub(crate) fn take_and_mark_destroyed(&mut self, id: I) -> Result<Arc<T>, InvalidId> {

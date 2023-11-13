@@ -81,14 +81,16 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
     }
 
     pub fn assign(self, value: T) -> (I, Arc<T>) {
-        self.data.write().insert(self.id, self.init(value));
-        (self.id, self.data.read().get(self.id).unwrap().clone())
+        let mut data = self.data.write();
+        data.insert(self.id, self.init(value));
+        (self.id, data.get(self.id).unwrap().clone())
     }
 
     pub fn assign_existing(self, value: &Arc<T>) -> I {
+        let mut data = self.data.write();
         #[cfg(debug_assertions)]
-        debug_assert!(!self.data.read().contains(self.id));
-        self.data.write().insert(self.id, value.clone());
+        debug_assert!(!data.contains(self.id));
+        data.insert(self.id, value.clone());
         self.id
     }
 
