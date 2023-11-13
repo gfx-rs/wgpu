@@ -82,7 +82,7 @@ pub fn main() -> MainResult {
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
             .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?
     };
-    let report = GpuReport::from_json(config_text).context("Could not pare .gpuconfig JSON")?;
+    let report = GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
 
     let mut test_guard = TEST_LIST.lock();
     execute_native(test_guard.drain(..).flat_map(|test| {
