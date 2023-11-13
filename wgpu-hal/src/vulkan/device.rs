@@ -722,6 +722,7 @@ impl super::Device {
                 let pipeline_options = naga::back::spv::PipelineOptions {
                     entry_point: stage.entry_point.to_string(),
                     shader_stage: naga_stage,
+                    constants: stage.constants.to_owned(),
                 };
                 let needs_temp_options = !runtime_checks
                     || !binding_map.is_empty()
@@ -1516,6 +1517,7 @@ impl crate::Device<super::Api> for super::Device {
                     .shared
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
+                // or if it has any overrides
                 {
                     return Ok(super::ShaderModule::Intermediate {
                         naga_shader,

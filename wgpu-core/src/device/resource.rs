@@ -2601,8 +2601,9 @@ impl<A: HalApi> Device<A> {
             label: desc.label.to_hal(self.instance_flags),
             layout: &layout.raw,
             stage: hal::ProgrammableStage {
-                entry_point: desc.stage.entry_point.as_ref(),
                 module: &shader_module.raw,
+                entry_point: desc.stage.entry_point.as_ref(),
+                constants: desc.stage.constants.as_ref(),
             },
         };
 
@@ -3000,6 +3001,7 @@ impl<A: HalApi> Device<A> {
             hal::ProgrammableStage {
                 module: &shader_module.raw,
                 entry_point: stage.entry_point.as_ref(),
+                constants: stage.constants.as_ref(),
             }
         };
 
@@ -3057,6 +3059,7 @@ impl<A: HalApi> Device<A> {
                 Some(hal::ProgrammableStage {
                     module: &shader_module.raw,
                     entry_point: fragment.stage.entry_point.as_ref(),
+                    constants: fragment.stage.constants.as_ref(),
                 })
             }
             None => None,
