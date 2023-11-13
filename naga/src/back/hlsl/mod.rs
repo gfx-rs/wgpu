@@ -195,6 +195,14 @@ pub struct Options {
     pub zero_initialize_workgroup_memory: bool,
 }
 
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct PipelineOptions {
+    /// Pipeline constants.
+    pub constants: back::PipelineConstants,
+}
+
 impl Default for Options {
     fn default() -> Self {
         Options {
