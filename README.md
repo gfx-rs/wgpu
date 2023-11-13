@@ -85,7 +85,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 :white_check_mark: = First Class Support  
 :ok: = Downlevel/Best Effort Support  
-:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)
+:triangular_ruler: = Requires the [ANGLE](#angle) translation layer (GL ES 3.0 only)  
 :volcano: = Requires the [MoltenVK](https://vulkan.lunarg.com/sdk/home#mac) translation layer  
 :hammer_and_wrench: = Unsupported, though open to contributions  
 
