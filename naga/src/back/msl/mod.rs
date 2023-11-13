@@ -221,7 +221,7 @@ impl Default for Options {
 }
 
 /// A subset of options that are meant to be changed per pipeline.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -232,6 +232,8 @@ pub struct PipelineOptions {
     ///
     /// Enable this for vertex shaders with point primitive topologies.
     pub allow_and_force_point_size: bool,
+    /// Pipeline constants.
+    pub constants: crate::back::PipelineConstants,
 }
 
 impl Options {

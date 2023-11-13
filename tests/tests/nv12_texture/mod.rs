@@ -24,11 +24,13 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",
+                    constants: &Default::default(),
                     buffers: &[],
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: "fs_main",
+                    constants: &Default::default(),
                     targets: &[Some(target_format.into())],
                 }),
                 primitive: wgpu::PrimitiveState {

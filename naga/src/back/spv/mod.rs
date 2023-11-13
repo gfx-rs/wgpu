@@ -725,7 +725,7 @@ impl<'a> Default for Options<'a> {
 }
 
 // A subset of options meant to be changed per pipeline.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct PipelineOptions {
@@ -735,6 +735,8 @@ pub struct PipelineOptions {
     ///
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
+    /// Pipeline constants.
+    pub constants: crate::back::PipelineConstants,
 }
 
 pub fn write_vec(
