@@ -48,10 +48,7 @@ fn element_or_member_type(
                 name: None,
                 inner: TypeInner::Vector {
                     size: rows,
-                    scalar: Scalar {
-                        kind: ScalarKind::Float,
-                        width,
-                    },
+                    scalar: Scalar::float(width),
                 },
             },
             Default::default(),

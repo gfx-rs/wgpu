@@ -1539,16 +1539,9 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
                 columns: src_cols,
                 width: src_width,
             },
-        ) if tgt_cols == src_cols && tgt_rows == src_rows => (
-            Scalar {
-                kind: Float,
-                width: tgt_width,
-            },
-            Scalar {
-                kind: Float,
-                width: src_width,
-            },
-        ),
+        ) if tgt_cols == src_cols && tgt_rows == src_rows => {
+            (Scalar::float(tgt_width), Scalar::float(src_width))
+        }
         _ => return None,
     };
 
@@ -1562,22 +1555,10 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
 
     Some(match (target_scalar, source_scalar) {
         // A conversion from a float to a double is special
-        (
-            Scalar {
-                kind: Float,
-                width: 8,
-            },
-            Scalar {
-                kind: Float,
-                width: 4,
-            },
-        ) => Conversion::FloatToDouble,
+        (Scalar::F64, Scalar::F32) => Conversion::FloatToDouble,
         // A conversion from an integer to a float is special
         (
-            Scalar {
-                kind: Float,
-                width: 4,
-            },
+            Scalar::F32,
             Scalar {
                 kind: Sint | Uint,
                 width: _,
@@ -1585,10 +1566,7 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
         ) => Conversion::IntToFloat,
         // A conversion from an integer to a double is special
         (
-            Scalar {
-                kind: Float,
-                width: 8,
-            },
+            Scalar::F64,
             Scalar {
                 kind: Sint | Uint,
                 width: _,
@@ -1608,7 +1586,7 @@ fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) ->
             TypeInner::ValuePointer { scalar, .. }
             | TypeInner::Scalar(scalar)
             | TypeInner::Vector { scalar, .. } => {
-                if scalar.kind == ScalarKind::Float && scalar.width == 8 {
+                if scalar == Scalar::F64 {
                     variations |= BuiltinVariations::DOUBLE
                 }
             }
