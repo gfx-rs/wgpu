@@ -1246,13 +1246,9 @@ fn inject_common_builtin(
                     _ => unreachable!(),
                 };
 
-                let second_scalar = if fun == MacroCall::MathFunction(MathFunction::Ldexp) {
-                    Scalar {
-                        kind: Sk::Sint,
-                        width: float_width,
-                    }
-                } else {
-                    float_scalar
+                let second_scalar = match fun {
+                    MacroCall::MathFunction(MathFunction::Ldexp) => Scalar::I32,
+                    _ => float_scalar,
                 };
 
                 declaration
