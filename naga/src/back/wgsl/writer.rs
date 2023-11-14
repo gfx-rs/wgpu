@@ -524,14 +524,14 @@ impl<W: Write> Writer<W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width: _,
+                width,
             } => {
                 write!(
                     self.out,
-                    //TODO: Can matrix be other than f32?
-                    "mat{}x{}<f32>",
+                    "mat{}x{}<{}>",
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
+                    scalar_kind_str(crate::Scalar::float(width))
                 )?;
             }
             TypeInner::Pointer { base, space } => {
