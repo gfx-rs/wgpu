@@ -63,9 +63,9 @@ For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.
 
 - Improve algorithm used by module compaction. By @jimblandy in [#4662](https://github.com/gfx-rs/wgpu/pull/4662).
 
-##### MSL-OUT
+- In Metal Shading Language output, fix issue where local variables were sometimes using variable names from previous functions.
 
-- Fix issue where local variables were sometimes using variable names from previous functions.
+- When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
 
 ## v0.18.0 (2023-10-25)
 
