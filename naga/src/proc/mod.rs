@@ -193,11 +193,11 @@ impl crate::Literal {
     }
     pub const fn scalar(&self) -> crate::Scalar {
         match *self {
-            crate::Literal::F64(_) => crate::Scalar::F64,
-            crate::Literal::F32(_) => crate::Scalar::F32,
-            crate::Literal::U32(_) => crate::Scalar::U32,
-            crate::Literal::I32(_) => crate::Scalar::I32,
-            crate::Literal::Bool(_) => crate::Scalar::BOOL,
+            Self::F64(_) => crate::Scalar::F64,
+            Self::F32(_) => crate::Scalar::F32,
+            Self::U32(_) => crate::Scalar::U32,
+            Self::I32(_) => crate::Scalar::I32,
+            Self::Bool(_) => crate::Scalar::BOOL,
         }
     }
     pub const fn scalar_kind(&self) -> crate::ScalarKind {

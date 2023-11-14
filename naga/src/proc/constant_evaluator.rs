@@ -607,7 +607,7 @@ impl<'a> ConstantEvaluator<'a> {
                     self.types[ty0].inner,
                     crate::TypeInner::Vector {
                         scalar: crate::Scalar {
-                            kind: crate::ScalarKind::Float,
+                            kind: ScalarKind::Float,
                             ..
                         },
                         ..
@@ -708,7 +708,7 @@ impl<'a> ConstantEvaluator<'a> {
                     self.types[ty0].inner,
                     crate::TypeInner::Vector {
                         scalar: crate::Scalar {
-                            kind: crate::ScalarKind::Float,
+                            kind: ScalarKind::Float,
                             ..
                         },
                         ..
@@ -833,7 +833,7 @@ impl<'a> ConstantEvaluator<'a> {
                 if matches!(
                     self.types[ty].inner,
                     crate::TypeInner::Scalar(crate::Scalar {
-                        kind: crate::ScalarKind::Uint,
+                        kind: ScalarKind::Uint,
                         ..
                     })
                 ) =>
@@ -905,10 +905,7 @@ impl<'a> ConstantEvaluator<'a> {
                         name: None,
                         inner: TypeInner::Vector {
                             size: rows,
-                            scalar: crate::Scalar {
-                                kind: ScalarKind::Float,
-                                width,
-                            },
+                            scalar: crate::Scalar::float(width),
                         },
                     },
                     span,
@@ -955,47 +952,34 @@ impl<'a> ConstantEvaluator<'a> {
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         use crate::Scalar as Sc;
-        use crate::ScalarKind as Sk;
 
         let expr = self.eval_zero_value_and_splat(expr, span)?;
 
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
                 let literal = match target {
-                    Sc {
-                        kind: Sk::Sint,
-                        width: 4,
-                    } => Literal::I32(match literal {
+                    Sc::I32 => Literal::I32(match literal {
                         Literal::I32(v) => v,
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v as i32,
                         Literal::Bool(v) => v as i32,
                         Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
                     }),
-                    Sc {
-                        kind: Sk::Uint,
-                        width: 4,
-                    } => Literal::U32(match literal {
+                    Sc::U32 => Literal::U32(match literal {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
                         Literal::Bool(v) => v as u32,
                         Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
                     }),
-                    Sc {
-                        kind: Sk::Float,
-                        width: 4,
-                    } => Literal::F32(match literal {
+                    Sc::F32 => Literal::F32(match literal {
                         Literal::I32(v) => v as f32,
                         Literal::U32(v) => v as f32,
                         Literal::F32(v) => v,
                         Literal::Bool(v) => v as u32 as f32,
                         Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
                     }),
-                    Sc {
-                        kind: Sk::Bool,
-                        width: crate::BOOL_WIDTH,
-                    } => Literal::Bool(match literal {
+                    Sc::BOOL => Literal::Bool(match literal {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
@@ -1330,10 +1314,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    scalar: crate::Scalar {
-                        kind: ScalarKind::Sint,
-                        width: 4,
-                    },
+                    scalar: crate::Scalar::I32,
                 },
             },
             Default::default(),
@@ -1520,10 +1501,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Tri,
-                    scalar: crate::Scalar {
-                        kind: ScalarKind::Float,
-                        width: 4,
-                    },
+                    scalar: crate::Scalar::F32,
                 },
             },
             Default::default(),
@@ -1672,10 +1650,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    scalar: crate::Scalar {
-                        kind: ScalarKind::Sint,
-                        width: 4,
-                    },
+                    scalar: crate::Scalar::I32,
                 },
             },
             Default::default(),
@@ -1755,10 +1730,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    scalar: crate::Scalar {
-                        kind: ScalarKind::Sint,
-                        width: 4,
-                    },
+                    scalar: crate::Scalar::I32,
                 },
             },
             Default::default(),

@@ -194,10 +194,7 @@ pub const fn scalar_components(ty: &TypeInner) -> Option<Scalar> {
         TypeInner::Scalar(scalar)
         | TypeInner::Vector { scalar, .. }
         | TypeInner::ValuePointer { scalar, .. } => Some(scalar),
-        TypeInner::Matrix { width, .. } => Some(Scalar {
-            kind: ScalarKind::Float,
-            width,
-        }),
+        TypeInner::Matrix { width, .. } => Some(Scalar::float(width)),
         _ => None,
     }
 }
