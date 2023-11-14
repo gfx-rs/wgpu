@@ -66,7 +66,6 @@ impl IdentityManager {
 
     /// Free `id`. It will never be returned from `alloc` again.
     pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
-        println!("free id");
         let (index, epoch, _backend) = id.unzip();
         let pe = &mut self.epochs[index as usize];
         assert_eq!(*pe, epoch);
