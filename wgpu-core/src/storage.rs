@@ -14,6 +14,10 @@ pub(crate) enum Element<T> {
     /// epoch.
     Occupied(T, Epoch),
 
+    /// Like `Occupied`, but the resource has been marked as destroyed
+    /// and hasn't been dropped yet.
+    Destroyed(T, Epoch),
+
     /// Like `Occupied`, but an error occurred when creating the
     /// resource.
     ///
@@ -68,9 +72,11 @@ impl<T, I: id::TypedId> Storage<T, I> {
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
             Some(&Element::Vacant) => false,
-            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => {
-                storage_epoch == epoch
-            }
+            Some(
+                &Element::Occupied(_, storage_epoch)
+                | &Element::Destroyed(_, storage_epoch)
+                | &Element::Error(storage_epoch, _),
+            ) => storage_epoch == epoch,
             None => false,
         }
     }
@@ -87,7 +93,9 @@ impl<T, I: id::TypedId> Storage<T, I> {
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(Some(v)), epoch),
             Some(&Element::Vacant) => return Ok(None),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&Element::Error(epoch, ..)) | Some(&Element::Destroyed(.., epoch)) => {
+                (Err(InvalidId), epoch)
+            }
             None => return Err(InvalidId),
         };
         assert_eq!(
@@ -106,6 +114,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
             Some(&Element::Vacant) => panic!("{}[{}] does not exist", self.kind, index),
             Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&Element::Destroyed(.., epoch)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
         };
         assert_eq!(
@@ -124,6 +133,29 @@ impl<T, I: id::TypedId> Storage<T, I> {
             Some(&mut Element::Occupied(ref mut v, epoch)) => (Ok(v), epoch),
             Some(&mut Element::Vacant) | None => panic!("{}[{}] does not exist", self.kind, index),
             Some(&mut Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&mut Element::Destroyed(.., epoch)) => (Err(InvalidId), epoch),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        result
+    }
+
+    /// Like `get_mut`, but returns the element even if it is destroyed.
+    ///
+    /// In practice, most API entry points should use `get`/`get_mut` so that a
+    /// destroyed resource leads to a validation error. This should be used internally
+    /// in places where we want to do some manipulation potentially after the element
+    /// was destroyed (for example the drop implementation).
+    pub(crate) fn get_occupied_or_destroyed(&mut self, id: I) -> Result<&mut T, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        let (result, storage_epoch) = match self.map.get_mut(index as usize) {
+            Some(&mut Element::Occupied(ref mut v, epoch))
+            | Some(&mut Element::Destroyed(ref mut v, epoch)) => (Ok(v), epoch),
+            Some(&mut Element::Vacant) | None => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&mut Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -137,7 +169,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
         match self.map[id as usize] {
             Element::Occupied(ref v, _) => v,
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, id),
-            Element::Error(_, _) => panic!(""),
+            Element::Error(_, _) | Element::Destroyed(..) => panic!(""),
         }
     }
 
@@ -169,18 +201,39 @@ impl<T, I: id::TypedId> Storage<T, I> {
         self.insert_impl(index as usize, Element::Error(epoch, label.to_string()))
     }
 
-    pub(crate) fn take_and_mark_destroyed(&mut self, id: I) -> Result<T, InvalidId> {
+    pub(crate) fn replace_with_error(&mut self, id: I) -> Result<T, InvalidId> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(
             &mut self.map[index as usize],
             Element::Error(epoch, String::new()),
         ) {
-            Element::Vacant => panic!("Cannot mark a vacant resource destroyed"),
+            Element::Vacant => panic!("Cannot access vacant resource"),
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
                 Ok(value)
             }
             _ => Err(InvalidId),
+        }
+    }
+
+    pub(crate) fn get_and_mark_destroyed(&mut self, id: I) -> Result<&mut T, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        let slot = &mut self.map[index as usize];
+        // borrowck dance: we have to move the element out before we can replace it
+        // with another variant with the same value.
+        if let &mut Element::Occupied(..) = slot {
+            if let Element::Occupied(value, storage_epoch) =
+                std::mem::replace(slot, Element::Vacant)
+            {
+                debug_assert_eq!(storage_epoch, epoch);
+                *slot = Element::Destroyed(value, storage_epoch);
+            }
+        }
+
+        if let Element::Destroyed(ref mut value, ..) = *slot {
+            Ok(value)
+        } else {
+            Err(InvalidId)
         }
     }
 
@@ -192,7 +245,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
     pub(crate) fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
-            Element::Occupied(value, storage_epoch) => {
+            Element::Occupied(value, storage_epoch) | Element::Destroyed(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
                 Some(value)
             }
@@ -239,7 +292,7 @@ impl<T, I: id::TypedId> Storage<T, I> {
         };
         for element in self.map.iter() {
             match *element {
-                Element::Occupied(..) => report.num_occupied += 1,
+                Element::Occupied(..) | Element::Destroyed(..) => report.num_occupied += 1,
                 Element::Vacant => report.num_vacant += 1,
                 Element::Error(..) => report.num_error += 1,
             }
