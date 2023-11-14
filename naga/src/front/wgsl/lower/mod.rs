@@ -633,7 +633,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     }
 
     fn format_typeinner(&self, inner: &crate::TypeInner) -> String {
-        inner.to_wgsl(self.module.to_ctx())
+        inner.to_wgsl(&self.module.to_ctx())
     }
 
     fn format_type(&self, handle: Handle<crate::Type>) -> String {
@@ -929,13 +929,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let expected = ty
                                 .name
                                 .clone()
-                                .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
+                                .unwrap_or_else(|| ty.inner.to_wgsl(&ctx.module.to_ctx()));
 
                             let ty = &ctx.module.types[inferred_type];
                             let got = ty
                                 .name
                                 .clone()
-                                .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
+                                .unwrap_or_else(|| ty.inner.to_wgsl(&ctx.module.to_ctx()));
 
                             return Err(Error::InitializationTypeMismatch {
                                 name: c.name.span,
