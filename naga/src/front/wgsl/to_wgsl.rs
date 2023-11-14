@@ -1,3 +1,30 @@
+//! Producing the WGSL forms of types, for use in error messages.
+
+use crate::proc::GlobalCtx;
+use crate::Handle;
+
+impl crate::proc::TypeResolution {
+    pub fn to_wgsl(&self, gctx: &GlobalCtx) -> String {
+        match *self {
+            crate::proc::TypeResolution::Handle(handle) => handle.to_wgsl(gctx),
+            crate::proc::TypeResolution::Value(ref inner) => inner.to_wgsl(gctx),
+        }
+    }
+}
+
+impl Handle<crate::Type> {
+    /// Formats the type as it is written in wgsl.
+    ///
+    /// For example `vec3<f32>`.
+    pub fn to_wgsl(self, gctx: &GlobalCtx) -> String {
+        let ty = &gctx.types[self];
+        match ty.name {
+            Some(ref name) => name.clone(),
+            None => ty.inner.to_wgsl(gctx),
+        }
+    }
+}
+
 impl crate::TypeInner {
     /// Formats the type as it is written in wgsl.
     ///
@@ -6,7 +33,7 @@ impl crate::TypeInner {
     /// Note: `TypeInner::Struct` doesn't include the name of the
     /// struct type. Therefore this method will simply return "struct"
     /// for them.
-    pub fn to_wgsl(&self, gctx: &crate::proc::GlobalCtx) -> String {
+    pub fn to_wgsl(&self, gctx: &GlobalCtx) -> String {
         use crate::TypeInner as Ti;
 
         match *self {
