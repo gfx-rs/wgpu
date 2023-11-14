@@ -65,7 +65,7 @@ impl Constructor<(Handle<crate::Type>, &crate::TypeInner)> {
                 format!("mat{}x{}<?>", columns as u32, rows as u32,)
             }
             Self::PartialArray => "array<?, ?>".to_string(),
-            Self::Type((handle, _inner)) => ctx.format_type(handle),
+            Self::Type((handle, _inner)) => handle.to_wgsl(&ctx.module.to_ctx()),
         }
     }
 }
@@ -455,7 +455,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             // Bad conversion (type cast)
             (Components::One { span, ty_inner, .. }, constructor) => {
-                let from_type = ctx.format_typeinner(ty_inner);
+                let from_type = ty_inner.to_wgsl(&ctx.module.to_ctx());
                 return Err(Error::BadTypeCast {
                     span,
                     from_type,
