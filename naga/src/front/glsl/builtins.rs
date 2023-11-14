@@ -1257,7 +1257,7 @@ fn inject_common_builtin(
 
                 declaration
                     .overloads
-                    .push(module.add_builtin(vec![ty(Scalar::F32), ty(second_scalar)], fun))
+                    .push(module.add_builtin(vec![ty(float_scalar), ty(second_scalar)], fun))
             }
         }
         "transpose" => {
