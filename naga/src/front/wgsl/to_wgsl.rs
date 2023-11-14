@@ -6,7 +6,7 @@ impl crate::TypeInner {
     /// Note: `TypeInner::Struct` doesn't include the name of the
     /// struct type. Therefore this method will simply return "struct"
     /// for them.
-    pub fn to_wgsl(&self, gctx: crate::proc::GlobalCtx) -> String {
+    pub fn to_wgsl(&self, gctx: &crate::proc::GlobalCtx) -> String {
         use crate::TypeInner as Ti;
 
         match *self {
@@ -206,14 +206,14 @@ mod tests {
             stride: 4,
             size: crate::ArraySize::Constant(unsafe { NonZeroU32::new_unchecked(32) }),
         };
-        assert_eq!(array.to_wgsl(gctx), "array<MyType1, 32>");
+        assert_eq!(array.to_wgsl(&gctx), "array<MyType1, 32>");
 
         let mat = crate::TypeInner::Matrix {
             rows: crate::VectorSize::Quad,
             columns: crate::VectorSize::Bi,
             width: 8,
         };
-        assert_eq!(mat.to_wgsl(gctx), "mat2x4<f64>");
+        assert_eq!(mat.to_wgsl(&gctx), "mat2x4<f64>");
 
         let ptr = crate::TypeInner::Pointer {
             base: mytype2,
@@ -221,7 +221,7 @@ mod tests {
                 access: crate::StorageAccess::default(),
             },
         };
-        assert_eq!(ptr.to_wgsl(gctx), "ptr<MyType2>");
+        assert_eq!(ptr.to_wgsl(&gctx), "ptr<MyType2>");
 
         let img1 = crate::TypeInner::Image {
             dim: crate::ImageDimension::D2,
@@ -231,26 +231,26 @@ mod tests {
                 multi: true,
             },
         };
-        assert_eq!(img1.to_wgsl(gctx), "texture_multisampled_2d<f32>");
+        assert_eq!(img1.to_wgsl(&gctx), "texture_multisampled_2d<f32>");
 
         let img2 = crate::TypeInner::Image {
             dim: crate::ImageDimension::Cube,
             arrayed: true,
             class: crate::ImageClass::Depth { multi: false },
         };
-        assert_eq!(img2.to_wgsl(gctx), "texture_depth_cube_array");
+        assert_eq!(img2.to_wgsl(&gctx), "texture_depth_cube_array");
 
         let img3 = crate::TypeInner::Image {
             dim: crate::ImageDimension::D2,
             arrayed: false,
             class: crate::ImageClass::Depth { multi: true },
         };
-        assert_eq!(img3.to_wgsl(gctx), "texture_depth_multisampled_2d");
+        assert_eq!(img3.to_wgsl(&gctx), "texture_depth_multisampled_2d");
 
         let array = crate::TypeInner::BindingArray {
             base: mytype1,
             size: crate::ArraySize::Constant(unsafe { NonZeroU32::new_unchecked(32) }),
         };
-        assert_eq!(array.to_wgsl(gctx), "binding_array<MyType1, 32>");
+        assert_eq!(array.to_wgsl(&gctx), "binding_array<MyType1, 32>");
     }
 }
