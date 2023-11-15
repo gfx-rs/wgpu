@@ -149,13 +149,30 @@ impl<T, I: id::TypedId> Storage<T, I> {
     /// destroyed resource leads to a validation error. This should be used internally
     /// in places where we want to do some manipulation potentially after the element
     /// was destroyed (for example the drop implementation).
-    pub(crate) fn get_occupied_or_destroyed(&mut self, id: I) -> Result<&mut T, InvalidId> {
+    pub(crate) fn get_occupied_or_destroyed_mut(&mut self, id: I) -> Result<&mut T, InvalidId> {
         let (index, epoch, _) = id.unzip();
         let (result, storage_epoch) = match self.map.get_mut(index as usize) {
             Some(&mut Element::Occupied(ref mut v, epoch))
             | Some(&mut Element::Destroyed(ref mut v, epoch)) => (Ok(v), epoch),
             Some(&mut Element::Vacant) | None => panic!("{}[{}] does not exist", self.kind, index),
             Some(&mut Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        result
+    }
+
+    pub(crate) fn get_occupied_or_destroyed(&self, id: I) -> Result<&T, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        let (result, storage_epoch) = match self.map.get(index as usize) {
+            Some(&Element::Occupied(ref v, epoch)) | Some(&Element::Destroyed(ref v, epoch)) => {
+                (Ok(v), epoch)
+            }
+            Some(&Element::Vacant) | None => panic!("{}[{}] does not exist", self.kind, index),
+            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
         };
         assert_eq!(
             epoch, storage_epoch,
