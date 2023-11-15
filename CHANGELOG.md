@@ -49,7 +49,7 @@ Bottom level categories:
 
 #### Safe `Surface` creation
 
-It is now possible to safely create a `wgpu::Surface` with `Surface::create_surface()` and carries a lifetime to the passed `window`. `Surface::create_surface_from_raw()` can be used to produce a `Surface<'static>`, which remains `unsafe`.
+It is now possible to safely create a `wgpu::Surface` with `Surface::create_surface()`. `Surface::create_surface_from_raw()` can be used to produce a `Surface<'static>`, which remains `unsafe`.
 
 #### Naga
 

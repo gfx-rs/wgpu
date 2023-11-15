@@ -27,6 +27,7 @@ use std::{
 use context::{Context, DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
@@ -379,6 +380,13 @@ impl Drop for Sampler {
 pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
 static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
+trait WgpuSurfaceRequirement: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync {}
+
+impl<T: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync> WgpuSurfaceRequirement
+    for T
+{
+}
+
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
@@ -387,10 +395,9 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
 /// serves a similar role.
-#[derive(Debug)]
 pub struct Surface<'window> {
     context: Arc<C>,
-    surface: PhantomData<&'window ()>,
+    _surface: Option<Box<dyn 'window + WgpuSurfaceRequirement>>,
     id: ObjectId,
     data: Box<Data>,
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
@@ -401,6 +408,26 @@ pub struct Surface<'window> {
     // been created is is additionally wrapped in an option.
     config: Mutex<Option<SurfaceConfiguration>>,
 }
+
+impl<'window> fmt::Debug for Surface<'window> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Surface")
+            .field("context", &self.context)
+            .field(
+                "_surface",
+                &if self._surface.is_some() {
+                    "Some"
+                } else {
+                    "None"
+                },
+            )
+            .field("id", &self.id)
+            .field("data", &self.data)
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     all(
@@ -1933,12 +1960,14 @@ impl Instance {
     ///   canvas element.
     pub fn create_surface<
         'window,
-        W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
+        W: 'window + HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync,
     >(
         &self,
-        window: &'window W,
+        window: W,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
-        unsafe { self.create_surface_from_raw(window) }
+        let mut surface = unsafe { self.create_surface_from_raw(&window) }?;
+        surface._surface = Some(Box::new(window));
+        Ok(surface)
     }
 
     /// See [`create_surface()`](Self::create_surface) for more details.
@@ -1948,9 +1977,7 @@ impl Instance {
     /// - `raw_window_handle` must be a valid object to create a surface upon.
     /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
     ///   dropped.
-    pub unsafe fn create_surface_from_raw<
-        W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
-    >(
+    pub unsafe fn create_surface_from_raw<W: HasWindowHandle + HasDisplayHandle>(
         &self,
         window: &W,
     ) -> Result<Surface<'static>, CreateSurfaceError> {
@@ -1975,7 +2002,7 @@ impl Instance {
         }?;
         Ok(Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             id,
             data,
             config: Mutex::new(None),
@@ -2001,7 +2028,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2027,7 +2054,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2053,7 +2080,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2079,7 +2106,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2110,7 +2137,7 @@ impl Instance {
         // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
         Ok(Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             id: ObjectId::from(surface.id()),
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
@@ -2147,7 +2174,7 @@ impl Instance {
         // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
         Ok(Surface {
             context: Arc::clone(&self.context),
-            surface: PhantomData,
+            _surface: None,
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             id: ObjectId::from(surface.id()),
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
