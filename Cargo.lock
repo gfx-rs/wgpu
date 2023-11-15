@@ -2018,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -3799,7 +3799,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "0.18.0"
+version = "0.18.1"
 dependencies = [
  "arrayvec 0.7.4",
  "bit-vec",

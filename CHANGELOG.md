@@ -40,6 +40,24 @@ Bottom level categories:
 
 ## Unreleased
 
+## v0.18.1 (2023-11-15)
+
+(naga version 0.14.1)
+
+### Bug Fixes
+
+#### General
+- Fix panic in `Surface::configure` in debug builds. By @cwfitzgerald in [#4635](https://github.com/gfx-rs/wgpu/pull/4635)
+- Fix crash when all the following are true: By @teoxoy in #[#4642](https://github.com/gfx-rs/wgpu/pull/4642)
+  - Passing a naga module directly to `Device::create_shader_module`.
+  - `InstanceFlags::DEBUG` is enabled.
+
+#### DX12 
+- Always use HLSL 2018 when using DXC to compile HLSL shaders. By @daxpedda in [#4629](https://github.com/gfx-rs/wgpu/pull/4629)
+
+#### Metal
+- In Metal Shading Language output, fix issue where local variables were sometimes using variable names from previous functions. By @DJMcNab in [#4594](https://github.com/gfx-rs/wgpu/pull/4594)
+
 For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
 ## v0.18.0 (2023-10-25)
