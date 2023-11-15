@@ -357,42 +357,90 @@ impl<A: HalApi> Device<A> {
             let (sampler_guard, _) = hub.samplers.read(&mut token);
 
             for id in trackers.buffers.used() {
-                if buffer_guard[id].life_guard.ref_count.is_none() {
+                if buffer_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.buffers.push(id);
                 }
             }
             for id in trackers.textures.used() {
-                if texture_guard[id].life_guard.ref_count.is_none() {
+                if texture_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.textures.push(id);
                 }
             }
             for id in trackers.views.used() {
-                if texture_view_guard[id].life_guard.ref_count.is_none() {
+                if texture_view_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.texture_views.push(id);
                 }
             }
             for id in trackers.bind_groups.used() {
-                if bind_group_guard[id].life_guard.ref_count.is_none() {
+                if bind_group_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.bind_groups.push(id);
                 }
             }
             for id in trackers.samplers.used() {
-                if sampler_guard[id].life_guard.ref_count.is_none() {
+                if sampler_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.samplers.push(id);
                 }
             }
             for id in trackers.compute_pipelines.used() {
-                if compute_pipe_guard[id].life_guard.ref_count.is_none() {
+                if compute_pipe_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.compute_pipelines.push(id);
                 }
             }
             for id in trackers.render_pipelines.used() {
-                if render_pipe_guard[id].life_guard.ref_count.is_none() {
+                if render_pipe_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.render_pipelines.push(id);
                 }
             }
             for id in trackers.query_sets.used() {
-                if query_set_guard[id].life_guard.ref_count.is_none() {
+                if query_set_guard
+                    .get_occupied_or_destroyed(id.0)
+                    .unwrap()
+                    .life_guard
+                    .ref_count
+                    .is_none()
+                {
                     self.temp_suspected.query_sets.push(id);
                 }
             }

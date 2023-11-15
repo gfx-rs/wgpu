@@ -551,7 +551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (ref_count, last_submit_index, device_id) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-            match buffer_guard.get_occupied_or_destroyed(buffer_id) {
+            match buffer_guard.get_occupied_or_destroyed_mut(buffer_id) {
                 Ok(buffer) => {
                     let ref_count = buffer.life_guard.ref_count.take().unwrap();
                     let last_submit_index = buffer.life_guard.life_count();
@@ -855,7 +855,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (ref_count, last_submit_index, device_id) = {
             let (mut texture_guard, _) = hub.textures.write(&mut token);
-            match texture_guard.get_occupied_or_destroyed(texture_id) {
+            match texture_guard.get_occupied_or_destroyed_mut(texture_id) {
                 Ok(texture) => {
                     let ref_count = texture.life_guard.ref_count.take().unwrap();
                     let last_submit_index = texture.life_guard.life_count();
