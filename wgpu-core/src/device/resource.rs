@@ -1317,18 +1317,19 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
         );
 
-        let debug_source = if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) {
-            Some(hal::DebugSource {
-                file_name: Cow::Owned(
-                    desc.label
-                        .as_ref()
-                        .map_or("shader".to_string(), |l| l.to_string()),
-                ),
-                source_code: Cow::Owned(source.clone()),
-            })
-        } else {
-            None
-        };
+        let debug_source =
+            if self.instance_flags.contains(wgt::InstanceFlags::DEBUG) && !source.is_empty() {
+                Some(hal::DebugSource {
+                    file_name: Cow::Owned(
+                        desc.label
+                            .as_ref()
+                            .map_or("shader".to_string(), |l| l.to_string()),
+                    ),
+                    source_code: Cow::Owned(source.clone()),
+                })
+            } else {
+                None
+            };
 
         let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
             .validate(&module)
