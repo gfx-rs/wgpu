@@ -840,21 +840,22 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         for stored in self.mapped.drain(..) {
             let resource_id = stored.value;
-            let buf = &buffer_guard[resource_id];
+            // The buffer may have been destroyed since the map request.
+            if let Ok(buf) = buffer_guard.get(resource_id.0) {
+                let submit_index = buf.life_guard.life_count();
+                log::trace!(
+                    "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
+                    resource_id,
+                    submit_index,
+                    self.active.iter().position(|a| a.index == submit_index)
+                );
 
-            let submit_index = buf.life_guard.life_count();
-            log::trace!(
-                "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
-                resource_id,
-                submit_index,
-                self.active.iter().position(|a| a.index == submit_index)
-            );
-
-            self.active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
-                .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
-                .push(resource_id);
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
+                    .push(resource_id);
+            }
         }
     }
 
@@ -879,7 +880,13 @@ impl<A: HalApi> LifetimeTracker<A> {
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
         for buffer_id in self.ready_to_map.drain(..) {
-            let buffer = &mut buffer_guard[buffer_id];
+            let buffer = match buffer_guard.get_occupied_or_destroyed_mut(buffer_id.0) {
+                Ok(buf) => buf,
+                Err(..) => {
+                    // The buffer may have been destroyed since the map request.
+                    continue;
+                }
+            };
             if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
             {
                 buffer.map_state = resource::BufferMapState::Idle;
