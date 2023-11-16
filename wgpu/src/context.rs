@@ -4,7 +4,7 @@ use wgt::{
     strict_assert, strict_assert_eq, AdapterInfo, BufferAddress, BufferSize, Color,
     DeviceLostReason, DownlevelCapabilities, DynamicOffset, Extent3d, Features, ImageDataLayout,
     ImageSubresourceRange, IndexFormat, Limits, ShaderStages, SurfaceStatus, TextureFormat,
-    TextureFormatFeatures, WasmNotSend, WasmNotSync,
+    TextureFormatFeatures, WasmNotSend, WasmNotSendSync,
 };
 
 use crate::{
@@ -27,55 +27,55 @@ impl<T: Into<ObjectId> + From<ObjectId> + Debug + 'static> ContextId for T {}
 /// Meta trait for an data associated with an id tracked by a context.
 ///
 /// There is no need to manually implement this trait since there is a blanket implementation for this trait.
-pub trait ContextData: Debug + WasmNotSend + WasmNotSync + 'static {}
-impl<T: Debug + WasmNotSend + WasmNotSync + 'static> ContextData for T {}
+pub trait ContextData: Debug + WasmNotSendSync + 'static {}
+impl<T: Debug + WasmNotSendSync + 'static> ContextData for T {}
 
-pub trait Context: Debug + WasmNotSend + WasmNotSync + Sized {
-    type AdapterId: ContextId + WasmNotSend + WasmNotSync;
+pub trait Context: Debug + WasmNotSendSync + Sized {
+    type AdapterId: ContextId + WasmNotSendSync;
     type AdapterData: ContextData;
-    type DeviceId: ContextId + WasmNotSend + WasmNotSync;
+    type DeviceId: ContextId + WasmNotSendSync;
     type DeviceData: ContextData;
-    type QueueId: ContextId + WasmNotSend + WasmNotSync;
+    type QueueId: ContextId + WasmNotSendSync;
     type QueueData: ContextData;
-    type ShaderModuleId: ContextId + WasmNotSend + WasmNotSync;
+    type ShaderModuleId: ContextId + WasmNotSendSync;
     type ShaderModuleData: ContextData;
-    type BindGroupLayoutId: ContextId + WasmNotSend + WasmNotSync;
+    type BindGroupLayoutId: ContextId + WasmNotSendSync;
     type BindGroupLayoutData: ContextData;
-    type BindGroupId: ContextId + WasmNotSend + WasmNotSync;
+    type BindGroupId: ContextId + WasmNotSendSync;
     type BindGroupData: ContextData;
-    type TextureViewId: ContextId + WasmNotSend + WasmNotSync;
+    type TextureViewId: ContextId + WasmNotSendSync;
     type TextureViewData: ContextData;
-    type SamplerId: ContextId + WasmNotSend + WasmNotSync;
+    type SamplerId: ContextId + WasmNotSendSync;
     type SamplerData: ContextData;
-    type BufferId: ContextId + WasmNotSend + WasmNotSync;
+    type BufferId: ContextId + WasmNotSendSync;
     type BufferData: ContextData;
-    type TextureId: ContextId + WasmNotSend + WasmNotSync;
+    type TextureId: ContextId + WasmNotSendSync;
     type TextureData: ContextData;
-    type QuerySetId: ContextId + WasmNotSend + WasmNotSync;
+    type QuerySetId: ContextId + WasmNotSendSync;
     type QuerySetData: ContextData;
-    type PipelineLayoutId: ContextId + WasmNotSend + WasmNotSync;
+    type PipelineLayoutId: ContextId + WasmNotSendSync;
     type PipelineLayoutData: ContextData;
-    type RenderPipelineId: ContextId + WasmNotSend + WasmNotSync;
+    type RenderPipelineId: ContextId + WasmNotSendSync;
     type RenderPipelineData: ContextData;
-    type ComputePipelineId: ContextId + WasmNotSend + WasmNotSync;
+    type ComputePipelineId: ContextId + WasmNotSendSync;
     type ComputePipelineData: ContextData;
-    type CommandEncoderId: ContextId + WasmNotSend + WasmNotSync;
+    type CommandEncoderId: ContextId + WasmNotSendSync;
     type CommandEncoderData: ContextData;
     type ComputePassId: ContextId;
     type ComputePassData: ContextData;
     type RenderPassId: ContextId;
     type RenderPassData: ContextData;
-    type CommandBufferId: ContextId + WasmNotSend + WasmNotSync;
+    type CommandBufferId: ContextId + WasmNotSendSync;
     type CommandBufferData: ContextData;
     type RenderBundleEncoderId: ContextId;
     type RenderBundleEncoderData: ContextData;
-    type RenderBundleId: ContextId + WasmNotSend + WasmNotSync;
+    type RenderBundleId: ContextId + WasmNotSendSync;
     type RenderBundleData: ContextData;
-    type SurfaceId: ContextId + WasmNotSend + WasmNotSync;
+    type SurfaceId: ContextId + WasmNotSendSync;
     type SurfaceData: ContextData;
 
-    type SurfaceOutputDetail: WasmNotSend + WasmNotSync + 'static;
-    type SubmissionIndex: ContextId + Clone + Copy + WasmNotSend + WasmNotSync;
+    type SurfaceOutputDetail: WasmNotSendSync + 'static;
+    type SubmissionIndex: ContextId + Clone + Copy + WasmNotSendSync;
     type SubmissionIndexData: ContextData + Copy;
 
     type RequestAdapterFuture: Future<Output = Option<(Self::AdapterId, Self::AdapterData)>>
@@ -1082,15 +1082,13 @@ impl ObjectId {
 ))]
 static_assertions::assert_impl_all!(ObjectId: Send, Sync);
 
-pub(crate) fn downcast_ref<T: Debug + WasmNotSend + WasmNotSync + 'static>(
-    data: &crate::Data,
-) -> &T {
+pub(crate) fn downcast_ref<T: Debug + WasmNotSendSync + 'static>(data: &crate::Data) -> &T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &*(data as *const dyn Any as *const T) }
 }
 
-fn downcast_mut<T: Debug + WasmNotSend + WasmNotSync + 'static>(data: &mut crate::Data) -> &mut T {
+fn downcast_mut<T: Debug + WasmNotSendSync + 'static>(data: &mut crate::Data) -> &mut T {
     strict_assert!(data.is::<T>());
     // Copied from std.
     unsafe { &mut *(data as *mut dyn Any as *mut T) }
@@ -1228,7 +1226,7 @@ pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 
 pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
 
 /// An object safe variant of [`Context`] implemented by all types that implement [`Context`].
-pub(crate) trait DynContext: Debug + WasmNotSend + WasmNotSync {
+pub(crate) trait DynContext: Debug + WasmNotSendSync {
     fn as_any(&self) -> &dyn Any;
 
     unsafe fn instance_create_surface(
@@ -4089,7 +4087,7 @@ where
     }
 }
 
-pub trait QueueWriteBuffer: WasmNotSend + WasmNotSync {
+pub trait QueueWriteBuffer: WasmNotSendSync {
     fn slice(&self) -> &[u8];
 
     fn slice_mut(&mut self) -> &mut [u8];

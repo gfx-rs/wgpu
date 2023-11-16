@@ -24,7 +24,7 @@ use std::{
 use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 use wgc::device::DeviceLostClosure;
 use wgc::id::TypedId;
-use wgt::{WasmNotSend, WasmNotSync};
+use wgt::WasmNotSendSync;
 
 const LABEL: &str = "label";
 
@@ -306,7 +306,7 @@ impl Context {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
+        cause: impl Error + WasmNotSendSync + 'static,
         label_key: &'static str,
         label: Label,
         string: &'static str,
@@ -340,7 +340,7 @@ impl Context {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
+        cause: impl Error + WasmNotSendSync + 'static,
         string: &'static str,
     ) {
         self.handle_error(sink_mutex, cause, "", None, string)
@@ -349,7 +349,7 @@ impl Context {
     #[track_caller]
     fn handle_error_fatal(
         &self,
-        cause: impl Error + WasmNotSend + WasmNotSync + 'static,
+        cause: impl Error + WasmNotSendSync + 'static,
         operation: &'static str,
     ) -> ! {
         panic!("Error in {operation}: {f}", f = self.format_error(&cause));

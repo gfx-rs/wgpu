@@ -43,7 +43,7 @@ pub use wgt::{
     StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
     SurfaceStatus, TextureAspect, TextureDimension, TextureFormat, TextureFormatFeatureFlags,
     TextureFormatFeatures, TextureSampleType, TextureUsages, TextureViewDimension, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
     COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };
@@ -380,10 +380,6 @@ impl Drop for Sampler {
 pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
 static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
-trait WgpuSurfaceRequirement: WasmNotSend + WasmNotSync {}
-
-impl<T: WasmNotSend + WasmNotSync> WgpuSurfaceRequirement for T {}
-
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
@@ -394,7 +390,7 @@ impl<T: WasmNotSend + WasmNotSync> WgpuSurfaceRequirement for T {}
 /// serves a similar role.
 pub struct Surface<'window> {
     context: Arc<C>,
-    _surface: Option<Box<dyn WgpuSurfaceRequirement + 'window>>,
+    _surface: Option<Box<dyn WasmNotSendSync + 'window>>,
     id: ObjectId,
     data: Box<Data>,
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
@@ -1966,7 +1962,7 @@ impl Instance {
         window: W,
     ) -> Result<Surface<'window>, CreateSurfaceError>
     where
-        W: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync + 'window,
+        W: HasWindowHandle + HasDisplayHandle + WasmNotSendSync + 'window,
     {
         let mut surface = unsafe { self.create_surface_from_raw(&window) }?;
         surface._surface = Some(Box::new(window));
@@ -5460,12 +5456,12 @@ mod send_sync {
     use std::any::Any;
     use std::fmt;
 
-    use wgt::{WasmNotSend, WasmNotSync};
+    use wgt::WasmNotSendSync;
 
-    pub trait AnyWasmNotSendSync: Any + WasmNotSend + WasmNotSync {
+    pub trait AnyWasmNotSendSync: Any + WasmNotSendSync {
         fn upcast_any_ref(&self) -> &dyn Any;
     }
-    impl<T: Any + WasmNotSend + WasmNotSync> AnyWasmNotSendSync for T {
+    impl<T: Any + WasmNotSendSync> AnyWasmNotSendSync for T {
         #[inline]
         fn upcast_any_ref(&self) -> &dyn Any {
             self

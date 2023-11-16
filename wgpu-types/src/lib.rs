@@ -6663,6 +6663,8 @@ pub use send_sync::*;
 
 #[doc(hidden)]
 mod send_sync {
+    pub trait WasmNotSendSync: WasmNotSend + WasmNotSync {}
+    impl<T: WasmNotSend + WasmNotSync> WasmNotSendSync for T {}
     #[cfg(any(
         not(target_arch = "wasm32"),
         all(
