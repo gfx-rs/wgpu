@@ -14,96 +14,123 @@ fn main(
     var passed = 0u;
     var expected: u32;
 
-    passed += u32(num_subgroups == 128u / subgroup_size);
-    passed += u32(subgroup_id == global_id.x / subgroup_size);
-    passed += u32(subgroup_invocation_id == global_id.x % subgroup_size);
+    var mask = 1u << 0u;
+    passed |= mask * u32(num_subgroups == 128u / subgroup_size);
+    mask = 1u << 1u;
+    passed |= mask * u32(subgroup_id == global_id.x / subgroup_size);
+    mask = 1u << 2u;
+    passed |= mask * u32(subgroup_invocation_id == global_id.x % subgroup_size);
 
     var expected_ballot = vec4<u32>(0u);
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected_ballot[i / 32u] |= ((global_id.x - subgroup_invocation_id + i) & 1u) << (i % 32u);
     }
-    passed += u32(dot(vec4<u32>(1u), vec4<u32>(subgroupBallot((subgroup_invocation_id & 1u) == 1u) == expected_ballot)) == 4u);
+    mask = 1u << 3u;
+    passed |= mask * u32(dot(vec4<u32>(1u), vec4<u32>(subgroupBallot((subgroup_invocation_id & 1u) == 1u) == expected_ballot)) == 4u);
 
-    passed += u32(subgroupAll(true));
-    passed += u32(!subgroupAll(subgroup_invocation_id != 0u));
+    mask = 1u << 4u;
+    passed |= mask * u32(subgroupAll(true));
+    mask = 1u << 5u;
+    passed |= mask * u32(!subgroupAll(subgroup_invocation_id != 0u));
 
-    passed += u32(subgroupAny(subgroup_invocation_id == 0u));
-    passed += u32(!subgroupAny(false));
+    mask = 1u << 6u;
+    passed |= mask * u32(subgroupAny(subgroup_invocation_id == 0u));
+    mask = 1u << 7u;
+    passed |= mask * u32(!subgroupAny(false));
 
     expected = 0u;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected += global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupAdd(global_id.x + 1u) == expected);
+    mask = 1u << 8u;
+    passed |= mask * u32(subgroupAdd(global_id.x + 1u) == expected);
 
     expected = 1u;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected *= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupMul(global_id.x + 1u) == expected);
+    mask = 1u << 9u;
+    passed |= mask * u32(subgroupMul(global_id.x + 1u) == expected);
 
     expected = 0u;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected = max(expected, global_id.x - subgroup_invocation_id + i + 1u);
     }
-    passed += u32(subgroupMax(global_id.x + 1u) == expected);
+    mask = 1u << 10u;
+    passed |= mask * u32(subgroupMax(global_id.x + 1u) == expected);
 
     expected = 0xFFFFFFFFu;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected = min(expected, global_id.x - subgroup_invocation_id + i + 1u);
     }
-    passed += u32(subgroupMin(global_id.x + 1u) == expected);
+    mask = 1u << 11u;
+    passed |= mask * u32(subgroupMin(global_id.x + 1u) == expected);
 
     expected = 0xFFFFFFFFu;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected &= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupAnd(global_id.x + 1u) == expected);
+    mask = 1u << 12u;
+    passed |= mask * u32(subgroupAnd(global_id.x + 1u) == expected);
 
     expected = 0u;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected |= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupOr(global_id.x + 1u) == expected);
+    mask = 1u << 13u;
+    passed |= mask * u32(subgroupOr(global_id.x + 1u) == expected);
 
     expected = 0u;
     for(var i = 0u; i < subgroup_size; i += 1u) {
         expected ^= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupXor(global_id.x + 1u) == expected);
+    mask = 1u << 14u;
+    passed |= mask * u32(subgroupXor(global_id.x + 1u) == expected);
 
     expected = 0u;
     for(var i = 0u; i < subgroup_invocation_id; i += 1u) {
         expected += global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupPrefixExclusiveAdd(global_id.x + 1u) == expected);
+    mask = 1u << 15u;
+    passed |= mask * u32(subgroupPrefixExclusiveAdd(global_id.x + 1u) == expected);
 
     expected = 1u;
     for(var i = 0u; i < subgroup_invocation_id; i += 1u) {
         expected *= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupPrefixExclusiveMul(global_id.x + 1u) == expected);
+    mask = 1u << 16u;
+    passed |= mask * u32(subgroupPrefixExclusiveMul(global_id.x + 1u) == expected);
 
     expected = 0u;
     for(var i = 0u; i <= subgroup_invocation_id; i += 1u) {
         expected += global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupPrefixInclusiveAdd(global_id.x + 1u) == expected);
+    mask = 1u << 17u;
+    passed |= mask * u32(subgroupPrefixInclusiveAdd(global_id.x + 1u) == expected);
 
     expected = 1u;
     for(var i = 0u; i <= subgroup_invocation_id; i += 1u) {
         expected *= global_id.x - subgroup_invocation_id + i + 1u;
     }
-    passed += u32(subgroupPrefixInclusiveMul(global_id.x + 1u) == expected);
+    mask = 1u << 18u;
+    passed |= mask * u32(subgroupPrefixInclusiveMul(global_id.x + 1u) == expected);
 
-    passed += u32(subgroupBroadcastFirst(u32(subgroup_invocation_id != 0u)) == 0u);
-    passed += u32(subgroupBroadcastFirst(u32(subgroup_invocation_id == 0u)) == 1u);
-    passed += u32(subgroupBroadcast(subgroup_invocation_id, 1u) == 1u);
-    passed += u32(subgroupShuffle(subgroup_invocation_id, subgroup_invocation_id) == subgroup_invocation_id);
-    passed += u32(subgroupShuffle(subgroup_invocation_id, subgroup_size - 1u - subgroup_invocation_id) == subgroup_size - 1u - subgroup_invocation_id);
-    passed += u32(subgroup_invocation_id == subgroup_size - 1u || subgroupShuffleDown(subgroup_invocation_id, 1u) == subgroup_invocation_id + 1u);
-    passed += u32(subgroup_invocation_id == 0u || subgroupShuffleUp(subgroup_invocation_id, 1u) == subgroup_invocation_id - 1u);
-    passed += u32(subgroupShuffleXor(subgroup_invocation_id, subgroup_size - 1u) == (subgroup_invocation_id ^ (subgroup_size - 1u)));
+    mask = 1u << 19u;
+    passed |= mask * u32(subgroupBroadcastFirst(u32(subgroup_invocation_id != 0u)) == 0u);
+    mask = 1u << 20u;
+    passed |= mask * u32(subgroupBroadcastFirst(u32(subgroup_invocation_id == 0u)) == 1u);
+    mask = 1u << 21u;
+    passed |= mask * u32(subgroupBroadcast(subgroup_invocation_id, 1u) == 1u);
+    mask = 1u << 22u;
+    passed |= mask * u32(subgroupShuffle(subgroup_invocation_id, subgroup_invocation_id) == subgroup_invocation_id);
+    mask = 1u << 23u;
+    passed |= mask * u32(subgroupShuffle(subgroup_invocation_id, subgroup_size - 1u - subgroup_invocation_id) == subgroup_size - 1u - subgroup_invocation_id);
+    mask = 1u << 24u;
+    passed |= mask * u32(subgroup_invocation_id == subgroup_size - 1u || subgroupShuffleDown(subgroup_invocation_id, 1u) == subgroup_invocation_id + 1u);
+    mask = 1u << 25u;
+    passed |= mask * u32(subgroup_invocation_id == 0u || subgroupShuffleUp(subgroup_invocation_id, 1u) == subgroup_invocation_id - 1u);
+    mask = 1u << 26u;
+    passed |= mask * u32(subgroupShuffleXor(subgroup_invocation_id, subgroup_size - 1u) == (subgroup_invocation_id ^ (subgroup_size - 1u)));
 
     storage_buffer[global_id.x] = passed;
 }

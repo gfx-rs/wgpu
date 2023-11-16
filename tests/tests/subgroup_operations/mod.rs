@@ -100,5 +100,12 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         ctx.device.poll(wgpu::Maintain::Wait);
         let mapping_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let result: &[u32; THREAD_COUNT as usize] = bytemuck::from_bytes(&mapping_buffer_view);
-        assert_eq!(result, &[27; THREAD_COUNT as usize]);
+        let expected_mask = (1 << (27)) - 1; // generate full mask
+        let expected_array = [expected_mask as u32; THREAD_COUNT as usize];
+        if result != &expected_array {
+            panic!(
+                "Got from GPU:\n{:x?}\n  expected:\n{:x?}",
+                result, &expected_array,
+            );
+        }
     });
