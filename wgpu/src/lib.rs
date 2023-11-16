@@ -27,6 +27,7 @@ use std::{
 use context::{Context, DeviceRequest, DynContext, ObjectId};
 use parking_lot::Mutex;
 
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 pub use wgt::{
     AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, Backends, BindGroupLayoutEntry,
     BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState, BufferAddress,
@@ -379,6 +380,10 @@ impl Drop for Sampler {
 pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
 static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
+trait WgpuSurfaceRequirement: WasmNotSend + WasmNotSync {}
+
+impl<T: WasmNotSend + WasmNotSync> WgpuSurfaceRequirement for T {}
+
 /// Handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
@@ -387,9 +392,9 @@ static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context)
 /// serves a similar role.
-#[derive(Debug)]
-pub struct Surface {
+pub struct Surface<'window> {
     context: Arc<C>,
+    _surface: Option<Box<dyn WgpuSurfaceRequirement + 'window>>,
     id: ObjectId,
     data: Box<Data>,
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
@@ -400,6 +405,28 @@ pub struct Surface {
     // been created is is additionally wrapped in an option.
     config: Mutex<Option<SurfaceConfiguration>>,
 }
+
+// This custom implementation is required because [`Surface::_surface`] doesn't
+// require [`Debug`](fmt::Debug), which we should not require from the user.
+impl<'window> fmt::Debug for Surface<'window> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Surface")
+            .field("context", &self.context)
+            .field(
+                "_surface",
+                &if self._surface.is_some() {
+                    "Some"
+                } else {
+                    "None"
+                },
+            )
+            .field("id", &self.id)
+            .field("data", &self.data)
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     all(
@@ -409,7 +436,7 @@ pub struct Surface {
 ))]
 static_assertions::assert_impl_all!(Surface: Send, Sync);
 
-impl Drop for Surface {
+impl Drop for Surface<'_> {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.surface_drop(&self.id, self.data.as_ref())
@@ -1171,7 +1198,7 @@ pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 ///
 /// Corresponds to [WebGPU `GPURequestAdapterOptions`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurequestadapteroptions).
-pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
+pub type RequestAdapterOptions<'a, 'b> = RequestAdapterOptionsBase<&'a Surface<'b>>;
 #[cfg(any(
     not(target_arch = "wasm32"),
     all(
@@ -1920,11 +1947,9 @@ impl Instance {
     /// If the specified display and window handle are not supported by any of the backends, then the surface
     /// will not be supported by any adapters.
     ///
-    /// # Safety
-    ///
-    /// - `raw_window_handle` must be a valid object to create a surface upon.
-    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
-    ///   dropped.
+    /// If a reference is passed in `window`, the returned [`Surface`] will
+    /// hold a lifetime to it. Owned values will return a [`Surface<'static>`]
+    /// instead.
     ///
     /// # Errors
     ///
@@ -1936,12 +1961,37 @@ impl Instance {
     /// - On macOS/Metal: will panic if not called on the main thread.
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
-    pub unsafe fn create_surface<
-        W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle,
-    >(
+    pub fn create_surface<'window, W>(
+        &self,
+        window: W,
+    ) -> Result<Surface<'window>, CreateSurfaceError>
+    where
+        W: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync + 'window,
+    {
+        let mut surface = unsafe { self.create_surface_from_raw(&window) }?;
+        surface._surface = Some(Box::new(window));
+        Ok(surface)
+    }
+
+    /// An alternative version to [`create_surface()`](Self::create_surface)
+    /// which has no lifetime requirements to `window` and doesn't require
+    /// [`Send`] or [`Sync`] (on non-Wasm targets). This makes it `unsafe`
+    /// instead and always returns a [`Surface<'static>`].
+    ///
+    /// See [`create_surface()`](Self::create_surface) for more details.
+    ///
+    /// # Safety
+    ///
+    /// - `raw_window_handle` must be a valid object to create a surface upon.
+    /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
+    ///   dropped.
+    pub unsafe fn create_surface_from_raw<W>(
         &self,
         window: &W,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Surface<'static>, CreateSurfaceError>
+    where
+        W: HasWindowHandle + HasDisplayHandle,
+    {
         let raw_display_handle = window
             .display_handle()
             .map_err(|e| CreateSurfaceError {
@@ -1963,6 +2013,7 @@ impl Instance {
         }?;
         Ok(Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             id,
             data,
             config: Mutex::new(None),
@@ -1978,7 +2029,7 @@ impl Instance {
     pub unsafe fn create_surface_from_core_animation_layer(
         &self,
         layer: *mut std::ffi::c_void,
-    ) -> Surface {
+    ) -> Surface<'static> {
         let surface = unsafe {
             self.context
                 .as_any()
@@ -1988,6 +2039,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2000,7 +2052,10 @@ impl Instance {
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
     #[cfg(target_os = "windows")]
-    pub unsafe fn create_surface_from_visual(&self, visual: *mut std::ffi::c_void) -> Surface {
+    pub unsafe fn create_surface_from_visual(
+        &self,
+        visual: *mut std::ffi::c_void,
+    ) -> Surface<'static> {
         let surface = unsafe {
             self.context
                 .as_any()
@@ -2010,6 +2065,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2025,7 +2081,7 @@ impl Instance {
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
-    ) -> Surface {
+    ) -> Surface<'static> {
         let surface = unsafe {
             self.context
                 .as_any()
@@ -2035,6 +2091,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2050,7 +2107,7 @@ impl Instance {
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut std::ffi::c_void,
-    ) -> Surface {
+    ) -> Surface<'static> {
         let surface = unsafe {
             self.context
                 .as_any()
@@ -2060,6 +2117,7 @@ impl Instance {
         };
         Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             id: ObjectId::from(surface.id()),
             data: Box::new(surface),
             config: Mutex::new(None),
@@ -2079,7 +2137,7 @@ impl Instance {
     pub fn create_surface_from_canvas(
         &self,
         canvas: web_sys::HtmlCanvasElement,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Surface<'static>, CreateSurfaceError> {
         let surface = self
             .context
             .as_any()
@@ -2090,6 +2148,7 @@ impl Instance {
         // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
         Ok(Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             id: ObjectId::from(surface.id()),
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
@@ -2115,7 +2174,7 @@ impl Instance {
     pub fn create_surface_from_offscreen_canvas(
         &self,
         canvas: web_sys::OffscreenCanvas,
-    ) -> Result<Surface, CreateSurfaceError> {
+    ) -> Result<Surface<'static>, CreateSurfaceError> {
         let surface = self
             .context
             .as_any()
@@ -2126,6 +2185,7 @@ impl Instance {
         // TODO: This is ugly, a way to create things from a native context needs to be made nicer.
         Ok(Surface {
             context: Arc::clone(&self.context),
+            _surface: None,
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
             id: ObjectId::from(surface.id()),
             #[cfg(any(not(target_arch = "wasm32"), feature = "webgl"))]
@@ -4913,7 +4973,7 @@ impl Drop for SurfaceTexture {
     }
 }
 
-impl Surface {
+impl Surface<'_> {
     /// Returns the capabilities of the surface when used with the given adapter.
     ///
     /// Returns specified values (see [`SurfaceCapabilities`]) if surface is incompatible with the adapter.
@@ -5303,7 +5363,7 @@ impl RenderBundle {
 }
 
 #[cfg(feature = "expose-ids")]
-impl Surface {
+impl Surface<'_> {
     /// Returns a globally-unique identifier for this `Surface`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.

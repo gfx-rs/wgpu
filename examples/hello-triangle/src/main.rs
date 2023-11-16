@@ -12,7 +12,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let instance = wgpu::Instance::default();
 
-    let surface = unsafe { instance.create_surface(&window) }.unwrap();
+    let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -84,6 +84,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     surface.configure(&device, &config);
 
+    let window = &window;
     event_loop
         .run(move |event, target| {
             // Have the closure take ownership of the resources.

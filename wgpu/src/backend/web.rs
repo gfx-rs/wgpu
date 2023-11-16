@@ -1109,7 +1109,7 @@ impl crate::context::Context for Context {
 
     fn instance_request_adapter(
         &self,
-        options: &crate::RequestAdapterOptions<'_>,
+        options: &crate::RequestAdapterOptions<'_, '_>,
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
