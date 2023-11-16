@@ -63,6 +63,11 @@ Bottom level categories:
 
 - When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
 
+### Examples
+
+- remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
+
+
 ## v0.18.1 (2023-11-15)
 
 (naga version 0.14.1)
