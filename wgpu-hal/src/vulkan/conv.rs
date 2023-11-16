@@ -408,10 +408,12 @@ pub fn map_aspects(aspects: crate::FormatAspects, plane: Option<u32>) -> vk::Ima
         Some(0) => flags |= vk::ImageAspectFlags::PLANE_0,
         Some(1) => flags |= vk::ImageAspectFlags::PLANE_1,
         Some(2) => flags |= vk::ImageAspectFlags::PLANE_2,
-        _ if aspects.contains(crate::FormatAspects::COLOR) => {
-            flags |= vk::ImageAspectFlags::COLOR;
+        Some(plane) => panic!("Unexpected plane {}", plane),
+        None => {
+            if aspects.contains(crate::FormatAspects::COLOR) {
+                flags |= vk::ImageAspectFlags::COLOR;
+            }
         }
-        _ => {}
     }
     if aspects.contains(crate::FormatAspects::DEPTH) {
         flags |= vk::ImageAspectFlags::DEPTH;
