@@ -751,17 +751,7 @@ impl<A: HalApi> Device<A> {
                 continue;
             }
 
-            if !matches!(
-                (desc.format, *format),
-                (
-                    TextureFormat::NV12,
-                    TextureFormat::R8Unorm
-                        | TextureFormat::R8Uint
-                        | TextureFormat::Rg8Unorm
-                        | TextureFormat::Rg8Uint,
-                )
-            ) && desc.format.remove_srgb_suffix() != format.remove_srgb_suffix()
-            {
+            if !check_texture_view_format_compatible(desc.format, *format) {
                 return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
             }
             hal_view_formats.push(*format);
@@ -3359,5 +3349,17 @@ impl<A: HalApi> Resource<DeviceId> for Device<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<DeviceId> {
         &mut self.info
+    }
+}
+
+fn check_texture_view_format_compatible(
+    texture_format: TextureFormat,
+    view_format: TextureFormat,
+) -> bool {
+    use TextureFormat::*;
+
+    match (texture_format, view_format) {
+        (NV12, R8Unorm | R8Uint | Rg8Unorm | Rg8Uint) => true,
+        _ => texture_format.remove_srgb_suffix() == view_format.remove_srgb_suffix(),
     }
 }
