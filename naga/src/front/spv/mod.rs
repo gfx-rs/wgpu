@@ -2829,22 +2829,22 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
-                    let (kind, width) = match ctx.type_arena[ty_lookup.handle].inner {
-                        crate::TypeInner::Scalar { kind, width }
-                        | crate::TypeInner::Vector { kind, width, .. } => (kind, width),
-                        crate::TypeInner::Matrix { width, .. } => (crate::ScalarKind::Float, width),
+                    let scalar = match ctx.type_arena[ty_lookup.handle].inner {
+                        crate::TypeInner::Scalar(scalar)
+                        | crate::TypeInner::Vector { scalar, .. } => scalar,
+                        crate::TypeInner::Matrix { width, .. } => crate::Scalar::float(width),
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
                     let expr = crate::Expression::As {
                         expr: get_expr_handle!(value_id, value_lexp),
-                        kind,
-                        convert: if kind == crate::ScalarKind::Bool {
+                        kind: scalar.kind,
+                        convert: if scalar.kind == crate::ScalarKind::Bool {
                             Some(crate::BOOL_WIDTH)
                         } else if inst.op == Op::Bitcast {
                             None
                         } else {
-                            Some(width)
+                            Some(scalar.width)
                         },
                     };
                     self.lookup_expression.insert(
@@ -3356,10 +3356,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let selector_lty = self.lookup_type.lookup(selector_lexp.type_id)?;
                     let selector_handle = get_expr_handle!(selector, selector_lexp);
                     let selector = match ctx.type_arena[selector_lty.handle].inner {
-                        crate::TypeInner::Scalar {
+                        crate::TypeInner::Scalar(crate::Scalar {
                             kind: crate::ScalarKind::Uint,
                             width: _,
-                        } => {
+                        }) => {
                             // IR expects a signed integer, so do a bitcast
                             ctx.expressions.append(
                                 crate::Expression::As {
@@ -3370,10 +3370,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                 span,
                             )
                         }
-                        crate::TypeInner::Scalar {
+                        crate::TypeInner::Scalar(crate::Scalar {
                             kind: crate::ScalarKind::Sint,
                             width: _,
-                        } => selector_handle,
+                        }) => selector_handle,
                         ref other => unimplemented!("Unexpected selector {:?}", other),
                     };
 
@@ -4244,10 +4244,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect(2)?;
         let id = self.next()?;
-        let inner = crate::TypeInner::Scalar {
-            kind: crate::ScalarKind::Bool,
-            width: crate::BOOL_WIDTH,
-        };
+        let inner = crate::TypeInner::Scalar(crate::Scalar::BOOL);
         self.lookup_type.insert(
             id,
             LookupType {
@@ -4275,14 +4272,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let id = self.next()?;
         let width = self.next()?;
         let sign = self.next()?;
-        let inner = crate::TypeInner::Scalar {
+        let inner = crate::TypeInner::Scalar(crate::Scalar {
             kind: match sign {
                 0 => crate::ScalarKind::Uint,
                 1 => crate::ScalarKind::Sint,
                 _ => return Err(Error::InvalidSign(sign)),
             },
             width: map_width(width)?,
-        };
+        });
         self.lookup_type.insert(
             id,
             LookupType {
@@ -4309,10 +4306,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         inst.expect(3)?;
         let id = self.next()?;
         let width = self.next()?;
-        let inner = crate::TypeInner::Scalar {
-            kind: crate::ScalarKind::Float,
-            width: map_width(width)?,
-        };
+        let inner = crate::TypeInner::Scalar(crate::Scalar::float(map_width(width)?));
         self.lookup_type.insert(
             id,
             LookupType {
@@ -4340,15 +4334,14 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let id = self.next()?;
         let type_id = self.next()?;
         let type_lookup = self.lookup_type.lookup(type_id)?;
-        let (kind, width) = match module.types[type_lookup.handle].inner {
-            crate::TypeInner::Scalar { kind, width } => (kind, width),
+        let scalar = match module.types[type_lookup.handle].inner {
+            crate::TypeInner::Scalar(scalar) => scalar,
             _ => return Err(Error::InvalidInnerType(type_id)),
         };
         let component_count = self.next()?;
         let inner = crate::TypeInner::Vector {
             size: map_vector_size(component_count)?,
-            kind,
-            width,
+            scalar,
         };
         self.lookup_type.insert(
             id,
@@ -4381,10 +4374,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
         let inner = match module.types[vector_type_lookup.handle].inner {
-            crate::TypeInner::Vector { size, width, .. } => crate::TypeInner::Matrix {
+            crate::TypeInner::Vector { size, scalar } => crate::TypeInner::Matrix {
                 columns: map_vector_size(num_columns)?,
                 rows: size,
-                width,
+                width: scalar.width,
             },
             _ => return Err(Error::InvalidInnerType(vector_type_id)),
         };
@@ -4761,11 +4754,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             crate::Type {
                 name: None,
                 inner: {
-                    let kind = crate::ScalarKind::Float;
-                    let width = 4;
+                    let scalar = crate::Scalar::F32;
                     match dim.required_coordinate_size() {
-                        None => crate::TypeInner::Scalar { kind, width },
-                        Some(size) => crate::TypeInner::Vector { size, kind, width },
+                        None => crate::TypeInner::Scalar(scalar),
+                        Some(size) => crate::TypeInner::Vector { size, scalar },
                     }
                 },
             },
@@ -4870,30 +4862,30 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let ty = type_lookup.handle;
 
         let literal = match module.types[ty].inner {
-            crate::TypeInner::Scalar {
+            crate::TypeInner::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Uint,
                 width,
-            } => {
+            }) => {
                 let low = self.next()?;
                 match width {
                     4 => crate::Literal::U32(low),
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
             }
-            crate::TypeInner::Scalar {
+            crate::TypeInner::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Sint,
                 width,
-            } => {
+            }) => {
                 let low = self.next()?;
                 match width {
                     4 => crate::Literal::I32(low as i32),
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
             }
-            crate::TypeInner::Scalar {
+            crate::TypeInner::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Float,
                 width,
-            } => {
+            }) => {
                 let low = self.next()?;
                 match width {
                     4 => crate::Literal::F32(f32::from_bits(low)),
@@ -5167,17 +5159,15 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         | crate::BuiltIn::SampleIndex
                         | crate::BuiltIn::VertexIndex
                         | crate::BuiltIn::PrimitiveIndex
-                        | crate::BuiltIn::LocalInvocationIndex => Some(crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
-                        }),
+                        | crate::BuiltIn::LocalInvocationIndex => {
+                            Some(crate::TypeInner::Scalar(crate::Scalar::U32))
+                        }
                         crate::BuiltIn::GlobalInvocationId
                         | crate::BuiltIn::LocalInvocationId
                         | crate::BuiltIn::WorkGroupId
                         | crate::BuiltIn::WorkGroupSize => Some(crate::TypeInner::Vector {
                             size: crate::VectorSize::Tri,
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
+                            scalar: crate::Scalar::U32,
                         }),
                         _ => None,
                     };

@@ -65,7 +65,7 @@ impl Constructor<(Handle<crate::Type>, &crate::TypeInner)> {
                 format!("mat{}x{}<?>", columns as u32, rows as u32,)
             }
             Self::PartialArray => "array<?, ?>".to_string(),
-            Self::Type((handle, _inner)) => ctx.format_type(handle),
+            Self::Type((handle, _inner)) => handle.to_wgsl(&ctx.module.to_ctx()),
         }
     }
 }
@@ -185,11 +185,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ty_inner: &crate::TypeInner::Scalar { .. },
                     ..
                 },
-                Constructor::Type((_, &crate::TypeInner::Scalar { kind, width })),
+                Constructor::Type((_, &crate::TypeInner::Scalar(scalar))),
             ) => crate::Expression::As {
                 expr: component,
-                kind,
-                convert: Some(width),
+                kind: scalar.kind,
+                convert: Some(scalar.width),
             },
 
             // Vector conversion (vector -> vector)
@@ -203,14 +203,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     _,
                     &crate::TypeInner::Vector {
                         size: dst_size,
-                        kind: dst_kind,
-                        width: dst_width,
+                        scalar: dst_scalar,
                     },
                 )),
             ) if dst_size == src_size => crate::Expression::As {
                 expr: component,
-                kind: dst_kind,
-                convert: Some(dst_width),
+                kind: dst_scalar.kind,
+                convert: Some(dst_scalar.width),
             },
 
             // Vector conversion (vector -> vector) - partial
@@ -294,23 +293,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             (
                 Components::One {
                     component,
-                    ty_inner:
-                        &crate::TypeInner::Scalar {
-                            kind: src_kind,
-                            width: src_width,
-                            ..
-                        },
+                    ty_inner: &crate::TypeInner::Scalar(src_scalar),
                     ..
                 },
                 Constructor::Type((
                     _,
                     &crate::TypeInner::Vector {
                         size,
-                        kind: dst_kind,
-                        width: dst_width,
+                        scalar: dst_scalar,
                     },
                 )),
-            ) if dst_kind == src_kind || dst_width == src_width => crate::Expression::Splat {
+            ) if dst_scalar == src_scalar => crate::Expression::Splat {
                 size,
                 value: component,
             },
@@ -320,8 +313,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Components::Many {
                     components,
                     first_component_ty_inner:
-                        &crate::TypeInner::Scalar { kind, width }
-                        | &crate::TypeInner::Vector { kind, width, .. },
+                        &crate::TypeInner::Scalar(scalar) | &crate::TypeInner::Vector { scalar, .. },
                     ..
                 },
                 Constructor::PartialVector { size },
@@ -333,9 +325,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         &crate::TypeInner::Scalar { .. } | &crate::TypeInner::Vector { .. },
                     ..
                 },
-                Constructor::Type((_, &crate::TypeInner::Vector { size, width, kind })),
+                Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
             ) => {
-                let inner = crate::TypeInner::Vector { size, kind, width };
+                let inner = crate::TypeInner::Vector { size, scalar };
                 let ty = ctx.ensure_type_exists(inner);
                 crate::Expression::Compose { ty, components }
             }
@@ -344,7 +336,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             (
                 Components::Many {
                     components,
-                    first_component_ty_inner: &crate::TypeInner::Scalar { width, .. },
+                    first_component_ty_inner: &crate::TypeInner::Scalar(crate::Scalar { width, .. }),
                     ..
                 },
                 Constructor::PartialMatrix { columns, rows },
@@ -365,8 +357,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 )),
             ) => {
                 let vec_ty = ctx.ensure_type_exists(crate::TypeInner::Vector {
-                    width,
-                    kind: crate::ScalarKind::Float,
+                    scalar: crate::Scalar::float(width),
                     size: rows,
                 });
 
@@ -395,7 +386,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             (
                 Components::Many {
                     components,
-                    first_component_ty_inner: &crate::TypeInner::Vector { width, .. },
+                    first_component_ty_inner:
+                        &crate::TypeInner::Vector {
+                            scalar: crate::Scalar { width, .. },
+                            ..
+                        },
                     ..
                 },
                 Constructor::PartialMatrix { columns, rows },
@@ -460,7 +455,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
             // Bad conversion (type cast)
             (Components::One { span, ty_inner, .. }, constructor) => {
-                let from_type = ctx.format_typeinner(ty_inner);
+                let from_type = ty_inner.to_wgsl(&ctx.module.to_ctx());
                 return Err(Error::BadTypeCast {
                     span,
                     from_type,

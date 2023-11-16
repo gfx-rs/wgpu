@@ -7,7 +7,6 @@ use crate::front::wgsl::parse::{ast, conv};
 use crate::front::Typifier;
 use crate::proc::{
     ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
-    TypeResolution,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -59,6 +58,8 @@ macro_rules! resolve_inner_binary {
 /// Returns a &[`TypeResolution`].
 ///
 /// See the documentation of [`resolve_inner!`] for why this macro is necessary.
+///
+/// [`TypeResolution`]: crate::proc::TypeResolution
 macro_rules! resolve {
     ($ctx:ident, $expr:expr) => {{
         $ctx.grow_types($expr)?;
@@ -486,6 +487,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     /// [`resolve_inner!`] or [`resolve_inner_binary!`].
     ///
     /// [`self.typifier`]: ExpressionContext::typifier
+    /// [`TypeResolution`]: crate::proc::TypeResolution
     /// [`register_type`]: Self::register_type
     /// [`Typifier`]: Typifier
     fn grow_types(
@@ -629,25 +631,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 self.append_expression(load, span)
             }
             Typed::Plain(handle) => Ok(handle),
-        }
-    }
-
-    fn format_typeinner(&self, inner: &crate::TypeInner) -> String {
-        inner.to_wgsl(self.module.to_ctx())
-    }
-
-    fn format_type(&self, handle: Handle<crate::Type>) -> String {
-        let ty = &self.module.types[handle];
-        match ty.name {
-            Some(ref name) => name.clone(),
-            None => self.format_typeinner(&ty.inner),
-        }
-    }
-
-    fn format_type_resolution(&self, resolution: &TypeResolution) -> String {
-        match *resolution {
-            TypeResolution::Handle(handle) => self.format_type(handle),
-            TypeResolution::Value(ref inner) => self.format_typeinner(inner),
         }
     }
 
@@ -925,22 +908,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     if let Some(explicit) = explicit_ty {
                         if explicit != inferred_type {
-                            let ty = &ctx.module.types[explicit];
-                            let expected = ty
-                                .name
-                                .clone()
-                                .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
-
-                            let ty = &ctx.module.types[inferred_type];
-                            let got = ty
-                                .name
-                                .clone()
-                                .unwrap_or_else(|| ty.inner.to_wgsl(ctx.module.to_ctx()));
-
+                            let gctx = ctx.module.to_ctx();
                             return Err(Error::InitializationTypeMismatch {
                                 name: c.name.span,
-                                expected,
-                                got,
+                                expected: explicit.to_wgsl(&gctx),
+                                got: inferred_type.to_wgsl(&gctx),
                             });
                         }
                     }
@@ -1128,10 +1100,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             .inner
                             .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
                         {
+                            let gctx = &ctx.module.to_ctx();
                             return Err(Error::InitializationTypeMismatch {
                                 name: l.name.span,
-                                expected: ctx.format_type(ty),
-                                got: ctx.format_type(init_ty),
+                                expected: ty.to_wgsl(gctx),
+                                got: init_ty.to_wgsl(gctx),
                             });
                         }
                     }
@@ -1166,10 +1139,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .inner
                                 .equivalent(initializer_ty, &ctx.module.types)
                             {
+                                let gctx = &ctx.module.to_ctx();
                                 return Err(Error::InitializationTypeMismatch {
                                     name: v.name.span,
-                                    expected: ctx.format_type(explicit),
-                                    got: ctx.format_typeinner(initializer_ty),
+                                    expected: explicit.to_wgsl(gctx),
+                                    got: initializer_ty.to_wgsl(gctx),
                                 });
                             }
                             explicit
@@ -1413,22 +1387,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let (kind, width) = match *resolve_inner!(ectx, target_handle) {
+                let scalar = match *resolve_inner!(ectx, target_handle) {
                     crate::TypeInner::ValuePointer {
-                        size: None,
-                        kind,
-                        width,
-                        ..
-                    } => (kind, width),
+                        size: None, scalar, ..
+                    } => scalar,
                     crate::TypeInner::Pointer { base, .. } => match ectx.module.types[base].inner {
-                        crate::TypeInner::Scalar { kind, width } => (kind, width),
+                        crate::TypeInner::Scalar(scalar) => scalar,
                         _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
                     },
                     _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
                 };
-                let literal = match kind {
+                let literal = match scalar.kind {
                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
-                        crate::Literal::one(kind, width)
+                        crate::Literal::one(scalar)
                             .ok_or(Error::BadIncrDecrReferenceType(value_span))?
                     }
                     _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
@@ -1608,21 +1579,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         match *inner {
                             crate::TypeInner::Pointer { base, .. } => &ctx.module.types[base].inner,
                             crate::TypeInner::ValuePointer {
-                                size: None,
-                                kind,
-                                width,
-                                ..
+                                size: None, scalar, ..
                             } => {
-                                temp_inner = crate::TypeInner::Scalar { kind, width };
+                                temp_inner = crate::TypeInner::Scalar(scalar);
                                 &temp_inner
                             }
                             crate::TypeInner::ValuePointer {
                                 size: Some(size),
-                                kind,
-                                width,
+                                scalar,
                                 ..
                             } => {
-                                temp_inner = crate::TypeInner::Vector { size, kind, width };
+                                temp_inner = crate::TypeInner::Vector { size, scalar };
                                 &temp_inner
                             }
                             _ => unreachable!(
@@ -1679,22 +1646,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let expr = self.expression(expr, ctx)?;
                 let to_resolved = self.resolve_ast_type(to, &mut ctx.as_global())?;
 
-                let kind = match ctx.module.types[to_resolved].inner {
-                    crate::TypeInner::Scalar { kind, .. } => kind,
-                    crate::TypeInner::Vector { kind, .. } => kind,
+                let element_scalar = match ctx.module.types[to_resolved].inner {
+                    crate::TypeInner::Scalar(scalar) => scalar,
+                    crate::TypeInner::Vector { scalar, .. } => scalar,
                     _ => {
                         let ty = resolve!(ctx, expr);
+                        let gctx = &ctx.module.to_ctx();
                         return Err(Error::BadTypeCast {
-                            from_type: ctx.format_type_resolution(ty),
+                            from_type: ty.to_wgsl(gctx),
                             span: ty_span,
-                            to_type: ctx.format_type(to_resolved),
+                            to_type: to_resolved.to_wgsl(gctx),
                         });
                     }
                 };
 
                 Typed::Plain(crate::Expression::As {
                     expr,
-                    kind,
+                    kind: element_scalar.kind,
                     convert: None,
                 })
             }
@@ -1785,10 +1753,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ) && {
                         matches!(
                             resolve_inner!(ctx, argument),
-                            &crate::TypeInner::Scalar {
+                            &crate::TypeInner::Scalar(crate::Scalar {
                                 kind: crate::ScalarKind::Bool,
                                 ..
-                            }
+                            })
                         )
                     };
 
@@ -1828,10 +1796,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
                         if let Some((size, width)) = match *resolve_inner!(ctx, arg) {
-                            crate::TypeInner::Scalar { width, .. } => Some((None, width)),
-                            crate::TypeInner::Vector { size, width, .. } => {
-                                Some((Some(size), width))
+                            crate::TypeInner::Scalar(crate::Scalar { width, .. }) => {
+                                Some((None, width))
                             }
+                            crate::TypeInner::Vector {
+                                size,
+                                scalar: crate::Scalar { width, .. },
+                                ..
+                            } => Some((Some(size), width)),
                             _ => None,
                         } {
                             ctx.module.generate_predeclared_type(
@@ -1976,13 +1948,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             args.finish()?;
 
                             let expression = match *resolve_inner!(ctx, value) {
-                                crate::TypeInner::Scalar { kind, width } => {
+                                crate::TypeInner::Scalar(scalar) => {
                                     crate::Expression::AtomicResult {
                                         ty: ctx.module.generate_predeclared_type(
-                                            crate::PredeclaredType::AtomicCompareExchangeWeakResult {
-                                                kind,
-                                                width,
-                                            },
+                                            crate::PredeclaredType::AtomicCompareExchangeWeakResult(
+                                                scalar,
+                                            ),
                                         ),
                                         comparison: true,
                                     }

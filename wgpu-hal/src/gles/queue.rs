@@ -572,7 +572,7 @@ impl super::Queue {
                 ref copy,
             } => {
                 let (block_width, block_height) = dst_format.block_dimensions();
-                let block_size = dst_format.block_size(None).unwrap();
+                let block_size = dst_format.block_copy_size(None).unwrap();
                 let format_desc = self.shared.describe_texture_format(dst_format);
                 let row_texels = copy
                     .buffer_layout
@@ -710,7 +710,7 @@ impl super::Queue {
                 dst_target: _,
                 ref copy,
             } => {
-                let block_size = src_format.block_size(None).unwrap();
+                let block_size = src_format.block_copy_size(None).unwrap();
                 if src_format.is_compressed() {
                     log::error!("Not implemented yet: compressed texture copy to buffer");
                     return;
@@ -1473,33 +1473,27 @@ impl super::Queue {
                     //
                     // --- Float 1-4 Component ---
                     //
-                    naga::TypeInner::Scalar {
-                        kind: naga::ScalarKind::Float,
-                        width: 4,
-                    } => {
+                    naga::TypeInner::Scalar(naga::Scalar::F32) => {
                         let data = unsafe { get_data::<f32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_f32(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Float,
                         size: naga::VectorSize::Bi,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 2>(data_bytes, offset) };
                         unsafe { gl.uniform_2_f32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Float,
                         size: naga::VectorSize::Tri,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 3>(data_bytes, offset) };
                         unsafe { gl.uniform_3_f32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Float,
                         size: naga::VectorSize::Quad,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_4_f32_slice(location, data) };
@@ -1508,33 +1502,27 @@ impl super::Queue {
                     //
                     // --- Int 1-4 Component ---
                     //
-                    naga::TypeInner::Scalar {
-                        kind: naga::ScalarKind::Sint,
-                        width: 4,
-                    } => {
+                    naga::TypeInner::Scalar(naga::Scalar::I32) => {
                         let data = unsafe { get_data::<i32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_i32(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Sint,
                         size: naga::VectorSize::Bi,
-                        width: 4,
+                        scalar: naga::Scalar::I32,
                     } => {
                         let data = unsafe { get_data::<i32, 2>(data_bytes, offset) };
                         unsafe { gl.uniform_2_i32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Sint,
                         size: naga::VectorSize::Tri,
-                        width: 4,
+                        scalar: naga::Scalar::I32,
                     } => {
                         let data = unsafe { get_data::<i32, 3>(data_bytes, offset) };
                         unsafe { gl.uniform_3_i32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Sint,
                         size: naga::VectorSize::Quad,
-                        width: 4,
+                        scalar: naga::Scalar::I32,
                     } => {
                         let data = unsafe { get_data::<i32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_4_i32_slice(location, data) };
@@ -1543,33 +1531,27 @@ impl super::Queue {
                     //
                     // --- Uint 1-4 Component ---
                     //
-                    naga::TypeInner::Scalar {
-                        kind: naga::ScalarKind::Uint,
-                        width: 4,
-                    } => {
+                    naga::TypeInner::Scalar(naga::Scalar::U32) => {
                         let data = unsafe { get_data::<u32, 1>(data_bytes, offset)[0] };
                         unsafe { gl.uniform_1_u32(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Uint,
                         size: naga::VectorSize::Bi,
-                        width: 4,
+                        scalar: naga::Scalar::U32,
                     } => {
                         let data = unsafe { get_data::<u32, 2>(data_bytes, offset) };
                         unsafe { gl.uniform_2_u32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Uint,
                         size: naga::VectorSize::Tri,
-                        width: 4,
+                        scalar: naga::Scalar::U32,
                     } => {
                         let data = unsafe { get_data::<u32, 3>(data_bytes, offset) };
                         unsafe { gl.uniform_3_u32_slice(location, data) };
                     }
                     naga::TypeInner::Vector {
-                        kind: naga::ScalarKind::Uint,
                         size: naga::VectorSize::Quad,
-                        width: 4,
+                        scalar: naga::Scalar::U32,
                     } => {
                         let data = unsafe { get_data::<u32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_4_u32_slice(location, data) };

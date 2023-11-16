@@ -36,9 +36,9 @@ pub fn compact(module: &mut crate::Module) {
     {
         for (_, global) in module.global_variables.iter() {
             log::trace!("tracing global {:?}", global.name);
-            module_tracer.as_type().trace_type(global.ty);
+            module_tracer.types_used.insert(global.ty);
             if let Some(init) = global.init {
-                module_tracer.as_const_expression().trace_expression(init);
+                module_tracer.const_expressions_used.insert(init);
             }
         }
     }
@@ -50,25 +50,23 @@ pub fn compact(module: &mut crate::Module) {
     for (handle, constant) in module.constants.iter() {
         if constant.name.is_some() {
             module_tracer.constants_used.insert(handle);
-            module_tracer.as_type().trace_type(constant.ty);
-            module_tracer
-                .as_const_expression()
-                .trace_expression(constant.init);
+            module_tracer.const_expressions_used.insert(constant.init);
         }
     }
 
     // We assume that all functions are used.
     //
     // Observe which types, constant expressions, constants, and
-    // expressions each function uses, and produce maps from
-    // pre-compaction to post-compaction handles.
+    // expressions each function uses, and produce maps for each
+    // function from pre-compaction to post-compaction expression
+    // handles.
     log::trace!("tracing functions");
     let function_maps: Vec<FunctionMap> = module
         .functions
         .iter()
         .map(|(_, f)| {
             log::trace!("tracing function {:?}", f.name);
-            let mut function_tracer = module_tracer.enter_function(f);
+            let mut function_tracer = module_tracer.as_function(f);
             function_tracer.trace();
             FunctionMap::from(function_tracer)
         })
@@ -81,11 +79,29 @@ pub fn compact(module: &mut crate::Module) {
         .iter()
         .map(|e| {
             log::trace!("tracing entry point {:?}", e.function.name);
-            let mut used = module_tracer.enter_function(&e.function);
+            let mut used = module_tracer.as_function(&e.function);
             used.trace();
             FunctionMap::from(used)
         })
         .collect();
+
+    // Given that the above steps have marked all the constant
+    // expressions used directly by globals, constants, functions, and
+    // entry points, walk the constant expression arena to find all
+    // constant expressions used, directly or indirectly.
+    module_tracer.as_const_expression().trace_expressions();
+
+    // Constants' initializers are taken care of already, because
+    // expression tracing sees through constants. But we still need to
+    // note type usage.
+    for (handle, constant) in module.constants.iter() {
+        if module_tracer.constants_used.contains(handle) {
+            module_tracer.types_used.insert(constant.ty);
+        }
+    }
+
+    // Propagate usage through types.
+    module_tracer.as_type().trace_types();
 
     // Now that we know what is used and what is never touched,
     // produce maps from the `Handle`s that appear in `module` now to
@@ -189,15 +205,14 @@ impl<'module> ModuleTracer<'module> {
             ref predeclared_types,
         } = *special_types;
 
-        let mut type_tracer = self.as_type();
         if let Some(ray_desc) = *ray_desc {
-            type_tracer.trace_type(ray_desc);
+            self.types_used.insert(ray_desc);
         }
         if let Some(ray_intersection) = *ray_intersection {
-            type_tracer.trace_type(ray_intersection);
+            self.types_used.insert(ray_intersection);
         }
         for (_, &handle) in predeclared_types {
-            type_tracer.trace_type(handle);
+            self.types_used.insert(handle);
         }
     }
 
@@ -210,24 +225,22 @@ impl<'module> ModuleTracer<'module> {
 
     fn as_const_expression(&mut self) -> expressions::ExpressionTracer {
         expressions::ExpressionTracer {
-            types: &self.module.types,
-            constants: &self.module.constants,
             expressions: &self.module.const_expressions,
+            constants: &self.module.constants,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             expressions_used: &mut self.const_expressions_used,
-            const_expressions: None,
+            const_expressions_used: None,
         }
     }
 
-    pub fn enter_function<'tracer>(
+    pub fn as_function<'tracer>(
         &'tracer mut self,
         function: &'tracer crate::Function,
     ) -> FunctionTracer<'tracer> {
         FunctionTracer {
-            module: self.module,
             function,
-
+            constants: &self.module.constants,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             const_expressions_used: &mut self.const_expressions_used,

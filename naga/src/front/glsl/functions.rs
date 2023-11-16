@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     front::glsl::types::type_power, proc::ensure_block_returns, AddressSpace, Block, EntryPoint,
-    Expression, Function, FunctionArgument, FunctionResult, Handle, Literal, LocalVariable,
+    Expression, Function, FunctionArgument, FunctionResult, Handle, Literal, LocalVariable, Scalar,
     ScalarKind, Span, Statement, StructMember, Type, TypeInner,
 };
 use std::iter;
@@ -20,7 +20,7 @@ struct ProxyWrite {
     /// A pointer to read the value of the store
     value: Handle<Expression>,
     /// An optional conversion to be applied
-    convert: Option<(ScalarKind, crate::Bytes)>,
+    convert: Option<Scalar>,
 }
 
 impl Frontend {
@@ -68,10 +68,14 @@ impl Frontend {
         let expr_is_bool = expr_type.scalar_kind() == Some(ScalarKind::Bool);
 
         // Special case: if casting from a bool, we need to use Select and not As.
-        match ctx.module.types[ty].inner.scalar_kind() {
-            Some(result_scalar_kind) if expr_is_bool && result_scalar_kind != ScalarKind::Bool => {
-                let l0 = Literal::zero(result_scalar_kind, 4).unwrap();
-                let l1 = Literal::one(result_scalar_kind, 4).unwrap();
+        match ctx.module.types[ty].inner.scalar() {
+            Some(result_scalar) if expr_is_bool && result_scalar.kind != ScalarKind::Bool => {
+                let result_scalar = Scalar {
+                    width: 4,
+                    ..result_scalar
+                };
+                let l0 = Literal::zero(result_scalar).unwrap();
+                let l1 = Literal::one(result_scalar).unwrap();
                 let mut reject = ctx.add_expression(Expression::Literal(l0), expr_meta)?;
                 let mut accept = ctx.add_expression(Expression::Literal(l1), expr_meta)?;
 
@@ -93,24 +97,16 @@ impl Frontend {
         }
 
         Ok(match ctx.module.types[ty].inner {
-            TypeInner::Vector { size, kind, width } if vector_size.is_none() => {
-                ctx.forced_conversion(&mut value, expr_meta, kind, width)?;
+            TypeInner::Vector { size, scalar } if vector_size.is_none() => {
+                ctx.forced_conversion(&mut value, expr_meta, scalar)?;
 
                 if let TypeInner::Scalar { .. } = *ctx.resolve_type(value, expr_meta)? {
                     ctx.add_expression(Expression::Splat { size, value }, meta)?
                 } else {
-                    self.vector_constructor(
-                        ctx,
-                        ty,
-                        size,
-                        kind,
-                        width,
-                        &[(value, expr_meta)],
-                        meta,
-                    )?
+                    self.vector_constructor(ctx, ty, size, scalar, &[(value, expr_meta)], meta)?
                 }
             }
-            TypeInner::Scalar { kind, width } => {
+            TypeInner::Scalar(scalar) => {
                 let mut expr = value;
                 if let TypeInner::Vector { .. } | TypeInner::Matrix { .. } =
                     *ctx.resolve_type(value, expr_meta)?
@@ -136,23 +132,23 @@ impl Frontend {
 
                 ctx.add_expression(
                     Expression::As {
-                        kind,
+                        kind: scalar.kind,
                         expr,
-                        convert: Some(width),
+                        convert: Some(scalar.width),
                     },
                     meta,
                 )?
             }
-            TypeInner::Vector { size, kind, width } => {
+            TypeInner::Vector { size, scalar } => {
                 if vector_size.map_or(true, |s| s != size) {
                     value = ctx.vector_resize(size, value, expr_meta)?;
                 }
 
                 ctx.add_expression(
                     Expression::As {
-                        kind,
+                        kind: scalar.kind,
                         expr: value,
-                        convert: Some(width),
+                        convert: Some(scalar.width),
                     },
                     meta,
                 )?
@@ -166,8 +162,8 @@ impl Frontend {
                 let scalar_components = members
                     .get(0)
                     .and_then(|member| scalar_components(&ctx.module.types[member.ty].inner));
-                if let Some((kind, width)) = scalar_components {
-                    ctx.implicit_conversion(&mut value, expr_meta, kind, width)?;
+                if let Some(scalar) = scalar_components {
+                    ctx.implicit_conversion(&mut value, expr_meta, scalar)?;
                 }
 
                 ctx.add_expression(
@@ -181,8 +177,8 @@ impl Frontend {
 
             TypeInner::Array { base, .. } => {
                 let scalar_components = scalar_components(&ctx.module.types[base].inner);
-                if let Some((kind, width)) = scalar_components {
-                    ctx.implicit_conversion(&mut value, expr_meta, kind, width)?;
+                if let Some(scalar) = scalar_components {
+                    ctx.implicit_conversion(&mut value, expr_meta, scalar)?;
                 }
 
                 ctx.add_expression(
@@ -220,9 +216,13 @@ impl Frontend {
         // `Expression::As` doesn't support matrix width
         // casts so we need to do some extra work for casts
 
-        ctx.forced_conversion(&mut value, expr_meta, ScalarKind::Float, width)?;
+        let element_scalar = Scalar {
+            kind: ScalarKind::Float,
+            width,
+        };
+        ctx.forced_conversion(&mut value, expr_meta, element_scalar)?;
         match *ctx.resolve_type(value, expr_meta)? {
-            TypeInner::Scalar { .. } => {
+            TypeInner::Scalar(_) => {
                 // If a matrix is constructed with a single scalar value, then that
                 // value is used to initialize all the values along the diagonal of
                 // the matrix; the rest are given zeros.
@@ -231,14 +231,13 @@ impl Frontend {
                         name: None,
                         inner: TypeInner::Vector {
                             size: rows,
-                            kind: ScalarKind::Float,
-                            width,
+                            scalar: element_scalar,
                         },
                     },
                     meta,
                 );
 
-                let zero_literal = Literal::zero(ScalarKind::Float, width).unwrap();
+                let zero_literal = Literal::zero(element_scalar).unwrap();
                 let zero = ctx.add_expression(Expression::Literal(zero_literal), meta)?;
 
                 for i in 0..columns as u32 {
@@ -268,8 +267,8 @@ impl Frontend {
                 // (column i, row j) in the argument will be initialized from there. All
                 // other components will be initialized to the identity matrix.
 
-                let zero_literal = Literal::zero(ScalarKind::Float, width).unwrap();
-                let one_literal = Literal::one(ScalarKind::Float, width).unwrap();
+                let zero_literal = Literal::zero(element_scalar).unwrap();
+                let one_literal = Literal::one(element_scalar).unwrap();
 
                 let zero = ctx.add_expression(Expression::Literal(zero_literal), meta)?;
                 let one = ctx.add_expression(Expression::Literal(one_literal), meta)?;
@@ -279,8 +278,7 @@ impl Frontend {
                         name: None,
                         inner: TypeInner::Vector {
                             size: rows,
-                            kind: ScalarKind::Float,
-                            width,
+                            scalar: element_scalar,
                         },
                     },
                     meta,
@@ -360,15 +358,14 @@ impl Frontend {
         ctx: &mut Context,
         ty: Handle<Type>,
         size: crate::VectorSize,
-        kind: ScalarKind,
-        width: crate::Bytes,
+        scalar: Scalar,
         args: &[(Handle<Expression>, Span)],
         meta: Span,
     ) -> Result<Handle<Expression>> {
         let mut components = Vec::with_capacity(size as usize);
 
         for (mut arg, expr_meta) in args.iter().copied() {
-            ctx.forced_conversion(&mut arg, expr_meta, kind, width)?;
+            ctx.forced_conversion(&mut arg, expr_meta, scalar)?;
 
             if components.len() >= size as usize {
                 break;
@@ -429,8 +426,12 @@ impl Frontend {
             } => {
                 let mut flattened = Vec::with_capacity(columns as usize * rows as usize);
 
+                let element_scalar = Scalar {
+                    kind: ScalarKind::Float,
+                    width,
+                };
                 for (mut arg, meta) in args.iter().copied() {
-                    ctx.forced_conversion(&mut arg, meta, ScalarKind::Float, width)?;
+                    ctx.forced_conversion(&mut arg, meta, element_scalar)?;
 
                     match *ctx.resolve_type(arg, meta)? {
                         TypeInner::Vector { size, .. } => {
@@ -453,8 +454,7 @@ impl Frontend {
                         name: None,
                         inner: TypeInner::Vector {
                             size: rows,
-                            kind: ScalarKind::Float,
-                            width,
+                            scalar: element_scalar,
                         },
                     },
                     meta,
@@ -471,14 +471,14 @@ impl Frontend {
                 }
                 None
             }
-            TypeInner::Vector { size, kind, width } => {
-                return self.vector_constructor(ctx, ty, size, kind, width, &args, meta)
+            TypeInner::Vector { size, scalar } => {
+                return self.vector_constructor(ctx, ty, size, scalar, &args, meta)
             }
             TypeInner::Array { base, .. } => {
                 for (mut arg, meta) in args.iter().copied() {
                     let scalar_components = scalar_components(&ctx.module.types[base].inner);
-                    if let Some((kind, width)) = scalar_components {
-                        ctx.implicit_conversion(&mut arg, meta, kind, width)?;
+                    if let Some(scalar) = scalar_components {
+                        ctx.implicit_conversion(&mut arg, meta, scalar)?;
                     }
 
                     components.push(arg)
@@ -503,8 +503,8 @@ impl Frontend {
             for ((mut arg, meta), scalar_components) in
                 args.iter().copied().zip(struct_member_data.iter().copied())
             {
-                if let Some((kind, width)) = scalar_components {
-                    ctx.implicit_conversion(&mut arg, meta, kind, width)?;
+                if let Some(scalar) = scalar_components {
+                    ctx.implicit_conversion(&mut arg, meta, scalar)?;
                 }
 
                 components.push(arg)
@@ -813,8 +813,8 @@ impl Frontend {
             let scalar_comps = scalar_components(&ctx.module.types[*parameter].inner);
 
             // Apply implicit conversions as needed
-            if let Some((kind, width)) = scalar_comps {
-                ctx.implicit_conversion(&mut handle, meta, kind, width)?;
+            if let Some(scalar) = scalar_comps {
+                ctx.implicit_conversion(&mut handle, meta, scalar)?;
             }
 
             arguments.push(handle)
@@ -850,8 +850,8 @@ impl Frontend {
                         meta,
                     )?;
 
-                    if let Some((kind, width)) = proxy_write.convert {
-                        ctx.conversion(&mut value, meta, kind, width)?;
+                    if let Some(scalar) = proxy_write.convert {
+                        ctx.conversion(&mut value, meta, scalar)?;
                     }
 
                     ctx.emit_restart();
@@ -893,10 +893,10 @@ impl Frontend {
             // If the argument is to be passed as a pointer but the type of the
             // expression returns a vector it must mean that it was for example
             // swizzled and it must be spilled into a local before calling
-            TypeInner::Vector { size, kind, width } => Some(ctx.module.types.insert(
+            TypeInner::Vector { size, scalar } => Some(ctx.module.types.insert(
                 Type {
                     name: None,
-                    inner: TypeInner::Vector { size, kind, width },
+                    inner: TypeInner::Vector { size, scalar },
                 },
                 Span::default(),
             )),
@@ -906,13 +906,12 @@ impl Frontend {
             TypeInner::Pointer { base, space } if space != AddressSpace::Function => Some(base),
             TypeInner::ValuePointer {
                 size,
-                kind,
-                width,
+                scalar,
                 space,
             } if space != AddressSpace::Function => {
                 let inner = match size {
-                    Some(size) => TypeInner::Vector { size, kind, width },
-                    None => TypeInner::Scalar { kind, width },
+                    Some(size) => TypeInner::Vector { size, scalar },
+                    None => TypeInner::Scalar(scalar),
                 };
 
                 Some(
@@ -1512,31 +1511,22 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
     use ScalarKind::*;
 
     // Gather the `ScalarKind` and scalar width from both the target and the source
-    let (target_kind, target_width, source_kind, source_width) = match (target, source) {
+    let (target_scalar, source_scalar) = match (target, source) {
         // Conversions between scalars are allowed
-        (
-            &TypeInner::Scalar {
-                kind: tgt_kind,
-                width: tgt_width,
-            },
-            &TypeInner::Scalar {
-                kind: src_kind,
-                width: src_width,
-            },
-        ) => (tgt_kind, tgt_width, src_kind, src_width),
+        (&TypeInner::Scalar(tgt_scalar), &TypeInner::Scalar(src_scalar)) => {
+            (tgt_scalar, src_scalar)
+        }
         // Conversions between vectors of the same size are allowed
         (
             &TypeInner::Vector {
-                kind: tgt_kind,
                 size: tgt_size,
-                width: tgt_width,
+                scalar: tgt_scalar,
             },
             &TypeInner::Vector {
-                kind: src_kind,
                 size: src_size,
-                width: src_width,
+                scalar: src_scalar,
             },
-        ) if tgt_size == src_size => (tgt_kind, tgt_width, src_kind, src_width),
+        ) if tgt_size == src_size => (tgt_scalar, src_scalar),
         // Conversions between matrices of the same size are allowed
         (
             &TypeInner::Matrix {
@@ -1549,29 +1539,41 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
                 columns: src_cols,
                 width: src_width,
             },
-        ) if tgt_cols == src_cols && tgt_rows == src_rows => (Float, tgt_width, Float, src_width),
+        ) if tgt_cols == src_cols && tgt_rows == src_rows => {
+            (Scalar::float(tgt_width), Scalar::float(src_width))
+        }
         _ => return None,
     };
 
     // Check if source can be converted into target, if this is the case then the type
     // power of target must be higher than that of source
-    let target_power = type_power(target_kind, target_width);
-    let source_power = type_power(source_kind, source_width);
+    let target_power = type_power(target_scalar);
+    let source_power = type_power(source_scalar);
     if target_power < source_power {
         return None;
     }
 
-    Some(
-        match ((target_kind, target_width), (source_kind, source_width)) {
-            // A conversion from a float to a double is special
-            ((Float, 8), (Float, 4)) => Conversion::FloatToDouble,
-            // A conversion from an integer to a float is special
-            ((Float, 4), (Sint | Uint, _)) => Conversion::IntToFloat,
-            // A conversion from an integer to a double is special
-            ((Float, 8), (Sint | Uint, _)) => Conversion::IntToDouble,
-            _ => Conversion::Other,
-        },
-    )
+    Some(match (target_scalar, source_scalar) {
+        // A conversion from a float to a double is special
+        (Scalar::F64, Scalar::F32) => Conversion::FloatToDouble,
+        // A conversion from an integer to a float is special
+        (
+            Scalar::F32,
+            Scalar {
+                kind: Sint | Uint,
+                width: _,
+            },
+        ) => Conversion::IntToFloat,
+        // A conversion from an integer to a double is special
+        (
+            Scalar::F64,
+            Scalar {
+                kind: Sint | Uint,
+                width: _,
+            },
+        ) => Conversion::IntToDouble,
+        _ => Conversion::Other,
+    })
 }
 
 /// Helper method returning all the non standard builtin variations needed
@@ -1581,10 +1583,10 @@ fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) ->
 
     for ty in args {
         match *ty {
-            TypeInner::ValuePointer { kind, width, .. }
-            | TypeInner::Scalar { kind, width }
-            | TypeInner::Vector { kind, width, .. } => {
-                if kind == ScalarKind::Float && width == 8 {
+            TypeInner::ValuePointer { scalar, .. }
+            | TypeInner::Scalar(scalar)
+            | TypeInner::Vector { scalar, .. } => {
+                if scalar == Scalar::F64 {
                     variations |= BuiltinVariations::DOUBLE
                 }
             }

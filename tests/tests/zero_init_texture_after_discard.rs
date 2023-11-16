@@ -158,7 +158,7 @@ impl<'ctx> TestCase<'ctx> {
             });
             ctx.queue.submit([encoder.finish()]);
         } else {
-            let block_size = format.block_size(None).unwrap();
+            let block_size = format.block_copy_size(None).unwrap();
             let bytes_per_row = texture.width() * block_size;
 
             // Size for tests is chosen so that we don't need to care about buffer alignments.

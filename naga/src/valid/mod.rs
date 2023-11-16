@@ -264,19 +264,25 @@ impl crate::TypeInner {
     #[cfg(feature = "validate")]
     const fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
         match *self {
-            Self::Scalar {
+            Self::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
                 ..
-            } => Some(crate::ImageDimension::D1),
+            }) => Some(crate::ImageDimension::D1),
             Self::Vector {
                 size: crate::VectorSize::Bi,
-                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                ..
+                scalar:
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        ..
+                    },
             } => Some(crate::ImageDimension::D2),
             Self::Vector {
                 size: crate::VectorSize::Tri,
-                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                ..
+                scalar:
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        ..
+                    },
             } => Some(crate::ImageDimension::D3),
             _ => None,
         }
@@ -349,10 +355,11 @@ impl Validator {
             ValidationError::from(e).with_span_handle(handle, &module.types)
         })?;
 
-        let placeholder = TypeResolution::Value(crate::TypeInner::Scalar {
+        // These should all get overwritten.
+        let placeholder = TypeResolution::Value(crate::TypeInner::Scalar(crate::Scalar {
             kind: crate::ScalarKind::Bool,
             width: 0,
-        });
+        }));
 
         let mut mod_info = ModuleInfo {
             type_flags: Vec::with_capacity(module.types.len()),
@@ -482,9 +489,5 @@ fn validate_atomic_compare_exchange_struct(
         && members[0].name.as_deref() == Some("old_value")
         && scalar_predicate(&types[members[0].ty].inner)
         && members[1].name.as_deref() == Some("exchanged")
-        && types[members[1].ty].inner
-            == crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Bool,
-                width: crate::BOOL_WIDTH,
-            }
+        && types[members[1].ty].inner == crate::TypeInner::Scalar(crate::Scalar::BOOL)
 }

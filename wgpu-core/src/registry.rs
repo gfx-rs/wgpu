@@ -15,14 +15,14 @@ pub struct RegistryReport {
     pub num_allocated: usize,
     pub num_kept_from_user: usize,
     pub num_released_from_user: usize,
+    pub num_destroyed_from_user: usize,
     pub num_error: usize,
     pub element_size: usize,
 }
 
 impl RegistryReport {
     pub fn is_empty(&self) -> bool {
-        self.num_allocated + self.num_kept_from_user + self.num_released_from_user + self.num_error
-            == 0
+        self.num_allocated + self.num_kept_from_user == 0
     }
 }
 
@@ -187,6 +187,7 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
         for element in storage.map.iter() {
             match *element {
                 Element::Occupied(..) => report.num_kept_from_user += 1,
+                Element::Destroyed(..) => report.num_destroyed_from_user += 1,
                 Element::Vacant => report.num_released_from_user += 1,
                 Element::Error(..) => report.num_error += 1,
             }

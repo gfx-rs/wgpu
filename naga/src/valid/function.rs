@@ -345,9 +345,9 @@ impl super::Validator {
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
         let pointer_inner = context.resolve_type(pointer, &self.valid_expression_set)?;
-        let (ptr_kind, ptr_width) = match *pointer_inner {
+        let ptr_scalar = match *pointer_inner {
             crate::TypeInner::Pointer { base, .. } => match context.types[base].inner {
-                crate::TypeInner::Atomic { kind, width } => (kind, width),
+                crate::TypeInner::Atomic(scalar) => scalar,
                 ref other => {
                     log::error!("Atomic pointer to type {:?}", other);
                     return Err(AtomicError::InvalidPointer(pointer)
@@ -365,7 +365,7 @@ impl super::Validator {
 
         let value_inner = context.resolve_type(value, &self.valid_expression_set)?;
         match *value_inner {
-            crate::TypeInner::Scalar { width, kind } if kind == ptr_kind && width == ptr_width => {}
+            crate::TypeInner::Scalar(scalar) if scalar == ptr_scalar => {}
             ref other => {
                 log::error!("Atomic operand type {:?}", other);
                 return Err(AtomicError::InvalidOperand(value)
@@ -387,12 +387,8 @@ impl super::Validator {
         match context.expressions[result] {
             crate::Expression::AtomicResult { ty, comparison }
                 if {
-                    let scalar_predicate = |ty: &crate::TypeInner| {
-                        *ty == crate::TypeInner::Scalar {
-                            kind: ptr_kind,
-                            width: ptr_width,
-                        }
-                    };
+                    let scalar_predicate =
+                        |ty: &crate::TypeInner| *ty == crate::TypeInner::Scalar(ptr_scalar);
                     match &context.types[ty].inner {
                         ty if !comparison => scalar_predicate(ty),
                         &crate::TypeInner::Struct { ref members, .. } if comparison => {
@@ -445,10 +441,10 @@ impl super::Validator {
                     ref reject,
                 } => {
                     match *context.resolve_type(condition, &self.valid_expression_set)? {
-                        Ti::Scalar {
+                        Ti::Scalar(crate::Scalar {
                             kind: crate::ScalarKind::Bool,
                             width: _,
-                        } => {}
+                        }) => {}
                         _ => {
                             return Err(FunctionError::InvalidIfType(condition)
                                 .with_span_handle(condition, context.expressions))
@@ -560,10 +556,10 @@ impl super::Validator {
 
                     if let Some(condition) = break_if {
                         match *context.resolve_type(condition, &self.valid_expression_set)? {
-                            Ti::Scalar {
+                            Ti::Scalar(crate::Scalar {
                                 kind: crate::ScalarKind::Bool,
                                 width: _,
-                            } => {}
+                            }) => {}
                             _ => {
                                 return Err(FunctionError::InvalidIfType(condition)
                                     .with_span_handle(condition, context.expressions))
@@ -665,21 +661,19 @@ impl super::Validator {
 
                     let good = match *pointer_ty {
                         Ti::Pointer { base, space: _ } => match context.types[base].inner {
-                            Ti::Atomic { kind, width } => *value_ty == Ti::Scalar { kind, width },
+                            Ti::Atomic(scalar) => *value_ty == Ti::Scalar(scalar),
                             ref other => value_ty == other,
                         },
                         Ti::ValuePointer {
                             size: Some(size),
-                            kind,
-                            width,
+                            scalar,
                             space: _,
-                        } => *value_ty == Ti::Vector { size, kind, width },
+                        } => *value_ty == Ti::Vector { size, scalar },
                         Ti::ValuePointer {
                             size: None,
-                            kind,
-                            width,
+                            scalar,
                             space: _,
-                        } => *value_ty == Ti::Scalar { kind, width },
+                        } => *value_ty == Ti::Scalar(scalar),
                         _ => false,
                     };
                     if !good {
@@ -768,10 +762,10 @@ impl super::Validator {
                             }
                             if let Some(expr) = array_index {
                                 match *context.resolve_type(expr, &self.valid_expression_set)? {
-                                    Ti::Scalar {
+                                    Ti::Scalar(crate::Scalar {
                                         kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
                                         width: _,
-                                    } => {}
+                                    }) => {}
                                     _ => {
                                         return Err(FunctionError::InvalidImageStore(
                                             ExpressionError::InvalidImageArrayIndexType(expr),
@@ -783,9 +777,11 @@ impl super::Validator {
                             match class {
                                 crate::ImageClass::Storage { format, .. } => {
                                     crate::TypeInner::Vector {
-                                        kind: format.into(),
                                         size: crate::VectorSize::Quad,
-                                        width: 4,
+                                        scalar: crate::Scalar {
+                                            kind: format.into(),
+                                            width: 4,
+                                        },
                                     }
                                 }
                                 _ => {

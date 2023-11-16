@@ -1,6 +1,6 @@
 use super::{context::Context, Error, ErrorKind, Result, Span};
 use crate::{
-    proc::ResolveContext, Bytes, Expression, Handle, ImageClass, ImageDimension, ScalarKind, Type,
+    proc::ResolveContext, Expression, Handle, ImageClass, ImageDimension, Scalar, ScalarKind, Type,
     TypeInner, VectorSize,
 };
 
@@ -8,38 +8,23 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
     match type_name {
         "bool" => Some(Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Bool,
-                width: crate::BOOL_WIDTH,
-            },
+            inner: TypeInner::Scalar(Scalar::BOOL),
         }),
         "float" => Some(Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Float,
-                width: 4,
-            },
+            inner: TypeInner::Scalar(Scalar::F32),
         }),
         "double" => Some(Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Float,
-                width: 8,
-            },
+            inner: TypeInner::Scalar(Scalar::F64),
         }),
         "int" => Some(Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Sint,
-                width: 4,
-            },
+            inner: TypeInner::Scalar(Scalar::I32),
         }),
         "uint" => Some(Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Uint,
-                width: 4,
-            },
+            inner: TypeInner::Scalar(Scalar::U32),
         }),
         "sampler" | "samplerShadow" => Some(Type {
             name: None,
@@ -48,13 +33,13 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
             },
         }),
         word => {
-            fn kind_width_parse(ty: &str) -> Option<(ScalarKind, u8)> {
+            fn kind_width_parse(ty: &str) -> Option<Scalar> {
                 Some(match ty {
-                    "" => (ScalarKind::Float, 4),
-                    "b" => (ScalarKind::Bool, crate::BOOL_WIDTH),
-                    "i" => (ScalarKind::Sint, 4),
-                    "u" => (ScalarKind::Uint, 4),
-                    "d" => (ScalarKind::Float, 8),
+                    "" => Scalar::F32,
+                    "b" => Scalar::BOOL,
+                    "i" => Scalar::I32,
+                    "u" => Scalar::U32,
+                    "d" => Scalar::F64,
                     _ => return None,
                 })
             }
@@ -73,12 +58,12 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let kind = iter.next()?;
                 let size = iter.next()?;
-                let (kind, width) = kind_width_parse(kind)?;
+                let scalar = kind_width_parse(kind)?;
                 let size = size_parse(size)?;
 
                 Some(Type {
                     name: None,
-                    inner: TypeInner::Vector { size, kind, width },
+                    inner: TypeInner::Vector { size, scalar },
                 })
             };
 
@@ -87,7 +72,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let kind = iter.next()?;
                 let size = iter.next()?;
-                let (_, width) = kind_width_parse(kind)?;
+                let Scalar { width, .. } = kind_width_parse(kind)?;
 
                 let (columns, rows) = if let Some(size) = size_parse(size) {
                     (size, size)
@@ -204,21 +189,21 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
     }
 }
 
-pub const fn scalar_components(ty: &TypeInner) -> Option<(ScalarKind, Bytes)> {
+pub const fn scalar_components(ty: &TypeInner) -> Option<Scalar> {
     match *ty {
-        TypeInner::Scalar { kind, width } => Some((kind, width)),
-        TypeInner::Vector { kind, width, .. } => Some((kind, width)),
-        TypeInner::Matrix { width, .. } => Some((ScalarKind::Float, width)),
-        TypeInner::ValuePointer { kind, width, .. } => Some((kind, width)),
+        TypeInner::Scalar(scalar)
+        | TypeInner::Vector { scalar, .. }
+        | TypeInner::ValuePointer { scalar, .. } => Some(scalar),
+        TypeInner::Matrix { width, .. } => Some(Scalar::float(width)),
         _ => None,
     }
 }
 
-pub const fn type_power(kind: ScalarKind, width: Bytes) -> Option<u32> {
-    Some(match kind {
+pub const fn type_power(scalar: Scalar) -> Option<u32> {
+    Some(match scalar.kind {
         ScalarKind::Sint => 0,
         ScalarKind::Uint => 1,
-        ScalarKind::Float if width == 4 => 2,
+        ScalarKind::Float if scalar.width == 4 => 2,
         ScalarKind::Float => 3,
         ScalarKind::Bool => return None,
     })

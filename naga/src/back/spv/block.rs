@@ -12,7 +12,7 @@ use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
     match *type_inner {
-        crate::TypeInner::Scalar { .. } => Dimension::Scalar,
+        crate::TypeInner::Scalar(_) => Dimension::Scalar,
         crate::TypeInner::Vector { .. } => Dimension::Vector,
         crate::TypeInner::Matrix { .. } => Dimension::Matrix,
         _ => unreachable!(),
@@ -78,8 +78,7 @@ impl Writer {
     ) -> Result<(), Error> {
         let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Float,
-            width: 4,
+            scalar: crate::Scalar::F32,
             pointer_space: Some(spirv::StorageClass::Output),
         }));
         let index_y_id = self.get_index_constant(1);
@@ -93,8 +92,7 @@ impl Writer {
 
         let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Float,
-            width: 4,
+            scalar: crate::Scalar::F32,
             pointer_space: None,
         }));
         let load_id = self.id_gen.next();
@@ -120,8 +118,7 @@ impl Writer {
     ) -> Result<(), Error> {
         let float_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Float,
-            width: 4,
+            scalar: crate::Scalar::F32,
             pointer_space: None,
         }));
         let zero_scalar_id = self.get_constant_scalar(crate::Literal::F32(0.0));
@@ -489,8 +486,8 @@ impl<'w> BlockContext<'w> {
 
                 let spirv_op = match op {
                     crate::BinaryOperator::Add => match *left_ty_inner {
-                        crate::TypeInner::Scalar { kind, .. }
-                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                        crate::TypeInner::Scalar(scalar)
+                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
                             crate::ScalarKind::Float => spirv::Op::FAdd,
                             _ => spirv::Op::IAdd,
                         },
@@ -517,8 +514,8 @@ impl<'w> BlockContext<'w> {
                         _ => unimplemented!(),
                     },
                     crate::BinaryOperator::Subtract => match *left_ty_inner {
-                        crate::TypeInner::Scalar { kind, .. }
-                        | crate::TypeInner::Vector { kind, .. } => match kind {
+                        crate::TypeInner::Scalar(scalar)
+                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
                             crate::ScalarKind::Float => spirv::Op::FSub,
                             _ => spirv::Op::ISub,
                         },
@@ -741,20 +738,19 @@ impl<'w> BlockContext<'w> {
                         other => unimplemented!("Unexpected max({:?})", other),
                     }),
                     Mf::Saturate => {
-                        let (maybe_size, width) = match *arg_ty {
-                            crate::TypeInner::Vector { size, width, .. } => (Some(size), width),
-                            crate::TypeInner::Scalar { width, .. } => (None, width),
+                        let (maybe_size, scalar) = match *arg_ty {
+                            crate::TypeInner::Vector { size, scalar } => (Some(size), scalar),
+                            crate::TypeInner::Scalar(scalar) => (None, scalar),
                             ref other => unimplemented!("Unexpected saturate({:?})", other),
                         };
-                        let kind = crate::ScalarKind::Float;
-                        let mut arg1_id = self.writer.get_constant_scalar_with(0, kind, width)?;
-                        let mut arg2_id = self.writer.get_constant_scalar_with(1, kind, width)?;
+                        let scalar = crate::Scalar::float(scalar.width);
+                        let mut arg1_id = self.writer.get_constant_scalar_with(0, scalar)?;
+                        let mut arg2_id = self.writer.get_constant_scalar_with(1, scalar)?;
 
                         if let Some(size) = maybe_size {
                             let ty = LocalType::Value {
                                 vector_size: Some(size),
-                                kind,
-                                width,
+                                scalar,
                                 pointer_space: None,
                             }
                             .into();
@@ -805,7 +801,11 @@ impl<'w> BlockContext<'w> {
                     // geometry
                     Mf::Dot => match *self.fun_info[arg].ty.inner_with(&self.ir_module.types) {
                         crate::TypeInner::Vector {
-                            kind: crate::ScalarKind::Float,
+                            scalar:
+                                crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    ..
+                                },
                             ..
                         } => MathOp::Custom(Instruction::binary(
                             spirv::Op::Dot,
@@ -866,13 +866,12 @@ impl<'w> BlockContext<'w> {
                             // if the selector is a scalar, we need to splat it
                             (
                                 &crate::TypeInner::Vector { size, .. },
-                                &crate::TypeInner::Scalar { kind, width },
+                                &crate::TypeInner::Scalar(scalar),
                             ) => {
                                 let selector_type_id =
                                     self.get_type_id(LookupType::Local(LocalType::Value {
                                         vector_size: Some(size),
-                                        kind,
-                                        width,
+                                        scalar,
                                         pointer_space: None,
                                     }));
                                 self.temp_list.clear();
@@ -915,14 +914,12 @@ impl<'w> BlockContext<'w> {
                         arg0_id,
                     )),
                     Mf::CountTrailingZeros => {
-                        let kind = crate::ScalarKind::Uint;
-
                         let uint_id = match *arg_ty {
-                            crate::TypeInner::Vector { size, width, .. } => {
+                            crate::TypeInner::Vector { size, mut scalar } => {
+                                scalar.kind = crate::ScalarKind::Uint;
                                 let ty = LocalType::Value {
                                     vector_size: Some(size),
-                                    kind,
-                                    width,
+                                    scalar,
                                     pointer_space: None,
                                 }
                                 .into();
@@ -930,13 +927,14 @@ impl<'w> BlockContext<'w> {
                                 self.temp_list.clear();
                                 self.temp_list.resize(
                                     size as _,
-                                    self.writer.get_constant_scalar_with(32, kind, width)?,
+                                    self.writer.get_constant_scalar_with(32, scalar)?,
                                 );
 
                                 self.writer.get_constant_composite(ty, &self.temp_list)
                             }
-                            crate::TypeInner::Scalar { width, .. } => {
-                                self.writer.get_constant_scalar_with(32, kind, width)?
+                            crate::TypeInner::Scalar(mut scalar) => {
+                                scalar.kind = crate::ScalarKind::Uint;
+                                self.writer.get_constant_scalar_with(32, scalar)?
                             }
                             _ => unreachable!(),
                         };
@@ -959,14 +957,12 @@ impl<'w> BlockContext<'w> {
                         ))
                     }
                     Mf::CountLeadingZeros => {
-                        let kind = crate::ScalarKind::Sint;
-
                         let (int_type_id, int_id) = match *arg_ty {
-                            crate::TypeInner::Vector { size, width, .. } => {
+                            crate::TypeInner::Vector { size, mut scalar } => {
+                                scalar.kind = crate::ScalarKind::Sint;
                                 let ty = LocalType::Value {
                                     vector_size: Some(size),
-                                    kind,
-                                    width,
+                                    scalar,
                                     pointer_space: None,
                                 }
                                 .into();
@@ -974,7 +970,7 @@ impl<'w> BlockContext<'w> {
                                 self.temp_list.clear();
                                 self.temp_list.resize(
                                     size as _,
-                                    self.writer.get_constant_scalar_with(31, kind, width)?,
+                                    self.writer.get_constant_scalar_with(31, scalar)?,
                                 );
 
                                 (
@@ -982,15 +978,17 @@ impl<'w> BlockContext<'w> {
                                     self.writer.get_constant_composite(ty, &self.temp_list),
                                 )
                             }
-                            crate::TypeInner::Scalar { width, .. } => (
-                                self.get_type_id(LookupType::Local(LocalType::Value {
-                                    vector_size: None,
-                                    kind,
-                                    width,
-                                    pointer_space: None,
-                                })),
-                                self.writer.get_constant_scalar_with(31, kind, width)?,
-                            ),
+                            crate::TypeInner::Scalar(mut scalar) => {
+                                scalar.kind = crate::ScalarKind::Sint;
+                                (
+                                    self.get_type_id(LookupType::Local(LocalType::Value {
+                                        vector_size: None,
+                                        scalar,
+                                        pointer_space: None,
+                                    })),
+                                    self.writer.get_constant_scalar_with(31, scalar)?,
+                                )
+                            }
                             _ => unreachable!(),
                         };
 
@@ -1139,13 +1137,13 @@ impl<'w> BlockContext<'w> {
                 use crate::ScalarKind as Sk;
 
                 let expr_id = self.cached[expr];
-                let (src_kind, src_size, src_width, is_matrix) =
+                let (src_scalar, src_size, is_matrix) =
                     match *self.fun_info[expr].ty.inner_with(&self.ir_module.types) {
-                        crate::TypeInner::Scalar { kind, width } => (kind, None, width, false),
-                        crate::TypeInner::Vector { kind, width, size } => {
-                            (kind, Some(size), width, false)
+                        crate::TypeInner::Scalar(scalar) => (scalar, None, false),
+                        crate::TypeInner::Vector { scalar, size } => (scalar, Some(size), false),
+                        crate::TypeInner::Matrix { width, .. } => {
+                            (crate::Scalar::float(width), None, true)
                         }
-                        crate::TypeInner::Matrix { width, .. } => (kind, None, width, true),
                         ref other => {
                             log::error!("As source {:?}", other);
                             return Err(Error::Validation("Unexpected Expression::As source"));
@@ -1163,11 +1161,12 @@ impl<'w> BlockContext<'w> {
                     // we only support identity casts for matrices
                     Cast::Unary(spirv::Op::CopyObject)
                 } else {
-                    match (src_kind, kind, convert) {
+                    match (src_scalar.kind, kind, convert) {
                         // Filter out identity casts. Some Adreno drivers are
                         // confused by no-op OpBitCast instructions.
                         (src_kind, kind, convert)
-                            if src_kind == kind && convert.unwrap_or(src_width) == src_width =>
+                            if src_kind == kind
+                                && convert.filter(|&width| width != src_scalar.width).is_none() =>
                         {
                             Cast::Identity
                         }
@@ -1175,20 +1174,18 @@ impl<'w> BlockContext<'w> {
                         (_, _, None) => Cast::Unary(spirv::Op::Bitcast),
                         // casting to a bool - generate `OpXxxNotEqual`
                         (_, Sk::Bool, Some(_)) => {
-                            let op = match src_kind {
+                            let op = match src_scalar.kind {
                                 Sk::Sint | Sk::Uint => spirv::Op::INotEqual,
                                 Sk::Float => spirv::Op::FUnordNotEqual,
                                 Sk::Bool => unreachable!(),
                             };
-                            let zero_scalar_id = self
-                                .writer
-                                .get_constant_scalar_with(0, src_kind, src_width)?;
+                            let zero_scalar_id =
+                                self.writer.get_constant_scalar_with(0, src_scalar)?;
                             let zero_id = match src_size {
                                 Some(size) => {
                                     let ty = LocalType::Value {
                                         vector_size: Some(size),
-                                        kind: src_kind,
-                                        width: src_width,
+                                        scalar: src_scalar,
                                         pointer_space: None,
                                     }
                                     .into();
@@ -1205,16 +1202,19 @@ impl<'w> BlockContext<'w> {
                         }
                         // casting from a bool - generate `OpSelect`
                         (Sk::Bool, _, Some(dst_width)) => {
+                            let dst_scalar = crate::Scalar {
+                                kind,
+                                width: dst_width,
+                            };
                             let zero_scalar_id =
-                                self.writer.get_constant_scalar_with(0, kind, dst_width)?;
+                                self.writer.get_constant_scalar_with(0, dst_scalar)?;
                             let one_scalar_id =
-                                self.writer.get_constant_scalar_with(1, kind, dst_width)?;
+                                self.writer.get_constant_scalar_with(1, dst_scalar)?;
                             let (accept_id, reject_id) = match src_size {
                                 Some(size) => {
                                     let ty = LocalType::Value {
                                         vector_size: Some(size),
-                                        kind,
-                                        width: dst_width,
+                                        scalar: dst_scalar,
                                         pointer_space: None,
                                     }
                                     .into();
@@ -1239,15 +1239,17 @@ impl<'w> BlockContext<'w> {
                         }
                         (Sk::Float, Sk::Uint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToU),
                         (Sk::Float, Sk::Sint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToS),
-                        (Sk::Float, Sk::Float, Some(dst_width)) if src_width != dst_width => {
+                        (Sk::Float, Sk::Float, Some(dst_width))
+                            if src_scalar.width != dst_width =>
+                        {
                             Cast::Unary(spirv::Op::FConvert)
                         }
                         (Sk::Sint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertSToF),
-                        (Sk::Sint, Sk::Sint, Some(dst_width)) if src_width != dst_width => {
+                        (Sk::Sint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
                             Cast::Unary(spirv::Op::SConvert)
                         }
                         (Sk::Uint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertUToF),
-                        (Sk::Uint, Sk::Uint, Some(dst_width)) if src_width != dst_width => {
+                        (Sk::Uint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
                             Cast::Unary(spirv::Op::UConvert)
                         }
                         // We assume it's either an identity cast, or int-uint.
@@ -1334,10 +1336,12 @@ impl<'w> BlockContext<'w> {
                 let object_ty = self.fun_info[accept].ty.inner_with(&self.ir_module.types);
 
                 if let (
-                    &crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Bool,
-                        width,
-                    },
+                    &crate::TypeInner::Scalar(
+                        condition_scalar @ crate::Scalar {
+                            kind: crate::ScalarKind::Bool,
+                            ..
+                        },
+                    ),
                     &crate::TypeInner::Vector { size, .. },
                 ) = (condition_ty, object_ty)
                 {
@@ -1347,8 +1351,7 @@ impl<'w> BlockContext<'w> {
                     let bool_vector_type_id =
                         self.get_type_id(LookupType::Local(LocalType::Value {
                             vector_size: Some(size),
-                            kind: crate::ScalarKind::Bool,
-                            width,
+                            scalar: condition_scalar,
                             pointer_space: None,
                         }));
 
@@ -1598,8 +1601,7 @@ impl<'w> BlockContext<'w> {
 
         let vector_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: Some(rows),
-            kind: crate::ScalarKind::Float,
-            width,
+            scalar: crate::Scalar::float(width),
             pointer_space: None,
         }));
 
@@ -1649,7 +1651,10 @@ impl<'w> BlockContext<'w> {
         vector: &crate::TypeInner,
     ) {
         let (size, kind) = match *vector {
-            crate::TypeInner::Vector { size, kind, .. } => (size, kind),
+            crate::TypeInner::Vector {
+                size,
+                scalar: crate::Scalar { kind, .. },
+            } => (size, kind),
             _ => unreachable!(),
         };
 
@@ -2193,14 +2198,14 @@ impl<'w> BlockContext<'w> {
                         ),
                         crate::AtomicFunction::Min => {
                             let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar {
+                                crate::TypeInner::Scalar(crate::Scalar {
                                     kind: crate::ScalarKind::Sint,
                                     width: _,
-                                } => spirv::Op::AtomicSMin,
-                                crate::TypeInner::Scalar {
+                                }) => spirv::Op::AtomicSMin,
+                                crate::TypeInner::Scalar(crate::Scalar {
                                     kind: crate::ScalarKind::Uint,
                                     width: _,
-                                } => spirv::Op::AtomicUMin,
+                                }) => spirv::Op::AtomicUMin,
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2215,14 +2220,14 @@ impl<'w> BlockContext<'w> {
                         }
                         crate::AtomicFunction::Max => {
                             let spirv_op = match *value_inner {
-                                crate::TypeInner::Scalar {
+                                crate::TypeInner::Scalar(crate::Scalar {
                                     kind: crate::ScalarKind::Sint,
                                     width: _,
-                                } => spirv::Op::AtomicSMax,
-                                crate::TypeInner::Scalar {
+                                }) => spirv::Op::AtomicSMax,
+                                crate::TypeInner::Scalar(crate::Scalar {
                                     kind: crate::ScalarKind::Uint,
                                     width: _,
-                                } => spirv::Op::AtomicUMax,
+                                }) => spirv::Op::AtomicUMax,
                                 _ => unimplemented!(),
                             };
                             Instruction::atomic_binary(
@@ -2248,11 +2253,10 @@ impl<'w> BlockContext<'w> {
                         }
                         crate::AtomicFunction::Exchange { compare: Some(cmp) } => {
                             let scalar_type_id = match *value_inner {
-                                crate::TypeInner::Scalar { kind, width } => {
+                                crate::TypeInner::Scalar(scalar) => {
                                     self.get_type_id(LookupType::Local(LocalType::Value {
                                         vector_size: None,
-                                        kind,
-                                        width,
+                                        scalar,
                                         pointer_space: None,
                                     }))
                                 }
@@ -2261,8 +2265,7 @@ impl<'w> BlockContext<'w> {
                             let bool_type_id =
                                 self.get_type_id(LookupType::Local(LocalType::Value {
                                     vector_size: None,
-                                    kind: crate::ScalarKind::Bool,
-                                    width: crate::BOOL_WIDTH,
+                                    scalar: crate::Scalar::BOOL,
                                     pointer_space: None,
                                 }));
 

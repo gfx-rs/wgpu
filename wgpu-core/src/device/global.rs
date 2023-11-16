@@ -487,7 +487,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("Buffer {:?} is asked to be dropped", buffer_id);
         let mut buffer_guard = hub.buffers.write();
         let buffer = buffer_guard
-            .take_and_mark_destroyed(buffer_id)
+            .get_and_mark_destroyed(buffer_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
         buffer.destroy()
     }
@@ -717,9 +717,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
 
         log::debug!("Texture {:?} is destroyed", texture_id);
-        let texture = hub
-            .textures
-            .get(texture_id)
+        let mut texture_guard = hub.textures.write();
+        let texture = texture_guard
+            .get_and_mark_destroyed(texture_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
         let device = &texture.device;

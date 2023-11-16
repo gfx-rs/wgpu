@@ -14,6 +14,10 @@ pub(crate) enum Element<T> {
     /// epoch.
     Occupied(Arc<T>, Epoch),
 
+    /// Like `Occupied`, but the resource has been marked as destroyed
+    /// and hasn't been dropped yet.
+    Destroyed(Arc<T>, Epoch),
+
     /// Like `Occupied`, but an error occurred when creating the
     /// resource.
     ///
@@ -74,9 +78,11 @@ where
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
             Some(&Element::Vacant) => false,
-            Some(&Element::Occupied(_, storage_epoch) | &Element::Error(storage_epoch, _)) => {
-                storage_epoch == epoch
-            }
+            Some(
+                &Element::Occupied(_, storage_epoch)
+                | &Element::Destroyed(_, storage_epoch)
+                | &Element::Error(storage_epoch, _),
+            ) => storage_epoch == epoch,
             None => false,
         }
     }
@@ -93,7 +99,9 @@ where
         let (result, storage_epoch) = match self.map.get(index as usize) {
             Some(&Element::Occupied(ref v, epoch)) => (Ok(Some(v)), epoch),
             Some(&Element::Vacant) => return Ok(None),
-            Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&Element::Error(epoch, ..)) | Some(&Element::Destroyed(.., epoch)) => {
+                (Err(InvalidId), epoch)
+            }
             None => return Err(InvalidId),
         };
         assert_eq!(
@@ -112,6 +120,7 @@ where
             Some(&Element::Occupied(ref v, epoch)) => (Ok(v), epoch),
             Some(&Element::Vacant) => panic!("{}[{:?}] does not exist", self.kind, id),
             Some(&Element::Error(epoch, ..)) => (Err(InvalidId), epoch),
+            Some(&Element::Destroyed(.., epoch)) => (Err(InvalidId), epoch),
             None => return Err(InvalidId),
         };
         assert_eq!(
@@ -136,6 +145,14 @@ where
         }
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
+            Element::Destroyed(_, storage_epoch) => {
+                assert_ne!(
+                    epoch,
+                    storage_epoch,
+                    "Index {index:?} of {} is already occupied",
+                    T::TYPE
+                );
+            }
             Element::Occupied(_, storage_epoch) => {
                 assert_ne!(
                     epoch,
@@ -171,18 +188,39 @@ where
         )
     }
 
-    pub(crate) fn take_and_mark_destroyed(&mut self, id: I) -> Result<Arc<T>, InvalidId> {
+    pub(crate) fn replace_with_error(&mut self, id: I) -> Result<Arc<T>, InvalidId> {
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(
             &mut self.map[index as usize],
             Element::Error(epoch, String::new()),
         ) {
-            Element::Vacant => panic!("Cannot mark a vacant resource destroyed"),
+            Element::Vacant => panic!("Cannot access vacant resource"),
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
                 Ok(value)
             }
             _ => Err(InvalidId),
+        }
+    }
+
+    pub(crate) fn get_and_mark_destroyed(&mut self, id: I) -> Result<Arc<T>, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        let slot = &mut self.map[index as usize];
+        // borrowck dance: we have to move the element out before we can replace it
+        // with another variant with the same value.
+        if let &mut Element::Occupied(..) = slot {
+            if let Element::Occupied(value, storage_epoch) =
+                std::mem::replace(slot, Element::Vacant)
+            {
+                debug_assert_eq!(storage_epoch, epoch);
+                *slot = Element::Destroyed(value, storage_epoch);
+            }
+        }
+
+        if let Element::Destroyed(ref value, ..) = *slot {
+            Ok(value.clone())
+        } else {
+            Err(InvalidId)
         }
     }
 
@@ -196,7 +234,7 @@ where
         log::info!("User is removing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
-            Element::Occupied(value, storage_epoch) => {
+            Element::Occupied(value, storage_epoch) | Element::Destroyed(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
                 Some(value)
             }

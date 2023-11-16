@@ -22,7 +22,7 @@ impl FunctionTracer<'_> {
                         ref accept,
                         ref reject,
                     } => {
-                        self.trace_expression(condition);
+                        self.expressions_used.insert(condition);
                         worklist.push(accept);
                         worklist.push(reject);
                     }
@@ -30,7 +30,7 @@ impl FunctionTracer<'_> {
                         selector,
                         ref cases,
                     } => {
-                        self.trace_expression(selector);
+                        self.expressions_used.insert(selector);
                         for case in cases {
                             worklist.push(&case.body);
                         }
@@ -41,15 +41,17 @@ impl FunctionTracer<'_> {
                         break_if,
                     } => {
                         if let Some(break_if) = break_if {
-                            self.trace_expression(break_if);
+                            self.expressions_used.insert(break_if);
                         }
                         worklist.push(body);
                         worklist.push(continuing);
                     }
-                    St::Return { value: Some(value) } => self.trace_expression(value),
+                    St::Return { value: Some(value) } => {
+                        self.expressions_used.insert(value);
+                    }
                     St::Store { pointer, value } => {
-                        self.trace_expression(pointer);
-                        self.trace_expression(value);
+                        self.expressions_used.insert(pointer);
+                        self.expressions_used.insert(value);
                     }
                     St::ImageStore {
                         image,
@@ -57,12 +59,12 @@ impl FunctionTracer<'_> {
                         array_index,
                         value,
                     } => {
-                        self.trace_expression(image);
-                        self.trace_expression(coordinate);
+                        self.expressions_used.insert(image);
+                        self.expressions_used.insert(coordinate);
                         if let Some(array_index) = array_index {
-                            self.trace_expression(array_index);
+                            self.expressions_used.insert(array_index);
                         }
-                        self.trace_expression(value);
+                        self.expressions_used.insert(value);
                     }
                     St::Atomic {
                         pointer,
@@ -70,14 +72,14 @@ impl FunctionTracer<'_> {
                         value,
                         result,
                     } => {
-                        self.trace_expression(pointer);
+                        self.expressions_used.insert(pointer);
                         self.trace_atomic_function(fun);
-                        self.trace_expression(value);
-                        self.trace_expression(result);
+                        self.expressions_used.insert(value);
+                        self.expressions_used.insert(result);
                     }
                     St::WorkGroupUniformLoad { pointer, result } => {
-                        self.trace_expression(pointer);
-                        self.trace_expression(result);
+                        self.expressions_used.insert(pointer);
+                        self.expressions_used.insert(result);
                     }
                     St::Call {
                         function: _,
@@ -85,14 +87,14 @@ impl FunctionTracer<'_> {
                         result,
                     } => {
                         for expr in arguments {
-                            self.trace_expression(*expr);
+                            self.expressions_used.insert(*expr);
                         }
                         if let Some(result) = result {
-                            self.trace_expression(result);
+                            self.expressions_used.insert(result);
                         }
                     }
                     St::RayQuery { query, ref fun } => {
-                        self.trace_expression(query);
+                        self.expressions_used.insert(query);
                         self.trace_ray_query_function(fun);
                     }
 
@@ -112,7 +114,9 @@ impl FunctionTracer<'_> {
         match *fun {
             Af::Exchange {
                 compare: Some(expr),
-            } => self.trace_expression(expr),
+            } => {
+                self.expressions_used.insert(expr);
+            }
             Af::Exchange { compare: None }
             | Af::Add
             | Af::Subtract
@@ -131,10 +135,12 @@ impl FunctionTracer<'_> {
                 acceleration_structure,
                 descriptor,
             } => {
-                self.trace_expression(acceleration_structure);
-                self.trace_expression(descriptor);
+                self.expressions_used.insert(acceleration_structure);
+                self.expressions_used.insert(descriptor);
             }
-            Qf::Proceed { result } => self.trace_expression(result),
+            Qf::Proceed { result } => {
+                self.expressions_used.insert(result);
+            }
             Qf::Terminate => {}
         }
     }

@@ -40,8 +40,6 @@ Bottom level categories:
 
 ## Unreleased
 
-For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
-
 ### Changes
 
 - Arcanization of wgpu core resources: Removed 'Token' and 'LifeTime' related management,
@@ -50,6 +48,11 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
 #### General
 
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
+- `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
+
+#### Naga
+
+- Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 
 ### Bug Fixes
 
@@ -57,11 +60,39 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
 
 - Create a hidden window per `wgpu::Instance` instead of sharing a global one.
 
-#### Naga MSL-OUT
+#### Naga
 
-- Fix issue where local variables were sometimes using variable names from previous functions.
+- Improve algorithm used by module compaction. By @jimblandy in [#4662](https://github.com/gfx-rs/wgpu/pull/4662).
+
+- When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
+
+- When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
+
+### Examples
+
+- remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
+
+## v0.18.1 (2023-11-15)
+
+(naga version 0.14.1)
+
+### Bug Fixes
+
+#### General
+- Fix panic in `Surface::configure` in debug builds. By @cwfitzgerald in [#4635](https://github.com/gfx-rs/wgpu/pull/4635)
+- Fix crash when all the following are true: By @teoxoy in #[#4642](https://github.com/gfx-rs/wgpu/pull/4642)
+  - Passing a naga module directly to `Device::create_shader_module`.
+  - `InstanceFlags::DEBUG` is enabled.
+
+#### DX12 
+- Always use HLSL 2018 when using DXC to compile HLSL shaders. By @daxpedda in [#4629](https://github.com/gfx-rs/wgpu/pull/4629)
+
+#### Metal
+- In Metal Shading Language output, fix issue where local variables were sometimes using variable names from previous functions. By @DJMcNab in [#4594](https://github.com/gfx-rs/wgpu/pull/4594)
 
 ## v0.18.0 (2023-10-25)
+
+For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
 ### Desktop OpenGL 3.3+ Support on Windows
 

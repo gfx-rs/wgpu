@@ -472,6 +472,19 @@ pub enum ScalarKind {
     Bool,
 }
 
+/// Characteristics of a scalar type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct Scalar {
+    /// How the value's bits are to be interpreted.
+    pub kind: ScalarKind,
+
+    /// This size of the value in bytes.
+    pub width: Bytes,
+}
+
 /// Size of an array.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -677,13 +690,9 @@ pub struct Type {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum TypeInner {
     /// Number of integral or floating-point kind.
-    Scalar { kind: ScalarKind, width: Bytes },
+    Scalar(Scalar),
     /// Vector of numbers.
-    Vector {
-        size: VectorSize,
-        kind: ScalarKind,
-        width: Bytes,
-    },
+    Vector { size: VectorSize, scalar: Scalar },
     /// Matrix of floats.
     Matrix {
         columns: VectorSize,
@@ -691,7 +700,7 @@ pub enum TypeInner {
         width: Bytes,
     },
     /// Atomic scalar.
-    Atomic { kind: ScalarKind, width: Bytes },
+    Atomic(Scalar),
     /// Pointer to another type.
     ///
     /// Pointers to scalars and vectors should be treated as equivalent to
@@ -737,8 +746,7 @@ pub enum TypeInner {
     /// [`TypeResolution::Value`]: proc::TypeResolution::Value
     ValuePointer {
         size: Option<VectorSize>,
-        kind: ScalarKind,
-        width: Bytes,
+        scalar: Scalar,
         space: AddressSpace,
     },
 
@@ -1966,10 +1974,7 @@ pub struct EntryPoint {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum PredeclaredType {
-    AtomicCompareExchangeWeakResult {
-        kind: ScalarKind,
-        width: Bytes,
-    },
+    AtomicCompareExchangeWeakResult(Scalar),
     ModfResult {
         size: Option<VectorSize>,
         width: Bytes,
