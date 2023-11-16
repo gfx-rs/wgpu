@@ -380,18 +380,9 @@ impl Drop for Sampler {
 pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
 static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
-/// This is used in [`Instance::create_surface`]. For a passed `window` to
-/// fullfill the requirements, [`HasWindowHandle`], [`HasDisplayHandle`] (and
-/// if not targetting Wasm [`Send`] and [`Sync`]) is required.
-pub trait WgpuSurfaceRequirement:
-    HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync
-{
-}
+trait WgpuSurfaceRequirement: WasmNotSend + WasmNotSync {}
 
-impl<T: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync> WgpuSurfaceRequirement
-    for T
-{
-}
+impl<T: WasmNotSend + WasmNotSync> WgpuSurfaceRequirement for T {}
 
 /// Handle to a presentable surface.
 ///
@@ -1970,7 +1961,10 @@ impl Instance {
     /// - On macOS/Metal: will panic if not called on the main thread.
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
-    pub fn create_surface<'window, W: WgpuSurfaceRequirement + 'window>(
+    pub fn create_surface<
+        'window,
+        W: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync + 'window,
+    >(
         &self,
         window: W,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
