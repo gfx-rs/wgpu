@@ -3302,7 +3302,6 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "struct {name} {{")?;
                     let mut last_offset = 0;
                     for (index, member) in members.iter().enumerate() {
-                        // quick and dirty way to figure out if we need this...
                         if member.offset > last_offset {
                             self.struct_member_pads.insert((handle, index as u32));
                             let pad = member.offset - last_offset;
