@@ -143,16 +143,18 @@ static NV12_TEXTURE_CREATION_BAD_VIEW_FORMATS: GpuTestConfiguration = GpuTestCon
         });
     });
 
-/// For D3D12 backend, textures always have plane 0
+/// For DX11/DX12 backend, textures always have plane 0
 #[gpu_test]
 static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
                 .features(wgpu::Features::TEXTURE_FORMAT_NV12)
-                .expect_fail(FailureCase::backend(
-                    wgpu::Backends::all().remove(wgpu::Backends::DX12),
-                )),
+                .expect_fail(FailureCase::backend({
+                    let mut backends = wgpu::Backends::all();
+                    backends.remove(wgpu::Backends::DX11 | wgpu::Backends::DX12);
+                    backends
+                })),
         )
         .run_sync(|ctx| {
             let size = wgpu::Extent3d {
@@ -230,7 +232,7 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
             view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
         });
         let _ = tex.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::R8gUnorm),
+            format: Some(wgpu::TextureFormat::Rg8Unorm),
             plane: Some(0),
             ..Default::default()
         });
