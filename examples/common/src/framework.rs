@@ -254,7 +254,7 @@ struct ExampleContext {
 }
 impl ExampleContext {
     /// Initializes the example context.
-    async fn init_async<'a, E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
+    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
         let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();

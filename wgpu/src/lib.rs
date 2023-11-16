@@ -380,7 +380,13 @@ impl Drop for Sampler {
 pub type SurfaceConfiguration = wgt::SurfaceConfiguration<Vec<TextureFormat>>;
 static_assertions::assert_impl_all!(SurfaceConfiguration: Send, Sync);
 
-trait WgpuSurfaceRequirement: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync {}
+/// This is used in [`Instance::create_surface`]. For a passed `window` to
+/// fullfill the requirements, [`HasWindowHandle`], [`HasDisplayHandle`] (and
+/// if not targetting Wasm [`Send`] and [`Sync`]) is required.
+pub trait WgpuSurfaceRequirement:
+    HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync
+{
+}
 
 impl<T: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync> WgpuSurfaceRequirement
     for T
@@ -397,7 +403,7 @@ impl<T: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync> WgpuSurf
 /// serves a similar role.
 pub struct Surface<'window> {
     context: Arc<C>,
-    _surface: Option<Box<dyn 'window + WgpuSurfaceRequirement>>,
+    _surface: Option<Box<dyn WgpuSurfaceRequirement + 'window>>,
     id: ObjectId,
     data: Box<Data>,
     // Stores the latest `SurfaceConfiguration` that was set using `Surface::configure`.
@@ -409,6 +415,8 @@ pub struct Surface<'window> {
     config: Mutex<Option<SurfaceConfiguration>>,
 }
 
+// This custom implementation is required because [`Surface::_surface`] doesn't
+// require [`Debug`](fmt::Debug), which we should not require from the user.
 impl<'window> fmt::Debug for Surface<'window> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Surface")
@@ -1948,6 +1956,10 @@ impl Instance {
     /// If the specified display and window handle are not supported by any of the backends, then the surface
     /// will not be supported by any adapters.
     ///
+    /// If a reference is passed in `window`, the returned [`Surface`] will
+    /// hold a lifetime to it. Owned values will return a [`Surface<'static>`]
+    /// instead.
+    ///
     /// # Errors
     ///
     /// - On WebGL2: Will return an error if the browser does not support WebGL2,
@@ -1958,10 +1970,7 @@ impl Instance {
     /// - On macOS/Metal: will panic if not called on the main thread.
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
-    pub fn create_surface<
-        'window,
-        W: 'window + HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync,
-    >(
+    pub fn create_surface<'window, W: WgpuSurfaceRequirement + 'window>(
         &self,
         window: W,
     ) -> Result<Surface<'window>, CreateSurfaceError> {
@@ -1970,6 +1979,11 @@ impl Instance {
         Ok(surface)
     }
 
+    /// An alternative version to [`create_surface()`](Self::create_surface)
+    /// which has no lifetime requirements to `window` and doesn't require
+    /// [`Send`] or [`Sync`] (on non-Wasm targets). This makes it `unsafe`
+    /// instead and always returns a [`Surface<'static>`].
+    ///
     /// See [`create_surface()`](Self::create_surface) for more details.
     ///
     /// # Safety

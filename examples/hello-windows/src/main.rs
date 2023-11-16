@@ -1,26 +1,26 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
     window::{Window, WindowId},
 };
 
-struct ViewportDesc<'window> {
-    window: &'window Window,
+struct ViewportDesc {
+    window: Arc<Window>,
     background: wgpu::Color,
-    surface: wgpu::Surface<'window>,
+    surface: wgpu::Surface<'static>,
 }
 
-struct Viewport<'window> {
-    desc: ViewportDesc<'window>,
+struct Viewport {
+    desc: ViewportDesc,
     config: wgpu::SurfaceConfiguration,
 }
 
-impl<'window> ViewportDesc<'window> {
-    fn new(window: &'window Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
-        let surface = instance.create_surface(window).unwrap();
+impl ViewportDesc {
+    fn new(window: Arc<Window>, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
+        let surface = instance.create_surface(window.clone()).unwrap();
         Self {
             window,
             background,
@@ -28,7 +28,7 @@ impl<'window> ViewportDesc<'window> {
         }
     }
 
-    fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport<'window> {
+    fn build(self, adapter: &wgpu::Adapter, device: &wgpu::Device) -> Viewport {
         let size = self.window.inner_size();
 
         let caps = self.surface.get_capabilities(adapter);
@@ -48,7 +48,7 @@ impl<'window> ViewportDesc<'window> {
     }
 }
 
-impl Viewport<'_> {
+impl Viewport {
     fn resize(&mut self, device: &wgpu::Device, size: winit::dpi::PhysicalSize<u32>) {
         self.config.width = size.width;
         self.config.height = size.height;
@@ -62,11 +62,11 @@ impl Viewport<'_> {
     }
 }
 
-async fn run(event_loop: EventLoop<()>, viewports: &[(Window, wgpu::Color)]) {
+async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color)>) {
     let instance = wgpu::Instance::default();
     let viewports: Vec<_> = viewports
-        .iter()
-        .map(|(window, color)| ViewportDesc::new(window, *color, &instance))
+        .into_iter()
+        .map(|(window, color)| ViewportDesc::new(window, color, &instance))
         .collect();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -180,6 +180,7 @@ fn main() {
                     .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
                     .build(&event_loop)
                     .unwrap();
+                let window = Arc::new(window);
                 window.set_outer_position(winit::dpi::PhysicalPosition::new(
                     WINDOW_PADDING + column * WINDOW_OFFSET,
                     WINDOW_PADDING + row * (WINDOW_OFFSET + WINDOW_TITLEBAR),
@@ -200,7 +201,7 @@ fn main() {
         }
 
         env_logger::init();
-        pollster::block_on(run(event_loop, &viewports));
+        pollster::block_on(run(event_loop, viewports));
     }
     #[cfg(target_arch = "wasm32")]
     {

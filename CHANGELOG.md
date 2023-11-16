@@ -49,7 +49,11 @@ Bottom level categories:
 
 #### Safe `Surface` creation
 
-It is now possible to safely create a `wgpu::Surface` with `Surface::create_surface()`. `Surface::create_surface_from_raw()` can be used to produce a `Surface<'static>`, which remains `unsafe`.
+It is now possible to safely create a `wgpu::Surface` with `Surface::create_surface()` by letting `Surface` hold a lifetime to `window`.
+
+Passing an owned value `window` to `Surface` will return a `Surface<'static>`. Shared ownership over `window` can still be achieved with e.g. an `Arc`. Alternatively a reference could be passed, which will return a `Surface<'window>`.
+
+`Surface::create_surface_from_raw()` can be used to continue producing a `Surface<'static>` without any lifetime requirements over `window`, which also remains `unsafe`.
 
 #### Naga
 
