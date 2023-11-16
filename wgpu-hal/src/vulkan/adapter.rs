@@ -301,6 +301,7 @@ impl PhysicalDeviceFeatures {
 
     fn to_wgpu(
         &self,
+        adapter_info: &wgt::AdapterInfo,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceCapabilities,
@@ -547,7 +548,8 @@ impl PhysicalDeviceFeatures {
                     vk::FormatFeatureFlags::SAMPLED_IMAGE
                         | vk::FormatFeatureFlags::TRANSFER_SRC
                         | vk::FormatFeatureFlags::TRANSFER_DST,
-                ),
+                )
+                && !adapter_info.driver.contains("moltenvk"),
         );
 
         (features, dl_flags)
@@ -984,7 +986,7 @@ impl super::Instance {
         };
 
         let (available_features, downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
+            phd_features.to_wgpu(&info, &self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // see https://github.com/gfx-rs/gfx/issues/1930
