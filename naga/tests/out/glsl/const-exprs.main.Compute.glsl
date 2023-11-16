@@ -57,6 +57,10 @@ void compose_of_constant() {
     ivec4 out_5 = ivec4(-4, -4, -4, -4);
 }
 
+void compose_of_splat() {
+    vec4 x_1 = vec4(2.0, 1.0, 1.0, 1.0);
+}
+
 uint map_texture_kind(int texture_kind) {
     switch(texture_kind) {
         case 0: {
@@ -81,6 +85,7 @@ void main() {
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    compose_of_splat();
     return;
 }
 
