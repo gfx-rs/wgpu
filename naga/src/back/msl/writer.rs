@@ -370,7 +370,7 @@ fn should_pack_struct_member(
         crate::TypeInner::Vector {
             size: crate::VectorSize::Tri,
             scalar: scalar @ crate::Scalar { width: 4, .. },
-        } if member.offset & 0xF != 0 || is_tight => Some(scalar),
+        } if is_tight => Some(scalar),
         _ => None,
     }
 }
