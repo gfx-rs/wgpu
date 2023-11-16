@@ -701,30 +701,32 @@ impl crate::Instance<super::Api> for super::Instance {
                 }
 
                 let validation_features_name = vk::ExtValidationFeaturesFn::name();
-                match entry.enumerate_instance_extension_properties(Some(validation_layer_name)) {
-                    Ok(validation_extensions) => {
-                        if validation_extensions.iter().any(|inst_ext| {
-                            cstr_from_bytes_until_nul(&inst_ext.extension_name)
-                                == Some(validation_features_name)
-                        }) {
-                            extensions.push(validation_features_name);
-                            validation_features = Some(
-                                vk::ValidationFeaturesEXT::builder().enabled_validation_features(
-                                    &[vk::ValidationFeatureEnableEXT::DEBUG_PRINTF],
-                                ),
-                            );
-                        } else {
-                            log::info!(
-                                "Unable to find validation layer extension {}, not enabling DEBUG_PRINTF",
-                                validation_features_name.to_string_lossy()
-                            )
+                'validation_exts: {
+                    let validation_extensions = match entry
+                        .enumerate_instance_extension_properties(Some(validation_layer_name))
+                    {
+                        Ok(e) => e,
+                        Err(e) => {
+                            log::warn!( "enumerate_instance_extension_properties() failed for validation layer: {:?}", e );
+                            break 'validation_exts;
                         }
+                    };
+
+                    let extension_found = validation_extensions.iter().any(|inst_ext| {
+                        cstr_from_bytes_until_nul(&inst_ext.extension_name)
+                            == Some(validation_features_name)
+                    });
+                    if !extension_found {
+                        log::info!( "Unable to find validation layer extension {}, not enabling DEBUG_PRINTF", validation_features_name.to_string_lossy() );
+                        break 'validation_exts;
                     }
-                    Err(e) => {
-                        log::warn!(
-                            "enumerate_instance_extension_properties() failed for validation layer: {:?}", e
-                        )
-                    }
+
+                    extensions.push(validation_features_name);
+                    validation_features = Some(
+                        vk::ValidationFeaturesEXT::builder().enabled_validation_features(&[
+                            vk::ValidationFeatureEnableEXT::DEBUG_PRINTF,
+                        ]),
+                    );
                 }
             } else {
                 log::warn!(
