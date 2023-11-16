@@ -275,11 +275,9 @@ impl<'a, W> Writer<'a, W> {
 
         for (ty_handle, ty) in self.module.types.iter() {
             match ty.inner {
-                TypeInner::Scalar(scalar) => self.scalar_required_features(scalar),
-                TypeInner::Vector { scalar, .. } => self.scalar_required_features(scalar),
-                TypeInner::Matrix { width, .. } => {
-                    self.scalar_required_features(Scalar::float(width))
-                }
+                TypeInner::Scalar(scalar)
+                | TypeInner::Vector { scalar, .. }
+                | TypeInner::Matrix { scalar, .. } => self.scalar_required_features(scalar),
                 TypeInner::Array { base, size, .. } => {
                     if let TypeInner::Array { .. } = self.module.types[base].inner {
                         self.features.request(Features::ARRAY_OF_ARRAYS)

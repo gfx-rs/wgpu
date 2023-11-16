@@ -156,8 +156,8 @@ impl Frontend {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
-            } => self.matrix_one_arg(ctx, ty, columns, rows, width, (value, expr_meta), meta)?,
+                scalar,
+            } => self.matrix_one_arg(ctx, ty, columns, rows, scalar, (value, expr_meta), meta)?,
             TypeInner::Struct { ref members, .. } => {
                 let scalar_components = members
                     .get(0)
@@ -207,7 +207,7 @@ impl Frontend {
         ty: Handle<Type>,
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-        width: crate::Bytes,
+        element_scalar: Scalar,
         (mut value, expr_meta): (Handle<Expression>, Span),
         meta: Span,
     ) -> Result<Handle<Expression>> {
@@ -216,10 +216,6 @@ impl Frontend {
         // `Expression::As` doesn't support matrix width
         // casts so we need to do some extra work for casts
 
-        let element_scalar = Scalar {
-            kind: ScalarKind::Float,
-            width,
-        };
         ctx.forced_conversion(&mut value, expr_meta, element_scalar)?;
         match *ctx.resolve_type(value, expr_meta)? {
             TypeInner::Scalar(_) => {
@@ -422,14 +418,10 @@ impl Frontend {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar: element_scalar,
             } => {
                 let mut flattened = Vec::with_capacity(columns as usize * rows as usize);
 
-                let element_scalar = Scalar {
-                    kind: ScalarKind::Float,
-                    width,
-                };
                 for (mut arg, meta) in args.iter().copied() {
                     ctx.forced_conversion(&mut arg, meta, element_scalar)?;
 
@@ -1532,16 +1524,14 @@ fn conversion(target: &TypeInner, source: &TypeInner) -> Option<Conversion> {
             &TypeInner::Matrix {
                 rows: tgt_rows,
                 columns: tgt_cols,
-                width: tgt_width,
+                scalar: tgt_scalar,
             },
             &TypeInner::Matrix {
                 rows: src_rows,
                 columns: src_cols,
-                width: src_width,
+                scalar: src_scalar,
             },
-        ) if tgt_cols == src_cols && tgt_rows == src_rows => {
-            (Scalar::float(tgt_width), Scalar::float(src_width))
-        }
+        ) if tgt_cols == src_cols && tgt_rows == src_rows => (tgt_scalar, src_scalar),
         _ => return None,
     };
 
@@ -1585,13 +1575,9 @@ fn builtin_required_variations<'a>(args: impl Iterator<Item = &'a TypeInner>) ->
         match *ty {
             TypeInner::ValuePointer { scalar, .. }
             | TypeInner::Scalar(scalar)
-            | TypeInner::Vector { scalar, .. } => {
+            | TypeInner::Vector { scalar, .. }
+            | TypeInner::Matrix { scalar, .. } => {
                 if scalar == Scalar::F64 {
-                    variations |= BuiltinVariations::DOUBLE
-                }
-            }
-            TypeInner::Matrix { width, .. } => {
-                if width == 8 {
                     variations |= BuiltinVariations::DOUBLE
                 }
             }

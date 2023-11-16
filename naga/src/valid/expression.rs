@@ -1501,7 +1501,7 @@ impl super::Validator {
                     crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
                         scalar
                     }
-                    crate::TypeInner::Matrix { width, .. } => crate::Scalar::float(width),
+                    crate::TypeInner::Matrix { scalar, .. } => scalar,
                     _ => return Err(ExpressionError::InvalidCastArgument),
                 };
                 base_scalar.kind = kind;

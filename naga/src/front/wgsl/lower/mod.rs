@@ -2529,7 +2529,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             } => crate::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar: crate::Scalar::float(width),
             },
             ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
             ast::Type::Pointer { base, space } => {

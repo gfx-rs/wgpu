@@ -72,7 +72,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let kind = iter.next()?;
                 let size = iter.next()?;
-                let Scalar { width, .. } = kind_width_parse(kind)?;
+                let scalar = kind_width_parse(kind)?;
 
                 let (columns, rows) = if let Some(size) = size_parse(size) {
                     (size, size)
@@ -89,7 +89,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                     inner: TypeInner::Matrix {
                         columns,
                         rows,
-                        width,
+                        scalar,
                     },
                 })
             };
@@ -193,8 +193,8 @@ pub const fn scalar_components(ty: &TypeInner) -> Option<Scalar> {
     match *ty {
         TypeInner::Scalar(scalar)
         | TypeInner::Vector { scalar, .. }
-        | TypeInner::ValuePointer { scalar, .. } => Some(scalar),
-        TypeInner::Matrix { width, .. } => Some(Scalar::float(width)),
+        | TypeInner::ValuePointer { scalar, .. }
+        | TypeInner::Matrix { scalar, .. } => Some(scalar),
         _ => None,
     }
 }

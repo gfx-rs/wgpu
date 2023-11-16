@@ -10,7 +10,7 @@ use super::{
 use crate::{
     front::Typifier, proc::Emitter, AddressSpace, Arena, BinaryOperator, Block, Expression,
     FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction, Scalar,
-    ScalarKind, Span, Statement, Type, TypeInner, VectorSize,
+    Span, Statement, Type, TypeInner, VectorSize,
 };
 use std::ops::Index;
 
@@ -619,12 +619,12 @@ impl<'a> Context<'a> {
                         &TypeInner::Matrix {
                             columns: left_columns,
                             rows: left_rows,
-                            width: left_width,
+                            scalar: left_scalar,
                         },
                         &TypeInner::Matrix {
                             columns: right_columns,
                             rows: right_rows,
-                            width: right_width,
+                            scalar: right_scalar,
                         },
                     ) => {
                         let dimensions_ok = if op == BinaryOperator::Multiply {
@@ -634,7 +634,7 @@ impl<'a> Context<'a> {
                         };
 
                         // Check that the two arguments have the same dimensions
-                        if !dimensions_ok || left_width != right_width {
+                        if !dimensions_ok || left_scalar != right_scalar {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -682,7 +682,7 @@ impl<'a> Context<'a> {
                                         inner: TypeInner::Matrix {
                                             columns: left_columns,
                                             rows: left_rows,
-                                            width: left_width,
+                                            scalar: left_scalar,
                                         },
                                     },
                                     Span::default(),
@@ -824,17 +824,15 @@ impl<'a> Context<'a> {
                         _ => self.add_expression(Expression::Binary { left, op, right }, meta)?,
                     },
                     (
-                        &TypeInner::Scalar(Scalar {
-                            width: left_width, ..
-                        }),
+                        &TypeInner::Scalar(left_scalar),
                         &TypeInner::Matrix {
                             rows,
                             columns,
-                            width: right_width,
+                            scalar: right_scalar,
                         },
                     ) => {
-                        // Check that the two arguments have the same width
-                        if left_width != right_width {
+                        // Check that the two arguments have the same scalar type
+                        if left_scalar != right_scalar {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -891,7 +889,7 @@ impl<'a> Context<'a> {
                                         inner: TypeInner::Matrix {
                                             columns,
                                             rows,
-                                            width: left_width,
+                                            scalar: left_scalar,
                                         },
                                     },
                                     Span::default(),
@@ -909,14 +907,12 @@ impl<'a> Context<'a> {
                         &TypeInner::Matrix {
                             rows,
                             columns,
-                            width: left_width,
+                            scalar: left_scalar,
                         },
-                        &TypeInner::Scalar(Scalar {
-                            width: right_width, ..
-                        }),
+                        &TypeInner::Scalar(right_scalar),
                     ) => {
-                        // Check that the two arguments have the same width
-                        if left_width != right_width {
+                        // Check that the two arguments have the same scalar type
+                        if left_scalar != right_scalar {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -974,7 +970,7 @@ impl<'a> Context<'a> {
                                         inner: TypeInner::Matrix {
                                             columns,
                                             rows,
-                                            width: left_width,
+                                            scalar: left_scalar,
                                         },
                                     },
                                     Span::default(),
@@ -1216,18 +1212,14 @@ impl<'a> Context<'a> {
                     TypeInner::Matrix {
                         columns,
                         rows,
-                        width,
+                        scalar,
                     } => {
                         let ty = TypeInner::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         };
-                        Literal::one(Scalar {
-                            kind: ScalarKind::Float,
-                            width,
-                        })
-                        .map(|i| (ty, i, Some(rows), Some(columns)))
+                        Literal::one(scalar).map(|i| (ty, i, Some(rows), Some(columns)))
                     }
                     _ => None,
                 };

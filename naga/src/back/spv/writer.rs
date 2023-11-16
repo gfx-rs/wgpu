@@ -1766,10 +1766,10 @@ impl Writer {
         if let crate::TypeInner::Matrix {
             columns: _,
             rows,
-            width,
+            scalar,
         } = *member_array_subty_inner
         {
-            let byte_stride = Alignment::from(rows) * width as u32;
+            let byte_stride = Alignment::from(rows) * scalar.width as u32;
             self.annotations.push(Instruction::member_decorate(
                 struct_id,
                 index as u32,

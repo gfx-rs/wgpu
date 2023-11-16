@@ -656,10 +656,9 @@ impl<'a, W: Write> super::Writer<'a, W> {
             _ => unreachable!(),
         };
         let vec_ty = match module.types[member.ty].inner {
-            crate::TypeInner::Matrix { rows, width, .. } => crate::TypeInner::Vector {
-                size: rows,
-                scalar: crate::Scalar::float(width),
-            },
+            crate::TypeInner::Matrix { rows, scalar, .. } => {
+                crate::TypeInner::Vector { size: rows, scalar }
+            }
             _ => unreachable!(),
         };
         self.write_value_type(module, &vec_ty)?;
@@ -736,9 +735,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             _ => unreachable!(),
         };
         let scalar_ty = match module.types[member.ty].inner {
-            crate::TypeInner::Matrix { width, .. } => {
-                crate::TypeInner::Scalar(crate::Scalar::float(width))
-            }
+            crate::TypeInner::Matrix { scalar, .. } => crate::TypeInner::Scalar(scalar),
             _ => unreachable!(),
         };
         self.write_value_type(module, &scalar_ty)?;

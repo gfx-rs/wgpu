@@ -1563,7 +1563,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Bi,
                         rows: naga::VectorSize::Bi,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 4>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_2_f32_slice(location, false, data) };
@@ -1571,7 +1571,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Bi,
                         rows: naga::VectorSize::Tri,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         // repack 2 vec3s into 6 values.
                         let unpacked_data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
@@ -1585,7 +1585,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Bi,
                         rows: naga::VectorSize::Quad,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_2x4_f32_slice(location, false, data) };
@@ -1597,7 +1597,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Tri,
                         rows: naga::VectorSize::Bi,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 6>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_3x2_f32_slice(location, false, data) };
@@ -1605,7 +1605,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Tri,
                         rows: naga::VectorSize::Tri,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         // repack 3 vec3s into 9 values.
                         let unpacked_data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
@@ -1620,7 +1620,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Tri,
                         rows: naga::VectorSize::Quad,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 12>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_3x4_f32_slice(location, false, data) };
@@ -1632,7 +1632,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Quad,
                         rows: naga::VectorSize::Bi,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 8>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_4x2_f32_slice(location, false, data) };
@@ -1640,7 +1640,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Quad,
                         rows: naga::VectorSize::Tri,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         // repack 4 vec3s into 12 values.
                         let unpacked_data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
@@ -1656,7 +1656,7 @@ impl super::Queue {
                     naga::TypeInner::Matrix {
                         columns: naga::VectorSize::Quad,
                         rows: naga::VectorSize::Quad,
-                        width: 4,
+                        scalar: naga::Scalar::F32,
                     } => {
                         let data = unsafe { get_data::<f32, 16>(data_bytes, offset) };
                         unsafe { gl.uniform_matrix_4_f32_slice(location, false, data) };
