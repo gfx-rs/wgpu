@@ -65,6 +65,8 @@ Bottom level categories:
 
 - When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
 
+- Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
+
 ### Examples
 
 - remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)

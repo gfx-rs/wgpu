@@ -430,11 +430,26 @@ impl<T> Arena<T> {
         P: FnMut(Handle<T>, &mut T) -> bool,
     {
         let mut index = 0;
+        let mut retained = 0;
         self.data.retain_mut(|elt| {
+            let handle = Handle::new(Index::new(index as u32 + 1).unwrap());
+            let keep = predicate(handle, elt);
+
+            // Since `predicate` needs mutable access to each element,
+            // we can't feasibly call it twice, so we have to compact
+            // spans by hand in parallel as part of this iteration.
+            #[cfg(feature = "span")]
+            if keep {
+                self.span_info[retained] = self.span_info[index];
+                retained += 1;
+            }
+
             index += 1;
-            let handle = Handle::new(Index::new(index).unwrap());
-            predicate(handle, elt)
-        })
+            keep
+        });
+
+        #[cfg(feature = "span")]
+        self.span_info.truncate(retained);
     }
 }
 
