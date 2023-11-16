@@ -1992,3 +1992,31 @@ fn binding_array_non_struct() {
         })
     }
 }
+
+#[cfg(feature = "span")]
+#[test]
+fn compaction_preserves_spans() {
+    let source = r#"
+        const a: i32 = -(-(-(-42i)));
+        const b: vec2<u32> = vec2<u32>(42u, 43i);
+    "#; //                   ^^^^^^^^^^^^^^^^^^^ correct error span: 68..87
+    let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
+    naga::compact::compact(&mut module);
+    let err = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    )
+    .validate(&module)
+    .expect_err("source ought to fail validation");
+
+    // Ideally this would all just be a `matches!` with a big pattern,
+    // but the `Span` API is full of opaque structs.
+    let mut spans = err.spans();
+    let first_span = spans.next().expect("error should have at least one span").0;
+    if !matches!(
+        first_span.to_range(),
+        Some(std::ops::Range { start: 68, end: 87 })
+    ) {
+        panic!("Error message has wrong span:\n\n{err:#?}");
+    }
+}
