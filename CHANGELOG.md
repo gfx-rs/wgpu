@@ -63,6 +63,8 @@ Bottom level categories:
 
 - When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
 
+- When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
+
 ## v0.18.1 (2023-11-15)
 
 (naga version 0.14.1)
