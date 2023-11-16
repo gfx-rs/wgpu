@@ -1070,7 +1070,11 @@ impl crate::Device<super::Api> for super::Device {
                     // FXC doesn't support SM 6.0
                     None => hlsl::ShaderModel::V5_1,
                 },
-                flags: hlsl::WriterFlags::default(),
+                flags: match self.dxc_container {
+                    // DXC doesn't support printf: https://github.com/microsoft/DirectXShaderCompiler/issues/357
+                    Some(_) => hlsl::WriterFlags::empty(),
+                    None => hlsl::WriterFlags::EMIT_DEBUG_PRINTF,
+                },
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,

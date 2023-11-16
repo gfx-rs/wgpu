@@ -799,7 +799,7 @@ bitflags::bitflags! {
         ///
         /// Supported Platforms:
         /// - DX11 (fxc only)
-        /// - Dx12 (fxc only)
+        /// - DX12 (fxc only)
         /// - Vulkan
         /// - OpenGL
         ///
