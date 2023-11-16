@@ -83,6 +83,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Implement WGSL abstract types (by @jimblandy):
   - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
 
+- Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
+
 ### Bug Fixes
 
 #### WGL
