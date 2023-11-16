@@ -1139,13 +1139,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         // update submission IDs
                         for id in cmdbuf.trackers.buffers.used() {
-                            let buffer = &mut buffer_guard[id];
-                            let raw_buf = match buffer.raw {
-                                Some(ref raw) => raw,
-                                None => {
+                            let buffer = match buffer_guard.get(id.0) {
+                                Ok(buf) => buf,
+                                Err(..) => {
                                     return Err(QueueSubmitError::DestroyedBuffer(id.0));
                                 }
                             };
+                            // get fails if the buffer is invalid or destroyed so we can assume
+                            // the raw buffer is not None.
+                            let raw_buf = buffer.raw.as_ref().unwrap();
+
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     log::warn!("Dropped buffer has a pending mapping.");
@@ -1161,10 +1164,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         }
                         for id in cmdbuf.trackers.textures.used() {
-                            let texture = &mut texture_guard[id];
+                            let texture = match texture_guard.get_mut(id.0) {
+                                Ok(tex) => tex,
+                                Err(..) => {
+                                    return Err(QueueSubmitError::DestroyedTexture(id.0));
+                                }
+                            };
+
                             let should_extend = match texture.inner {
                                 TextureInner::Native { raw: None } => {
-                                    return Err(QueueSubmitError::DestroyedTexture(id.0));
+                                    unreachable!();
                                 }
                                 TextureInner::Native { raw: Some(_) } => false,
                                 TextureInner::Surface {
