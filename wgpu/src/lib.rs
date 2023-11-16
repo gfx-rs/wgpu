@@ -1961,13 +1961,13 @@ impl Instance {
     /// - On macOS/Metal: will panic if not called on the main thread.
     /// - On web: will panic if the `raw_window_handle` does not properly refer to a
     ///   canvas element.
-    pub fn create_surface<
-        'window,
-        W: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync + 'window,
-    >(
+    pub fn create_surface<'window, W>(
         &self,
         window: W,
-    ) -> Result<Surface<'window>, CreateSurfaceError> {
+    ) -> Result<Surface<'window>, CreateSurfaceError>
+    where
+        W: HasWindowHandle + HasDisplayHandle + WasmNotSend + WasmNotSync + 'window,
+    {
         let mut surface = unsafe { self.create_surface_from_raw(&window) }?;
         surface._surface = Some(Box::new(window));
         Ok(surface)
@@ -1985,10 +1985,13 @@ impl Instance {
     /// - `raw_window_handle` must be a valid object to create a surface upon.
     /// - `raw_window_handle` must remain valid until after the returned [`Surface`] is
     ///   dropped.
-    pub unsafe fn create_surface_from_raw<W: HasWindowHandle + HasDisplayHandle>(
+    pub unsafe fn create_surface_from_raw<W>(
         &self,
         window: &W,
-    ) -> Result<Surface<'static>, CreateSurfaceError> {
+    ) -> Result<Surface<'static>, CreateSurfaceError>
+    where
+        W: HasWindowHandle + HasDisplayHandle,
+    {
         let raw_display_handle = window
             .display_handle()
             .map_err(|e| CreateSurfaceError {
