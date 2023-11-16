@@ -9,6 +9,7 @@ fn main() {
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    compose_of_splat();
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -78,4 +79,8 @@ fn map_texture_kind(texture_kind: i32) -> u32 {
         case TEXTURE_KIND_SKY: { return 30u; }
         default: { return 0u; }
     }
+}
+
+fn compose_of_splat() {
+    var x = vec4f(vec3f(1.0), 2.0).wzyx;
 }
