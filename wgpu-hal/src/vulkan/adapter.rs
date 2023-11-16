@@ -549,7 +549,7 @@ impl PhysicalDeviceFeatures {
                         | vk::FormatFeatureFlags::TRANSFER_SRC
                         | vk::FormatFeatureFlags::TRANSFER_DST,
                 )
-                && !adapter_info.driver.contains("moltenvk"),
+                && !adapter_info.driver.contains("MoltenVK"),
         );
 
         (features, dl_flags)
