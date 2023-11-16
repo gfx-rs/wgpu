@@ -908,12 +908,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 TypeInner::Matrix {
                     rows,
                     columns,
-                    width,
+                    scalar,
                 } if member.binding.is_none() && rows == crate::VectorSize::Bi => {
-                    let vec_ty = crate::TypeInner::Vector {
-                        size: rows,
-                        scalar: crate::Scalar::float(width),
-                    };
+                    let vec_ty = crate::TypeInner::Vector { size: rows, scalar };
                     let field_name_key = NameKey::StructMember(handle, index as u32);
 
                     for i in 0..columns as u8 {
@@ -1037,7 +1034,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 // The IR supports only float matrix
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-matrix
@@ -1046,7 +1043,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(
                     self.out,
                     "{}{}x{}",
-                    crate::Scalar::float(width).to_hlsl_str()?,
+                    scalar.to_hlsl_str()?,
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
                 )?;
@@ -3241,11 +3238,11 @@ pub(super) fn get_inner_matrix_data(
         TypeInner::Matrix {
             columns,
             rows,
-            width,
+            scalar,
         } => Some(MatrixType {
             columns,
             rows,
-            width,
+            width: scalar.width,
         }),
         TypeInner::Array { base, .. } => get_inner_matrix_data(module, base),
         _ => None,
@@ -3276,12 +3273,12 @@ pub(super) fn get_inner_matrix_of_struct_array_member(
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 mat_data = Some(MatrixType {
                     columns,
                     rows,
-                    width,
+                    width: scalar.width,
                 })
             }
             TypeInner::Array { base, .. } => {
@@ -3333,12 +3330,12 @@ fn get_inner_matrix_of_global_uniform(
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 mat_data = Some(MatrixType {
                     columns,
                     rows,
-                    width,
+                    width: scalar.width,
                 })
             }
             TypeInner::Array { base, .. } => {

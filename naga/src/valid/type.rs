@@ -103,6 +103,8 @@ pub enum TypeError {
     InvalidData(Handle<crate::Type>),
     #[error("Base type {0:?} for the array is invalid")]
     InvalidArrayBaseType(Handle<crate::Type>),
+    #[error("Matrix elements must always be floating-point types")]
+    MatrixElementNotFloat,
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} does not match the expected {expected}")]
@@ -305,9 +307,12 @@ impl super::Validator {
             Ti::Matrix {
                 columns: _,
                 rows,
-                width,
+                scalar,
             } => {
-                self.check_width(crate::Scalar::float(width))?;
+                if scalar.kind != crate::ScalarKind::Float {
+                    return Err(TypeError::MatrixElementNotFloat);
+                }
+                self.check_width(scalar)?;
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -315,7 +320,7 @@ impl super::Validator {
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE,
-                    Alignment::from(rows) * Alignment::from_width(width),
+                    Alignment::from(rows) * Alignment::from_width(scalar.width),
                 )
             }
             Ti::Atomic(crate::Scalar { kind, width }) => {

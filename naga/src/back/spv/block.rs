@@ -494,7 +494,7 @@ impl<'w> BlockContext<'w> {
                         crate::TypeInner::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         } => {
                             self.write_matrix_matrix_column_op(
                                 block,
@@ -504,7 +504,7 @@ impl<'w> BlockContext<'w> {
                                 right_id,
                                 columns,
                                 rows,
-                                width,
+                                scalar.width,
                                 spirv::Op::FAdd,
                             );
 
@@ -522,7 +522,7 @@ impl<'w> BlockContext<'w> {
                         crate::TypeInner::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         } => {
                             self.write_matrix_matrix_column_op(
                                 block,
@@ -532,7 +532,7 @@ impl<'w> BlockContext<'w> {
                                 right_id,
                                 columns,
                                 rows,
-                                width,
+                                scalar.width,
                                 spirv::Op::FSub,
                             );
 
@@ -1141,9 +1141,7 @@ impl<'w> BlockContext<'w> {
                     match *self.fun_info[expr].ty.inner_with(&self.ir_module.types) {
                         crate::TypeInner::Scalar(scalar) => (scalar, None, false),
                         crate::TypeInner::Vector { scalar, size } => (scalar, Some(size), false),
-                        crate::TypeInner::Matrix { width, .. } => {
-                            (crate::Scalar::float(width), None, true)
-                        }
+                        crate::TypeInner::Matrix { scalar, .. } => (scalar, None, true),
                         ref other => {
                             log::error!("As source {:?}", other);
                             return Err(Error::Validation("Unexpected Expression::As source"));

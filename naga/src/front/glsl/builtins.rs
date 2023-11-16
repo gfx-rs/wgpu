@@ -1276,7 +1276,7 @@ fn inject_common_builtin(
                     vec![TypeInner::Matrix {
                         columns,
                         rows,
-                        width: float_width,
+                        scalar: float_scalar,
                     }],
                     MacroCall::MathFunction(MathFunction::Transpose),
                 ))
@@ -1295,7 +1295,7 @@ fn inject_common_builtin(
                 let args = vec![TypeInner::Matrix {
                     columns,
                     rows,
-                    width: float_width,
+                    scalar: float_scalar,
                 }];
 
                 declaration.overloads.push(module.add_builtin(

@@ -44,13 +44,13 @@ impl crate::TypeInner {
             Ti::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 format!(
                     "mat{}x{}<{}>",
                     columns as u32,
                     rows as u32,
-                    crate::Scalar::float(width).to_wgsl(),
+                    scalar.to_wgsl(),
                 )
             }
             Ti::Atomic(scalar) => {
@@ -236,7 +236,7 @@ mod tests {
         let mat = crate::TypeInner::Matrix {
             rows: crate::VectorSize::Quad,
             columns: crate::VectorSize::Bi,
-            width: 8,
+            scalar: crate::Scalar::F64,
         };
         assert_eq!(mat.to_wgsl(&gctx), "mat2x4<f64>");
 

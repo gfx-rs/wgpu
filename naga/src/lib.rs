@@ -693,11 +693,11 @@ pub enum TypeInner {
     Scalar(Scalar),
     /// Vector of numbers.
     Vector { size: VectorSize, scalar: Scalar },
-    /// Matrix of floats.
+    /// Matrix of numbers.
     Matrix {
         columns: VectorSize,
         rows: VectorSize,
-        width: Bytes,
+        scalar: Scalar,
     },
     /// Atomic scalar.
     Atomic(Scalar),

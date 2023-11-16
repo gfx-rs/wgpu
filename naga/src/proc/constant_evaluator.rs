@@ -914,15 +914,12 @@ impl<'a> ConstantEvaluator<'a> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 let vec_ty = self.types.insert(
                     Type {
                         name: None,
-                        inner: TypeInner::Vector {
-                            size: rows,
-                            scalar: crate::Scalar::float(width),
-                        },
+                        inner: TypeInner::Vector { size: rows, scalar },
                     },
                     span,
                 );
@@ -1026,7 +1023,7 @@ impl<'a> ConstantEvaluator<'a> {
                     TypeInner::Matrix { columns, rows, .. } => TypeInner::Matrix {
                         columns,
                         rows,
-                        width: target.width,
+                        scalar: target,
                     },
                     _ => return Err(ConstantEvaluatorError::InvalidCastArg),
                 };
@@ -1522,7 +1519,7 @@ mod tests {
                 inner: TypeInner::Matrix {
                     columns: VectorSize::Bi,
                     rows: VectorSize::Tri,
-                    width: 4,
+                    scalar: crate::Scalar::F32,
                 },
             },
             Default::default(),

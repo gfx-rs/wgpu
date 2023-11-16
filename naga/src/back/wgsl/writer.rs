@@ -524,14 +524,14 @@ impl<W: Write> Writer<W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 write!(
                     self.out,
                     "mat{}x{}<{}>",
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
-                    scalar_kind_str(crate::Scalar::float(width))
+                    scalar_kind_str(scalar)
                 )?;
             }
             TypeInner::Pointer { base, space } => {
@@ -1412,12 +1412,11 @@ impl<W: Write> Writer<W> {
                     TypeInner::Matrix {
                         columns,
                         rows,
-                        width,
-                        ..
+                        scalar,
                     } => {
                         let scalar = crate::Scalar {
                             kind,
-                            width: convert.unwrap_or(width),
+                            width: convert.unwrap_or(scalar.width),
                         };
                         let scalar_kind_str = scalar_kind_str(scalar);
                         write!(

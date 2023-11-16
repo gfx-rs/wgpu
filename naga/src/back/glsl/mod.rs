@@ -985,11 +985,11 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => write!(
                 self.out,
                 "{}mat{}x{}",
-                glsl_scalar(crate::Scalar::float(width))?.prefix,
+                glsl_scalar(scalar)?.prefix,
                 columns as u8,
                 rows as u8
             )?,

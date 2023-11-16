@@ -95,6 +95,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 - When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
 
+- Allow Naga's IR types to represent matrices with elements elements of any scalar kind. This makes it possible for Naga IR types to represent WGSL abstract matrices. By @jimblandy in [#4735](https://github.com/gfx-rs/wgpu/pull/4735).
+
 - When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
 
 - Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).

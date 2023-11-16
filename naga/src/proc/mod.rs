@@ -226,7 +226,7 @@ impl super::TypeInner {
         use crate::TypeInner as Ti;
         match *self {
             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
-            Ti::Matrix { width, .. } => Some(super::Scalar::float(width)),
+            Ti::Matrix { scalar, .. } => Some(scalar),
             _ => None,
         }
     }
@@ -266,8 +266,8 @@ impl super::TypeInner {
             Self::Matrix {
                 columns,
                 rows,
-                width,
-            } => Alignment::from(rows) * width as u32 * columns as u32,
+                scalar,
+            } => Alignment::from(rows) * scalar.width as u32 * columns as u32,
             Self::Pointer { .. } | Self::ValuePointer { .. } => POINTER_SPAN,
             Self::Array {
                 base: _,
@@ -367,10 +367,9 @@ impl super::TypeInner {
     pub fn component_type(&self, index: usize) -> Option<TypeResolution> {
         Some(match *self {
             Self::Vector { scalar, .. } => TypeResolution::Value(crate::TypeInner::Scalar(scalar)),
-            Self::Matrix { rows, width, .. } => TypeResolution::Value(crate::TypeInner::Vector {
-                size: rows,
-                scalar: crate::Scalar::float(width),
-            }),
+            Self::Matrix { rows, scalar, .. } => {
+                TypeResolution::Value(crate::TypeInner::Vector { size: rows, scalar })
+            }
             Self::Array {
                 base,
                 size: crate::ArraySize::Constant(_),
@@ -773,7 +772,7 @@ fn test_matrix_size() {
         crate::TypeInner::Matrix {
             columns: crate::VectorSize::Tri,
             rows: crate::VectorSize::Tri,
-            width: 4
+            scalar: crate::Scalar::F32,
         }
         .size(module.to_ctx()),
         48,

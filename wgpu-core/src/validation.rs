@@ -792,10 +792,10 @@ impl Interface {
             naga::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => NumericType {
                 dim: NumericDimension::Matrix(columns, rows),
-                scalar: naga::Scalar::float(width),
+                scalar,
             },
             naga::TypeInner::Struct { ref members, .. } => {
                 for member in members {
