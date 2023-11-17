@@ -34,7 +34,7 @@ pub use wgt::math::*;
 /// - Input is empty
 /// - SPIR-V magic number is missing from beginning of stream
 #[cfg(feature = "spirv")]
-pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
+pub fn make_spirv(data: &[u8]) -> super::ShaderSource<'_> {
     super::ShaderSource::SpirV(make_spirv_raw(data))
 }
 
@@ -42,7 +42,7 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource {
 /// Returns raw slice instead of ShaderSource.
 ///
 /// [`Device::create_shader_module_spirv`]: crate::Device::create_shader_module_spirv
-pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
+pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
     assert_eq!(
         data.len() % size_of::<u32>(),
@@ -94,7 +94,7 @@ impl DownloadBuffer {
     pub fn read_buffer(
         device: &super::Device,
         queue: &super::Queue,
-        buffer: &super::BufferSlice,
+        buffer: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
         let size = match buffer.size {

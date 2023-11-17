@@ -13,7 +13,7 @@ pub struct BufferInitDescriptor<'a> {
 /// Utility methods not meant to be in the main API.
 pub trait DeviceExt {
     /// Creates a [Buffer](crate::Buffer) with data to initialize it.
-    fn create_buffer_init(&self, desc: &BufferInitDescriptor) -> crate::Buffer;
+    fn create_buffer_init(&self, desc: &BufferInitDescriptor<'_>) -> crate::Buffer;
 
     /// Upload an entire texture and its mipmaps from a source buffer.
     ///
@@ -30,7 +30,7 @@ pub trait DeviceExt {
     fn create_texture_with_data(
         &self,
         queue: &crate::Queue,
-        desc: &crate::TextureDescriptor,
+        desc: &crate::TextureDescriptor<'_>,
         data: &[u8],
     ) -> crate::Texture;
 }
@@ -77,7 +77,7 @@ impl DeviceExt for crate::Device {
     fn create_texture_with_data(
         &self,
         queue: &crate::Queue,
-        desc: &crate::TextureDescriptor,
+        desc: &crate::TextureDescriptor<'_>,
         data: &[u8],
     ) -> crate::Texture {
         // Implicitly add the COPY_DST usage
