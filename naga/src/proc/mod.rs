@@ -247,7 +247,7 @@ impl super::TypeInner {
     }
 
     /// Get the size of this type.
-    pub fn size(&self, _gctx: GlobalCtx) -> u32 {
+    pub fn size(&self) -> u32 {
         match *self {
             Self::Scalar(scalar) | Self::Atomic(scalar) => scalar.width as u32,
             Self::Vector { size, scalar } => size as u32 * scalar.width as u32,
@@ -757,14 +757,13 @@ pub fn flatten_compose<'arenas>(
 
 #[test]
 fn test_matrix_size() {
-    let module = crate::Module::default();
     assert_eq!(
         crate::TypeInner::Matrix {
             columns: crate::VectorSize::Tri,
             rows: crate::VectorSize::Tri,
             width: 4
         }
-        .size(module.to_ctx()),
+        .size(),
         48,
     );
 }

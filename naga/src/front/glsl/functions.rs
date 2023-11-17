@@ -1309,7 +1309,7 @@ impl Frontend {
                         offset: span,
                     });
 
-                    span += ctx.module.types[ty].inner.size(ctx.module.to_ctx());
+                    span += ctx.module.types[ty].inner.size();
 
                     let len = ctx.expressions.len();
                     let load = ctx

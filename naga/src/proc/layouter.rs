@@ -169,7 +169,7 @@ impl Layouter {
         use crate::TypeInner as Ti;
 
         for (ty_handle, ty) in gctx.types.iter().skip(self.layouts.len()) {
-            let size = ty.inner.size(gctx);
+            let size = ty.inner.size();
             let layout = match ty.inner {
                 Ti::Scalar(scalar) | Ti::Atomic(scalar) => {
                     let alignment = Alignment::new(scalar.width as u32)

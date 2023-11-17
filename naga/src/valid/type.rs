@@ -500,7 +500,7 @@ impl super::Validator {
                         }
                     }
 
-                    let base_size = gctx.types[member.ty].inner.size(gctx);
+                    let base_size = gctx.types[member.ty].inner.size();
                     min_offset = member.offset + base_size;
                     if min_offset > span {
                         return Err(TypeError::MemberOutOfBounds {

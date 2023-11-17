@@ -364,7 +364,7 @@ fn should_pack_struct_member(
     }
 
     let ty_inner = &module.types[member.ty].inner;
-    let last_offset = member.offset + ty_inner.size(module.to_ctx());
+    let last_offset = member.offset + ty_inner.size();
     let next_offset = match members.get(index + 1) {
         Some(next) => next.offset,
         None => span,
@@ -1079,12 +1079,9 @@ impl<W: Write> Writer<W> {
         };
 
         let (size, stride) = match context.module.types[array_ty].inner {
-            crate::TypeInner::Array { base, stride, .. } => (
-                context.module.types[base]
-                    .inner
-                    .size(context.module.to_ctx()),
-                stride,
-            ),
+            crate::TypeInner::Array { base, stride, .. } => {
+                (context.module.types[base].inner.size(), stride)
+            }
             _ => return Err(Error::Validation),
         };
 
@@ -3312,7 +3309,7 @@ impl<W: Write> Writer<W> {
                             writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
                         }
                         let ty_inner = &module.types[member.ty].inner;
-                        last_offset = member.offset + ty_inner.size(module.to_ctx());
+                        last_offset = member.offset + ty_inner.size();
 
                         let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
 

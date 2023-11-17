@@ -62,7 +62,7 @@ impl crate::TypeInner {
                 let last_el_size = gctx.types[base].inner.size_hlsl(gctx);
                 ((count - 1) * stride) + last_el_size
             }
-            _ => self.size(gctx),
+            _ => self.size(),
         }
     }
 

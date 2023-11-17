@@ -2146,7 +2146,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_ty = self.lookup_type.lookup(result_type_id)?;
                     let inner = &ctx.type_arena[result_ty.handle].inner;
                     let kind = inner.scalar_kind().unwrap();
-                    let size = inner.size(ctx.gctx()) as u8;
+                    let size = inner.size() as u8;
 
                     let left_cast = ctx.expressions.append(
                         crate::Expression::As {
