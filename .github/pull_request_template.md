@@ -20,5 +20,5 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 - [ ] Run `cargo clippy`. If applicable, add:
   - [ ] `--target wasm32-unknown-unknown`
   - [ ] `--target wasm32-unknown-emscripten`
-- [ ] Run `cargo xtask run` to run tests. 
+- [ ] Run `cargo xtask test` to run tests.
 - [ ] Add change to `CHANGELOG.md`. See simple instructions inside file.
