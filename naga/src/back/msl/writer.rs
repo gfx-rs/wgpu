@@ -3118,7 +3118,7 @@ impl<W: Write> Writer<W> {
             super::keywords::RESERVED,
             &[],
             &[],
-            &[],
+            &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
         self.struct_member_pads.clear();
