@@ -868,6 +868,22 @@ impl<'a> ConstantEvaluator<'a> {
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Literal`]: Expression::Literal
     /// [`Compose`]: Expression::Compose
+    fn eval_zero_value(
+        &mut self,
+        expr: Handle<Expression>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        match self.expressions[expr] {
+            Expression::ZeroValue(ty) => self.eval_zero_value_impl(ty, span),
+            _ => Ok(expr),
+        }
+    }
+
+    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
+    ///
+    /// [`ZeroValue`]: Expression::ZeroValue
+    /// [`Literal`]: Expression::Literal
+    /// [`Compose`]: Expression::Compose
     fn eval_zero_value_impl(
         &mut self,
         ty: Handle<Type>,
@@ -953,7 +969,7 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         use crate::Scalar as Sc;
 
-        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let expr = self.eval_zero_value(expr, span)?;
 
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
@@ -1021,6 +1037,14 @@ impl<'a> ConstantEvaluator<'a> {
                 );
 
                 Expression::Compose { ty, components }
+            }
+            Expression::Splat { size, value } => {
+                let value_span = self.expressions.get_span(value);
+                let cast_value = self.cast(value, target, value_span)?;
+                Expression::Splat {
+                    size,
+                    value: cast_value,
+                }
             }
             _ => return Err(ConstantEvaluatorError::InvalidCastArg),
         };
