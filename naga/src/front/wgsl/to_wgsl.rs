@@ -57,16 +57,14 @@ impl crate::TypeInner {
                 format!("atomic<{}>", scalar.to_wgsl())
             }
             Ti::Pointer { base, .. } => {
-                let base = &gctx.types[base];
-                let name = base.name.as_deref().unwrap_or("unknown");
+                let name = base.to_wgsl(gctx);
                 format!("ptr<{name}>")
             }
             Ti::ValuePointer { scalar, .. } => {
                 format!("ptr<{}>", scalar.to_wgsl())
             }
             Ti::Array { base, size, .. } => {
-                let member_type = &gctx.types[base];
-                let base = member_type.name.as_deref().unwrap_or("unknown");
+                let base = base.to_wgsl(gctx);
                 match size {
                     crate::ArraySize::Constant(size) => format!("array<{base}, {size}>"),
                     crate::ArraySize::Dynamic => format!("array<{base}>"),
