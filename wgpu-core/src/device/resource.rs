@@ -1016,6 +1016,34 @@ impl<A: HalApi> Device<A> {
             });
         };
 
+        match (texture.desc.format, resolved_format, desc.plane) {
+            (
+                wgt::TextureFormat::NV12,
+                wgt::TextureFormat::R8Unorm | wgt::TextureFormat::R8Uint,
+                Some(0),
+            ) => {}
+            (
+                wgt::TextureFormat::NV12,
+                wgt::TextureFormat::Rg8Unorm | wgt::TextureFormat::Rg8Uint,
+                Some(1),
+            ) => {}
+            (wgt::TextureFormat::NV12, _, _) => {
+                return Err(resource::CreateTextureViewError::InvalidTextureViewPlane {
+                    plane: desc.plane,
+                    view_format: resolved_format,
+                });
+            }
+            (_, _, Some(_)) => {
+                return Err(
+                    resource::CreateTextureViewError::InvalidTextureViewPlaneOnNonplanarTexture {
+                        plane: desc.plane,
+                        texture_format: texture.desc.format,
+                    },
+                );
+            }
+            _ => {}
+        }
+
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
         let render_extent = 'b: loop {
             if !texture

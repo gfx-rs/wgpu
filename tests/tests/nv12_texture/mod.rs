@@ -1,6 +1,6 @@
 //! Tests for nv12 texture creation and sampling.
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -120,42 +120,31 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
 
 #[gpu_test]
 static NV12_TEXTURE_CREATION_BAD_VIEW_FORMATS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
-            .expect_fail(FailureCase::always()),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
             height: 256,
             depth_or_array_layers: 1,
         };
-        let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size,
-            format: wgpu::TextureFormat::NV12,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            sample_count: 1,
-            view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        fail(&ctx.device, || {
+            let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: wgpu::TextureFormat::NV12,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+            });
         });
     });
 
-/// For DX11/DX12 backend, textures always have plane 0
 #[gpu_test]
 static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(
-            TestParameters::default()
-                .features(wgpu::Features::TEXTURE_FORMAT_NV12)
-                .expect_fail(FailureCase::backend({
-                    let mut backends = wgpu::Backends::all();
-                    backends.remove(wgpu::Backends::DX11 | wgpu::Backends::DX12);
-                    backends
-                })),
-        )
+        .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
         .run_sync(|ctx| {
             let size = wgpu::Extent3d {
                 width: 256,
@@ -172,19 +161,17 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
                 sample_count: 1,
                 view_formats: &[],
             });
-            let _ = tex.create_view(&wgpu::TextureViewDescriptor {
-                plane: Some(0),
-                ..Default::default()
+            fail(&ctx.device, || {
+                let _ = tex.create_view(&wgpu::TextureViewDescriptor {
+                    plane: Some(0),
+                    ..Default::default()
+                });
             });
         });
 
 #[gpu_test]
 static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
-            .expect_fail(FailureCase::always()),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -201,20 +188,18 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
             sample_count: 1,
             view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
         });
-        let _ = tex.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            plane: Some(2),
-            ..Default::default()
+        fail(&ctx.device, || {
+            let _ = tex.create_view(&wgpu::TextureViewDescriptor {
+                format: Some(wgpu::TextureFormat::R8Unorm),
+                plane: Some(2),
+                ..Default::default()
+            });
         });
     });
 
 #[gpu_test]
 static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
-            .expect_fail(FailureCase::always()),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -231,9 +216,11 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
             sample_count: 1,
             view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
         });
-        let _ = tex.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(wgpu::TextureFormat::Rg8Unorm),
-            plane: Some(0),
-            ..Default::default()
+        fail(&ctx.device, || {
+            let _ = tex.create_view(&wgpu::TextureViewDescriptor {
+                format: Some(wgpu::TextureFormat::Rg8Unorm),
+                plane: Some(0),
+                ..Default::default()
+            });
         });
     });

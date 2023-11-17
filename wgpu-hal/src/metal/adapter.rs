@@ -232,7 +232,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 }
                 flags
             }
-            Tf::NV12 => unreachable!(),
+            Tf::NV12 => return Tfc::empty(),
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
                     all_caps

@@ -1100,6 +1100,16 @@ pub enum CreateTextureViewError {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
     },
+    #[error("Invalid texture view plane `{plane:?}` with view format `{view_format:?}`")]
+    InvalidTextureViewPlane {
+        plane: Option<u32>,
+        view_format: wgt::TextureFormat,
+    },
+    #[error("Invalid texture view plane `{plane:?}` on non-planar texture `{texture_format:?}`")]
+    InvalidTextureViewPlaneOnNonplanarTexture {
+        plane: Option<u32>,
+        texture_format: wgt::TextureFormat,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
