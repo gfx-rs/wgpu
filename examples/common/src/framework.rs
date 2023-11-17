@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use wgpu::{Instance, Surface, WasmNotSend, WasmNotSync};
+use wgpu::{Instance, Surface, WasmNotSendSync};
 use wgpu_test::GpuTestConfiguration;
 use winit::{
     dpi::PhysicalSize,
@@ -504,7 +504,7 @@ pub struct ExampleTestParams<E> {
     pub _phantom: std::marker::PhantomData<E>,
 }
 
-impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuTestConfiguration {
+impl<E: Example + WasmNotSendSync> From<ExampleTestParams<E>> for GpuTestConfiguration {
     fn from(params: ExampleTestParams<E>) -> Self {
         GpuTestConfiguration::new()
             .name(params.name)
