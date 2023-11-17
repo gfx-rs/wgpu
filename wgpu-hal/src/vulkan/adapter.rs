@@ -986,6 +986,15 @@ impl super::Instance {
             );
         };
 
+        if let Some(driver) = phd_capabilities.driver {
+            if driver.conformance_version.major == 0 {
+                log::warn!(
+                    "Adapter is not Vulkan compliant, hiding adapter: {}",
+                    info.name
+                );
+                return None;
+            }
+        }
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0
             && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
         {
