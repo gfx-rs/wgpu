@@ -1715,7 +1715,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         let max_vertex_buffers = device.limits.max_vertex_buffers;
-                        if slot > max_vertex_buffers {
+                        if slot >= max_vertex_buffers {
                             return Err(RenderCommandError::VertexBufferIndexOutOfRange {
                                 index: slot,
                                 max: max_vertex_buffers,
