@@ -311,14 +311,10 @@ fn check_targets(
 
     #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     {
-        let debug_info = if cfg!(feature = "span") {
-            source_code.map(|code| naga::back::spv::DebugInfo {
-                source_code: code,
-                file_name: name.as_ref(),
-            })
-        } else {
-            None
-        };
+        let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
+            source_code: code,
+            file_name: name.as_ref(),
+        });
 
         if targets.contains(Targets::SPIRV) {
             write_output_spv(
@@ -791,7 +787,6 @@ fn convert_wgsl() {
         }
     }
 
-    #[cfg(feature = "span")]
     {
         let inputs = [
             ("debug-symbol-simple", Targets::SPIRV),

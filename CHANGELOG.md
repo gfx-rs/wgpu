@@ -57,6 +57,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 #### Naga
 
+- Remove `span` and `validate` features. Always fully validate shader modules, and always track source positions for use in error messages. By @teoxoy in [#4706](https://github.com/gfx-rs/wgpu/pull/4706)
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
@@ -92,7 +93,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
   - Passing a naga module directly to `Device::create_shader_module`.
   - `InstanceFlags::DEBUG` is enabled.
 
-#### DX12 
+#### DX12
 - Always use HLSL 2018 when using DXC to compile HLSL shaders. By @daxpedda in [#4629](https://github.com/gfx-rs/wgpu/pull/4629)
 
 #### Metal

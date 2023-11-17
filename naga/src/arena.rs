@@ -247,7 +247,6 @@ impl<T> Range<T> {
 pub struct Arena<T> {
     /// Values of this arena.
     data: Vec<T>,
-    #[cfg(feature = "span")]
     #[cfg_attr(feature = "serialize", serde(skip))]
     span_info: Vec<Span>,
 }
@@ -269,7 +268,6 @@ impl<T> Arena<T> {
     pub const fn new() -> Self {
         Arena {
             data: Vec::new(),
-            #[cfg(feature = "span")]
             span_info: Vec::new(),
         }
     }
@@ -310,11 +308,8 @@ impl<T> Arena<T> {
 
     /// Adds a new value to the arena, returning a typed handle.
     pub fn append(&mut self, value: T, span: Span) -> Handle<T> {
-        #[cfg(not(feature = "span"))]
-        let _ = span;
         let index = self.data.len();
         self.data.push(value);
-        #[cfg(feature = "span")]
         self.span_info.push(span);
         Handle::from_usize(index)
     }
@@ -377,18 +372,10 @@ impl<T> Arena<T> {
     }
 
     pub fn get_span(&self, handle: Handle<T>) -> Span {
-        #[cfg(feature = "span")]
-        {
-            *self
-                .span_info
-                .get(handle.index())
-                .unwrap_or(&Span::default())
-        }
-        #[cfg(not(feature = "span"))]
-        {
-            let _ = handle;
-            Span::default()
-        }
+        *self
+            .span_info
+            .get(handle.index())
+            .unwrap_or(&Span::default())
     }
 
     /// Assert that `handle` is valid for this arena.
@@ -438,7 +425,6 @@ impl<T> Arena<T> {
             // Since `predicate` needs mutable access to each element,
             // we can't feasibly call it twice, so we have to compact
             // spans by hand in parallel as part of this iteration.
-            #[cfg(feature = "span")]
             if keep {
                 self.span_info[retained] = self.span_info[index];
                 retained += 1;
@@ -448,7 +434,6 @@ impl<T> Arena<T> {
             keep
         });
 
-        #[cfg(feature = "span")]
         self.span_info.truncate(retained);
     }
 }
@@ -463,16 +448,11 @@ where
         D: serde::Deserializer<'de>,
     {
         let data = Vec::deserialize(deserializer)?;
-        #[cfg(feature = "span")]
         let span_info = std::iter::repeat(Span::default())
             .take(data.len())
             .collect();
 
-        Ok(Self {
-            data,
-            #[cfg(feature = "span")]
-            span_info,
-        })
+        Ok(Self { data, span_info })
     }
 }
 
@@ -561,7 +541,6 @@ pub struct UniqueArena<T> {
     /// promises that its elements "are indexed in a compact range, without
     /// holes in the range 0..set.len()", so we can always use the indices
     /// returned by insertion as indices into this vector.
-    #[cfg(feature = "span")]
     span_info: Vec<Span>,
 }
 
@@ -570,7 +549,6 @@ impl<T> UniqueArena<T> {
     pub fn new() -> Self {
         UniqueArena {
             set: FastIndexSet::default(),
-            #[cfg(feature = "span")]
             span_info: Vec::new(),
         }
     }
@@ -588,7 +566,6 @@ impl<T> UniqueArena<T> {
     /// Clears the arena, keeping all allocations.
     pub fn clear(&mut self) {
         self.set.clear();
-        #[cfg(feature = "span")]
         self.span_info.clear();
     }
 
@@ -596,29 +573,17 @@ impl<T> UniqueArena<T> {
     ///
     /// If a value has been inserted multiple times, the span returned is the
     /// one provided with the first insertion.
-    ///
-    /// If the `span` feature is not enabled, always return `Span::default`.
-    /// This can be detected with [`Span::is_defined`].
     pub fn get_span(&self, handle: Handle<T>) -> Span {
-        #[cfg(feature = "span")]
-        {
-            *self
-                .span_info
-                .get(handle.index())
-                .unwrap_or(&Span::default())
-        }
-        #[cfg(not(feature = "span"))]
-        {
-            let _ = handle;
-            Span::default()
-        }
+        *self
+            .span_info
+            .get(handle.index())
+            .unwrap_or(&Span::default())
     }
 
     #[cfg(feature = "compact")]
     pub(crate) fn drain_all(&mut self) -> UniqueArenaDrain<T> {
         UniqueArenaDrain {
             inner_elts: self.set.drain(..),
-            #[cfg(feature = "span")]
             inner_spans: self.span_info.drain(..),
             index: Index::new(1).unwrap(),
         }
@@ -628,7 +593,6 @@ impl<T> UniqueArena<T> {
 #[cfg(feature = "compact")]
 pub(crate) struct UniqueArenaDrain<'a, T> {
     inner_elts: indexmap::set::Drain<'a, T>,
-    #[cfg(feature = "span")]
     inner_spans: std::vec::Drain<'a, Span>,
     index: Index,
 }
@@ -642,10 +606,7 @@ impl<'a, T> Iterator for UniqueArenaDrain<'a, T> {
             Some(elt) => {
                 let handle = Handle::new(self.index);
                 self.index = self.index.checked_add(1).unwrap();
-                #[cfg(feature = "span")]
                 let span = self.inner_spans.next().unwrap();
-                #[cfg(not(feature = "span"))]
-                let span = Span::default();
                 Some((handle, elt, span))
             }
             None => None,
@@ -672,27 +633,21 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     /// If this arena already contains an element that is `Eq` to `value`,
     /// return a `Handle` to the existing element, and drop `value`.
     ///
-    /// When the `span` feature is enabled, if `value` is inserted into the
-    /// arena, associate `span` with it. An element's span can be retrieved with
-    /// the [`get_span`] method.
+    /// If `value` is inserted into the arena, associate `span` with
+    /// it. An element's span can be retrieved with the [`get_span`]
+    /// method.
     ///
     /// [`Handle<T>`]: Handle
     /// [`get_span`]: UniqueArena::get_span
     pub fn insert(&mut self, value: T, span: Span) -> Handle<T> {
         let (index, added) = self.set.insert_full(value);
 
-        #[cfg(feature = "span")]
-        {
-            if added {
-                debug_assert!(index == self.span_info.len());
-                self.span_info.push(span);
-            }
-
-            debug_assert!(self.set.len() == self.span_info.len());
+        if added {
+            debug_assert!(index == self.span_info.len());
+            self.span_info.push(span);
         }
 
-        #[cfg(not(feature = "span"))]
-        let _ = (span, added);
+        debug_assert!(self.set.len() == self.span_info.len());
 
         Handle::from_usize(index)
     }
@@ -779,14 +734,9 @@ where
         D: serde::Deserializer<'de>,
     {
         let set = FastIndexSet::deserialize(deserializer)?;
-        #[cfg(feature = "span")]
         let span_info = std::iter::repeat(Span::default()).take(set.len()).collect();
 
-        Ok(Self {
-            set,
-            #[cfg(feature = "span")]
-            span_info,
-        })
+        Ok(Self { set, span_info })
     }
 }
 
@@ -800,7 +750,6 @@ where
         let mut arena = Self::default();
         for elem in u.arbitrary_iter()? {
             arena.set.insert(elem?);
-            #[cfg(feature = "span")]
             arena.span_info.push(Span::UNDEFINED);
         }
         Ok(arena)
@@ -810,7 +759,6 @@ where
         let mut arena = Self::default();
         for elem in u.arbitrary_take_rest_iter()? {
             arena.set.insert(elem?);
-            #[cfg(feature = "span")]
             arena.span_info.push(Span::UNDEFINED);
         }
         Ok(arena)

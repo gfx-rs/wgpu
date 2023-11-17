@@ -19,9 +19,7 @@ argh = "0.1.5"
 version = "0.14"
 path = "../naga"
 features = [
-    "validate",
     "compact",
-    "span",
     "wgsl-in",
     "wgsl-out",
     "glsl-in",

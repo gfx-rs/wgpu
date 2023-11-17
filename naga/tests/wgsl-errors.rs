@@ -1993,7 +1993,6 @@ fn binding_array_non_struct() {
     }
 }
 
-#[cfg(feature = "span")]
 #[test]
 fn compaction_preserves_spans() {
     let source = r#"
