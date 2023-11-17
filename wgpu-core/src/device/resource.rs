@@ -1016,33 +1016,7 @@ impl<A: HalApi> Device<A> {
             });
         };
 
-        match (texture.desc.format, resolved_format, desc.plane) {
-            (
-                wgt::TextureFormat::NV12,
-                wgt::TextureFormat::R8Unorm | wgt::TextureFormat::R8Uint,
-                Some(0),
-            ) => {}
-            (
-                wgt::TextureFormat::NV12,
-                wgt::TextureFormat::Rg8Unorm | wgt::TextureFormat::Rg8Uint,
-                Some(1),
-            ) => {}
-            (wgt::TextureFormat::NV12, _, _) => {
-                return Err(resource::CreateTextureViewError::InvalidTextureViewPlane {
-                    plane: desc.plane,
-                    view_format: resolved_format,
-                });
-            }
-            (_, _, Some(_)) => {
-                return Err(
-                    resource::CreateTextureViewError::InvalidTextureViewPlaneOnNonplanarTexture {
-                        plane: desc.plane,
-                        texture_format: texture.desc.format,
-                    },
-                );
-            }
-            _ => {}
-        }
+        validate_texture_view_plane(texture.desc.format, resolved_format, desc.plane)?;
 
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
         let render_extent = 'b: loop {
@@ -3389,5 +3363,29 @@ fn check_texture_view_format_compatible(
     match (texture_format, view_format) {
         (NV12, R8Unorm | R8Uint | Rg8Unorm | Rg8Uint) => true,
         _ => texture_format.remove_srgb_suffix() == view_format.remove_srgb_suffix(),
+    }
+}
+
+fn validate_texture_view_plane(
+    texture_format: TextureFormat,
+    view_format: TextureFormat,
+    plane: Option<u32>,
+) -> Result<(), resource::CreateTextureViewError> {
+    use TextureFormat::*;
+
+    match (texture_format, view_format, plane) {
+        (NV12, R8Unorm | R8Uint, Some(0)) => Ok(()),
+        (NV12, Rg8Unorm | Rg8Uint, Some(1)) => Ok(()),
+        (NV12, _, _) => {
+            Err(resource::CreateTextureViewError::InvalidTextureViewPlane { plane, view_format })
+        }
+
+        (_, _, Some(_)) => Err(
+            resource::CreateTextureViewError::InvalidTextureViewPlaneOnNonplanarTexture {
+                plane,
+                texture_format,
+            },
+        ),
+        _ => Ok(()),
     }
 }
