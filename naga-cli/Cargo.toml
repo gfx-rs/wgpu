@@ -21,7 +21,6 @@ path = "../naga"
 features = [
     "validate",
     "compact",
-    "span",
     "wgsl-in",
     "wgsl-out",
     "glsl-in",
