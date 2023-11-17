@@ -7,7 +7,6 @@ use crate::arena::{Handle, UniqueArena};
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
 use bit_set::BitSet;
 
-#[cfg(feature = "validate")]
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -110,7 +109,6 @@ pub enum EntryPointError {
     InvalidLocationsWhileDualSourceBlending { location_mask: BitSet },
 }
 
-#[cfg(feature = "validate")]
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
     let mut storage_usage = GlobalUse::QUERY;
     if access.contains(crate::StorageAccess::LOAD) {
@@ -131,8 +129,6 @@ struct VaryingContext<'a> {
     location_mask: &'a mut BitSet,
     built_ins: &'a mut crate::FastHashSet<crate::BuiltIn>,
     capabilities: Capabilities,
-
-    #[cfg(feature = "validate")]
     flags: super::ValidationFlags,
 }
 
@@ -307,7 +303,6 @@ impl VaryingContext<'_> {
 
                     self.second_blend_source = true;
                 } else if !self.location_mask.insert(location as usize) {
-                    #[cfg(feature = "validate")]
                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                         return Err(VaryingError::BindingCollision { location });
                     }
@@ -369,15 +364,12 @@ impl VaryingContext<'_> {
                             let span_context = self.types.get_span_context(ty);
                             match member.binding {
                                 None => {
-                                    #[cfg(feature = "validate")]
                                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                                         return Err(VaryingError::MemberMissingBinding(
                                             index as u32,
                                         )
                                         .with_span_context(span_context));
                                     }
-                                    #[cfg(not(feature = "validate"))]
-                                    let _ = index;
                                 }
                                 Some(ref binding) => self
                                     .validate_impl(member.ty, binding)
@@ -385,9 +377,7 @@ impl VaryingContext<'_> {
                             }
                         }
                     }
-                    _ =>
-                    {
-                        #[cfg(feature = "validate")]
+                    _ => {
                         if self.flags.contains(super::ValidationFlags::BINDINGS) {
                             return Err(VaryingError::MissingBinding.with_span());
                         }
@@ -400,7 +390,6 @@ impl VaryingContext<'_> {
 }
 
 impl super::Validator {
-    #[cfg(feature = "validate")]
     pub(super) fn validate_global_var(
         &self,
         var: &crate::GlobalVariable,
@@ -550,7 +539,6 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
-        #[cfg(feature = "validate")]
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
             if !self.capabilities.contains(required) {
@@ -565,7 +553,6 @@ impl super::Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         if ep.stage == crate::ShaderStage::Compute {
             if ep
                 .workgroup_size
@@ -578,12 +565,10 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
         }
 
-        #[cfg_attr(not(feature = "validate"), allow(unused_mut))]
         let mut info = self
             .validate_function(&ep.function, module, mod_info, true)
             .map_err(WithSpan::into_other)?;
 
-        #[cfg(feature = "validate")]
         {
             use super::ShaderStages;
 
@@ -611,8 +596,6 @@ impl super::Validator {
                 location_mask: &mut self.location_mask,
                 built_ins: &mut argument_built_ins,
                 capabilities: self.capabilities,
-
-                #[cfg(feature = "validate")]
                 flags: self.flags,
             };
             ctx.validate(fa.ty, fa.binding.as_ref())
@@ -631,13 +614,10 @@ impl super::Validator {
                 location_mask: &mut self.location_mask,
                 built_ins: &mut result_built_ins,
                 capabilities: self.capabilities,
-
-                #[cfg(feature = "validate")]
                 flags: self.flags,
             };
             ctx.validate(fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
-            #[cfg(feature = "validate")]
             if ctx.second_blend_source {
                 // Only the first location may be used whhen dual source blending
                 if ctx.location_mask.len() == 1 && ctx.location_mask.contains(0) {
@@ -650,18 +630,15 @@ impl super::Validator {
                 }
             }
 
-            #[cfg(feature = "validate")]
             if ep.stage == crate::ShaderStage::Vertex
                 && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
             {
                 return Err(EntryPointError::MissingVertexOutputPosition.with_span());
             }
         } else if ep.stage == crate::ShaderStage::Vertex {
-            #[cfg(feature = "validate")]
             return Err(EntryPointError::MissingVertexOutputPosition.with_span());
         }
 
-        #[cfg(feature = "validate")]
         {
             let used_push_constants = module
                 .global_variables
@@ -679,7 +656,6 @@ impl super::Validator {
         }
 
         self.ep_resource_bindings.clear();
-        #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
             let usage = info[var_handle];
             if usage.is_empty() {

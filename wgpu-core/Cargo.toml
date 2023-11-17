@@ -81,7 +81,7 @@ thiserror = "1"
 [dependencies.naga]
 path = "../naga"
 version = "0.14.0"
-features = ["clone", "validate"]
+features = ["clone"]
 
 [dependencies.wgt]
 package = "wgpu-types"

@@ -29,7 +29,6 @@ spv-out = ["spirv"]
 wgsl-in = ["hexf-parse", "unicode-xid"]
 wgsl-out = []
 hlsl-out = []
-validate = []
 compact = []
 
 [[bench]]

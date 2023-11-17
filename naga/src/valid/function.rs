@@ -1,8 +1,6 @@
 use crate::arena::Handle;
-#[cfg(feature = "validate")]
 use crate::arena::{Arena, UniqueArena};
 
-#[cfg(feature = "validate")]
 use super::validate_atomic_compare_exchange_struct;
 
 use super::{
@@ -10,10 +8,8 @@ use super::{
     ExpressionError, FunctionInfo, ModuleInfo,
 };
 use crate::span::WithSpan;
-#[cfg(feature = "validate")]
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
 
-#[cfg(feature = "validate")]
 use bit_set::BitSet;
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -174,13 +170,11 @@ bitflags::bitflags! {
     }
 }
 
-#[cfg(feature = "validate")]
 struct BlockInfo {
     stages: super::ShaderStages,
     finished: bool,
 }
 
-#[cfg(feature = "validate")]
 struct BlockContext<'a> {
     abilities: ControlFlowAbility,
     info: &'a FunctionInfo,
@@ -194,7 +188,6 @@ struct BlockContext<'a> {
     return_type: Option<Handle<crate::Type>>,
 }
 
-#[cfg(feature = "validate")]
 impl<'a> BlockContext<'a> {
     fn new(
         fun: &'a crate::Function,
@@ -263,7 +256,6 @@ impl<'a> BlockContext<'a> {
 }
 
 impl super::Validator {
-    #[cfg(feature = "validate")]
     fn validate_call(
         &mut self,
         function: Handle<crate::Function>,
@@ -320,7 +312,6 @@ impl super::Validator {
         Ok(callee_info.available_stages)
     }
 
-    #[cfg(feature = "validate")]
     fn emit_expression(
         &mut self,
         handle: Handle<crate::Expression>,
@@ -335,7 +326,6 @@ impl super::Validator {
         }
     }
 
-    #[cfg(feature = "validate")]
     fn validate_atomic(
         &mut self,
         pointer: Handle<crate::Expression>,
@@ -410,7 +400,6 @@ impl super::Validator {
         Ok(())
     }
 
-    #[cfg(feature = "validate")]
     fn validate_block_impl(
         &mut self,
         statements: &crate::Block,
@@ -920,7 +909,6 @@ impl super::Validator {
         Ok(BlockInfo { stages, finished })
     }
 
-    #[cfg(feature = "validate")]
     fn validate_block(
         &mut self,
         statements: &crate::Block,
@@ -934,7 +922,6 @@ impl super::Validator {
         Ok(info)
     }
 
-    #[cfg(feature = "validate")]
     fn validate_local_var(
         &self,
         var: &crate::LocalVariable,
@@ -971,16 +958,13 @@ impl super::Validator {
         fun: &crate::Function,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-        #[cfg_attr(not(feature = "validate"), allow(unused))] entry_point: bool,
+        entry_point: bool,
     ) -> Result<FunctionInfo, WithSpan<FunctionError>> {
-        #[cfg_attr(not(feature = "validate"), allow(unused_mut))]
         let mut info = mod_info.process_function(fun, module, self.flags, self.capabilities)?;
 
-        #[cfg(feature = "validate")]
         let expression_constness =
             crate::proc::ExpressionConstnessTracker::from_arena(&fun.expressions);
 
-        #[cfg(feature = "validate")]
         for (var_handle, var) in fun.local_variables.iter() {
             self.validate_local_var(var, module.to_ctx(), &info, &expression_constness)
                 .map_err(|source| {
@@ -994,7 +978,6 @@ impl super::Validator {
                 })?;
         }
 
-        #[cfg(feature = "validate")]
         for (index, argument) in fun.arguments.iter().enumerate() {
             match module.types[argument.ty].inner.pointer_space() {
                 Some(crate::AddressSpace::Private | crate::AddressSpace::Function) | None => {}
@@ -1027,7 +1010,6 @@ impl super::Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         if let Some(ref result) = fun.result {
             if !self.types[result.ty.index()]
                 .flags
@@ -1049,7 +1031,6 @@ impl super::Validator {
             if expr.needs_pre_emit() {
                 self.valid_expression_set.insert(handle.index());
             }
-            #[cfg(feature = "validate")]
             if self.flags.contains(super::ValidationFlags::EXPRESSIONS) {
                 match self.validate_expression(handle, expr, fun, module, &info, mod_info) {
                     Ok(stages) => info.available_stages &= stages,
@@ -1061,7 +1042,6 @@ impl super::Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         if self.flags.contains(super::ValidationFlags::BLOCKS) {
             let stages = self
                 .validate_block(
