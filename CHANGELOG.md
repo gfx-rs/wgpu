@@ -58,6 +58,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 #### Naga
 
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
+- Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
 ### Bug Fixes
 
