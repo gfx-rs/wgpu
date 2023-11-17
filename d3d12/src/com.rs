@@ -7,6 +7,14 @@ use std::{
 };
 use winapi::{ctypes::c_void, um::unknwnbase::IUnknown, Interface};
 
+/// A nullable pointer to a COM object.
+///
+/// # Invariants
+///
+/// This data structure contains one of the following:
+///
+/// 1. A null pointer.
+/// 2. A pointer to a valid instance of a COM object that implements `T`.
 #[repr(transparent)]
 pub struct ComPtr<T: Interface>(*mut T);
 
@@ -15,6 +23,14 @@ impl<T: Interface> ComPtr<T> {
         ComPtr(ptr::null_mut())
     }
 
+    /// Create a `ComPtr` from a raw pointer. This will call [`AddRef`] on the pointer.
+    ///
+    /// # Safety
+    ///
+    /// This constructor is unsound to use unless [invariants for this data structure][self] are
+    /// maintained by `raw`.
+    ///
+    /// [`AddRef`]: https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-addref
     pub unsafe fn from_raw(raw: *mut T) -> Self {
         if !raw.is_null() {
             (*(raw as *mut IUnknown)).AddRef();
@@ -34,21 +50,51 @@ impl<T: Interface> ComPtr<T> {
         self.0
     }
 
+    /// Returns a pointer to the inner pointer, casted to [`c_void`].
+    ///
+    /// Useful for D3D functions that initialize objects with C's `void**` as an out parameter.
+    ///
+    /// # Safety
+    ///
+    /// This method is not `unsafe` by itself. However, readers should remember that it is unsound
+    /// to assign to the pointee returned here unless [invariants for this data structure][self]
+    /// are maintained.
     pub fn mut_void(&mut self) -> *mut *mut c_void {
         &mut self.0 as *mut *mut _ as *mut *mut _
     }
 
+    /// Returns a pointer to the inner pointer (of `T`).
+    ///
+    /// Useful for D3D functions that initialize objects with `T**` as an out parameter.
+    ///
+    /// # Safety
+    ///
+    /// This method is not `unsafe` by itself. However, readers should remember that it is unsound
+    /// to assign to the pointee returned here unless [invariants for this data structure][self]
+    /// are maintained.
     pub fn mut_self(&mut self) -> *mut *mut T {
         &mut self.0 as *mut *mut _
     }
 }
 
 impl<T: Interface> ComPtr<T> {
+    /// Returns a reference to the inner pointer, casted to [`IUnknown`].
+    ///
+    /// # Safety
+    ///
+    /// - This pointer must not be null.
     pub unsafe fn as_unknown(&self) -> &IUnknown {
         debug_assert!(!self.is_null());
         &*(self.0 as *mut IUnknown)
     }
 
+    /// Casts the `T` to `U` using `QueryInterface` (AKA [`Interface`]).
+    ///
+    /// # Safety
+    ///
+    /// - This pointer must not be null.
+    ///
+    /// [`QueryInterface`]: https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-queryinterface(refiid_void)
     pub unsafe fn cast<U>(&self) -> D3DResult<ComPtr<U>>
     where
         U: Interface,
