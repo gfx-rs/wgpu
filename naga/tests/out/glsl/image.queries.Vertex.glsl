@@ -4,6 +4,8 @@
 precision highp float;
 precision highp int;
 
+uniform uint _naga_vs_base_instance;
+
 uniform highp sampler2D _group_0_binding_0_vs;
 
 uniform highp sampler2D _group_0_binding_1_vs;

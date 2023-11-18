@@ -29,6 +29,7 @@ pub(super) struct State {
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
+    base_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<super::PushConstantDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
     // The current state of the push constant data block.
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
@@ -57,6 +58,7 @@ impl Default for State {
             instance_vbuf_mask: Default::default(),
             dirty_vbuf_mask: Default::default(),
             active_first_instance: Default::default(),
+            base_instance_location: Default::default(),
             push_constant_descs: Default::default(),
             current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
             end_of_pass_timestamp: Default::default(),
@@ -206,6 +208,7 @@ impl super::CommandEncoder {
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
+        self.state.base_instance_location = inner.base_instance_location.clone();
         self.state.push_constant_descs = inner.push_constant_descs.clone();
 
         // rebind textures, if needed
@@ -1004,15 +1007,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         start_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        base_instance: u32,
         instance_count: u32,
     ) {
-        self.prepare_draw(start_instance);
+        self.prepare_draw(base_instance);
         self.cmd_buffer.commands.push(C::Draw {
             topology: self.state.topology,
             start_vertex,
             vertex_count,
+            base_instance,
             instance_count,
+            base_instance_location: self.state.base_instance_location.clone(),
         });
     }
     unsafe fn draw_indexed(
@@ -1020,10 +1025,10 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         start_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        base_instance: u32,
         instance_count: u32,
     ) {
-        self.prepare_draw(start_instance);
+        self.prepare_draw(base_instance);
         let (index_size, index_type) = match self.state.index_format {
             wgt::IndexFormat::Uint16 => (2, glow::UNSIGNED_SHORT),
             wgt::IndexFormat::Uint32 => (4, glow::UNSIGNED_INT),
@@ -1035,7 +1040,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             index_offset,
             index_count,
             base_vertex,
+            base_instance,
             instance_count,
+            base_instance_location: self.state.base_instance_location.clone(),
         });
     }
     unsafe fn draw_indirect(

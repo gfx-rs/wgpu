@@ -652,6 +652,11 @@ impl<'a, W: Write> Writer<'a, W> {
             writeln!(self.out)?;
         }
 
+        if self.entry_point.stage == ShaderStage::Vertex {
+            writeln!(self.out, "uniform uint _naga_vs_base_instance;")?;
+            writeln!(self.out)?;
+        }
+
         // Enable early depth tests if needed
         if let Some(depth_test) = self.entry_point.early_depth_test {
             // If early depth test is supported for this version of GLSL
@@ -4330,7 +4335,7 @@ const fn glsl_built_in(
         Bi::BaseVertex => "uint(gl_BaseVertex)",
         Bi::ClipDistance => "gl_ClipDistance",
         Bi::CullDistance => "gl_CullDistance",
-        Bi::InstanceIndex => "uint(gl_InstanceID)",
+        Bi::InstanceIndex => "(uint(gl_InstanceID) + _naga_vs_base_instance)",
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
         // fragment

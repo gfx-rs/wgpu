@@ -158,11 +158,15 @@ impl super::Queue {
                 start_vertex,
                 vertex_count,
                 instance_count,
+                base_instance,
+                base_instance_location,
             } => {
                 // Don't use `gl.draw_arrays` for `instance_count == 1`.
                 // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
                 // See https://github.com/gfx-rs/wgpu/issues/3578
                 unsafe {
+                    gl.uniform_1_u32(base_instance_location.as_ref(), base_instance);
+
                     gl.draw_arrays_instanced(
                         topology,
                         start_vertex as i32,
@@ -177,8 +181,12 @@ impl super::Queue {
                 index_count,
                 index_offset,
                 base_vertex,
+                base_instance,
                 instance_count,
+                base_instance_location,
             } => {
+                unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), base_instance) };
+
                 match base_vertex {
                     // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
                     // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.

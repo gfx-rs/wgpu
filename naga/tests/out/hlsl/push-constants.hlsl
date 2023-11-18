@@ -19,10 +19,10 @@ struct FragmentInput_main {
     float4 color : LOC0;
 };
 
-float4 vert_main(float2 pos : LOC0, uint vi : SV_VertexID) : SV_Position
+float4 vert_main(float2 pos : LOC0, uint ii : SV_InstanceID, uint vi : SV_VertexID) : SV_Position
 {
-    float _expr5 = pc.multiplier;
-    return float4(((float((_NagaConstants.base_vertex + vi)) * _expr5) * pos), 0.0, 1.0);
+    float _expr8 = pc.multiplier;
+    return float4((((float((_NagaConstants.base_instance + ii)) * float((_NagaConstants.base_vertex + vi))) * _expr8) * pos), 0.0, 1.0);
 }
 
 float4 main(FragmentInput_main fragmentinput_main) : SV_Target0

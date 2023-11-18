@@ -513,6 +513,7 @@ type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
+    base_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
 }
 
@@ -712,7 +713,9 @@ enum Command {
         topology: u32,
         start_vertex: u32,
         vertex_count: u32,
+        base_instance: u32,
         instance_count: u32,
+        base_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndexed {
         topology: u32,
@@ -720,7 +723,9 @@ enum Command {
         index_count: u32,
         index_offset: wgt::BufferAddress,
         base_vertex: i32,
+        base_instance: u32,
         instance_count: u32,
+        base_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndirect {
         topology: u32,
