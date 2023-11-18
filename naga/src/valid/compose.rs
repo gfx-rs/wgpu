@@ -1,4 +1,3 @@
-#[cfg(feature = "validate")]
 use crate::proc::TypeResolution;
 
 use crate::arena::Handle;
@@ -14,7 +13,6 @@ pub enum ComposeError {
     ComponentType { index: u32 },
 }
 
-#[cfg(feature = "validate")]
 pub fn validate_compose(
     self_ty_handle: Handle<crate::Type>,
     gctx: crate::proc::GlobalCtx,

@@ -95,7 +95,7 @@ use std::{
 
 use bitflags::bitflags;
 use thiserror::Error;
-use wgt::{WasmNotSend, WasmNotSync};
+use wgt::WasmNotSendSync;
 
 // - Vertex + Fragment
 // - Compute
@@ -200,25 +200,25 @@ pub trait Api: Clone + fmt::Debug + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: WasmNotSend + WasmNotSync + fmt::Debug;
+    type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
-    type Texture: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
-    type SurfaceTexture: fmt::Debug + WasmNotSend + WasmNotSync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + WasmNotSend + WasmNotSync;
-    type Sampler: fmt::Debug + WasmNotSend + WasmNotSync;
-    type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
-    type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Buffer: fmt::Debug + WasmNotSendSync + 'static;
+    type Texture: fmt::Debug + WasmNotSendSync + 'static;
+    type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + WasmNotSendSync;
+    type Sampler: fmt::Debug + WasmNotSendSync;
+    type QuerySet: fmt::Debug + WasmNotSendSync;
+    type Fence: fmt::Debug + WasmNotSendSync;
 
-    type BindGroupLayout: fmt::Debug + WasmNotSend + WasmNotSync;
-    type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
-    type PipelineLayout: fmt::Debug + WasmNotSend + WasmNotSync;
-    type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
-    type RenderPipeline: fmt::Debug + WasmNotSend + WasmNotSync;
-    type ComputePipeline: fmt::Debug + WasmNotSend + WasmNotSync;
+    type BindGroupLayout: fmt::Debug + WasmNotSendSync;
+    type BindGroup: fmt::Debug + WasmNotSendSync;
+    type PipelineLayout: fmt::Debug + WasmNotSendSync;
+    type ShaderModule: fmt::Debug + WasmNotSendSync;
+    type RenderPipeline: fmt::Debug + WasmNotSendSync;
+    type ComputePipeline: fmt::Debug + WasmNotSendSync;
 }
 
-pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
+pub trait Instance<A: Api>: Sized + WasmNotSendSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -229,7 +229,7 @@ pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Surface<A: Api>: WasmNotSendSync {
     /// Configures the surface to use the given device.
     ///
     /// # Safety
@@ -271,7 +271,7 @@ pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn discard_texture(&self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Adapter<A: Api>: WasmNotSendSync {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -295,7 +295,7 @@ pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
-pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Device<A: Api>: WasmNotSendSync {
     /// Exit connection to this logical device.
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
@@ -391,7 +391,7 @@ pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn stop_capture(&self);
 }
 
-pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Queue<A: Api>: WasmNotSendSync {
     /// Submits the command buffers for execution on GPU.
     ///
     /// Valid usage:
@@ -415,7 +415,7 @@ pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
+pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.

@@ -778,7 +778,6 @@ impl FunctionInfo {
                     let mut requirements = UniformityRequirements::empty();
                     for expr in range.clone() {
                         let req = self.expressions[expr.index()].uniformity.requirements;
-                        #[cfg(feature = "validate")]
                         if self
                             .flags
                             .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
@@ -823,7 +822,7 @@ impl FunctionInfo {
                     // The uniformity analysis Naga uses now is less accurate than the one in the WGSL standard,
                     // causing Naga to reject correct uses of `workgroupUniformLoad` in some interesting programs.
 
-                    /* #[cfg(feature = "validate")]
+                    /*
                     if self
                         .flags
                         .contains(super::ValidationFlags::CONTROL_FLOW_UNIFORMITY)
@@ -1060,7 +1059,6 @@ impl ModuleInfo {
 }
 
 #[test]
-#[cfg(feature = "validate")]
 fn uniform_control_flow() {
     use crate::{Expression as E, Statement as S};
 

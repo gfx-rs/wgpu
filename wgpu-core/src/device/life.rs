@@ -27,11 +27,11 @@ use smallvec::SmallVec;
 
 use parking_lot::Mutex;
 use thiserror::Error;
-use wgt::{WasmNotSend, WasmNotSync};
+use wgt::WasmNotSendSync;
 
 use std::{any::Any, sync::Arc};
 
-pub(crate) trait ResourceMap: Any + WasmNotSend + WasmNotSync {
+pub(crate) trait ResourceMap: Any + WasmNotSendSync {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn clear_map(&mut self);

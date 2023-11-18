@@ -5,16 +5,12 @@ use crate::{
     Handle,
 };
 
-#[cfg(feature = "validate")]
 use crate::{Arena, UniqueArena};
 
-#[cfg(feature = "validate")]
 use super::ValidationError;
 
-#[cfg(feature = "validate")]
 use std::{convert::TryInto, hash::Hash, num::NonZeroU32};
 
-#[cfg(feature = "validate")]
 impl super::Validator {
     /// Validates that all handles within `module` are:
     ///
@@ -547,21 +543,18 @@ impl super::Validator {
     }
 }
 
-#[cfg(feature = "validate")]
 impl From<BadHandle> for ValidationError {
     fn from(source: BadHandle) -> Self {
         Self::InvalidHandle(source.into())
     }
 }
 
-#[cfg(feature = "validate")]
 impl From<FwdDepError> for ValidationError {
     fn from(source: FwdDepError) -> Self {
         Self::InvalidHandle(source.into())
     }
 }
 
-#[cfg(feature = "validate")]
 impl From<BadRangeError> for ValidationError {
     fn from(source: BadRangeError) -> Self {
         Self::InvalidHandle(source.into())
@@ -592,7 +585,6 @@ pub struct FwdDepError {
     depends_on_kind: &'static str,
 }
 
-#[cfg(feature = "validate")]
 impl<T> Handle<T> {
     /// Check that `self` is valid within `arena` using [`Arena::check_contains_handle`].
     pub(self) fn check_valid_for(self, arena: &Arena<T>) -> Result<(), InvalidHandleError> {
@@ -656,7 +648,6 @@ impl<T> Handle<T> {
     }
 }
 
-#[cfg(feature = "validate")]
 impl<T> crate::arena::Range<T> {
     pub(self) fn check_valid_for(&self, arena: &Arena<T>) -> Result<(), BadRangeError> {
         arena.check_contains_range(self)
@@ -664,7 +655,6 @@ impl<T> crate::arena::Range<T> {
 }
 
 #[test]
-#[cfg(feature = "validate")]
 fn constant_deps() {
     use crate::{Constant, Expression, Literal, Span, Type, TypeInner};
 

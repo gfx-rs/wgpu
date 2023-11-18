@@ -23,7 +23,7 @@ use hal::CommandEncoder;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{WasmNotSend, WasmNotSync};
+use wgt::WasmNotSendSync;
 
 use std::{
     borrow::Borrow,
@@ -135,7 +135,7 @@ impl<Id: TypedId> ResourceInfo<Id> {
 
 pub(crate) type ResourceType = &'static str;
 
-pub trait Resource<Id: TypedId>: 'static + WasmNotSend + WasmNotSync {
+pub trait Resource<Id: TypedId>: 'static + WasmNotSendSync {
     const TYPE: ResourceType;
     fn as_info(&self) -> &ResourceInfo<Id>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Id>;

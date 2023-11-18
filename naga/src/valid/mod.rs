@@ -45,31 +45,22 @@ bitflags::bitflags! {
     /// should never panic.
     ///
     /// The default value for `ValidationFlags` is
-    /// `ValidationFlags::all()`. If Naga's `"validate"` feature is
-    /// enabled, this requests full validation; otherwise, this
-    /// requests no validation. (The `"validate"` feature is disabled
-    /// by default.)
+    /// `ValidationFlags::all()`.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct ValidationFlags: u8 {
         /// Expressions.
-        #[cfg(feature = "validate")]
         const EXPRESSIONS = 0x1;
         /// Statements and blocks of them.
-        #[cfg(feature = "validate")]
         const BLOCKS = 0x2;
         /// Uniformity of control flow for operations that require it.
-        #[cfg(feature = "validate")]
         const CONTROL_FLOW_UNIFORMITY = 0x4;
         /// Host-shareable structure layouts.
-        #[cfg(feature = "validate")]
         const STRUCT_LAYOUTS = 0x8;
         /// Constants.
-        #[cfg(feature = "validate")]
         const CONSTANTS = 0x10;
         /// Group, binding, and location attributes.
-        #[cfg(feature = "validate")]
         const BINDINGS = 0x20;
     }
 }
@@ -237,7 +228,6 @@ pub enum ValidationError {
 }
 
 impl crate::TypeInner {
-    #[cfg(feature = "validate")]
     const fn is_sized(&self) -> bool {
         match *self {
             Self::Scalar { .. }
@@ -261,7 +251,6 @@ impl crate::TypeInner {
     }
 
     /// Return the `ImageDimension` for which `self` is an appropriate coordinate.
-    #[cfg(feature = "validate")]
     const fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
         match *self {
             Self::Scalar(crate::Scalar {
@@ -316,7 +305,6 @@ impl Validator {
         self.valid_expression_set.clear();
     }
 
-    #[cfg(feature = "validate")]
     fn validate_constant(
         &self,
         handle: Handle<crate::Constant>,
@@ -347,7 +335,6 @@ impl Validator {
         self.reset();
         self.reset_types(module.types.len());
 
-        #[cfg(feature = "validate")]
         Self::validate_module_handles(module).map_err(|e| e.with_span())?;
 
         self.layouter.update(module.to_ctx()).map_err(|e| {
@@ -397,7 +384,6 @@ impl Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, _) in module.const_expressions.iter() {
                 self.validate_const_expression(handle, module.to_ctx(), &mod_info)
@@ -420,7 +406,6 @@ impl Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, module.to_ctx(), &mod_info)
                 .map_err(|source| {
@@ -479,7 +464,6 @@ impl Validator {
     }
 }
 
-#[cfg(feature = "validate")]
 fn validate_atomic_compare_exchange_struct(
     types: &crate::UniqueArena<crate::Type>,
     members: &[crate::StructMember],

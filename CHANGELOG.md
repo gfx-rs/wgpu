@@ -50,9 +50,19 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
 - `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
 
+#### Safe `Surface` creation
+
+It is now possible to safely create a `wgpu::Surface` with `Surface::create_surface()` by letting `Surface` hold a lifetime to `window`.
+
+Passing an owned value `window` to `Surface` will return a `Surface<'static>`. Shared ownership over `window` can still be achieved with e.g. an `Arc`. Alternatively a reference could be passed, which will return a `Surface<'window>`.
+
+`Surface::create_surface_from_raw()` can be used to continue producing a `Surface<'static>` without any lifetime requirements over `window`, which also remains `unsafe`.
+
 #### Naga
 
+- Remove `span` and `validate` features. Always fully validate shader modules, and always track source positions for use in error messages. By @teoxoy in [#4706](https://github.com/gfx-rs/wgpu/pull/4706)
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
+- Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
 ### Bug Fixes
 
@@ -67,6 +77,8 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
 - When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
 
 - When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
+
+- Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
 
 ### Examples
 
@@ -84,7 +96,7 @@ removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal re
   - Passing a naga module directly to `Device::create_shader_module`.
   - `InstanceFlags::DEBUG` is enabled.
 
-#### DX12 
+#### DX12
 - Always use HLSL 2018 when using DXC to compile HLSL shaders. By @daxpedda in [#4629](https://github.com/gfx-rs/wgpu/pull/4629)
 
 #### Metal

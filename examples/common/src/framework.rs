@@ -1,4 +1,6 @@
-use wgpu::{Instance, Surface, WasmNotSend, WasmNotSync};
+use std::sync::Arc;
+
+use wgpu::{Instance, Surface, WasmNotSendSync};
 use wgpu_test::GpuTestConfiguration;
 use winit::{
     dpi::PhysicalSize,
@@ -90,7 +92,7 @@ fn init_logger() {
 
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
-    window: Window,
+    window: Arc<Window>,
 }
 
 impl EventLoopWrapper {
@@ -98,7 +100,7 @@ impl EventLoopWrapper {
         let event_loop = EventLoop::new().unwrap();
         let mut builder = winit::window::WindowBuilder::new();
         builder = builder.with_title(title);
-        let window = builder.build(&event_loop).unwrap();
+        let window = Arc::new(builder.build(&event_loop).unwrap());
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -121,7 +123,7 @@ impl EventLoopWrapper {
 ///
 /// As surface usage varies per platform, wrapping this up cleans up the event loop code.
 struct SurfaceWrapper {
-    surface: Option<wgpu::Surface>,
+    surface: Option<wgpu::Surface<'static>>,
     config: Option<wgpu::SurfaceConfiguration>,
 }
 
@@ -141,9 +143,9 @@ impl SurfaceWrapper {
     ///
     /// We cannot unconditionally create a surface here, as Android requires
     /// us to wait until we recieve the `Resumed` event to do so.
-    fn pre_adapter(&mut self, instance: &Instance, window: &Window) {
+    fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
         if cfg!(target_arch = "wasm32") {
-            self.surface = Some(unsafe { instance.create_surface(&window).unwrap() });
+            self.surface = Some(instance.create_surface(window).unwrap());
         }
     }
 
@@ -163,7 +165,7 @@ impl SurfaceWrapper {
     /// On all native platforms, this is where we create the surface.
     ///
     /// Additionally, we configure the surface based on the (now valid) window size.
-    fn resume(&mut self, context: &ExampleContext, window: &Window, srgb: bool) {
+    fn resume(&mut self, context: &ExampleContext, window: Arc<Window>, srgb: bool) {
         // Window size is only actually valid after we enter the event loop.
         let window_size = window.inner_size();
         let width = window_size.width.max(1);
@@ -173,7 +175,7 @@ impl SurfaceWrapper {
 
         // We didn't create the surface in pre_adapter, so we need to do so now.
         if !cfg!(target_arch = "wasm32") {
-            self.surface = Some(unsafe { context.instance.create_surface(&window).unwrap() });
+            self.surface = Some(context.instance.create_surface(window).unwrap());
         }
 
         // From here on, self.surface should be Some.
@@ -252,7 +254,7 @@ struct ExampleContext {
 }
 impl ExampleContext {
     /// Initializes the example context.
-    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: &Window) -> Self {
+    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
         let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
@@ -357,8 +359,7 @@ async fn start<E: Example>(title: &str) {
     init_logger();
     let window_loop = EventLoopWrapper::new(title);
     let mut surface = SurfaceWrapper::new();
-    let context = ExampleContext::init_async::<E>(&mut surface, &window_loop.window).await;
-
+    let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;
     let mut frame_counter = FrameCounter::new();
 
     // We wait to create the example until we have a valid surface.
@@ -384,7 +385,7 @@ async fn start<E: Example>(title: &str) {
 
             match event {
                 ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, &window_loop.window, E::SRGB);
+                    surface.resume(&context, window_loop.window.clone(), E::SRGB);
 
                     // If we haven't created the example yet, do so now.
                     if example.is_none() {
@@ -503,7 +504,7 @@ pub struct ExampleTestParams<E> {
     pub _phantom: std::marker::PhantomData<E>,
 }
 
-impl<E: Example + WasmNotSend + WasmNotSync> From<ExampleTestParams<E>> for GpuTestConfiguration {
+impl<E: Example + WasmNotSendSync> From<ExampleTestParams<E>> for GpuTestConfiguration {
     fn from(params: ExampleTestParams<E>) -> Self {
         GpuTestConfiguration::new()
             .name(params.name)

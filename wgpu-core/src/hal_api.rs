@@ -1,4 +1,4 @@
-use wgt::{Backend, WasmNotSend, WasmNotSync};
+use wgt::{Backend, WasmNotSendSync};
 
 use crate::{
     global::Global,
@@ -7,7 +7,7 @@ use crate::{
     instance::{HalSurface, Instance, Surface},
 };
 
-pub trait HalApi: hal::Api + 'static + WasmNotSend + WasmNotSync {
+pub trait HalApi: hal::Api + 'static + WasmNotSendSync {
     const VARIANT: Backend;
     fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance;
     fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance>;

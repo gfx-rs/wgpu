@@ -6,7 +6,7 @@ use std::{
     hash::Hash,
     marker::PhantomData,
 };
-use wgt::{Backend, WasmNotSend, WasmNotSync};
+use wgt::{Backend, WasmNotSendSync};
 
 #[cfg(feature = "id32")]
 type IdType = u32;
@@ -72,7 +72,7 @@ type Dummy = hal::api::Empty;
     all(feature = "serde", not(feature = "replay")),
     derive(serde::Deserialize)
 )]
-pub struct Id<T: 'static + WasmNotSend + WasmNotSync>(NonZeroId, PhantomData<T>);
+pub struct Id<T: 'static + WasmNotSendSync>(NonZeroId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
 #[allow(dead_code)]
@@ -85,7 +85,7 @@ enum SerialId {
 #[cfg(feature = "trace")]
 impl<T> From<Id<T>> for SerialId
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn from(id: Id<T>) -> Self {
         let (index, epoch, backend) = id.unzip();
@@ -95,7 +95,7 @@ where
 #[cfg(feature = "replay")]
 impl<T> From<SerialId> for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn from(id: SerialId) -> Self {
         match id {
@@ -106,7 +106,7 @@ where
 
 impl<T> Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     /// # Safety
     ///
@@ -138,11 +138,11 @@ where
     }
 }
 
-impl<T> Copy for Id<T> where T: 'static + WasmNotSend + WasmNotSync {}
+impl<T> Copy for Id<T> where T: 'static + WasmNotSendSync {}
 
 impl<T> Clone for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn clone(&self) -> Self {
         *self
@@ -151,7 +151,7 @@ where
 
 impl<T> Debug for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let (index, epoch, backend) = self.unzip();
@@ -166,7 +166,7 @@ where
 
 impl<T> Hash for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
@@ -175,18 +175,18 @@ where
 
 impl<T> PartialEq for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<T> Eq for Id<T> where T: 'static + WasmNotSend + WasmNotSync {}
+impl<T> Eq for Id<T> where T: 'static + WasmNotSendSync {}
 
 impl<T> PartialOrd for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
@@ -195,7 +195,7 @@ where
 
 impl<T> Ord for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
@@ -207,7 +207,7 @@ where
 /// Most `wgpu-core` clients should not use this trait. Unusual clients that
 /// need to construct `Id` values directly, or access their components, like the
 /// WGPU recording player, may use this trait to do so.
-pub trait TypedId: Copy + Debug + Any + 'static + WasmNotSend + WasmNotSync + Eq + Hash {
+pub trait TypedId: Copy + Debug + Any + 'static + WasmNotSendSync + Eq + Hash {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
     fn unzip(self) -> (Index, Epoch, Backend);
     fn into_raw(self) -> NonZeroId;
@@ -216,7 +216,7 @@ pub trait TypedId: Copy + Debug + Any + 'static + WasmNotSend + WasmNotSync + Eq
 #[allow(trivial_numeric_casts)]
 impl<T> TypedId for Id<T>
 where
-    T: 'static + WasmNotSend + WasmNotSync,
+    T: 'static + WasmNotSendSync,
 {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
         assert_eq!(0, epoch >> EPOCH_BITS);

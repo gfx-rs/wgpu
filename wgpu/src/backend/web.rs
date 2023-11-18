@@ -139,7 +139,7 @@ pub(crate) struct MakeSendFuture<F, M> {
 impl<F: Future, M: Fn(F::Output) -> T, T> Future for MakeSendFuture<F, M> {
     type Output = T;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
         // This is safe because we have no Drop implementation to violate the Pin requirements and
         // do not provide any means of moving the inner future.
         unsafe {
@@ -565,7 +565,7 @@ fn map_texture_view_dimension(
     }
 }
 
-fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBuffer {
+fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> web_sys::GpuImageCopyBuffer {
     let buffer: &<Context as crate::Context>::BufferData = downcast_ref(view.buffer.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyBuffer::new(&buffer.0);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
@@ -578,7 +578,7 @@ fn map_buffer_copy_view(view: crate::ImageCopyBuffer) -> web_sys::GpuImageCopyBu
     mapped
 }
 
-fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopyTexture {
+fn map_texture_copy_view(view: crate::ImageCopyTexture<'_>) -> web_sys::GpuImageCopyTexture {
     let texture: &<Context as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
     let mut mapped = web_sys::GpuImageCopyTexture::new(&texture.0);
@@ -588,7 +588,7 @@ fn map_texture_copy_view(view: crate::ImageCopyTexture) -> web_sys::GpuImageCopy
 }
 
 fn map_tagged_texture_copy_view(
-    view: crate::ImageCopyTextureTagged,
+    view: crate::ImageCopyTextureTagged<'_>,
 ) -> web_sys::GpuImageCopyTextureTagged {
     let texture: &<Context as crate::Context>::TextureData =
         downcast_ref(view.texture.data.as_ref());
@@ -1109,7 +1109,7 @@ impl crate::context::Context for Context {
 
     fn instance_request_adapter(
         &self,
-        options: &crate::RequestAdapterOptions<'_>,
+        options: &crate::RequestAdapterOptions<'_, '_>,
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
@@ -1138,7 +1138,7 @@ impl crate::context::Context for Context {
         &self,
         _adapter: &Self::AdapterId,
         adapter_data: &Self::AdapterData,
-        desc: &crate::DeviceDescriptor,
+        desc: &crate::DeviceDescriptor<'_>,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
         if trace_dir.is_some() {
@@ -1401,7 +1401,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: crate::ShaderModuleDescriptor,
+        desc: crate::ShaderModuleDescriptor<'_>,
         _shader_bound_checks: wgt::ShaderBoundChecks,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
         let mut descriptor = match desc.source {
@@ -1487,7 +1487,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         _device_data: &Self::DeviceData,
-        _desc: &crate::ShaderModuleDescriptorSpirV,
+        _desc: &crate::ShaderModuleDescriptorSpirV<'_>,
     ) -> (Self::ShaderModuleId, Self::ShaderModuleData) {
         unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
     }
@@ -1496,7 +1496,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::BindGroupLayoutDescriptor,
+        desc: &crate::BindGroupLayoutDescriptor<'_>,
     ) -> (Self::BindGroupLayoutId, Self::BindGroupLayoutData) {
         let mapped_bindings = desc
             .entries
@@ -1595,7 +1595,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::BindGroupDescriptor,
+        desc: &crate::BindGroupDescriptor<'_>,
     ) -> (Self::BindGroupId, Self::BindGroupData) {
         let mapped_entries = desc
             .entries
@@ -1654,7 +1654,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::PipelineLayoutDescriptor,
+        desc: &crate::PipelineLayoutDescriptor<'_>,
     ) -> (Self::PipelineLayoutId, Self::PipelineLayoutData) {
         let temp_layouts = desc
             .bind_group_layouts
@@ -1676,7 +1676,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::RenderPipelineDescriptor,
+        desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> (Self::RenderPipelineId, Self::RenderPipelineData) {
         let module: &<Context as crate::Context>::ShaderModuleData =
             downcast_ref(desc.vertex.module.data.as_ref());
@@ -1776,7 +1776,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::ComputePipelineDescriptor,
+        desc: &crate::ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData) {
         let shader_module: &<Context as crate::Context>::ShaderModuleData =
             downcast_ref(desc.module.data.as_ref());
@@ -1804,7 +1804,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::BufferDescriptor,
+        desc: &crate::BufferDescriptor<'_>,
     ) -> (Self::BufferId, Self::BufferData) {
         let mut mapped_desc =
             web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
@@ -1819,7 +1819,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::TextureDescriptor,
+        desc: &crate::TextureDescriptor<'_>,
     ) -> (Self::TextureId, Self::TextureData) {
         let mut mapped_desc = web_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),
@@ -1845,7 +1845,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::SamplerDescriptor,
+        desc: &crate::SamplerDescriptor<'_>,
     ) -> (Self::SamplerId, Self::SamplerData) {
         let mut mapped_desc = web_sys::GpuSamplerDescriptor::new();
         mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
@@ -1871,7 +1871,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &wgt::QuerySetDescriptor<crate::Label>,
+        desc: &wgt::QuerySetDescriptor<crate::Label<'_>>,
     ) -> (Self::QuerySetId, Self::QuerySetData) {
         let ty = match desc.ty {
             wgt::QueryType::Occlusion => web_sys::GpuQueryType::Occlusion,
@@ -1889,7 +1889,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::CommandEncoderDescriptor,
+        desc: &crate::CommandEncoderDescriptor<'_>,
     ) -> (Self::CommandEncoderId, Self::CommandEncoderData) {
         let mut mapped_desc = web_sys::GpuCommandEncoderDescriptor::new();
         if let Some(label) = desc.label {
@@ -1906,7 +1906,7 @@ impl crate::context::Context for Context {
         &self,
         _device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::RenderBundleEncoderDescriptor,
+        desc: &crate::RenderBundleEncoderDescriptor<'_>,
     ) -> (Self::RenderBundleEncoderId, Self::RenderBundleEncoderData) {
         let mapped_color_formats = desc
             .color_formats
@@ -2065,7 +2065,7 @@ impl crate::context::Context for Context {
         &self,
         _texture: &Self::TextureId,
         texture_data: &Self::TextureData,
-        desc: &crate::TextureViewDescriptor,
+        desc: &crate::TextureViewDescriptor<'_>,
     ) -> (Self::TextureViewId, Self::TextureViewData) {
         let mut mapped = web_sys::GpuTextureViewDescriptor::new();
         if let Some(dim) = desc.dimension {
@@ -2246,8 +2246,8 @@ impl crate::context::Context for Context {
         &self,
         _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyBuffer,
-        destination: crate::ImageCopyTexture,
+        source: crate::ImageCopyBuffer<'_>,
+        destination: crate::ImageCopyTexture<'_>,
         copy_size: wgt::Extent3d,
     ) {
         encoder_data
@@ -2263,8 +2263,8 @@ impl crate::context::Context for Context {
         &self,
         _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture,
-        destination: crate::ImageCopyBuffer,
+        source: crate::ImageCopyTexture<'_>,
+        destination: crate::ImageCopyBuffer<'_>,
         copy_size: wgt::Extent3d,
     ) {
         encoder_data
@@ -2280,8 +2280,8 @@ impl crate::context::Context for Context {
         &self,
         _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        source: crate::ImageCopyTexture,
-        destination: crate::ImageCopyTexture,
+        source: crate::ImageCopyTexture<'_>,
+        destination: crate::ImageCopyTexture<'_>,
         copy_size: wgt::Extent3d,
     ) {
         encoder_data
@@ -2297,7 +2297,7 @@ impl crate::context::Context for Context {
         &self,
         _encoder: &Self::CommandEncoderId,
         encoder_data: &Self::CommandEncoderData,
-        desc: &crate::ComputePassDescriptor,
+        desc: &crate::ComputePassDescriptor<'_>,
     ) -> (Self::ComputePassId, Self::ComputePassData) {
         let mut mapped_desc = web_sys::GpuComputePassDescriptor::new();
         if let Some(label) = desc.label {
@@ -2528,7 +2528,7 @@ impl crate::context::Context for Context {
         &self,
         _encoder: Self::RenderBundleEncoderId,
         encoder_data: Self::RenderBundleEncoderData,
-        desc: &crate::RenderBundleDescriptor,
+        desc: &crate::RenderBundleDescriptor<'_>,
     ) -> (Self::RenderBundleId, Self::RenderBundleData) {
         create_identified(match desc.label {
             Some(label) => {
@@ -2645,7 +2645,7 @@ impl crate::context::Context for Context {
         &self,
         _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
-        texture: crate::ImageCopyTexture,
+        texture: crate::ImageCopyTexture<'_>,
         data: &[u8],
         data_layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
@@ -2682,7 +2682,7 @@ impl crate::context::Context for Context {
         _queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         source: &wgt::ImageCopyExternalImage,
-        dest: crate::ImageCopyTextureTagged,
+        dest: crate::ImageCopyTextureTagged<'_>,
         size: wgt::Extent3d,
     ) {
         queue_data
