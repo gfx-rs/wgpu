@@ -42,8 +42,24 @@ Bottom level categories:
 
 ### Changes
 
-- Arcanization of wgpu core resources: Removed 'Token' and 'LifeTime' related management,
-removed 'RefCount' and 'MultiRefCount' in favour of using only 'Arc' internal reference count, removing mut from resources and added instead internal members locks on demand or atomics operations, resources now implement Drop and destroy stuff when last 'Arc' resources is released, resources hold an 'Arc' in order to be able to implement Drop, resources have an utility to retrieve the id of the resource itself, removed all guards and just retrive the 'Arc' needed on-demand to unlock registry of resources asap removing locking from hot paths. By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+- Arcanization of wgpu core resources: 
+Removed Token and LifeTime related management
+Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
+Removing mut from resources and added instead internal members locks on demand or atomics operations
+Resources now implement Drop and destroy stuff when last Arc resources is released
+Resources hold an Arc in order to be able to implement Drop
+Resources have an utility to retrieve the id of the resource itself
+Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
+Verify correct resources release when unused or not needed
+Check Web and Metal compliation (thanks to @niklaskorz)
+Fix tests on all platforms
+Test a multithreaded scenario
+Storage is now holding only user-land resources, but Arc is keeping refcount for resources
+When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
+IdentityManager is now unique and free is called on resource drop instead of storage unregister
+Identity changes due to Arcanization and Registry being just the user reference
+Added MemLeaks test and fixing mem leaks
+By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
 
 #### General
 
