@@ -734,11 +734,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let resource::TextureInner::Native { ref raw } = *texture.inner().as_ref().unwrap() {
             if !raw.is_none() {
                 let temp = queue::TempResource::Texture(texture.clone());
-                let mut pending_writes = device.pending_writes.lock();
-                let pending_writes = pending_writes.as_mut().unwrap();
+                let mut guard = device.pending_writes.lock();
+                let pending_writes = guard.as_mut().unwrap();
                 if pending_writes.dst_textures.contains_key(&texture_id) {
                     pending_writes.temp_resources.push(temp);
                 } else {
+                    drop(guard);
                     device
                         .lock_life()
                         .schedule_resource_destruction(temp, last_submit_index);
@@ -763,7 +764,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let device = &texture.device;
             {
-                let mut life_lock = device.lock_life();
                 if device
                     .pending_writes
                     .lock()
@@ -772,9 +772,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .dst_textures
                     .contains_key(&texture_id)
                 {
-                    life_lock.future_suspected_textures.push(texture.clone());
+                    device
+                        .lock_life()
+                        .future_suspected_textures
+                        .push(texture.clone());
                 } else {
-                    life_lock
+                    device
+                        .lock_life()
                         .suspected_resources
                         .insert(texture_id, texture.clone());
                 }

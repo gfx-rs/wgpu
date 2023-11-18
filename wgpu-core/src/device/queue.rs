@@ -1147,9 +1147,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // a temporary one, since the chains are not finished.
                     let mut temp_suspected = device.temp_suspected.lock();
                     {
-                        let mut suspected = temp_suspected.take().unwrap();
+                        let mut suspected =
+                            temp_suspected.replace(ResourceMaps::new::<A>()).unwrap();
                         suspected.clear();
-                        temp_suspected.replace(ResourceMaps::new::<A>());
                     }
 
                     // finish all the command buffers first

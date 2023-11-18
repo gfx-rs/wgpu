@@ -312,18 +312,19 @@ impl<A: HalApi> Device<A> {
     ) -> Result<(UserClosures, bool), WaitIdleError> {
         profiling::scope!("Device::maintain");
         {
-            let mut life_tracker = self.lock_life();
-
             // Normally, `temp_suspected` exists only to save heap
             // allocations: it's cleared at the start of the function
             // call, and cleared by the end. But `Global::queue_submit` is
             // fallible; if it exits early, it may leave some resources in
             // `temp_suspected`.
-            {
-                let temp_suspected = self.temp_suspected.lock().take().unwrap();
-                life_tracker.suspected_resources.extend(temp_suspected);
-            }
-            self.temp_suspected.lock().replace(ResourceMaps::new::<A>());
+            let temp_suspected = self
+                .temp_suspected
+                .lock()
+                .replace(ResourceMaps::new::<A>())
+                .unwrap();
+
+            let mut life_tracker = self.lock_life();
+            life_tracker.suspected_resources.extend(temp_suspected);
 
             life_tracker.triage_suspected(
                 hub,
@@ -397,7 +398,11 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn untrack(&self, trackers: &Tracker<A>) {
-        let mut temp_suspected = self.temp_suspected.lock().take().unwrap();
+        let mut temp_suspected = self
+            .temp_suspected
+            .lock()
+            .replace(ResourceMaps::new::<A>())
+            .unwrap();
         temp_suspected.clear();
         // As the tracker is cleared/dropped, we need to consider all the resources
         // that it references for destruction in the next GC pass.
@@ -444,7 +449,6 @@ impl<A: HalApi> Device<A> {
             }
         }
         self.lock_life().suspected_resources.extend(temp_suspected);
-        self.temp_suspected.lock().replace(ResourceMaps::new::<A>());
     }
 
     pub(crate) fn create_buffer(
@@ -3203,8 +3207,8 @@ impl<A: HalApi> Device<A> {
         &self,
         submission_index: SubmissionIndex,
     ) -> Result<(), WaitIdleError> {
-        let fence = self.fence.read();
-        let fence = fence.as_ref().unwrap();
+        let guard = self.fence.read();
+        let fence = guard.as_ref().unwrap();
         let last_done_index = unsafe {
             self.raw
                 .as_ref()
@@ -3221,6 +3225,7 @@ impl<A: HalApi> Device<A> {
                     .wait(fence, submission_index, !0)
                     .map_err(DeviceError::from)?
             };
+            drop(guard);
             let closures = self.lock_life().triage_submissions(
                 submission_index,
                 self.command_allocator.lock().as_mut().unwrap(),
@@ -3277,9 +3282,8 @@ impl<A: HalApi> Device<A> {
         self.valid.store(false, Ordering::Release);
 
         // 1) Resolve the GPUDevice device.lost promise.
-        let mut life_tracker = self.lock_life();
-        if life_tracker.device_lost_closure.is_some() {
-            let device_lost_closure = life_tracker.device_lost_closure.take().unwrap();
+        let closure = self.lock_life().device_lost_closure.take();
+        if let Some(device_lost_closure) = closure {
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
         }
 
@@ -3310,7 +3314,6 @@ impl<A: HalApi> Device<A> {
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&self) {
         self.pending_writes.lock().as_mut().unwrap().deactivate();
-        let mut life_tracker = self.lock_life();
         let current_index = self.active_submission_index.load(Ordering::Relaxed);
         if let Err(error) = unsafe {
             let fence = self.fence.read();
@@ -3322,6 +3325,7 @@ impl<A: HalApi> Device<A> {
         } {
             log::error!("failed to wait for the device: {:?}", error);
         }
+        let mut life_tracker = self.lock_life();
         let _ = life_tracker.triage_submissions(
             current_index,
             self.command_allocator.lock().as_mut().unwrap(),
