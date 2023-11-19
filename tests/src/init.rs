@@ -1,8 +1,10 @@
 use wgpu::{Adapter, Device, Instance, Queue};
 use wgt::{Backends, Features, Limits};
 
+use crate::AdapterSettings;
+
 /// Initialize a wgpu instance with the options from the environment.
-pub fn initialize_instance() -> Instance {
+pub fn initialize_instance(settings: AdapterSettings) -> Instance {
     // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
     //
     // We can potentially work support back into the test runner in the future, but as the adapters are matched up
@@ -12,15 +14,21 @@ pub fn initialize_instance() -> Instance {
     let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
     Instance::new(wgpu::InstanceDescriptor {
         backends,
-        flags: wgpu::InstanceFlags::debugging().with_env(),
+        flags: {
+            let mut flags = wgpu::InstanceFlags::debugging().with_env();
+            if settings.minimum_features {
+                flags |= wgpu::InstanceFlags::MINIMAL_INTERNAL_CAPABILITIES;
+            }
+            flags
+        },
         dx12_shader_compiler,
         gles_minor_version,
     })
 }
 
 /// Initialize a wgpu adapter, taking the `n`th adapter from the instance.
-pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
-    let instance = initialize_instance();
+pub async fn initialize_adapter(settings: AdapterSettings) -> (Adapter, Option<SurfaceGuard>) {
+    let instance = initialize_instance(settings);
     #[allow(unused_variables)]
     let _surface: wgpu::Surface;
     let surface_guard: Option<SurfaceGuard>;
@@ -53,8 +61,8 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
             let adapter_iter = instance.enumerate_adapters(wgpu::Backends::all());
             let adapter_count = adapter_iter.len();
             let adapter = adapter_iter.into_iter()
-                .nth(adapter_index)
-                .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?"));
+                .nth(settings.index)
+                .unwrap_or_else(|| panic!("Tried to get index {adapter_index} adapter, but adapter list was only {adapter_count} long. Is .gpuconfig out of date?", adapter_index = settings.index));
         } else {
             assert_eq!(adapter_index, 0);
             let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions::default()).await.unwrap();

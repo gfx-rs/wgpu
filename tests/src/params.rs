@@ -361,3 +361,9 @@ impl TestInfo {
         }
     }
 }
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct AdapterSettings {
+    pub index: usize,
+    pub minimum_features: bool,
+}

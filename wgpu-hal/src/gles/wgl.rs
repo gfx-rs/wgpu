@@ -48,6 +48,7 @@ const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
 /// guarantee exclusive access when shared with multiple threads.
 pub struct AdapterContext {
     inner: Arc<Mutex<Inner>>,
+    flags: InstanceFlags,
 }
 
 unsafe impl Sync for AdapterContext {}
@@ -56,6 +57,10 @@ unsafe impl Send for AdapterContext {}
 impl AdapterContext {
     pub fn is_owned(&self) -> bool {
         true
+    }
+
+    pub fn flags(&self) -> InstanceFlags {
+        self.flags
     }
 
     pub fn raw_context(&self) -> *mut c_void {
@@ -144,6 +149,7 @@ struct Inner {
 
 pub struct Instance {
     srgb_capable: bool,
+    flags: InstanceFlags,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -507,6 +513,7 @@ impl crate::Instance<super::Api> for Instance {
                 gl,
                 context,
             })),
+            flags: desc.flags,
             srgb_capable,
         })
     }
@@ -537,6 +544,7 @@ impl crate::Instance<super::Api> for Instance {
         unsafe {
             super::Adapter::expose(AdapterContext {
                 inner: self.inner.clone(),
+                flags: self.flags,
             })
         }
         .into_iter()
