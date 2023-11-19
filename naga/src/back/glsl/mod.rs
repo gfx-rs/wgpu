@@ -76,6 +76,8 @@ const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
+pub const BASE_INSTANCE_BINDING: &str = "naga_vs_base_instance";
+
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
@@ -569,7 +571,11 @@ impl<'a, W: Write> Writer<'a, W> {
             keywords::RESERVED_KEYWORDS,
             &[],
             &[],
-            &["gl_"],
+            &[
+                "gl_", // all GL built-in variables
+                "_group", // all normal bindings
+                "_push_constant_binding_", // all push constant bindings
+            ],
             &mut names,
         );
 
@@ -653,7 +659,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         if self.entry_point.stage == ShaderStage::Vertex {
-            writeln!(self.out, "uniform uint _naga_vs_base_instance;")?;
+            writeln!(self.out, "uniform uint {BASE_INSTANCE_BINDING};")?;
             writeln!(self.out)?;
         }
 

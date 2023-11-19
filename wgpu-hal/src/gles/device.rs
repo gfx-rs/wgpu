@@ -469,7 +469,7 @@ impl super::Device {
 
         let base_instance_location = if has_stages.contains(wgt::ShaderStages::VERTEX) {
             // If this returns none (the uniform isn't active), that's fine, we just won't set it.
-            unsafe { gl.get_uniform_location(program, "_naga_vs_base_instance") }
+            unsafe { gl.get_uniform_location(program, naga::back::glsl::BASE_INSTANCE_BINDING) }
         } else {
             None
         };
