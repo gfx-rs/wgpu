@@ -378,7 +378,11 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
+            // This is true, even though instance index will not be properly adjusted.
+            //
+            // This is because the OpenGL backend does not advertise support for non-zero `base_instance`.
+            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,

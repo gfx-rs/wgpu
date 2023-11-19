@@ -9,6 +9,7 @@ pub struct DrawIndirect {
     /// The Index of the first vertex to draw.
     pub base_vertex: u32,
     /// The instance ID of the first instance to draw.
+    ///
     /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub base_instance: u32,
 }

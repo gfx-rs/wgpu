@@ -284,7 +284,18 @@ static DRAW_INDIRECT_VERTEX_OFFSET: GpuTestConfiguration = GpuTestConfiguration:
                 base_instance: 0,
             },
         );
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
+
+        // When this is false, the vertex_index won't respect the vertex_offset
+        let base = ctx.adapter_downlevel_capabilities.flags.contains(
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE,
+        );
+        let array = if base {
+            &[0, 1, 2, 3, 4, 5]
+        } else {
+            &[0, 1, 2, 0, 0, 0]
+        };
+
+        pulling_common(ctx, array, |cmb, _| {
             cmb.draw_indirect(&call1, 0);
             cmb.draw_indirect(&call2, 0);
         })
@@ -308,7 +319,17 @@ static DRAW_INDIRECT_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::n
                 base_instance: 0,
             },
         );
-        pulling_common(ctx, &[0, 0, 0, 3, 4, 5, 6, 7, 8], |cmb, _| {
+
+        // When this is false, the vertex_index won't respect the vertex_offset
+        let base = ctx.adapter_downlevel_capabilities.flags.contains(
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE,
+        );
+        let array = if base {
+            &[0, 0, 0, 3, 4, 5, 6, 7, 8][..]
+        } else {
+            &[0, 1, 2, 3, 4, 5][..]
+        };
+        pulling_common(ctx, &array, |cmb, _| {
             cmb.draw_indexed_indirect(&indirect, 0);
         })
     });
@@ -361,7 +382,21 @@ static DRAW_INDIRECT_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfigurati
                 base_instance: 1,
             },
         );
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
+        // If this is false, the base instance will be ignored.
+        let first_instance = ctx
+            .adapter
+            .features()
+            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
+        // If this is false, it won't be ignored, but it won't show up in the shader
+        let base = ctx.adapter_downlevel_capabilities.flags.contains(
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE,
+        );
+        let array = if first_instance && base {
+            &[0, 1, 2, 3, 4, 5]
+        } else {
+            &[0, 1, 2, 0, 0, 0]
+        };
+        pulling_common(ctx, array, |cmb, _| {
             cmb.draw_indirect(&call1, 0);
             cmb.draw_indirect(&call2, 0);
         })
