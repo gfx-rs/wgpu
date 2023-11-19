@@ -40,6 +40,11 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+#### OpenGL
+- `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
+
 ### Changes
 
 #### General
