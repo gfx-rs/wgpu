@@ -12,8 +12,8 @@ struct Draw {
 
 impl Draw {
     fn execute(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if let Some(base_vertex) = self.vertex_offset {
-            rpass.draw_indexed(self.vertex.clone(), base_vertex, self.instance.clone());
+        if let Some(vertex_offset) = self.vertex_offset {
+            rpass.draw_indexed(self.vertex.clone(), vertex_offset, self.instance.clone());
         } else {
             rpass.draw(self.vertex.clone(), self.instance.clone());
         }
@@ -44,15 +44,23 @@ impl Draw {
         }
     }
 
-    fn execute_indirect(&self, rpass: &mut wgpu::RenderPass<'_>, indirect: &wgpu::Buffer) {
-        if let Some(base_vertex) = self.vertex_offset {
-            rpass.draw_indexed_indirect(indirect, 0);
+    fn execute_indirect<'rpass>(
+        &self,
+        rpass: &mut wgpu::RenderPass<'rpass>,
+        indirect: &'rpass wgpu::Buffer,
+        offset: &mut u64,
+    ) {
+        if self.vertex_offset.is_some() {
+            rpass.draw_indexed_indirect(indirect, *offset);
+            *offset += 20;
         } else {
-            rpass.draw_indirect(indirect, 0);
+            rpass.draw_indirect(indirect, *offset);
+            *offset += 16;
         }
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 enum TestCase {
     Draw,
     DrawVertexOffset,
@@ -115,6 +123,7 @@ impl TestCase {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 enum IdSource {
     Buffers,
     Builtins,
@@ -124,6 +133,7 @@ impl IdSource {
     const ARRAY: [Self; 2] = [Self::Buffers, Self::Builtins];
 }
 
+#[derive(Debug, Copy, Clone)]
 enum DrawCallKind {
     Direct,
     Indirect,
@@ -139,10 +149,50 @@ struct Test {
     draw_call_kind: DrawCallKind,
 }
 
-fn vertex_index_common<'b, F>(ctx: TestingContext, expected: &[u32], function: F)
-where
-    F: for<'a> Fn(&mut wgpu::RenderPass<'a>, &'a &'b ()) + 'b,
-{
+impl Test {
+    fn expectation(&self, ctx: &TestingContext) -> &'static [u32] {
+        // If this is false, the first instance will be ignored.
+        let non_zero_first_instance_supported = ctx
+            .adapter
+            .features()
+            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
+        // If this is false, it won't be ignored, but it won't show up in the shader
+        let first_vert_instance_supported = ctx.adapter_downlevel_capabilities.flags.contains(
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
+        );
+
+        let is_indirect = matches!(self.draw_call_kind, DrawCallKind::Indirect);
+
+        match self.case {
+            TestCase::DrawBaseVertex => {
+                if !first_vert_instance_supported && is_indirect {
+                    return &[0, 1, 2, 3, 4, 5];
+                }
+
+                &[0, 0, 0, 3, 4, 5, 6, 7, 8]
+            }
+            TestCase::Draw => &[0, 1, 2, 3, 4, 5],
+            TestCase::DrawVertexOffset | TestCase::DrawInstanced => {
+                if !first_vert_instance_supported && is_indirect {
+                    return &[0, 1, 2, 0, 0, 0];
+                }
+
+                &[0, 1, 2, 3, 4, 5]
+            }
+            TestCase::DrawInstancedOffset => {
+                if (!first_vert_instance_supported || !non_zero_first_instance_supported)
+                    && is_indirect
+                {
+                    return &[0, 1, 2, 0, 0, 0];
+                }
+
+                &[0, 1, 2, 3, 4, 5]
+            }
+        }
+    }
+}
+
+fn vertex_index_common(ctx: TestingContext) {
     let identity_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: Some("identity buffer"),
         contents: bytemuck::cast_slice(&[0u32, 1, 2, 3, 4, 5, 6, 7, 8]),
@@ -237,7 +287,7 @@ where
         )
         .create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut tests = Vec::new();
+    let mut tests = Vec::with_capacity(5 * 2 * 2);
     for case in TestCase::ARRAY {
         for id_source in IdSource::ARRAY {
             for draw_call_kind in DrawCallKind::ARRAY {
@@ -250,11 +300,14 @@ where
         }
     }
 
+    let mut failed = false;
     for test in tests {
         let pipeline = match test.id_source {
             IdSource::Buffers => &buffer_pipeline,
             IdSource::Builtins => &builtin_pipeline,
         };
+
+        let expected = test.expectation(&ctx);
 
         let buffer_size = 4 * expected.len() as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
@@ -284,6 +337,7 @@ where
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
+        let indirect_buffer;
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -299,9 +353,33 @@ where
         rpass.set_vertex_buffer(0, identity_buffer.slice(..));
         rpass.set_vertex_buffer(1, identity_buffer.slice(..));
         rpass.set_index_buffer(identity_buffer.slice(..), wgpu::IndexFormat::Uint32);
-        rpass.set_pipeline(&pipeline);
+        rpass.set_pipeline(pipeline);
         rpass.set_bind_group(0, &bg, &[]);
-        function(&mut rpass, &&());
+
+        let draws = test.case.draws();
+
+        match test.draw_call_kind {
+            DrawCallKind::Direct => {
+                for draw in draws {
+                    draw.execute(&mut rpass);
+                }
+            }
+            DrawCallKind::Indirect => {
+                let mut indirect_bytes = Vec::new();
+                for draw in draws {
+                    draw.add_to_buffer(&mut indirect_bytes);
+                }
+                indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+                    label: Some("indirect"),
+                    contents: &indirect_bytes,
+                    usage: wgpu::BufferUsages::INDIRECT,
+                });
+                let mut offset = 0;
+                for draw in draws {
+                    draw.execute_indirect(&mut rpass, &indirect_buffer, &mut offset);
+                }
+            }
+        }
 
         drop(rpass);
 
@@ -313,263 +391,32 @@ where
         ctx.device.poll(wgpu::Maintain::Wait);
         let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
-        assert_eq!(data, expected, "case {} failed", case_name);
+        if data != expected {
+            eprintln!(
+                "Failed: Got: {:?} Expected: {:?} - Case {:?} getting indices from {:?} using {:?} draw calls",
+                data,
+                expected,
+                test.case,
+                test.id_source,
+                test.draw_call_kind
+            );
+            failed = true;
+        } else {
+            eprintln!(
+                "Passed: Case {:?} getting indices from {:?} using {:?} draw calls",
+                test.case, test.id_source, test.draw_call_kind
+            );
+        }
     }
-}
 
-fn draw_indirect(ctx: &TestingContext, dii: wgpu::util::DrawIndirectArgs) -> wgpu::Buffer {
-    ctx.device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: dii.as_bytes(),
-            usage: wgpu::BufferUsages::INDIRECT,
-        })
-}
-
-fn draw_indexed_indirect(
-    ctx: &TestingContext,
-    dii: wgpu::util::DrawIndexedIndirectArgs,
-) -> wgpu::Buffer {
-    ctx.device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: None,
-            contents: dii.as_bytes(),
-            usage: wgpu::BufferUsages::INDIRECT,
-        })
-}
-
-fn parameters() -> TestParameters {
-    TestParameters::default()
-        .test_features_limits()
-        .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+    assert!(!failed);
 }
 
 #[gpu_test]
-static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(parameters())
-    .run_sync(|ctx| {
-        vertex_index_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
-            cmb.draw(0..6, 0..1);
-        })
-    });
-
-#[gpu_test]
-static DRAW_VERTEX_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+static VERTEX_INDICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
-    .run_sync(|ctx| {
-        vertex_index_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
-            cmb.draw(0..3, 0..1);
-            cmb.draw(3..6, 0..1);
-        })
-    });
-
-#[gpu_test]
-static DRAW_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        vertex_index_common(ctx, &[0, 0, 0, 3, 4, 5, 6, 7, 8], |cmb, _| {
-            cmb.draw_indexed(0..6, 3, 0..1);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        vertex_index_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
-            cmb.draw(0..3, 0..2);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        vertex_index_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
-            cmb.draw(0..3, 0..1);
-            cmb.draw(0..3, 1..2);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        let indirect = draw_indirect(
-            &ctx,
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 6,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-        );
-
-        vertex_index_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
-            cmb.draw_indirect(&indirect, 0);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INDIRECT_VERTEX_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        let call1 = draw_indirect(
-            &ctx,
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-        );
-        let call2 = draw_indirect(
-            &ctx,
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 3,
-                first_instance: 0,
-            },
-        );
-
-        // When this is false, the vertex_index won't respect the vertex_offset
-        let base = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
-        );
-        let array = if base {
-            &[0, 1, 2, 3, 4, 5]
-        } else {
-            &[0, 1, 2, 0, 0, 0]
-        };
-
-        vertex_index_common(ctx, array, |cmb, _| {
-            cmb.draw_indirect(&call1, 0);
-            cmb.draw_indirect(&call2, 0);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INDIRECT_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        let indirect = draw_indexed_indirect(
-            &ctx,
-            wgpu::util::DrawIndexedIndirectArgs {
-                vertex_count: 6,
-                instance_count: 1,
-                vertex_offset: 3,
-                first_index: 0,
-                first_instance: 0,
-            },
-        );
-
-        // When this is false, the vertex_index won't respect the vertex_offset
-        let base = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
-        );
-        let array = if base {
-            &[0, 0, 0, 3, 4, 5, 6, 7, 8][..]
-        } else {
-            &[0, 1, 2, 3, 4, 5][..]
-        };
-        vertex_index_common(ctx, array, |cmb, _| {
-            cmb.draw_indexed_indirect(&indirect, 0);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INDIRECT_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        let indirect = draw_indirect(
-            &ctx,
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 2,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-        );
-        vertex_index_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
-            cmb.draw_indirect(&indirect, 0);
-        })
-    });
-
-#[gpu_test]
-static DRAW_INDIRECT_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
-    )
-    .run_sync(|ctx| {
-        let call1 = draw_indirect(
-            &ctx,
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 0,
-            },
-        );
-        let call2 = draw_indirect(
-            &ctx,
-            wgpu::util::DrawIndirectArgs {
-                vertex_count: 3,
-                instance_count: 1,
-                first_vertex: 0,
-                first_instance: 1,
-            },
-        );
-        // If this is false, the base instance will be ignored.
-        let first_instance = ctx
-            .adapter
-            .features()
-            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
-        // If this is false, it won't be ignored, but it won't show up in the shader
-        let base = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
-        );
-        let array = if first_instance && base {
-            &[0, 1, 2, 3, 4, 5]
-        } else {
-            &[0, 1, 2, 0, 0, 0]
-        };
-        vertex_index_common(ctx, array, |cmb, _| {
-            cmb.draw_indirect(&call1, 0);
-            cmb.draw_indirect(&call2, 0);
-        })
-    });
+    .run_sync(vertex_index_common);

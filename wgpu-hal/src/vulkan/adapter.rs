@@ -989,11 +989,16 @@ impl super::Instance {
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
-                log::warn!(
-                    "Adapter is not Vulkan compliant, hiding adapter: {}",
-                    info.name
-                );
-                return None;
+                let driver_name_unsigned = driver.driver_name.map(|i| i as u8);
+                if !driver_name_unsigned.starts_with(b"MoltenVK") {
+                    log::warn!(
+                        "Adapter is not Vulkan compliant, hiding adapter: {}",
+                        info.name
+                    );
+                    return None;
+                } else {
+                    log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
+                }
             }
         }
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0
