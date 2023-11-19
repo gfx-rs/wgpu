@@ -147,7 +147,7 @@ where
     assert_eq!(data, expected);
 }
 
-fn draw_indirect(ctx: &TestingContext, dii: wgpu::util::DrawIndirect) -> wgpu::Buffer {
+fn draw_indirect(ctx: &TestingContext, dii: wgpu::util::DrawIndirectArgs) -> wgpu::Buffer {
     ctx.device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
@@ -158,7 +158,7 @@ fn draw_indirect(ctx: &TestingContext, dii: wgpu::util::DrawIndirect) -> wgpu::B
 
 fn draw_indexed_indirect(
     ctx: &TestingContext,
-    dii: wgpu::util::DrawIndexedIndirect,
+    dii: wgpu::util::DrawIndexedIndirectArgs,
 ) -> wgpu::Buffer {
     ctx.device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -245,11 +245,11 @@ static DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         let indirect = draw_indirect(
             &ctx,
-            wgpu::util::DrawIndirect {
+            wgpu::util::DrawIndirectArgs {
                 vertex_count: 6,
                 instance_count: 1,
-                base_vertex: 0,
-                base_instance: 0,
+                first_vertex: 0,
+                first_instance: 0,
             },
         );
 
@@ -268,26 +268,26 @@ static DRAW_INDIRECT_VERTEX_OFFSET: GpuTestConfiguration = GpuTestConfiguration:
     .run_sync(|ctx| {
         let call1 = draw_indirect(
             &ctx,
-            wgpu::util::DrawIndirect {
+            wgpu::util::DrawIndirectArgs {
                 vertex_count: 3,
                 instance_count: 1,
-                base_vertex: 0,
-                base_instance: 0,
+                first_vertex: 0,
+                first_instance: 0,
             },
         );
         let call2 = draw_indirect(
             &ctx,
-            wgpu::util::DrawIndirect {
+            wgpu::util::DrawIndirectArgs {
                 vertex_count: 3,
                 instance_count: 1,
-                base_vertex: 3,
-                base_instance: 0,
+                first_vertex: 3,
+                first_instance: 0,
             },
         );
 
         // When this is false, the vertex_index won't respect the vertex_offset
         let base = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE,
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
         );
         let array = if base {
             &[0, 1, 2, 3, 4, 5]
@@ -311,18 +311,18 @@ static DRAW_INDIRECT_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::n
     .run_sync(|ctx| {
         let indirect = draw_indexed_indirect(
             &ctx,
-            wgpu::util::DrawIndexedIndirect {
+            wgpu::util::DrawIndexedIndirectArgs {
                 vertex_count: 6,
                 instance_count: 1,
                 vertex_offset: 3,
-                base_index: 0,
-                base_instance: 0,
+                first_index: 0,
+                first_instance: 0,
             },
         );
 
         // When this is false, the vertex_index won't respect the vertex_offset
         let base = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE,
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
         );
         let array = if base {
             &[0, 0, 0, 3, 4, 5, 6, 7, 8][..]
@@ -344,11 +344,11 @@ static DRAW_INDIRECT_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new
     .run_sync(|ctx| {
         let indirect = draw_indirect(
             &ctx,
-            wgpu::util::DrawIndirect {
+            wgpu::util::DrawIndirectArgs {
                 vertex_count: 3,
                 instance_count: 2,
-                base_vertex: 0,
-                base_instance: 0,
+                first_vertex: 0,
+                first_instance: 0,
             },
         );
         pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
@@ -366,20 +366,20 @@ static DRAW_INDIRECT_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(|ctx| {
         let call1 = draw_indirect(
             &ctx,
-            wgpu::util::DrawIndirect {
+            wgpu::util::DrawIndirectArgs {
                 vertex_count: 3,
                 instance_count: 1,
-                base_vertex: 0,
-                base_instance: 0,
+                first_vertex: 0,
+                first_instance: 0,
             },
         );
         let call2 = draw_indirect(
             &ctx,
-            wgpu::util::DrawIndirect {
+            wgpu::util::DrawIndirectArgs {
                 vertex_count: 3,
                 instance_count: 1,
-                base_vertex: 0,
-                base_instance: 1,
+                first_vertex: 0,
+                first_instance: 1,
             },
         );
         // If this is false, the base instance will be ignored.
@@ -389,7 +389,7 @@ static DRAW_INDIRECT_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfigurati
             .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
         // If this is false, it won't be ignored, but it won't show up in the shader
         let base = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE,
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
         );
         let array = if first_instance && base {
             &[0, 1, 2, 3, 4, 5]

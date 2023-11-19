@@ -3965,15 +3965,15 @@ impl<'a> RenderPass<'a> {
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     ///
     /// Indirect drawing has some caviats depending on the features available. We are not currently able to validate
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirect::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE`] is not present on the adapter,
+    ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST`] is not present on the adapter,
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
-    /// 
+    ///
     /// See details on the individual flags for more information.
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
@@ -3990,15 +3990,15 @@ impl<'a> RenderPass<'a> {
     /// based on the contents of the `indirect_buffer`.
     ///
     /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
     /// Indirect drawing has some caviats depending on the features available. We are not currently able to validate
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirect::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE`] is not present on the adapter,
+    ///   [`DrawIndexedIndirect::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST`] is not present on the adapter,
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
-    /// 
+    ///
     /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
@@ -4044,7 +4044,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
@@ -4072,7 +4072,7 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
@@ -4105,7 +4105,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// The structure expected in `count_buffer` is the following:
@@ -4151,7 +4151,7 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
     /// These draw structures are expected to be tightly packed.
     ///
@@ -4407,7 +4407,7 @@ impl<'a> ComputePass<'a> {
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirect`](crate::util::DispatchIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4655,7 +4655,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_bundle_encoder_draw_indirect(
             &*self.parent.context,
@@ -4673,7 +4673,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,

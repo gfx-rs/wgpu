@@ -6,7 +6,6 @@
 mod belt;
 mod device;
 mod encoder;
-mod indirect;
 mod init;
 
 use std::sync::Arc;
@@ -19,9 +18,8 @@ use std::{
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
-pub use indirect::*;
 pub use init::*;
-pub use wgt::math::*;
+pub use wgt::{math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs};
 
 /// Treat the given byte slice as a SPIR-V module.
 ///

@@ -1491,13 +1491,13 @@ bitflags::bitflags! {
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
 
         /// If this is true, use of `@builtin(vertex_index)` and `@builtin(instance_index)` will properly take into consideration
-        /// the `base_vertex` and `base_instance` parameters of indirect draw calls.
+        /// the `first_vertex` and `first_instance` parameters of indirect draw calls.
         ///
         /// If this is false, `@builtin(vertex_index)` and `@builtin(instance_index)` will start by counting from 0, ignoring the
-        /// `base_vertex` and `base_instance` parameters.
+        /// `first_vertex` and `first_instance` parameters.
         ///
         /// For example, if you had a draw call like this:
-        /// - `base_vertex: 4,`
+        /// - `first_vertex: 4,`
         /// - `vertex_count: 12,`
         ///
         /// When this flag is present, `@builtin(vertex_index)` will start at 4 and go up to 15 (12 invocations).
@@ -1516,7 +1516,7 @@ bitflags::bitflags! {
         ///
         /// Will be implemented in the future by:
         /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
-        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_BASE = 1 << 23;
+        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST = 1 << 23;
     }
 }
 
@@ -6538,44 +6538,83 @@ impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
-    /// Offset into the vertex buffers, in vertices, to begin drawing from.
+    /// The Index of the first vertex to draw.
     pub first_vertex: u32,
-    /// First instance to draw.
+    /// The instance ID of the first instance to draw.
+    ///
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
+}
+
+impl DrawIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Argument buffer layout for draw_indexed_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndexedIndirectArgs {
-    /// The number of indices to draw.
-    pub index_count: u32,
+    /// The number of vertices to draw.
+    pub vertex_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
-    /// Offset into the index buffer, in indices, begin drawing from.
+    /// The first index within the index buffer.
     pub first_index: u32,
-    /// Added to each index value before indexing into the vertex buffers.
-    pub base_vertex: i32,
-    /// First instance to draw.
+    /// The value added to the vertex index before indexing into the vertex buffer.
+    pub vertex_offset: i32,
+    /// The instance ID of the first instance to draw.
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
+}
+
+impl DrawIndexedIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Argument buffer layout for dispatch_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DispatchIndirectArgs {
-    /// X dimension of the grid of workgroups to dispatch.
-    pub group_size_x: u32,
-    /// Y dimension of the grid of workgroups to dispatch.
-    pub group_size_y: u32,
-    /// Z dimension of the grid of workgroups to dispatch.
-    pub group_size_z: u32,
+    /// The number of work groups in X dimension.
+    pub x: u32,
+    /// The number of work groups in Y dimension.
+    pub y: u32,
+    /// The number of work groups in Z dimension.
+    pub z: u32,
+}
+
+impl DispatchIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written into a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Describes how shader bound checks should be performed.
