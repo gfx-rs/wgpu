@@ -76,6 +76,7 @@ const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
+// Must match code in glsl_built_in
 pub const BASE_INSTANCE_BINDING: &str = "naga_vs_base_instance";
 
 /// Mapping between resources and bindings.
@@ -572,8 +573,8 @@ impl<'a, W: Write> Writer<'a, W> {
             &[],
             &[],
             &[
-                "gl_", // all GL built-in variables
-                "_group", // all normal bindings
+                "gl_",                     // all GL built-in variables
+                "_group",                  // all normal bindings
                 "_push_constant_binding_", // all push constant bindings
             ],
             &mut names,
@@ -4341,7 +4342,8 @@ const fn glsl_built_in(
         Bi::BaseVertex => "uint(gl_BaseVertex)",
         Bi::ClipDistance => "gl_ClipDistance",
         Bi::CullDistance => "gl_CullDistance",
-        Bi::InstanceIndex => "(uint(gl_InstanceID) + _naga_vs_base_instance)",
+        // Must match BASE_INSTANCE_BINDING
+        Bi::InstanceIndex => "(uint(gl_InstanceID) + naga_vs_base_instance)",
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
         // fragment

@@ -159,7 +159,7 @@ impl super::Queue {
                 vertex_count,
                 instance_count,
                 base_instance,
-                base_instance_location,
+                ref base_instance_location,
             } => {
                 // Don't use `gl.draw_arrays` for `instance_count == 1`.
                 // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
@@ -183,7 +183,7 @@ impl super::Queue {
                 base_vertex,
                 base_instance,
                 instance_count,
-                base_instance_location,
+                ref base_instance_location,
             } => {
                 unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), base_instance) };
 

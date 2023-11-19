@@ -914,6 +914,19 @@ impl fmt::Debug for CommandBuffer {
     }
 }
 
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for CommandBuffer {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for CommandBuffer {}
+
 //TODO: we would have something like `Arc<typed_arena::Arena>`
 // here and in the command buffers. So that everything grows
 // inside the encoder and stays there until `reset_all`.
@@ -931,6 +944,19 @@ impl fmt::Debug for CommandEncoder {
             .finish()
     }
 }
+
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for CommandEncoder {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for CommandEncoder {}
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {

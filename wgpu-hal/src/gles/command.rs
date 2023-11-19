@@ -205,6 +205,7 @@ impl super::CommandEncoder {
         }
     }
 
+    #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
@@ -1011,6 +1012,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         instance_count: u32,
     ) {
         self.prepare_draw(base_instance);
+        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
         self.cmd_buffer.commands.push(C::Draw {
             topology: self.state.topology,
             start_vertex,
@@ -1034,6 +1036,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             wgt::IndexFormat::Uint32 => (4, glow::UNSIGNED_INT),
         };
         let index_offset = self.state.index_offset + index_size * start_index as wgt::BufferAddress;
+        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
         self.cmd_buffer.commands.push(C::DrawIndexed {
             topology: self.state.topology,
             index_type,
