@@ -1,14 +1,19 @@
 use std::num::NonZeroU64;
 
-use wgpu::util::DeviceExt;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
-fn pulling_common(
-    ctx: TestingContext,
-    expected: &[u32],
-    function: impl FnOnce(&mut wgpu::RenderPass<'_>),
-) {
+fn pulling_common<'b, F>(ctx: TestingContext, expected: &[u32], function: F)
+where
+    F: for<'a> FnOnce(&mut wgpu::RenderPass<'a>, &'a &'b ()) + 'b,
+{
+    let index_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("index buffer"),
+        contents: bytemuck::cast_slice(&[0u32, 1, 2, 3, 4, 5]),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
     let shader = ctx
         .device
         .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"));
@@ -124,9 +129,10 @@ fn pulling_common(
         occlusion_query_set: None,
     });
 
+    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bg, &[]);
-    function(&mut rpass);
+    function(&mut rpass, &&());
 
     drop(rpass);
 
@@ -141,6 +147,27 @@ fn pulling_common(
     assert_eq!(data, expected);
 }
 
+fn draw_indirect(ctx: &TestingContext, dii: wgpu::util::DrawIndirect) -> wgpu::Buffer {
+    ctx.device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: dii.as_bytes(),
+            usage: wgpu::BufferUsages::INDIRECT,
+        })
+}
+
+fn draw_indexed_indirect(
+    ctx: &TestingContext,
+    dii: wgpu::util::DrawIndexedIndirect,
+) -> wgpu::Buffer {
+    ctx.device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: dii.as_bytes(),
+            usage: wgpu::BufferUsages::INDIRECT,
+        })
+}
+
 #[gpu_test]
 static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -149,22 +176,35 @@ static DRAW: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
     .run_sync(|ctx| {
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
             cmb.draw(0..6, 0..1);
         })
     });
 
 #[gpu_test]
-static DRAW_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+static DRAW_VERTEX_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
     .run_sync(|ctx| {
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
             cmb.draw(0..3, 0..1);
             cmb.draw(3..6, 0..1);
+        })
+    });
+
+#[gpu_test]
+static DRAW_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
+    .run_sync(|ctx| {
+        pulling_common(ctx, &[0, 0, 0, 3, 4, 5, 6, 7, 8], |cmb, _| {
+            cmb.draw_indexed(0..6, 3, 0..1);
         })
     });
 
@@ -176,7 +216,7 @@ static DRAW_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
     .run_sync(|ctx| {
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
             cmb.draw(0..3, 0..2);
         })
     });
@@ -189,8 +229,140 @@ static DRAW_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )
     .run_sync(|ctx| {
-        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
             cmb.draw(0..3, 0..1);
             cmb.draw(0..3, 1..2);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INDIRECT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
+    .run_sync(|ctx| {
+        let indirect = draw_indirect(
+            &ctx,
+            wgpu::util::DrawIndirect {
+                vertex_count: 6,
+                instance_count: 1,
+                base_vertex: 0,
+                base_instance: 0,
+            },
+        );
+
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
+            cmb.draw_indirect(&indirect, 0);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INDIRECT_VERTEX_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
+    .run_sync(|ctx| {
+        let call1 = draw_indirect(
+            &ctx,
+            wgpu::util::DrawIndirect {
+                vertex_count: 3,
+                instance_count: 1,
+                base_vertex: 0,
+                base_instance: 0,
+            },
+        );
+        let call2 = draw_indirect(
+            &ctx,
+            wgpu::util::DrawIndirect {
+                vertex_count: 3,
+                instance_count: 1,
+                base_vertex: 3,
+                base_instance: 0,
+            },
+        );
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
+            cmb.draw_indirect(&call1, 0);
+            cmb.draw_indirect(&call2, 0);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INDIRECT_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
+    .run_sync(|ctx| {
+        let indirect = draw_indexed_indirect(
+            &ctx,
+            wgpu::util::DrawIndexedIndirect {
+                vertex_count: 6,
+                instance_count: 1,
+                vertex_offset: 3,
+                base_index: 0,
+                base_instance: 0,
+            },
+        );
+        pulling_common(ctx, &[0, 0, 0, 3, 4, 5, 6, 7, 8], |cmb, _| {
+            cmb.draw_indexed_indirect(&indirect, 0);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INDIRECT_INSTANCED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
+    .run_sync(|ctx| {
+        let indirect = draw_indirect(
+            &ctx,
+            wgpu::util::DrawIndirect {
+                vertex_count: 3,
+                instance_count: 2,
+                base_vertex: 0,
+                base_instance: 0,
+            },
+        );
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
+            cmb.draw_indirect(&indirect, 0);
+        })
+    });
+
+#[gpu_test]
+static DRAW_INDIRECT_INSTANCED_OFFSET: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+    )
+    .run_sync(|ctx| {
+        let call1 = draw_indirect(
+            &ctx,
+            wgpu::util::DrawIndirect {
+                vertex_count: 3,
+                instance_count: 1,
+                base_vertex: 0,
+                base_instance: 0,
+            },
+        );
+        let call2 = draw_indirect(
+            &ctx,
+            wgpu::util::DrawIndirect {
+                vertex_count: 3,
+                instance_count: 1,
+                base_vertex: 0,
+                base_instance: 1,
+            },
+        );
+        pulling_common(ctx, &[0, 1, 2, 3, 4, 5], |cmb, _| {
+            cmb.draw_indirect(&call1, 0);
+            cmb.draw_indirect(&call2, 0);
         })
     });
