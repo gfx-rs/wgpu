@@ -329,7 +329,7 @@ static DRAW_INDIRECT_BASE_VERTEX: GpuTestConfiguration = GpuTestConfiguration::n
         } else {
             &[0, 1, 2, 3, 4, 5][..]
         };
-        pulling_common(ctx, &array, |cmb, _| {
+        pulling_common(ctx, array, |cmb, _| {
             cmb.draw_indexed_indirect(&indirect, 0);
         })
     });
