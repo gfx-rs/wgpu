@@ -2386,9 +2386,16 @@ pub enum TextureFormat {
     /// [`Features::DEPTH32FLOAT_STENCIL8`] must be enabled to use this texture format.
     Depth32FloatStencil8,
 
-    /// YUV 4:2:0 video resource format.
-    /// Valid luminance data view formats for this video resource format are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
-    /// Valid chrominance data view formats (width and height are each 1/2 of luminance view) for this video resource format are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
+    /// YUV 4:2:0 chroma subsampled format.
+    ///
+    /// Contains two planes:
+    /// - 0: Single 8 bit channel luminance.
+    /// - 1: Dual 8 bit channel chrominance at half width and half height.
+    ///
+    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
+    /// 
+    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
+    ///
     /// Width and height must be even.
     ///
     /// [`Features::TEXTURE_FORMAT_NV12`] must be enabled to use this texture format.
