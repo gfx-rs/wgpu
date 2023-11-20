@@ -1,5 +1,8 @@
-#version 420 core
-#extension GL_ARB_shader_draw_parameters : require
+#version 320 es
+
+precision highp float;
+precision highp int;
+
 struct PushConstants {
     float multiplier;
 };
