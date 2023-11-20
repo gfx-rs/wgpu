@@ -19,7 +19,15 @@ impl Draw {
         }
     }
 
-    fn add_to_buffer(&self, bytes: &mut Vec<u8>) {
+    fn add_to_buffer(&self, bytes: &mut Vec<u8>, features: wgpu::Features) {
+        // The behavior of non-zero first_instance in indirect draw calls in currently undefined if INDIRECT_FIRST_INSTANCE is not supported.
+        let supports_first_instance = features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
+        let first_instance = if supports_first_instance {
+            self.instance.start
+        } else {
+            0
+        };
+
         if let Some(vertex_offset) = self.vertex_offset {
             bytes.extend_from_slice(
                 wgpu::util::DrawIndexedIndirectArgs {
@@ -27,7 +35,7 @@ impl Draw {
                     instance_count: self.instance.end - self.instance.start,
                     vertex_offset,
                     first_index: self.vertex.start,
-                    first_instance: self.instance.start,
+                    first_instance,
                 }
                 .as_bytes(),
             )
@@ -37,7 +45,7 @@ impl Draw {
                     vertex_count: self.vertex.end - self.vertex.start,
                     instance_count: self.instance.end - self.instance.start,
                     first_vertex: self.vertex.start,
-                    first_instance: self.instance.start,
+                    first_instance,
                 }
                 .as_bytes(),
             )
@@ -151,38 +159,43 @@ struct Test {
 
 impl Test {
     fn expectation(&self, ctx: &TestingContext) -> &'static [u32] {
+        let is_indirect = matches!(self.draw_call_kind, DrawCallKind::Indirect);
+
+        // Both of these failure modes require indirect rendering
+
         // If this is false, the first instance will be ignored.
         let non_zero_first_instance_supported = ctx
             .adapter
             .features()
-            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
+            .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE)
+            || !is_indirect;
+
         // If this is false, it won't be ignored, but it won't show up in the shader
+        //
+        // If the IdSource is buffers, this doesn't apply
         let first_vert_instance_supported = ctx.adapter_downlevel_capabilities.flags.contains(
             wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
-        );
-
-        let is_indirect = matches!(self.draw_call_kind, DrawCallKind::Indirect);
+        ) || matches!(self.id_source, IdSource::Buffers)
+            || !is_indirect;
 
         match self.case {
             TestCase::DrawBaseVertex => {
-                if !first_vert_instance_supported && is_indirect {
+                if !first_vert_instance_supported {
                     return &[0, 1, 2, 3, 4, 5];
                 }
 
                 &[0, 0, 0, 3, 4, 5, 6, 7, 8]
             }
-            TestCase::Draw => &[0, 1, 2, 3, 4, 5],
-            TestCase::DrawVertexOffset | TestCase::DrawInstanced => {
-                if !first_vert_instance_supported && is_indirect {
+            TestCase::Draw | TestCase::DrawInstanced => &[0, 1, 2, 3, 4, 5],
+            TestCase::DrawVertexOffset => {
+                if !first_vert_instance_supported {
                     return &[0, 1, 2, 0, 0, 0];
                 }
 
                 &[0, 1, 2, 3, 4, 5]
             }
             TestCase::DrawInstancedOffset => {
-                if (!first_vert_instance_supported || !non_zero_first_instance_supported)
-                    && is_indirect
-                {
+                if !first_vert_instance_supported || !non_zero_first_instance_supported {
                     return &[0, 1, 2, 0, 0, 0];
                 }
 
@@ -300,6 +313,8 @@ fn vertex_index_common(ctx: TestingContext) {
         }
     }
 
+    let features = ctx.adapter.features();
+
     let mut failed = false;
     for test in tests {
         let pipeline = match test.id_source {
@@ -367,7 +382,7 @@ fn vertex_index_common(ctx: TestingContext) {
             DrawCallKind::Indirect => {
                 let mut indirect_bytes = Vec::new();
                 for draw in draws {
-                    draw.add_to_buffer(&mut indirect_bytes);
+                    draw.add_to_buffer(&mut indirect_bytes, features);
                 }
                 indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
                     label: Some("indirect"),

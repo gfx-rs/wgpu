@@ -1,11 +1,8 @@
 (
 	god_mode: true,
 	glsl: (
-		version: Embedded(
-			version: 320,
-			is_webgl: false
-		),
-		writer_flags: (""),
+		version: Desktop(420),
+		writer_flags: ("DRAW_PARAMETERS"),
 		binding_map: {},
 		zero_initialize_workgroup_memory: true,
 	),

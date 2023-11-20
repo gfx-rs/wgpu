@@ -280,15 +280,21 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
-        /// Allows non-zero value for the "first instance" in indirect draw calls.
+        /// Allows non-zero value for the `first_instance` member in indirect draw calls.
+        ///
+        /// If this feature is not enabled, and the `first_instance` member is non-zero, the behavior may be:
+        /// - The draw call is ignored.
+        /// - The draw call is executed as if the `first_instance` is zero.
+        /// - The draw call is executed with the correct `first_instance` value.
         ///
         /// Supported Platforms:
         /// - Vulkan (mostly)
         /// - DX12
         /// - Metal
+        /// - OpenGL (Desktop 4.2+ with ARB_shader_draw_parameters only)
         ///
         /// Not Supported:
-        /// - OpenGL
+        /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
         const INDIRECT_FIRST_INSTANCE = 1 << 2;
@@ -1391,9 +1397,9 @@ bitflags::bitflags! {
         /// DX11 on FL10 level hardware, WebGL2, and GLES 3.0 devices do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
-        /// 
+        ///
         /// Indirect calls, if supported, always support non-zero `base_vertex`.
-        /// 
+        ///
         /// Supported by:
         /// - Vulkan
         /// - DX12

@@ -1090,6 +1090,12 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        writer_flags.set(
+            glsl::WriterFlags::DRAW_PARAMETERS,
+            self.shared
+                .private_caps
+                .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING),
+        );
         // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
         // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
         writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);

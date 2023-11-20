@@ -161,18 +161,37 @@ impl super::Queue {
                 base_instance,
                 ref base_instance_location,
             } => {
-                // Don't use `gl.draw_arrays` for `instance_count == 1`.
-                // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
-                // See https://github.com/gfx-rs/wgpu/issues/3578
-                unsafe {
-                    gl.uniform_1_u32(base_instance_location.as_ref(), base_instance);
+                let supports_full_instancing = self
+                    .shared
+                    .private_caps
+                    .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
 
-                    gl.draw_arrays_instanced(
-                        topology,
-                        start_vertex as i32,
-                        vertex_count as i32,
-                        instance_count as i32,
-                    )
+                if supports_full_instancing {
+                    unsafe {
+                        gl.draw_arrays_instanced_base_instance(
+                            topology,
+                            start_vertex as i32,
+                            vertex_count as i32,
+                            instance_count as i32,
+                            base_instance,
+                        )
+                    }
+                } else {
+                    unsafe {
+                        gl.uniform_1_u32(base_instance_location.as_ref(), base_instance);
+                    }
+
+                    // Don't use `gl.draw_arrays` for `instance_count == 1`.
+                    // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `draw_arrays`.
+                    // See https://github.com/gfx-rs/wgpu/issues/3578
+                    unsafe {
+                        gl.draw_arrays_instanced(
+                            topology,
+                            start_vertex as i32,
+                            vertex_count as i32,
+                            instance_count as i32,
+                        )
+                    }
                 };
             }
             C::DrawIndexed {
@@ -185,38 +204,69 @@ impl super::Queue {
                 instance_count,
                 ref base_instance_location,
             } => {
-                unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), base_instance) };
-
                 match base_vertex {
-                    // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
-                    // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
-                    // See https://github.com/gfx-rs/wgpu/issues/3578
-                    0 => unsafe {
-                        gl.draw_elements_instanced(
-                            topology,
-                            index_count as i32,
-                            index_type,
-                            index_offset as i32,
-                            instance_count as i32,
-                        )
-                    },
-                    _ => unsafe {
-                        gl.draw_elements_instanced_base_vertex(
-                            topology,
-                            index_count as _,
-                            index_type,
-                            index_offset as i32,
-                            instance_count as i32,
-                            base_vertex,
-                        )
-                    },
+                    0 => {
+                        unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), base_instance) };
+
+                        unsafe {
+                            // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
+                            // Angle has a bug where it doesn't consider the instance divisor when `DYNAMIC_DRAW` is used in `gl.draw_elements`/`gl.draw_elements_base_vertex`.
+                            // See https://github.com/gfx-rs/wgpu/issues/3578
+                            gl.draw_elements_instanced(
+                                topology,
+                                index_count as i32,
+                                index_type,
+                                index_offset as i32,
+                                instance_count as i32,
+                            )
+                        }
+                    }
+                    _ => {
+                        let supports_full_instancing = self
+                            .shared
+                            .private_caps
+                            .contains(PrivateCapabilities::FULLY_FEATURED_INSTANCING);
+
+                        if supports_full_instancing {
+                            unsafe {
+                                gl.draw_elements_instanced_base_vertex_base_instance(
+                                    topology,
+                                    index_count as i32,
+                                    index_type,
+                                    index_offset as i32,
+                                    instance_count as i32,
+                                    base_vertex,
+                                    base_instance,
+                                )
+                            }
+                        } else {
+                            unsafe {
+                                gl.uniform_1_u32(base_instance_location.as_ref(), base_instance)
+                            };
+
+                            // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
+                            unsafe {
+                                gl.draw_elements_instanced_base_vertex(
+                                    topology,
+                                    index_count as _,
+                                    index_type,
+                                    index_offset as i32,
+                                    instance_count as i32,
+                                    base_vertex,
+                                )
+                            }
+                        }
+                    }
                 }
             }
             C::DrawIndirect {
                 topology,
                 indirect_buf,
                 indirect_offset,
+                ref base_instance_location,
             } => {
+                unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), 0) };
+
                 unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
                 unsafe { gl.draw_arrays_indirect_offset(topology, indirect_offset as i32) };
             }
@@ -225,7 +275,10 @@ impl super::Queue {
                 index_type,
                 indirect_buf,
                 indirect_offset,
+                ref base_instance_location,
             } => {
+                unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), 0) };
+
                 unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
                 unsafe {
                     gl.draw_elements_indirect_offset(topology, index_type, indirect_offset as i32)

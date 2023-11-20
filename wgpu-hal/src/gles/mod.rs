@@ -196,6 +196,10 @@ bitflags::bitflags! {
         const DEBUG_FNS = 1 << 13;
         /// Supports framebuffer invalidation.
         const INVALIDATE_FRAMEBUFFER = 1 << 14;
+        /// Indicates support for `glDrawElementsInstancedBaseVertexBaseInstance` and `ARB_shader_draw_parameters`
+        ///
+        /// When this is true, instance offset emulation via vertex buffer rebinding and a shader uniform will be disabled.
+        const FULLY_FEATURED_INSTANCING = 1 << 15;
     }
 }
 
@@ -756,12 +760,14 @@ enum Command {
         topology: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
+        base_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndexedIndirect {
         topology: u32,
         index_type: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
+        base_instance_location: Option<glow::UniformLocation>,
     },
     Dispatch([u32; 3]),
     DispatchIndirect {

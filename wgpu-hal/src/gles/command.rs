@@ -195,13 +195,24 @@ impl super::CommandEncoder {
     }
 
     fn prepare_draw(&mut self, first_instance: u32) {
-        if first_instance != self.state.active_first_instance {
+        // If we support fully featured instancing, we want to bind everything as normal
+        // and let the draw call sort it out.
+        let emulated_first_instance_value = if self
+            .private_caps
+            .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING)
+        {
+            0
+        } else {
+            first_instance
+        };
+
+        if emulated_first_instance_value != self.state.active_first_instance {
             // rebind all per-instance buffers on first-instance change
             self.state.dirty_vbuf_mask |= self.state.instance_vbuf_mask;
-            self.state.active_first_instance = first_instance;
+            self.state.active_first_instance = emulated_first_instance_value;
         }
         if self.state.dirty_vbuf_mask != 0 {
-            self.rebind_vertex_data(first_instance);
+            self.rebind_vertex_data(emulated_first_instance_value);
         }
     }
 
@@ -1058,10 +1069,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
                 indirect_buf: buffer.raw.unwrap(),
                 indirect_offset,
+                base_instance_location: self.state.base_instance_location.clone(),
             });
         }
     }
@@ -1079,11 +1092,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset = offset
                 + draw * mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,
                 index_type,
                 indirect_buf: buffer.raw.unwrap(),
                 indirect_offset,
+                base_instance_location: self.state.base_instance_location.clone(),
             });
         }
     }
