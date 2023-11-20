@@ -1,13 +1,16 @@
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
-    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
+    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
     command::ColorAttachmentError,
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
-    id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    resource::Resource,
-    validation, Label, LifeGuard, Stored,
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
+    hal_api::HalApi,
+    id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
+    resource::{Resource, ResourceInfo, ResourceType},
+    validation, Label,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32};
+use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32, sync::Arc};
 use thiserror::Error;
 
 /// Information about buffer bindings, which
@@ -40,26 +43,53 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 
 #[derive(Debug)]
-pub struct ShaderModule<A: hal::Api> {
-    pub(crate) raw: A::ShaderModule,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct ShaderModule<A: HalApi> {
+    pub(crate) raw: Option<A::ShaderModule>,
+    pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
+    pub(crate) info: ResourceInfo<ShaderModuleId>,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
-impl<A: hal::Api> Resource for ShaderModule<A> {
-    const TYPE: &'static str = "ShaderModule";
+impl<A: HalApi> Drop for ShaderModule<A> {
+    fn drop(&mut self) {
+        log::info!("Destroying ShaderModule {:?}", self.info.label());
+        if let Some(raw) = self.raw.take() {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *self.device.trace.lock() {
+                trace.add(trace::Action::DestroyShaderModule(self.info.id()));
+            }
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_shader_module(raw);
+            }
+        }
+    }
+}
 
-    fn life_guard(&self) -> &LifeGuard {
-        unreachable!()
+impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
+    const TYPE: ResourceType = "ShaderModule";
+
+    fn as_info(&self) -> &ResourceInfo<ShaderModuleId> {
+        &self.info
     }
 
-    fn label(&self) -> &str {
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<ShaderModuleId> {
+        &mut self.info
+    }
+
+    fn label(&self) -> String {
         #[cfg(debug_assertions)]
-        return &self.label;
+        return self.label.clone();
         #[cfg(not(debug_assertions))]
-        return "";
+        return String::new();
+    }
+}
+
+impl<A: HalApi> ShaderModule<A> {
+    pub(crate) fn raw(&self) -> &A::ShaderModule {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -212,19 +242,42 @@ pub enum CreateComputePipelineError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipeline<A: hal::Api> {
-    pub(crate) raw: A::ComputePipeline,
-    pub(crate) layout_id: Stored<PipelineLayoutId>,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct ComputePipeline<A: HalApi> {
+    pub(crate) raw: Option<A::ComputePipeline>,
+    pub(crate) layout: Arc<PipelineLayout<A>>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) _shader_module: Arc<ShaderModule<A>>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<ComputePipelineId>,
 }
 
-impl<A: hal::Api> Resource for ComputePipeline<A> {
-    const TYPE: &'static str = "ComputePipeline";
+impl<A: HalApi> Drop for ComputePipeline<A> {
+    fn drop(&mut self) {
+        log::info!("Destroying ComputePipeline {:?}", self.info.label());
+        if let Some(raw) = self.raw.take() {
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_compute_pipeline(raw);
+            }
+        }
+    }
+}
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+impl<A: HalApi> Resource<ComputePipelineId> for ComputePipeline<A> {
+    const TYPE: ResourceType = "ComputePipeline";
+
+    fn as_info(&self) -> &ResourceInfo<ComputePipelineId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<ComputePipelineId> {
+        &mut self.info
+    }
+}
+
+impl<A: HalApi> ComputePipeline<A> {
+    pub(crate) fn raw(&self) -> &A::ComputePipeline {
+        self.raw.as_ref().unwrap()
     }
 }
 
@@ -426,22 +479,45 @@ impl Default for VertexStep {
 }
 
 #[derive(Debug)]
-pub struct RenderPipeline<A: hal::Api> {
-    pub(crate) raw: A::RenderPipeline,
-    pub(crate) layout_id: Stored<PipelineLayoutId>,
-    pub(crate) device_id: Stored<DeviceId>,
+pub struct RenderPipeline<A: HalApi> {
+    pub(crate) raw: Option<A::RenderPipeline>,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) layout: Arc<PipelineLayout<A>>,
+    pub(crate) _shader_modules: Vec<Arc<ShaderModule<A>>>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) info: ResourceInfo<RenderPipelineId>,
 }
 
-impl<A: hal::Api> Resource for RenderPipeline<A> {
-    const TYPE: &'static str = "RenderPipeline";
+impl<A: HalApi> Drop for RenderPipeline<A> {
+    fn drop(&mut self) {
+        log::info!("Destroying RenderPipeline {:?}", self.info.label());
+        if let Some(raw) = self.raw.take() {
+            unsafe {
+                use hal::Device;
+                self.device.raw().destroy_render_pipeline(raw);
+            }
+        }
+    }
+}
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+impl<A: HalApi> Resource<RenderPipelineId> for RenderPipeline<A> {
+    const TYPE: ResourceType = "RenderPipeline";
+
+    fn as_info(&self) -> &ResourceInfo<RenderPipelineId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<RenderPipelineId> {
+        &mut self.info
+    }
+}
+
+impl<A: HalApi> RenderPipeline<A> {
+    pub(crate) fn raw(&self) -> &A::RenderPipeline {
+        self.raw.as_ref().unwrap()
     }
 }

@@ -56,7 +56,7 @@
             format: "rgba8unorm",
             usage: 9, // STORAGE + COPY_SRC
             view_formats: [],
-        )),
+        )),        
         CreateTextureView(
             id: Id(1, 1, Empty),
             parent_id: Id(1, 1, Empty),

@@ -27,6 +27,41 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+#[test]
+fn device_lifetime_check() {
+    use pollster::FutureExt as _;
+
+    env_logger::init();
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::util::backend_bits_from_env().unwrap_or(wgpu::Backends::all()),
+        dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default(),
+        gles_minor_version: wgpu::util::gles_minor_version_from_env().unwrap_or_default(),
+        flags: wgpu::InstanceFlags::debugging().with_env(),
+    });
+
+    let adapter = wgpu::util::initialize_adapter_from_env_or_default(&instance, None)
+        .block_on()
+        .expect("failed to create adapter");
+
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor::default(), None)
+        .block_on()
+        .expect("failed to create device");
+
+    instance.poll_all(false);
+
+    let pre_report = instance.generate_report();
+
+    drop(queue);
+    drop(device);
+    let post_report = instance.generate_report();
+    assert_ne!(
+        pre_report, post_report,
+        "Queue and Device has not been dropped as expected"
+    );
+}
+
+#[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
     GpuTestConfiguration::new().run_async(|_ctx| request_device_error_message());
@@ -38,7 +73,7 @@ static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
 async fn request_device_error_message() {
     // Not using initialize_test() because that doesn't let us catch the error
     // nor .await anything
-    let (adapter, _surface_guard) = wgpu_test::initialize_adapter(0).await;
+    let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(0).await;
 
     let device_error = adapter
         .request_device(
@@ -88,11 +123,7 @@ async fn request_device_error_message() {
 // The DX12 issue may be related to https://github.com/gfx-rs/wgpu/issues/3193.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE)
-            .expect_fail(FailureCase::backend(wgpu::Backends::DX12)),
-    )
+    .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
     .run_sync(|ctx| {
         // Create some resources on the device that we will attempt to use *after* losing
         // the device.

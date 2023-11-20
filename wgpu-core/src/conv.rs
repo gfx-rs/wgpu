@@ -1,4 +1,6 @@
-use crate::resource;
+use wgt::TextureFormatFeatures;
+
+use crate::resource::{self, TextureDescriptor};
 
 pub fn is_power_of_two_u16(val: u16) -> bool {
     val != 0 && (val & (val - 1)) == 0
@@ -133,6 +135,32 @@ pub fn map_texture_usage(
         usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && !is_color,
     );
     u
+}
+
+pub fn map_texture_usage_for_texture(
+    desc: &TextureDescriptor,
+    format_features: &TextureFormatFeatures,
+) -> hal::TextureUses {
+    // Enforce having COPY_DST/DEPTH_STENCIL_WRITE/COLOR_TARGET otherwise we
+    // wouldn't be able to initialize the texture.
+    map_texture_usage(desc.usage, desc.format.into())
+        | if desc.format.is_depth_stencil_format() {
+            hal::TextureUses::DEPTH_STENCIL_WRITE
+        } else if desc.usage.contains(wgt::TextureUsages::COPY_DST) {
+            hal::TextureUses::COPY_DST // (set already)
+        } else {
+            // Use COPY_DST only if we can't use COLOR_TARGET
+            if format_features
+                .allowed_usages
+                .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+                && desc.dimension == wgt::TextureDimension::D2
+            // Render targets dimension must be 2d
+            {
+                hal::TextureUses::COLOR_TARGET
+            } else {
+                hal::TextureUses::COPY_DST
+            }
+        }
 }
 
 pub fn map_texture_usage_from_hal(uses: hal::TextureUses) -> wgt::TextureUsages {

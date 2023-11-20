@@ -212,10 +212,10 @@ pub trait Api: Clone + fmt::Debug + Sized {
 
     type BindGroupLayout: fmt::Debug + WasmNotSendSync;
     type BindGroup: fmt::Debug + WasmNotSendSync;
-    type PipelineLayout: WasmNotSendSync;
+    type PipelineLayout: fmt::Debug + WasmNotSendSync;
     type ShaderModule: fmt::Debug + WasmNotSendSync;
-    type RenderPipeline: WasmNotSendSync;
-    type ComputePipeline: WasmNotSendSync;
+    type RenderPipeline: fmt::Debug + WasmNotSendSync;
+    type ComputePipeline: fmt::Debug + WasmNotSendSync;
 }
 
 pub trait Instance<A: Api>: Sized + WasmNotSendSync {
@@ -239,7 +239,7 @@ pub trait Surface<A: Api>: WasmNotSendSync {
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All surfaces created using other devices must have been unconfigured before this call.
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
@@ -252,7 +252,7 @@ pub trait Surface<A: Api>: WasmNotSendSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface must have been configured on the given device.
-    unsafe fn unconfigure(&mut self, device: &A::Device);
+    unsafe fn unconfigure(&self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
     ///
@@ -265,10 +265,10 @@ pub trait Surface<A: Api>: WasmNotSendSync {
     ///
     /// Returns `None` on timing out.
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
-    unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
+    unsafe fn discard_texture(&self, texture: A::SurfaceTexture);
 }
 
 pub trait Adapter<A: Api>: WasmNotSendSync {
@@ -399,13 +399,13 @@ pub trait Queue<A: Api>: WasmNotSendSync {
     ///   that are associated with this queue.
     /// - all of the command buffers had `CommadBuffer::finish()` called.
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
-        &mut self,
-        surface: &mut A::Surface,
+        &self,
+        surface: &A::Surface,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;

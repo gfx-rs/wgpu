@@ -1,6 +1,6 @@
 //! Tests for buffer usages validation.
 
-use wgpu::BufferUsages as Bu;
+use wgpu::{BufferUsages as Bu, MapMode as Ma};
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters};
 use wgt::BufferAddress;
 
@@ -66,4 +66,105 @@ static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConf
                 (true, ALWAYS_FAIL),
             ],
         );
+    });
+
+async fn map_test(
+    device: &wgpu::Device,
+    usage_type: &str,
+    map_mode_type: Ma,
+    before_unmap: bool,
+    before_destroy: bool,
+    after_unmap: bool,
+    after_destroy: bool,
+) {
+    log::info!("map_test usage_type:{usage_type} map_mode_type:{:?} before_unmap:{before_unmap} before_destroy:{before_destroy} after_unmap:{after_unmap} after_destroy:{after_destroy}", map_mode_type);
+
+    let size = 8;
+    let usage = match usage_type {
+        "read" => Bu::COPY_DST | Bu::MAP_READ,
+        "write" => Bu::COPY_SRC | Bu::MAP_WRITE,
+        _ => Bu::from_bits(0).unwrap(),
+    };
+    let buffer_creation_validation_error = usage.is_empty();
+
+    let mut buffer = None;
+
+    fail_if(device, buffer_creation_validation_error, || {
+        buffer = Some(device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size,
+            usage,
+            mapped_at_creation: false,
+        }));
+    });
+    if buffer_creation_validation_error {
+        return;
+    }
+
+    let buffer = buffer.unwrap();
+
+    let map_async_validation_error = buffer_creation_validation_error
+        || (map_mode_type == Ma::Read && !usage.contains(Bu::MAP_READ))
+        || (map_mode_type == Ma::Write && !usage.contains(Bu::MAP_WRITE));
+
+    fail_if(device, map_async_validation_error, || {
+        buffer.slice(0..size).map_async(map_mode_type, |_| {});
+    });
+
+    if map_async_validation_error {
+        return;
+    }
+
+    if before_unmap {
+        buffer.unmap();
+    }
+
+    if before_destroy {
+        buffer.destroy();
+    }
+
+    device.poll(wgpu::MaintainBase::Wait);
+
+    if !before_unmap && !before_destroy {
+        {
+            let view = buffer.slice(0..size).get_mapped_range();
+            assert!(!view.is_empty());
+        }
+
+        if after_unmap {
+            buffer.unmap();
+        }
+
+        if after_destroy {
+            buffer.destroy();
+        }
+    }
+}
+
+#[gpu_test]
+static BUFFER_MAP_ASYNC_MAP_STATE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+    .run_async(move |ctx| async move {
+        for usage_type in ["invalid", "read", "write"] {
+            for map_mode_type in [Ma::Read, Ma::Write] {
+                for before_unmap in [false, true] {
+                    for before_destroy in [false, true] {
+                        for after_unmap in [false, true] {
+                            for after_destroy in [false, true] {
+                                map_test(
+                                    &ctx.device,
+                                    usage_type,
+                                    map_mode_type,
+                                    before_unmap,
+                                    before_destroy,
+                                    after_unmap,
+                                    after_destroy,
+                                )
+                                .await
+                            }
+                        }
+                    }
+                }
+            }
+        }
     });

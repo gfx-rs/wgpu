@@ -47,6 +47,25 @@ Bottom level categories:
 
 ### Changes
 
+- Arcanization of wgpu core resources: 
+Removed Token and LifeTime related management
+Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
+Removing mut from resources and added instead internal members locks on demand or atomics operations
+Resources now implement Drop and destroy stuff when last Arc resources is released
+Resources hold an Arc in order to be able to implement Drop
+Resources have an utility to retrieve the id of the resource itself
+Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
+Verify correct resources release when unused or not needed
+Check Web and Metal compliation (thanks to @niklaskorz)
+Fix tests on all platforms
+Test a multithreaded scenario
+Storage is now holding only user-land resources, but Arc is keeping refcount for resources
+When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
+IdentityManager is now unique and free is called on resource drop instead of storage unregister
+Identity changes due to Arcanization and Registry being just the user reference
+Added MemLeaks test and fixing mem leaks
+By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+
 #### General
 
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
@@ -1128,7 +1147,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 #### Vulkan
 
-- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
+- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
 - Update to Naga b209d911 (2022-9-1) to avoid generating SPIR-V that
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in

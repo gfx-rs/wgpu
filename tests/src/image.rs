@@ -431,13 +431,6 @@ fn copy_texture_to_buffer(
         }
         TextureFormat::Depth24PlusStencil8 => {
             copy_via_compute(device, encoder, texture, buffer, TextureAspect::DepthOnly);
-            // copy_via_compute(
-            //     device,
-            //     encoder,
-            //     texture,
-            //     buffer_stencil.as_ref().unwrap(),
-            //     TextureAspect::StencilOnly,
-            // );
             copy_texture_to_buffer_with_aspect(
                 encoder,
                 texture,
