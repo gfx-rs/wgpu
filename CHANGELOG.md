@@ -51,6 +51,7 @@ Bottom level categories:
 
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
 - `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
+- Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
 
 #### Safe `Surface` creation
 
