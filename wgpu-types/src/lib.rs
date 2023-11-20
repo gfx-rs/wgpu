@@ -2393,7 +2393,7 @@ pub enum TextureFormat {
     /// - 1: Dual 8 bit channel chrominance at half width and half height.
     ///
     /// Valid view formats for luminance are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
-    /// 
+    ///
     /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
     ///
     /// Width and height must be even.
@@ -2951,8 +2951,9 @@ impl TextureFormat {
             | Self::Depth24Plus
             | Self::Depth24PlusStencil8
             | Self::Depth32Float
-            | Self::Depth32FloatStencil8
-            | Self::NV12 => (1, 1),
+            | Self::Depth32FloatStencil8 => (1, 1),
+
+            Self::NV12 => (2, 2),
 
             Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
