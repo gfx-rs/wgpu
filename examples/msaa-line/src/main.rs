@@ -329,13 +329,7 @@ static TEST: wgpu_example::framework::ExampleTestParams =
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-        base_test_parameters: wgpu_test::TestParameters::default()
-            // AMD seems to render nothing on DX12 https://github.com/gfx-rs/wgpu/issues/3838
-            .expect_fail(FailureCase {
-                backends: Some(wgpu::Backends::DX12),
-                vendor: Some(0x1002),
-                ..FailureCase::default()
-            }),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         // There's a lot of natural variance so we check the weighted median too to differentiate
         // real failures from variance.
         comparisons: &[
