@@ -54,6 +54,31 @@ To address this, we invalidate the vertex buffers based on:
   - whether or not `start_instance` is used
   - stride has changed
 
+## Handling of BaseVertex, BaseInstance, and FirstVertex
+
+Between indirect, the lack of "base instance" semantics, and the availablity of gl_BaseInstance
+in shaders, getting buffers and builtins to work correctly is a bit tricky.
+
+We never emulate `base_vertex` and gl_VertexID behaves as `@builtin(vertex_index)` does, so we
+never need to do anything about that.
+
+We always advertise support for `VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST`.
+
+### GL 4.2+ with ARB_shader_draw_parameters
+
+- `@builtin(instance_index)` translates to `gl_InstanceID + gl_BaseInstance`
+- We bind instance buffers without any offset emulation.
+- We advertise support for the `INDIRECT_FIRST_INSTANCE` feature.
+
+While we can theoretically have a card with 4.2+ support but without ARB_shader_draw_parameters,
+we don't bother with that combination.
+
+### GLES & GL 4.1
+
+- `@builtin(instance_index)` translates to `gl_InstanceID + naga_vs_base_instance`
+- We bind instance buffers with offset emulation.
+- We _do not_ advertise support for `INDIRECT_FIRST_INSTANCE` and cpu-side pretend the base instance is 0 on indirect calls.
+
 */
 
 ///cbindgen:ignore

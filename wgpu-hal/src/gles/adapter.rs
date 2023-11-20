@@ -552,6 +552,12 @@ impl super::Adapter {
                 extensions.contains("GL_KHR_texture_compression_astc_hdr"),
             );
         }
+        if let Some(full_ver) = full_ver {
+            // Desktop 4.2 and greater specify the first instance parameter.
+            //
+            // For all other versions, the behavior is undefined.
+            features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, full_ver >= (4, 2));
+        }
 
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 

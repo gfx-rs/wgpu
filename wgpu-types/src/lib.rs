@@ -1390,7 +1390,16 @@ bitflags::bitflags! {
         ///
         /// DX11 on FL10 level hardware, WebGL2, and GLES 3.0 devices do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
-        /// Supports non-zero `base_vertex` parameter to indexed draw calls.
+        /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
+        /// 
+        /// Indirect calls, if supported, always support non-zero `base_vertex`.
+        /// 
+        /// Supported by:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        /// - OpenGL 3.2+
+        /// - OpenGL ES 3.2
         const BASE_VERTEX = 1 << 3;
         /// Supports reading from a depth/stencil texture while using it as a read-only
         /// depth/stencil attachment.
