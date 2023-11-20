@@ -12,8 +12,6 @@ use std::{borrow::Cow, iter};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
-#[cfg(test)]
-use wgpu_test::FailureCase;
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
     keyboard::{Key, NamedKey},
