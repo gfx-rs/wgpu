@@ -1,16 +1,24 @@
+//! Tests that vertex buffers, vertex indices, and instance indices are properly handled.
+//!
+//! We need tests for these as the backends use various schemes to work around the lack
+//! of support for things like BaseInstance in shaders.
+
 use std::{num::NonZeroU64, ops::Range};
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+/// Generic struct representing a draw call
 struct Draw {
     vertex: Range<u32>,
     instance: Range<u32>,
+    /// If present, is an indexed call
     vertex_offset: Option<i32>,
 }
 
 impl Draw {
+    /// Directly execute the draw call
     fn execute(&self, rpass: &mut wgpu::RenderPass<'_>) {
         if let Some(vertex_offset) = self.vertex_offset {
             rpass.draw_indexed(self.vertex.clone(), vertex_offset, self.instance.clone());
@@ -19,6 +27,7 @@ impl Draw {
         }
     }
 
+    /// Add the draw call to the given indirect buffer
     fn add_to_buffer(&self, bytes: &mut Vec<u8>, features: wgpu::Features) {
         // The behavior of non-zero first_instance in indirect draw calls in currently undefined if INDIRECT_FIRST_INSTANCE is not supported.
         let supports_first_instance = features.contains(wgpu::Features::INDIRECT_FIRST_INSTANCE);
@@ -52,6 +61,7 @@ impl Draw {
         }
     }
 
+    /// Execute the draw call from the given indirect buffer
     fn execute_indirect<'rpass>(
         &self,
         rpass: &mut wgpu::RenderPass<'rpass>,
@@ -70,10 +80,15 @@ impl Draw {
 
 #[derive(Debug, Copy, Clone)]
 enum TestCase {
+    /// A single draw call with 6 vertices
     Draw,
+    /// Two draw calls of 0..3 and 3..6 verts
     DrawVertexOffset,
+    /// A single draw call with 6 vertices and a vertex offset of 3
     DrawBaseVertex,
+    /// A single draw call with 3 vertices and 2 instances
     DrawInstanced,
+    /// Two draw calls with 3 vertices and 0..1 and 1..2 instances.
     DrawInstancedOffset,
 }
 
@@ -86,6 +101,7 @@ impl TestCase {
         Self::DrawInstancedOffset,
     ];
 
+    // Get the draw calls for this test case
     fn draws(&self) -> &'static [Draw] {
         match self {
             TestCase::Draw => &[Draw {
@@ -133,7 +149,9 @@ impl TestCase {
 
 #[derive(Debug, Copy, Clone)]
 enum IdSource {
+    /// Use buffers to load the vertex and instance index
     Buffers,
+    /// Use builtins to load the vertex and instance index
     Builtins,
 }
 
@@ -158,6 +176,8 @@ struct Test {
 }
 
 impl Test {
+    /// Get the expected result from this test, taking into account
+    /// the various features and capabilities that may be missing.
     fn expectation(&self, ctx: &TestingContext) -> &'static [u32] {
         let is_indirect = matches!(self.draw_call_kind, DrawCallKind::Indirect);
 
@@ -348,12 +368,12 @@ fn vertex_index_common(ctx: TestingContext) {
             }],
         });
 
-        let mut encoder = ctx
+        let mut encoder1 = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
         let indirect_buffer;
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut rpass = encoder1.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 ops: wgpu::Operations::default(),
@@ -398,9 +418,17 @@ fn vertex_index_common(ctx: TestingContext) {
 
         drop(rpass);
 
-        encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+        let mut encoder2 = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        ctx.queue.submit(Some(encoder.finish()));
+        encoder2.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, buffer_size);
+
+        // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
+        // with a hard wait in between.
+        ctx.queue.submit([encoder1.finish()]);
+        ctx.device.poll(wgpu::Maintain::Wait);
+        ctx.queue.submit([encoder2.finish()]);
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
         ctx.device.poll(wgpu::Maintain::Wait);
