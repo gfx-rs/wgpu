@@ -1,5 +1,6 @@
 use glow::HasContext;
-use std::sync::Arc;
+use parking_lot::Mutex;
+use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -213,9 +214,9 @@ impl super::Adapter {
         let vendor = unsafe { gl.get_parameter_string(vendor_const) };
         let renderer = unsafe { gl.get_parameter_string(renderer_const) };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::trace!("Vendor: {}", vendor);
-        log::trace!("Renderer: {}", renderer);
-        log::trace!("Version: {}", version);
+        log::debug!("Vendor: {}", vendor);
+        log::debug!("Renderer: {}", renderer);
+        log::debug!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver
@@ -271,7 +272,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::trace!("SL version: {}", &sl_version);
+            log::debug!("SL version: {}", &sl_version);
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
                 let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
@@ -290,7 +291,7 @@ impl super::Adapter {
             }
         };
 
-        log::trace!("Supported GL Extensions: {:#?}", extensions);
+        log::debug!("Supported GL Extensions: {:#?}", extensions);
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
@@ -919,9 +920,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 shader_clear_program,
                 shader_clear_program_color_uniform_location,
                 zero_buffer,
-                temp_query_results: Vec::new(),
-                draw_buffer_count: 1,
-                current_index_buffer: None,
+                temp_query_results: Mutex::new(Vec::new()),
+                draw_buffer_count: AtomicU8::new(1),
+                current_index_buffer: Mutex::new(None),
             },
         })
     }

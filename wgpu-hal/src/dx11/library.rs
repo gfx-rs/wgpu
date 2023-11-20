@@ -120,7 +120,7 @@ impl D3D11Lib {
                     return Some((super::D3D11Device::Device2(device2), feature_level));
                 }
                 Err(hr) => {
-                    log::info!("Failed to cast device to ID3D11Device2: {}", hr)
+                    log::warn!("Failed to cast device to ID3D11Device2: {}", hr)
                 }
             }
         }
@@ -132,7 +132,7 @@ impl D3D11Lib {
                     return Some((super::D3D11Device::Device1(device1), feature_level));
                 }
                 Err(hr) => {
-                    log::info!("Failed to cast device to ID3D11Device1: {}", hr)
+                    log::warn!("Failed to cast device to ID3D11Device1: {}", hr)
                 }
             }
         }

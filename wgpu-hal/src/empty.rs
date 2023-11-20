@@ -57,22 +57,22 @@ impl crate::Instance<Api> for Context {
 
 impl crate::Surface<Api> for Context {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &Context,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &Context) {}
+    unsafe fn unconfigure(&self, device: &Context) {}
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
-    unsafe fn discard_texture(&mut self, texture: Resource) {}
+    unsafe fn discard_texture(&self, texture: Resource) {}
 }
 
 impl crate::Adapter<Api> for Context {
@@ -101,15 +101,15 @@ impl crate::Adapter<Api> for Context {
 
 impl crate::Queue<Api> for Context {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&Resource],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
     ) -> DeviceResult<()> {
         Ok(())
     }
     unsafe fn present(
-        &mut self,
-        surface: &mut Context,
+        &self,
+        surface: &Context,
         texture: Resource,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())

@@ -2,6 +2,7 @@ use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::{shader_compilation, SurfaceTarget},
 };
+use parking_lot::Mutex;
 use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
     shared::{
@@ -427,7 +428,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device,
             queue: super::Queue {
                 raw: queue,
-                temp_lists: Vec::new(),
+                temp_lists: Mutex::new(Vec::new()),
             },
         })
     }

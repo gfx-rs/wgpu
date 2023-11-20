@@ -108,30 +108,32 @@ pub struct BindGroup {}
 pub struct PipelineLayout {}
 #[derive(Debug)]
 pub struct ShaderModule {}
+#[derive(Debug)]
 pub struct RenderPipeline {}
+#[derive(Debug)]
 pub struct ComputePipeline {}
 
 impl crate::Surface<Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         todo!()
     }
 
-    unsafe fn unconfigure(&mut self, device: &Device) {
+    unsafe fn unconfigure(&self, device: &Device) {
         todo!()
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         todo!()
     }
 
-    unsafe fn discard_texture(&mut self, texture: SurfaceTexture) {
+    unsafe fn discard_texture(&self, texture: SurfaceTexture) {
         todo!()
     }
 }

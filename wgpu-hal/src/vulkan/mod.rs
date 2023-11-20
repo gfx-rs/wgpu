@@ -31,14 +31,23 @@ mod conv;
 mod device;
 mod instance;
 
-use std::{borrow::Borrow, ffi::CStr, fmt, num::NonZeroU32, sync::Arc};
+use std::{
+    borrow::Borrow,
+    ffi::CStr,
+    fmt,
+    num::NonZeroU32,
+    sync::{
+        atomic::{AtomicIsize, Ordering},
+        Arc,
+    },
+};
 
 use arrayvec::ArrayVec;
 use ash::{
     extensions::{ext, khr},
     vk,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -146,7 +155,7 @@ pub struct Surface {
     raw: vk::SurfaceKHR,
     functor: khr::Surface,
     instance: Arc<InstanceShared>,
-    swapchain: Option<Swapchain>,
+    swapchain: RwLock<Option<Swapchain>>,
 }
 
 #[derive(Debug)]
@@ -340,7 +349,7 @@ pub struct Queue {
     /// It would be correct to use a single semaphore there, but
     /// [Intel hangs in `anv_queue_finish`](https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508).
     relay_semaphores: [vk::Semaphore; 2],
-    relay_index: Option<usize>,
+    relay_index: AtomicIsize,
 }
 
 #[derive(Debug)]
@@ -560,7 +569,7 @@ impl Fence {
 
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
@@ -605,16 +614,17 @@ impl crate::Queue<Api> for Queue {
         }
 
         let wait_stage_mask = [vk::PipelineStageFlags::TOP_OF_PIPE];
-        let sem_index = match self.relay_index {
-            Some(old_index) => {
-                vk_info = vk_info
-                    .wait_semaphores(&self.relay_semaphores[old_index..old_index + 1])
-                    .wait_dst_stage_mask(&wait_stage_mask);
-                (old_index + 1) % self.relay_semaphores.len()
-            }
-            None => 0,
+        let old_index = self.relay_index.load(Ordering::Relaxed);
+        let sem_index = if old_index >= 0 {
+            vk_info = vk_info
+                .wait_semaphores(&self.relay_semaphores[old_index as usize..old_index as usize + 1])
+                .wait_dst_stage_mask(&wait_stage_mask);
+            (old_index as usize + 1) % self.relay_semaphores.len()
+        } else {
+            0
         };
-        self.relay_index = Some(sem_index);
+        self.relay_index
+            .store(sem_index as isize, Ordering::Relaxed);
         signal_semaphores[0] = self.relay_semaphores[sem_index];
 
         let signal_count = if signal_semaphores[1] == vk::Semaphore::null() {
@@ -634,11 +644,12 @@ impl crate::Queue<Api> for Queue {
     }
 
     unsafe fn present(
-        &mut self,
-        surface: &mut Surface,
+        &self,
+        surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
-        let ssc = surface.swapchain.as_ref().unwrap();
+        let mut swapchain = surface.swapchain.write();
+        let ssc = swapchain.as_mut().unwrap();
 
         let swapchains = [ssc.raw];
         let image_indices = [texture.index];
@@ -646,8 +657,11 @@ impl crate::Queue<Api> for Queue {
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
-        if let Some(old_index) = self.relay_index.take() {
-            vk_info = vk_info.wait_semaphores(&self.relay_semaphores[old_index..old_index + 1]);
+        let old_index = self.relay_index.swap(-1, Ordering::Relaxed);
+        if old_index >= 0 {
+            vk_info = vk_info.wait_semaphores(
+                &self.relay_semaphores[old_index as usize..old_index as usize + 1],
+            );
         }
 
         let suboptimal = {

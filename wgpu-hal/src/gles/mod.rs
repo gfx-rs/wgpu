@@ -95,7 +95,7 @@ use glow::HasContext;
 
 use naga::FastHashMap;
 use parking_lot::Mutex;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, AtomicU8};
 use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -248,9 +248,9 @@ pub struct Queue {
     /// Keep a reasonably large buffer filled with zeroes, so that we can implement `ClearBuffer` of
     /// zeroes by copying from it.
     zero_buffer: glow::Buffer,
-    temp_query_results: Vec<u64>,
-    draw_buffer_count: u8,
-    current_index_buffer: Option<glow::Buffer>,
+    temp_query_results: Mutex<Vec<u64>>,
+    draw_buffer_count: AtomicU8,
+    current_index_buffer: Mutex<Option<glow::Buffer>>,
 }
 
 #[derive(Clone, Debug)]
@@ -387,6 +387,7 @@ pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
 
+#[derive(Debug)]
 struct BindGroupLayoutInfo {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
     /// Mapping of resources, indexed by `binding`, into the whole layout space.
@@ -397,6 +398,7 @@ struct BindGroupLayoutInfo {
     binding_to_slot: Box<[u8]>,
 }
 
+#[derive(Debug)]
 pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
     naga_options: naga::back::glsl::Options,
@@ -510,6 +512,7 @@ unsafe impl Send for PushConstantDesc {}
 /// sampler (in this layout) that the texture is used with.
 type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 
+#[derive(Debug)]
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
@@ -556,6 +559,7 @@ struct ProgramCacheKey {
 
 type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;
 
+#[derive(Debug)]
 pub struct RenderPipeline {
     inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
@@ -581,6 +585,7 @@ unsafe impl Sync for RenderPipeline {}
 ))]
 unsafe impl Send for RenderPipeline {}
 
+#[derive(Debug)]
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
@@ -691,7 +696,7 @@ impl Default for StencilSide {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct StencilState {
     front: StencilSide,
     back: StencilSide,

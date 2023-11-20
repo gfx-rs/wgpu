@@ -187,7 +187,7 @@ impl super::Device {
         unsafe { gl.shader_source(raw, shader) };
         unsafe { gl.compile_shader(raw) };
 
-        log::info!("\tCompiled shader {:?}", raw);
+        log::debug!("\tCompiled shader {:?}", raw);
 
         let compiled_ok = unsafe { gl.get_shader_compile_status(raw) };
         let msg = unsafe { gl.get_shader_info_log(raw) };
@@ -398,7 +398,7 @@ impl super::Device {
             unsafe { gl.delete_shader(shader) };
         }
 
-        log::info!("\tLinked program {:?}", program);
+        log::debug!("\tLinked program {:?}", program);
 
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
@@ -1418,27 +1418,27 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
             };
-            let &(_, sync) = fence
+            if let Some(&(_, sync)) = fence
                 .pending
                 .iter()
                 .find(|&&(value, _)| value >= wait_value)
-                .unwrap();
-            match unsafe {
-                gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
-            } {
-                // for some reason firefox returns WAIT_FAILED, to investigate
-                #[cfg(target_arch = "wasm32")]
-                glow::WAIT_FAILED => {
-                    log::warn!("wait failed!");
-                    Ok(false)
-                }
-                glow::TIMEOUT_EXPIRED => Ok(false),
-                glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
-                _ => Err(crate::DeviceError::Lost),
+            {
+                return match unsafe {
+                    gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
+                } {
+                    // for some reason firefox returns WAIT_FAILED, to investigate
+                    #[cfg(target_arch = "wasm32")]
+                    glow::WAIT_FAILED => {
+                        log::warn!("wait failed!");
+                        Ok(false)
+                    }
+                    glow::TIMEOUT_EXPIRED => Ok(false),
+                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
+                    _ => Err(crate::DeviceError::Lost),
+                };
             }
-        } else {
-            Ok(true)
         }
+        Ok(true)
     }
 
     unsafe fn start_capture(&self) -> bool {

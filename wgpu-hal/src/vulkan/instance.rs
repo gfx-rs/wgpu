@@ -9,6 +9,7 @@ use ash::{
     extensions::{ext, khr},
     vk,
 };
+use parking_lot::RwLock;
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -285,7 +286,7 @@ impl super::Instance {
             }) {
                 true
             } else {
-                log::info!("Unable to find extension: {}", ext.to_string_lossy());
+                log::warn!("Unable to find extension: {}", ext.to_string_lossy());
                 false
             }
         });
@@ -314,7 +315,7 @@ impl super::Instance {
         has_nv_optimus: bool,
         drop_guard: Option<crate::DropGuard>,
     ) -> Result<Self, crate::InstanceError> {
-        log::info!("Instance version: 0x{:x}", instance_api_version);
+        log::debug!("Instance version: 0x{:x}", instance_api_version);
 
         let debug_utils = if let Some(debug_utils_create_info) = debug_utils_create_info {
             if extensions.contains(&ext::DebugUtils::name()) {
@@ -344,7 +345,7 @@ impl super::Instance {
 
         let get_physical_device_properties =
             if extensions.contains(&khr::GetPhysicalDeviceProperties2::name()) {
-                log::info!("Enabling device properties2");
+                log::debug!("Enabling device properties2");
                 Some(khr::GetPhysicalDeviceProperties2::new(
                     &entry,
                     &raw_instance,
@@ -539,7 +540,7 @@ impl super::Instance {
             raw: surface,
             functor,
             instance: Arc::clone(&self.shared),
-            swapchain: None,
+            swapchain: RwLock::new(None),
         }
     }
 }
@@ -618,7 +619,7 @@ impl crate::Instance<super::Api> for super::Instance {
             entry.enumerate_instance_layer_properties()
         };
         let instance_layers = instance_layers.map_err(|e| {
-            log::info!("enumerate_instance_layer_properties: {:?}", e);
+            log::debug!("enumerate_instance_layer_properties: {:?}", e);
             crate::InstanceError::with_source(
                 String::from("enumerate_instance_layer_properties() failed"),
                 e,
@@ -877,24 +878,24 @@ impl crate::Instance<super::Api> for super::Instance {
 
 impl crate::Surface<super::Api> for super::Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         // Safety: `configure`'s contract guarantees there are no resources derived from the swapchain in use.
-        let old = self
-            .swapchain
+        let mut swap_chain = self.swapchain.write();
+        let old = swap_chain
             .take()
             .map(|sc| unsafe { sc.release_resources(&device.shared.raw) });
 
         let swapchain = unsafe { device.create_swapchain(self, config, old)? };
-        self.swapchain = Some(swapchain);
+        *swap_chain = Some(swapchain);
 
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
-        if let Some(sc) = self.swapchain.take() {
+    unsafe fn unconfigure(&self, device: &super::Device) {
+        if let Some(sc) = self.swapchain.write().take() {
             // Safety: `unconfigure`'s contract guarantees there are no resources derived from the swapchain in use.
             let swapchain = unsafe { sc.release_resources(&device.shared.raw) };
             unsafe { swapchain.functor.destroy_swapchain(swapchain.raw, None) };
@@ -902,10 +903,11 @@ impl crate::Surface<super::Api> for super::Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_mut().unwrap();
+        let mut swapchain = self.swapchain.write();
+        let sc = swapchain.as_mut().unwrap();
 
         let mut timeout_ns = match timeout {
             Some(duration) => duration.as_nanos() as u64,
@@ -992,5 +994,5 @@ impl crate::Surface<super::Api> for super::Surface {
         }))
     }
 
-    unsafe fn discard_texture(&mut self, _texture: super::SurfaceTexture) {}
+    unsafe fn discard_texture(&self, _texture: super::SurfaceTexture) {}
 }

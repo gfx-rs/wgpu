@@ -186,7 +186,7 @@ impl super::Device {
         }
 
         let value = cur_value + 1;
-        log::info!("Waiting for idle with value {}", value);
+        log::debug!("Waiting for idle with value {}", value);
         self.present_queue.signal(&self.idler.fence, value);
         let hr = self
             .idler

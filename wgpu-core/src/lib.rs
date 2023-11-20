@@ -48,6 +48,7 @@
     clippy::pattern_type_mismatch,
 )]
 
+pub mod any_surface;
 pub mod binding_model;
 pub mod command;
 mod conv;
@@ -70,9 +71,7 @@ mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 
-use atomic::{AtomicUsize, Ordering};
-
-use std::{borrow::Cow, os::raw::c_char, ptr, sync::atomic};
+use std::{borrow::Cow, os::raw::c_char};
 
 /// The index of a queue submission.
 ///
@@ -112,155 +111,6 @@ pub fn hal_label(opt: Option<&str>, flags: wgt::InstanceFlags) -> Option<&str> {
     }
 
     opt
-}
-
-/// Reference count object that is 1:1 with each reference.
-///
-/// All the clones of a given `RefCount` point to the same
-/// heap-allocated atomic reference count. When the count drops to
-/// zero, only the count is freed. No other automatic cleanup takes
-/// place; this is just a reference count, not a smart pointer.
-///
-/// `RefCount` values are created only by [`LifeGuard::new`] and by
-/// `Clone`, so every `RefCount` is implicitly tied to some
-/// [`LifeGuard`].
-#[derive(Debug)]
-struct RefCount(ptr::NonNull<AtomicUsize>);
-
-unsafe impl Send for RefCount {}
-unsafe impl Sync for RefCount {}
-
-impl RefCount {
-    const MAX: usize = 1 << 24;
-
-    /// Construct a new `RefCount`, with an initial count of 1.
-    fn new() -> RefCount {
-        let bx = Box::new(AtomicUsize::new(1));
-        Self(unsafe { ptr::NonNull::new_unchecked(Box::into_raw(bx)) })
-    }
-
-    fn load(&self) -> usize {
-        unsafe { self.0.as_ref() }.load(Ordering::Acquire)
-    }
-}
-
-impl Clone for RefCount {
-    fn clone(&self) -> Self {
-        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
-        assert!(old_size < Self::MAX);
-        Self(self.0)
-    }
-}
-
-impl Drop for RefCount {
-    fn drop(&mut self) {
-        unsafe {
-            if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
-                drop(Box::from_raw(self.0.as_ptr()));
-            }
-        }
-    }
-}
-
-/// Reference count object that tracks multiple references.
-/// Unlike `RefCount`, it's manually inc()/dec() called.
-#[derive(Debug)]
-struct MultiRefCount(AtomicUsize);
-
-impl MultiRefCount {
-    fn new() -> Self {
-        Self(AtomicUsize::new(1))
-    }
-
-    fn inc(&self) {
-        self.0.fetch_add(1, Ordering::AcqRel);
-    }
-
-    fn dec_and_check_empty(&self) -> bool {
-        self.0.fetch_sub(1, Ordering::AcqRel) == 1
-    }
-}
-
-/// Information needed to decide when it's safe to free some wgpu-core
-/// resource.
-///
-/// Each type representing a `wgpu-core` resource, like [`Device`],
-/// [`Buffer`], etc., contains a `LifeGuard` which indicates whether
-/// it is safe to free.
-///
-/// A resource may need to be retained for any of several reasons:
-///
-/// - The user may hold a reference to it (via a `wgpu::Buffer`, say).
-///
-/// - Other resources may depend on it (a texture view's backing
-///   texture, for example).
-///
-/// - It may be used by commands sent to the GPU that have not yet
-///   finished execution.
-///
-/// [`Device`]: device::Device
-/// [`Buffer`]: resource::Buffer
-#[derive(Debug)]
-pub struct LifeGuard {
-    /// `RefCount` for the user's reference to this resource.
-    ///
-    /// When the user first creates a `wgpu-core` resource, this `RefCount` is
-    /// created along with the resource's `LifeGuard`. When the user drops the
-    /// resource, we swap this out for `None`. Note that the resource may
-    /// still be held alive by other resources.
-    ///
-    /// Any `Stored<T>` value holds a clone of this `RefCount` along with the id
-    /// of a `T` resource.
-    ref_count: Option<RefCount>,
-
-    /// The index of the last queue submission in which the resource
-    /// was used.
-    ///
-    /// Each queue submission is fenced and assigned an index number
-    /// sequentially. Thus, when a queue submission completes, we know any
-    /// resources used in that submission and any lower-numbered submissions are
-    /// no longer in use by the GPU.
-    submission_index: AtomicUsize,
-
-    /// The `label` from the descriptor used to create the resource.
-    #[cfg(debug_assertions)]
-    pub(crate) label: String,
-}
-
-impl LifeGuard {
-    #[allow(unused_variables)]
-    fn new(label: &str) -> Self {
-        Self {
-            ref_count: Some(RefCount::new()),
-            submission_index: AtomicUsize::new(0),
-            #[cfg(debug_assertions)]
-            label: label.to_string(),
-        }
-    }
-
-    fn add_ref(&self) -> RefCount {
-        self.ref_count.clone().unwrap()
-    }
-
-    /// Record that this resource will be used by the queue submission with the
-    /// given index.
-    ///
-    /// Returns `true` if the resource is still held by the user.
-    fn use_at(&self, submit_index: SubmissionIndex) -> bool {
-        self.submission_index
-            .store(submit_index as _, Ordering::Release);
-        self.ref_count.is_some()
-    }
-
-    fn life_count(&self) -> SubmissionIndex {
-        self.submission_index.load(Ordering::Acquire) as _
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Stored<T> {
-    value: id::Valid<T>,
-    ref_count: RefCount,
 }
 
 const DOWNLEVEL_WARNING_MESSAGE: &str = "The underlying API or device in use does not \
@@ -399,7 +249,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 ///
 /// ```ignore
 /// impl<...> Global<...> {
-///    pub fn device_create_buffer<A: hal::Api>(&self, ...) -> ...
+///    pub fn device_create_buffer<A: HalApi>(&self, ...) -> ...
 ///    { ... }
 /// }
 /// ```
@@ -407,7 +257,7 @@ define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "g
 /// That `gfx_select!` call uses `device_id`'s backend to select the right
 /// backend type `A` for a call to `Global::device_create_buffer<A>`.
 ///
-/// However, there's nothing about this macro that is specific to `global::Global`.
+/// However, there's nothing about this macro that is specific to `hub::Global`.
 /// For example, Firefox's embedding of `wgpu_core` defines its own types with
 /// methods that take `hal::Api` type parameters. Firefox uses `gfx_select!` to
 /// dynamically dispatch to the right specialization based on the resource's id.

@@ -1948,6 +1948,10 @@ impl crate::context::Context for Context {
         // with a callback.
     }
 
+    fn queue_drop(&self, _queue: &Self::QueueId, _queue_data: &Self::QueueData) {
+        // Queue is dropped automatically
+    }
+
     fn device_set_device_lost_callback(
         &self,
         _device: &Self::DeviceId,

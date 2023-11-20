@@ -204,7 +204,7 @@ impl crate::Device<super::Api> for super::Device {
 
 impl crate::Queue<super::Api> for super::Queue {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&super::CommandBuffer],
         signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
@@ -212,8 +212,8 @@ impl crate::Queue<super::Api> for super::Queue {
     }
 
     unsafe fn present(
-        &mut self,
-        surface: &mut super::Surface,
+        &self,
+        surface: &super::Surface,
         texture: super::SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         todo!()
