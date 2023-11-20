@@ -95,7 +95,7 @@ fn draw_test_with_reports(
             layout: Some(&ppl),
             vertex: wgpu::VertexState {
                 buffers: &[],
-                entry_point: "vs_main",
+                entry_point: "vs_main_builtin",
                 module: &shader,
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -276,7 +276,7 @@ fn draw_test_with_reports(
     target_os = "emscripten",
     feature = "webgl"
 ))]
-#[wgpu_macros::gpu_test]
+#[wgpu_test::gpu_test]
 static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
     wgpu_test::GpuTestConfiguration::new()
         .parameters(
