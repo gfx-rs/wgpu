@@ -224,3 +224,27 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
             });
         });
     });
+
+#[gpu_test]
+static NV12_TEXTURE_BAD_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .run_sync(|ctx| {
+        let size = wgpu::Extent3d {
+            width: 255,
+            height: 255,
+            depth_or_array_layers: 1,
+        };
+
+        fail(&ctx.device, || {
+            let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: wgpu::TextureFormat::NV12,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
+            });
+        });
+    });
