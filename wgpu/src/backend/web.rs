@@ -1609,7 +1609,8 @@ impl crate::context::Context for Context {
                     }) => {
                         let buffer: &<Context as crate::Context>::BufferData =
                             downcast_ref(buffer.data.as_ref());
-                        let mut mapped_buffer_binding = web_sys::GpuBufferBinding::new(&buffer.0.buffer);
+                        let mut mapped_buffer_binding =
+                            web_sys::GpuBufferBinding::new(&buffer.0.buffer);
                         mapped_buffer_binding.offset(offset as f64);
                         if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
@@ -1812,7 +1813,10 @@ impl crate::context::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(WebBuffer::new(device_data.0.create_buffer(&mapped_desc), desc))
+        create_identified(WebBuffer::new(
+            device_data.0.create_buffer(&mapped_desc),
+            desc,
+        ))
     }
 
     fn device_create_texture(
@@ -2848,9 +2852,10 @@ impl crate::context::Context for Context {
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        pass_data
-            .0
-            .dispatch_workgroups_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
+        pass_data.0.dispatch_workgroups_indirect_with_f64(
+            &indirect_buffer_data.0.buffer,
+            indirect_offset as f64,
+        );
     }
 
     fn render_bundle_encoder_set_pipeline(
@@ -2936,9 +2941,11 @@ impl crate::context::Context for Context {
                 );
             }
             None => {
-                encoder_data
-                    .0
-                    .set_vertex_buffer_with_f64(slot, &buffer_data.0.buffer, offset as f64);
+                encoder_data.0.set_vertex_buffer_with_f64(
+                    slot,
+                    &buffer_data.0.buffer,
+                    offset as f64,
+                );
             }
         };
     }
@@ -3453,28 +3460,41 @@ impl QueueWriteBuffer for WebQueueWriteBuffer {
 #[derive(Debug)]
 pub struct WebBuffer {
     buffer: web_sys::GpuBuffer,
-    mapping: RefCell<WebBufferMapState>
+    mapping: RefCell<WebBufferMapState>,
 }
 
 impl WebBuffer {
     fn new(buffer: web_sys::GpuBuffer, desc: &crate::BufferDescriptor<'_>) -> Self {
         Self {
             buffer,
-            mapping: RefCell::new(WebBufferMapState { mapped_buffer: None, range: 0..desc.size })
+            mapping: RefCell::new(WebBufferMapState {
+                mapped_buffer: None,
+                range: 0..desc.size,
+            }),
         }
     }
 
     fn get_mapped_array_buffer(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::ArrayBuffer {
-        self.buffer.get_mapped_range_with_f64_and_f64(sub_range.start as f64, (sub_range.end - sub_range.start) as f64)
+        self.buffer.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
     }
 
     fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
         let mut mapping = self.mapping.borrow_mut();
         let range = mapping.range.clone();
         let array_buffer = mapping.mapped_buffer.get_or_insert_with(|| {
-            self.buffer.get_mapped_range_with_f64_and_f64(range.start as f64, (range.end - range.start) as f64)
+            self.buffer.get_mapped_range_with_f64_and_f64(
+                range.start as f64,
+                (range.end - range.start) as f64,
+            )
         });
-        js_sys::Uint8Array::new_with_byte_offset_and_length(array_buffer, (sub_range.start - range.start) as u32, (sub_range.end - sub_range.start) as u32)
+        js_sys::Uint8Array::new_with_byte_offset_and_length(
+            array_buffer,
+            (sub_range.start - range.start) as u32,
+            (sub_range.end - sub_range.start) as u32,
+        )
     }
 
     fn set_mapped_range(&self, range: Range<wgt::BufferAddress>) {
@@ -3485,7 +3505,7 @@ impl WebBuffer {
 #[derive(Debug)]
 struct WebBufferMapState {
     pub mapped_buffer: Option<js_sys::ArrayBuffer>,
-    pub range: Range<wgt::BufferAddress>
+    pub range: Range<wgt::BufferAddress>,
 }
 
 #[derive(Debug)]
