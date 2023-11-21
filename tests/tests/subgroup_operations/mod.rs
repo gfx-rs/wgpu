@@ -103,9 +103,27 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         let expected_mask = (1 << (27)) - 1; // generate full mask
         let expected_array = [expected_mask as u32; THREAD_COUNT as usize];
         if result != &expected_array {
-            panic!(
+            use std::fmt::Write;
+            let mut msg = String::new();
+            writeln!(
+                &mut msg,
                 "Got from GPU:\n{:x?}\n  expected:\n{:x?}",
                 result, &expected_array,
-            );
+            )
+            .unwrap();
+            for (thread, (result, expected)) in result
+                .iter()
+                .zip(expected_array)
+                .enumerate()
+                .filter(|(_, (r, e))| *r != e)
+            {
+                write!(&mut msg, "thread {} failed tests:", thread).unwrap();
+                let difference = result ^ expected;
+                for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
+                    write!(&mut msg, " {},", i).unwrap();
+                }
+                writeln!(&mut msg).unwrap();
+            }
+            panic!("{}", msg);
         }
     });
