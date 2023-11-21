@@ -644,7 +644,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // writing the module saving some loops but some older versions (420 or less) required the
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
-        self.features.write(&self.options, &mut self.out)?;
+        self.features.write(self.options, &mut self.out)?;
 
         // Write the additional extensions
         if self
