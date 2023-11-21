@@ -775,6 +775,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
+        (
+            "struct-layout",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
