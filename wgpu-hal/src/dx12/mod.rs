@@ -291,8 +291,8 @@ enum RootElement {
     Empty,
     Constant,
     SpecialConstantBuffer {
-        base_vertex: i32,
-        base_instance: u32,
+        first_vertex: i32,
+        first_instance: u32,
         other: u32,
     },
     /// Descriptor table.

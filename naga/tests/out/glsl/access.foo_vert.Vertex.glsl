@@ -3,8 +3,6 @@
 precision highp float;
 precision highp int;
 
-uniform uint naga_vs_base_instance;
-
 struct GlobalConst {
     uint a;
     uvec3 b;

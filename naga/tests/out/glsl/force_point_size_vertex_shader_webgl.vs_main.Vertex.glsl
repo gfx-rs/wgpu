@@ -3,8 +3,6 @@
 precision highp float;
 precision highp int;
 
-uniform uint naga_vs_base_instance;
-
 
 void main() {
     uint in_vertex_index = uint(gl_VertexID);

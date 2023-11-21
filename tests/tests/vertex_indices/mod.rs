@@ -14,13 +14,13 @@ struct Draw {
     vertex: Range<u32>,
     instance: Range<u32>,
     /// If present, is an indexed call
-    vertex_offset: Option<i32>,
+    base_vertex: Option<i32>,
 }
 
 impl Draw {
     /// Directly execute the draw call
     fn execute(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if let Some(vertex_offset) = self.vertex_offset {
+        if let Some(vertex_offset) = self.base_vertex {
             rpass.draw_indexed(self.vertex.clone(), vertex_offset, self.instance.clone());
         } else {
             rpass.draw(self.vertex.clone(), self.instance.clone());
@@ -37,12 +37,12 @@ impl Draw {
             0
         };
 
-        if let Some(vertex_offset) = self.vertex_offset {
+        if let Some(vertex_offset) = self.base_vertex {
             bytes.extend_from_slice(
                 wgpu::util::DrawIndexedIndirectArgs {
-                    vertex_count: self.vertex.end - self.vertex.start,
+                    index_count: self.vertex.end - self.vertex.start,
                     instance_count: self.instance.end - self.instance.start,
-                    vertex_offset,
+                    base_vertex: vertex_offset,
                     first_index: self.vertex.start,
                     first_instance,
                 }
@@ -68,7 +68,7 @@ impl Draw {
         indirect: &'rpass wgpu::Buffer,
         offset: &mut u64,
     ) {
-        if self.vertex_offset.is_some() {
+        if self.base_vertex.is_some() {
             rpass.draw_indexed_indirect(indirect, *offset);
             *offset += 20;
         } else {
@@ -83,22 +83,22 @@ enum TestCase {
     /// A single draw call with 6 vertices
     Draw,
     /// Two draw calls of 0..3 and 3..6 verts
-    DrawVertexOffset,
+    DrawNonZeroFirstVertex,
     /// A single draw call with 6 vertices and a vertex offset of 3
     DrawBaseVertex,
     /// A single draw call with 3 vertices and 2 instances
     DrawInstanced,
     /// Two draw calls with 3 vertices and 0..1 and 1..2 instances.
-    DrawInstancedOffset,
+    DrawNonZeroBaseInstance,
 }
 
 impl TestCase {
     const ARRAY: [Self; 5] = [
         Self::Draw,
-        Self::DrawVertexOffset,
+        Self::DrawNonZeroFirstVertex,
         Self::DrawBaseVertex,
         Self::DrawInstanced,
-        Self::DrawInstancedOffset,
+        Self::DrawNonZeroBaseInstance,
     ];
 
     // Get the draw calls for this test case
@@ -107,40 +107,40 @@ impl TestCase {
             TestCase::Draw => &[Draw {
                 vertex: 0..6,
                 instance: 0..1,
-                vertex_offset: None,
+                base_vertex: None,
             }],
-            TestCase::DrawVertexOffset => &[
+            TestCase::DrawNonZeroFirstVertex => &[
                 Draw {
                     vertex: 0..3,
                     instance: 0..1,
-                    vertex_offset: None,
+                    base_vertex: None,
                 },
                 Draw {
                     vertex: 3..6,
                     instance: 0..1,
-                    vertex_offset: None,
+                    base_vertex: None,
                 },
             ],
             TestCase::DrawBaseVertex => &[Draw {
                 vertex: 0..6,
                 instance: 0..1,
-                vertex_offset: Some(3),
+                base_vertex: Some(3),
             }],
             TestCase::DrawInstanced => &[Draw {
                 vertex: 0..3,
                 instance: 0..2,
-                vertex_offset: None,
+                base_vertex: None,
             }],
-            TestCase::DrawInstancedOffset => &[
+            TestCase::DrawNonZeroBaseInstance => &[
                 Draw {
                     vertex: 0..3,
                     instance: 0..1,
-                    vertex_offset: None,
+                    base_vertex: None,
                 },
                 Draw {
                     vertex: 0..3,
                     instance: 1..2,
-                    vertex_offset: None,
+                    base_vertex: None,
                 },
             ],
         }
@@ -207,14 +207,14 @@ impl Test {
                 &[0, 0, 0, 3, 4, 5, 6, 7, 8]
             }
             TestCase::Draw | TestCase::DrawInstanced => &[0, 1, 2, 3, 4, 5],
-            TestCase::DrawVertexOffset => {
+            TestCase::DrawNonZeroFirstVertex => {
                 if !first_vert_instance_supported {
                     return &[0, 1, 2, 0, 0, 0];
                 }
 
                 &[0, 1, 2, 3, 4, 5]
             }
-            TestCase::DrawInstancedOffset => {
+            TestCase::DrawNonZeroBaseInstance => {
                 if !first_vert_instance_supported || !non_zero_first_instance_supported {
                     return &[0, 1, 2, 0, 0, 0];
                 }

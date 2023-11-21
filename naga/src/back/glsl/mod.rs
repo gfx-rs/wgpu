@@ -77,7 +77,7 @@ pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
 // Must match code in glsl_built_in
-pub const BASE_INSTANCE_BINDING: &str = "naga_vs_base_instance";
+pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
 
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
@@ -644,7 +644,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // writing the module saving some loops but some older versions (420 or less) required the
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
-        self.features.write(self.options.version, &mut self.out)?;
+        self.features.write(&self.options, &mut self.out)?;
 
         // Write the additional extensions
         if self
@@ -654,17 +654,6 @@ impl<'a, W: Write> Writer<'a, W> {
         {
             // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shadow_lod.txt
             writeln!(self.out, "#extension GL_EXT_texture_shadow_lod : require")?;
-        }
-        if self
-            .options
-            .writer_flags
-            .contains(WriterFlags::DRAW_PARAMETERS)
-        {
-            // https://registry.khronos.org/OpenGL/extensions/ARB/ARB_shader_draw_parameters.txt
-            writeln!(
-                self.out,
-                "#extension GL_ARB_shader_draw_parameters : require"
-            )?;
         }
 
         // glsl es requires a precision to be specified for floats and ints
@@ -691,8 +680,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 .options
                 .writer_flags
                 .contains(WriterFlags::DRAW_PARAMETERS)
+            && self.features.contains(Features::INSTANCE_INDEX)
         {
-            writeln!(self.out, "uniform uint {BASE_INSTANCE_BINDING};")?;
+            writeln!(self.out, "uniform uint {FIRST_INSTANCE_BINDING};")?;
             writeln!(self.out)?;
         }
 
@@ -4378,8 +4368,8 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
             if options.draw_parameters {
                 "(uint(gl_InstanceID) + uint(gl_BaseInstanceARB))"
             } else {
-                // Must match BASE_INSTANCE_BINDING
-                "(uint(gl_InstanceID) + naga_vs_base_instance)"
+                // Must match FISRT_INSTANCE_BINDING
+                "(uint(gl_InstanceID) + naga_vs_first_instance)"
             }
         }
         Bi::PointSize => "gl_PointSize",

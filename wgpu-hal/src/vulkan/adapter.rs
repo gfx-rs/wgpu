@@ -992,11 +992,8 @@ impl super::Instance {
         };
 
         if let Some(driver) = phd_capabilities.driver {
-            #[allow(clippy::unnecessary_cast, trivial_numeric_casts)]
-            // False positive on the `as u8` cast on Linux/Android aarch64
             if driver.conformance_version.major == 0 {
-                let driver_name_unsigned = driver.driver_name.map(|i| i as u8);
-                if !driver_name_unsigned.starts_with(b"MoltenVK") {
+                if driver.driver_id != ash::vk::DriverId::MOLTENVK {
                     log::warn!(
                         "Adapter is not Vulkan compliant, hiding adapter: {}",
                         info.name

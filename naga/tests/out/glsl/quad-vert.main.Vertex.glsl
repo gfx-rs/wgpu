@@ -3,8 +3,6 @@
 precision highp float;
 precision highp int;
 
-uniform uint naga_vs_base_instance;
-
 struct gen_gl_PerVertex {
     vec4 gen_gl_Position;
     float gen_gl_PointSize;

@@ -6584,14 +6584,15 @@ impl DrawIndirectArgs {
 #[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of vertices to draw.
-    pub vertex_count: u32,
+    pub index_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
     /// The first index within the index buffer.
     pub first_index: u32,
     /// The value added to the vertex index before indexing into the vertex buffer.
-    pub vertex_offset: i32,
+    pub base_vertex: i32,
     /// The instance ID of the first instance to draw.
+    ///
     /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
 }

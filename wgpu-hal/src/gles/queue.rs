@@ -163,8 +163,8 @@ impl super::Queue {
                 start_vertex,
                 vertex_count,
                 instance_count,
-                base_instance,
-                ref base_instance_location,
+                first_instance,
+                ref first_instance_location,
             } => {
                 let supports_full_instancing = self
                     .shared
@@ -178,12 +178,12 @@ impl super::Queue {
                             start_vertex as i32,
                             vertex_count as i32,
                             instance_count as i32,
-                            base_instance,
+                            first_instance,
                         )
                     }
                 } else {
                     unsafe {
-                        gl.uniform_1_u32(base_instance_location.as_ref(), base_instance);
+                        gl.uniform_1_u32(first_instance_location.as_ref(), first_instance);
                     }
 
                     // Don't use `gl.draw_arrays` for `instance_count == 1`.
@@ -205,13 +205,15 @@ impl super::Queue {
                 index_count,
                 index_offset,
                 base_vertex,
-                base_instance,
+                first_instance,
                 instance_count,
-                ref base_instance_location,
+                ref first_instance_location,
             } => {
                 match base_vertex {
                     0 => {
-                        unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), base_instance) };
+                        unsafe {
+                            gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
+                        };
 
                         unsafe {
                             // Don't use `gl.draw_elements`/`gl.draw_elements_base_vertex` for `instance_count == 1`.
@@ -241,12 +243,12 @@ impl super::Queue {
                                     index_offset as i32,
                                     instance_count as i32,
                                     base_vertex,
-                                    base_instance,
+                                    first_instance,
                                 )
                             }
                         } else {
                             unsafe {
-                                gl.uniform_1_u32(base_instance_location.as_ref(), base_instance)
+                                gl.uniform_1_u32(first_instance_location.as_ref(), first_instance)
                             };
 
                             // If we've gotten here, wgpu-core has already validated that this function exists via the DownlevelFlags::BASE_VERTEX feature.
@@ -268,9 +270,9 @@ impl super::Queue {
                 topology,
                 indirect_buf,
                 indirect_offset,
-                ref base_instance_location,
+                ref first_instance_location,
             } => {
-                unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), 0) };
+                unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), 0) };
 
                 unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
                 unsafe { gl.draw_arrays_indirect_offset(topology, indirect_offset as i32) };
@@ -280,9 +282,9 @@ impl super::Queue {
                 index_type,
                 indirect_buf,
                 indirect_offset,
-                ref base_instance_location,
+                ref first_instance_location,
             } => {
-                unsafe { gl.uniform_1_u32(base_instance_location.as_ref(), 0) };
+                unsafe { gl.uniform_1_u32(first_instance_location.as_ref(), 0) };
 
                 unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(indirect_buf)) };
                 unsafe {

@@ -3,8 +3,6 @@
 precision highp float;
 precision highp int;
 
-uniform uint naga_vs_base_instance;
-
 struct VertexOutput {
     vec4 position;
     vec3 uv;

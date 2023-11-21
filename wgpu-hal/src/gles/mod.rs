@@ -51,7 +51,7 @@ from the vertex data itself. This mostly matches WebGPU, however there is a catc
 `stride` needs to be specified with the data, not as a part of the layout.
 
 To address this, we invalidate the vertex buffers based on:
-  - whether or not `start_instance` is used
+  - whether or not `first_instance` is used
   - stride has changed
 
 ## Handling of BaseVertex, BaseInstance, and FirstVertex
@@ -75,7 +75,7 @@ we don't bother with that combination.
 
 ### GLES & GL 4.1
 
-- `@builtin(instance_index)` translates to `gl_InstanceID + naga_vs_base_instance`
+- `@builtin(instance_index)` translates to `gl_InstanceID + naga_vs_first_instance`
 - We bind instance buffers with offset emulation.
 - We _do not_ advertise support for `INDIRECT_FIRST_INSTANCE` and cpu-side pretend the base instance is 0 on indirect calls.
 
@@ -545,7 +545,7 @@ type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
-    base_instance_location: Option<glow::UniformLocation>,
+    first_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
 }
 
@@ -747,9 +747,9 @@ enum Command {
         topology: u32,
         start_vertex: u32,
         vertex_count: u32,
-        base_instance: u32,
+        first_instance: u32,
         instance_count: u32,
-        base_instance_location: Option<glow::UniformLocation>,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndexed {
         topology: u32,
@@ -757,22 +757,22 @@ enum Command {
         index_count: u32,
         index_offset: wgt::BufferAddress,
         base_vertex: i32,
-        base_instance: u32,
+        first_instance: u32,
         instance_count: u32,
-        base_instance_location: Option<glow::UniformLocation>,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndirect {
         topology: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
-        base_instance_location: Option<glow::UniformLocation>,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndexedIndirect {
         topology: u32,
         index_type: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
-        base_instance_location: Option<glow::UniformLocation>,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     Dispatch([u32; 3]),
     DispatchIndirect {

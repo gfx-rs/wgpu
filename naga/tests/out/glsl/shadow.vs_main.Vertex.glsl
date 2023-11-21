@@ -3,8 +3,6 @@
 precision highp float;
 precision highp int;
 
-uniform uint naga_vs_base_instance;
-
 struct Globals {
     mat4x4 view_proj;
     uvec4 num_lights;

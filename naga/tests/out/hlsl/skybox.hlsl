@@ -1,6 +1,6 @@
 struct NagaConstants {
-    int base_vertex;
-    int base_instance;
+    int first_vertex;
+    int first_instance;
     uint other;
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b1);
@@ -41,8 +41,8 @@ VertexOutput_vs_main vs_main(uint vertex_index : SV_VertexID)
     int tmp1_ = (int)0;
     int tmp2_ = (int)0;
 
-    tmp1_ = (int((_NagaConstants.base_vertex + vertex_index)) / 2);
-    tmp2_ = (int((_NagaConstants.base_vertex + vertex_index)) & 1);
+    tmp1_ = (int((_NagaConstants.first_vertex + vertex_index)) / 2);
+    tmp2_ = (int((_NagaConstants.first_vertex + vertex_index)) & 1);
     int _expr9 = tmp1_;
     int _expr15 = tmp2_;
     float4 pos = float4(((float(_expr9) * 4.0) - 1.0), ((float(_expr15) * 4.0) - 1.0), 0.0, 1.0);

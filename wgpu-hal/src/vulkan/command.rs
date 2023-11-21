@@ -724,7 +724,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         &mut self,
         start_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
         unsafe {
@@ -733,16 +733,16 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 vertex_count,
                 instance_count,
                 start_vertex,
-                start_instance,
+                first_instance,
             )
         };
     }
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
         unsafe {
@@ -750,9 +750,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 self.active,
                 index_count,
                 instance_count,
-                start_index,
+                first_index,
                 base_vertex,
-                start_instance,
+                first_instance,
             )
         };
     }

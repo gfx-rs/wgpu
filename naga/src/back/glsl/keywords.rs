@@ -480,5 +480,5 @@ pub const RESERVED_KEYWORDS: &[&str] = &[
     // Naga utilities:
     super::MODF_FUNCTION,
     super::FREXP_FUNCTION,
-    super::BASE_INSTANCE_BINDING,
+    super::FIRST_INSTANCE_BINDING,
 ];

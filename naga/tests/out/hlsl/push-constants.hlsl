@@ -1,6 +1,6 @@
 struct NagaConstants {
-    int base_vertex;
-    int base_instance;
+    int first_vertex;
+    int first_instance;
     uint other;
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
@@ -22,7 +22,7 @@ struct FragmentInput_main {
 float4 vert_main(float2 pos : LOC0, uint ii : SV_InstanceID, uint vi : SV_VertexID) : SV_Position
 {
     float _expr8 = pc.multiplier;
-    return float4((((float((_NagaConstants.base_instance + ii)) * float((_NagaConstants.base_vertex + vi))) * _expr8) * pos), 0.0, 1.0);
+    return float4((((float((_NagaConstants.first_instance + ii)) * float((_NagaConstants.first_vertex + vi))) * _expr8) * pos), 0.0, 1.0);
 }
 
 float4 main(FragmentInput_main fragmentinput_main) : SV_Target0

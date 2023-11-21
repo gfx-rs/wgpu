@@ -1,6 +1,4 @@
 #version 400 core
-uniform uint naga_vs_base_instance;
-
 struct FragmentInput {
     vec4 position;
     uint _flat;
