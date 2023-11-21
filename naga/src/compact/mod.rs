@@ -100,6 +100,14 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
+    // Treat all named types as used.
+    for (handle, ty) in module.types.iter() {
+        log::trace!("tracing type {:?}, name {:?}", handle, ty.name);
+        if ty.name.is_some() {
+            module_tracer.types_used.insert(handle);
+        }
+    }
+
     // Propagate usage through types.
     module_tracer.as_type().trace_types();
 
