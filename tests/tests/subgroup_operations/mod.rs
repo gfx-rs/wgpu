@@ -3,6 +3,7 @@ use std::{borrow::Cow, num::NonZeroU64};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 const THREAD_COUNT: u64 = 128;
+const TEST_COUNT: u32 = 29;
 
 #[gpu_test]
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -100,7 +101,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         ctx.device.poll(wgpu::Maintain::Wait);
         let mapping_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let result: &[u32; THREAD_COUNT as usize] = bytemuck::from_bytes(&mapping_buffer_view);
-        let expected_mask = (1 << (27)) - 1; // generate full mask
+        let expected_mask = (1 << (TEST_COUNT)) - 1; // generate full mask
         let expected_array = [expected_mask as u32; THREAD_COUNT as usize];
         if result != &expected_array {
             use std::fmt::Write;

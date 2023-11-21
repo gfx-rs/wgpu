@@ -132,5 +132,28 @@ fn main(
     mask = 1u << 26u;
     passed |= mask * u32(subgroupShuffleXor(subgroup_invocation_id, subgroup_size - 1u) == (subgroup_invocation_id ^ (subgroup_size - 1u)));
 
+    mask = 1u << 27u;
+    if subgroup_invocation_id % 2u == 0u {
+        passed |= mask * u32(subgroupAdd(1u) == (subgroup_size / 2u));
+    } else {
+        passed |= mask * u32(subgroupAdd(1u) == (subgroup_size / 2u));
+    }
+
+    mask = 1u << 28u;
+    switch subgroup_invocation_id % 3u {
+        case 0u: {
+            passed |= mask * u32(subgroupBroadcastFirst(subgroup_invocation_id) == 0u);
+        }
+        case 1u: {
+            passed |= mask * u32(subgroupBroadcastFirst(subgroup_invocation_id) == 1u);
+        }
+        case 2u: {
+            passed |= mask * u32(subgroupBroadcastFirst(subgroup_invocation_id) == 2u);
+        }
+        default {  }
+    }
+
+    // Increment TEST_COUNT in subgroup_operations/mod.rs if adding more tests
+
     storage_buffer[global_id.x] = passed;
 }
