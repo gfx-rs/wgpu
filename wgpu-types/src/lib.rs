@@ -290,7 +290,7 @@ bitflags::bitflags! {
         /// Supported Platforms:
         /// - Vulkan (mostly)
         /// - DX12
-        /// - Metal
+        /// - Metal on Apple3+ or Mac1+
         /// - OpenGL (Desktop 4.2+ with ARB_shader_draw_parameters only)
         ///
         /// Not Supported:
@@ -622,7 +622,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
-        /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
+        /// - Metal on Apple3+ or Mac1+ (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
         ///
@@ -1394,7 +1394,7 @@ bitflags::bitflags! {
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
         ///
-        /// DX11 on FL10 level hardware, WebGL2, and GLES 3.0 devices do not support indirect.
+        /// DX11 on FL10 level hardware, WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
         ///
@@ -1403,7 +1403,7 @@ bitflags::bitflags! {
         /// Supported by:
         /// - Vulkan
         /// - DX12
-        /// - Metal
+        /// - Metal on Apple3+ or Mac1+
         /// - OpenGL 3.2+
         /// - OpenGL ES 3.2
         const BASE_VERTEX = 1 << 3;
