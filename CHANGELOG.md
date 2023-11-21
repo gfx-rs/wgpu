@@ -113,6 +113,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 - Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
 
+- Record the names of WGSL `alias` declarations in Naga IR `Type`s. By @jimblandy in [#4733](https://github.com/gfx-rs/wgpu/pull/4733).
+
 ### Examples
 
 - remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
