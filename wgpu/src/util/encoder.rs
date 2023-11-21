@@ -50,7 +50,7 @@ pub trait RenderEncoder<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress);
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -59,7 +59,7 @@ pub trait RenderEncoder<'a> {
     /// The active index buffer can be set with [`RenderEncoder::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,

@@ -467,9 +467,17 @@ impl super::Device {
             }
         }
 
+        let first_instance_location = if has_stages.contains(wgt::ShaderStages::VERTEX) {
+            // If this returns none (the uniform isn't active), that's fine, we just won't set it.
+            unsafe { gl.get_uniform_location(program, naga::back::glsl::FIRST_INSTANCE_BINDING) }
+        } else {
+            None
+        };
+
         Ok(Arc::new(super::PipelineInner {
             program,
             sampler_map,
+            first_instance_location,
             push_constant_descs: uniforms,
         }))
     }
@@ -1081,6 +1089,12 @@ impl crate::Device<super::Api> for super::Device {
             self.shared
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
+        );
+        writer_flags.set(
+            glsl::WriterFlags::DRAW_PARAMETERS,
+            self.shared
+                .private_caps
+                .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING),
         );
         // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
         // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950

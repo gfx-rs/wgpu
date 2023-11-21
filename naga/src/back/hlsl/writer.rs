@@ -13,8 +13,8 @@ use std::{fmt, mem};
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
 const SPECIAL_CBUF_VAR: &str = "_NagaConstants";
-const SPECIAL_BASE_VERTEX: &str = "base_vertex";
-const SPECIAL_BASE_INSTANCE: &str = "base_instance";
+const SPECIAL_FIRST_VERTEX: &str = "first_vertex";
+const SPECIAL_FIRST_INSTANCE: &str = "first_instance";
 const SPECIAL_OTHER: &str = "other";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
@@ -189,8 +189,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write special constants, if needed
         if let Some(ref bt) = self.options.special_constants_binding {
             writeln!(self.out, "struct {SPECIAL_CBUF_TYPE} {{")?;
-            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_VERTEX)?;
-            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_INSTANCE)?;
+            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_FIRST_VERTEX)?;
+            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_FIRST_INSTANCE)?;
             writeln!(self.out, "{}uint {};", back::INDENT, SPECIAL_OTHER)?;
             writeln!(self.out, "}};")?;
             write!(
@@ -2102,7 +2102,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         use crate::Expression;
 
-        // Handle the special semantics for base vertex/instance
+        // Handle the special semantics of vertex_index/instance_index
         let ff_input = if self.options.special_constants_binding.is_some() {
             func_ctx.is_fixed_function_input(expr, module)
         } else {
@@ -2110,20 +2110,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         };
         let closing_bracket = match ff_input {
             Some(crate::BuiltIn::VertexIndex) => {
-                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_BASE_VERTEX} + ")?;
+                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX} + ")?;
                 ")"
             }
             Some(crate::BuiltIn::InstanceIndex) => {
-                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_BASE_INSTANCE} + ",)?;
+                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE} + ",)?;
                 ")"
             }
             Some(crate::BuiltIn::NumWorkGroups) => {
-                //Note: despite their names (`BASE_VERTEX` and `BASE_INSTANCE`),
+                // Note: despite their names (`FIRST_VERTEX` and `FIRST_INSTANCE`),
                 // in compute shaders the special constants contain the number
                 // of workgroups, which we are using here.
                 write!(
                     self.out,
-                    "uint3({SPECIAL_CBUF_VAR}.{SPECIAL_BASE_VERTEX}, {SPECIAL_CBUF_VAR}.{SPECIAL_BASE_INSTANCE}, {SPECIAL_CBUF_VAR}.{SPECIAL_OTHER})",
+                    "uint3({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX}, {SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE}, {SPECIAL_CBUF_VAR}.{SPECIAL_OTHER})",
                 )?;
                 return Ok(());
             }

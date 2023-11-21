@@ -565,17 +565,17 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     );
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     );
     unsafe fn draw_indirect(
@@ -623,8 +623,8 @@ bitflags!(
     /// Pipeline layout creation flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
-        /// Include support for base vertex/instance drawing.
-        const BASE_VERTEX_INSTANCE = 1 << 0;
+        /// Include support for `first_vertex` / `first_instance` drawing.
+        const FIRST_VERTEX_INSTANCE = 1 << 0;
         /// Include support for num work groups builtin.
         const NUM_WORK_GROUPS = 1 << 1;
     }

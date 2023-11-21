@@ -280,12 +280,21 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
-        /// Allows non-zero value for the "first instance" in indirect draw calls.
+        /// Allows non-zero value for the `first_instance` member in indirect draw calls.
+        ///
+        /// If this feature is not enabled, and the `first_instance` member is non-zero, the behavior may be:
+        /// - The draw call is ignored.
+        /// - The draw call is executed as if the `first_instance` is zero.
+        /// - The draw call is executed with the correct `first_instance` value.
         ///
         /// Supported Platforms:
         /// - Vulkan (mostly)
         /// - DX12
-        /// - Metal
+        /// - Metal on Apple3+ or Mac1+
+        /// - OpenGL (Desktop 4.2+ with ARB_shader_draw_parameters only)
+        ///
+        /// Not Supported:
+        /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
         const INDIRECT_FIRST_INSTANCE = 1 << 2;
@@ -613,7 +622,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
-        /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
+        /// - Metal on Apple3+ or Mac1+ (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
         ///
@@ -1385,9 +1394,18 @@ bitflags::bitflags! {
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
         ///
-        /// DX11 on FL10 level hardware, WebGL2, and GLES 3.0 devices do not support indirect.
+        /// DX11 on FL10 level hardware, WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
-        /// Supports non-zero `base_vertex` parameter to indexed draw calls.
+        /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
+        ///
+        /// Indirect calls, if supported, always support non-zero `base_vertex`.
+        ///
+        /// Supported by:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal on Apple3+ or Mac1+
+        /// - OpenGL 3.2+
+        /// - OpenGL ES 3.2
         const BASE_VERTEX = 1 << 3;
         /// Supports reading from a depth/stencil texture while using it as a read-only
         /// depth/stencil attachment.
@@ -1486,6 +1504,34 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
+
+        /// If this is true, use of `@builtin(vertex_index)` and `@builtin(instance_index)` will properly take into consideration
+        /// the `first_vertex` and `first_instance` parameters of indirect draw calls.
+        ///
+        /// If this is false, `@builtin(vertex_index)` and `@builtin(instance_index)` will start by counting from 0, ignoring the
+        /// `first_vertex` and `first_instance` parameters.
+        ///
+        /// For example, if you had a draw call like this:
+        /// - `first_vertex: 4,`
+        /// - `vertex_count: 12,`
+        ///
+        /// When this flag is present, `@builtin(vertex_index)` will start at 4 and go up to 15 (12 invocations).
+        ///
+        /// When this flag is not present, `@builtin(vertex_index)` will start at 0 and go up to 11 (12 invocations).
+        ///
+        /// This only affects the builtins in the shaders,
+        /// vertex buffers and instance rate vertex buffers will behave like expected with this flag disabled.
+        ///
+        /// See also [`Features::`]
+        ///
+        /// Supported By:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        ///
+        /// Will be implemented in the future by:
+        /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
+        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
 
@@ -6507,44 +6553,84 @@ impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
-    /// Offset into the vertex buffers, in vertices, to begin drawing from.
+    /// The Index of the first vertex to draw.
     pub first_vertex: u32,
-    /// First instance to draw.
+    /// The instance ID of the first instance to draw.
+    ///
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
+}
+
+impl DrawIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Argument buffer layout for draw_indexed_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
-    /// Offset into the index buffer, in indices, begin drawing from.
+    /// The first index within the index buffer.
     pub first_index: u32,
-    /// Added to each index value before indexing into the vertex buffers.
+    /// The value added to the vertex index before indexing into the vertex buffer.
     pub base_vertex: i32,
-    /// First instance to draw.
+    /// The instance ID of the first instance to draw.
+    ///
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
+}
+
+impl DrawIndexedIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Argument buffer layout for dispatch_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DispatchIndirectArgs {
-    /// X dimension of the grid of workgroups to dispatch.
-    pub group_size_x: u32,
-    /// Y dimension of the grid of workgroups to dispatch.
-    pub group_size_y: u32,
-    /// Z dimension of the grid of workgroups to dispatch.
-    pub group_size_z: u32,
+    /// The number of work groups in X dimension.
+    pub x: u32,
+    /// The number of work groups in Y dimension.
+    pub y: u32,
+    /// The number of work groups in Z dimension.
+    pub z: u32,
+}
+
+impl DispatchIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written into a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Describes how shader bound checks should be performed.

@@ -298,6 +298,11 @@ impl super::Adapter {
 
         let base = wgt::Limits::default();
 
+        let mut downlevel = wgt::DownlevelCapabilities::default();
+        // https://github.com/gfx-rs/wgpu/issues/2471
+        downlevel.flags -=
+            wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -392,7 +397,7 @@ impl super::Adapter {
                     )
                     .unwrap(),
                 },
-                downlevel: wgt::DownlevelCapabilities::default(),
+                downlevel,
             },
         })
     }

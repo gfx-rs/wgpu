@@ -331,7 +331,8 @@ impl PhysicalDeviceFeatures {
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -992,11 +993,15 @@ impl super::Instance {
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
-                log::warn!(
-                    "Adapter is not Vulkan compliant, hiding adapter: {}",
-                    info.name
-                );
-                return None;
+                if driver.driver_id == ash::vk::DriverId::MOLTENVK {
+                    log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
+                } else {
+                    log::warn!(
+                        "Adapter is not Vulkan compliant, hiding adapter: {}",
+                        info.name
+                    );
+                    return None;
+                }
             }
         }
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0

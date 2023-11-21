@@ -29,6 +29,7 @@ pub(super) struct State {
     instance_vbuf_mask: usize,
     dirty_vbuf_mask: usize,
     active_first_instance: u32,
+    first_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<super::PushConstantDesc, { super::MAX_PUSH_CONSTANT_COMMANDS }>,
     // The current state of the push constant data block.
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
@@ -57,6 +58,7 @@ impl Default for State {
             instance_vbuf_mask: Default::default(),
             dirty_vbuf_mask: Default::default(),
             active_first_instance: Default::default(),
+            first_instance_location: Default::default(),
             push_constant_descs: Default::default(),
             current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
             end_of_pass_timestamp: Default::default(),
@@ -193,19 +195,32 @@ impl super::CommandEncoder {
     }
 
     fn prepare_draw(&mut self, first_instance: u32) {
-        if first_instance != self.state.active_first_instance {
+        // If we support fully featured instancing, we want to bind everything as normal
+        // and let the draw call sort it out.
+        let emulated_first_instance_value = if self
+            .private_caps
+            .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING)
+        {
+            0
+        } else {
+            first_instance
+        };
+
+        if emulated_first_instance_value != self.state.active_first_instance {
             // rebind all per-instance buffers on first-instance change
             self.state.dirty_vbuf_mask |= self.state.instance_vbuf_mask;
-            self.state.active_first_instance = first_instance;
+            self.state.active_first_instance = emulated_first_instance_value;
         }
         if self.state.dirty_vbuf_mask != 0 {
-            self.rebind_vertex_data(first_instance);
+            self.rebind_vertex_data(emulated_first_instance_value);
         }
     }
 
+    #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
+        self.state.first_instance_location = inner.first_instance_location.clone();
         self.state.push_constant_descs = inner.push_constant_descs.clone();
 
         // rebind textures, if needed
@@ -1002,40 +1017,46 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
-        self.prepare_draw(start_instance);
+        self.prepare_draw(first_instance);
+        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
         self.cmd_buffer.commands.push(C::Draw {
             topology: self.state.topology,
-            start_vertex,
+            first_vertex,
             vertex_count,
+            first_instance,
             instance_count,
+            first_instance_location: self.state.first_instance_location.clone(),
         });
     }
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
-        self.prepare_draw(start_instance);
+        self.prepare_draw(first_instance);
         let (index_size, index_type) = match self.state.index_format {
             wgt::IndexFormat::Uint16 => (2, glow::UNSIGNED_SHORT),
             wgt::IndexFormat::Uint32 => (4, glow::UNSIGNED_INT),
         };
-        let index_offset = self.state.index_offset + index_size * start_index as wgt::BufferAddress;
+        let index_offset = self.state.index_offset + index_size * first_index as wgt::BufferAddress;
+        #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
         self.cmd_buffer.commands.push(C::DrawIndexed {
             topology: self.state.topology,
             index_type,
             index_offset,
             index_count,
             base_vertex,
+            first_instance,
             instance_count,
+            first_instance_location: self.state.first_instance_location.clone(),
         });
     }
     unsafe fn draw_indirect(
@@ -1048,10 +1069,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * mem::size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
                 indirect_buf: buffer.raw.unwrap(),
                 indirect_offset,
+                first_instance_location: self.state.first_instance_location.clone(),
             });
         }
     }
@@ -1069,11 +1092,13 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset = offset
                 + draw * mem::size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,
                 index_type,
                 indirect_buf: buffer.raw.unwrap(),
                 indirect_offset,
+                first_instance_location: self.state.first_instance_location.clone(),
             });
         }
     }

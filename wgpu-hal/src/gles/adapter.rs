@@ -379,7 +379,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
+            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
@@ -389,8 +390,6 @@ impl super::Adapter {
             wgt::DownlevelFlags::INDIRECT_EXECUTION,
             supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
         );
-        //TODO: we can actually support positive `base_vertex` in the same way
-        // as we emulate the `start_instance`. But we can't deal with negatives...
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, supported((3, 2), (3, 2)));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLEND,
@@ -616,6 +615,21 @@ impl super::Adapter {
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),
         );
+        if let Some(full_ver) = full_ver {
+            let supported =
+                full_ver >= (4, 2) && extensions.contains("GL_ARB_shader_draw_parameters");
+            private_caps.set(
+                super::PrivateCapabilities::FULLY_FEATURED_INSTANCING,
+                supported,
+            );
+            // Desktop 4.2 and greater specify the first instance parameter.
+            //
+            // For all other versions, the behavior is undefined.
+            //
+            // We only support indirect first instance when we also have ARB_shader_draw_parameters as
+            // that's the only way to get gl_InstanceID to work correctly.
+            features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
+        }
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
