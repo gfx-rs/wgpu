@@ -1531,7 +1531,7 @@ bitflags::bitflags! {
         ///
         /// Will be implemented in the future by:
         /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
-        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST = 1 << 23;
+        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
 

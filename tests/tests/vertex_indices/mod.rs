@@ -194,7 +194,7 @@ impl Test {
         //
         // If the IdSource is buffers, this doesn't apply
         let first_vert_instance_supported = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST,
+            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW,
         ) || matches!(self.id_source, IdSource::Buffers)
             || !is_indirect;
 

@@ -3979,7 +3979,7 @@ impl<'a> RenderPass<'a> {
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
     ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST`] is not present on the adapter,
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
     /// See details on the individual flags for more information.
@@ -4004,7 +4004,7 @@ impl<'a> RenderPass<'a> {
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
     ///   [`DrawIndexedIndirect::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST`] is not present on the adapter,
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
     /// See details on the individual flags for more information.

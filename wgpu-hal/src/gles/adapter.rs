@@ -380,7 +380,7 @@ impl super::Adapter {
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
             | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST;
+            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,

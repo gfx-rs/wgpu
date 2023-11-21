@@ -62,7 +62,7 @@ in shaders, getting buffers and builtins to work correctly is a bit tricky.
 We never emulate `base_vertex` and gl_VertexID behaves as `@builtin(vertex_index)` does, so we
 never need to do anything about that.
 
-We always advertise support for `VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_INDIRECT_FIRST`.
+We always advertise support for `VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`.
 
 ### GL 4.2+ with ARB_shader_draw_parameters
 
