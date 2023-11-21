@@ -6583,7 +6583,7 @@ impl DrawIndirectArgs {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndexedIndirectArgs {
-    /// The number of vertices to draw.
+    /// The number of indices to draw.
     pub index_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,

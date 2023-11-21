@@ -34,7 +34,7 @@ will be minimal, if any.
 
 Generally, vertex buffers are marked as dirty and lazily bound on draw.
 
-GLES3 doesn't support "base instance" semantics. However, it's easy to support,
+GLES3 doesn't support `first_instance` semantics. However, it's easy to support,
 since we are forced to do late binding anyway. We just adjust the offsets
 into the vertex data.
 
@@ -54,9 +54,9 @@ To address this, we invalidate the vertex buffers based on:
   - whether or not `first_instance` is used
   - stride has changed
 
-## Handling of BaseVertex, BaseInstance, and FirstVertex
+## Handling of `base_vertex`, `first_instance`, and `first_vertex`
 
-Between indirect, the lack of "base instance" semantics, and the availablity of gl_BaseInstance
+Between indirect, the lack of `first_instance` semantics, and the availability of `gl_BaseInstance`
 in shaders, getting buffers and builtins to work correctly is a bit tricky.
 
 We never emulate `base_vertex` and gl_VertexID behaves as `@builtin(vertex_index)` does, so we
@@ -77,7 +77,7 @@ we don't bother with that combination.
 
 - `@builtin(instance_index)` translates to `gl_InstanceID + naga_vs_first_instance`
 - We bind instance buffers with offset emulation.
-- We _do not_ advertise support for `INDIRECT_FIRST_INSTANCE` and cpu-side pretend the base instance is 0 on indirect calls.
+- We _do not_ advertise support for `INDIRECT_FIRST_INSTANCE` and cpu-side pretend the `first_instance` is 0 on indirect calls.
 
 */
 

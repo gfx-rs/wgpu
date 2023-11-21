@@ -1,7 +1,7 @@
 //! Tests that vertex buffers, vertex indices, and instance indices are properly handled.
 //!
 //! We need tests for these as the backends use various schemes to work around the lack
-//! of support for things like BaseInstance in shaders.
+//! of support for things like `gl_BaseInstance` in shaders.
 
 use std::{num::NonZeroU64, ops::Range};
 
@@ -20,8 +20,8 @@ struct Draw {
 impl Draw {
     /// Directly execute the draw call
     fn execute(&self, rpass: &mut wgpu::RenderPass<'_>) {
-        if let Some(vertex_offset) = self.base_vertex {
-            rpass.draw_indexed(self.vertex.clone(), vertex_offset, self.instance.clone());
+        if let Some(base_vertex) = self.base_vertex {
+            rpass.draw_indexed(self.vertex.clone(), base_vertex, self.instance.clone());
         } else {
             rpass.draw(self.vertex.clone(), self.instance.clone());
         }
@@ -37,12 +37,12 @@ impl Draw {
             0
         };
 
-        if let Some(vertex_offset) = self.base_vertex {
+        if let Some(base_vertex) = self.base_vertex {
             bytes.extend_from_slice(
                 wgpu::util::DrawIndexedIndirectArgs {
                     index_count: self.vertex.end - self.vertex.start,
                     instance_count: self.instance.end - self.instance.start,
-                    base_vertex: vertex_offset,
+                    base_vertex,
                     first_index: self.vertex.start,
                     first_instance,
                 }
@@ -89,7 +89,7 @@ enum TestCase {
     /// A single draw call with 3 vertices and 2 instances
     DrawInstanced,
     /// Two draw calls with 3 vertices and 0..1 and 1..2 instances.
-    DrawNonZeroBaseInstance,
+    DrawNonZeroFirstInstance,
 }
 
 impl TestCase {
@@ -98,7 +98,7 @@ impl TestCase {
         Self::DrawNonZeroFirstVertex,
         Self::DrawBaseVertex,
         Self::DrawInstanced,
-        Self::DrawNonZeroBaseInstance,
+        Self::DrawNonZeroFirstInstance,
     ];
 
     // Get the draw calls for this test case
@@ -131,7 +131,7 @@ impl TestCase {
                 instance: 0..2,
                 base_vertex: None,
             }],
-            TestCase::DrawNonZeroBaseInstance => &[
+            TestCase::DrawNonZeroFirstInstance => &[
                 Draw {
                     vertex: 0..3,
                     instance: 0..1,
@@ -214,7 +214,7 @@ impl Test {
 
                 &[0, 1, 2, 3, 4, 5]
             }
-            TestCase::DrawNonZeroBaseInstance => {
+            TestCase::DrawNonZeroFirstInstance => {
                 if !first_vert_instance_supported || !non_zero_first_instance_supported {
                     return &[0, 1, 2, 0, 0, 0];
                 }

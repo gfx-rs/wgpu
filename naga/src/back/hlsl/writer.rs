@@ -2104,7 +2104,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         use crate::Expression;
 
-        // Handle the special semantics for base vertex/instance
+        // Handle the special semantics of vertex_index/instance_index
         let ff_input = if self.options.special_constants_binding.is_some() {
             func_ctx.is_fixed_function_input(expr, module)
         } else {
@@ -2120,7 +2120,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ")"
             }
             Some(crate::BuiltIn::NumWorkGroups) => {
-                //Note: despite their names (`FIRST_VERTEX` and `FIRST_INSTANCE`),
+                // Note: despite their names (`FIRST_VERTEX` and `FIRST_INSTANCE`),
                 // in compute shaders the special constants contain the number
                 // of workgroups, which we are using here.
                 write!(
