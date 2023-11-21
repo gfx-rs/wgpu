@@ -2059,7 +2059,7 @@ impl crate::Context for Context {
         encoder_data: &Self::CommandEncoderData,
         buffer: &crate::Buffer,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
+        size: Option<wgt::BufferAddress>,
     ) {
         let global = &self.0;
         if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_buffer(
