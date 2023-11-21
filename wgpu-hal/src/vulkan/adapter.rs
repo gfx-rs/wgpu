@@ -993,14 +993,14 @@ impl super::Instance {
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
-                if driver.driver_id != ash::vk::DriverId::MOLTENVK {
+                if driver.driver_id == ash::vk::DriverId::MOLTENVK {
+                    log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
+                } else {
                     log::warn!(
                         "Adapter is not Vulkan compliant, hiding adapter: {}",
                         info.name
                     );
                     return None;
-                } else {
-                    log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
                 }
             }
         }
