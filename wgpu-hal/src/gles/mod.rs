@@ -745,7 +745,7 @@ type InvalidatedAttachments = ArrayVec<u32, { crate::MAX_COLOR_ATTACHMENTS + 2 }
 enum Command {
     Draw {
         topology: u32,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
         first_instance: u32,
         instance_count: u32,

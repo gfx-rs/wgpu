@@ -213,11 +213,11 @@ impl GraphicsCommandList {
         &self,
         num_vertices: VertexCount,
         num_instances: InstanceCount,
-        start_vertex: VertexCount,
+        first_vertex: VertexCount,
         first_instance: InstanceCount,
     ) {
         unsafe {
-            self.DrawInstanced(num_vertices, num_instances, start_vertex, first_instance);
+            self.DrawInstanced(num_vertices, num_instances, first_vertex, first_instance);
         }
     }
 

@@ -160,7 +160,7 @@ impl super::Queue {
         match *command {
             C::Draw {
                 topology,
-                start_vertex,
+                first_vertex,
                 vertex_count,
                 instance_count,
                 first_instance,
@@ -175,7 +175,7 @@ impl super::Queue {
                     unsafe {
                         gl.draw_arrays_instanced_base_instance(
                             topology,
-                            start_vertex as i32,
+                            first_vertex as i32,
                             vertex_count as i32,
                             instance_count as i32,
                             first_instance,
@@ -192,7 +192,7 @@ impl super::Queue {
                     unsafe {
                         gl.draw_arrays_instanced(
                             topology,
-                            start_vertex as i32,
+                            first_vertex as i32,
                             vertex_count as i32,
                             instance_count as i32,
                         )

@@ -965,7 +965,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
         first_instance: u32,
         instance_count: u32,
@@ -974,7 +974,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         if first_instance != 0 {
             encoder.draw_primitives_instanced_base_instance(
                 self.state.raw_primitive_type,
-                start_vertex as _,
+                first_vertex as _,
                 vertex_count as _,
                 instance_count as _,
                 first_instance as _,
@@ -982,14 +982,14 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         } else if instance_count != 1 {
             encoder.draw_primitives_instanced(
                 self.state.raw_primitive_type,
-                start_vertex as _,
+                first_vertex as _,
                 vertex_count as _,
                 instance_count as _,
             );
         } else {
             encoder.draw_primitives(
                 self.state.raw_primitive_type,
-                start_vertex as _,
+                first_vertex as _,
                 vertex_count as _,
             );
         }

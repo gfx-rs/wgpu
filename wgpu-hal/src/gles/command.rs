@@ -1026,7 +1026,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
         self.cmd_buffer.commands.push(C::Draw {
             topology: self.state.topology,
-            start_vertex: first_vertex,
+            first_vertex,
             vertex_count,
             first_instance,
             instance_count,
