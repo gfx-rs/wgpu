@@ -783,7 +783,10 @@ fn convert_wgsl() {
         let source = input.read_source();
         match naga::front::wgsl::parse_str(&source) {
             Ok(mut module) => check_targets(&input, &mut module, targets, None),
-            Err(e) => panic!("{}", e.emit_to_string(&source)),
+            Err(e) => panic!(
+                "{}",
+                e.emit_to_string_with_path(&source, input.input_path())
+            ),
         }
     }
 
@@ -798,7 +801,10 @@ fn convert_wgsl() {
             let source = input.read_source();
             match naga::front::wgsl::parse_str(&source) {
                 Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
-                Err(e) => panic!("{}", e.emit_to_string(&source)),
+                Err(e) => panic!(
+                    "{}",
+                    e.emit_to_string_with_path(&source, input.input_path())
+                ),
             }
         }
     }
