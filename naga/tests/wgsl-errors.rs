@@ -1909,7 +1909,7 @@ fn function_returns_void() {
     check(
         "
         fn x() {
-	        let a = vec2<f32>(1, 2u);
+	        let a = vec2<f32>(1.0, 2.0);
         }
 
         fn b() {
