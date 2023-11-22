@@ -1,8 +1,8 @@
 /// Conditions under which a test should fail or be skipped.
 ///
-/// By passing a `FailureCase` to [`TestParameters::expect_fail`], you can
+/// By passing a `FailureCase` to [`TestParameters::expect_fail`][expect_fail], you can
 /// mark a test as expected to fail under the indicated conditions. By
-/// passing it to [`TestParameters::skip`], you can request that the
+/// passing it to [`TestParameters::skip`][skip], you can request that the
 /// test be skipped altogether.
 ///
 /// If a field is `None`, then that field does not restrict matches. For
@@ -31,6 +31,8 @@
 /// The default value of `FailureCase` applies to any test case. That
 /// is, there are no criteria to constrain the match.
 ///
+/// [skip]: super::TestParameters::skip
+/// [expect_fail]: super::TestParameters::expect_fail
 /// [`AdapterInfo`]: wgt::AdapterInfo
 #[derive(Default, Clone)]
 pub struct FailureCase {
