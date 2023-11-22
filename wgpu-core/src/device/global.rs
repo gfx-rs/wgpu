@@ -185,7 +185,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(buffer);
-            log::trace!("Device::create_buffer -> {id:?}");
+            log::trace!("Device::create_buffer({desc:?}) -> {id:?}");
 
             let buffer_use = if !desc.mapped_at_creation {
                 hal::BufferUses::empty()
@@ -563,7 +563,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(texture);
-            log::trace!("Device::create_texture -> {id:?}");
+            log::trace!("Device::create_texture({desc:?}) -> {id:?}");
 
             device.trackers.lock().textures.insert_single(
                 id,
