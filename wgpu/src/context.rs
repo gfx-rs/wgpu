@@ -494,7 +494,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         encoder_data: &Self::CommandEncoderData,
         buffer: &Buffer,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     );
 
     fn command_encoder_insert_debug_marker(
@@ -1570,7 +1570,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         encoder_data: &crate::Data,
         buffer: &Buffer,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     );
 
     fn command_encoder_insert_debug_marker(
@@ -2914,7 +2914,7 @@ where
         encoder_data: &crate::Data,
         buffer: &Buffer,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);

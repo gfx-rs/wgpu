@@ -16,9 +16,7 @@ use crate::{
 
 use hal::CommandEncoder as _;
 use thiserror::Error;
-use wgt::{
-    math::align_to, BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect,
-};
+use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
@@ -37,7 +35,7 @@ pub enum ClearError {
     #[error("Texture {0:?} can not be cleared")]
     NoValidTextureClearMode(TextureId),
     #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
-    UnalignedFillSize(BufferSize),
+    UnalignedFillSize(BufferAddress),
     #[error("Buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("Clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
@@ -75,7 +73,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_buffer");
         log::trace!("CommandEncoder::clear_buffer {dst:?}");
@@ -116,10 +114,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(ClearError::UnalignedBufferOffset(offset));
         }
         if let Some(size) = size {
-            if size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(ClearError::UnalignedFillSize(size));
             }
-            let destination_end_offset = offset + size.get();
+            let destination_end_offset = offset + size;
             if destination_end_offset > dst_buffer.size {
                 return Err(ClearError::BufferOverrun {
                     start_offset: offset,
@@ -130,7 +128,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let end = match size {
-            Some(size) => offset + size.get(),
+            Some(size) => offset + size,
             None => dst_buffer.size,
         };
         if offset == end {

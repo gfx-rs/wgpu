@@ -3643,7 +3643,7 @@ impl CommandEncoder {
         &mut self,
         buffer: &Buffer,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
