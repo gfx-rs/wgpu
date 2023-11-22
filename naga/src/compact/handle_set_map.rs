@@ -26,13 +26,23 @@ impl<T> HandleSet<T> {
     }
 
     /// Add `handle` to the set.
-    ///
-    /// Return `true` if the handle was not already in the set. In
-    /// other words, return true if it was newly inserted.
-    pub fn insert(&mut self, handle: Handle<T>) -> bool {
+    pub fn insert(&mut self, handle: Handle<T>) {
         // Note that, oddly, `Handle::index` does not return a 1-based
         // `Index`, but rather a zero-based `usize`.
-        self.members.insert(handle.index())
+        self.members.insert(handle.index());
+    }
+
+    /// Add handles from `iter` to the set.
+    pub fn insert_iter(&mut self, iter: impl IntoIterator<Item = Handle<T>>) {
+        for handle in iter {
+            self.insert(handle);
+        }
+    }
+
+    pub fn contains(&self, handle: Handle<T>) -> bool {
+        // Note that, oddly, `Handle::index` does not return a 1-based
+        // `Index`, but rather a zero-based `usize`.
+        self.members.contains(handle.index())
     }
 }
 
@@ -148,6 +158,8 @@ impl<T: 'static> HandleMap<T> {
                 // Build a zero-based end-exclusive range, given one-based handle indices.
                 compacted = first1.get() - 1..last1.get();
             } else {
+                // The range contains only a single live handle, which
+                // we identified with the first `find_map` call.
                 compacted = first1.get() - 1..first1.get();
             }
         } else {

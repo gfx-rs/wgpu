@@ -13,8 +13,8 @@ use std::{fmt, mem};
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
 const SPECIAL_CBUF_VAR: &str = "_NagaConstants";
-const SPECIAL_BASE_VERTEX: &str = "base_vertex";
-const SPECIAL_BASE_INSTANCE: &str = "base_instance";
+const SPECIAL_FIRST_VERTEX: &str = "first_vertex";
+const SPECIAL_FIRST_INSTANCE: &str = "first_instance";
 const SPECIAL_OTHER: &str = "other";
 
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
@@ -189,8 +189,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Write special constants, if needed
         if let Some(ref bt) = self.options.special_constants_binding {
             writeln!(self.out, "struct {SPECIAL_CBUF_TYPE} {{")?;
-            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_VERTEX)?;
-            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_BASE_INSTANCE)?;
+            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_FIRST_VERTEX)?;
+            writeln!(self.out, "{}int {};", back::INDENT, SPECIAL_FIRST_INSTANCE)?;
             writeln!(self.out, "{}uint {};", back::INDENT, SPECIAL_OTHER)?;
             writeln!(self.out, "}};")?;
             write!(
@@ -908,13 +908,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 TypeInner::Matrix {
                     rows,
                     columns,
-                    width,
+                    scalar,
                 } if member.binding.is_none() && rows == crate::VectorSize::Bi => {
-                    let vec_ty = crate::TypeInner::Vector {
-                        size: rows,
-                        kind: crate::ScalarKind::Float,
-                        width,
-                    };
+                    let vec_ty = crate::TypeInner::Vector { size: rows, scalar };
                     let field_name_key = NameKey::StructMember(handle, index as u32);
 
                     for i in 0..columns as u8 {
@@ -1024,21 +1020,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     /// Adds no trailing or leading whitespace
     pub(super) fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
-            TypeInner::Scalar { kind, width } | TypeInner::Atomic { kind, width } => {
-                write!(self.out, "{}", kind.to_hlsl_str(width)?)?;
+            TypeInner::Scalar(scalar) | TypeInner::Atomic(scalar) => {
+                write!(self.out, "{}", scalar.to_hlsl_str()?)?;
             }
-            TypeInner::Vector { size, kind, width } => {
+            TypeInner::Vector { size, scalar } => {
                 write!(
                     self.out,
                     "{}{}",
-                    kind.to_hlsl_str(width)?,
+                    scalar.to_hlsl_str()?,
                     back::vector_size_str(size)
                 )?;
             }
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 // The IR supports only float matrix
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-matrix
@@ -1047,7 +1043,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(
                     self.out,
                     "{}{}x{}",
-                    crate::ScalarKind::Float.to_hlsl_str(width)?,
+                    scalar.to_hlsl_str()?,
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
                 )?;
@@ -2232,6 +2228,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                 crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                 crate::Literal::I32(value) => write!(self.out, "{}", value)?,
+                crate::Literal::I64(value) => write!(self.out, "{}L", value)?,
                 crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
             },
             Expression::Constant(handle) => {
@@ -2295,7 +2292,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         use crate::Expression;
 
-        // Handle the special semantics for base vertex/instance
+        // Handle the special semantics of vertex_index/instance_index
         let ff_input = if self.options.special_constants_binding.is_some() {
             func_ctx.is_fixed_function_input(expr, module)
         } else {
@@ -2303,20 +2300,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         };
         let closing_bracket = match ff_input {
             Some(crate::BuiltIn::VertexIndex) => {
-                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_BASE_VERTEX} + ")?;
+                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX} + ")?;
                 ")"
             }
             Some(crate::BuiltIn::InstanceIndex) => {
-                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_BASE_INSTANCE} + ",)?;
+                write!(self.out, "({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE} + ",)?;
                 ")"
             }
             Some(crate::BuiltIn::NumWorkGroups) => {
-                //Note: despite their names (`BASE_VERTEX` and `BASE_INSTANCE`),
+                // Note: despite their names (`FIRST_VERTEX` and `FIRST_INSTANCE`),
                 // in compute shaders the special constants contain the number
                 // of workgroups, which we are using here.
                 write!(
                     self.out,
-                    "uint3({SPECIAL_CBUF_VAR}.{SPECIAL_BASE_VERTEX}, {SPECIAL_CBUF_VAR}.{SPECIAL_BASE_INSTANCE}, {SPECIAL_CBUF_VAR}.{SPECIAL_OTHER})",
+                    "uint3({SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_VERTEX}, {SPECIAL_CBUF_VAR}.{SPECIAL_FIRST_INSTANCE}, {SPECIAL_CBUF_VAR}.{SPECIAL_OTHER})",
                 )?;
                 return Ok(());
             }
@@ -2674,7 +2671,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
 
                 // return x component if return type is scalar
-                if let TypeInner::Scalar { .. } = *func_ctx.resolve_type(expr, &module.types) {
+                if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
                     write!(self.out, ".x")?;
                 }
             }
@@ -2757,23 +2754,27 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let inner = func_ctx.resolve_type(expr, &module.types);
                 match convert {
                     Some(dst_width) => {
+                        let scalar = crate::Scalar {
+                            kind,
+                            width: dst_width,
+                        };
                         match *inner {
                             TypeInner::Vector { size, .. } => {
                                 write!(
                                     self.out,
                                     "{}{}(",
-                                    kind.to_hlsl_str(dst_width)?,
+                                    scalar.to_hlsl_str()?,
                                     back::vector_size_str(size)
                                 )?;
                             }
-                            TypeInner::Scalar { .. } => {
-                                write!(self.out, "{}(", kind.to_hlsl_str(dst_width)?,)?;
+                            TypeInner::Scalar(_) => {
+                                write!(self.out, "{}(", scalar.to_hlsl_str()?,)?;
                             }
                             TypeInner::Matrix { columns, rows, .. } => {
                                 write!(
                                     self.out,
                                     "{}{}x{}(",
-                                    kind.to_hlsl_str(dst_width)?,
+                                    scalar.to_hlsl_str()?,
                                     back::vector_size_str(columns),
                                     back::vector_size_str(rows)
                                 )?;
@@ -3154,14 +3155,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     Function::CountTrailingZeros => {
                         match *func_ctx.resolve_type(arg, &module.types) {
-                            TypeInner::Vector { size, kind, .. } => {
+                            TypeInner::Vector { size, scalar } => {
                                 let s = match size {
                                     crate::VectorSize::Bi => ".xx",
                                     crate::VectorSize::Tri => ".xxx",
                                     crate::VectorSize::Quad => ".xxxx",
                                 };
 
-                                if let ScalarKind::Uint = kind {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min((32u){s}, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -3171,8 +3172,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     write!(self.out, ")))")?;
                                 }
                             }
-                            TypeInner::Scalar { kind, .. } => {
-                                if let ScalarKind::Uint = kind {
+                            TypeInner::Scalar(scalar) => {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min(32u, firstbitlow(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -3189,14 +3190,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     Function::CountLeadingZeros => {
                         match *func_ctx.resolve_type(arg, &module.types) {
-                            TypeInner::Vector { size, kind, .. } => {
+                            TypeInner::Vector { size, scalar } => {
                                 let s = match size {
                                     crate::VectorSize::Bi => ".xx",
                                     crate::VectorSize::Tri => ".xxx",
                                     crate::VectorSize::Quad => ".xxxx",
                                 };
 
-                                if let ScalarKind::Uint = kind {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "((31u){s} - firstbithigh(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -3211,8 +3212,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     write!(self.out, ")))")?;
                                 }
                             }
-                            TypeInner::Scalar { kind, .. } => {
-                                if let ScalarKind::Uint = kind {
+                            TypeInner::Scalar(scalar) => {
+                                if let ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "(31u - firstbithigh(")?;
                                     self.write_expr(module, arg, func_ctx)?;
                                     write!(self.out, "))")?;
@@ -3432,11 +3433,11 @@ pub(super) fn get_inner_matrix_data(
         TypeInner::Matrix {
             columns,
             rows,
-            width,
+            scalar,
         } => Some(MatrixType {
             columns,
             rows,
-            width,
+            width: scalar.width,
         }),
         TypeInner::Array { base, .. } => get_inner_matrix_data(module, base),
         _ => None,
@@ -3467,12 +3468,12 @@ pub(super) fn get_inner_matrix_of_struct_array_member(
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 mat_data = Some(MatrixType {
                     columns,
                     rows,
-                    width,
+                    width: scalar.width,
                 })
             }
             TypeInner::Array { base, .. } => {
@@ -3524,12 +3525,12 @@ fn get_inner_matrix_of_global_uniform(
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 mat_data = Some(MatrixType {
                     columns,
                     rows,
-                    width,
+                    width: scalar.width,
                 })
             }
             TypeInner::Array { base, .. } => {

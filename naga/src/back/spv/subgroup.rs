@@ -18,8 +18,7 @@ impl<'w> BlockContext<'w> {
         )?;
         let vec4_u32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: Some(crate::VectorSize::Quad),
-            kind: crate::ScalarKind::Uint,
-            width: 4,
+            scalar: crate::Scalar::U32,
             pointer_space: None,
         }));
         let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
@@ -67,14 +66,14 @@ impl<'w> BlockContext<'w> {
         let result_type_id = self.get_expression_type_id(result_ty);
         let result_ty_inner = result_ty.inner_with(&self.ir_module.types);
 
-        let (is_scalar, kind) = match *result_ty_inner {
-            TypeInner::Scalar { kind, .. } => (true, kind),
-            TypeInner::Vector { kind, .. } => (false, kind),
+        let (is_scalar, scalar) = match *result_ty_inner {
+            TypeInner::Scalar(kind) => (true, kind),
+            TypeInner::Vector { scalar: kind, .. } => (false, kind),
             _ => unimplemented!(),
         };
 
         use crate::ScalarKind as sk;
-        let spirv_op = match (kind, *op) {
+        let spirv_op = match (scalar.kind, *op) {
             (sk::Bool, sg::All) if is_scalar => spirv::Op::GroupNonUniformAll,
             (sk::Bool, sg::Any) if is_scalar => spirv::Op::GroupNonUniformAny,
             (_, sg::All | sg::Any) => unimplemented!(),

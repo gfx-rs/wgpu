@@ -277,8 +277,7 @@ enum LocalType {
         /// If `None`, this represents a scalar type. If `Some`, this represents
         /// a vector type of the given size.
         vector_size: Option<crate::VectorSize>,
-        kind: crate::ScalarKind,
-        width: crate::Bytes,
+        scalar: crate::Scalar,
         pointer_space: Option<spirv::StorageClass>,
     },
     /// A matrix of floating-point values.
@@ -356,28 +355,24 @@ struct LookupFunctionType {
 
 fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
     Some(match *inner {
-        crate::TypeInner::Scalar { kind, width } | crate::TypeInner::Atomic { kind, width } => {
-            LocalType::Value {
-                vector_size: None,
-                kind,
-                width,
-                pointer_space: None,
-            }
-        }
-        crate::TypeInner::Vector { size, kind, width } => LocalType::Value {
+        crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => LocalType::Value {
+            vector_size: None,
+            scalar,
+            pointer_space: None,
+        },
+        crate::TypeInner::Vector { size, scalar } => LocalType::Value {
             vector_size: Some(size),
-            kind,
-            width,
+            scalar,
             pointer_space: None,
         },
         crate::TypeInner::Matrix {
             columns,
             rows,
-            width,
+            scalar,
         } => LocalType::Matrix {
             columns,
             rows,
-            width,
+            width: scalar.width,
         },
         crate::TypeInner::Pointer { base, space } => LocalType::Pointer {
             base,
@@ -385,13 +380,11 @@ fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
         },
         crate::TypeInner::ValuePointer {
             size,
-            kind,
-            width,
+            scalar,
             space,
         } => LocalType::Value {
             vector_size: size,
-            kind,
-            width,
+            scalar,
             pointer_space: Some(helpers::map_storage_class(space)),
         },
         crate::TypeInner::Image {

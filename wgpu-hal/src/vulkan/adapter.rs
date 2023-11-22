@@ -3,7 +3,11 @@ use super::conv;
 use ash::{extensions::khr, vk};
 use parking_lot::Mutex;
 
-use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    ffi::CStr,
+    sync::{atomic::AtomicIsize, Arc},
+};
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
@@ -327,7 +331,8 @@ impl PhysicalDeviceFeatures {
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -1025,6 +1030,19 @@ impl super::Instance {
             );
         };
 
+        if let Some(driver) = phd_capabilities.driver {
+            if driver.conformance_version.major == 0 {
+                if driver.driver_id == ash::vk::DriverId::MOLTENVK {
+                    log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
+                } else {
+                    log::warn!(
+                        "Adapter is not Vulkan compliant, hiding adapter: {}",
+                        info.name
+                    );
+                    return None;
+                }
+            }
+        }
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0
             && !phd_capabilities.supports_extension(vk::KhrStorageBufferStorageClassFn::name())
         {
@@ -1411,7 +1429,7 @@ impl super::Adapter {
             device: Arc::clone(&shared),
             family_index,
             relay_semaphores,
-            relay_index: None,
+            relay_index: AtomicIsize::new(-1),
         };
 
         let mem_allocator = {

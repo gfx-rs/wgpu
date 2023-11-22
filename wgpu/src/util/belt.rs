@@ -98,7 +98,7 @@ impl StagingBelt {
         offset: BufferAddress,
         size: BufferSize,
         device: &Device,
-    ) -> BufferViewMut {
+    ) -> BufferViewMut<'_> {
         let mut chunk = if let Some(index) = self
             .active_chunks
             .iter()

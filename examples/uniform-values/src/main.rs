@@ -16,6 +16,7 @@
 //! The usage of the uniform buffer within the shader itself is pretty self-explanatory given
 //! some understanding of WGSL.
 
+use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
 // with actual GPU-allocated WGPU storage buffers.
 use encase::ShaderType;
@@ -84,8 +85,8 @@ impl Default for AppState {
 }
 
 struct WgpuContext {
-    pub window: Window,
-    pub surface: wgpu::Surface,
+    pub window: Arc<Window>,
+    pub surface: wgpu::Surface<'static>,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -95,11 +96,11 @@ struct WgpuContext {
 }
 
 impl WgpuContext {
-    async fn new(window: Window) -> WgpuContext {
+    async fn new(window: Arc<Window>) -> WgpuContext {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::default();
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+        let surface = instance.create_surface(window.clone()).unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -223,7 +224,7 @@ impl WgpuContext {
     }
 }
 
-async fn run(event_loop: EventLoop<()>, window: Window) {
+async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
     let mut wgpu_context = Some(WgpuContext::new(window).await);
     // (6)
     let mut state = Some(AppState::default());
@@ -351,6 +352,7 @@ fn main() {
         .with_inner_size(winit::dpi::LogicalSize::new(900, 900))
         .build(&event_loop)
         .unwrap();
+    let window = Arc::new(window);
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::builder().format_timestamp_nanos().init();
@@ -362,14 +364,14 @@ fn main() {
         console_log::init().expect("could not initialize logger");
         use winit::platform::web::WindowExtWebSys;
 
+        let canvas = window.canvas().expect("Couldn't get canvas");
+        canvas.style().set_css_text("height: 100%; width: 100%;");
+
         let document = web_sys::window()
             .and_then(|win| win.document())
             .expect("Failed to get document.");
         let body = document.body().unwrap();
-        body.append_child(&web_sys::Element::from(
-            window.canvas().expect("Couldn't get canvas"),
-        ))
-        .unwrap();
+        body.append_child(&canvas).unwrap();
         let controls_text = document
             .create_element("p")
             .expect("Failed to create controls text as element.");

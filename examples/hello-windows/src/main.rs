@@ -1,6 +1,6 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -8,9 +8,9 @@ use winit::{
 };
 
 struct ViewportDesc {
-    window: Window,
+    window: Arc<Window>,
     background: wgpu::Color,
-    surface: wgpu::Surface,
+    surface: wgpu::Surface<'static>,
 }
 
 struct Viewport {
@@ -19,8 +19,8 @@ struct Viewport {
 }
 
 impl ViewportDesc {
-    fn new(window: Window, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
-        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+    fn new(window: Arc<Window>, background: wgpu::Color, instance: &wgpu::Instance) -> Self {
+        let surface = instance.create_surface(window.clone()).unwrap();
         Self {
             window,
             background,
@@ -62,7 +62,7 @@ impl Viewport {
     }
 }
 
-async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
+async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color)>) {
     let instance = wgpu::Instance::default();
     let viewports: Vec<_> = viewports
         .into_iter()
@@ -180,6 +180,7 @@ fn main() {
                     .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
                     .build(&event_loop)
                     .unwrap();
+                let window = Arc::new(window);
                 window.set_outer_position(winit::dpi::PhysicalPosition::new(
                     WINDOW_PADDING + column * WINDOW_OFFSET,
                     WINDOW_PADDING + row * (WINDOW_OFFSET + WINDOW_TITLEBAR),

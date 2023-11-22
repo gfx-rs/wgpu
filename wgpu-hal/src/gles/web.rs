@@ -1,5 +1,5 @@
 use glow::HasContext;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use wasm_bindgen::JsCast;
 
 use super::TextureFormatDesc;
@@ -92,9 +92,9 @@ impl Instance {
         Ok(Surface {
             canvas,
             webgl2_context,
-            srgb_present_program: None,
-            swapchain: None,
-            texture: None,
+            srgb_present_program: Mutex::new(None),
+            swapchain: RwLock::new(None),
+            texture: Mutex::new(None),
             presentable: true,
         })
     }
@@ -176,14 +176,27 @@ impl crate::Instance<super::Api> for Instance {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Surface {
     canvas: Canvas,
     webgl2_context: web_sys::WebGl2RenderingContext,
-    pub(super) swapchain: Option<Swapchain>,
-    texture: Option<glow::Texture>,
+    pub(super) swapchain: RwLock<Option<Swapchain>>,
+    texture: Mutex<Option<glow::Texture>>,
     pub(super) presentable: bool,
-    srgb_present_program: Option<glow::Program>,
+    srgb_present_program: Mutex<Option<glow::Program>>,
+}
+
+impl Clone for Surface {
+    fn clone(&self) -> Self {
+        Self {
+            canvas: self.canvas.clone(),
+            webgl2_context: self.webgl2_context.clone(),
+            swapchain: RwLock::new(self.swapchain.read().clone()),
+            texture: Mutex::new(*self.texture.lock()),
+            presentable: self.presentable,
+            srgb_present_program: Mutex::new(*self.srgb_present_program.lock()),
+        }
+    }
 }
 
 #[cfg(all(
@@ -214,12 +227,13 @@ pub struct Swapchain {
 
 impl Surface {
     pub(super) unsafe fn present(
-        &mut self,
+        &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
         let gl = &context.glow_context;
-        let swapchain = self.swapchain.as_ref().ok_or(crate::SurfaceError::Other(
+        let swapchain = self.swapchain.read();
+        let swapchain = swapchain.as_ref().ok_or(crate::SurfaceError::Other(
             "need to configure surface before presenting",
         ))?;
 
@@ -236,8 +250,8 @@ impl Surface {
             unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None) };
             unsafe { gl.bind_sampler(0, None) };
             unsafe { gl.active_texture(glow::TEXTURE0) };
-            unsafe { gl.bind_texture(glow::TEXTURE_2D, self.texture) };
-            unsafe { gl.use_program(self.srgb_present_program) };
+            unsafe { gl.bind_texture(glow::TEXTURE_2D, *self.texture.lock()) };
+            unsafe { gl.use_program(*self.srgb_present_program.lock()) };
             unsafe { gl.disable(glow::DEPTH_TEST) };
             unsafe { gl.disable(glow::STENCIL_TEST) };
             unsafe { gl.disable(glow::SCISSOR_TEST) };
@@ -298,7 +312,7 @@ impl Surface {
 
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -315,94 +329,107 @@ impl crate::Surface<super::Api> for Surface {
 
         let gl = &device.shared.context.lock();
 
-        if let Some(swapchain) = self.swapchain.take() {
-            // delete all frame buffers already allocated
-            unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
+        {
+            let mut swapchain = self.swapchain.write();
+            if let Some(swapchain) = swapchain.take() {
+                // delete all frame buffers already allocated
+                unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
+            }
+        }
+        {
+            let mut srgb_present_program = self.srgb_present_program.lock();
+            if srgb_present_program.is_none() && config.format.is_srgb() {
+                *srgb_present_program = Some(unsafe { Self::create_srgb_present_program(gl) });
+            }
+        }
+        {
+            let mut texture = self.texture.lock();
+            if let Some(texture) = texture.take() {
+                unsafe { gl.delete_texture(texture) };
+            }
+
+            *texture = Some(unsafe { gl.create_texture() }.map_err(|error| {
+                log::error!("Internal swapchain texture creation failed: {error}");
+                crate::DeviceError::OutOfMemory
+            })?);
+
+            let desc = device.shared.describe_texture_format(config.format);
+            unsafe { gl.bind_texture(glow::TEXTURE_2D, *texture) };
+            unsafe {
+                gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MIN_FILTER,
+                    glow::NEAREST as _,
+                )
+            };
+            unsafe {
+                gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MAG_FILTER,
+                    glow::NEAREST as _,
+                )
+            };
+            unsafe {
+                gl.tex_storage_2d(
+                    glow::TEXTURE_2D,
+                    1,
+                    desc.internal,
+                    config.extent.width as i32,
+                    config.extent.height as i32,
+                )
+            };
+
+            let framebuffer = unsafe { gl.create_framebuffer() }.map_err(|error| {
+                log::error!("Internal swapchain framebuffer creation failed: {error}");
+                crate::DeviceError::OutOfMemory
+            })?;
+            unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
+            unsafe {
+                gl.framebuffer_texture_2d(
+                    glow::READ_FRAMEBUFFER,
+                    glow::COLOR_ATTACHMENT0,
+                    glow::TEXTURE_2D,
+                    *texture,
+                    0,
+                )
+            };
+            unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
+
+            let mut swapchain = self.swapchain.write();
+            *swapchain = Some(Swapchain {
+                extent: config.extent,
+                // channel: config.format.base_format().1,
+                format: config.format,
+                format_desc: desc,
+                framebuffer,
+            });
         }
 
-        if self.srgb_present_program.is_none() && config.format.is_srgb() {
-            self.srgb_present_program = Some(unsafe { Self::create_srgb_present_program(gl) });
-        }
-
-        if let Some(texture) = self.texture.take() {
-            unsafe { gl.delete_texture(texture) };
-        }
-
-        self.texture = Some(unsafe { gl.create_texture() }.map_err(|error| {
-            log::error!("Internal swapchain texture creation failed: {error}");
-            crate::DeviceError::OutOfMemory
-        })?);
-
-        let desc = device.shared.describe_texture_format(config.format);
-        unsafe { gl.bind_texture(glow::TEXTURE_2D, self.texture) };
-        unsafe {
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MIN_FILTER,
-                glow::NEAREST as _,
-            )
-        };
-        unsafe {
-            gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MAG_FILTER,
-                glow::NEAREST as _,
-            )
-        };
-        unsafe {
-            gl.tex_storage_2d(
-                glow::TEXTURE_2D,
-                1,
-                desc.internal,
-                config.extent.width as i32,
-                config.extent.height as i32,
-            )
-        };
-
-        let framebuffer = unsafe { gl.create_framebuffer() }.map_err(|error| {
-            log::error!("Internal swapchain framebuffer creation failed: {error}");
-            crate::DeviceError::OutOfMemory
-        })?;
-        unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer)) };
-        unsafe {
-            gl.framebuffer_texture_2d(
-                glow::READ_FRAMEBUFFER,
-                glow::COLOR_ATTACHMENT0,
-                glow::TEXTURE_2D,
-                self.texture,
-                0,
-            )
-        };
-        unsafe { gl.bind_texture(glow::TEXTURE_2D, None) };
-
-        self.swapchain = Some(Swapchain {
-            extent: config.extent,
-            // channel: config.format.base_format().1,
-            format: config.format,
-            format_desc: desc,
-            framebuffer,
-        });
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
+    unsafe fn unconfigure(&self, device: &super::Device) {
         let gl = device.shared.context.lock();
-        if let Some(swapchain) = self.swapchain.take() {
-            unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
+        {
+            let mut swapchain = self.swapchain.write();
+            if let Some(swapchain) = swapchain.take() {
+                unsafe { gl.delete_framebuffer(swapchain.framebuffer) };
+            }
         }
-        if let Some(renderbuffer) = self.texture.take() {
+        if let Some(renderbuffer) = self.texture.lock().take() {
             unsafe { gl.delete_texture(renderbuffer) };
         }
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<std::time::Duration>, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
             inner: super::TextureInner::Texture {
-                raw: self.texture.unwrap(),
+                raw: self.texture.lock().unwrap(),
                 target: glow::TEXTURE_2D,
             },
             drop_guard: None,
@@ -422,5 +449,5 @@ impl crate::Surface<super::Api> for Surface {
         }))
     }
 
-    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
+    unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

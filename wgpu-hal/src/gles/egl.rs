@@ -1,5 +1,5 @@
 use glow::HasContext;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 
 use std::{ffi, os::raw, ptr, rc::Rc, sync::Arc, time::Duration};
 
@@ -159,7 +159,7 @@ impl Drop for DisplayOwner {
 }
 
 fn open_x_display() -> Option<DisplayOwner> {
-    log::info!("Loading X11 library to get the current display");
+    log::debug!("Loading X11 library to get the current display");
     unsafe {
         let library = libloading::Library::new("libX11.so").ok()?;
         let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay").unwrap();
@@ -185,7 +185,7 @@ fn test_wayland_display() -> Option<DisplayOwner> {
     /* We try to connect and disconnect here to simply ensure there
      * is an active wayland display available.
      */
-    log::info!("Loading Wayland library to get the current display");
+    log::debug!("Loading Wayland library to get the current display");
     let library = unsafe {
         let client_library = find_library(&["libwayland-client.so.0", "libwayland-client.so"])?;
         let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
@@ -243,7 +243,7 @@ fn choose_config(
     let mut attributes = Vec::with_capacity(9);
     for tier_max in (0..tiers.len()).rev() {
         let name = tiers[tier_max].0;
-        log::info!("\tTrying {}", name);
+        log::debug!("\tTrying {}", name);
 
         attributes.clear();
         for &(_, tier_attr) in tiers[..=tier_max].iter() {
@@ -462,17 +462,17 @@ impl Inner {
             .query_string(Some(display), khronos_egl::EXTENSIONS)
             .unwrap()
             .to_string_lossy();
-        log::info!("Display vendor {:?}, version {:?}", vendor, version,);
+        log::debug!("Display vendor {:?}, version {:?}", vendor, version,);
         log::debug!(
             "Display extensions: {:#?}",
             display_extensions.split_whitespace().collect::<Vec<_>>()
         );
 
         let srgb_kind = if version >= (1, 5) {
-            log::info!("\tEGL surface: +srgb");
+            log::debug!("\tEGL surface: +srgb");
             SrgbFrameBufferKind::Core
         } else if display_extensions.contains("EGL_KHR_gl_colorspace") {
-            log::info!("\tEGL surface: +srgb khr");
+            log::debug!("\tEGL surface: +srgb khr");
             SrgbFrameBufferKind::Khr
         } else {
             log::warn!("\tEGL surface: -srgb");
@@ -520,14 +520,14 @@ impl Inner {
 
         if flags.contains(wgt::InstanceFlags::DEBUG) {
             if version >= (1, 5) {
-                log::info!("\tEGL context: +debug");
+                log::debug!("\tEGL context: +debug");
                 context_attributes.push(khronos_egl::CONTEXT_OPENGL_DEBUG);
                 context_attributes.push(khronos_egl::TRUE as _);
             } else if supports_khr_context {
-                log::info!("\tEGL context: +debug KHR");
+                log::debug!("\tEGL context: +debug KHR");
                 khr_context_flags |= EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR;
             } else {
-                log::info!("\tEGL context: -debug");
+                log::debug!("\tEGL context: -debug");
             }
         }
         if needs_robustness {
@@ -535,11 +535,11 @@ impl Inner {
             // (regardless of whether the extension is supported!).
             // In fact, Angle does precisely that awful behavior, so we don't try it there.
             if version >= (1, 5) && !display_extensions.contains("EGL_ANGLE_") {
-                log::info!("\tEGL context: +robust access");
+                log::debug!("\tEGL context: +robust access");
                 context_attributes.push(khronos_egl::CONTEXT_OPENGL_ROBUST_ACCESS);
                 context_attributes.push(khronos_egl::TRUE as _);
             } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
-                log::info!("\tEGL context: +robust access EXT");
+                log::debug!("\tEGL context: +robust access EXT");
                 context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
                 context_attributes.push(khronos_egl::TRUE as _);
             } else {
@@ -571,7 +571,7 @@ impl Inner {
             || display_extensions.contains("EGL_KHR_surfaceless_context")
             || cfg!(target_os = "emscripten")
         {
-            log::info!("\tEGL context: +surfaceless");
+            log::debug!("\tEGL context: +surfaceless");
             None
         } else {
             let attributes = [
@@ -782,7 +782,7 @@ impl crate::Instance<super::Api> for Instance {
                 .unwrap();
                 (display, Some(Rc::new(display_owner)), WindowKind::AngleX11)
             } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
-                log::info!("No windowing system present. Using surfaceless platform");
+                log::warn!("No windowing system present. Using surfaceless platform");
                 let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
                 let display = unsafe {
                     egl.get_platform_display(
@@ -795,7 +795,7 @@ impl crate::Instance<super::Api> for Instance {
 
                 (display, None, WindowKind::Unknown)
             } else {
-                log::info!("EGL_MESA_platform_surfaceless not available. Using default platform");
+                log::warn!("EGL_MESA_platform_surfaceless not available. Using default platform");
                 let display = unsafe { egl.get_display(khronos_egl::DEFAULT_DISPLAY) }.unwrap();
                 (display, None, WindowKind::Unknown)
             };
@@ -803,7 +803,7 @@ impl crate::Instance<super::Api> for Instance {
         if desc.flags.contains(wgt::InstanceFlags::VALIDATION)
             && client_ext_str.contains("EGL_KHR_debug")
         {
-            log::info!("Enabling EGL debug output");
+            log::debug!("Enabling EGL debug output");
             let function: EglDebugMessageControlFun = {
                 let addr = egl.get_proc_address("eglDebugMessageControlKHR").unwrap();
                 unsafe { std::mem::transmute(addr) }
@@ -937,7 +937,7 @@ impl crate::Instance<super::Api> for Instance {
             config: inner.config,
             presentable: inner.supports_native_window,
             raw_window_handle: window_handle,
-            swapchain: None,
+            swapchain: RwLock::new(None),
             srgb_kind: inner.srgb_kind,
         })
     }
@@ -958,13 +958,13 @@ impl crate::Instance<super::Api> for Instance {
         };
 
         if self.flags.contains(wgt::InstanceFlags::DEBUG) && gl.supports_debug() {
-            log::info!("Max label length: {}", unsafe {
+            log::debug!("Max label length: {}", unsafe {
                 gl.get_parameter_i32(glow::MAX_LABEL_LENGTH)
             });
         }
 
         if self.flags.contains(wgt::InstanceFlags::VALIDATION) && gl.supports_debug() {
-            log::info!("Enabling GLES debug output");
+            log::debug!("Enabling GLES debug output");
             unsafe { gl.enable(glow::DEBUG_OUTPUT) };
             unsafe { gl.debug_message_callback(super::gl_debug_message_callback) };
         }
@@ -1035,7 +1035,7 @@ pub struct Surface {
     config: khronos_egl::Config,
     pub(super) presentable: bool,
     raw_window_handle: raw_window_handle::RawWindowHandle,
-    swapchain: Option<Swapchain>,
+    swapchain: RwLock<Option<Swapchain>>,
     srgb_kind: SrgbFrameBufferKind,
 }
 
@@ -1044,12 +1044,13 @@ unsafe impl Sync for Surface {}
 
 impl Surface {
     pub(super) unsafe fn present(
-        &mut self,
+        &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
         let gl = unsafe { context.get_without_egl_lock() };
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
 
         self.egl
             .instance
@@ -1107,11 +1108,11 @@ impl Surface {
     }
 
     unsafe fn unconfigure_impl(
-        &mut self,
+        &self,
         device: &super::Device,
     ) -> Option<(khronos_egl::Surface, Option<*mut raw::c_void>)> {
         let gl = &device.shared.context.lock();
-        match self.swapchain.take() {
+        match self.swapchain.write().take() {
             Some(sc) => {
                 unsafe { gl.delete_renderbuffer(sc.renderbuffer) };
                 unsafe { gl.delete_framebuffer(sc.framebuffer) };
@@ -1131,7 +1132,7 @@ impl Surface {
 
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -1316,7 +1317,8 @@ impl crate::Surface<super::Api> for Surface {
         unsafe { gl.bind_renderbuffer(glow::RENDERBUFFER, None) };
         unsafe { gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None) };
 
-        self.swapchain = Some(Swapchain {
+        let mut swapchain = self.swapchain.write();
+        *swapchain = Some(Swapchain {
             surface,
             wl_window,
             renderbuffer,
@@ -1330,7 +1332,7 @@ impl crate::Surface<super::Api> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
+    unsafe fn unconfigure(&self, device: &super::Device) {
         if let Some((surface, wl_window)) = unsafe { self.unconfigure_impl(device) } {
             self.egl
                 .instance
@@ -1351,10 +1353,11 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<Duration>, //TODO
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: sc.renderbuffer,
@@ -1375,5 +1378,5 @@ impl crate::Surface<super::Api> for Surface {
             suboptimal: false,
         }))
     }
-    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
+    unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

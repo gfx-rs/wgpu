@@ -539,7 +539,7 @@ struct CompiledStage {
 impl super::Device {
     pub(super) unsafe fn create_swapchain(
         &self,
-        surface: &mut super::Surface,
+        surface: &super::Surface,
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<super::Swapchain>,
     ) -> Result<super::Swapchain, crate::SurfaceError> {
@@ -1588,7 +1588,7 @@ impl crate::Device<super::Api> for super::Device {
             multiview: desc.multiview,
             ..Default::default()
         };
-        let mut stages = ArrayVec::<_, 2>::new();
+        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
         let mut vertex_attributes = Vec::new();
 

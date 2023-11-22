@@ -23,6 +23,7 @@ struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
+    push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
     multiview: Option<std::num::NonZeroU32>,
 }
 
@@ -53,7 +54,7 @@ impl CompilationContext<'_> {
                 Some(name) => name.clone(),
                 None => continue,
             };
-            log::debug!(
+            log::trace!(
                 "Rebind buffer: {:?} -> {}, register={:?}, slot={}",
                 var.name.as_ref(),
                 &name,
@@ -101,6 +102,8 @@ impl CompilationContext<'_> {
                 naga::ShaderStage::Compute => {}
             }
         }
+
+        *self.push_constant_items = reflection_info.push_constant_items;
     }
 }
 
@@ -184,7 +187,7 @@ impl super::Device {
         unsafe { gl.shader_source(raw, shader) };
         unsafe { gl.compile_shader(raw) };
 
-        log::info!("\tCompiled shader {:?}", raw);
+        log::debug!("\tCompiled shader {:?}", raw);
 
         let compiled_ok = unsafe { gl.get_shader_compile_status(raw) };
         let msg = unsafe { gl.get_shader_info_log(raw) };
@@ -279,7 +282,7 @@ impl super::Device {
     unsafe fn create_pipeline<'a>(
         &self,
         gl: &glow::Context,
-        shaders: ArrayVec<ShaderStage<'a>, 3>,
+        shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
@@ -327,7 +330,7 @@ impl super::Device {
 
     unsafe fn create_program<'a>(
         gl: &glow::Context,
-        shaders: ArrayVec<ShaderStage<'a>, 3>,
+        shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
         multiview: Option<std::num::NonZeroU32>,
@@ -348,16 +351,22 @@ impl super::Device {
         }
 
         let mut name_binding_map = NameBindingMap::default();
+        let mut push_constant_items = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
         let mut has_stages = wgt::ShaderStages::empty();
-        let mut shaders_to_delete = arrayvec::ArrayVec::<_, 3>::new();
+        let mut shaders_to_delete = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
 
-        for (naga_stage, stage) in shaders {
+        for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
+            let pc_item = {
+                push_constant_items.push(Vec::new());
+                push_constant_items.last_mut().unwrap()
+            };
             let context = CompilationContext {
                 layout,
                 sampler_map: &mut sampler_map,
                 name_binding_map: &mut name_binding_map,
+                push_constant_items: pc_item,
                 multiview,
             };
 
@@ -389,7 +398,7 @@ impl super::Device {
             unsafe { gl.delete_shader(shader) };
         }
 
-        log::info!("\tLinked program {:?}", program);
+        log::debug!("\tLinked program {:?}", program);
 
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
@@ -409,6 +418,7 @@ impl super::Device {
                 match register {
                     super::BindingRegister::UniformBuffers => {
                         let index = unsafe { gl.get_uniform_block_index(program, name) }.unwrap();
+                        log::trace!("\tBinding slot {slot} to block index {index}");
                         unsafe { gl.uniform_block_binding(program, index, slot as _) };
                     }
                     super::BindingRegister::StorageBuffers => {
@@ -429,41 +439,46 @@ impl super::Device {
             }
         }
 
-        let mut uniforms: [super::UniformDesc; super::MAX_PUSH_CONSTANTS] =
-            [None; super::MAX_PUSH_CONSTANTS].map(|_: Option<()>| Default::default());
-        let count = unsafe { gl.get_active_uniforms(program) };
-        let mut offset = 0;
+        let mut uniforms = ArrayVec::new();
 
-        for uniform in 0..count {
-            let glow::ActiveUniform { utype, name, .. } =
-                unsafe { gl.get_active_uniform(program, uniform) }.unwrap();
+        for (stage_idx, stage_items) in push_constant_items.into_iter().enumerate() {
+            for item in stage_items {
+                let naga_module = &shaders[stage_idx].1.module.naga.module;
+                let type_inner = &naga_module.types[item.ty].inner;
 
-            if conv::is_opaque_type(utype) {
-                continue;
-            }
+                let location = unsafe { gl.get_uniform_location(program, &item.access_path) };
 
-            if let Some(location) = unsafe { gl.get_uniform_location(program, &name) } {
-                if uniforms[offset / 4].location.is_some() {
-                    panic!("Offset already occupied")
+                log::trace!(
+                    "push constant item: name={}, ty={:?}, offset={}, location={:?}",
+                    item.access_path,
+                    type_inner,
+                    item.offset,
+                    location,
+                );
+
+                if let Some(location) = location {
+                    uniforms.push(super::PushConstantDesc {
+                        location,
+                        offset: item.offset,
+                        size_bytes: type_inner.size(naga_module.to_ctx()),
+                        ty: type_inner.clone(),
+                    });
                 }
-
-                // `size` will always be 1 so we need to guess the real size from the type
-                let uniform_size = conv::uniform_byte_size(utype);
-
-                uniforms[offset / 4] = super::UniformDesc {
-                    location: Some(location),
-                    size: uniform_size,
-                    utype,
-                };
-
-                offset += uniform_size as usize;
             }
         }
+
+        let first_instance_location = if has_stages.contains(wgt::ShaderStages::VERTEX) {
+            // If this returns none (the uniform isn't active), that's fine, we just won't set it.
+            unsafe { gl.get_uniform_location(program, naga::back::glsl::FIRST_INSTANCE_BINDING) }
+        } else {
+            None
+        };
 
         Ok(Arc::new(super::PipelineInner {
             program,
             sampler_map,
-            uniforms,
+            first_instance_location,
+            push_constant_descs: uniforms,
         }))
     }
 }
@@ -1075,6 +1090,12 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        writer_flags.set(
+            glsl::WriterFlags::DRAW_PARAMETERS,
+            self.shared
+                .private_caps
+                .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING),
+        );
         // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
         // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
         writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
@@ -1411,27 +1432,27 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
             };
-            let &(_, sync) = fence
+            if let Some(&(_, sync)) = fence
                 .pending
                 .iter()
                 .find(|&&(value, _)| value >= wait_value)
-                .unwrap();
-            match unsafe {
-                gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
-            } {
-                // for some reason firefox returns WAIT_FAILED, to investigate
-                #[cfg(target_arch = "wasm32")]
-                glow::WAIT_FAILED => {
-                    log::warn!("wait failed!");
-                    Ok(false)
-                }
-                glow::TIMEOUT_EXPIRED => Ok(false),
-                glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
-                _ => Err(crate::DeviceError::Lost),
+            {
+                return match unsafe {
+                    gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
+                } {
+                    // for some reason firefox returns WAIT_FAILED, to investigate
+                    #[cfg(target_arch = "wasm32")]
+                    glow::WAIT_FAILED => {
+                        log::warn!("wait failed!");
+                        Ok(false)
+                    }
+                    glow::TIMEOUT_EXPIRED => Ok(false),
+                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
+                    _ => Err(crate::DeviceError::Lost),
+                };
             }
-        } else {
-            Ok(true)
         }
+        Ok(true)
     }
 
     unsafe fn start_capture(&self) -> bool {

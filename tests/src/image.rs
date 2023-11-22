@@ -388,7 +388,7 @@ fn copy_texture_to_buffer_with_aspect(
     aspect: TextureAspect,
 ) {
     let (block_width, block_height) = texture.format().block_dimensions();
-    let block_size = texture.format().block_size(Some(aspect)).unwrap();
+    let block_size = texture.format().block_copy_size(Some(aspect)).unwrap();
     let bytes_per_row = align_to(
         (texture.width() / block_width) * block_size,
         COPY_BYTES_PER_ROW_ALIGNMENT,
@@ -431,13 +431,6 @@ fn copy_texture_to_buffer(
         }
         TextureFormat::Depth24PlusStencil8 => {
             copy_via_compute(device, encoder, texture, buffer, TextureAspect::DepthOnly);
-            // copy_via_compute(
-            //     device,
-            //     encoder,
-            //     texture,
-            //     buffer_stencil.as_ref().unwrap(),
-            //     TextureAspect::StencilOnly,
-            // );
             copy_texture_to_buffer_with_aspect(
                 encoder,
                 texture,
@@ -501,7 +494,7 @@ impl ReadbackBuffers {
             let mut buffer_depth_bytes_per_row = (texture.width() / block_width)
                 * texture
                     .format()
-                    .block_size(Some(TextureAspect::DepthOnly))
+                    .block_copy_size(Some(TextureAspect::DepthOnly))
                     .unwrap_or(4);
             if should_align_buffer_size {
                 buffer_depth_bytes_per_row =
@@ -515,7 +508,7 @@ impl ReadbackBuffers {
                 (texture.width() / block_width)
                     * texture
                         .format()
-                        .block_size(Some(TextureAspect::StencilOnly))
+                        .block_copy_size(Some(TextureAspect::StencilOnly))
                         .unwrap_or(4),
                 COPY_BYTES_PER_ROW_ALIGNMENT,
             );
@@ -542,8 +535,8 @@ impl ReadbackBuffers {
                 buffer_stencil: Some(buffer_stencil),
             }
         } else {
-            let mut bytes_per_row =
-                (texture.width() / block_width) * texture.format().block_size(None).unwrap_or(4);
+            let mut bytes_per_row = (texture.width() / block_width)
+                * texture.format().block_copy_size(None).unwrap_or(4);
             if should_align_buffer_size {
                 bytes_per_row = align_to(bytes_per_row, COPY_BYTES_PER_ROW_ALIGNMENT);
             }
@@ -581,7 +574,7 @@ impl ReadbackBuffers {
         device.poll(Maintain::Wait);
         let (block_width, block_height) = self.texture_format.block_dimensions();
         let expected_bytes_per_row = (self.texture_width / block_width)
-            * self.texture_format.block_size(aspect).unwrap_or(4);
+            * self.texture_format.block_copy_size(aspect).unwrap_or(4);
         let expected_buffer_size = expected_bytes_per_row
             * (self.texture_height / block_height)
             * self.texture_depth_or_array_layers;
@@ -625,12 +618,16 @@ impl ReadbackBuffers {
         buffer_zero && stencil_buffer_zero
     }
 
-    pub fn check_buffer_contents(&self, device: &Device, expected_data: &[u8]) -> bool {
-        let result = self
-            .retrieve_buffer(device, &self.buffer, self.buffer_aspect())
-            .iter()
-            .eq(expected_data.iter());
+    pub fn assert_buffer_contents(&self, device: &Device, expected_data: &[u8]) {
+        let result_buffer = self.retrieve_buffer(device, &self.buffer, self.buffer_aspect());
+        assert!(
+            result_buffer.len() >= expected_data.len(),
+            "Result buffer ({}) smaller than expected buffer ({})",
+            result_buffer.len(),
+            expected_data.len()
+        );
+        let result_buffer = &result_buffer[..expected_data.len()];
+        assert_eq!(result_buffer, expected_data);
         self.buffer.unmap();
-        result
     }
 }

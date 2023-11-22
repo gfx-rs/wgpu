@@ -1,7 +1,7 @@
 use std::panic::AssertUnwindSafe;
 
 use futures_lite::FutureExt;
-use wgpu::{Adapter, Device, Queue};
+use wgpu::{Adapter, Device, Instance, Queue};
 
 use crate::{
     init::{initialize_adapter, initialize_device},
@@ -13,6 +13,7 @@ use crate::{
 
 /// Parameters and resources hadned to the test function.
 pub struct TestingContext {
+    pub instance: Instance,
     pub adapter: Adapter,
     pub adapter_info: wgpu::AdapterInfo,
     pub adapter_downlevel_capabilities: wgpu::DownlevelCapabilities,
@@ -44,7 +45,7 @@ pub async fn execute_test(
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
-    let (adapter, _surface_guard) = initialize_adapter(adapter_index).await;
+    let (instance, adapter, _surface_guard) = initialize_adapter(adapter_index).await;
 
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
@@ -67,6 +68,7 @@ pub async fn execute_test(
     ));
 
     let context = TestingContext {
+        instance,
         adapter,
         adapter_info,
         adapter_downlevel_capabilities,

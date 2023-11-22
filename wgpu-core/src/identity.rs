@@ -1,8 +1,11 @@
 use parking_lot::Mutex;
 use wgt::Backend;
 
-use crate::{id, Epoch, Index};
-use std::fmt::Debug;
+use crate::{
+    id::{self},
+    Epoch, FastHashMap, Index,
+};
+use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 /// A simple structure to allocate [`Id`] identifiers.
 ///
@@ -32,98 +35,99 @@ use std::fmt::Debug;
 /// [`alloc`]: IdentityManager::alloc
 /// [`free`]: IdentityManager::free
 #[derive(Debug, Default)]
-pub struct IdentityManager {
-    /// Available index values. If empty, then `epochs.len()` is the next index
-    /// to allocate.
-    free: Vec<Index>,
-
-    /// The next or currently-live epoch value associated with each `Id` index.
-    ///
-    /// If there is a live id with index `i`, then `epochs[i]` is its epoch; any
-    /// id with the same index but an older epoch is dead.
-    ///
-    /// If index `i` is currently unused, `epochs[i]` is the epoch to use in its
-    /// next `Id`.
-    epochs: Vec<Epoch>,
+pub(super) struct IdentityValues {
+    free: Vec<(Index, Epoch)>,
+    //sorted by Index
+    used: FastHashMap<Epoch, Vec<Index>>,
+    count: usize,
 }
 
-impl IdentityManager {
+impl IdentityValues {
     /// Allocate a fresh, never-before-seen id with the given `backend`.
     ///
     /// The backend is incorporated into the id, so that ids allocated with
     /// different `backend` values are always distinct.
     pub fn alloc<I: id::TypedId>(&mut self, backend: Backend) -> I {
+        self.count += 1;
         match self.free.pop() {
-            Some(index) => I::zip(index, self.epochs[index as usize], backend),
+            Some((index, epoch)) => I::zip(index, epoch + 1, backend),
             None => {
                 let epoch = 1;
-                let id = I::zip(self.epochs.len() as Index, epoch, backend);
-                self.epochs.push(epoch);
-                id
+                let used = self.used.entry(epoch).or_insert_with(Default::default);
+                let index = if let Some(i) = used.iter().max_by_key(|v| *v) {
+                    i + 1
+                } else {
+                    0
+                };
+                used.push(index);
+                I::zip(index, epoch, backend)
             }
         }
     }
 
-    /// Free `id`. It will never be returned from `alloc` again.
-    pub fn free<I: id::TypedId + Debug>(&mut self, id: I) {
+    pub fn mark_as_used<I: id::TypedId>(&mut self, id: I) -> I {
+        self.count += 1;
         let (index, epoch, _backend) = id.unzip();
-        let pe = &mut self.epochs[index as usize];
-        assert_eq!(*pe, epoch);
-        // If the epoch reaches EOL, the index doesn't go
-        // into the free list, will never be reused again.
-        if epoch < id::EPOCH_MASK {
-            *pe = epoch + 1;
-            self.free.push(index);
+        let used = self.used.entry(epoch).or_insert_with(Default::default);
+        used.push(index);
+        id
+    }
+
+    /// Free `id`. It will never be returned from `alloc` again.
+    pub fn release<I: id::TypedId>(&mut self, id: I) {
+        let (index, epoch, _backend) = id.unzip();
+        self.free.push((index, epoch));
+        self.count -= 1;
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+}
+
+#[derive(Debug)]
+pub struct IdentityManager<I: id::TypedId> {
+    pub(super) values: Mutex<IdentityValues>,
+    _phantom: PhantomData<I>,
+}
+
+impl<I: id::TypedId> IdentityManager<I> {
+    pub fn process(&self, backend: Backend) -> I {
+        self.values.lock().alloc(backend)
+    }
+    pub fn mark_as_used(&self, id: I) -> I {
+        self.values.lock().mark_as_used(id)
+    }
+    pub fn free(&self, id: I) {
+        self.values.lock().release(id)
+    }
+}
+
+impl<I: id::TypedId> IdentityManager<I> {
+    pub fn new() -> Self {
+        Self {
+            values: Mutex::new(IdentityValues::default()),
+            _phantom: PhantomData,
         }
     }
 }
 
-/// A type that can build true ids from proto-ids, and free true ids.
-///
-/// For some implementations, the true id is based on the proto-id.
-/// The caller is responsible for providing well-allocated proto-ids.
-///
-/// For other implementations, the proto-id carries no information
-/// (it's `()`, say), and this `IdentityHandler` type takes care of
-/// allocating a fresh true id.
+/// A type that can produce [`IdentityManager`] filters for ids of type `I`.
 ///
 /// See the module-level documentation for details.
-pub trait IdentityHandler<I>: Debug {
-    /// The type of proto-id consumed by this filter, to produce a true id.
-    type Input: Clone + Debug;
-
-    /// Given a proto-id value `id`, return a true id for `backend`.
-    fn process(&self, id: Self::Input, backend: Backend) -> I;
-
-    /// Free the true id `id`.
-    fn free(&self, id: I);
-}
-
-impl<I: id::TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
-    type Input = ();
-    fn process(&self, _id: Self::Input, backend: Backend) -> I {
-        self.lock().alloc(backend)
-    }
-    fn free(&self, id: I) {
-        self.lock().free(id)
-    }
-}
-
-/// A type that can produce [`IdentityHandler`] filters for ids of type `I`.
-///
-/// See the module-level documentation for details.
-pub trait IdentityHandlerFactory<I> {
-    /// The type of filter this factory constructs.
-    ///
-    /// "Filter" and "handler" seem to both mean the same thing here:
-    /// something that can produce true ids from proto-ids.
-    type Filter: IdentityHandler<I>;
-
-    /// Create an [`IdentityHandler<I>`] implementation that can
+pub trait IdentityHandlerFactory<I: id::TypedId> {
+    type Input: Copy;
+    /// Create an [`IdentityManager<I>`] implementation that can
     /// transform proto-ids into ids of type `I`.
+    /// It can return None if ids are passed from outside
+    /// and are not generated by wgpu
     ///
-    /// [`IdentityHandler<I>`]: IdentityHandler
-    fn spawn(&self) -> Self::Filter;
+    /// [`IdentityManager<I>`]: IdentityManager
+    fn spawn(&self) -> Arc<IdentityManager<I>> {
+        Arc::new(IdentityManager::new())
+    }
+    fn autogenerate_ids() -> bool;
+    fn input_to_id(id_in: Self::Input) -> I;
 }
 
 /// A global identity handler factory based on [`IdentityManager`].
@@ -134,14 +138,18 @@ pub trait IdentityHandlerFactory<I> {
 #[derive(Debug)]
 pub struct IdentityManagerFactory;
 
-impl<I: id::TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
-    type Filter = Mutex<IdentityManager>;
-    fn spawn(&self) -> Self::Filter {
-        Mutex::new(IdentityManager::default())
+impl<I: id::TypedId> IdentityHandlerFactory<I> for IdentityManagerFactory {
+    type Input = ();
+    fn autogenerate_ids() -> bool {
+        true
+    }
+
+    fn input_to_id(_id_in: Self::Input) -> I {
+        unreachable!("It should not be called")
     }
 }
 
-/// A factory that can build [`IdentityHandler`]s for all resource
+/// A factory that can build [`IdentityManager`]s for all resource
 /// types.
 pub trait GlobalIdentityHandlerFactory:
     IdentityHandlerFactory<id::AdapterId>
@@ -162,27 +170,23 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<id::SamplerId>
     + IdentityHandlerFactory<id::SurfaceId>
 {
-    fn ids_are_generated_in_wgpu() -> bool;
 }
 
-impl GlobalIdentityHandlerFactory for IdentityManagerFactory {
-    fn ids_are_generated_in_wgpu() -> bool {
-        true
-    }
-}
+impl GlobalIdentityHandlerFactory for IdentityManagerFactory {}
 
-pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input;
+pub type Input<G, I> = <G as IdentityHandlerFactory<I>>::Input;
 
 #[test]
 fn test_epoch_end_of_life() {
     use id::TypedId as _;
-    let mut man = IdentityManager::default();
-    man.epochs.push(id::EPOCH_MASK);
-    man.free.push(0);
-    let id1 = man.alloc::<id::BufferId>(Backend::Empty);
-    assert_eq!(id1.unzip().0, 0);
+    let man = IdentityManager::<id::BufferId>::new();
+    let forced_id = man.mark_as_used(id::BufferId::zip(0, 1, Backend::Empty));
+    assert_eq!(forced_id.unzip().0, 0);
+    let id1 = man.process(Backend::Empty);
+    assert_eq!(id1.unzip().0, 1);
     man.free(id1);
-    let id2 = man.alloc::<id::BufferId>(Backend::Empty);
-    // confirm that the index 0 is no longer re-used
+    let id2 = man.process(Backend::Empty);
+    // confirm that the epoch 1 is no longer re-used
     assert_eq!(id2.unzip().0, 1);
+    assert_eq!(id2.unzip().1, 2);
 }

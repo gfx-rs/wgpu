@@ -1,16 +1,20 @@
+use std::{marker::PhantomData, sync::Arc};
+
+use wgt::Backend;
+
 use crate::{
     hal_api::HalApi,
     hub::{HubReport, Hubs},
-    id,
+    id::SurfaceId,
     identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
-    registry::Registry,
-    storage::{Element, StorageReport},
+    registry::{Registry, RegistryReport},
+    storage::Element,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct GlobalReport {
-    pub surfaces: StorageReport,
+    pub surfaces: RegistryReport,
     #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
     pub vulkan: Option<HubReport>,
     #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
@@ -23,10 +27,32 @@ pub struct GlobalReport {
     pub gl: Option<HubReport>,
 }
 
+impl GlobalReport {
+    pub fn surfaces(&self) -> &RegistryReport {
+        &self.surfaces
+    }
+    pub fn hub_report(&self, backend: Backend) -> &HubReport {
+        match backend {
+            #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
+            Backend::Vulkan => self.vulkan.as_ref().unwrap(),
+            #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
+            Backend::Metal => self.metal.as_ref().unwrap(),
+            #[cfg(all(feature = "dx12", windows))]
+            Backend::Dx12 => self.dx12.as_ref().unwrap(),
+            #[cfg(all(feature = "dx11", windows))]
+            Backend::Dx11 => self.dx11.as_ref().unwrap(),
+            #[cfg(feature = "gles")]
+            Backend::Gl => self.gl.as_ref().unwrap(),
+            _ => panic!("HubReport is not supported on this backend"),
+        }
+    }
+}
+
 pub struct Global<G: GlobalIdentityHandlerFactory> {
     pub instance: Instance,
-    pub surfaces: Registry<Surface, id::SurfaceId, G>,
-    pub(crate) hubs: Hubs<G>,
+    pub surfaces: Registry<SurfaceId, Surface>,
+    pub(crate) hubs: Hubs,
+    _phantom: PhantomData<G>,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -34,8 +60,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance: Instance::new(name, instance_desc),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
@@ -50,8 +77,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance: A::create_instance_from_hal(name, hal_instance),
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
@@ -69,21 +97,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Global::new");
         Self {
             instance,
-            surfaces: Registry::without_backend(&factory, "Surface"),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
+            _phantom: PhantomData,
         }
     }
 
     pub fn clear_backend<A: HalApi>(&self, _dummy: ()) {
-        let mut surface_guard = self.surfaces.data.write();
         let hub = A::hub(self);
+        let surfaces_locked = self.surfaces.read();
         // this is used for tests, which keep the adapter
-        hub.clear(&mut surface_guard, false);
+        hub.clear(&surfaces_locked, false);
     }
 
     pub fn generate_report(&self) -> GlobalReport {
         GlobalReport {
-            surfaces: self.surfaces.data.read().generate_report(),
+            surfaces: self.surfaces.generate_report(),
             #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
             vulkan: if self.instance.vulkan.is_some() {
                 Some(self.hubs.vulkan.generate_report())
@@ -121,35 +150,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
-        log::info!("Dropping Global");
-        let mut surface_guard = self.surfaces.data.write();
+        log::info!("Destroying Global");
+        let mut surfaces_locked = self.surfaces.write();
 
         // destroy hubs before the instance gets dropped
         #[cfg(all(feature = "vulkan", not(target_arch = "wasm32")))]
         {
-            self.hubs.vulkan.clear(&mut surface_guard, true);
+            self.hubs.vulkan.clear(&surfaces_locked, true);
         }
         #[cfg(all(feature = "metal", any(target_os = "macos", target_os = "ios")))]
         {
-            self.hubs.metal.clear(&mut surface_guard, true);
+            self.hubs.metal.clear(&surfaces_locked, true);
         }
         #[cfg(all(feature = "dx12", windows))]
         {
-            self.hubs.dx12.clear(&mut surface_guard, true);
+            self.hubs.dx12.clear(&surfaces_locked, true);
         }
         #[cfg(all(feature = "dx11", windows))]
         {
-            self.hubs.dx11.clear(&mut surface_guard, true);
+            self.hubs.dx11.clear(&surfaces_locked, true);
         }
         #[cfg(feature = "gles")]
         {
-            self.hubs.gl.clear(&mut surface_guard, true);
+            self.hubs.gl.clear(&surfaces_locked, true);
         }
 
         // destroy surfaces
-        for element in surface_guard.map.drain(..) {
-            if let Element::Occupied(surface, _) = element {
-                self.instance.destroy_surface(surface);
+        for element in surfaces_locked.map.drain(..) {
+            if let Element::Occupied(arc_surface, _) = element {
+                if let Ok(surface) = Arc::try_unwrap(arc_surface) {
+                    self.instance.destroy_surface(surface);
+                } else {
+                    panic!("Surface cannot be destroyed because is still in use");
+                }
             }
         }
     }

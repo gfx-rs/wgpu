@@ -427,17 +427,17 @@ const BGR10A2_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
-const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
+/// "Indirect draw & dispatch arguments" in the Metal feature set tables
+const INDIRECT_DRAW_DISPATCH_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-const BASE_VERTEX_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v1,
-];
+/// "Base vertex/instance drawing" in the Metal feature set tables
+///
+/// in our terms, `base_vertex` and `first_instance` must be 0
+const BASE_VERTEX_FIRST_INSTANCE_SUPPORT: &[MTLFeatureSet] = INDIRECT_DRAW_DISPATCH_SUPPORT;
 
 const TEXTURE_CUBE_ARRAY_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily4_v1,
@@ -600,8 +600,11 @@ impl super::PrivateCapabilities {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             sampler_clamp_to_border: Self::supports_any(device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
-            base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
-            base_vertex_instance_drawing: Self::supports_any(device, BASE_VERTEX_INSTANCE_SUPPORT),
+            indirect_draw_dispatch: Self::supports_any(device, INDIRECT_DRAW_DISPATCH_SUPPORT),
+            base_vertex_first_instance_drawing: Self::supports_any(
+                device,
+                BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
+            ),
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: !os_is_mac || device.is_low_power(),
             headless: os_is_mac && device.is_headless(),
@@ -821,7 +824,6 @@ impl super::PrivateCapabilities {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::INDIRECT_FIRST_INSTANCE
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -831,9 +833,12 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
-            | F::MULTI_DRAW_INDIRECT
             | F::BGRA8UNORM_STORAGE;
 
+        features.set(
+            F::INDIRECT_FIRST_INSTANCE | F::MULTI_DRAW_INDIRECT,
+            self.indirect_draw_dispatch,
+        );
         features.set(
             F::TIMESTAMP_QUERY,
             self.timestamp_query_support
@@ -901,10 +906,19 @@ impl super::PrivateCapabilities {
             wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES,
             self.texture_cube_array,
         );
-        //TODO: separate the mutable comparisons from immutable ones
+        // TODO: separate the mutable comparisons from immutable ones
         downlevel.flags.set(
             wgt::DownlevelFlags::COMPARISON_SAMPLERS,
             self.mutable_comparison_samplers,
+        );
+        downlevel.flags.set(
+            wgt::DownlevelFlags::INDIRECT_EXECUTION,
+            self.indirect_draw_dispatch,
+        );
+        // TODO: add another flag for `first_instance`
+        downlevel.flags.set(
+            wgt::DownlevelFlags::BASE_VERTEX,
+            self.base_vertex_first_instance_drawing,
         );
         downlevel
             .flags

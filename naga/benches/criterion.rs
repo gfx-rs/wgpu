@@ -119,7 +119,6 @@ fn gather_modules() -> Vec<naga::Module> {
 fn validation(c: &mut Criterion) {
     let inputs = gather_modules();
     let mut group = c.benchmark_group("valid");
-    #[cfg(feature = "validate")]
     group.bench_function("safe", |b| {
         let mut validator = naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
@@ -131,7 +130,6 @@ fn validation(c: &mut Criterion) {
             }
         });
     });
-    #[cfg(feature = "validate")]
     group.bench_function("unsafe", |b| {
         let mut validator = naga::valid::Validator::new(
             naga::valid::ValidationFlags::empty(),
@@ -146,7 +144,6 @@ fn validation(c: &mut Criterion) {
 }
 
 fn backends(c: &mut Criterion) {
-    #[cfg(feature = "validate")]
     let inputs = {
         let mut validator = naga::valid::Validator::new(
             naga::valid::ValidationFlags::empty(),
@@ -158,8 +155,6 @@ fn backends(c: &mut Criterion) {
             .flat_map(|module| validator.validate(&module).ok().map(|info| (module, info)))
             .collect::<Vec<_>>()
     };
-    #[cfg(not(feature = "validate"))]
-    let inputs = Vec::<(naga::Module, naga::valid::ModuleInfo)>::new();
 
     let mut group = c.benchmark_group("back");
     #[cfg(feature = "wgsl-out")]

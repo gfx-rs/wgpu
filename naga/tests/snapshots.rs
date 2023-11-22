@@ -323,14 +323,10 @@ fn check_targets(
 
     #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     {
-        let debug_info = if cfg!(feature = "span") {
-            source_code.map(|code| naga::back::spv::DebugInfo {
-                source_code: code,
-                file_name: name.as_ref(),
-            })
-        } else {
-            None
-        };
+        let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
+            source_code: code,
+            file_name: name.as_ref(),
+        });
 
         if targets.contains(Targets::SPIRV) {
             write_output_spv(
@@ -803,11 +799,13 @@ fn convert_wgsl() {
         let source = input.read_source();
         match naga::front::wgsl::parse_str(&source) {
             Ok(mut module) => check_targets(&input, &mut module, targets, None),
-            Err(e) => panic!("{}", e.emit_to_string(&source)),
+            Err(e) => panic!(
+                "{}",
+                e.emit_to_string_with_path(&source, input.input_path())
+            ),
         }
     }
 
-    #[cfg(feature = "span")]
     {
         let inputs = [
             ("debug-symbol-simple", Targets::SPIRV),
@@ -819,7 +817,10 @@ fn convert_wgsl() {
             let source = input.read_source();
             match naga::front::wgsl::parse_str(&source) {
                 Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
-                Err(e) => panic!("{}", e.emit_to_string(&source)),
+                Err(e) => panic!(
+                    "{}",
+                    e.emit_to_string_with_path(&source, input.input_path())
+                ),
             }
         }
     }

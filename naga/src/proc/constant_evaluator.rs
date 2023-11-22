@@ -406,7 +406,7 @@ impl<'a> ConstantEvaluator<'a> {
                 let expr = self.check_and_get(expr)?;
 
                 match convert {
-                    Some(width) => self.cast(expr, kind, width, span),
+                    Some(width) => self.cast(expr, crate::Scalar { kind, width }, span),
                     None => Err(ConstantEvaluatorError::NotImplemented(
                         "bitcast built-in function".into(),
                     )),
@@ -470,12 +470,11 @@ impl<'a> ConstantEvaluator<'a> {
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         match self.expressions[value] {
             Expression::Literal(literal) => {
-                let kind = literal.scalar_kind();
-                let width = literal.width();
+                let scalar = literal.scalar();
                 let ty = self.types.insert(
                     Type {
                         name: None,
-                        inner: TypeInner::Vector { size, kind, width },
+                        inner: TypeInner::Vector { size, scalar },
                     },
                     span,
                 );
@@ -487,7 +486,7 @@ impl<'a> ConstantEvaluator<'a> {
             }
             Expression::ZeroValue(ty) => {
                 let inner = match self.types[ty].inner {
-                    TypeInner::Scalar { kind, width } => TypeInner::Vector { size, kind, width },
+                    TypeInner::Scalar(scalar) => TypeInner::Vector { size, scalar },
                     _ => return Err(ConstantEvaluatorError::SplatScalarOnly),
                 };
                 let res_ty = self.types.insert(Type { name: None, inner }, span);
@@ -506,14 +505,10 @@ impl<'a> ConstantEvaluator<'a> {
         pattern: [crate::SwizzleComponent; 4],
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         let mut get_dst_ty = |ty| match self.types[ty].inner {
-            crate::TypeInner::Vector {
-                size: _,
-                kind,
-                width,
-            } => Ok(self.types.insert(
+            crate::TypeInner::Vector { size: _, scalar } => Ok(self.types.insert(
                 Type {
                     name: None,
-                    inner: crate::TypeInner::Vector { size, kind, width },
+                    inner: crate::TypeInner::Vector { size, scalar },
                 },
                 span,
             )),
@@ -619,7 +614,10 @@ impl<'a> ConstantEvaluator<'a> {
                 && matches!(
                     self.types[ty0].inner,
                     crate::TypeInner::Vector {
-                        kind: crate::ScalarKind::Float,
+                        scalar: crate::Scalar {
+                            kind: ScalarKind::Float,
+                            ..
+                        },
                         ..
                     }
                 ) =>
@@ -717,7 +715,10 @@ impl<'a> ConstantEvaluator<'a> {
                 && matches!(
                     self.types[ty0].inner,
                     crate::TypeInner::Vector {
-                        kind: crate::ScalarKind::Float,
+                        scalar: crate::Scalar {
+                            kind: ScalarKind::Float,
+                            ..
+                        },
                         ..
                     }
                 ) =>
@@ -839,10 +840,10 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::ZeroValue(ty)
                 if matches!(
                     self.types[ty].inner,
-                    crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Uint,
+                    crate::TypeInner::Scalar(crate::Scalar {
+                        kind: ScalarKind::Uint,
                         ..
-                    }
+                    })
                 ) =>
             {
                 Ok(0)
@@ -875,24 +876,39 @@ impl<'a> ConstantEvaluator<'a> {
     /// [`ZeroValue`]: Expression::ZeroValue
     /// [`Literal`]: Expression::Literal
     /// [`Compose`]: Expression::Compose
+    fn eval_zero_value(
+        &mut self,
+        expr: Handle<Expression>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        match self.expressions[expr] {
+            Expression::ZeroValue(ty) => self.eval_zero_value_impl(ty, span),
+            _ => Ok(expr),
+        }
+    }
+
+    /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
+    ///
+    /// [`ZeroValue`]: Expression::ZeroValue
+    /// [`Literal`]: Expression::Literal
+    /// [`Compose`]: Expression::Compose
     fn eval_zero_value_impl(
         &mut self,
         ty: Handle<Type>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
         match self.types[ty].inner {
-            TypeInner::Scalar { kind, width } => {
+            TypeInner::Scalar(scalar) => {
                 let expr = Expression::Literal(
-                    Literal::zero(kind, width)
-                        .ok_or(ConstantEvaluatorError::TypeNotConstructible)?,
+                    Literal::zero(scalar).ok_or(ConstantEvaluatorError::TypeNotConstructible)?,
                 );
                 self.register_evaluated_expr(expr, span)
             }
-            TypeInner::Vector { size, kind, width } => {
+            TypeInner::Vector { size, scalar } => {
                 let scalar_ty = self.types.insert(
                     Type {
                         name: None,
-                        inner: TypeInner::Scalar { kind, width },
+                        inner: TypeInner::Scalar(scalar),
                     },
                     span,
                 );
@@ -906,16 +922,12 @@ impl<'a> ConstantEvaluator<'a> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 let vec_ty = self.types.insert(
                     Type {
                         name: None,
-                        inner: TypeInner::Vector {
-                            size: rows,
-                            kind: ScalarKind::Float,
-                            width,
-                        },
+                        inner: TypeInner::Vector { size: rows, scalar },
                     },
                     span,
                 );
@@ -951,48 +963,57 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    /// Convert the scalar components of `expr` to `kind` and `target_width`.
+    /// Convert the scalar components of `expr` to `target`.
     ///
     /// Treat `span` as the location of the resulting expression.
     pub fn cast(
         &mut self,
         expr: Handle<Expression>,
-        kind: ScalarKind,
-        target_width: crate::Bytes,
+        target: crate::Scalar,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        use crate::Scalar as Sc;
+
+        let expr = self.eval_zero_value(expr, span)?;
 
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
-                let literal = match (kind, target_width) {
-                    (ScalarKind::Sint, 4) => Literal::I32(match literal {
+                let literal = match target {
+                    Sc::I32 => Literal::I32(match literal {
                         Literal::I32(v) => v,
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v as i32,
                         Literal::Bool(v) => v as i32,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
-                    (ScalarKind::Uint, 4) => Literal::U32(match literal {
+                    Sc::U32 => Literal::U32(match literal {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
                         Literal::Bool(v) => v as u32,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
-                    (ScalarKind::Float, 4) => Literal::F32(match literal {
+                    Sc::F32 => Literal::F32(match literal {
                         Literal::I32(v) => v as f32,
                         Literal::U32(v) => v as f32,
                         Literal::F32(v) => v,
                         Literal::Bool(v) => v as u32 as f32,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
-                    (ScalarKind::Bool, crate::BOOL_WIDTH) => Literal::Bool(match literal {
+                    Sc::BOOL => Literal::Bool(match literal {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
                         Literal::Bool(v) => v,
-                        Literal::F64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::F64(_) | Literal::I64(_) => {
+                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                        }
                     }),
                     _ => return Err(ConstantEvaluatorError::InvalidCastArg),
                 };
@@ -1005,20 +1026,19 @@ impl<'a> ConstantEvaluator<'a> {
                 let ty_inner = match self.types[ty].inner {
                     TypeInner::Vector { size, .. } => TypeInner::Vector {
                         size,
-                        kind,
-                        width: target_width,
+                        scalar: target,
                     },
                     TypeInner::Matrix { columns, rows, .. } => TypeInner::Matrix {
                         columns,
                         rows,
-                        width: target_width,
+                        scalar: target,
                     },
                     _ => return Err(ConstantEvaluatorError::InvalidCastArg),
                 };
 
                 let mut components = src_components.clone();
                 for component in &mut components {
-                    *component = self.cast(*component, kind, target_width, span)?;
+                    *component = self.cast(*component, target, span)?;
                 }
 
                 let ty = self.types.insert(
@@ -1030,6 +1050,14 @@ impl<'a> ConstantEvaluator<'a> {
                 );
 
                 Expression::Compose { ty, components }
+            }
+            Expression::Splat { size, value } => {
+                let value_span = self.expressions.get_span(value);
+                let cast_value = self.cast(value, target, value_span)?;
+                Expression::Splat {
+                    size,
+                    value: cast_value,
+                }
             }
             _ => return Err(ConstantEvaluatorError::InvalidCastArg),
         };
@@ -1313,10 +1341,7 @@ mod tests {
         let scalar_ty = types.insert(
             Type {
                 name: None,
-                inner: TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
-                    width: 4,
-                },
+                inner: TypeInner::Scalar(crate::Scalar::I32),
             },
             Default::default(),
         );
@@ -1326,8 +1351,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    kind: ScalarKind::Sint,
-                    width: 4,
+                    scalar: crate::Scalar::I32,
                 },
             },
             Default::default(),
@@ -1449,10 +1473,7 @@ mod tests {
         let scalar_ty = types.insert(
             Type {
                 name: None,
-                inner: TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
-                    width: 4,
-                },
+                inner: TypeInner::Scalar(crate::Scalar::I32),
             },
             Default::default(),
         );
@@ -1506,7 +1527,7 @@ mod tests {
                 inner: TypeInner::Matrix {
                     columns: VectorSize::Bi,
                     rows: VectorSize::Tri,
-                    width: 4,
+                    scalar: crate::Scalar::F32,
                 },
             },
             Default::default(),
@@ -1517,8 +1538,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Tri,
-                    kind: ScalarKind::Float,
-                    width: 4,
+                    scalar: crate::Scalar::F32,
                 },
             },
             Default::default(),
@@ -1657,10 +1677,7 @@ mod tests {
         let i32_ty = types.insert(
             Type {
                 name: None,
-                inner: TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
-                    width: 4,
-                },
+                inner: TypeInner::Scalar(crate::Scalar::I32),
             },
             Default::default(),
         );
@@ -1670,8 +1687,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    kind: ScalarKind::Sint,
-                    width: 4,
+                    scalar: crate::Scalar::I32,
                 },
             },
             Default::default(),
@@ -1741,10 +1757,7 @@ mod tests {
         let i32_ty = types.insert(
             Type {
                 name: None,
-                inner: TypeInner::Scalar {
-                    kind: ScalarKind::Sint,
-                    width: 4,
-                },
+                inner: TypeInner::Scalar(crate::Scalar::I32),
             },
             Default::default(),
         );
@@ -1754,8 +1767,7 @@ mod tests {
                 name: None,
                 inner: TypeInner::Vector {
                     size: VectorSize::Bi,
-                    kind: ScalarKind::Sint,
-                    width: 4,
+                    scalar: crate::Scalar::I32,
                 },
             },
             Default::default(),

@@ -1,5 +1,6 @@
 use glow::HasContext;
-use std::sync::Arc;
+use parking_lot::Mutex;
+use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -213,9 +214,9 @@ impl super::Adapter {
         let vendor = unsafe { gl.get_parameter_string(vendor_const) };
         let renderer = unsafe { gl.get_parameter_string(renderer_const) };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::trace!("Vendor: {}", vendor);
-        log::trace!("Renderer: {}", renderer);
-        log::trace!("Version: {}", version);
+        log::debug!("Vendor: {}", vendor);
+        log::debug!("Renderer: {}", renderer);
+        log::debug!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver
@@ -271,7 +272,7 @@ impl super::Adapter {
 
         let shading_language_version = {
             let sl_version = unsafe { gl.get_parameter_string(glow::SHADING_LANGUAGE_VERSION) };
-            log::trace!("SL version: {}", &sl_version);
+            log::debug!("SL version: {}", &sl_version);
             if full_ver.is_some() {
                 let (sl_major, sl_minor) = Self::parse_full_version(&sl_version).ok()?;
                 let mut value = sl_major as u16 * 100 + sl_minor as u16 * 10;
@@ -290,7 +291,7 @@ impl super::Adapter {
             }
         };
 
-        log::trace!("Supported GL Extensions: {:#?}", extensions);
+        log::debug!("Supported GL Extensions: {:#?}", extensions);
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
@@ -378,7 +379,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
+            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
@@ -388,8 +390,6 @@ impl super::Adapter {
             wgt::DownlevelFlags::INDIRECT_EXECUTION,
             supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
         );
-        //TODO: we can actually support positive `base_vertex` in the same way
-        // as we emulate the `start_instance`. But we can't deal with negatives...
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, supported((3, 2), (3, 2)));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLEND,
@@ -615,6 +615,21 @@ impl super::Adapter {
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),
         );
+        if let Some(full_ver) = full_ver {
+            let supported =
+                full_ver >= (4, 2) && extensions.contains("GL_ARB_shader_draw_parameters");
+            private_caps.set(
+                super::PrivateCapabilities::FULLY_FEATURED_INSTANCING,
+                supported,
+            );
+            // Desktop 4.2 and greater specify the first instance parameter.
+            //
+            // For all other versions, the behavior is undefined.
+            //
+            // We only support indirect first instance when we also have ARB_shader_draw_parameters as
+            // that's the only way to get gl_InstanceID to work correctly.
+            features.set(wgt::Features::INDIRECT_FIRST_INSTANCE, supported);
+        }
 
         let max_texture_size = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) } as u32;
         let max_texture_3d_size = unsafe { gl.get_parameter_i32(glow::MAX_3D_TEXTURE_SIZE) } as u32;
@@ -919,9 +934,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 shader_clear_program,
                 shader_clear_program_color_uniform_location,
                 zero_buffer,
-                temp_query_results: Vec::new(),
-                draw_buffer_count: 1,
-                current_index_buffer: None,
+                temp_query_results: Mutex::new(Vec::new()),
+                draw_buffer_count: AtomicU8::new(1),
+                current_index_buffer: Mutex::new(None),
             },
         })
     }

@@ -1,4 +1,5 @@
 use crate::front::wgsl::parse::lexer::Token;
+use crate::front::wgsl::Scalar;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
 use crate::{SourceLocation, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
@@ -54,7 +55,11 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to standard error stream.
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
+    pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
+    where
+        P: AsRef<std::path::Path>,
+    {
+        let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = codespan_reporting::term::Config::default();
         let writer = StandardStream::stderr(ColorChoice::Auto);
@@ -68,7 +73,11 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+    pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
+    where
+        P: AsRef<std::path::Path>,
+    {
+        let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = codespan_reporting::term::Config::default();
         let mut writer = NoColor::new(Vec::new());
@@ -139,7 +148,7 @@ pub enum Error<'a> {
     UnexpectedComponents(Span),
     UnexpectedOperationInConstContext(Span),
     BadNumber(Span, NumberError),
-    BadMatrixScalarKind(Span, crate::ScalarKind, u8),
+    BadMatrixScalarKind(Span, Scalar),
     BadAccessor(Span),
     BadTexture(Span),
     BadTypeCast {
@@ -149,8 +158,7 @@ pub enum Error<'a> {
     },
     BadTextureSampleType {
         span: Span,
-        kind: crate::ScalarKind,
-        width: u8,
+        scalar: Scalar,
     },
     BadIncrDecrReferenceType(Span),
     InvalidResolve(ResolveError),
@@ -304,10 +312,10 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span, err.to_string().into())],
                 notes: vec![],
             },
-            Error::BadMatrixScalarKind(span, kind, width) => ParseError {
+            Error::BadMatrixScalarKind(span, scalar) => ParseError {
                 message: format!(
                     "matrix scalar type must be floating-point, but found `{}`",
-                    kind.to_wgsl(width)
+                    scalar.to_wgsl()
                 ),
                 labels: vec![(span, "must be floating-point (e.g. `f32`)".into())],
                 notes: vec![],
@@ -327,10 +335,10 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
             },
-            Error::BadTextureSampleType { span, kind, width } => ParseError {
+            Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
                     "texture sample type must be one of f32, i32 or u32, but found {}",
-                    kind.to_wgsl(width)
+                    scalar.to_wgsl()
                 ),
                 labels: vec![(span, "must be one of f32, i32 or u32".into())],
                 notes: vec![],

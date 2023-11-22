@@ -123,7 +123,7 @@ fn main() {}
 fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height: u32) {
     use hal::{Adapter as _, CommandEncoder as _, Device as _, Queue as _};
 
-    let mut od = unsafe {
+    let od = unsafe {
         exposed
             .adapter
             .open(wgt::Features::empty(), &wgt::Limits::downlevel_defaults())

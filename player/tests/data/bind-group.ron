@@ -2,30 +2,6 @@
     features: 0x0,
     expectations: [], //not crash!
     actions: [
-        CreatePipelineLayout(Id(0, 1, Empty), (
-            label: Some("empty"),
-            bind_group_layouts: [],
-            push_constant_ranges: [],
-        )),
-        CreateShaderModule(
-            id: Id(0, 1, Empty),
-            desc: (
-                label: None,
-                flags: (bits: 3),
-            ),
-            data: "empty.wgsl",
-        ),
-        CreateComputePipeline(
-            id: Id(0, 1, Empty),
-            desc: (
-                label: None,
-                layout: Some(Id(0, 1, Empty)),
-                stage: (
-                    module: Id(0, 1, Empty),
-                    entry_point: "main",
-                ),
-            ),
-        ),
         CreateBuffer(Id(0, 1, Empty), (
             label: None,
             size: 16,
@@ -58,16 +34,42 @@
                 )
             ],
         )),
+        CreatePipelineLayout(Id(0, 1, Empty), (
+            label: Some("empty"),
+            bind_group_layouts: [
+                Id(0, 1, Empty),
+            ],
+            push_constant_ranges: [],
+        )),
+        CreateShaderModule(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                flags: (bits: 3),
+            ),
+            data: "empty.wgsl",
+        ),
+        CreateComputePipeline(
+            id: Id(0, 1, Empty),
+            desc: (
+                label: None,
+                layout: Some(Id(0, 1, Empty)),
+                stage: (
+                    module: Id(0, 1, Empty),
+                    entry_point: "main",
+                ),
+            ),
+        ),
         Submit(1, [
             RunComputePass(
                 base: (
                     commands: [
-                        SetPipeline(Id(0, 1, Empty)),
                         SetBindGroup(
                             index: 0,
                             num_dynamic_offsets: 0,
                             bind_group_id: Id(0, 1, Empty),
                         ),
+                        SetPipeline(Id(0, 1, Empty)),
                     ],
                     dynamic_offsets: [],
                     string_data: [],
