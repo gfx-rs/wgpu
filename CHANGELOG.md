@@ -40,6 +40,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### `WGPU_ALLOW_NONCOMPLIANT_ADAPTER` environment variable
+
+This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
+
 ### New Features
 
 #### General

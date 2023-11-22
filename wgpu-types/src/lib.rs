@@ -858,6 +858,11 @@ bitflags::bitflags! {
         const VALIDATION = 1 << 1;
         /// Don't pass labels to wgpu-hal.
         const DISCARD_HAL_LABELS = 1 << 2;
+        /// Whether non-compliant adapters should be enumerated.
+        ///
+        /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
+        /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
+        const ALLOW_NONCOMPLIANT_ADAPTER = 1 << 3;
     }
 }
 
@@ -909,6 +914,9 @@ impl InstanceFlags {
         }
         if let Some(bit) = env("WGPU_DEBUG") {
             self.set(Self::DEBUG, bit);
+        }
+        if let Some(bit) = env("WGPU_ALLOW_NONCOMPLIANT_ADAPTER") {
+            self.set(Self::ALLOW_NONCOMPLIANT_ADAPTER, bit);
         }
 
         self
