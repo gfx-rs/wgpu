@@ -441,7 +441,7 @@ async fn start<E: Example>(title: &str) {
                         if example.is_none() {
                             return;
                         }
-                        
+
                         frame_counter.update();
 
                         let frame = surface.acquire(&context);
