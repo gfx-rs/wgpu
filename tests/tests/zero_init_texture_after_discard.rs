@@ -70,7 +70,9 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
                     DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES
                         | DownlevelFlags::COMPUTE_SHADERS,
                 )
-                .limits(Limits::downlevel_defaults()),
+                .limits(Limits::downlevel_defaults())
+                // https://github.com/gfx-rs/wgpu/issues/4740
+                .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
         )
         .run_sync(|mut ctx| {
             for format in [
