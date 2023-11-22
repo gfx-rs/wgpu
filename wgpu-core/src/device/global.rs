@@ -574,6 +574,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
+        log::error!("Device::create_texture error {error:?}");
+
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -646,6 +648,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
+        log::error!("Device::create_texture error {error:?}");
+
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -697,6 +701,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             return (id, None);
         };
+
+        log::error!("Device::create_buffer error {error:?}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -2314,6 +2320,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
+            log::error!("Buffer::map_async error {err:?}");
             return Err(err);
         }
 
