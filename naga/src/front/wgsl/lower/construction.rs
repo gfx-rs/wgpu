@@ -163,7 +163,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         // above can have mutable access to the type arena.
         let constructor = constructor_h.borrow_inner(ctx.module);
 
-        let expr = match (components, constructor) {
+        let expr;
+        match (components, constructor) {
             // Empty constructor
             (Components::None, dst_ty) => match dst_ty {
                 Constructor::Type((result_ty, _)) => {
@@ -186,11 +187,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ..
                 },
                 Constructor::Type((_, &crate::TypeInner::Scalar(scalar))),
-            ) => crate::Expression::As {
-                expr: component,
-                kind: scalar.kind,
-                convert: Some(scalar.width),
-            },
+            ) => {
+                expr = crate::Expression::As {
+                    expr: component,
+                    kind: scalar.kind,
+                    convert: Some(scalar.width),
+                };
+            }
 
             // Vector conversion (vector -> vector)
             (
@@ -206,11 +209,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar: dst_scalar,
                     },
                 )),
-            ) if dst_size == src_size => crate::Expression::As {
-                expr: component,
-                kind: dst_scalar.kind,
-                convert: Some(dst_scalar.width),
-            },
+            ) if dst_size == src_size => {
+                expr = crate::Expression::As {
+                    expr: component,
+                    kind: dst_scalar.kind,
+                    convert: Some(dst_scalar.width),
+                };
+            }
 
             // Vector conversion (vector -> vector) - partial
             (
@@ -247,11 +252,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar: dst_scalar,
                     },
                 )),
-            ) if dst_columns == src_columns && dst_rows == src_rows => crate::Expression::As {
-                expr: component,
-                kind: crate::ScalarKind::Float,
-                convert: Some(dst_scalar.width),
-            },
+            ) if dst_columns == src_columns && dst_rows == src_rows => {
+                expr = crate::Expression::As {
+                    expr: component,
+                    kind: crate::ScalarKind::Float,
+                    convert: Some(dst_scalar.width),
+                };
+            }
 
             // Matrix conversion (matrix -> matrix) - partial
             (
@@ -284,10 +291,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ..
                 },
                 Constructor::PartialVector { size },
-            ) => crate::Expression::Splat {
-                size,
-                value: component,
-            },
+            ) => {
+                expr = crate::Expression::Splat {
+                    size,
+                    value: component,
+                };
+            }
 
             // Vector constructor (splat)
             (
@@ -303,10 +312,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar: dst_scalar,
                     },
                 )),
-            ) if dst_scalar == src_scalar => crate::Expression::Splat {
-                size,
-                value: component,
-            },
+            ) if dst_scalar == src_scalar => {
+                expr = crate::Expression::Splat {
+                    size,
+                    value: component,
+                };
+            }
 
             // Vector constructor (by elements)
             (
@@ -329,7 +340,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ) => {
                 let inner = crate::TypeInner::Vector { size, scalar };
                 let ty = ctx.ensure_type_exists(inner);
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // Matrix constructor (by elements)
@@ -377,7 +388,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     rows,
                     scalar,
                 });
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // Matrix constructor (by columns)
@@ -409,7 +420,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     rows,
                     scalar,
                 });
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // Array constructor - infer type
@@ -430,7 +441,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
                 let ty = ctx.ensure_type_exists(inner);
 
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // Array or Struct constructor
@@ -442,7 +453,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 )),
             ) => {
                 let components = components.into_components_vec();
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // ERRORS
