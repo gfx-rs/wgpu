@@ -17,16 +17,12 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults())
             // remove once we get to https://github.com/gfx-rs/wgpu/issues/3193
-            .expect_fail(
-                FailureCase {
-                    backends: Some(Backends::DX12),
-                    vendor: Some(5140),
-                    adapter: Some("Microsoft Basic Render Driver"),
-                    ..FailureCase::default()
-                }
-                .validation_error("OBJECT_DELETED_WHILE_STILL_IN_USE")
-                .flaky(),
-            ),
+            .skip(FailureCase {
+                backends: Some(Backends::DX12),
+                vendor: Some(5140),
+                adapter: Some("Microsoft Basic Render Driver"),
+                ..FailureCase::default()
+            }),
     )
     .run_sync(|ctx| {
         let bgl = ctx

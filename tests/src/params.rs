@@ -154,9 +154,9 @@ impl TestInfo {
                 .map(|(name, _)| name)
                 .collect();
             let names_text = names.join(" & ");
-            let flaky_text = if flaky { " (flaky)" } else { "" };
+            let flaky_text = if flaky { " Flaky " } else { " " };
 
-            format!("Executed Failure: {names_text}{flaky_text}")
+            format!("Executed{flaky_text}Failure: {names_text}")
         } else {
             String::from("Executed")
         };
