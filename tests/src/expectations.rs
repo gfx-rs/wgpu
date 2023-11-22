@@ -81,6 +81,11 @@ pub struct FailureCase {
 }
 
 impl FailureCase {
+    /// Create a new failure case.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// This case applies to all tests.
     pub fn always() -> Self {
         FailureCase::default()
@@ -239,6 +244,7 @@ impl FailureCase {
         }
     }
 
+    /// Returns true if the given failure "satisfies" this failure case.
     pub(crate) fn matches_failure(&self, failure: &FailureResult) -> bool {
         for reason in self.reasons() {
             let result = match (reason, failure) {
@@ -348,17 +354,31 @@ pub(crate) fn expectations_match_failures(
     expectations: &[FailureCase],
     mut actual: Vec<FailureResult>,
 ) -> ExpectationMatchResult {
+    // Start with the assumption that we will pass.
     let mut result = ExpectationMatchResult::Complete;
+
+    // Run through all expected failures.
     for expected_failure in expectations {
+        // If any of the failures match.
         let mut matched = false;
-        for f_idx in (0..actual.len()).rev() {
-            let failure = &actual[f_idx];
-            if expected_failure.matches_failure(failure) {
-                actual.swap_remove(f_idx);
+
+        // Iterate through the failures.
+        //
+        // In reverse, to be able to use swap_remove.
+        actual.retain(|failure| {
+            // If the failure matches, remove it from the list of failures, as we expected it.
+            let matches = expected_failure.matches_failure(failure);
+
+            if matches {
                 matched = true;
             }
-        }
 
+            // Retain removes on false, so flip the bool so we remove on failure.
+            !matches
+        });
+
+        // If we didn't match our expected failure against any of the actual failures,
+        // and this failure is not flaky, then we need to panic, as we got an unexpected success.
         if !matched && matches!(expected_failure.behavior, FailureBehavior::AssertFailure) {
             result = ExpectationMatchResult::Panic;
             log::error!(
@@ -368,6 +388,8 @@ pub(crate) fn expectations_match_failures(
         }
     }
 
+    // If we have any failures left, then we got an unexpected failure
+    // and we need to panic.
     if !actual.is_empty() {
         result = ExpectationMatchResult::Panic;
         for failure in actual {
@@ -383,28 +405,8 @@ mod test {
     use crate::{
         expectations::{ExpectationMatchResult, FailureResult},
         init::init_logger,
-        FailureBehavior, FailureCase, FailureReason,
+        FailureCase,
     };
-
-    fn always_fail(reason: FailureReason) -> FailureCase {
-        FailureCase {
-            reasons: vec![reason],
-            behavior: FailureBehavior::AssertFailure,
-            ..FailureCase::default()
-        }
-    }
-
-    fn flaky(reason: FailureReason) -> FailureCase {
-        FailureCase {
-            reasons: vec![reason],
-            behavior: FailureBehavior::Ignore,
-            ..FailureCase::default()
-        }
-    }
-
-    fn expect_validation_err(msg: &'static str) -> FailureReason {
-        FailureReason::ValidationError(Some(msg))
-    }
 
     fn validation_err(msg: &'static str) -> FailureResult {
         FailureResult::ValidationError(Some(String::from(msg)))
@@ -430,7 +432,7 @@ mod test {
 
         // -- Missing expected failure --
 
-        let expectation = vec![always_fail(FailureReason::Any)];
+        let expectation = vec![FailureCase::always()];
         let actual = vec![];
 
         assert_eq!(
@@ -440,7 +442,7 @@ mod test {
 
         // -- Expected failure (validation) --
 
-        let expectation = vec![always_fail(FailureReason::Any)];
+        let expectation = vec![FailureCase::always()];
         let actual = vec![FailureResult::ValidationError(None)];
 
         assert_eq!(
@@ -450,7 +452,7 @@ mod test {
 
         // -- Expected failure (panic) --
 
-        let expectation = vec![always_fail(FailureReason::Any)];
+        let expectation = vec![FailureCase::always()];
         let actual = vec![FailureResult::Panic(None)];
 
         assert_eq!(
@@ -465,11 +467,10 @@ mod test {
 
         // -- Matching Substring --
 
-        let expectation = vec![always_fail(FailureReason::ValidationError(Some(
-            "Some StrIng",
-        )))];
+        let expectation: Vec<FailureCase> =
+            vec![FailureCase::always().validation_error("Some StrIng")];
         let actual = vec![FailureResult::ValidationError(Some(String::from(
-            "a very long string that contains sOmE sTrInG",
+            "a very long string that contains sOmE sTrInG of different capitalization",
         )))];
 
         assert_eq!(
@@ -479,7 +480,7 @@ mod test {
 
         // -- Non-Matching Substring --
 
-        let expectation = vec![always_fail(expect_validation_err("Some String"))];
+        let expectation = vec![FailureCase::always().validation_error("Some String")];
         let actual = vec![validation_err("a very long string that doesn't contain it")];
 
         assert_eq!(
@@ -492,7 +493,7 @@ mod test {
     fn ignore_flaky() {
         init_logger();
 
-        let expectation = vec![flaky(expect_validation_err("blah"))];
+        let expectation = vec![FailureCase::always().validation_error("blah").flaky()];
         let actual = vec![validation_err("some blah")];
 
         assert_eq!(
@@ -500,7 +501,7 @@ mod test {
             ExpectationMatchResult::Complete
         );
 
-        let expectation = vec![flaky(expect_validation_err("blah"))];
+        let expectation = vec![FailureCase::always().validation_error("blah").flaky()];
         let actual = vec![];
 
         assert_eq!(
@@ -515,7 +516,7 @@ mod test {
 
         // -- matches all matching errors --
 
-        let expectation = vec![always_fail(expect_validation_err("blah"))];
+        let expectation = vec![FailureCase::always().validation_error("blah")];
         let actual = vec![
             validation_err("some blah"),
             validation_err("some other blah"),
@@ -528,7 +529,7 @@ mod test {
 
         // -- but not all errors --
 
-        let expectation = vec![always_fail(expect_validation_err("blah"))];
+        let expectation = vec![FailureCase::always().validation_error("blah")];
         let actual = vec![
             validation_err("some blah"),
             validation_err("some other blah"),

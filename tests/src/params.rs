@@ -1,7 +1,10 @@
 use arrayvec::ArrayVec;
 use wgt::{DownlevelCapabilities, DownlevelFlags, Features, Limits};
 
-use crate::{report::AdapterReport, FailureApplicationReasons, FailureCase, GpuTestConfiguration};
+use crate::{
+    report::AdapterReport, FailureApplicationReasons, FailureBehavior, FailureCase,
+    GpuTestConfiguration,
+};
 
 const LOWEST_DOWNLEVEL_PROPERTIES: wgpu::DownlevelCapabilities = DownlevelCapabilities {
     flags: wgt::DownlevelFlags::empty(),
@@ -121,10 +124,12 @@ impl TestInfo {
 
         let mut applicable_cases = Vec::with_capacity(test.params.failures.len());
         let mut failure_application_reasons = FailureApplicationReasons::empty();
+        let mut flaky = false;
         for failure in &test.params.failures {
             if let Some(reasons) = failure.applies_to_adapter(&adapter_lowercase_info) {
                 failure_application_reasons.insert(reasons);
                 applicable_cases.push(failure.clone());
+                flaky |= matches!(failure.behavior, FailureBehavior::Ignore);
             }
         }
 
@@ -148,9 +153,10 @@ impl TestInfo {
                 .iter_names()
                 .map(|(name, _)| name)
                 .collect();
-            let names_text = names.join(" | ");
+            let names_text = names.join(" & ");
+            let flaky_text = if flaky { " (flaky)" } else { "" };
 
-            format!("Executed Failure: {}", names_text)
+            format!("Executed Failure: {names_text}{flaky_text}")
         } else {
             String::from("Executed")
         };
