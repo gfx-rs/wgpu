@@ -779,6 +779,10 @@ fn convert_wgsl() {
             "struct-layout",
             Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
         ),
+        (
+            "f64",
+            Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

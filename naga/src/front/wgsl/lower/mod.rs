@@ -1472,6 +1472,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ast::Literal::Number(Number::F32(f)) => crate::Literal::F32(f),
                     ast::Literal::Number(Number::I32(i)) => crate::Literal::I32(i),
                     ast::Literal::Number(Number::U32(u)) => crate::Literal::U32(u),
+                    ast::Literal::Number(Number::F64(f)) => crate::Literal::F64(f),
                     ast::Literal::Number(_) => {
                         unreachable!("got abstract numeric type when not expected");
                     }

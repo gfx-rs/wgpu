@@ -16,6 +16,8 @@ pub enum Number {
     U32(u32),
     /// Concrete f32
     F32(f32),
+    /// Concrete f64
+    F64(f64),
 }
 
 impl Number {
@@ -61,9 +63,11 @@ enum IntKind {
     U32,
 }
 
+#[derive(Debug)]
 enum FloatKind {
-    F32,
     F16,
+    F32,
+    F64,
 }
 
 // The following regexes (from the WGSL spec) will be matched:
@@ -104,9 +108,9 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
     /// if one of the given patterns are found at the start of the buffer
     /// returning the corresponding expr for the matched pattern
     macro_rules! consume_map {
-        ($bytes:ident, [$($pattern:pat_param => $to:expr),*]) => {
+        ($bytes:ident, [$( $($pattern:pat_param),* => $to:expr),* $(,)?]) => {
             match $bytes {
-                $( &[$pattern, ref rest @ ..] => { $bytes = rest; Some($to) }, )*
+                $( &[ $($pattern),*, ref rest @ ..] => { $bytes = rest; Some($to) }, )*
                 _ => None,
             }
         };
@@ -134,6 +138,16 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
             }
             start_len - $bytes.len()
         }};
+    }
+
+    macro_rules! consume_float_suffix {
+        ($bytes:ident) => {
+            consume_map!($bytes, [
+                b'h' => FloatKind::F16,
+                b'f' => FloatKind::F32,
+                b'l', b'f' => FloatKind::F64,
+            ])
+        };
     }
 
     /// maps the given `&[u8]` (tail of the initial `input: &str`) to a `&str`
@@ -190,7 +204,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
                 let number = general_extract.end(bytes);
 
-                let kind = consume_map!(bytes, [b'f' => FloatKind::F32, b'h' => FloatKind::F16]);
+                let kind = consume_float_suffix!(bytes);
 
                 (parse_hex_float(number, kind), rest_to_str!(bytes))
             } else {
@@ -219,7 +233,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
                 let exponent = exp_extract.end(bytes);
 
-                let kind = consume_map!(bytes, [b'f' => FloatKind::F32, b'h' => FloatKind::F16]);
+                let kind = consume_float_suffix!(bytes);
 
                 (
                     parse_hex_float_missing_period(significand, exponent, kind),
@@ -257,7 +271,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
             let number = general_extract.end(bytes);
 
-            let kind = consume_map!(bytes, [b'f' => FloatKind::F32, b'h' => FloatKind::F16]);
+            let kind = consume_float_suffix!(bytes);
 
             (parse_dec_float(number, kind), rest_to_str!(bytes))
         } else {
@@ -275,7 +289,7 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
 
                 let number = general_extract.end(bytes);
 
-                let kind = consume_map!(bytes, [b'f' => FloatKind::F32, b'h' => FloatKind::F16]);
+                let kind = consume_float_suffix!(bytes);
 
                 (parse_dec_float(number, kind), rest_to_str!(bytes))
             } else {
@@ -289,8 +303,9 @@ fn parse(input: &str) -> (Result<Number, NumberError>, &str) {
                 let kind = consume_map!(bytes, [
                     b'i' => Kind::Int(IntKind::I32),
                     b'u' => Kind::Int(IntKind::U32),
+                    b'h' => Kind::Float(FloatKind::F16),
                     b'f' => Kind::Float(FloatKind::F32),
-                    b'h' => Kind::Float(FloatKind::F16)
+                    b'l', b'f' => Kind::Float(FloatKind::F64),
                 ]);
 
                 (
@@ -382,12 +397,17 @@ fn parse_hex_float(input: &str, kind: Option<FloatKind>) -> Result<Number, Numbe
             // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
             _ => Err(NumberError::NotRepresentable),
         },
+        Some(FloatKind::F16) => Err(NumberError::UnimplementedF16),
         Some(FloatKind::F32) => match hexf_parse::parse_hexf32(input, false) {
             Ok(num) => Ok(Number::F32(num)),
             // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
             _ => Err(NumberError::NotRepresentable),
         },
-        Some(FloatKind::F16) => Err(NumberError::UnimplementedF16),
+        Some(FloatKind::F64) => match hexf_parse::parse_hexf64(input, false) {
+            Ok(num) => Ok(Number::F64(num)),
+            // can only be ParseHexfErrorKind::Inexact but we can't check since it's private
+            _ => Err(NumberError::NotRepresentable),
+        },
     }
 }
 
@@ -405,6 +425,12 @@ fn parse_dec_float(input: &str, kind: Option<FloatKind>) -> Result<Number, Numbe
             let num = input.parse::<f32>().unwrap(); // will never fail
             num.is_finite()
                 .then_some(Number::F32(num))
+                .ok_or(NumberError::NotRepresentable)
+        }
+        Some(FloatKind::F64) => {
+            let num = input.parse::<f64>().unwrap(); // will never fail
+            num.is_finite()
+                .then_some(Number::F64(num))
                 .ok_or(NumberError::NotRepresentable)
         }
         Some(FloatKind::F16) => Err(NumberError::UnimplementedF16),
