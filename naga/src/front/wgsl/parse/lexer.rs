@@ -448,6 +448,7 @@ impl<'a> Lexer<'a> {
 }
 
 #[cfg(test)]
+#[track_caller]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
@@ -674,6 +675,22 @@ fn test_tokens() {
             Token::Operation('/'),
         ],
     );
+
+    // Type suffixes are only allowed on hex float literals
+    // if you provided an exponent.
+    sub_test(
+        "0x1.2f 0x1.2f 0x1.2h 0x1.2H",
+        &[
+            // The 'f' suffixes are taken as a hex digit:
+            // the fractional part is 0x2f / 256.
+            Token::Number(Ok(Number::F32(1.0 + 0x2f as f32 / 256.0))),
+            Token::Number(Ok(Number::F32(1.0 + 0x2f as f32 / 256.0))),
+            Token::Number(Ok(Number::F32(1.125))),
+            Token::Word("h"),
+            Token::Number(Ok(Number::F32(1.125))),
+            Token::Word("H"),
+        ],
+    )
 }
 
 #[test]
