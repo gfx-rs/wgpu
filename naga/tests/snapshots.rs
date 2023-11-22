@@ -783,6 +783,10 @@ fn convert_wgsl() {
             "f64",
             Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        (
+            "abstract-types",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

@@ -102,8 +102,44 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
-- Implement WGSL abstract types (by @jimblandy):
-  - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
+-   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743)).
+
+    Abstract types make numeric literals easier to use, by
+    automatically converting literals and other constant expressions
+    from abstract numeric types to concrete types when safe and
+    necessary. For example, to build a vector of floating-point
+    numbers, Naga previously made you write:
+
+        vec3<f32>(1.0, 2.0, 3.0)
+
+    With this change, you can now simply write:
+
+        vec3<f32>(1, 2, 3)
+
+    Even though the literals are abstract integers, Naga recognizes
+    that it is safe and necessary to convert them to `f32` values in
+    order to build the vector. You can also use abstract values as
+    initializers for global constants, like this:
+
+        const unit_x: vec2<f32> = vec2(1, 0);
+
+    The literals `1` and `0` are abstract integers, and the expression
+    `vec2(1, 0)` is an abstract vector. However, Naga recognizes that
+    it can convert that to the concrete type `vec2<f32>` to satisfy
+    the given type of `unit_x`.
+
+    The WGSL specification permits abstract integers and
+    floating-point values in almost all contexts, but Naga's support
+    for this is still incomplete. Many WGSL operators and builtin
+    functions are specified to produce abstract results when applied
+    to abstract inputs, but for now Naga simply concretizes them all
+    before applying the operation. We will expand Naga's abstract type
+    support in subsequent pull requests.
+
+    As part of this work, the public types `naga::ScalarKind` and
+    `naga::Literal` now have new variants, `AbstractInt` and `AbstractFloat`.
+
+- Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
 
 - Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
 
