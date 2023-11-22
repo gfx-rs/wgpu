@@ -4,7 +4,8 @@ use futures_lite::FutureExt;
 use wgpu::{Adapter, Device, Instance, Queue};
 
 use crate::{
-    init::{initialize_adapter, initialize_device},
+    expectations::{expectations_match_failures, ExpectationMatchResult, FailureResult},
+    init::{init_logger, initialize_adapter, initialize_device},
     isolation,
     params::TestInfo,
     report::AdapterReport,
@@ -37,11 +38,7 @@ pub async fn execute_test(
         return;
     }
 
-    // We don't actually care if it fails
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = env_logger::try_init();
-    #[cfg(target_arch = "wasm32")]
-    let _ = console_log::init_with_level(log::Level::Info);
+    init_logger();
 
     let _test_guard = isolation::OneTestPerProcessGuard::new();
 
@@ -78,51 +75,40 @@ pub async fn execute_test(
         queue,
     };
 
+    let mut failures = Vec::new();
+
     // Run the test, and catch panics (possibly due to failed assertions).
-    let panicked = AssertUnwindSafe((config.test.as_ref().unwrap())(context))
+    let panic_res = AssertUnwindSafe((config.test.as_ref().unwrap())(context))
         .catch_unwind()
-        .await
-        .is_err();
+        .await;
+
+    if let Err(panic) = panic_res {
+        let panic_str = panic.downcast_ref::<&'static str>();
+        let panic_string = if let Some(&panic_str) = panic_str {
+            Some(panic_str.to_string())
+        } else {
+            panic.downcast_ref::<String>().cloned()
+        };
+
+        failures.push(FailureResult::Panic(panic_string))
+    }
 
     // Check whether any validation errors were reported during the test run.
     cfg_if::cfg_if!(
         if #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))] {
-            let canary_set = wgpu::hal::VALIDATION_CANARY.get_and_reset();
+            failures.extend(wgpu::hal::VALIDATION_CANARY.get_and_reset().into_iter().map(|msg| FailureResult::ValidationError(Some(msg))));
         } else if #[cfg(all(target_arch = "wasm32", feature = "webgl"))] {
-            let canary_set = _surface_guard.unwrap().check_for_unreported_errors();
+            if _surface_guard.unwrap().check_for_unreported_errors() {
+                failures.push(FailureResult::ValidationError(None));
+            }
         } else {
             // TODO: WebGPU
             let canary_set = false;
         }
     );
 
-    // Summarize reasons for actual failure, if any.
-    let failure_cause = match (panicked, canary_set) {
-        (true, true) => Some("PANIC AND VALIDATION ERROR"),
-        (true, false) => Some("PANIC"),
-        (false, true) => Some("VALIDATION ERROR"),
-        (false, false) => None,
-    };
-
-    // Compare actual results against expectations.
-    match (failure_cause, test_info.expected_failure_reason) {
-        // The test passed, as expected.
-        (None, None) => log::info!("TEST RESULT: PASSED"),
-        // The test failed unexpectedly.
-        (Some(cause), None) => {
-            panic!("UNEXPECTED TEST FAILURE DUE TO {cause}")
-        }
-        // The test passed unexpectedly.
-        (None, Some(reason)) => {
-            panic!("UNEXPECTED TEST PASS: {reason:?}");
-        }
-        // The test failed, as expected.
-        (Some(cause), Some(reason_expected)) => {
-            log::info!(
-                "TEST RESULT: EXPECTED FAILURE DUE TO {} (expected because of {:?})",
-                cause,
-                reason_expected
-            );
-        }
+    // The call to matches_failure will log.
+    if expectations_match_failures(&test_info.failures, failures) == ExpectationMatchResult::Panic {
+        panic!();
     }
 }
