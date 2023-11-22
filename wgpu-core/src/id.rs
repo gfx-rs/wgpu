@@ -155,12 +155,17 @@ where
 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let (index, epoch, backend) = self.unzip();
-        formatter
-            .debug_struct("Id")
-            .field("index", &index)
-            .field("epoch", &epoch)
-            .field("backend", &backend)
-            .finish()
+        let backend = match backend {
+            Backend::Vulkan => "vk",
+            Backend::Metal => "mtl",
+            Backend::Dx12 => "d3d12",
+            Backend::Dx11 => "d3d11",
+            Backend::Gl => "gl",
+            Backend::BrowserWebGpu => "webgpu",
+            Backend::Empty => "_",
+        };
+        write!(formatter, "Id({index},{epoch},{backend})")?;
+        Ok(())
     }
 }
 
