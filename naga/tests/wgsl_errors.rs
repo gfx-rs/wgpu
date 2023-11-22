@@ -502,7 +502,7 @@ fn let_type_mismatch() {
         r#"
             const x: i32 = 1.0;
         "#,
-        r#"error: the type of `x` is expected to be `i32`, but got `f32`
+        r#"error: the type of `x` is expected to be `i32`, but got `{AbstractFloat}`
   ┌─ wgsl:2:19
   │
 2 │             const x: i32 = 1.0;
@@ -1996,9 +1996,12 @@ fn binding_array_non_struct() {
 #[test]
 fn compaction_preserves_spans() {
     let source = r#"
-        const a: i32 = -(-(-(-42i)));
-        const b: vec2<u32> = vec2<u32>(42u, 43i);
-    "#; //                   ^^^^^^^^^^^^^^^^^^^ correct error span: 68..87
+        fn f() {
+           var a: i32 = -(-(-(-42i)));
+           var x: i32;
+           x = 42u;
+        }
+    "#; //     ^^^   correct error span: 95..98
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2011,10 +2014,18 @@ fn compaction_preserves_spans() {
     // Ideally this would all just be a `matches!` with a big pattern,
     // but the `Span` API is full of opaque structs.
     let mut spans = err.spans();
-    let first_span = spans.next().expect("error should have at least one span").0;
+
+    // The first span is the whole function.
+    let _ = spans.next().expect("error should have at least one span");
+
+    // The second span is the assignment destination.
+    let dest_span = spans
+        .next()
+        .expect("error should have at least two spans")
+        .0;
     if !matches!(
-        first_span.to_range(),
-        Some(std::ops::Range { start: 68, end: 87 })
+        dest_span.to_range(),
+        Some(std::ops::Range { start: 95, end: 98 })
     ) {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }

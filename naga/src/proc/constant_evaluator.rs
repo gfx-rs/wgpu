@@ -277,6 +277,17 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    pub fn to_ctx(&self) -> crate::proc::GlobalCtx {
+        crate::proc::GlobalCtx {
+            types: self.types,
+            constants: self.constants,
+            const_expressions: match self.function_local_data {
+                Some(ref data) => data.const_expressions,
+                None => self.expressions,
+            },
+        }
+    }
+
     fn check(&self, expr: Handle<Expression>) -> Result<(), ConstantEvaluatorError> {
         if let Some(ref function_local_data) = self.function_local_data {
             if !function_local_data.expression_constness.is_const(expr) {
@@ -1035,7 +1046,21 @@ impl<'a> ConstantEvaluator<'a> {
                             return Err(ConstantEvaluatorError::InvalidCastArg)
                         }
                     }),
-                    _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+                    Sc::ABSTRACT_FLOAT => Literal::AbstractFloat(match literal {
+                        Literal::AbstractInt(v) => {
+                            // Overflow is forbidden, but inexact conversions
+                            // are fine. The range of f64 is far larger than
+                            // that of i64, so we don't have to check anything
+                            // here.
+                            v as f64
+                        }
+                        Literal::AbstractFloat(v) => v,
+                        _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+                    }),
+                    _ => {
+                        log::debug!("Constant evaluator refused to convert value to {target:?}");
+                        return Err(ConstantEvaluatorError::InvalidCastArg);
+                    }
                 };
                 Expression::Literal(literal)
             }
@@ -1083,6 +1108,66 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         self.register_evaluated_expr(expr, span)
+    }
+
+    /// Convert the scalar leaves of  `expr` to `target`, handling arrays.
+    ///
+    /// `expr` must be a `Compose` expression whose type is a scalar, vector,
+    /// matrix, or nested arrays of such.
+    ///
+    /// This is basically the same as the [`cast`] method, except that that
+    /// should only handle Naga [`As`] expressions, which cannot convert arrays.
+    ///
+    /// Treat `span` as the location of the resulting expression.
+    ///
+    /// [`cast`]: ConstantEvaluator::cast
+    /// [`As`]: crate::Expression::As
+    pub fn cast_array(
+        &mut self,
+        expr: Handle<Expression>,
+        target: crate::Scalar,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let Expression::Compose { ty, ref components } = self.expressions[expr] else {
+            return self.cast(expr, target, span);
+        };
+
+        let crate::TypeInner::Array { base: _, size, stride: _ } = self.types[ty].inner else {
+            return self.cast(expr, target, span);
+        };
+
+        let mut components = components.clone();
+        for component in &mut components {
+            *component = self.cast_array(*component, target, span)?;
+        }
+
+        let first = components
+            .first()
+            .ok_or(ConstantEvaluatorError::InvalidCastArg)?;
+        let new_base = match self.resolve_type(*first)? {
+            crate::proc::TypeResolution::Handle(ty) => ty,
+            crate::proc::TypeResolution::Value(inner) => {
+                self.types.insert(Type { name: None, inner }, span)
+            }
+        };
+        let new_base_stride = self.types[new_base].inner.size(self.to_ctx());
+        let new_array_ty = self.types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Array {
+                    base: new_base,
+                    size,
+                    stride: new_base_stride,
+                },
+            },
+            span,
+        );
+
+        let compose = Expression::Compose {
+            ty: new_array_ty,
+            components,
+        };
+        self.register_evaluated_expr(compose, span)
     }
 
     fn unary_op(
@@ -1338,6 +1423,28 @@ impl<'a> ConstantEvaluator<'a> {
         } else {
             Ok(self.expressions.append(expr, span))
         }
+    }
+
+    fn resolve_type(
+        &self,
+        expr: Handle<Expression>,
+    ) -> Result<crate::proc::TypeResolution, ConstantEvaluatorError> {
+        use crate::proc::TypeResolution as Tr;
+        use crate::Expression as Ex;
+        let resolution = match self.expressions[expr] {
+            Ex::Literal(ref literal) => Tr::Value(literal.ty_inner()),
+            Ex::Constant(c) => Tr::Handle(self.constants[c].ty),
+            Ex::ZeroValue(ty) | Ex::Compose { ty, .. } => Tr::Handle(ty),
+            Ex::Splat { size, value } => {
+                let Tr::Value(TypeInner::Scalar(scalar)) = self.resolve_type(value)? else {
+                    return Err(ConstantEvaluatorError::SplatScalarOnly);
+                };
+                Tr::Value(TypeInner::Vector { scalar, size })
+            }
+            _ => return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant),
+        };
+
+        Ok(resolution)
     }
 }
 

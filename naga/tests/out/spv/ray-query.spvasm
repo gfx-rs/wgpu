@@ -66,10 +66,10 @@ OpMemberDecorate %18 0 Offset 0
 %47 = OpConstantComposite  %5  %27 %25 %27
 %48 = OpConstant  %4  4
 %49 = OpConstant  %4  255
-%50 = OpConstant  %6  0.1
-%51 = OpConstant  %6  100.0
-%52 = OpConstantComposite  %5  %27 %27 %27
-%53 = OpConstantComposite  %14  %48 %49 %50 %51 %52 %47
+%50 = OpConstantComposite  %5  %27 %27 %27
+%51 = OpConstant  %6  0.1
+%52 = OpConstant  %6  100.0
+%53 = OpConstantComposite  %14  %48 %49 %51 %52 %50 %47
 %55 = OpTypePointer Function %13
 %72 = OpConstant  %4  1
 %85 = OpTypePointer StorageBuffer %4

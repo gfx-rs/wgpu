@@ -20,37 +20,11 @@ pub enum Number {
     F64(f64),
 }
 
-impl Number {
-    /// Convert abstract numbers to a plausible concrete counterpart.
-    ///
-    /// Return concrete numbers unchanged. If the conversion would be
-    /// lossy, return an error.
-    fn abstract_to_concrete(self) -> Result<Number, NumberError> {
-        match self {
-            Number::AbstractInt(num) => i32::try_from(num)
-                .map(Number::I32)
-                .map_err(|_| NumberError::NotRepresentable),
-            Number::AbstractFloat(num) => {
-                let num = num as f32;
-                if num.is_finite() {
-                    Ok(Number::F32(num))
-                } else {
-                    Err(NumberError::NotRepresentable)
-                }
-            }
-            num => Ok(num),
-        }
-    }
-}
-
 // TODO: when implementing Creation-Time Expressions, remove the ability to match the minus sign
 
 pub(in crate::front::wgsl) fn consume_number(input: &str) -> (Token<'_>, &str) {
     let (result, rest) = parse(input);
-    (
-        Token::Number(result.and_then(Number::abstract_to_concrete)),
-        rest,
-    )
+    (Token::Number(result), rest)
 }
 
 enum Kind {
