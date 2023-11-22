@@ -102,8 +102,6 @@ pub async fn execute_test(
                 failures.push(FailureResult::ValidationError(None));
             }
         } else {
-            // TODO: WebGPU
-            let canary_set = false;
         }
     );
 

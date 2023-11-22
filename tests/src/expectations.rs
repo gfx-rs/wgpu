@@ -15,7 +15,7 @@
 ///     vendor: None,
 ///     adapter: Some("RTX"),
 ///     driver: None,
-///     reason: FailureReason::ValidationError(Some("Some error substring")),
+///     reasons: vec![FailureReason::ValidationError(Some("Some error substring"))],
 ///     behavior: FailureBehavior::AssertFailure,
 /// }
 /// # ;
@@ -332,6 +332,7 @@ pub enum FailureBehavior {
 
 #[derive(Debug)]
 pub(crate) enum FailureResult {
+    #[allow(dead_code)] // Not constructed on wasm
     ValidationError(Option<String>),
     Panic(Option<String>),
 }
