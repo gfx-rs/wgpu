@@ -434,6 +434,14 @@ async fn start<E: Example>(title: &str) {
                         println!("{:#?}", context.instance.generate_report());
                     }
                     WindowEvent::RedrawRequested => {
+                        // On MacOS, currently redraw requested comes in _before_ Init does.
+                        // If this happens, just drop the requested redraw on the floor.
+                        //
+                        // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
+                        if example.is_none() {
+                            return;
+                        }
+                        
                         frame_counter.update();
 
                         let frame = surface.acquire(&context);
