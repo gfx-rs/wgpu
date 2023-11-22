@@ -7,7 +7,7 @@ double f(double x)
     double z = (double)0;
 
     double y = (30.0L + 400.0L);
-    z = (y + double(5));
+    z = (y + 5.0L);
     return (((x + y) + k) + 5.0L);
 }
 
