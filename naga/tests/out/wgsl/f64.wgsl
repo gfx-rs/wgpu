@@ -6,7 +6,7 @@ fn f(x: f64) -> f64 {
     var z: f64;
 
     let y = (30.0lf + 400.0lf);
-    z = (y + f64(5));
+    z = (y + 5.0lf);
     return (((x + y) + k) + 5.0lf);
 }
 

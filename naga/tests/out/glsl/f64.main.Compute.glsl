@@ -8,7 +8,7 @@ const double k = 2.0LF;
 double f(double x) {
     double z = 0.0;
     double y = (30.0LF + 400.0LF);
-    z = (y + double(5));
+    z = (y + 5.0LF);
     return (((x + y) + k) + 5.0LF);
 }
 
