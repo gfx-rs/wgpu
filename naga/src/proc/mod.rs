@@ -237,6 +237,10 @@ impl crate::Literal {
 pub const POINTER_SPAN: u32 = 4;
 
 impl super::TypeInner {
+    /// Return the scalar type of `self`.
+    ///
+    /// If `inner` is a scalar, vector, or matrix type, return
+    /// its scalar type. Otherwise, return `None`.
     pub const fn scalar(&self) -> Option<super::Scalar> {
         use crate::TypeInner as Ti;
         match *self {
