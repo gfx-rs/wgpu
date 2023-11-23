@@ -701,6 +701,10 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
         wgt::Features::BGRA8UNORM_STORAGE,
         web_sys::GpuFeatureName::Bgra8unormStorage,
     ),
+    (
+        wgt::Features::FLOAT32_FILTERABLE,
+        web_sys::GpuFeatureName::Float32Filterable,
+    ),
 ];
 
 fn map_wgt_features(supported_features: web_sys::GpuSupportedFeatures) -> wgt::Features {
