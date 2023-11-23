@@ -875,10 +875,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast::GlobalDeclKind::Var(ref v) => {
                     let ty = self.resolve_ast_type(v.ty, &mut ctx)?;
 
-                    let init = v
-                        .init
-                        .map(|init| self.expression(init, &mut ctx.as_const()))
-                        .transpose()?;
+                    let init;
+                    if let Some(init_ast) = v.init {
+                        let mut ectx = ctx.as_const();
+                        let lowered = self.expression_for_abstract(init_ast, &mut ectx)?;
+                        let ty_res = crate::proc::TypeResolution::Handle(ty);
+                        let converted = ectx
+                            .try_automatic_conversions(lowered, &ty_res, v.name.span)
+                            .map_err(|error| match error {
+                                Error::AutoConversion {
+                                    dest_span: _,
+                                    dest_type,
+                                    source_span: _,
+                                    source_type,
+                                } => Error::InitializationTypeMismatch {
+                                    name: v.name.span,
+                                    expected: dest_type,
+                                    got: source_type,
+                                },
+                                other => other,
+                            })?;
+                        init = Some(converted);
+                    } else {
+                        init = None;
+                    }
 
                     let binding = if let Some(ref binding) = v.binding {
                         Some(crate::ResourceBinding {

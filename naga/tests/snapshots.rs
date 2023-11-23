@@ -794,6 +794,10 @@ fn convert_wgsl() {
             "abstract-types-const",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
+        (
+            "abstract-types-var",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
