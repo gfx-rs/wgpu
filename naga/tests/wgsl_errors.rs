@@ -2004,6 +2004,22 @@ fn constructor_type_error_span() {
 }
 
 #[test]
+fn global_initialization_type_mismatch() {
+    check(
+        "
+        var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
+    ",
+        r###"error: the type of `a` is expected to be `vec2<f32>`, but got `vec2<i32>`
+  ┌─ wgsl:2:22
+  │
+2 │         var<private> a: vec2<f32> = vec2<i32>(1i, 2i);
+  │                      ^ definition of `a`
+
+"###,
+    )
+}
+
+#[test]
 fn binding_array_local() {
     check_validation! {
         "fn f() { var x: binding_array<sampler, 4>; }":

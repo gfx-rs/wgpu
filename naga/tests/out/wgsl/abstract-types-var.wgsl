@@ -1,0 +1,25 @@
+var<private> xvipaiai: vec2<i32> = vec2<i32>(42, 43);
+var<private> xvupaiai: vec2<u32> = vec2<u32>(44u, 45u);
+var<private> xvfpaiai: vec2<f32> = vec2<f32>(46.0, 47.0);
+var<private> xvupuai: vec2<u32> = vec2<u32>(42u, 43u);
+var<private> xvupaiu: vec2<u32> = vec2<u32>(42u, 43u);
+var<private> xvuuai: vec2<u32> = vec2<u32>(42u, 43u);
+var<private> xvuaiu: vec2<u32> = vec2<u32>(42u, 43u);
+var<private> xmfpaiaiaiai: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 2.0), vec2<f32>(3.0, 4.0));
+var<private> xmfpafaiaiai: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 2.0), vec2<f32>(3.0, 4.0));
+var<private> xmfpaiafaiai: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 2.0), vec2<f32>(3.0, 4.0));
+var<private> xmfpaiaiafai: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 2.0), vec2<f32>(3.0, 4.0));
+var<private> xmfpaiaiaiaf: mat2x2<f32> = mat2x2<f32>(vec2<f32>(1.0, 2.0), vec2<f32>(3.0, 4.0));
+var<private> xvispai: vec2<i32> = vec2(1);
+var<private> xvfspaf: vec2<f32> = vec2(1.0);
+var<private> xvis_ai: vec2<i32> = vec2(1);
+var<private> xvus_ai: vec2<u32> = vec2(1u);
+var<private> xvfs_ai: vec2<f32> = vec2(1.0);
+var<private> xvfs_af: vec2<f32> = vec2(1.0);
+var<private> xafafaf: array<f32, 2> = array<f32, 2>(1.0, 2.0);
+var<private> xafaiai: array<f32, 2> = array<f32, 2>(1.0, 2.0);
+var<private> xafpaiai: array<i32, 2> = array<i32, 2>(1, 2);
+var<private> xafpaiaf: array<f32, 2> = array<f32, 2>(1.0, 2.0);
+var<private> xafpafai: array<f32, 2> = array<f32, 2>(1.0, 2.0);
+var<private> xafpafaf: array<f32, 2> = array<f32, 2>(1.0, 2.0);
+

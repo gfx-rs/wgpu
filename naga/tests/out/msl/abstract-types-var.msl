@@ -1,0 +1,12 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_5 {
+    float inner[2];
+};
+struct type_7 {
+    int inner[2];
+};
