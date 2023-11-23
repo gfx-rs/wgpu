@@ -62,5 +62,9 @@ web-sys = { workspace = true, features = [
     "Response",
     "HtmlImageElement",
     "WebGl2RenderingContext",
-    "CanvasRenderingContext2d"
+    "CanvasRenderingContext2d",
+
+    # Needed for example display logic
+    "HtmlStyleElement",
+    "HtmlHeadElement",
 ] }
