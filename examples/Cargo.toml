@@ -14,6 +14,11 @@ publish = false
 path = "src/lib.rs"
 harness = false
 
+[[bin]]
+name = "wgpu-examples"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 bytemuck.workspace = true
 cfg-if.workspace = true

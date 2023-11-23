@@ -5,6 +5,11 @@ edition = "2021"
 publish = false
 license = "MIT OR Apache-2.0"
 
+[lib]
+name = "hlsl_snapshots"
+path = "src/lib.rs"
+test = false
+
 [dependencies]
 anyhow = "1"
 nanoserde = "0.1.32"
