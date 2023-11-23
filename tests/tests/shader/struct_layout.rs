@@ -224,8 +224,11 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
-            .expect_fail(FailureCase::backend(wgpu::Backends::VULKAN))
+            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/wgpu/issues/4371
+            .expect_fail(
+                FailureCase::backend(wgpu::Backends::VULKAN)
+                    .validation_error("a matrix with stride 8 not satisfying alignment to 16"),
+            )
             .limits(Limits::downlevel_defaults()),
     )
     .run_sync(|ctx| {

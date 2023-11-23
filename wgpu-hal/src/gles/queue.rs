@@ -940,12 +940,21 @@ impl super::Queue {
                     {
                         let mut result: u64 = 0;
                         unsafe {
-                            let result: *mut u64 = &mut result;
-                            gl.get_query_parameter_u64_with_offset(
-                                query,
-                                glow::QUERY_RESULT,
-                                result as usize,
-                            )
+                            if self
+                                .shared
+                                .private_caps
+                                .contains(PrivateCapabilities::QUERY_64BIT)
+                            {
+                                let result: *mut u64 = &mut result;
+                                gl.get_query_parameter_u64_with_offset(
+                                    query,
+                                    glow::QUERY_RESULT,
+                                    result as usize,
+                                )
+                            } else {
+                                result =
+                                    gl.get_query_parameter_u32(query, glow::QUERY_RESULT) as u64;
+                            }
                         };
                         temp_query_results.push(result);
                     }
