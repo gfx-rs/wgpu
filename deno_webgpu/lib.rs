@@ -268,7 +268,7 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     }
     if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
         return_features.push("float32-filterable");
-    }    
+    }
 
     // extended from spec
 

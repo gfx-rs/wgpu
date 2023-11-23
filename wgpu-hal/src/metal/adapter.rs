@@ -829,11 +829,8 @@ impl super::PrivateCapabilities {
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE;
-        
-        features.set(
-            F::FLOAT32_FILTERABLE,
-            self.supports_float_filtering,
-        );
+
+        features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(
             F::INDIRECT_FIRST_INSTANCE | F::MULTI_DRAW_INDIRECT,
             self.indirect_draw_dispatch,

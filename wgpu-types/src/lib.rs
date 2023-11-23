@@ -337,7 +337,7 @@ bitflags::bitflags! {
 
         // ? const NORM16_FILTERABLE = 1 << 17; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const NORM16_RESOLVE = 1 << 18; (https://github.com/gpuweb/gpuweb/issues/3839)
-        
+
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be filterable.
         ///
         /// Supported Platforms:  (TODO is this correct?)
@@ -347,7 +347,7 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const FLOAT32_FILTERABLE = 1 << 19;
-        
+
         // ? const FLOAT32_BLENDABLE = 1 << 20; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << 21; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << 22; (https://github.com/gpuweb/gpuweb/issues/3844)
@@ -3078,7 +3078,7 @@ impl TextureFormat {
         let noaa = TextureFormatFeatureFlags::empty();
         let msaa = TextureFormatFeatureFlags::MULTISAMPLE_X4;
         let msaa_resolve = msaa | TextureFormatFeatureFlags::MULTISAMPLE_RESOLVE;
-        
+
         // Flags
         let basic =
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
@@ -3182,13 +3182,12 @@ impl TextureFormat {
 
             Self::Astc { .. } =>          (        noaa,      basic),
         };
-        
+
         let sample_type = self.sample_type(None);
-        let mut is_filterable = 
-            sample_type == Some(TextureSampleType::Float { filterable: true });
+        let mut is_filterable = sample_type == Some(TextureSampleType::Float { filterable: true });
         if device_features.contains(Features::FLOAT32_FILTERABLE) {
             is_filterable |= sample_type == Some(TextureSampleType::Float { filterable: false });
-        } 
+        }
 
         flags.set(TextureFormatFeatureFlags::FILTERABLE, is_filterable);
         flags.set(TextureFormatFeatureFlags::BLENDABLE, is_filterable);
