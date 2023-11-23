@@ -972,13 +972,6 @@ impl super::Instance {
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
-            // see https://github.com/gfx-rs/gfx/issues/1930
-            let _is_windows_intel_dual_src_bug = cfg!(windows)
-                && phd_capabilities.properties.vendor_id == db::intel::VENDOR
-                && (phd_capabilities.properties.device_id & db::intel::DEVICE_KABY_LAKE_MASK
-                    == db::intel::DEVICE_KABY_LAKE_MASK
-                    || phd_capabilities.properties.device_id & db::intel::DEVICE_SKY_LAKE_MASK
-                        == db::intel::DEVICE_SKY_LAKE_MASK);
             // TODO: only enable for particular devices
             workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
             workarounds.set(
