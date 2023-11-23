@@ -226,7 +226,7 @@ pub fn main() {
 static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "srgb-blend-srg",
     // Generated on WARP/Windows
-    image_path: "/examples/srgb-blend/screenshot-srgb.png",
+    image_path: "/examples/src/srgb_blend/screenshot-srgb.png",
     width: 192,
     height: 192,
     optional_features: wgpu::Features::default(),
@@ -240,7 +240,7 @@ static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::Exampl
 static TEST_LINEAR: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "srgb-blend-linear",
     // Generated on WARP/Windows
-    image_path: "/examples/srgb-blend/screenshot-linear.png",
+    image_path: "/examples/src/srgb_blend/screenshot-linear.png",
     width: 192,
     height: 192,
     optional_features: wgpu::Features::default(),

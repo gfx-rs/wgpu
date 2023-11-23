@@ -321,7 +321,7 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "msaa-line",
-    image_path: "/examples/msaa-line/screenshot.png",
+    image_path: "/examples/src/msaa_line/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,

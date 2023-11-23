@@ -463,7 +463,7 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox",
-    image_path: "/examples/skybox/screenshot.png",
+    image_path: "/examples/src/skybox/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
@@ -478,7 +478,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 #[wgpu_test::gpu_test]
 static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-bc1",
-    image_path: "/examples/skybox/screenshot-bc1.png",
+    image_path: "/examples/src/skybox/screenshot-bc1.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
@@ -491,7 +491,7 @@ static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Example
 #[wgpu_test::gpu_test]
 static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-etc2",
-    image_path: "/examples/skybox/screenshot-etc2.png",
+    image_path: "/examples/src/skybox/screenshot-etc2.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
@@ -504,7 +504,7 @@ static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::Exampl
 #[wgpu_test::gpu_test]
 static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-astc",
-    image_path: "/examples/skybox/screenshot-astc.png",
+    image_path: "/examples/src/skybox/screenshot-astc.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,

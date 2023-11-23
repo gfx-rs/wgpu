@@ -383,7 +383,7 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "bunnymark",
-    image_path: "/examples/bunnymark/screenshot.png",
+    image_path: "/examples/src/bunnymark/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),

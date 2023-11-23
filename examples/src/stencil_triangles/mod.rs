@@ -232,7 +232,7 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "stencil-triangles",
-    image_path: "/examples/stencil-triangles/screenshot.png",
+    image_path: "/examples/src/stencil_triangles/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),

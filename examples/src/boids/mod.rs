@@ -329,7 +329,7 @@ pub fn main() {
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "boids",
     // Generated on 1080ti on Vk/Windows
-    image_path: "examples/boids/screenshot.png",
+    image_path: "/examples/src/boids/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),

@@ -380,7 +380,7 @@ pub fn main() {
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube",
     // Generated on 1080ti on Vk/Windows
-    image_path: "/examples/cube/screenshot.png",
+    image_path: "/examples/src/cube/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
@@ -396,7 +396,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube-lines",
     // Generated on 1080ti on Vk/Windows
-    image_path: "/examples/cube/screenshot-lines.png",
+    image_path: "/examples/src/cube/screenshot-lines.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::POLYGON_MODE_LINE,
