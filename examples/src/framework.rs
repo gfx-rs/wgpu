@@ -498,7 +498,6 @@ pub fn parse_url_query_string<'a>(query: &'a str, search_key: &str) -> Option<&'
 #[cfg(test)]
 pub use wgpu_test::image::ComparisonType;
 
-
 #[cfg(test)]
 #[derive(Clone)]
 pub struct ExampleTestParams<E> {
@@ -515,7 +514,9 @@ pub struct ExampleTestParams<E> {
 }
 
 #[cfg(test)]
-impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>> for wgpu_test::GpuTestConfiguration {
+impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
+    for wgpu_test::GpuTestConfiguration
+{
     fn from(params: ExampleTestParams<E>) -> Self {
         wgpu_test::GpuTestConfiguration::new()
             .name(params.name)
