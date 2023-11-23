@@ -995,6 +995,12 @@ impl super::Instance {
             if driver.conformance_version.major == 0 {
                 if driver.driver_id == ash::vk::DriverId::MOLTENVK {
                     log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
+                } else if self
+                    .shared
+                    .flags
+                    .contains(wgt::InstanceFlags::ALLOW_NONCOMPLIANT_ADAPTER)
+                {
+                    log::warn!("Adapter is not Vulkan compliant: {}", info.name);
                 } else {
                     log::warn!(
                         "Adapter is not Vulkan compliant, hiding adapter: {}",
