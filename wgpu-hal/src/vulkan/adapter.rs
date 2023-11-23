@@ -998,7 +998,7 @@ impl super::Instance {
                 } else if self
                     .shared
                     .flags
-                    .contains(wgt::InstanceFlags::ALLOW_NONCOMPLIANT_ADAPTER)
+                    .contains(wgt::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER)
                 {
                     log::warn!("Adapter is not Vulkan compliant: {}", info.name);
                 } else {
