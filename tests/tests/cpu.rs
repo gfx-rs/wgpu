@@ -1,1 +1,0 @@
-mod example_wgsl;

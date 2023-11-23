@@ -11,7 +11,7 @@ async fn read_png(path: impl AsRef<Path>, width: u32, height: u32) -> Option<Vec
         Ok(f) => f,
         Err(e) => {
             log::warn!(
-                "image comparison invalid: file io error when comparing {}: {}",
+                "image comparison invalid: file io error when 3comparing {}: {}",
                 path.as_ref().display(),
                 e
             );

@@ -4088,45 +4088,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-boids-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "nanorand",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-bunnymark-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "nanorand",
- "png",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-conservative-raster-example"
-version = "0.18.0"
-dependencies = [
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
 name = "wgpu-core"
 version = "0.18.0"
 dependencies = [
@@ -4150,29 +4111,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-cube-example"
+name = "wgpu-examples"
 version = "0.18.0"
 dependencies = [
  "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-example"
-version = "0.18.0"
-dependencies = [
  "cfg-if",
  "console_error_panic_hook",
  "console_log",
+ "ddsfile",
+ "encase",
  "env_logger",
  "fern",
+ "flume",
+ "futures-intrusive",
+ "getrandom",
+ "glam",
  "js-sys",
  "log",
+ "nanorand",
+ "noise",
+ "obj",
  "png",
  "pollster",
  "wasm-bindgen",
@@ -4231,101 +4189,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-hello-compute-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "flume",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-hello-example"
-version = "0.18.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "glam",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wgpu",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-hello-synchronization-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "flume",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-hello-triangle-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "pollster",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-hello-windows-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "env_logger",
- "pollster",
- "wgpu",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-hello-workgroups-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "wgpu-example",
-]
-
-[[package]]
 name = "wgpu-info"
 version = "0.18.0"
 dependencies = [
@@ -4346,148 +4209,6 @@ dependencies = [
  "heck",
  "quote",
  "syn 2.0.39",
-]
-
-[[package]]
-name = "wgpu-mipmap-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-msaa-line-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "log",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-render-to-texture-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "png",
- "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-repeated-compute-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "getrandom",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-shadow-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-skybox-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "ddsfile",
- "glam",
- "log",
- "obj",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-srgb-blend-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-stencil-triangle-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-storage-texture-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "png",
- "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
 ]
 
 [[package]]
@@ -4527,36 +4248,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-texture-arrays-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-timestamp-queries-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
 name = "wgpu-types"
 version = "0.18.0"
 dependencies = [
@@ -4565,38 +4256,6 @@ dependencies = [
  "serde",
  "serde_json",
  "web-sys",
-]
-
-[[package]]
-name = "wgpu-uniform-values-example"
-version = "0.18.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "encase",
- "env_logger",
- "glam",
- "png",
- "pollster",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-water-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "nanorand",
- "noise",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
 ]
 
 [[package]]
