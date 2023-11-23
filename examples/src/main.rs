@@ -1,9 +1,19 @@
-fn main() {
-    let arg1 = std::env::args()
-        .nth(1)
-        .expect("please provide example name!");
+fn get_example_name() -> Option<String> {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            let query_string = web_sys::window()?.location().search().ok()?;
 
-    match &*arg1 {
+            wgpu_examples::framework::parse_url_query_string(&query_string, "example").map(String::from)
+        } else {
+            std::env::args().nth(1)
+        }
+    }
+}
+
+fn main() {
+    let example = get_example_name().expect("please provide example name!");
+
+    match &*example {
         "boids" => wgpu_examples::boids::main(),
         "bunnymark" => wgpu_examples::bunnymark::main(),
         "conservative_raster" => wgpu_examples::conservative_raster::main(),

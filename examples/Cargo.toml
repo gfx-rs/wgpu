@@ -48,6 +48,7 @@ console_log.workspace = true
 fern.workspace = true
 js-sys.workspace = true
 wasm-bindgen.workspace = true
+wasm-bindgen-test.workspace = true
 wasm-bindgen-futures.workspace = true
 hal = { workspace = true, optional = true }
 # We need these features in the framework examples and tests
@@ -57,7 +58,9 @@ web-sys = { workspace = true, features = [
     "RequestInit",
     "RequestMode",
     "Request",
+    "ImageData",
     "Response",
+    "HtmlImageElement",
     "WebGl2RenderingContext",
     "CanvasRenderingContext2d"
 ] }
