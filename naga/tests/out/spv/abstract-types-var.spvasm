@@ -1,0 +1,78 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 70
+OpCapability Shader
+OpCapability Linkage
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpDecorate %10 ArrayStride 4
+OpDecorate %12 ArrayStride 4
+%2 = OpTypeVoid
+%4 = OpTypeInt 32 1
+%3 = OpTypeVector %4 2
+%6 = OpTypeInt 32 0
+%5 = OpTypeVector %6 2
+%8 = OpTypeFloat 32
+%7 = OpTypeVector %8 2
+%9 = OpTypeMatrix %7 2
+%11 = OpConstant  %6  2
+%10 = OpTypeArray %8 %11
+%12 = OpTypeArray %4 %11
+%13 = OpConstant  %4  42
+%14 = OpConstant  %4  43
+%15 = OpConstantComposite  %3  %13 %14
+%16 = OpConstant  %6  44
+%17 = OpConstant  %6  45
+%18 = OpConstantComposite  %5  %16 %17
+%19 = OpConstant  %8  46.0
+%20 = OpConstant  %8  47.0
+%21 = OpConstantComposite  %7  %19 %20
+%22 = OpConstant  %6  42
+%23 = OpConstant  %6  43
+%24 = OpConstantComposite  %5  %22 %23
+%25 = OpConstant  %8  1.0
+%26 = OpConstant  %8  2.0
+%27 = OpConstantComposite  %7  %25 %26
+%28 = OpConstant  %8  3.0
+%29 = OpConstant  %8  4.0
+%30 = OpConstantComposite  %7  %28 %29
+%31 = OpConstantComposite  %9  %27 %30
+%32 = OpConstant  %4  1
+%33 = OpConstantComposite  %3  %32 %32
+%34 = OpConstantComposite  %7  %25 %25
+%35 = OpConstant  %6  1
+%36 = OpConstantComposite  %5  %35 %35
+%37 = OpConstantComposite  %10  %25 %26
+%38 = OpConstant  %4  2
+%39 = OpConstantComposite  %12  %32 %38
+%41 = OpTypePointer Private %3
+%40 = OpVariable  %41  Private %15
+%43 = OpTypePointer Private %5
+%42 = OpVariable  %43  Private %18
+%45 = OpTypePointer Private %7
+%44 = OpVariable  %45  Private %21
+%46 = OpVariable  %43  Private %24
+%47 = OpVariable  %43  Private %24
+%48 = OpVariable  %43  Private %24
+%49 = OpVariable  %43  Private %24
+%51 = OpTypePointer Private %9
+%50 = OpVariable  %51  Private %31
+%52 = OpVariable  %51  Private %31
+%53 = OpVariable  %51  Private %31
+%54 = OpVariable  %51  Private %31
+%55 = OpVariable  %51  Private %31
+%56 = OpVariable  %41  Private %33
+%57 = OpVariable  %45  Private %34
+%58 = OpVariable  %41  Private %33
+%59 = OpVariable  %43  Private %36
+%60 = OpVariable  %45  Private %34
+%61 = OpVariable  %45  Private %34
+%63 = OpTypePointer Private %10
+%62 = OpVariable  %63  Private %37
+%64 = OpVariable  %63  Private %37
+%66 = OpTypePointer Private %12
+%65 = OpVariable  %66  Private %39
+%67 = OpVariable  %63  Private %37
+%68 = OpVariable  %63  Private %37
+%69 = OpVariable  %63  Private %37
