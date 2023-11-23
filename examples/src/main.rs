@@ -55,7 +55,7 @@ fn print_unknown_example(result: Option<String>) {
 
             // Add a basic style sheet to center the text and remove some margin.
             let style_sheet: HtmlStyleElement = document.create_element("style").unwrap().dyn_into().unwrap();
-            style_sheet.set_inner_text("div { text-align: center; } p h1 { margin: 4px }");
+            style_sheet.set_inner_text("div { text-align: center; } p { margin: 4px }");
             head.append_child(&style_sheet).unwrap();
 
             // A div to provide a container and some padding.
