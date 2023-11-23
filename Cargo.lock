@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "ab_glyph"
-version = "0.2.22"
+version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1061f3ff92c2f65800df1f12fc7b4ff44ee14783104187dd04dfee6f11b0fd2"
+checksum = "80179d7dd5d7e8c285d67c4a1e652972a92de7475beddfb92028c76463b13225"
 dependencies = [
  "ab_glyph_rasterizer",
  "owned_ttf_parser",
@@ -502,9 +502,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.7"
+version = "4.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac495e00dcec98c83465d5ad66c5c4fabd652fd6686e7c6269b117e729a6f17b"
+checksum = "2275f18819641850fa26c89acc84d465c1bf91ce57bc2748b28c420473352f64"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -512,9 +512,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.7"
+version = "4.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c77ed9a32a62e6ca27175d00d29d05ca32e396ea1eb5fb01d8256b669cec7663"
+checksum = "07cdf1b148b25c1e1f7a42225e30a0d99a615cd4637eae7365548dd4529b95bc"
 dependencies = [
  "anstream",
  "anstyle",
@@ -881,9 +881,9 @@ checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 
 [[package]]
 name = "cursor-icon"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "740bb192a8e2d1350119916954f4409ee7f62f149b536911eeb78ba5a20526bf"
+checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
 name = "d3d12"
@@ -931,9 +931,9 @@ dependencies = [
 
 [[package]]
 name = "data-encoding"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e66c9d817f1720209181c316d28635c050fa304f9c79e47a520882661b7308"
+checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
 name = "ddsfile"
@@ -1025,7 +1025,7 @@ dependencies = [
  "lazy-regex",
  "once_cell",
  "pmutil",
- "proc-macro-crate",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "regex",
@@ -1240,9 +1240,9 @@ checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "errno"
-version = "0.3.5"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac3e13f66a2f95e32a39eaa81f6b95d42878ca0e1db0c7543723dfe12557e860"
+checksum = "f258a7194e7f7c2a7837a8913aeab7fd8c383457034fa20ce4dd3dcb813e8eb8"
 dependencies = [
  "libc",
  "windows-sys 0.48.0",
@@ -1269,9 +1269,9 @@ dependencies = [
 
 [[package]]
 name = "fdeflate"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d329bdeac514ee06249dabc27877490f17f5d371ec693360768b838e19f3ae10"
+checksum = "64d6dafc854908ff5da46ff3f8f473c6984119a2876a383a860246dd7841a868"
 dependencies = [
  "simd-adler32",
 ]
@@ -1364,9 +1364,9 @@ checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
+checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
 ]
@@ -1793,9 +1793,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idna"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d20d6b07bfbc108882d88ed8e37d39636dcc260e15e30c45e6ba089610b917c"
+checksum = "634d9b1461af396cad843f47fdba5597a4f9e6ddd4bfb6ff5d85028c25cb12f6"
 dependencies = [
  "unicode-bidi",
  "unicode-normalization",
@@ -1930,9 +1930,9 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "lazy-regex"
-version = "3.0.2"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e723bd417b2df60a0f6a2b6825f297ea04b245d4ba52b5a22cb679bdf58b05fa"
+checksum = "5d12be4595afdf58bd19e4a9f4e24187da2a66700786ff660a418e9059937a4c"
 dependencies = [
  "lazy-regex-proc_macros",
  "once_cell",
@@ -1941,9 +1941,9 @@ dependencies = [
 
 [[package]]
 name = "lazy-regex-proc_macros"
-version = "3.0.1"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f0a1d9139f0ee2e862e08a9c5d0ba0470f2aa21cd1e1aa1b1562f83116c725f"
+checksum = "44bcd58e6c97a7fcbaffcdc95728b393b8d98933bfadad49ed4097845b57ef0b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1995,6 +1995,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "libredox"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3af92c55d7d839293953fcd0fda5ecfe93297cfde6ffbdec13b41d99c0ba6607"
+dependencies = [
+ "bitflags 2.4.1",
+ "libc",
+ "redox_syscall 0.4.1",
+]
+
+[[package]]
 name = "libtest-mimic"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2017,9 +2028,9 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da2479e8c062e40bf0066ffa0bc823de0a9368974af99c9f6df941d2c231e03f"
+checksum = "969488b55f8ac402214f3f5fd243ebb7206cf82de60d3172994707a4bcc2b829"
 
 [[package]]
 name = "lock_api"
@@ -2272,7 +2283,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0df7ac00c4672f9d5aece54ee3347520b7e20f158656c7db2e6de01902eb7a6c"
 dependencies = [
  "darling",
- "proc-macro-crate",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -2429,7 +2440,7 @@ version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -2441,7 +2452,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 2.0.0",
  "proc-macro2",
  "quote",
  "syn 2.0.39",
@@ -2535,11 +2546,11 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "orbclient"
-version = "0.3.46"
+version = "0.3.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8378ac0dfbd4e7895f2d2c1f1345cab3836910baf3a300b000d04250f0c8428f"
+checksum = "52f0d54bde9774d3a51dcf281a5def240c71996bc6ca05d2c847ec8b2b216166"
 dependencies = [
- "redox_syscall 0.3.5",
+ "libredox",
 ]
 
 [[package]]
@@ -2559,9 +2570,9 @@ checksum = "4030760ffd992bef45b0ae3f10ce1aba99e33464c90d14dd7c039884963ddc7a"
 
 [[package]]
 name = "owned_ttf_parser"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "706de7e2214113d63a8238d1910463cfce781129a6f263d13fdb09ff64355ba4"
+checksum = "d4586edfe4c648c71797a74c84bacb32b52b212eff5dfe2bb9f2c599844023e7"
 dependencies = [
  "ttf-parser",
 ]
@@ -2606,9 +2617,9 @@ checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
 name = "percent-encoding"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
+checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "petgraph"
@@ -2772,7 +2783,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
 dependencies = [
  "once_cell",
- "toml_edit",
+ "toml_edit 0.19.15",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8366a6159044a37876a2b9817124296703c586a5c92e2c53751fa06d8d43e8"
+dependencies = [
+ "toml_edit 0.20.7",
 ]
 
 [[package]]
@@ -2881,15 +2901,6 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb5a58c1855b4b6819d59012155603f0b22ad30cad752600aadfcb695265519a"
-dependencies = [
- "bitflags 1.3.2",
-]
-
-[[package]]
-name = "redox_syscall"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "567664f262709473930a4bf9e51bf2ebf3348f2e748ccc50dea20646858f8f29"
@@ -2994,9 +3005,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.21"
+version = "0.38.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b426b0506e5d50a7d8dafcf2e81471400deb602392c7dd110815afb4eaf02a3"
+checksum = "dc99bc2d4f1fed22595588a013687477aedf3cdcfb26558c559edb67b4d9b22e"
 dependencies = [
  "bitflags 2.4.1",
  "errno",
@@ -3285,9 +3296,9 @@ dependencies = [
 
 [[package]]
 name = "sourcemap"
-version = "7.0.0"
+version = "7.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbecc42a2b6131acc3bf9a25c9fe4161dba438eb52131bba83c5d781b5b70be3"
+checksum = "10da010a590ed2fa9ca8467b00ce7e9c5a8017742c0c09c45450efc172208c4b"
 dependencies = [
  "data-encoding",
  "debugid",
@@ -3420,12 +3431,11 @@ dependencies = [
 
 [[package]]
 name = "thread-id"
-version = "4.1.0"
+version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ee93aa2b8331c0fec9091548843f2c90019571814057da3b783f9de09349d73"
+checksum = "f0ec81c46e9eb50deaa257be2f148adf052d1fb7701cfd55ccfab2525280b70b"
 dependencies = [
  "libc",
- "redox_syscall 0.2.16",
  "winapi",
 ]
 
@@ -3561,6 +3571,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_edit"
+version = "0.20.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70f427fce4d84c72b5b732388bf4a9f4531b53f74e2887e3ecb2481f68f66d81"
+dependencies = [
+ "indexmap",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3578,9 +3599,9 @@ checksum = "c06d3da6113f116aaee68e4d601191614c9053067f9ab7f6edbcb161237daa54"
 
 [[package]]
 name = "ttf-parser"
-version = "0.19.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49d64318d8311fc2668e48b63969f4343e0a85c4a109aa8460d6672e364b8bd1"
+checksum = "17f77d76d837a7830fe1d4f12b7b4ba4192c1888001c7164257e4bc6d21d96b4"
 
 [[package]]
 name = "unic-char-property"
@@ -3670,9 +3691,9 @@ checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "url"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "143b538f18257fac9cad154828a57c6bf5157e1aa604d4816b5995bf6de87ae5"
+checksum = "31e6302e3bb753d46e83516cae55ae196fc0c309407cf11ab35cc51a4c2a4633"
 dependencies = [
  "form_urlencoded",
  "idna",
@@ -3701,9 +3722,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.5.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88ad59a7560b41a70d191093a945f0b87bc1deeda46fb237479708a1d6b6cdfc"
+checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
 dependencies = [
  "getrandom",
  "serde",
@@ -4088,45 +4109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-boids-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "nanorand",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-bunnymark-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "nanorand",
- "png",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-conservative-raster-example"
-version = "0.18.0"
-dependencies = [
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
 name = "wgpu-core"
 version = "0.18.0"
 dependencies = [
@@ -4150,33 +4132,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-cube-example"
+name = "wgpu-examples"
 version = "0.18.0"
 dependencies = [
  "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-example"
-version = "0.18.0"
-dependencies = [
  "cfg-if",
  "console_error_panic_hook",
  "console_log",
+ "ddsfile",
+ "encase",
  "env_logger",
  "fern",
+ "flume",
+ "futures-intrusive",
+ "getrandom",
+ "glam",
  "js-sys",
  "log",
+ "nanorand",
+ "noise",
+ "obj",
  "png",
  "pollster",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
  "web-sys",
  "web-time",
  "wgpu",
@@ -4231,101 +4211,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-hello-compute-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "flume",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-hello-example"
-version = "0.18.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "glam",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wgpu",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-hello-synchronization-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "flume",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-hello-triangle-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "pollster",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-hello-windows-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "env_logger",
- "pollster",
- "wgpu",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-hello-workgroups-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "wgpu-example",
-]
-
-[[package]]
 name = "wgpu-info"
 version = "0.18.0"
 dependencies = [
@@ -4346,148 +4231,6 @@ dependencies = [
  "heck",
  "quote",
  "syn 2.0.39",
-]
-
-[[package]]
-name = "wgpu-mipmap-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-msaa-line-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "log",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-render-to-texture-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "png",
- "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-repeated-compute-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "getrandom",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
-]
-
-[[package]]
-name = "wgpu-shadow-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-skybox-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "ddsfile",
- "glam",
- "log",
- "obj",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-srgb-blend-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-stencil-triangle-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-storage-texture-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "png",
- "pollster",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
 ]
 
 [[package]]
@@ -4527,36 +4270,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-texture-arrays-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-timestamp-queries-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "env_logger",
- "futures-intrusive",
- "log",
- "pollster",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-test",
- "winit 0.29.3",
-]
-
-[[package]]
 name = "wgpu-types"
 version = "0.18.0"
 dependencies = [
@@ -4565,38 +4278,6 @@ dependencies = [
  "serde",
  "serde_json",
  "web-sys",
-]
-
-[[package]]
-name = "wgpu-uniform-values-example"
-version = "0.18.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "encase",
- "env_logger",
- "glam",
- "png",
- "pollster",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "winit 0.29.3",
-]
-
-[[package]]
-name = "wgpu-water-example"
-version = "0.18.0"
-dependencies = [
- "bytemuck",
- "glam",
- "nanorand",
- "noise",
- "wasm-bindgen-test",
- "wgpu",
- "wgpu-example",
- "wgpu-test",
- "winit 0.29.3",
 ]
 
 [[package]]
@@ -4934,9 +4615,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.5.17"
+version = "0.5.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3b801d0e0a6726477cc207f60162da452f3a95adb368399bef20a946e06f65c"
+checksum = "829846f3e3db426d4cee4510841b71a8e58aa2a76b1132579487ae430ccd9c7b"
 dependencies = [
  "memchr",
 ]
@@ -5023,18 +4704,18 @@ checksum = "0fcb9cbac069e033553e8bb871be2fbdffcab578eb25bd0f7c508cedc6dcd75a"
 
 [[package]]
 name = "zerocopy"
-version = "0.7.15"
+version = "0.7.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81ba595b9f2772fbee2312de30eeb80ec773b4cb2f1e8098db024afadda6c06f"
+checksum = "e97e415490559a91254a2979b4829267a57d2fcd741a98eee8b722fb57289aa0"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.7.15"
+version = "0.7.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "772666c41fb6dceaf520b564b962d738a8e1a83b41bd48945f50837aed78bb1d"
+checksum = "dd7e48ccf166952882ca8bd778a43502c64f33bf94c12ebe2a7f08e5a0f6689f"
 dependencies = [
  "proc-macro2",
  "quote",

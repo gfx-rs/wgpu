@@ -12,13 +12,9 @@ autotests = false
 publish = false
 
 [[test]]
-name = "gpu-tests"
-path = "tests/gpu.rs"
+name = "wgpu-test"
+path = "tests/root.rs"
 harness = false
-
-[[test]]
-name = "cpu-tests"
-path = "tests/cpu.rs"
 
 [features]
 webgl = ["wgpu/webgl"]

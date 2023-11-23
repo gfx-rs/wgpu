@@ -37,11 +37,11 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ### Rust
 
-Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin <name>`. See the [list of examples](examples).
+Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin wgpu-examples <example>`. See the [list of examples](examples).
 
-To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin <name>`. Then connect to `http://localhost:8000` in your WebGPU enabled browser.
+To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin wgpu-example`. Then connect to `http://localhost:8000` in your WebGPU enabled browser, and you can choose an example to run.
 
-To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin <name> --features webgl`. Then connect to `http://localhost:8000` in your WebGL enabled browser.
+To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin wgpu-example --features webgl`. Then connect to `http://localhost:8000` in your WebGL enabled browser, and you can choose an example to run.
 
 If you are looking for a wgpu tutorial, look at the following:
 
