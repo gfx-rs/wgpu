@@ -90,10 +90,11 @@ use std::{
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 
 use bitflags::bitflags;
+use parking_lot::Mutex;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
 
@@ -1384,8 +1385,11 @@ pub struct ComputePassDescriptor<'a, A: Api> {
     pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
 }
 
-/// Stores if any API validation error has occurred in this process
-/// since it was last reset.
+/// Stores the text of any validation errors that have occurred since
+/// the last call to `get_and_reset`.
+///
+/// Each value is a validation error and a message associated with it,
+/// or `None` if the error has no message from the api.
 ///
 /// This is used for internal wgpu testing only and _must not_ be used
 /// as a way to check for errors.
@@ -1396,24 +1400,24 @@ pub struct ComputePassDescriptor<'a, A: Api> {
 /// This prevents the issue of one validation error terminating the
 /// entire process.
 pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: AtomicBool::new(false),
+    inner: Mutex::new(Vec::new()),
 };
 
 /// Flag for internal testing.
 pub struct ValidationCanary {
-    inner: AtomicBool,
+    inner: Mutex<Vec<String>>,
 }
 
 impl ValidationCanary {
     #[allow(dead_code)] // in some configurations this function is dead
-    fn set(&self) {
-        self.inner.store(true, std::sync::atomic::Ordering::SeqCst);
+    fn add(&self, msg: String) {
+        self.inner.lock().push(msg);
     }
 
-    /// Returns true if any API validation error has occurred in this process
+    /// Returns any API validation errors that hav occurred in this process
     /// since the last call to this function.
-    pub fn get_and_reset(&self) -> bool {
-        self.inner.swap(false, std::sync::atomic::Ordering::SeqCst)
+    pub fn get_and_reset(&self) -> Vec<String> {
+        self.inner.lock().drain(..).collect()
     }
 }
 

@@ -72,7 +72,11 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
                 )
                 .limits(Limits::downlevel_defaults())
                 // https://github.com/gfx-rs/wgpu/issues/4740
-                .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+                .expect_fail(
+                    FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")
+                        .panic("texture was not fully cleared")
+                        .flaky(),
+                ),
         )
         .run_sync(|mut ctx| {
             for format in [

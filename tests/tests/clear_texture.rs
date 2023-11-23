@@ -341,7 +341,13 @@ static CLEAR_TEXTURE_UNCOMPRESSED_GLES: GpuTestConfiguration = GpuTestConfigurat
 static CLEAR_TEXTURE_UNCOMPRESSED: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .expect_fail(FailureCase::backend(wgpu::Backends::GL))
+            .expect_fail(
+                FailureCase::backend(wgpu::Backends::GL)
+                    .panic("texture with format Rg8Snorm was not fully cleared")
+                    .panic("texture with format Rgb9e5Ufloat was not fully cleared")
+                    .validation_error("GL_INVALID_FRAMEBUFFER_OPERATION")
+                    .validation_error("GL_INVALID_OPERATION"),
+            )
             .features(wgpu::Features::CLEAR_TEXTURE),
     )
     .run_sync(|ctx| {

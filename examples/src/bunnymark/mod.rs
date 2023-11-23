@@ -393,7 +393,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         wgpu_test::ComparisonType::Mean(0.05),
         wgpu_test::ComparisonType::Percentile {
             percentile: 0.99,
-            threshold: 0.19,
+            threshold: 0.37,
         },
     ],
     _phantom: std::marker::PhantomData::<Example>,

@@ -190,16 +190,18 @@ bitflags::bitflags! {
         const TEXTURE_FLOAT_LINEAR = 1 << 10;
         /// Supports query buffer objects.
         const QUERY_BUFFERS = 1 << 11;
+        /// Supports 64 bit queries via `glGetQueryObjectui64v`
+        const QUERY_64BIT = 1 << 12;
         /// Supports `glTexStorage2D`, etc.
-        const TEXTURE_STORAGE = 1 << 12;
+        const TEXTURE_STORAGE = 1 << 13;
         /// Supports `push_debug_group`, `pop_debug_group` and `debug_message_insert`.
-        const DEBUG_FNS = 1 << 13;
+        const DEBUG_FNS = 1 << 14;
         /// Supports framebuffer invalidation.
-        const INVALIDATE_FRAMEBUFFER = 1 << 14;
+        const INVALIDATE_FRAMEBUFFER = 1 << 15;
         /// Indicates support for `glDrawElementsInstancedBaseVertexBaseInstance` and `ARB_shader_draw_parameters`
         ///
         /// When this is true, instance offset emulation via vertex buffer rebinding and a shader uniform will be disabled.
-        const FULLY_FEATURED_INSTANCING = 1 << 15;
+        const FULLY_FEATURED_INSTANCING = 1 << 16;
     }
 }
 
@@ -1040,6 +1042,6 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
 
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
-        crate::VALIDATION_CANARY.set();
+        crate::VALIDATION_CANARY.add(message.to_string());
     }
 }

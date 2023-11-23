@@ -603,6 +603,7 @@ impl super::Adapter {
             },
         );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
+        private_caps.set(super::PrivateCapabilities::QUERY_64BIT, full_ver.is_some());
         private_caps.set(
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
