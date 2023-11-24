@@ -101,10 +101,10 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
                 let min_ref_count = 1 + external_count;
                 if existing_ref_count <= min_ref_count {
                     self.metadata.remove(index);
-                    log::info!("{} {:?} is not tracked anymore", T::TYPE, id,);
+                    log::trace!("{} {:?} is not tracked anymore", T::TYPE, id,);
                     return true;
                 } else {
-                    log::info!(
+                    log::trace!(
                         "{} {:?} is still referenced from {}",
                         T::TYPE,
                         id,

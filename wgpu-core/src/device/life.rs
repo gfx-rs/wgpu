@@ -369,7 +369,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
-            log::info!("Active submission {} is done", a.index);
+            log::debug!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
             for encoder in a.encoders {
@@ -979,7 +979,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             };
             if is_removed {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
-                log::info!("Buffer ready to map {:?} is not tracked anymore", buffer_id);
+                log::trace!("Buffer ready to map {:?} is not tracked anymore", buffer_id);
                 self.free_resources.insert(buffer_id, buffer.clone());
             } else {
                 let mapping = match std::mem::replace(

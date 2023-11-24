@@ -331,10 +331,10 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
                 let min_ref_count = 1 + external_count;
                 if existing_ref_count <= min_ref_count {
                     self.metadata.remove(index);
-                    log::info!("Buffer {:?} is not tracked anymore", id,);
+                    log::trace!("Buffer {:?} is not tracked anymore", id,);
                     return true;
                 } else {
-                    log::info!(
+                    log::trace!(
                         "Buffer {:?} is still referenced from {}",
                         id,
                         existing_ref_count

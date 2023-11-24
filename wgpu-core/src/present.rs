@@ -230,7 +230,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let (id, resource) = fid.assign(texture);
-                log::info!("Created CURRENT Surface Texture {:?}", id);
+                log::debug!("Created CURRENT Surface Texture {:?}", id);
 
                 {
                     // register it in the device tracker as uninitialized

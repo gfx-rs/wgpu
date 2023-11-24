@@ -420,10 +420,10 @@ impl<A: HalApi> ResourceTracker<TextureId, Texture<A>> for TextureTracker<A> {
                     self.start_set.complex.remove(&index);
                     self.end_set.complex.remove(&index);
                     self.metadata.remove(index);
-                    log::info!("Texture {:?} is not tracked anymore", id,);
+                    log::trace!("Texture {:?} is not tracked anymore", id,);
                     return true;
                 } else {
-                    log::info!(
+                    log::trace!(
                         "Texture {:?} is still referenced from {}",
                         id,
                         existing_ref_count
