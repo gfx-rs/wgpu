@@ -293,6 +293,9 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
+        // float32-filterable should always be available on d3d12
+        features.set(wgt::Features::FLOAT32_FILTERABLE, true);
+
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
