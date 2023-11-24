@@ -3740,7 +3740,7 @@ impl<'a> RenderPass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::render_pass_set_bind_group(
@@ -3757,7 +3757,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         DynContext::render_pass_set_pipeline(
             &*self.parent.context,
             &mut self.id,
@@ -3785,7 +3785,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         DynContext::render_pass_set_index_buffer(
             &*self.parent.context,
             &mut self.id,
@@ -3808,7 +3808,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         DynContext::render_pass_set_vertex_buffer(
             &*self.parent.context,
             &mut self.id,
@@ -3983,7 +3983,7 @@ impl<'a> RenderPass<'a> {
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
     /// See details on the individual flags for more information.
-    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
             &mut self.id,
@@ -4010,7 +4010,7 @@ impl<'a> RenderPass<'a> {
     /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::render_pass_draw_indexed_indirect(
@@ -4059,7 +4059,7 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
     ) {
@@ -4087,7 +4087,7 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
         count: u32,
     ) {
@@ -4129,9 +4129,9 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indirect_count(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-        count_buffer: &'a Buffer,
+        count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
     ) {
@@ -4176,9 +4176,9 @@ impl<'a> RenderPass<'a> {
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect_count(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
-        count_buffer: &'a Buffer,
+        count_buffer: &Buffer,
         count_offset: BufferAddress,
         max_count: u32,
     ) {
@@ -4345,7 +4345,7 @@ impl<'a> ComputePass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::compute_pass_set_bind_group(
@@ -4360,7 +4360,7 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
         DynContext::compute_pass_set_pipeline(
             &*self.parent.context,
             &mut self.id,
@@ -4418,7 +4418,7 @@ impl<'a> ComputePass<'a> {
     /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::compute_pass_dispatch_workgroups_indirect(
@@ -4532,7 +4532,7 @@ impl<'a> RenderBundleEncoder<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &'a BindGroup,
+        bind_group: &BindGroup,
         offsets: &[DynamicOffset],
     ) {
         DynContext::render_bundle_encoder_set_bind_group(
@@ -4549,7 +4549,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         DynContext::render_bundle_encoder_set_pipeline(
             &*self.parent.context,
             &mut self.id,
@@ -4563,7 +4563,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderBundleEncoder::draw_indexed) on this [`RenderBundleEncoder`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         DynContext::render_bundle_encoder_set_index_buffer(
             &*self.parent.context,
             &mut self.id,
@@ -4586,7 +4586,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         DynContext::render_bundle_encoder_set_vertex_buffer(
             &*self.parent.context,
             &mut self.id,
@@ -4664,7 +4664,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
-    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         DynContext::render_bundle_encoder_draw_indirect(
             &*self.parent.context,
             &mut self.id,
@@ -4684,7 +4684,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &'a Buffer,
+        indirect_buffer: &Buffer,
         indirect_offset: BufferAddress,
     ) {
         DynContext::render_bundle_encoder_draw_indexed_indirect(

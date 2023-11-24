@@ -10,18 +10,18 @@ pub trait RenderEncoder<'a> {
     /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
     ///
     /// If the bind group have dynamic offsets, provide them in order of their declaration.
-    fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]);
+    fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[DynamicOffset]);
 
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline);
+    fn set_pipeline(&mut self, pipeline: &RenderPipeline);
 
     /// Sets the active index buffer.
     ///
     /// Subsequent calls to [`draw_indexed`](RenderEncoder::draw_indexed) on this [`RenderEncoder`] will
     /// use `buffer` as the source index buffer.
-    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat);
+    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat);
 
     /// Assign a vertex buffer to a slot.
     ///
@@ -33,7 +33,7 @@ pub trait RenderEncoder<'a> {
     ///
     /// [`draw`]: RenderEncoder::draw
     /// [`draw_indexed`]: RenderEncoder::draw_indexed
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>);
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>);
 
     /// Draws primitives from the active vertex buffer(s).
     ///
@@ -51,7 +51,7 @@ pub trait RenderEncoder<'a> {
     /// The active vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
-    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress);
+    fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress);
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`.
@@ -60,11 +60,7 @@ pub trait RenderEncoder<'a> {
     /// vertex buffers can be set with [`RenderEncoder::set_vertex_buffer`].
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
-    fn draw_indexed_indirect(
-        &mut self,
-        indirect_buffer: &'a Buffer,
-        indirect_offset: BufferAddress,
-    );
+    fn draw_indexed_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress);
 
     /// [`wgt::Features::PUSH_CONSTANTS`] must be enabled on the device in order to call this function.
     ///
@@ -101,22 +97,22 @@ pub trait RenderEncoder<'a> {
 
 impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     #[inline(always)]
-    fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]) {
+    fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[DynamicOffset]) {
         Self::set_bind_group(self, index, bind_group, offsets);
     }
 
     #[inline(always)]
-    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         Self::set_pipeline(self, pipeline);
     }
 
     #[inline(always)]
-    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         Self::set_index_buffer(self, buffer_slice, index_format);
     }
 
     #[inline(always)]
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         Self::set_vertex_buffer(self, slot, buffer_slice);
     }
 
@@ -131,16 +127,12 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
     }
 
     #[inline(always)]
-    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         Self::draw_indirect(self, indirect_buffer, indirect_offset);
     }
 
     #[inline(always)]
-    fn draw_indexed_indirect(
-        &mut self,
-        indirect_buffer: &'a Buffer,
-        indirect_offset: BufferAddress,
-    ) {
+    fn draw_indexed_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         Self::draw_indexed_indirect(self, indirect_buffer, indirect_offset);
     }
 
@@ -152,22 +144,22 @@ impl<'a> RenderEncoder<'a> for RenderPass<'a> {
 
 impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
     #[inline(always)]
-    fn set_bind_group(&mut self, index: u32, bind_group: &'a BindGroup, offsets: &[DynamicOffset]) {
+    fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[DynamicOffset]) {
         Self::set_bind_group(self, index, bind_group, offsets);
     }
 
     #[inline(always)]
-    fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+    fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         Self::set_pipeline(self, pipeline);
     }
 
     #[inline(always)]
-    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
         Self::set_index_buffer(self, buffer_slice, index_format);
     }
 
     #[inline(always)]
-    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
         Self::set_vertex_buffer(self, slot, buffer_slice);
     }
 
@@ -182,16 +174,12 @@ impl<'a> RenderEncoder<'a> for RenderBundleEncoder<'a> {
     }
 
     #[inline(always)]
-    fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         Self::draw_indirect(self, indirect_buffer, indirect_offset);
     }
 
     #[inline(always)]
-    fn draw_indexed_indirect(
-        &mut self,
-        indirect_buffer: &'a Buffer,
-        indirect_offset: BufferAddress,
-    ) {
+    fn draw_indexed_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         Self::draw_indexed_indirect(self, indirect_buffer, indirect_offset);
     }
 
