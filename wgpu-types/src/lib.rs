@@ -858,7 +858,12 @@ bitflags::bitflags! {
         const VALIDATION = 1 << 1;
         /// Don't pass labels to wgpu-hal.
         const DISCARD_HAL_LABELS = 1 << 2;
-        /// Whether non-compliant adapters should be enumerated.
+        /// Whether wgpu should expose adapters that run on top of non-compliant adapters.
+        ///
+        /// Turning this on might mean that some of the functionality provided by the wgpu
+        /// adapter/device is not working or is broken. It could be that all the functionality
+        /// wgpu currently exposes works but we can't tell for sure since we have no additional
+        /// transparency into what is working and what is not on the underlying adapter.
         ///
         /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
         /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
