@@ -549,6 +549,13 @@ impl super::Adapter {
             );
         }
 
+        features.set(
+            wgt::Features::FLOAT32_FILTERABLE,
+            extensions.contains("GL_ARB_color_buffer_float")
+                || extensions.contains("GL_EXT_color_buffer_float")
+                || extensions.contains("OES_texture_float_linear"),
+        );
+
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 
         let mut private_caps = super::PrivateCapabilities::empty();
