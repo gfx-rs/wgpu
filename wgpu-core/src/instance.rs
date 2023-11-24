@@ -10,7 +10,7 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     present::Presentation,
     resource::{Resource, ResourceInfo, ResourceType},
-    LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
+    resource_log, LabelHelpers, DOWNLEVEL_WARNING_MESSAGE,
 };
 
 use parking_lot::Mutex;
@@ -1082,7 +1082,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
                 _ => unreachable!(),
             };
-        log::info!("Created Adapter {:?}", id);
+        resource_log!("Created Adapter {:?}", id);
         id
     }
 
@@ -1203,13 +1203,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Err(e) => break e,
                 };
             let (device_id, _) = device_fid.assign(device);
-            log::info!("Created Device {:?}", device_id);
+            resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
             let (queue_id, _) = queue_fid.assign(queue);
-            log::info!("Created Queue {:?}", queue_id);
+            resource_log!("Created Queue {:?}", queue_id);
 
             device.queue_id.write().replace(queue_id);
 
@@ -1255,13 +1255,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let (device_id, _) = devices_fid.assign(device);
-            log::info!("Created Device {:?}", device_id);
+            resource_log!("Created Device {:?}", device_id);
 
             let device = hub.devices.get(device_id).unwrap();
             queue.device = Some(device.clone());
 
             let (queue_id, _) = queues_fid.assign(queue);
-            log::info!("Created Queue {:?}", queue_id);
+            resource_log!("Created Queue {:?}", queue_id);
 
             device.queue_id.write().replace(queue_id);
 

@@ -9,7 +9,8 @@ use std::{marker::PhantomData, sync::Arc};
 use parking_lot::Mutex;
 
 use crate::{
-    hal_api::HalApi, id::TypedId, resource::Resource, storage::Storage, track::ResourceMetadata,
+    hal_api::HalApi, id::TypedId, resource::Resource, resource_log, storage::Storage,
+    track::ResourceMetadata,
 };
 
 use super::ResourceTracker;
@@ -90,6 +91,8 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
         if index > self.metadata.size() {
             return false;
         }
+
+        resource_log!("StatelessTracker::remove_abandoned {id:?}");
 
         self.tracker_assert_in_bounds(index);
 
