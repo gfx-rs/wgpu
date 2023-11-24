@@ -340,10 +340,11 @@ bitflags::bitflags! {
         
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be filterable.
         ///
-        /// Supported Platforms:  (TODO is this correct?)
-        /// - Vulkan
+        /// Supported Platforms:
+        /// - Vulkan (mainly on Desktop GPUs)
         /// - DX12
-        /// - Metal
+        /// - Metal on macOS or Apple9+ GPUs, optional on iOS/iPadOS with Apple7/8 GPUs
+        /// - GL with one of `GL_ARB_color_buffer_float`/`GL_EXT_color_buffer_float`/`OES_texture_float_linear`
         ///
         /// This is a web and native feature.
         const FLOAT32_FILTERABLE = 1 << 19;
