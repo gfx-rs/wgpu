@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     any_surface::AnySurface,
+    api_log,
     device::{queue::Queue, resource::Device, DeviceDescriptor},
     global::Global,
     hal_api::HalApi,
@@ -306,7 +307,7 @@ impl<A: HalApi> Adapter<A> {
         instance_flags: wgt::InstanceFlags,
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
-        log::info!("Adapter::create_device");
+        api_log!("Adapter::create_device");
 
         let caps = &self.raw.capabilities;
         if let Ok(device) = Device::new(
@@ -762,7 +763,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn surface_drop(&self, id: SurfaceId) {
         profiling::scope!("Surface::drop");
 
-        log::info!("Surface::drop {id:?}");
+        api_log!("Surface::drop {id:?}");
 
         fn unconfigure<G: GlobalIdentityHandlerFactory, A: HalApi>(
             global: &Global<G>,
@@ -828,7 +829,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
-        log::info!("Instance::enumerate_adapters");
+        api_log!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
 
@@ -884,8 +885,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
-        profiling::scope!("Instance::pick_adapter");
-        log::info!("Instance::pick_adapter");
+        profiling::scope!("Instance::request_adapter");
+        api_log!("Instance::request_adapter");
 
         fn gather<A: HalApi, I: Copy>(
             _: A,
@@ -1159,7 +1160,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
-        log::info!("Adapter::drop {adapter_id:?}");
+        api_log!("Adapter::drop {adapter_id:?}");
 
         let hub = A::hub(self);
         let mut adapters_locked = hub.adapters.write();
@@ -1185,7 +1186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id_in: Input<G, QueueId>,
     ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
         profiling::scope!("Adapter::request_device");
-        log::info!("Adapter::request_device");
+        api_log!("Adapter::request_device");
 
         let hub = A::hub(self);
         let device_fid = hub.devices.prepare::<G>(device_id_in);
