@@ -1,7 +1,9 @@
 struct ExampleDesc {
     name: &'static str,
     function: fn(),
+    #[allow(dead_code)] // isn't used on native
     webgl: bool,
+    #[allow(dead_code)] // isn't used on native
     webgpu: bool,
 }
 
@@ -208,8 +210,8 @@ fn print_unknown_example(result: Option<String>) {
     }
 
     println!("\nAvailable Examples:");
-    for (name, _) in EXAMPLES {
-        println!("\t{name}");
+    for examples in EXAMPLES {
+        println!("\t{}", examples.name);
     }
 }
 
