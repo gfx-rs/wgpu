@@ -255,7 +255,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands<A> {
-        log::info!(
+        log::trace!(
             "Extracting BakedCommands from CommandBuffer {:?}",
             self.info.label()
         );
