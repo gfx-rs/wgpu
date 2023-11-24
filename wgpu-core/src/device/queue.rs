@@ -385,6 +385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_buffer");
+        log::info!("Queue::write_buffer {buffer_id:?} {}bytes", data.len());
 
         let hub = A::hub(self);
 
@@ -649,6 +650,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_texture");
+        log::info!("Queue::write_texture {:?} {size:?}", destination.texture);
 
         let hub = A::hub(self);
 
@@ -1115,7 +1117,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
         profiling::scope!("Queue::submit");
-        log::trace!("Queue::submit {queue_id:?}");
+        log::info!("Queue::submit {queue_id:?}");
 
         let (submit_index, callbacks) = {
             let hub = A::hub(self);
@@ -1524,7 +1526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
-        log::trace!("Queue::on_submitted_work_done {queue_id:?}");
+        log::info!("Queue::on_submitted_work_done {queue_id:?}");
 
         //TODO: flush pending writes
         let hub = A::hub(self);

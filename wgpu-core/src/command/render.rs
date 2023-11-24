@@ -1410,7 +1410,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
-                        log::trace!("RenderPass::set_bind_group {index} {bind_group_id:?}");
+                        log::info!("RenderPass::set_bind_group {index} {bind_group_id:?}");
 
                         let scope = PassErrorScope::SetBindGroup(bind_group_id);
                         let max_bind_groups = device.limits.max_bind_groups;
@@ -1493,7 +1493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::SetPipeline(pipeline_id) => {
-                        log::trace!("RenderPass::set_pipeline {pipeline_id:?}");
+                        log::info!("RenderPass::set_pipeline {pipeline_id:?}");
 
                         let scope = PassErrorScope::SetPipelineRender(pipeline_id);
                         state.pipeline = Some(pipeline_id);
@@ -1621,7 +1621,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
-                        log::trace!("RenderPass::set_index_buffer {buffer_id:?}");
+                        log::info!("RenderPass::set_index_buffer {buffer_id:?}");
 
                         let scope = PassErrorScope::SetIndexBuffer(buffer_id);
                         let buffer = info
@@ -1674,7 +1674,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset,
                         size,
                     } => {
-                        log::trace!("RenderPass::set_vertex_buffer {slot} {buffer_id:?}");
+                        log::info!("RenderPass::set_vertex_buffer {slot} {buffer_id:?}");
 
                         let scope = PassErrorScope::SetVertexBuffer(buffer_id);
                         let buffer = info
@@ -1737,7 +1737,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         state.vertex.update_limits();
                     }
                     RenderCommand::SetBlendConstant(ref color) => {
-                        log::trace!("RenderPass::set_blend_constant");
+                        log::info!("RenderPass::set_blend_constant");
 
                         state.blend_constant = OptionalState::Set;
                         let array = [
@@ -1751,7 +1751,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::SetStencilReference(value) => {
-                        log::trace!("RenderPass::set_stencil_reference {value}");
+                        log::info!("RenderPass::set_stencil_reference {value}");
 
                         state.stencil_reference = value;
                         if state
@@ -1768,7 +1768,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth_min,
                         depth_max,
                     } => {
-                        log::trace!("RenderPass::set_viewport {rect:?}");
+                        log::info!("RenderPass::set_viewport {rect:?}");
 
                         let scope = PassErrorScope::SetViewport;
                         if rect.x < 0.0
@@ -1806,7 +1806,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size_bytes,
                         values_offset,
                     } => {
-                        log::trace!("RenderPass::set_push_constants");
+                        log::info!("RenderPass::set_push_constants");
 
                         let scope = PassErrorScope::SetPushConstant;
                         let values_offset = values_offset
@@ -1841,7 +1841,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     RenderCommand::SetScissor(ref rect) => {
-                        log::trace!("RenderPass::set_scissor_rect {rect:?}");
+                        log::info!("RenderPass::set_scissor_rect {rect:?}");
 
                         let scope = PassErrorScope::SetScissorRect;
                         if rect.x + rect.w > info.extent.width
@@ -1866,7 +1866,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_vertex,
                         first_instance,
                     } => {
-                        log::trace!(
+                        log::info!(
                             "RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}"
                         );
 
@@ -1910,7 +1910,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         base_vertex,
                         first_instance,
                     } => {
-                        log::trace!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
+                        log::info!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
 
                         let indexed = true;
                         let scope = PassErrorScope::Draw {
@@ -1958,7 +1958,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         count,
                         indexed,
                     } => {
-                        log::trace!("RenderPass::draw_indirect (indexed:{indexed}) {buffer_id:?} {offset} {count:?}");
+                        log::info!("RenderPass::draw_indirect (indexed:{indexed}) {buffer_id:?} {offset} {count:?}");
 
                         let scope = PassErrorScope::Draw {
                             indexed,
@@ -2032,7 +2032,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         max_count,
                         indexed,
                     } => {
-                        log::trace!("RenderPass::multi_draw_indirect_count (indexed:{indexed}) {buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset:?} {max_count:?}");
+                        log::info!("RenderPass::multi_draw_indirect_count (indexed:{indexed}) {buffer_id:?} {offset} {count_buffer_id:?} {count_buffer_offset:?} {max_count:?}");
 
                         let scope = PassErrorScope::Draw {
                             indexed,
@@ -2148,7 +2148,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             )
                             .unwrap();
 
-                            log::trace!("RenderPass::push_debug_group {label:?}");
+                            log::info!("RenderPass::push_debug_group {label:?}");
                             unsafe {
                                 raw.begin_debug_marker(label);
                             }
@@ -2156,7 +2156,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         string_offset += len;
                     }
                     RenderCommand::PopDebugGroup => {
-                        log::trace!("RenderPass::pop_debug_group");
+                        log::info!("RenderPass::pop_debug_group");
 
                         let scope = PassErrorScope::PopDebugGroup;
                         if state.debug_scope_depth == 0 {
@@ -2176,7 +2176,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 &base.string_data[string_offset..string_offset + len],
                             )
                             .unwrap();
-                            log::trace!("RenderPass::insert_debug_marker {label:?}");
+                            log::info!("RenderPass::insert_debug_marker {label:?}");
                             unsafe {
                                 raw.insert_debug_marker(label);
                             }
@@ -2187,7 +2187,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         query_set_id,
                         query_index,
                     } => {
-                        log::trace!("RenderPass::write_timestamps {query_set_id:?} {query_index}");
+                        log::info!("RenderPass::write_timestamps {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::WriteTimestamp;
 
                         device
@@ -2210,7 +2210,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::BeginOcclusionQuery { query_index } => {
-                        log::trace!("RenderPass::begin_occlusion_query {query_index}");
+                        log::info!("RenderPass::begin_occlusion_query {query_index}");
                         let scope = PassErrorScope::BeginOcclusionQuery;
 
                         let query_set_id = occlusion_query_set_id
@@ -2234,7 +2234,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::EndOcclusionQuery => {
-                        log::trace!("RenderPass::end_occlusion_query");
+                        log::info!("RenderPass::end_occlusion_query");
                         let scope = PassErrorScope::EndOcclusionQuery;
 
                         end_occlusion_query(raw, &*query_set_guard, &mut active_query)
@@ -2244,7 +2244,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         query_set_id,
                         query_index,
                     } => {
-                        log::trace!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
+                        log::info!("RenderPass::begin_pipeline_statistics_query {query_set_id:?} {query_index}");
                         let scope = PassErrorScope::BeginPipelineStatisticsQuery;
 
                         let query_set = tracker
@@ -2264,14 +2264,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::EndPipelineStatisticsQuery => {
-                        log::trace!("RenderPass::end_pipeline_statistics_query");
+                        log::info!("RenderPass::end_pipeline_statistics_query");
                         let scope = PassErrorScope::EndPipelineStatisticsQuery;
 
                         end_pipeline_statistics_query(raw, &*query_set_guard, &mut active_query)
                             .map_pass_err(scope)?;
                     }
                     RenderCommand::ExecuteBundle(bundle_id) => {
-                        log::trace!("RenderPass::execute_bundle {bundle_id:?}");
+                        log::info!("RenderPass::execute_bundle {bundle_id:?}");
                         let scope = PassErrorScope::ExecuteBundle;
                         let bundle: &command::RenderBundle<A> = tracker
                             .bundles

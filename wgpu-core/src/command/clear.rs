@@ -76,7 +76,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: Option<BufferAddress>,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_buffer");
-        log::trace!("CommandEncoder::clear_buffer {dst:?}");
+        log::info!("CommandEncoder::clear_buffer {dst:?}");
 
         let hub = A::hub(self);
 
@@ -161,7 +161,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         subresource_range: &ImageSubresourceRange,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_texture");
-        log::trace!("CommandEncoder::clear_texture {dst:?}");
+        log::info!("CommandEncoder::clear_texture {dst:?}");
 
         let hub = A::hub(self);
 

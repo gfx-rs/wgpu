@@ -828,7 +828,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         profiling::scope!("Instance::enumerate_adapters");
-        log::trace!("Instance::enumerate_adapters");
+        log::info!("Instance::enumerate_adapters");
 
         let mut adapters = Vec::new();
 
@@ -885,7 +885,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Result<AdapterId, RequestAdapterError> {
         profiling::scope!("Instance::pick_adapter");
-        log::trace!("Instance::pick_adapter");
+        log::info!("Instance::pick_adapter");
 
         fn gather<A: HalApi, I: Copy>(
             _: A,
@@ -1159,7 +1159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn adapter_drop<A: HalApi>(&self, adapter_id: AdapterId) {
         profiling::scope!("Adapter::drop");
-        log::trace!("Adapter::drop {adapter_id:?}");
+        log::info!("Adapter::drop {adapter_id:?}");
 
         let hub = A::hub(self);
         let mut adapters_locked = hub.adapters.write();
@@ -1185,7 +1185,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id_in: Input<G, QueueId>,
     ) -> (DeviceId, QueueId, Option<RequestDeviceError>) {
         profiling::scope!("Adapter::request_device");
-        log::trace!("Adapter::request_device");
+        log::info!("Adapter::request_device");
 
         let hub = A::hub(self);
         let device_fid = hub.devices.prepare::<G>(device_id_in);
