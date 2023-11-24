@@ -1,0 +1,71 @@
+<html>
+
+<head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <style type="text/css">
+        body {
+            margin: 0 auto;
+            padding: 0;
+            text-align: center;
+            background: #fff;
+            font-family: "Calibri", "Arial", sans-serif;
+        }
+
+        #banner {
+            background: #dee;
+            padding: 0.5em 0;
+            border-bottom: 1px solid #abb;
+        }
+
+        p {
+            font-size: 0.8em;
+            padding: 0;
+            margin: 0.5em 0;
+        }
+
+        ul {
+            margin: 0;
+        }
+
+        li {
+            display: inline;
+            margin: 0.5em;
+            font-size: 0.9em;
+        }
+
+        canvas {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="banner">
+        <p>
+            WebGPU requires Chrome (on Windows, Mac, or Chromeos) or Firefox Nightly (Windows or Linux).
+            <br />
+            Output will appear below or in the browser's console.
+        </p>
+        <p>
+            <a href="../index.html">
+                Back to home page
+            </a>
+        </p>
+        <ul id="webgl2-list"></ul>
+        <ul id="webgpu-list"></ul>
+    </div>
+    <script type="module">
+        const params = new URLSearchParams(window.location.search);
+        const backend = params.get("backend");
+        const example = params.get("example");
+        if (backend !== null && example !== null) {
+            import(`./${backend}.js`).then((module) => module.default());
+        } else {
+            window.location.assign(
+                `${window.location.href}?backend=webgl2&example=hello_triangle`
+            );
+        }
+    </script>
+</body>
+
+</html>
