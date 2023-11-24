@@ -181,7 +181,7 @@ impl ViewDescriptor {
                 unsafe {
                     *desc.u.Texture2D_mut() = d3d12_ty::D3D12_TEX2D_UAV {
                         MipSlice: self.mip_level_base,
-                        PlaneSlice: 0,
+                        PlaneSlice: self.plane,
                     }
                 }
             }
@@ -192,7 +192,7 @@ impl ViewDescriptor {
                         MipSlice: self.mip_level_base,
                         FirstArraySlice: self.array_layer_base,
                         ArraySize: self.array_layer_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: self.plane,
                     }
                 }
             }
@@ -252,7 +252,7 @@ impl ViewDescriptor {
                 unsafe {
                     *desc.u.Texture2D_mut() = d3d12_ty::D3D12_TEX2D_RTV {
                         MipSlice: self.mip_level_base,
-                        PlaneSlice: 0,
+                        PlaneSlice: self.plane,
                     }
                 }
             }
@@ -274,7 +274,7 @@ impl ViewDescriptor {
                         MipSlice: self.mip_level_base,
                         FirstArraySlice: self.array_layer_base,
                         ArraySize: self.array_layer_count,
-                        PlaneSlice: 0,
+                        PlaneSlice: self.plane,
                     }
                 }
             }

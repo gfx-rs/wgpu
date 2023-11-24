@@ -804,24 +804,35 @@ impl<A: HalApi> Device<A> {
             let mut clear_views = SmallVec::new();
             for mip_level in 0..desc.mip_level_count {
                 for array_layer in 0..desc.size.depth_or_array_layers {
-                    let desc = hal::TextureViewDescriptor {
-                        label: clear_label,
-                        format: desc.format,
-                        dimension,
-                        usage,
-                        range: wgt::ImageSubresourceRange {
-                            aspect: wgt::TextureAspect::All,
-                            base_mip_level: mip_level,
-                            mip_level_count: Some(1),
-                            base_array_layer: array_layer,
-                            array_layer_count: Some(1),
-                        },
-                        plane: None,
-                    };
-                    clear_views.push(Some(
-                        unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
-                            .map_err(DeviceError::from)?,
-                    ));
+                    macro_rules! push_clear_view {
+                        ($format:expr, $plane:expr) => {
+                            let desc = hal::TextureViewDescriptor {
+                                label: clear_label,
+                                format: $format,
+                                dimension,
+                                usage,
+                                range: wgt::ImageSubresourceRange {
+                                    aspect: wgt::TextureAspect::All,
+                                    base_mip_level: mip_level,
+                                    mip_level_count: Some(1),
+                                    base_array_layer: array_layer,
+                                    array_layer_count: Some(1),
+                                },
+                                plane: $plane,
+                            };
+                            clear_views.push(Some(
+                                unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
+                                    .map_err(DeviceError::from)?,
+                            ));
+                        };
+                    }
+
+                    if desc.format == wgt::TextureFormat::NV12 {
+                        push_clear_view!(wgt::TextureFormat::R8Unorm, Some(0));
+                        push_clear_view!(wgt::TextureFormat::Rg8Unorm, Some(1));
+                    } else {
+                        push_clear_view!(desc.format, None);
+                    }
                 }
             }
             resource::TextureClearMode::RenderPass {
