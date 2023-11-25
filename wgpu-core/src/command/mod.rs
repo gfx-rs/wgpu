@@ -27,7 +27,8 @@ use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
 use crate::{
-    api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory, Label,
+    api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory,
+    resource_log, Label,
 };
 
 use hal::CommandEncoder as _;
@@ -137,7 +138,7 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         if self.data.lock().is_none() {
             return;
         }
-        log::info!("Destroying CommandBuffer {:?}", self.info.label());
+        resource_log!("resource::CommandBuffer::drop {}", self.info.label());
         let mut baked = self.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());

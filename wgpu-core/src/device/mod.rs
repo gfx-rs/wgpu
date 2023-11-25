@@ -6,7 +6,7 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     resource::{Buffer, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation},
-    Label, DOWNLEVEL_ERROR_MESSAGE,
+    resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -372,7 +372,10 @@ impl<A: HalApi> CommandAllocator<A> {
     }
 
     fn dispose(self, device: &A::Device) {
-        log::info!("Destroying {} command encoders", self.free_encoders.len());
+        resource_log!(
+            "CommandAllocator::dispose encoders {}",
+            self.free_encoders.len()
+        );
         for cmd_encoder in self.free_encoders {
             unsafe {
                 device.destroy_command_encoder(cmd_encoder);
