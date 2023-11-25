@@ -170,10 +170,10 @@ async fn get_data<T: bytemuck::Pod>(
     );
     queue.submit(Some(command_encoder.finish()));
     let buffer_slice = staging_buffer.slice(..);
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     device.poll(wgpu::Maintain::Wait);
-    receiver.receive().await.unwrap().unwrap();
+    receiver.recv_async().await.unwrap().unwrap();
     output.copy_from_slice(bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));
     staging_buffer.unmap();
 }
