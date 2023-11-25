@@ -1,10 +1,16 @@
-# hello-workgroups
+# hello_workgroups
 
 Now you finally know what that silly little `@workgroup_size(1)` means!
 
 This example is an extremely bare-bones and arguably somewhat unreasonable demonstration of what workgroup sizes mean in an attempt to explain workgroups in general.
 
 The example starts with two arrays of numbers. One where `a[i] = i` and the other where `b[i] = 2i`. Both are bound to the shader. The program dispatches a workgroup for each index, each workgroup representing both elements at that index in both arrays. Each invocation in each workgroup works on its respective array and adds 1 to the element there.
+
+## To Run
+
+```
+cargo run --bin wgpu-examples hello_workgroups
+```
 
 ## What are Workgroups?
 

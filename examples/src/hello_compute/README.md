@@ -12,7 +12,7 @@ that it will take to finish and reach the number `1`.
 
 ```
 # Pass in any 4 numbers as arguments
-RUST_LOG=hello_compute cargo run --bin hello-compute 1 4 3 295
+RUST_LOG=hello_compute cargo run --bin wgpu-examples hello_compute 1 4 3 295
 ```
 
 ## Example Output

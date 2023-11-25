@@ -5,7 +5,7 @@ This example prints output describing the adapter in use.
 ## To Run
 
 ```
-cargo run --bin hello
+cargo run --bin wgpu-examples hello
 ```
 
 ## Example output

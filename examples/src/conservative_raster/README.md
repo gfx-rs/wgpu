@@ -1,4 +1,4 @@
-# conservative-raster
+# conservative_raster
 
 This example shows how to render with conservative rasterization (native extension with limited support).
 
@@ -12,7 +12,7 @@ Pixels only drawn with conservative rasterization enabled are depicted red.
 ## To Run
 
 ```
-cargo run --bin conservative-raster
+cargo run --bin wgpu-examples conservative_raster
 ```
 
 ## Screenshots
