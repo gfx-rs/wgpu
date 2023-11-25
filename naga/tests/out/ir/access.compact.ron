@@ -2,25 +2,27 @@
     types: [
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Uint,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
             inner: Vector(
                 size: Tri,
-                kind: Uint,
-                width: 4,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
             ),
         ),
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Sint,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: Some("GlobalConst"),
@@ -67,7 +69,10 @@
             inner: Matrix(
                 columns: Quad,
                 rows: Tri,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -75,7 +80,10 @@
             inner: Matrix(
                 columns: Bi,
                 rows: Bi,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -88,10 +96,10 @@
         ),
         (
             name: None,
-            inner: Atomic(
+            inner: Atomic((
                 kind: Sint,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
@@ -105,8 +113,10 @@
             name: None,
             inner: Vector(
                 size: Bi,
-                kind: Uint,
-                width: 4,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -174,7 +184,10 @@
             inner: Matrix(
                 columns: Tri,
                 rows: Bi,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -195,8 +208,10 @@
             name: None,
             inner: Vector(
                 size: Bi,
-                kind: Sint,
-                width: 4,
+                scalar: (
+                    kind: Sint,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -204,7 +219,10 @@
             inner: Matrix(
                 columns: Quad,
                 rows: Bi,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
@@ -231,10 +249,10 @@
         ),
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Float,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
@@ -263,8 +281,10 @@
             name: None,
             inner: Vector(
                 size: Quad,
-                kind: Float,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (

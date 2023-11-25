@@ -128,7 +128,6 @@ pub type SpanContext = (Span, String);
 #[derive(Debug, Clone)]
 pub struct WithSpan<E> {
     inner: E,
-    #[cfg(feature = "span")]
     spans: Vec<SpanContext>,
 }
 
@@ -165,7 +164,6 @@ impl<E> WithSpan<E> {
     pub const fn new(inner: E) -> Self {
         Self {
             inner,
-            #[cfg(feature = "span")]
             spans: Vec::new(),
         }
     }
@@ -182,22 +180,14 @@ impl<E> WithSpan<E> {
 
     /// Iterator over stored [`SpanContext`]s.
     pub fn spans(&self) -> impl ExactSizeIterator<Item = &SpanContext> {
-        #[cfg(feature = "span")]
-        return self.spans.iter();
-        #[cfg(not(feature = "span"))]
-        return std::iter::empty();
+        self.spans.iter()
     }
 
     /// Add a new span with description.
-    #[cfg_attr(
-        not(feature = "span"),
-        allow(unused_variables, unused_mut, clippy::missing_const_for_fn)
-    )]
     pub fn with_span<S>(mut self, span: Span, description: S) -> Self
     where
         S: ToString,
     {
-        #[cfg(feature = "span")]
         if span.is_defined() {
             self.spans.push((span, description.to_string()));
         }
@@ -223,7 +213,6 @@ impl<E> WithSpan<E> {
     {
         WithSpan {
             inner: self.inner.into(),
-            #[cfg(feature = "span")]
             spans: self.spans,
         }
     }
@@ -234,14 +223,11 @@ impl<E> WithSpan<E> {
     where
         F: FnOnce(E) -> WithSpan<E2>,
     {
-        #[cfg_attr(not(feature = "span"), allow(unused_mut))]
         let mut res = func(self.inner);
-        #[cfg(feature = "span")]
         res.spans.extend(self.spans);
         res
     }
 
-    #[cfg(feature = "span")]
     /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
         if self.spans.is_empty() {
@@ -251,14 +237,6 @@ impl<E> WithSpan<E> {
         Some(self.spans[0].0.location(source))
     }
 
-    #[cfg(not(feature = "span"))]
-    #[allow(clippy::missing_const_for_fn)]
-    /// Return a [`SourceLocation`] for our first span, if we have one.
-    pub fn location(&self, _source: &str) -> Option<SourceLocation> {
-        None
-    }
-
-    #[cfg(feature = "span")]
     fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
     where
         E: Error,
@@ -286,7 +264,6 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
-    #[cfg(feature = "span")]
     pub fn emit_to_stderr(&self, source: &str)
     where
         E: Error,
@@ -295,7 +272,6 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
-    #[cfg(feature = "span")]
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
     where
         E: Error,
@@ -311,7 +287,6 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
-    #[cfg(feature = "span")]
     pub fn emit_to_string(&self, source: &str) -> String
     where
         E: Error,
@@ -320,7 +295,6 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
-    #[cfg(feature = "span")]
     pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
     where
         E: Error,

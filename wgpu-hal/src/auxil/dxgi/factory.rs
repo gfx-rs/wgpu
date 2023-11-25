@@ -18,6 +18,26 @@ fn should_keep_adapter(adapter: &dxgi::IDXGIAdapter1) -> bool {
     let mut desc = unsafe { std::mem::zeroed() };
     unsafe { adapter.GetDesc1(&mut desc) };
 
+    // The Intel Haswell family of iGPUs had support for the D3D12 API but it was later
+    // removed due to a security vulnerability.
+    //
+    // We are explicitly filtering out all the devices in the family because we are now
+    // getting reports of device loss at a later time than at device creation time (`D3D12CreateDevice`).
+    //
+    // See https://www.intel.com/content/www/us/en/support/articles/000057520/graphics.html
+    // This list of device IDs is from https://dgpu-docs.intel.com/devices/hardware-table.html
+    let haswell_device_ids = [
+        0x0422, 0x0426, 0x042A, 0x042B, 0x042E, 0x0C22, 0x0C26, 0x0C2A, 0x0C2B, 0x0C2E, 0x0A22,
+        0x0A2A, 0x0A2B, 0x0D2A, 0x0D2B, 0x0D2E, 0x0A26, 0x0A2E, 0x0D22, 0x0D26, 0x0412, 0x0416,
+        0x0D12, 0x041A, 0x041B, 0x0C12, 0x0C16, 0x0C1A, 0x0C1B, 0x0C1E, 0x0A12, 0x0A1A, 0x0A1B,
+        0x0D16, 0x0D1A, 0x0D1B, 0x0D1E, 0x041E, 0x0A16, 0x0A1E, 0x0402, 0x0406, 0x040A, 0x040B,
+        0x040E, 0x0C02, 0x0C06, 0x0C0A, 0x0C0B, 0x0C0E, 0x0A02, 0x0A06, 0x0A0A, 0x0A0B, 0x0A0E,
+        0x0D02, 0x0D06, 0x0D0A, 0x0D0B, 0x0D0E,
+    ];
+    if desc.VendorId == 0x8086 && haswell_device_ids.contains(&desc.DeviceId) {
+        return false;
+    }
+
     // If run completely headless, windows will show two different WARP adapters, one
     // which is lying about being an integrated card. This is so that programs
     // that ignore software adapters will actually run on headless/gpu-less machines.
@@ -92,7 +112,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                     continue;
                 }
                 Err(err) => {
-                    log::info!("Failed casting Adapter1 to Adapter3: {}", err);
+                    log::warn!("Failed casting Adapter1 to Adapter3: {}", err);
                 }
             }
         }
@@ -105,7 +125,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                     continue;
                 }
                 Err(err) => {
-                    log::info!("Failed casting Adapter1 to Adapter2: {}", err);
+                    log::warn!("Failed casting Adapter1 to Adapter2: {}", err);
                 }
             }
         }
@@ -170,9 +190,9 @@ pub fn create_factory(
                 err,
             ));
         }
-        // If we don't print it to info as all win7 will hit this case.
+        // If we don't print it to warn as all win7 will hit this case.
         Err(err) => {
-            log::info!("IDXGIFactory1 creation function not found: {err:?}");
+            log::warn!("IDXGIFactory1 creation function not found: {err:?}");
             None
         }
     };
@@ -191,9 +211,9 @@ pub fn create_factory(
                     "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
                 )));
             }
-            // If we don't print it to info.
+            // If we don't print it to warn.
             Err(err) => {
-                log::info!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
+                log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
                 return Ok((lib_dxgi, d3d12::DxgiFactory::Factory4(factory4)));
             }
         }
@@ -232,9 +252,9 @@ pub fn create_factory(
                 "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
             )));
         }
-        // If we don't print it to info.
+        // If we don't print it to warn.
         Err(err) => {
-            log::info!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
+            log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
         }
     }
 

@@ -40,14 +40,120 @@ Bottom level categories:
 
 ## Unreleased
 
+### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
+
+This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
+
+### New Features
+
+#### General
+- Added `DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW` to know if `@builtin(vertex_index)` and `@builtin(instance_index)` will respect the `first_vertex` / `first_instance` in indirect calls. If this is not present, both will always start counting from 0. Currently enabled on all backends except DX12. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722)
+
+#### OpenGL
+- `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
+#### Naga
+
+- Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
+
+### Changes
+
+- Arcanization of wgpu core resources:
+Removed Token and LifeTime related management
+Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
+Removing mut from resources and added instead internal members locks on demand or atomics operations
+Resources now implement Drop and destroy stuff when last Arc resources is released
+Resources hold an Arc in order to be able to implement Drop
+Resources have an utility to retrieve the id of the resource itself
+Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
+Verify correct resources release when unused or not needed
+Check Web and Metal compliation (thanks to @niklaskorz)
+Fix tests on all platforms
+Test a multithreaded scenario
+Storage is now holding only user-land resources, but Arc is keeping refcount for resources
+When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
+IdentityManager is now unique and free is called on resource drop instead of storage unregister
+Identity changes due to Arcanization and Registry being just the user reference
+Added MemLeaks test and fixing mem leaks
+By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+
+#### General
+
+- Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
+- `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
+- Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
+- Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737)
+- Reduce the `info` log level noise. By @nical in [#4769](https://github.com/gfx-rs/wgpu/pull/4769), [#4711](https://github.com/gfx-rs/wgpu/pull/4711) and [#4772](https://github.com/gfx-rs/wgpu/pull/4772)
+
+#### Safe `Surface` creation
+
+It is now possible to safely create a `wgpu::Surface` with `Surface::create_surface()` by letting `Surface` hold a lifetime to `window`.
+
+Passing an owned value `window` to `Surface` will return a `Surface<'static>`. Shared ownership over `window` can still be achieved with e.g. an `Arc`. Alternatively a reference could be passed, which will return a `Surface<'window>`.
+
+`Surface::create_surface_from_raw()` can be used to continue producing a `Surface<'static>` without any lifetime requirements over `window`, which also remains `unsafe`.
+
+#### Naga
+
+- Remove `span` and `validate` features. Always fully validate shader modules, and always track source positions for use in error messages. By @teoxoy in [#4706](https://github.com/gfx-rs/wgpu/pull/4706)
+- Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
+- Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
+
+- Implement WGSL abstract types (by @jimblandy):
+  - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
+
+- Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
+
 ### Bug Fixes
 
 #### Vulkan
+
 - Use `VK_EXT_robustness2` only when not using an outdated intel iGPU driver. By @TheoDulka in [#4602](https://github.com/gfx-rs/wgpu/pull/4602).
 
-For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
+#### WGL
+
+- Create a hidden window per `wgpu::Instance` instead of sharing a global one.
+
+#### Naga
+
+- Make module compaction preserve the module's named types, even if they are unused. By @jimblandy in [#4734](https://github.com/gfx-rs/wgpu/pull/4734).
+
+- Improve algorithm used by module compaction. By @jimblandy in [#4662](https://github.com/gfx-rs/wgpu/pull/4662).
+
+- When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
+
+- Allow Naga's IR types to represent matrices with elements elements of any scalar kind. This makes it possible for Naga IR types to represent WGSL abstract matrices. By @jimblandy in [#4735](https://github.com/gfx-rs/wgpu/pull/4735).
+
+- When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
+
+- Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
+
+- Record the names of WGSL `alias` declarations in Naga IR `Type`s. By @jimblandy in [#4733](https://github.com/gfx-rs/wgpu/pull/4733).
+
+### Examples
+
+- remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
+
+## v0.18.1 (2023-11-15)
+
+(naga version 0.14.1)
+
+### Bug Fixes
+
+#### General
+- Fix panic in `Surface::configure` in debug builds. By @cwfitzgerald in [#4635](https://github.com/gfx-rs/wgpu/pull/4635)
+- Fix crash when all the following are true: By @teoxoy in #[#4642](https://github.com/gfx-rs/wgpu/pull/4642)
+  - Passing a naga module directly to `Device::create_shader_module`.
+  - `InstanceFlags::DEBUG` is enabled.
+
+#### DX12
+- Always use HLSL 2018 when using DXC to compile HLSL shaders. By @daxpedda in [#4629](https://github.com/gfx-rs/wgpu/pull/4629)
+
+#### Metal
+- In Metal Shading Language output, fix issue where local variables were sometimes using variable names from previous functions. By @DJMcNab in [#4594](https://github.com/gfx-rs/wgpu/pull/4594)
 
 ## v0.18.0 (2023-10-25)
+
+For naga changelogs at or before v0.14.0. See [naga's changelog](naga/CHANGELOG.md).
 
 ### Desktop OpenGL 3.3+ Support on Windows
 
@@ -236,6 +342,8 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Calls to lost devices now return `DeviceError::Lost` instead of `DeviceError::Invalid`. By @bradwerth in [#4238]([https://github.com/gfx-rs/wgpu/pull/4238])
 - Let the `"strict_asserts"` feature enable check that wgpu-core's lock-ordering tokens are unique per thread. By @jimblandy in [#4258]([https://github.com/gfx-rs/wgpu/pull/4258])
 - Allow filtering labels out before they are passed to GPU drivers by @nical in [https://github.com/gfx-rs/wgpu/pull/4246](4246)
+- `DeviceLostClosure` callback mechanism provided so user agents can resolve `GPUDevice.lost` Promises at the appropriate time by @bradwerth in [#4645](https://github.com/gfx-rs/wgpu/pull/4645)
+
 
 #### Vulkan
 
@@ -260,6 +368,8 @@ By @teoxoy in [#4185](https://github.com/gfx-rs/wgpu/pull/4185)
 - Fix `clear` texture views being leaked when `wgpu::SurfaceTexture` is dropped before it is presented. By @rajveermalviya in [#4057](https://github.com/gfx-rs/wgpu/pull/4057).
 - Add `Feature::SHADER_UNUSED_VERTEX_OUTPUT` to allow unused vertex shader outputs. By @Aaron1011 in [#4116](https://github.com/gfx-rs/wgpu/pull/4116).
 - Fix a panic in `surface_configure`. By @nical in [#4220](https://github.com/gfx-rs/wgpu/pull/4220) and [#4227](https://github.com/gfx-rs/wgpu/pull/4227)
+- Pipelines register their implicit layouts in error cases. By @bradwerth in [#4624](https://github.com/gfx-rs/wgpu/pull/4624)
+- Better handle explicit destruction of textures and buffers. By @nical in [#4657](https://github.com/gfx-rs/wgpu/pull/4657)
 
 #### Vulkan
 
@@ -1064,7 +1174,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 #### Vulkan
 
-- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
+- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
 - Update to Naga b209d911 (2022-9-1) to avoid generating SPIR-V that
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in

@@ -90,13 +90,17 @@ use std::{
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 
 use bitflags::bitflags;
+use parking_lot::Mutex;
 use thiserror::Error;
-use wgt::{WasmNotSend, WasmNotSync};
+use wgt::WasmNotSendSync;
 
+// - Vertex + Fragment
+// - Compute
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
@@ -197,25 +201,25 @@ pub trait Api: Clone + fmt::Debug + Sized {
 
     type Queue: Queue<Self>;
     type CommandEncoder: CommandEncoder<Self>;
-    type CommandBuffer: WasmNotSend + WasmNotSync + fmt::Debug;
+    type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
-    type Buffer: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
-    type Texture: fmt::Debug + WasmNotSend + WasmNotSync + 'static;
-    type SurfaceTexture: fmt::Debug + WasmNotSend + WasmNotSync + Borrow<Self::Texture>;
-    type TextureView: fmt::Debug + WasmNotSend + WasmNotSync;
-    type Sampler: fmt::Debug + WasmNotSend + WasmNotSync;
-    type QuerySet: fmt::Debug + WasmNotSend + WasmNotSync;
-    type Fence: fmt::Debug + WasmNotSend + WasmNotSync;
+    type Buffer: fmt::Debug + WasmNotSendSync + 'static;
+    type Texture: fmt::Debug + WasmNotSendSync + 'static;
+    type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
+    type TextureView: fmt::Debug + WasmNotSendSync;
+    type Sampler: fmt::Debug + WasmNotSendSync;
+    type QuerySet: fmt::Debug + WasmNotSendSync;
+    type Fence: fmt::Debug + WasmNotSendSync;
 
-    type BindGroupLayout: fmt::Debug + WasmNotSend + WasmNotSync;
-    type BindGroup: fmt::Debug + WasmNotSend + WasmNotSync;
-    type PipelineLayout: WasmNotSend + WasmNotSync;
-    type ShaderModule: fmt::Debug + WasmNotSend + WasmNotSync;
-    type RenderPipeline: WasmNotSend + WasmNotSync;
-    type ComputePipeline: WasmNotSend + WasmNotSync;
+    type BindGroupLayout: fmt::Debug + WasmNotSendSync;
+    type BindGroup: fmt::Debug + WasmNotSendSync;
+    type PipelineLayout: fmt::Debug + WasmNotSendSync;
+    type ShaderModule: fmt::Debug + WasmNotSendSync;
+    type RenderPipeline: fmt::Debug + WasmNotSendSync;
+    type ComputePipeline: fmt::Debug + WasmNotSendSync;
 }
 
-pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
+pub trait Instance<A: Api>: Sized + WasmNotSendSync {
     unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
@@ -226,7 +230,7 @@ pub trait Instance<A: Api>: Sized + WasmNotSend + WasmNotSync {
     unsafe fn enumerate_adapters(&self) -> Vec<ExposedAdapter<A>>;
 }
 
-pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Surface<A: Api>: WasmNotSendSync {
     /// Configures the surface to use the given device.
     ///
     /// # Safety
@@ -236,7 +240,7 @@ pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All surfaces created using other devices must have been unconfigured before this call.
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &A::Device,
         config: &SurfaceConfiguration,
     ) -> Result<(), SurfaceError>;
@@ -249,7 +253,7 @@ pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     /// - All [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - All [`Api::TextureView`]s derived from the [`AcquiredSurfaceTexture`]s must have been destroyed.
     /// - The surface must have been configured on the given device.
-    unsafe fn unconfigure(&mut self, device: &A::Device);
+    unsafe fn unconfigure(&self, device: &A::Device);
 
     /// Returns the next texture to be presented by the swapchain for drawing
     ///
@@ -262,13 +266,13 @@ pub trait Surface<A: Api>: WasmNotSend + WasmNotSync {
     ///
     /// Returns `None` on timing out.
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
-    unsafe fn discard_texture(&mut self, texture: A::SurfaceTexture);
+    unsafe fn discard_texture(&self, texture: A::SurfaceTexture);
 }
 
-pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Adapter<A: Api>: WasmNotSendSync {
     unsafe fn open(
         &self,
         features: wgt::Features,
@@ -292,7 +296,7 @@ pub trait Adapter<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
 }
 
-pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Device<A: Api>: WasmNotSendSync {
     /// Exit connection to this logical device.
     unsafe fn exit(self, queue: A::Queue);
     /// Creates a new buffer.
@@ -388,7 +392,7 @@ pub trait Device<A: Api>: WasmNotSend + WasmNotSync {
     unsafe fn stop_capture(&self);
 }
 
-pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
+pub trait Queue<A: Api>: WasmNotSendSync {
     /// Submits the command buffers for execution on GPU.
     ///
     /// Valid usage:
@@ -396,13 +400,13 @@ pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
     ///   that are associated with this queue.
     /// - all of the command buffers had `CommadBuffer::finish()` called.
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
-        &mut self,
-        surface: &mut A::Surface,
+        &self,
+        surface: &A::Surface,
         texture: A::SurfaceTexture,
     ) -> Result<(), SurfaceError>;
     unsafe fn get_timestamp_period(&self) -> f32;
@@ -412,7 +416,7 @@ pub trait Queue<A: Api>: WasmNotSend + WasmNotSync {
 /// Serves as a parent for all the encoded command buffers.
 /// Works in bursts of action: one or more command buffers are recorded,
 /// then submitted to a queue, and then it needs to be `reset_all()`.
-pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
+pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
     /// Begin encoding a new command buffer.
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
     /// Discard currently recorded list, if any.
@@ -500,11 +504,19 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
+    /// Sets a range in push constant data.
+    ///
+    /// IMPORTANT: while the data is passed as words, the offset is in bytes!
+    ///
+    /// # Safety
+    ///
+    /// - `offset_bytes` must be a multiple of 4.
+    /// - The range of push constants written must be valid for the pipeline layout at draw time.
     unsafe fn set_push_constants(
         &mut self,
         layout: &A::PipelineLayout,
         stages: wgt::ShaderStages,
-        offset: u32,
+        offset_bytes: u32,
         data: &[u32],
     );
 
@@ -554,17 +566,17 @@ pub trait CommandEncoder<A: Api>: WasmNotSend + WasmNotSync + fmt::Debug {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     );
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     );
     unsafe fn draw_indirect(
@@ -612,8 +624,8 @@ bitflags!(
     /// Pipeline layout creation flags.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
-        /// Include support for base vertex/instance drawing.
-        const BASE_VERTEX_INSTANCE = 1 << 0;
+        /// Include support for `first_vertex` / `first_instance` drawing.
+        const FIRST_VERTEX_INSTANCE = 1 << 0;
         /// Include support for num work groups builtin.
         const NUM_WORK_GROUPS = 1 << 1;
     }
@@ -1373,8 +1385,11 @@ pub struct ComputePassDescriptor<'a, A: Api> {
     pub timestamp_writes: Option<ComputePassTimestampWrites<'a, A>>,
 }
 
-/// Stores if any API validation error has occurred in this process
-/// since it was last reset.
+/// Stores the text of any validation errors that have occurred since
+/// the last call to `get_and_reset`.
+///
+/// Each value is a validation error and a message associated with it,
+/// or `None` if the error has no message from the api.
 ///
 /// This is used for internal wgpu testing only and _must not_ be used
 /// as a way to check for errors.
@@ -1385,24 +1400,24 @@ pub struct ComputePassDescriptor<'a, A: Api> {
 /// This prevents the issue of one validation error terminating the
 /// entire process.
 pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: AtomicBool::new(false),
+    inner: Mutex::new(Vec::new()),
 };
 
 /// Flag for internal testing.
 pub struct ValidationCanary {
-    inner: AtomicBool,
+    inner: Mutex<Vec<String>>,
 }
 
 impl ValidationCanary {
     #[allow(dead_code)] // in some configurations this function is dead
-    fn set(&self) {
-        self.inner.store(true, std::sync::atomic::Ordering::SeqCst);
+    fn add(&self, msg: String) {
+        self.inner.lock().push(msg);
     }
 
-    /// Returns true if any API validation error has occurred in this process
+    /// Returns any API validation errors that hav occurred in this process
     /// since the last call to this function.
-    pub fn get_and_reset(&self) -> bool {
-        self.inner.swap(false, std::sync::atomic::Ordering::SeqCst)
+    pub fn get_and_reset(&self) -> Vec<String> {
+        self.inner.lock().drain(..).collect()
     }
 }
 

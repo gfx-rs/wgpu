@@ -45,31 +45,22 @@ bitflags::bitflags! {
     /// should never panic.
     ///
     /// The default value for `ValidationFlags` is
-    /// `ValidationFlags::all()`. If Naga's `"validate"` feature is
-    /// enabled, this requests full validation; otherwise, this
-    /// requests no validation. (The `"validate"` feature is disabled
-    /// by default.)
+    /// `ValidationFlags::all()`.
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct ValidationFlags: u8 {
         /// Expressions.
-        #[cfg(feature = "validate")]
         const EXPRESSIONS = 0x1;
         /// Statements and blocks of them.
-        #[cfg(feature = "validate")]
         const BLOCKS = 0x2;
         /// Uniformity of control flow for operations that require it.
-        #[cfg(feature = "validate")]
         const CONTROL_FLOW_UNIFORMITY = 0x4;
         /// Host-shareable structure layouts.
-        #[cfg(feature = "validate")]
         const STRUCT_LAYOUTS = 0x8;
         /// Constants.
-        #[cfg(feature = "validate")]
         const CONSTANTS = 0x10;
         /// Group, binding, and location attributes.
-        #[cfg(feature = "validate")]
         const BINDINGS = 0x20;
     }
 }
@@ -237,7 +228,6 @@ pub enum ValidationError {
 }
 
 impl crate::TypeInner {
-    #[cfg(feature = "validate")]
     const fn is_sized(&self) -> bool {
         match *self {
             Self::Scalar { .. }
@@ -261,22 +251,27 @@ impl crate::TypeInner {
     }
 
     /// Return the `ImageDimension` for which `self` is an appropriate coordinate.
-    #[cfg(feature = "validate")]
     const fn image_storage_coordinates(&self) -> Option<crate::ImageDimension> {
         match *self {
-            Self::Scalar {
+            Self::Scalar(crate::Scalar {
                 kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
                 ..
-            } => Some(crate::ImageDimension::D1),
+            }) => Some(crate::ImageDimension::D1),
             Self::Vector {
                 size: crate::VectorSize::Bi,
-                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                ..
+                scalar:
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        ..
+                    },
             } => Some(crate::ImageDimension::D2),
             Self::Vector {
                 size: crate::VectorSize::Tri,
-                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                ..
+                scalar:
+                    crate::Scalar {
+                        kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                        ..
+                    },
             } => Some(crate::ImageDimension::D3),
             _ => None,
         }
@@ -310,7 +305,6 @@ impl Validator {
         self.valid_expression_set.clear();
     }
 
-    #[cfg(feature = "validate")]
     fn validate_constant(
         &self,
         handle: Handle<crate::Constant>,
@@ -341,7 +335,6 @@ impl Validator {
         self.reset();
         self.reset_types(module.types.len());
 
-        #[cfg(feature = "validate")]
         Self::validate_module_handles(module).map_err(|e| e.with_span())?;
 
         self.layouter.update(module.to_ctx()).map_err(|e| {
@@ -349,10 +342,11 @@ impl Validator {
             ValidationError::from(e).with_span_handle(handle, &module.types)
         })?;
 
-        let placeholder = TypeResolution::Value(crate::TypeInner::Scalar {
+        // These should all get overwritten.
+        let placeholder = TypeResolution::Value(crate::TypeInner::Scalar(crate::Scalar {
             kind: crate::ScalarKind::Bool,
             width: 0,
-        });
+        }));
 
         let mut mod_info = ModuleInfo {
             type_flags: Vec::with_capacity(module.types.len()),
@@ -390,7 +384,6 @@ impl Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         if self.flags.contains(ValidationFlags::CONSTANTS) {
             for (handle, _) in module.const_expressions.iter() {
                 self.validate_const_expression(handle, module.to_ctx(), &mod_info)
@@ -413,7 +406,6 @@ impl Validator {
             }
         }
 
-        #[cfg(feature = "validate")]
         for (var_handle, var) in module.global_variables.iter() {
             self.validate_global_var(var, module.to_ctx(), &mod_info)
                 .map_err(|source| {
@@ -472,7 +464,6 @@ impl Validator {
     }
 }
 
-#[cfg(feature = "validate")]
 fn validate_atomic_compare_exchange_struct(
     types: &crate::UniqueArena<crate::Type>,
     members: &[crate::StructMember],
@@ -482,9 +473,5 @@ fn validate_atomic_compare_exchange_struct(
         && members[0].name.as_deref() == Some("old_value")
         && scalar_predicate(&types[members[0].ty].inner)
         && members[1].name.as_deref() == Some("exchanged")
-        && types[members[1].ty].inner
-            == crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Bool,
-                width: crate::BOOL_WIDTH,
-            }
+        && types[members[1].ty].inner == crate::TypeInner::Scalar(crate::Scalar::BOOL)
 }

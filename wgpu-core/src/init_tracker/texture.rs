@@ -1,7 +1,7 @@
 use super::{InitTracker, MemoryInitKind};
-use crate::{id::TextureId, track::TextureSelector};
+use crate::{hal_api::HalApi, resource::Texture, track::TextureSelector};
 use arrayvec::ArrayVec;
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub(crate) struct TextureInitRange {
@@ -35,8 +35,8 @@ impl From<TextureSelector> for TextureInitRange {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TextureInitTrackerAction {
-    pub(crate) id: TextureId,
+pub(crate) struct TextureInitTrackerAction<A: HalApi> {
+    pub(crate) texture: Arc<Texture<A>>,
     pub(crate) range: TextureInitRange,
     pub(crate) kind: MemoryInitKind,
 }
@@ -57,10 +57,10 @@ impl TextureInitTracker {
         }
     }
 
-    pub(crate) fn check_action(
+    pub(crate) fn check_action<A: HalApi>(
         &self,
-        action: &TextureInitTrackerAction,
-    ) -> Option<TextureInitTrackerAction> {
+        action: &TextureInitTrackerAction<A>,
+    ) -> Option<TextureInitTrackerAction<A>> {
         let mut mip_range_start = std::usize::MAX;
         let mut mip_range_end = std::usize::MIN;
         let mut layer_range_start = std::u32::MAX;
@@ -85,7 +85,7 @@ impl TextureInitTracker {
 
         if mip_range_start < mip_range_end && layer_range_start < layer_range_end {
             Some(TextureInitTrackerAction {
-                id: action.id,
+                texture: action.texture.clone(),
                 range: TextureInitRange {
                     mip_range: mip_range_start as u32..mip_range_end as u32,
                     layer_range: layer_range_start..layer_range_end,

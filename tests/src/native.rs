@@ -77,10 +77,12 @@ pub fn main() -> MainResult {
 
     use crate::report::GpuReport;
 
-    let config_text =
+    let config_text = {
+        profiling::scope!("Reading .gpuconfig");
         &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
-            .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?;
-    let report = GpuReport::from_json(config_text).context("Could not pare .gpuconfig JSON")?;
+            .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?
+    };
+    let report = GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
 
     let mut test_guard = TEST_LIST.lock();
     execute_native(test_guard.drain(..).flat_map(|test| {
@@ -98,7 +100,10 @@ pub fn main() -> MainResult {
 
 fn execute_native(tests: impl IntoIterator<Item = NativeTest>) {
     let args = libtest_mimic::Arguments::from_args();
-    let trials = tests.into_iter().map(NativeTest::into_trial).collect();
+    let trials = {
+        profiling::scope!("collecting tests");
+        tests.into_iter().map(NativeTest::into_trial).collect()
+    };
 
     libtest_mimic::run(&args, trials).exit_if_failed();
 }

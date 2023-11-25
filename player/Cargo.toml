@@ -10,6 +10,16 @@ keywords.workspace = true
 license.workspace = true
 publish = false
 
+[lib]
+name = "player"
+path = "src/lib.rs"
+test = false
+
+[[bin]]
+name = "play"
+path = "src/bin/play.rs"
+test = false
+
 [dependencies]
 env_logger.workspace = true
 log.workspace = true

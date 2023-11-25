@@ -1,6 +1,7 @@
 use super::{number::consume_number, Error, ExpectedToken};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::{conv, Number};
+use crate::front::wgsl::Scalar;
 use crate::Span;
 
 type TokenSpan<'a> = (Token<'a>, Span);
@@ -374,9 +375,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
-    pub(in crate::front::wgsl) fn next_scalar_generic(
-        &mut self,
-    ) -> Result<(crate::ScalarKind, crate::Bytes), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<Scalar, Error<'a>> {
         self.expect_generic_paren('<')?;
         let pair = match self.next() {
             (Token::Word(word), span) => {
@@ -393,11 +392,11 @@ impl<'a> Lexer<'a> {
     /// Returns the span covering the inner type, excluding the brackets.
     pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
         &mut self,
-    ) -> Result<(crate::ScalarKind, crate::Bytes, Span), Error<'a>> {
+    ) -> Result<(Scalar, Span), Error<'a>> {
         self.expect_generic_paren('<')?;
         let pair = match self.next() {
             (Token::Word(word), span) => conv::get_scalar_type(word)
-                .map(|(a, b)| (a, b, span))
+                .map(|scalar| (scalar, span))
                 .ok_or(Error::UnknownScalarType(span)),
             (_, span) => Err(Error::UnknownScalarType(span)),
         }?;
@@ -449,6 +448,7 @@ impl<'a> Lexer<'a> {
 }
 
 #[cfg(test)]
+#[track_caller]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
@@ -626,6 +626,22 @@ fn test_numbers() {
 }
 
 #[test]
+fn double_floats() {
+    sub_test(
+        "0x1.2p4lf 0x1p8lf 0.0625lf 625e-4lf 10lf 10l",
+        &[
+            Token::Number(Ok(Number::F64(18.0))),
+            Token::Number(Ok(Number::F64(256.0))),
+            Token::Number(Ok(Number::F64(0.0625))),
+            Token::Number(Ok(Number::F64(0.0625))),
+            Token::Number(Ok(Number::F64(10.0))),
+            Token::Number(Ok(Number::I32(10))),
+            Token::Word("l"),
+        ],
+    )
+}
+
+#[test]
 fn test_tokens() {
     sub_test("id123_OK", &[Token::Word("id123_OK")]);
     sub_test(
@@ -675,6 +691,24 @@ fn test_tokens() {
             Token::Operation('/'),
         ],
     );
+
+    // Type suffixes are only allowed on hex float literals
+    // if you provided an exponent.
+    sub_test(
+        "0x1.2f 0x1.2f 0x1.2h 0x1.2H 0x1.2lf",
+        &[
+            // The 'f' suffixes are taken as a hex digit:
+            // the fractional part is 0x2f / 256.
+            Token::Number(Ok(Number::F32(1.0 + 0x2f as f32 / 256.0))),
+            Token::Number(Ok(Number::F32(1.0 + 0x2f as f32 / 256.0))),
+            Token::Number(Ok(Number::F32(1.125))),
+            Token::Word("h"),
+            Token::Number(Ok(Number::F32(1.125))),
+            Token::Word("H"),
+            Token::Number(Ok(Number::F32(1.125))),
+            Token::Word("lf"),
+        ],
+    )
 }
 
 #[test]

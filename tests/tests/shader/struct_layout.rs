@@ -99,7 +99,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 }
             }
 
-            // https://github.com/gfx-rs/naga/issues/1785
+            // https://github.com/gfx-rs/wgpu/issues/4371
             let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
                 Backends::GL
             } else {
@@ -171,6 +171,51 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
         }
     }
 
+    // Nested struct and array test.
+    //
+    // This tries to exploit all the weird edge cases of the struct layout algorithm.
+    {
+        let header =
+            String::from("struct Inner { scalar: f32, member: array<vec3<f32>, 2>, scalar2: f32 }");
+        let members = String::from("inner: Inner, scalar3: f32, vector: vec3<f32>, scalar4: f32");
+        let direct = String::from(
+            "\
+            output[0] = bitcast<u32>(input.inner.scalar);
+            output[1] = bitcast<u32>(input.inner.member[0].x);
+            output[2] = bitcast<u32>(input.inner.member[0].y);
+            output[3] = bitcast<u32>(input.inner.member[0].z);
+            output[4] = bitcast<u32>(input.inner.member[1].x);
+            output[5] = bitcast<u32>(input.inner.member[1].y);
+            output[6] = bitcast<u32>(input.inner.member[1].z);
+            output[7] = bitcast<u32>(input.inner.scalar2);
+            output[8] = bitcast<u32>(input.scalar3);
+            output[9] = bitcast<u32>(input.vector.x);
+            output[10] = bitcast<u32>(input.vector.y);
+            output[11] = bitcast<u32>(input.vector.z);
+            output[12] = bitcast<u32>(input.scalar4);
+        ",
+        );
+
+        tests.push(
+            ShaderTest::new(
+                String::from("nested struct and array"),
+                members,
+                direct,
+                &input_values,
+                &[
+                    0, // inner.scalar
+                    4, 5, 6, // inner.member[0]
+                    8, 9, 10, // inner.member[1]
+                    12, // scalar2
+                    16, // scalar3
+                    20, 21, 22, // vector
+                    23, // scalar4
+                ],
+            )
+            .header(header),
+        );
+    }
+
     tests
 }
 
@@ -179,8 +224,11 @@ static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/naga/issues/2034
-            .expect_fail(FailureCase::backend(wgpu::Backends::VULKAN))
+            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/wgpu/issues/4371
+            .expect_fail(
+                FailureCase::backend(wgpu::Backends::VULKAN)
+                    .validation_error("a matrix with stride 8 not satisfying alignment to 16"),
+            )
             .limits(Limits::downlevel_defaults()),
     )
     .run_sync(|ctx| {
@@ -215,8 +263,7 @@ static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(Limits {
                 max_push_constant_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
-            })
-            .expect_fail(FailureCase::backend(Backends::GL)),
+            }),
     )
     .run_sync(|ctx| {
         shader_input_output_test(

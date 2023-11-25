@@ -1,6 +1,6 @@
 struct NagaConstants {
-    int base_vertex;
-    int base_instance;
+    int first_vertex;
+    int first_instance;
     uint other;
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
@@ -48,7 +48,7 @@ VertexOutput ConstructVertexOutput(float4 arg0, float arg1) {
 
 VertexOutput_vertex vertex(uint vertex_index : SV_VertexID, uint instance_index : SV_InstanceID, uint color : LOC10)
 {
-    uint tmp = (((_NagaConstants.base_vertex + vertex_index) + (_NagaConstants.base_instance + instance_index)) + color);
+    uint tmp = (((_NagaConstants.first_vertex + vertex_index) + (_NagaConstants.first_instance + instance_index)) + color);
     const VertexOutput vertexoutput = ConstructVertexOutput((1.0).xxxx, float(tmp));
     const VertexOutput_vertex vertexoutput_1 = { vertexoutput._varying, vertexoutput.position };
     return vertexoutput_1;
@@ -81,7 +81,7 @@ void compute(uint3 global_id : SV_DispatchThreadID, uint3 local_id : SV_GroupThr
         output = (uint[1])0;
     }
     GroupMemoryBarrierWithGroupSync();
-    output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.base_vertex, _NagaConstants.base_instance, _NagaConstants.other).x);
+    output[0] = ((((global_id.x + local_id.x) + local_index) + wg_id.x) + uint3(_NagaConstants.first_vertex, _NagaConstants.first_instance, _NagaConstants.other).x);
     return;
 }
 
@@ -90,5 +90,5 @@ precise float4 vertex_two_structs(Input1_ in1_, Input2_ in2_) : SV_Position
     uint index = 2u;
 
     uint _expr8 = index;
-    return float4(float((_NagaConstants.base_vertex + in1_.index)), float((_NagaConstants.base_instance + in2_.index)), float(_expr8), 0.0);
+    return float4(float((_NagaConstants.first_vertex + in1_.index)), float((_NagaConstants.first_instance + in2_.index)), float(_expr8), 0.0);
 }

@@ -61,6 +61,11 @@ void compose_of_constant(
     metal::int4 out_5 = metal::int4(-4, -4, -4, -4);
 }
 
+void compose_of_splat(
+) {
+    metal::float4 x_1 = metal::float4(2.0, 1.0, 1.0, 1.0);
+}
+
 uint map_texture_kind(
     int texture_kind
 ) {
@@ -88,5 +93,6 @@ kernel void main_(
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    compose_of_splat();
     return;
 }

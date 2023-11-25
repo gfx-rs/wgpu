@@ -1,3 +1,5 @@
+{{header}}
+
 struct CustomStruct {
     {{input_members}}
 }

@@ -2,21 +2,23 @@ use crate::{
     binding_model,
     hal_api::HalApi,
     hub::Hub,
-    id,
+    id::{self},
     identity::{GlobalIdentityHandlerFactory, Input},
     resource::{Buffer, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation},
-    Label, DOWNLEVEL_ERROR_MESSAGE,
+    resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
 use hal::Device as _;
 use smallvec::SmallVec;
+use std::os::raw::c_char;
 use thiserror::Error;
-use wgt::{BufferAddress, TextureFormat};
+use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
 
 use std::{iter, num::NonZeroU32, ptr};
 
+pub mod any_device;
 pub mod global;
 mod life;
 pub mod queue;
@@ -169,12 +171,15 @@ pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
+    pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
 
 impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
         self.submissions.extend(other.submissions);
+        self.device_lost_invocations
+            .extend(other.device_lost_invocations);
     }
 
     fn fire(self) {
@@ -183,33 +188,120 @@ impl UserClosures {
 
         // Mappings _must_ be fired before submissions, as the spec requires all mapping callbacks that are registered before
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
-        for (operation, status) in self.mappings {
-            operation.callback.call(status);
+        for (mut operation, status) in self.mappings {
+            if let Some(callback) = operation.callback.take() {
+                callback.call(status);
+            }
         }
         for closure in self.submissions {
             closure.call();
         }
+        for invocation in self.device_lost_invocations {
+            invocation
+                .closure
+                .call(invocation.reason, invocation.message);
+        }
     }
 }
 
-fn map_buffer<A: hal::Api>(
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + Send + 'static>;
+#[cfg(not(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+)))]
+pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static>;
+
+#[repr(C)]
+pub struct DeviceLostClosureC {
+    pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
+    pub user_data: *mut u8,
+}
+
+#[cfg(any(
+    not(target_arch = "wasm32"),
+    all(
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
+    )
+))]
+unsafe impl Send for DeviceLostClosureC {}
+
+pub struct DeviceLostClosure {
+    // We wrap this so creating the enum in the C variant can be unsafe,
+    // allowing our call function to be safe.
+    inner: DeviceLostClosureInner,
+}
+
+pub struct DeviceLostInvocation {
+    closure: DeviceLostClosure,
+    reason: DeviceLostReason,
+    message: String,
+}
+
+enum DeviceLostClosureInner {
+    Rust { callback: DeviceLostCallback },
+    C { inner: DeviceLostClosureC },
+}
+
+impl DeviceLostClosure {
+    pub fn from_rust(callback: DeviceLostCallback) -> Self {
+        Self {
+            inner: DeviceLostClosureInner::Rust { callback },
+        }
+    }
+
+    /// # Safety
+    ///
+    /// - The callback pointer must be valid to call with the provided `user_data`
+    ///   pointer.
+    ///
+    /// - Both pointers must point to `'static` data, as the callback may happen at
+    ///   an unspecified time.
+    pub unsafe fn from_c(inner: DeviceLostClosureC) -> Self {
+        Self {
+            inner: DeviceLostClosureInner::C { inner },
+        }
+    }
+
+    pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
+        match self.inner {
+            DeviceLostClosureInner::Rust { callback } => callback(reason, message),
+            // SAFETY: the contract of the call to from_c says that this unsafe is sound.
+            DeviceLostClosureInner::C { inner } => unsafe {
+                // Ensure message is structured as a null-terminated C string. It only
+                // needs to live as long as the callback invocation.
+                let message = std::ffi::CString::new(message).unwrap();
+                (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
+            },
+        }
+    }
+}
+
+fn map_buffer<A: HalApi>(
     raw: &A::Device,
-    buffer: &mut Buffer<A>,
+    buffer: &Buffer<A>,
     offset: BufferAddress,
     size: BufferAddress,
     kind: HostMap,
 ) -> Result<ptr::NonNull<u8>, BufferAccessError> {
     let mapping = unsafe {
-        raw.map_buffer(buffer.raw.as_ref().unwrap(), offset..offset + size)
+        raw.map_buffer(buffer.raw(), offset..offset + size)
             .map_err(DeviceError::from)?
     };
 
-    buffer.sync_mapped_writes = match kind {
+    *buffer.sync_mapped_writes.lock() = match kind {
         HostMap::Read if !mapping.is_coherent => unsafe {
-            raw.invalidate_mapped_ranges(
-                buffer.raw.as_ref().unwrap(),
-                iter::once(offset..offset + size),
-            );
+            raw.invalidate_mapped_ranges(buffer.raw(), iter::once(offset..offset + size));
             None
         },
         HostMap::Write if !mapping.is_coherent => Some(offset..offset + size),
@@ -233,10 +325,15 @@ fn map_buffer<A: hal::Api>(
     // reasonable way as all data is pushed to GPU anyways.
 
     // No need to flush if it is flushed later anyways.
-    let zero_init_needs_flush_now = mapping.is_coherent && buffer.sync_mapped_writes.is_none();
+    let zero_init_needs_flush_now =
+        mapping.is_coherent && buffer.sync_mapped_writes.lock().is_none();
     let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
-    for uninitialized in buffer.initialization_status.drain(offset..(size + offset)) {
+    for uninitialized in buffer
+        .initialization_status
+        .write()
+        .drain(offset..(size + offset))
+    {
         // The mapping's pointer is already offset, however we track the
         // uninitialized range relative to the buffer's start.
         let fill_range =
@@ -244,20 +341,18 @@ fn map_buffer<A: hal::Api>(
         mapped[fill_range].fill(0);
 
         if zero_init_needs_flush_now {
-            unsafe {
-                raw.flush_mapped_ranges(buffer.raw.as_ref().unwrap(), iter::once(uninitialized))
-            };
+            unsafe { raw.flush_mapped_ranges(buffer.raw(), iter::once(uninitialized)) };
         }
     }
 
     Ok(mapping.ptr)
 }
 
-struct CommandAllocator<A: hal::Api> {
+pub(crate) struct CommandAllocator<A: HalApi> {
     free_encoders: Vec<A::CommandEncoder>,
 }
 
-impl<A: hal::Api> CommandAllocator<A> {
+impl<A: HalApi> CommandAllocator<A> {
     fn acquire_encoder(
         &mut self,
         device: &A::Device,
@@ -277,7 +372,10 @@ impl<A: hal::Api> CommandAllocator<A> {
     }
 
     fn dispose(self, device: &A::Device) {
-        log::info!("Destroying {} command encoders", self.free_encoders.len());
+        resource_log!(
+            "CommandAllocator::dispose encoders {}",
+            self.free_encoders.len()
+        );
         for cmd_encoder in self.free_encoders {
             unsafe {
                 device.destroy_command_encoder(cmd_encoder);
@@ -291,6 +389,7 @@ impl<A: hal::Api> CommandAllocator<A> {
 pub struct InvalidDevice;
 
 #[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum DeviceError {
     #[error("Parent device is invalid.")]
     Invalid,
@@ -300,6 +399,8 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Creation of a resource failed for a reason other than running out of memory.")]
     ResourceCreationFailed,
+    #[error("QueueId is invalid")]
+    InvalidQueueId,
     #[error("Attempt to use a resource with a different device from the one that created it")]
     WrongDevice,
 }
@@ -339,13 +440,13 @@ pub struct ImplicitPipelineIds<'a, G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> ImplicitPipelineIds<'_, G> {
-    fn prepare<A: HalApi>(self, hub: &Hub<A, G>) -> ImplicitPipelineContext {
+    fn prepare<A: HalApi>(self, hub: &Hub<A>) -> ImplicitPipelineContext {
         ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(self.root_id).into_id(),
+            root_id: hub.pipeline_layouts.prepare::<G>(self.root_id).into_id(),
             group_ids: self
                 .group_ids
                 .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(id_in.clone()).into_id())
+                .map(|id_in| hub.bind_group_layouts.prepare::<G>(*id_in).into_id())
                 .collect(),
         }
     }

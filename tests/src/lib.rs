@@ -1,6 +1,7 @@
 //! Test utilities for the wgpu repository.
 
 mod config;
+mod expectations;
 pub mod image;
 mod init;
 mod isolation;
@@ -16,8 +17,9 @@ pub use self::image::ComparisonType;
 pub use config::GpuTestConfiguration;
 #[doc(hidden)]
 pub use ctor::ctor;
+pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
 pub use init::{initialize_adapter, initialize_device, initialize_instance};
-pub use params::{FailureCase, FailureReasons, TestParameters};
+pub use params::TestParameters;
 pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 

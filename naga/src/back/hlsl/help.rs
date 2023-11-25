@@ -133,7 +133,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             }
             crate::ImageClass::Sampled { kind, multi } => {
                 let multi_str = if multi { "MS" } else { "" };
-                let scalar_kind_str = kind.to_hlsl_str(4)?;
+                let scalar_kind_str = crate::Scalar { kind, width: 4 }.to_hlsl_str()?;
                 write!(self.out, "{multi_str}<{scalar_kind_str}4>")?
             }
             crate::ImageClass::Storage { format, .. } => {
@@ -656,11 +656,9 @@ impl<'a, W: Write> super::Writer<'a, W> {
             _ => unreachable!(),
         };
         let vec_ty = match module.types[member.ty].inner {
-            crate::TypeInner::Matrix { rows, width, .. } => crate::TypeInner::Vector {
-                size: rows,
-                kind: crate::ScalarKind::Float,
-                width,
-            },
+            crate::TypeInner::Matrix { rows, scalar, .. } => {
+                crate::TypeInner::Vector { size: rows, scalar }
+            }
             _ => unreachable!(),
         };
         self.write_value_type(module, &vec_ty)?;
@@ -737,10 +735,7 @@ impl<'a, W: Write> super::Writer<'a, W> {
             _ => unreachable!(),
         };
         let scalar_ty = match module.types[member.ty].inner {
-            crate::TypeInner::Matrix { width, .. } => crate::TypeInner::Scalar {
-                kind: crate::ScalarKind::Float,
-                width,
-            },
+            crate::TypeInner::Matrix { scalar, .. } => crate::TypeInner::Scalar(scalar),
             _ => unreachable!(),
         };
         self.write_value_type(module, &scalar_ty)?;

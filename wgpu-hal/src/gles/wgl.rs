@@ -4,7 +4,7 @@ use glutin_wgl_sys::wgl_extra::{
     CONTEXT_PROFILE_MASK_ARB,
 };
 use once_cell::sync::Lazy;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use std::{
     collections::HashSet,
@@ -13,7 +13,11 @@ use std::{
     mem,
     os::raw::c_int,
     ptr,
-    sync::Arc,
+    sync::{
+        mpsc::{sync_channel, SyncSender},
+        Arc,
+    },
+    thread,
     time::Duration,
 };
 use wgt::InstanceFlags;
@@ -31,8 +35,8 @@ use winapi::{
             PIXELFORMATDESCRIPTOR,
         },
         winuser::{
-            CreateWindowExA, DefWindowProcA, GetDC, RegisterClassExA, ReleaseDC, CS_OWNDC,
-            WNDCLASSEXA,
+            CreateWindowExA, DefWindowProcA, DestroyWindow, GetDC, RegisterClassExA, ReleaseDC,
+            CS_OWNDC, WNDCLASSEXA,
         },
     },
 };
@@ -69,7 +73,7 @@ impl AdapterContext {
             .try_lock_for(Duration::from_secs(CONTEXT_LOCK_TIMEOUT_SECS))
             .expect("Could not lock adapter context. This is most-likely a deadlock.");
 
-        inner.context.make_current(inner.device).unwrap();
+        inner.context.make_current(inner.device.dc).unwrap();
 
         AdapterContextLock { inner }
     }
@@ -134,7 +138,7 @@ unsafe impl Sync for WglContext {}
 
 struct Inner {
     gl: glow::Context,
-    device: HDC,
+    device: InstanceDevice,
     context: WglContext,
 }
 
@@ -219,7 +223,7 @@ unsafe fn setup_pixel_format(dc: HDC) -> Result<(), crate::InstanceError> {
     Ok(())
 }
 
-fn create_global_device_context() -> Result<HDC, crate::InstanceError> {
+fn create_global_window_class() -> Result<CString, crate::InstanceError> {
     let instance = unsafe { GetModuleHandleA(ptr::null()) };
     if instance.is_null() {
         return Err(crate::InstanceError::with_source(
@@ -269,58 +273,137 @@ fn create_global_device_context() -> Result<HDC, crate::InstanceError> {
         ));
     }
 
-    // Create a hidden window since we don't pass `WS_VISIBLE`.
-    let window = unsafe {
-        CreateWindowExA(
-            0,
-            name.as_ptr(),
-            name.as_ptr(),
-            0,
-            0,
-            0,
-            1,
-            1,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            instance,
-            ptr::null_mut(),
-        )
-    };
-    if window.is_null() {
-        return Err(crate::InstanceError::with_source(
-            String::from("unable to create hidden instance window"),
-            Error::last_os_error(),
-        ));
-    }
-    let dc = unsafe { GetDC(window) };
-    if dc.is_null() {
-        return Err(crate::InstanceError::with_source(
-            String::from("unable to create memory device"),
-            Error::last_os_error(),
-        ));
-    }
-    unsafe { setup_pixel_format(dc)? };
+    // We intentionally leak the window class as we only need one per process.
 
-    // We intentionally leak the window class, window and device context handle to avoid
-    // spawning a thread to destroy them. We cannot use `DestroyWindow` and `ReleaseDC` on
-    // different threads.
-
-    Ok(dc)
+    Ok(name)
 }
 
-fn get_global_device_context() -> Result<HDC, crate::InstanceError> {
+fn get_global_window_class() -> Result<CString, crate::InstanceError> {
+    static GLOBAL: Lazy<Result<CString, crate::InstanceError>> =
+        Lazy::new(create_global_window_class);
+    GLOBAL.clone()
+}
+
+struct InstanceDevice {
+    dc: HDC,
+
+    /// This is used to keep the thread owning `dc` alive until this struct is dropped.
+    _tx: SyncSender<()>,
+}
+
+fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
     #[derive(Clone, Copy)]
     struct SendDc(HDC);
     unsafe impl Sync for SendDc {}
     unsafe impl Send for SendDc {}
 
-    static GLOBAL: Lazy<Result<SendDc, crate::InstanceError>> =
-        Lazy::new(|| create_global_device_context().map(SendDc));
-    GLOBAL.clone().map(|dc| dc.0)
+    struct Window {
+        window: HWND,
+    }
+    impl Drop for Window {
+        fn drop(&mut self) {
+            unsafe {
+                if DestroyWindow(self.window) == FALSE {
+                    log::error!("failed to destroy window {}", Error::last_os_error());
+                }
+            };
+        }
+    }
+    struct DeviceContextHandle {
+        dc: HDC,
+        window: HWND,
+    }
+    impl Drop for DeviceContextHandle {
+        fn drop(&mut self) {
+            unsafe {
+                ReleaseDC(self.window, self.dc);
+            };
+        }
+    }
+
+    let window_class = get_global_window_class()?;
+
+    let (drop_tx, drop_rx) = sync_channel(0);
+    let (setup_tx, setup_rx) = sync_channel(0);
+
+    // We spawn a thread which owns the hidden window for this instance.
+    thread::Builder::new()
+        .stack_size(256 * 1024)
+        .name("wgpu-hal WGL Instance Thread".to_owned())
+        .spawn(move || {
+            let setup = (|| {
+                let instance = unsafe { GetModuleHandleA(ptr::null()) };
+                if instance.is_null() {
+                    return Err(crate::InstanceError::with_source(
+                        String::from("unable to get executable instance"),
+                        Error::last_os_error(),
+                    ));
+                }
+
+                // Create a hidden window since we don't pass `WS_VISIBLE`.
+                let window = unsafe {
+                    CreateWindowExA(
+                        0,
+                        window_class.as_ptr(),
+                        window_class.as_ptr(),
+                        0,
+                        0,
+                        0,
+                        1,
+                        1,
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                        instance,
+                        ptr::null_mut(),
+                    )
+                };
+                if window.is_null() {
+                    return Err(crate::InstanceError::with_source(
+                        String::from("unable to create hidden instance window"),
+                        Error::last_os_error(),
+                    ));
+                }
+                let window = Window { window };
+
+                let dc = unsafe { GetDC(window.window) };
+                if dc.is_null() {
+                    return Err(crate::InstanceError::with_source(
+                        String::from("unable to create memory device"),
+                        Error::last_os_error(),
+                    ));
+                }
+                let dc = DeviceContextHandle {
+                    dc,
+                    window: window.window,
+                };
+                unsafe { setup_pixel_format(dc.dc)? };
+
+                Ok((window, dc))
+            })();
+
+            match setup {
+                Ok((_window, dc)) => {
+                    setup_tx.send(Ok(SendDc(dc.dc))).unwrap();
+                    // Wait for the shutdown event to free the window and device context handle.
+                    drop_rx.recv().ok();
+                }
+                Err(err) => {
+                    setup_tx.send(Err(err)).unwrap();
+                }
+            }
+        })
+        .map_err(|e| {
+            crate::InstanceError::with_source(String::from("unable to create instance thread"), e)
+        })?;
+
+    let dc = setup_rx.recv().unwrap()?.0;
+
+    Ok(InstanceDevice { dc, _tx: drop_tx })
 }
 
 impl crate::Instance<super::Api> for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        profiling::scope!("Init OpenGL (WGL) Backend");
         let opengl_module = unsafe { LoadLibraryA("opengl32.dll\0".as_ptr() as *const _) };
         if opengl_module.is_null() {
             return Err(crate::InstanceError::with_source(
@@ -329,7 +412,8 @@ impl crate::Instance<super::Api> for Instance {
             ));
         }
 
-        let dc = get_global_device_context()?;
+        let device = create_instance_device()?;
+        let dc = device.dc;
 
         let context = unsafe { wglCreateContext(dc) };
         if context.is_null() {
@@ -419,7 +503,7 @@ impl crate::Instance<super::Api> for Instance {
 
         Ok(Instance {
             inner: Arc::new(Mutex::new(Inner {
-                device: dc,
+                device,
                 gl,
                 context,
             })),
@@ -443,7 +527,7 @@ impl crate::Instance<super::Api> for Instance {
         Ok(Surface {
             window: window.hwnd.get() as *mut _,
             presentable: true,
-            swapchain: None,
+            swapchain: RwLock::new(None),
             srgb_capable: self.srgb_capable,
         })
     }
@@ -489,7 +573,7 @@ pub struct Swapchain {
 pub struct Surface {
     window: HWND,
     pub(super) presentable: bool,
-    swapchain: Option<Swapchain>,
+    swapchain: RwLock<Option<Swapchain>>,
     srgb_capable: bool,
 }
 
@@ -498,11 +582,12 @@ unsafe impl Sync for Surface {}
 
 impl Surface {
     pub(super) unsafe fn present(
-        &mut self,
+        &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let dc = unsafe { GetDC(self.window) };
         if dc.is_null() {
             log::error!(
@@ -578,7 +663,7 @@ impl Surface {
 
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -672,7 +757,7 @@ impl crate::Surface<super::Api> for Surface {
             return Err(crate::SurfaceError::Other("unable to set swap interval"));
         }
 
-        self.swapchain = Some(Swapchain {
+        self.swapchain.write().replace(Swapchain {
             renderbuffer,
             framebuffer,
             extent: config.extent,
@@ -684,9 +769,9 @@ impl crate::Surface<super::Api> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
+    unsafe fn unconfigure(&self, device: &super::Device) {
         let gl = &device.shared.context.lock();
-        if let Some(sc) = self.swapchain.take() {
+        if let Some(sc) = self.swapchain.write().take() {
             unsafe {
                 gl.delete_renderbuffer(sc.renderbuffer);
                 gl.delete_framebuffer(sc.framebuffer)
@@ -695,10 +780,11 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: sc.renderbuffer,
@@ -719,5 +805,5 @@ impl crate::Surface<super::Api> for Surface {
             suboptimal: false,
         }))
     }
-    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
+    unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

@@ -2,10 +2,10 @@
     types: [
         (
             name: None,
-            inner: Scalar(
+            inner: Scalar((
                 kind: Uint,
                 width: 4,
-            ),
+            )),
         ),
         (
             name: None,
@@ -33,8 +33,10 @@
             name: None,
             inner: Vector(
                 size: Tri,
-                kind: Uint,
-                width: 4,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
             ),
         ),
     ],

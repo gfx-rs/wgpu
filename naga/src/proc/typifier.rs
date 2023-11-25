@@ -119,27 +119,25 @@ impl Clone for TypeResolution {
         match *self {
             Self::Handle(handle) => Self::Handle(handle),
             Self::Value(ref v) => Self::Value(match *v {
-                Ti::Scalar { kind, width } => Ti::Scalar { kind, width },
-                Ti::Vector { size, kind, width } => Ti::Vector { size, kind, width },
+                Ti::Scalar(scalar) => Ti::Scalar(scalar),
+                Ti::Vector { size, scalar } => Ti::Vector { size, scalar },
                 Ti::Matrix {
                     rows,
                     columns,
-                    width,
+                    scalar,
                 } => Ti::Matrix {
                     rows,
                     columns,
-                    width,
+                    scalar,
                 },
                 Ti::Pointer { base, space } => Ti::Pointer { base, space },
                 Ti::ValuePointer {
                     size,
-                    kind,
-                    width,
+                    scalar,
                     space,
                 } => Ti::ValuePointer {
                     size,
-                    kind,
-                    width,
+                    scalar,
                     space,
                 },
                 _ => unreachable!("Unexpected clone type: {:?}", v),
@@ -241,49 +239,35 @@ impl<'a> ResolveContext<'a> {
                 // pointer, but that's a validation error, not a type error, so
                 // go ahead provide a type here.
                 Ti::Array { base, .. } => TypeResolution::Handle(base),
-                Ti::Matrix { rows, width, .. } => TypeResolution::Value(Ti::Vector {
-                    size: rows,
-                    kind: crate::ScalarKind::Float,
-                    width,
-                }),
-                Ti::Vector {
-                    size: _,
-                    kind,
-                    width,
-                } => TypeResolution::Value(Ti::Scalar { kind, width }),
+                Ti::Matrix { rows, scalar, .. } => {
+                    TypeResolution::Value(Ti::Vector { size: rows, scalar })
+                }
+                Ti::Vector { size: _, scalar } => TypeResolution::Value(Ti::Scalar(scalar)),
                 Ti::ValuePointer {
                     size: Some(_),
-                    kind,
-                    width,
+                    scalar,
                     space,
                 } => TypeResolution::Value(Ti::ValuePointer {
                     size: None,
-                    kind,
-                    width,
+                    scalar,
                     space,
                 }),
                 Ti::Pointer { base, space } => {
                     TypeResolution::Value(match types[base].inner {
                         Ti::Array { base, .. } => Ti::Pointer { base, space },
-                        Ti::Vector {
-                            size: _,
-                            kind,
-                            width,
-                        } => Ti::ValuePointer {
+                        Ti::Vector { size: _, scalar } => Ti::ValuePointer {
                             size: None,
-                            kind,
-                            width,
+                            scalar,
                             space,
                         },
                         // Matrices are only dynamically indexed behind a pointer
                         Ti::Matrix {
                             columns: _,
                             rows,
-                            width,
+                            scalar,
                         } => Ti::ValuePointer {
-                            kind: crate::ScalarKind::Float,
                             size: Some(rows),
-                            width,
+                            scalar,
                             space,
                         },
                         Ti::BindingArray { base, .. } => Ti::Pointer { base, space },
@@ -307,25 +291,21 @@ impl<'a> ResolveContext<'a> {
             },
             crate::Expression::AccessIndex { base, index } => {
                 match *past(base)?.inner_with(types) {
-                    Ti::Vector { size, kind, width } => {
+                    Ti::Vector { size, scalar } => {
                         if index >= size as u32 {
                             return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                         }
-                        TypeResolution::Value(Ti::Scalar { kind, width })
+                        TypeResolution::Value(Ti::Scalar(scalar))
                     }
                     Ti::Matrix {
                         columns,
                         rows,
-                        width,
+                        scalar,
                     } => {
                         if index >= columns as u32 {
                             return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                         }
-                        TypeResolution::Value(crate::TypeInner::Vector {
-                            size: rows,
-                            kind: crate::ScalarKind::Float,
-                            width,
-                        })
+                        TypeResolution::Value(crate::TypeInner::Vector { size: rows, scalar })
                     }
                     Ti::Array { base, .. } => TypeResolution::Handle(base),
                     Ti::Struct { ref members, .. } => {
@@ -336,8 +316,7 @@ impl<'a> ResolveContext<'a> {
                     }
                     Ti::ValuePointer {
                         size: Some(size),
-                        kind,
-                        width,
+                        scalar,
                         space,
                     } => {
                         if index >= size as u32 {
@@ -345,8 +324,7 @@ impl<'a> ResolveContext<'a> {
                         }
                         TypeResolution::Value(Ti::ValuePointer {
                             size: None,
-                            kind,
-                            width,
+                            scalar,
                             space,
                         })
                     }
@@ -355,29 +333,27 @@ impl<'a> ResolveContext<'a> {
                         space,
                     } => TypeResolution::Value(match types[ty_base].inner {
                         Ti::Array { base, .. } => Ti::Pointer { base, space },
-                        Ti::Vector { size, kind, width } => {
+                        Ti::Vector { size, scalar } => {
                             if index >= size as u32 {
                                 return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                             }
                             Ti::ValuePointer {
                                 size: None,
-                                kind,
-                                width,
+                                scalar,
                                 space,
                             }
                         }
                         Ti::Matrix {
                             rows,
                             columns,
-                            width,
+                            scalar,
                         } => {
                             if index >= columns as u32 {
                                 return Err(ResolveError::OutOfBoundsIndex { expr: base, index });
                             }
                             Ti::ValuePointer {
                                 size: Some(rows),
-                                kind: crate::ScalarKind::Float,
-                                width,
+                                scalar,
                                 space,
                             }
                         }
@@ -410,9 +386,7 @@ impl<'a> ResolveContext<'a> {
                 }
             }
             crate::Expression::Splat { size, value } => match *past(value)?.inner_with(types) {
-                Ti::Scalar { kind, width } => {
-                    TypeResolution::Value(Ti::Vector { size, kind, width })
-                }
+                Ti::Scalar(scalar) => TypeResolution::Value(Ti::Vector { size, scalar }),
                 ref other => {
                     log::error!("Scalar type {:?}", other);
                     return Err(ResolveError::InvalidScalar(value));
@@ -423,11 +397,9 @@ impl<'a> ResolveContext<'a> {
                 vector,
                 pattern: _,
             } => match *past(vector)?.inner_with(types) {
-                Ti::Vector {
-                    size: _,
-                    kind,
-                    width,
-                } => TypeResolution::Value(Ti::Vector { size, kind, width }),
+                Ti::Vector { size: _, scalar } => {
+                    TypeResolution::Value(Ti::Vector { size, scalar })
+                }
                 ref other => {
                     log::error!("Vector type {:?}", other);
                     return Err(ResolveError::InvalidVector(vector));
@@ -464,20 +436,19 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::Load { pointer } => match *past(pointer)?.inner_with(types) {
                 Ti::Pointer { base, space: _ } => {
-                    if let Ti::Atomic { kind, width } = types[base].inner {
-                        TypeResolution::Value(Ti::Scalar { kind, width })
+                    if let Ti::Atomic(scalar) = types[base].inner {
+                        TypeResolution::Value(Ti::Scalar(scalar))
                     } else {
                         TypeResolution::Handle(base)
                     }
                 }
                 Ti::ValuePointer {
                     size,
-                    kind,
-                    width,
+                    scalar,
                     space: _,
                 } => TypeResolution::Value(match size {
-                    Some(size) => Ti::Vector { size, kind, width },
-                    None => Ti::Scalar { kind, width },
+                    Some(size) => Ti::Vector { size, scalar },
+                    None => Ti::Scalar(scalar),
                 }),
                 ref other => {
                     log::error!("Pointer type {:?}", other);
@@ -490,11 +461,13 @@ impl<'a> ResolveContext<'a> {
                 ..
             } => match *past(image)?.inner_with(types) {
                 Ti::Image { class, .. } => TypeResolution::Value(Ti::Vector {
-                    kind: match class {
-                        crate::ImageClass::Sampled { kind, multi: _ } => kind,
-                        _ => crate::ScalarKind::Float,
+                    scalar: crate::Scalar {
+                        kind: match class {
+                            crate::ImageClass::Sampled { kind, multi: _ } => kind,
+                            _ => crate::ScalarKind::Float,
+                        },
+                        width: 4,
                     },
-                    width: 4,
                     size: crate::VectorSize::Quad,
                 }),
                 ref other => {
@@ -505,18 +478,16 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::ImageSample { image, .. }
             | crate::Expression::ImageLoad { image, .. } => match *past(image)?.inner_with(types) {
                 Ti::Image { class, .. } => TypeResolution::Value(match class {
-                    crate::ImageClass::Depth { multi: _ } => Ti::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    },
+                    crate::ImageClass::Depth { multi: _ } => Ti::Scalar(crate::Scalar::F32),
                     crate::ImageClass::Sampled { kind, multi: _ } => Ti::Vector {
-                        kind,
-                        width: 4,
+                        scalar: crate::Scalar { kind, width: 4 },
                         size: crate::VectorSize::Quad,
                     },
                     crate::ImageClass::Storage { format, .. } => Ti::Vector {
-                        kind: format.into(),
-                        width: 4,
+                        scalar: crate::Scalar {
+                            kind: format.into(),
+                            width: 4,
+                        },
                         size: crate::VectorSize::Quad,
                     },
                 }),
@@ -528,19 +499,14 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::ImageQuery { image, query } => TypeResolution::Value(match query {
                 crate::ImageQuery::Size { level: _ } => match *past(image)?.inner_with(types) {
                     Ti::Image { dim, .. } => match dim {
-                        crate::ImageDimension::D1 => Ti::Scalar {
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
-                        },
+                        crate::ImageDimension::D1 => Ti::Scalar(crate::Scalar::U32),
                         crate::ImageDimension::D2 | crate::ImageDimension::Cube => Ti::Vector {
                             size: crate::VectorSize::Bi,
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
+                            scalar: crate::Scalar::U32,
                         },
                         crate::ImageDimension::D3 => Ti::Vector {
                             size: crate::VectorSize::Tri,
-                            kind: crate::ScalarKind::Uint,
-                            width: 4,
+                            scalar: crate::Scalar::U32,
                         },
                     },
                     ref other => {
@@ -550,10 +516,7 @@ impl<'a> ResolveContext<'a> {
                 },
                 crate::ImageQuery::NumLevels
                 | crate::ImageQuery::NumLayers
-                | crate::ImageQuery::NumSamples => Ti::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
-                },
+                | crate::ImageQuery::NumSamples => Ti::Scalar(crate::Scalar::U32),
             }),
             crate::Expression::Unary { expr, .. } => past(expr)?.clone(),
             crate::Expression::Binary { op, left, right } => match op {
@@ -568,37 +531,32 @@ impl<'a> ResolveContext<'a> {
                             &Ti::Matrix {
                                 columns: _,
                                 rows,
-                                width,
+                                scalar,
                             },
                             &Ti::Matrix { columns, .. },
                         ) => TypeResolution::Value(Ti::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         }),
                         (
                             &Ti::Matrix {
                                 columns: _,
                                 rows,
-                                width,
+                                scalar,
                             },
                             &Ti::Vector { .. },
-                        ) => TypeResolution::Value(Ti::Vector {
-                            size: rows,
-                            kind: crate::ScalarKind::Float,
-                            width,
-                        }),
+                        ) => TypeResolution::Value(Ti::Vector { size: rows, scalar }),
                         (
                             &Ti::Vector { .. },
                             &Ti::Matrix {
                                 columns,
                                 rows: _,
-                                width,
+                                scalar,
                             },
                         ) => TypeResolution::Value(Ti::Vector {
                             size: columns,
-                            kind: crate::ScalarKind::Float,
-                            width,
+                            scalar,
                         }),
                         (&Ti::Scalar { .. }, _) => res_right.clone(),
                         (_, &Ti::Scalar { .. }) => res_left.clone(),
@@ -618,11 +576,10 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::GreaterEqual
                 | crate::BinaryOperator::LogicalAnd
                 | crate::BinaryOperator::LogicalOr => {
-                    let kind = crate::ScalarKind::Bool;
-                    let width = crate::BOOL_WIDTH;
+                    let scalar = crate::Scalar::BOOL;
                     let inner = match *past(left)?.inner_with(types) {
-                        Ti::Scalar { .. } => Ti::Scalar { kind, width },
-                        Ti::Vector { size, .. } => Ti::Vector { size, kind, width },
+                        Ti::Scalar { .. } => Ti::Scalar(scalar),
+                        Ti::Vector { size, .. } => Ti::Vector { size, scalar },
                         ref other => {
                             return Err(ResolveError::IncompatibleOperands(format!(
                                 "{op:?}({other:?}, _)"
@@ -643,20 +600,13 @@ impl<'a> ResolveContext<'a> {
             crate::Expression::Derivative { expr, .. } => past(expr)?.clone(),
             crate::Expression::Relational { fun, argument } => match fun {
                 crate::RelationalFunction::All | crate::RelationalFunction::Any => {
-                    TypeResolution::Value(Ti::Scalar {
-                        kind: crate::ScalarKind::Bool,
-                        width: crate::BOOL_WIDTH,
-                    })
+                    TypeResolution::Value(Ti::Scalar(crate::Scalar::BOOL))
                 }
                 crate::RelationalFunction::IsNan | crate::RelationalFunction::IsInf => {
                     match *past(argument)?.inner_with(types) {
-                        Ti::Scalar { .. } => TypeResolution::Value(Ti::Scalar {
-                            kind: crate::ScalarKind::Bool,
-                            width: crate::BOOL_WIDTH,
-                        }),
+                        Ti::Scalar { .. } => TypeResolution::Value(Ti::Scalar(crate::Scalar::BOOL)),
                         Ti::Vector { size, .. } => TypeResolution::Value(Ti::Vector {
-                            kind: crate::ScalarKind::Bool,
-                            width: crate::BOOL_WIDTH,
+                            scalar: crate::Scalar::BOOL,
                             size,
                         }),
                         ref other => {
@@ -714,14 +664,16 @@ impl<'a> ResolveContext<'a> {
                     Mf::Pow => res_arg.clone(),
                     Mf::Modf | Mf::Frexp => {
                         let (size, width) = match res_arg.inner_with(types) {
-                            &Ti::Scalar {
+                            &Ti::Scalar(crate::Scalar {
                                 kind: crate::ScalarKind::Float,
-                               width,
-                            } => (None, width),
-                            &Ti::Vector {
-                                kind: crate::ScalarKind::Float,
-                                size,
                                 width,
+                            }) => (None, width),
+                            &Ti::Vector {
+                                scalar: crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    width,
+                                },
+                                size,
                             } => (Some(size), width),
                             ref other =>
                                 return Err(ResolveError::IncompatibleOperands(format!("{fun:?}({other:?}, _)")))
@@ -740,10 +692,9 @@ impl<'a> ResolveContext<'a> {
                     // geometry
                     Mf::Dot => match *res_arg.inner_with(types) {
                         Ti::Vector {
-                            kind,
                             size: _,
-                            width,
-                        } => TypeResolution::Value(Ti::Scalar { kind, width }),
+                            scalar,
+                        } => TypeResolution::Value(Ti::Scalar(scalar)),
                         ref other =>
                             return Err(ResolveError::IncompatibleOperands(
                                 format!("{fun:?}({other:?}, _)")
@@ -754,7 +705,14 @@ impl<'a> ResolveContext<'a> {
                             format!("{fun:?}(_, None)")
                         ))?;
                         match (res_arg.inner_with(types), past(arg1)?.inner_with(types)) {
-                            (&Ti::Vector {kind: _, size: columns,width}, &Ti::Vector{ size: rows, .. }) => TypeResolution::Value(Ti::Matrix { columns, rows, width }),
+                            (
+                                &Ti::Vector { size: columns, scalar },
+                                &Ti::Vector{ size: rows, .. }
+                            ) => TypeResolution::Value(Ti::Matrix {
+                                columns,
+                                rows,
+                                scalar,
+                            }),
                             (left, right) =>
                                 return Err(ResolveError::IncompatibleOperands(
                                     format!("{fun:?}({left:?}, {right:?})")
@@ -764,8 +722,8 @@ impl<'a> ResolveContext<'a> {
                     Mf::Cross => res_arg.clone(),
                     Mf::Distance |
                     Mf::Length => match *res_arg.inner_with(types) {
-                        Ti::Scalar {width,kind} |
-                        Ti::Vector {width,kind,size:_} => TypeResolution::Value(Ti::Scalar { kind, width }),
+                        Ti::Scalar(scalar) |
+                        Ti::Vector {scalar,size:_} => TypeResolution::Value(Ti::Scalar(scalar)),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                                 format!("{fun:?}({other:?})")
                             )),
@@ -786,11 +744,11 @@ impl<'a> ResolveContext<'a> {
                         Ti::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         } => TypeResolution::Value(Ti::Matrix {
                             columns: rows,
                             rows: columns,
-                            width,
+                            scalar,
                         }),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                             format!("{fun:?}({other:?})")
@@ -800,11 +758,11 @@ impl<'a> ResolveContext<'a> {
                         Ti::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         } if columns == rows => TypeResolution::Value(Ti::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         }),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                             format!("{fun:?}({other:?})")
@@ -812,9 +770,9 @@ impl<'a> ResolveContext<'a> {
                     },
                     Mf::Determinant => match *res_arg.inner_with(types) {
                         Ti::Matrix {
-                            width,
+                            scalar,
                             ..
-                        } => TypeResolution::Value(Ti::Scalar { kind: crate::ScalarKind::Float, width }),
+                        } => TypeResolution::Value(Ti::Scalar(scalar)),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                             format!("{fun:?}({other:?})")
                         )),
@@ -828,10 +786,17 @@ impl<'a> ResolveContext<'a> {
                     Mf::InsertBits |
                     Mf::FindLsb |
                     Mf::FindMsb => match *res_arg.inner_with(types)  {
-                        Ti::Scalar { kind: kind @ (crate::ScalarKind::Sint | crate::ScalarKind::Uint), width } =>
-                            TypeResolution::Value(Ti::Scalar { kind, width }),
-                        Ti::Vector { size, kind: kind @ (crate::ScalarKind::Sint | crate::ScalarKind::Uint), width } =>
-                            TypeResolution::Value(Ti::Vector { size, kind, width }),
+                        Ti::Scalar(scalar @ crate::Scalar {
+                            kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                            ..
+                        }) => TypeResolution::Value(Ti::Scalar(scalar)),
+                        Ti::Vector {
+                            size,
+                            scalar: scalar @ crate::Scalar {
+                                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                                ..
+                            }
+                        } => TypeResolution::Value(Ti::Vector { size, scalar }),
                         ref other => return Err(ResolveError::IncompatibleOperands(
                                 format!("{fun:?}({other:?})")
                             )),
@@ -841,13 +806,19 @@ impl<'a> ResolveContext<'a> {
                     Mf::Pack4x8unorm |
                     Mf::Pack2x16snorm |
                     Mf::Pack2x16unorm |
-                    Mf::Pack2x16float => TypeResolution::Value(Ti::Scalar { kind: crate::ScalarKind::Uint, width: 4 }),
+                    Mf::Pack2x16float => TypeResolution::Value(Ti::Scalar(crate::Scalar::U32)),
                     // data unpacking
                     Mf::Unpack4x8snorm |
-                    Mf::Unpack4x8unorm => TypeResolution::Value(Ti::Vector { size: crate::VectorSize::Quad, kind: crate::ScalarKind::Float, width: 4 }),
+                    Mf::Unpack4x8unorm => TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Quad,
+                        scalar: crate::Scalar::F32
+                    }),
                     Mf::Unpack2x16snorm |
                     Mf::Unpack2x16unorm |
-                    Mf::Unpack2x16float => TypeResolution::Value(Ti::Vector { size: crate::VectorSize::Bi, kind: crate::ScalarKind::Float, width: 4 }),
+                    Mf::Unpack2x16float => TypeResolution::Value(Ti::Vector {
+                        size: crate::VectorSize::Bi,
+                        scalar: crate::Scalar::F32
+                    }),
                 }
             }
             crate::Expression::As {
@@ -855,28 +826,36 @@ impl<'a> ResolveContext<'a> {
                 kind,
                 convert,
             } => match *past(expr)?.inner_with(types) {
-                Ti::Scalar { kind: _, width } => TypeResolution::Value(Ti::Scalar {
-                    kind,
-                    width: convert.unwrap_or(width),
-                }),
+                Ti::Scalar(crate::Scalar { width, .. }) => {
+                    TypeResolution::Value(Ti::Scalar(crate::Scalar {
+                        kind,
+                        width: convert.unwrap_or(width),
+                    }))
+                }
                 Ti::Vector {
-                    kind: _,
                     size,
-                    width,
+                    scalar: crate::Scalar { kind: _, width },
                 } => TypeResolution::Value(Ti::Vector {
-                    kind,
                     size,
-                    width: convert.unwrap_or(width),
+                    scalar: crate::Scalar {
+                        kind,
+                        width: convert.unwrap_or(width),
+                    },
                 }),
                 Ti::Matrix {
                     columns,
                     rows,
-                    width,
-                } => TypeResolution::Value(Ti::Matrix {
-                    columns,
-                    rows,
-                    width: convert.unwrap_or(width),
-                }),
+                    mut scalar,
+                } => {
+                    if let Some(width) = convert {
+                        scalar.width = width;
+                    }
+                    TypeResolution::Value(Ti::Matrix {
+                        columns,
+                        rows,
+                        scalar,
+                    })
+                }
                 ref other => {
                     return Err(ResolveError::IncompatibleOperands(format!(
                         "{other:?} as {kind:?}"
@@ -890,14 +869,12 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::FunctionReturnsVoid)?;
                 TypeResolution::Handle(result.ty)
             }
-            crate::Expression::ArrayLength(_) => TypeResolution::Value(Ti::Scalar {
-                kind: crate::ScalarKind::Uint,
-                width: 4,
-            }),
-            crate::Expression::RayQueryProceedResult => TypeResolution::Value(Ti::Scalar {
-                kind: crate::ScalarKind::Bool,
-                width: crate::BOOL_WIDTH,
-            }),
+            crate::Expression::ArrayLength(_) => {
+                TypeResolution::Value(Ti::Scalar(crate::Scalar::U32))
+            }
+            crate::Expression::RayQueryProceedResult => {
+                TypeResolution::Value(Ti::Scalar(crate::Scalar::BOOL))
+            }
             crate::Expression::RayQueryGetIntersection { .. } => {
                 let result = self
                     .special_types

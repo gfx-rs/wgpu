@@ -1,4 +1,3 @@
-#[cfg(feature = "validate")]
 use crate::proc::TypeResolution;
 
 use crate::arena::Handle;
@@ -14,7 +13,6 @@ pub enum ComposeError {
     ComponentType { index: u32 },
 }
 
-#[cfg(feature = "validate")]
 pub fn validate_compose(
     self_ty_handle: Handle<crate::Type>,
     gctx: crate::proc::GlobalCtx,
@@ -24,19 +22,15 @@ pub fn validate_compose(
 
     match gctx.types[self_ty_handle].inner {
         // vectors are composed from scalars or other vectors
-        Ti::Vector { size, kind, width } => {
+        Ti::Vector { size, scalar } => {
             let mut total = 0;
             for (index, comp_res) in component_resolutions.enumerate() {
                 total += match *comp_res.inner_with(gctx.types) {
-                    Ti::Scalar {
-                        kind: comp_kind,
-                        width: comp_width,
-                    } if comp_kind == kind && comp_width == width => 1,
+                    Ti::Scalar(comp_scalar) if comp_scalar == scalar => 1,
                     Ti::Vector {
                         size: comp_size,
-                        kind: comp_kind,
-                        width: comp_width,
-                    } if comp_kind == kind && comp_width == width => comp_size as u32,
+                        scalar: comp_scalar,
+                    } if comp_scalar == scalar => comp_size as u32,
                     ref other => {
                         log::error!("Vector component[{}] type {:?}", index, other);
                         return Err(ComposeError::ComponentType {
@@ -56,13 +50,9 @@ pub fn validate_compose(
         Ti::Matrix {
             columns,
             rows,
-            width,
+            scalar,
         } => {
-            let inner = Ti::Vector {
-                size: rows,
-                kind: crate::ScalarKind::Float,
-                width,
-            };
+            let inner = Ti::Vector { size: rows, scalar };
             if columns as usize != component_resolutions.len() {
                 return Err(ComposeError::ComponentCount {
                     expected: columns as u32,

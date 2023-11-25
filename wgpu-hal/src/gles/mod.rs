@@ -34,7 +34,7 @@ will be minimal, if any.
 
 Generally, vertex buffers are marked as dirty and lazily bound on draw.
 
-GLES3 doesn't support "base instance" semantics. However, it's easy to support,
+GLES3 doesn't support `first_instance` semantics. However, it's easy to support,
 since we are forced to do late binding anyway. We just adjust the offsets
 into the vertex data.
 
@@ -51,8 +51,33 @@ from the vertex data itself. This mostly matches WebGPU, however there is a catc
 `stride` needs to be specified with the data, not as a part of the layout.
 
 To address this, we invalidate the vertex buffers based on:
-  - whether or not `start_instance` is used
+  - whether or not `first_instance` is used
   - stride has changed
+
+## Handling of `base_vertex`, `first_instance`, and `first_vertex`
+
+Between indirect, the lack of `first_instance` semantics, and the availability of `gl_BaseInstance`
+in shaders, getting buffers and builtins to work correctly is a bit tricky.
+
+We never emulate `base_vertex` and gl_VertexID behaves as `@builtin(vertex_index)` does, so we
+never need to do anything about that.
+
+We always advertise support for `VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`.
+
+### GL 4.2+ with ARB_shader_draw_parameters
+
+- `@builtin(instance_index)` translates to `gl_InstanceID + gl_BaseInstance`
+- We bind instance buffers without any offset emulation.
+- We advertise support for the `INDIRECT_FIRST_INSTANCE` feature.
+
+While we can theoretically have a card with 4.2+ support but without ARB_shader_draw_parameters,
+we don't bother with that combination.
+
+### GLES & GL 4.1
+
+- `@builtin(instance_index)` translates to `gl_InstanceID + naga_vs_first_instance`
+- We bind instance buffers with offset emulation.
+- We _do not_ advertise support for `INDIRECT_FIRST_INSTANCE` and cpu-side pretend the `first_instance` is 0 on indirect calls.
 
 */
 
@@ -95,7 +120,7 @@ use glow::HasContext;
 
 use naga::FastHashMap;
 use parking_lot::Mutex;
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicU32, AtomicU8};
 use std::{fmt, ops::Range, sync::Arc};
 
 #[derive(Clone, Debug)]
@@ -108,6 +133,8 @@ const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
 const MAX_PUSH_CONSTANTS: usize = 64;
+// We have to account for each push constant may need to be set for every shader.
+const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
     type Instance = Instance;
@@ -163,6 +190,18 @@ bitflags::bitflags! {
         const TEXTURE_FLOAT_LINEAR = 1 << 10;
         /// Supports query buffer objects.
         const QUERY_BUFFERS = 1 << 11;
+        /// Supports 64 bit queries via `glGetQueryObjectui64v`
+        const QUERY_64BIT = 1 << 12;
+        /// Supports `glTexStorage2D`, etc.
+        const TEXTURE_STORAGE = 1 << 13;
+        /// Supports `push_debug_group`, `pop_debug_group` and `debug_message_insert`.
+        const DEBUG_FNS = 1 << 14;
+        /// Supports framebuffer invalidation.
+        const INVALIDATE_FRAMEBUFFER = 1 << 15;
+        /// Indicates support for `glDrawElementsInstancedBaseVertexBaseInstance` and `ARB_shader_draw_parameters`
+        ///
+        /// When this is true, instance offset emulation via vertex buffer rebinding and a shader uniform will be disabled.
+        const FULLY_FEATURED_INSTANCING = 1 << 16;
     }
 }
 
@@ -240,9 +279,9 @@ pub struct Queue {
     /// Keep a reasonably large buffer filled with zeroes, so that we can implement `ClearBuffer` of
     /// zeroes by copying from it.
     zero_buffer: glow::Buffer,
-    temp_query_results: Vec<u64>,
-    draw_buffer_count: u8,
-    current_index_buffer: Option<glow::Buffer>,
+    temp_query_results: Mutex<Vec<u64>>,
+    draw_buffer_count: AtomicU8,
+    current_index_buffer: Mutex<Option<glow::Buffer>>,
 }
 
 #[derive(Clone, Debug)]
@@ -379,6 +418,7 @@ pub struct BindGroupLayout {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
 }
 
+#[derive(Debug)]
 struct BindGroupLayoutInfo {
     entries: Arc<[wgt::BindGroupLayoutEntry]>,
     /// Mapping of resources, indexed by `binding`, into the whole layout space.
@@ -389,6 +429,7 @@ struct BindGroupLayoutInfo {
     binding_to_slot: Box<[u8]>,
 }
 
+#[derive(Debug)]
 pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
     naga_options: naga::back::glsl::Options,
@@ -420,7 +461,8 @@ enum RawBinding {
         raw: glow::Texture,
         target: BindTarget,
         aspects: crate::FormatAspects,
-        //TODO: mip levels, array layers
+        mip_levels: Range<u32>,
+        //TODO: array layers
     },
     Image(ImageBinding),
     Sampler(glow::Sampler),
@@ -476,11 +518,12 @@ struct VertexBufferDesc {
     stride: u32,
 }
 
-#[derive(Clone, Debug, Default)]
-struct UniformDesc {
-    location: Option<glow::UniformLocation>,
-    size: u32,
-    utype: u32,
+#[derive(Clone, Debug)]
+struct PushConstantDesc {
+    location: glow::UniformLocation,
+    ty: naga::TypeInner,
+    offset: u32,
+    size_bytes: u32,
 }
 
 #[cfg(all(
@@ -488,22 +531,24 @@ struct UniformDesc {
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
-unsafe impl Sync for UniformDesc {}
+unsafe impl Sync for PushConstantDesc {}
 #[cfg(all(
     target_arch = "wasm32",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
-unsafe impl Send for UniformDesc {}
+unsafe impl Send for PushConstantDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
 type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 
+#[derive(Debug)]
 struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
-    uniforms: [UniformDesc; MAX_PUSH_CONSTANTS],
+    first_instance_location: Option<glow::UniformLocation>,
+    push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
 }
 
 #[derive(Clone, Debug)]
@@ -546,6 +591,7 @@ struct ProgramCacheKey {
 
 type ProgramCache = FastHashMap<ProgramCacheKey, Result<Arc<PipelineInner>, crate::PipelineError>>;
 
+#[derive(Debug)]
 pub struct RenderPipeline {
     inner: Arc<PipelineInner>,
     primitive: wgt::PrimitiveState,
@@ -571,6 +617,7 @@ unsafe impl Sync for RenderPipeline {}
 ))]
 unsafe impl Send for RenderPipeline {}
 
+#[derive(Debug)]
 pub struct ComputePipeline {
     inner: Arc<PipelineInner>,
 }
@@ -681,7 +728,7 @@ impl Default for StencilSide {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct StencilState {
     front: StencilSide,
     back: StencilSide,
@@ -700,9 +747,11 @@ type InvalidatedAttachments = ArrayVec<u32, { crate::MAX_COLOR_ATTACHMENTS + 2 }
 enum Command {
     Draw {
         topology: u32,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
+        first_instance: u32,
         instance_count: u32,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndexed {
         topology: u32,
@@ -710,18 +759,22 @@ enum Command {
         index_count: u32,
         index_offset: wgt::BufferAddress,
         base_vertex: i32,
+        first_instance: u32,
         instance_count: u32,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndirect {
         topology: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     DrawIndexedIndirect {
         topology: u32,
         index_type: u32,
         indirect_buf: glow::Buffer,
         indirect_offset: wgt::BufferAddress,
+        first_instance_location: Option<glow::UniformLocation>,
     },
     Dispatch([u32; 3]),
     DispatchIndirect {
@@ -865,6 +918,7 @@ enum Command {
         texture: glow::Texture,
         target: BindTarget,
         aspects: crate::FormatAspects,
+        mip_levels: Range<u32>,
     },
     BindImage {
         slot: u32,
@@ -874,7 +928,7 @@ enum Command {
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
     SetPushConstants {
-        uniform: UniformDesc,
+        uniform: PushConstantDesc,
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },
@@ -898,6 +952,19 @@ impl fmt::Debug for CommandBuffer {
     }
 }
 
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for CommandBuffer {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for CommandBuffer {}
+
 //TODO: we would have something like `Arc<typed_arena::Arena>`
 // here and in the command buffers. So that everything grows
 // inside the encoder and stays there until `reset_all`.
@@ -915,6 +982,19 @@ impl fmt::Debug for CommandEncoder {
             .finish()
     }
 }
+
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Sync for CommandEncoder {}
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "fragile-send-sync-non-atomic-wasm",
+    not(target_feature = "atomics")
+))]
+unsafe impl Send for CommandEncoder {}
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
@@ -962,6 +1042,6 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
 
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
-        crate::VALIDATION_CANARY.set();
+        crate::VALIDATION_CANARY.add(message.to_string());
     }
 }

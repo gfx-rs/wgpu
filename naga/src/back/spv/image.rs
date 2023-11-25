@@ -128,8 +128,7 @@ impl Load {
             crate::ImageClass::Depth { .. } => {
                 ctx.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: Some(crate::VectorSize::Quad),
-                    kind: crate::ScalarKind::Float,
-                    width: 4,
+                    scalar: crate::Scalar::F32,
                     pointer_space: None,
                 }))
             }
@@ -292,18 +291,16 @@ impl<'w> BlockContext<'w> {
 
         // Find the component type of `coordinates`, and figure out the size the
         // combined coordinate vector will have.
-        let (component_kind, size) = match *inner_ty {
-            Ti::Scalar { kind, width: 4 } => (kind, Some(Vs::Bi)),
+        let (component_scalar, size) = match *inner_ty {
+            Ti::Scalar(scalar @ crate::Scalar { width: 4, .. }) => (scalar, Some(Vs::Bi)),
             Ti::Vector {
-                kind,
-                width: 4,
+                scalar: scalar @ crate::Scalar { width: 4, .. },
                 size: Vs::Bi,
-            } => (kind, Some(Vs::Tri)),
+            } => (scalar, Some(Vs::Tri)),
             Ti::Vector {
-                kind,
-                width: 4,
+                scalar: scalar @ crate::Scalar { width: 4, .. },
                 size: Vs::Tri,
-            } => (kind, Some(Vs::Quad)),
+            } => (scalar, Some(Vs::Quad)),
             Ti::Vector { size: Vs::Quad, .. } => {
                 return Err(Error::Validation("extending vec4 coordinate"));
             }
@@ -317,16 +314,16 @@ impl<'w> BlockContext<'w> {
         let array_index_id = self.cached[array_index];
         let ty = &self.fun_info[array_index].ty;
         let inner_ty = ty.inner_with(&self.ir_module.types);
-        let array_index_kind = if let Ti::Scalar { kind, width: 4 } = *inner_ty {
-            debug_assert!(matches!(
-                kind,
-                crate::ScalarKind::Sint | crate::ScalarKind::Uint
-            ));
-            kind
-        } else {
-            unreachable!("we only allow i32 and u32");
+        let array_index_scalar = match *inner_ty {
+            Ti::Scalar(
+                scalar @ crate::Scalar {
+                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                    width: 4,
+                },
+            ) => scalar,
+            _ => unreachable!("we only allow i32 and u32"),
         };
-        let cast = match (component_kind, array_index_kind) {
+        let cast = match (component_scalar.kind, array_index_scalar.kind) {
             (crate::ScalarKind::Sint, crate::ScalarKind::Sint)
             | (crate::ScalarKind::Uint, crate::ScalarKind::Uint) => None,
             (crate::ScalarKind::Sint, crate::ScalarKind::Uint)
@@ -341,8 +338,7 @@ impl<'w> BlockContext<'w> {
         let reconciled_array_index_id = if let Some(cast) = cast {
             let component_ty_id = self.get_type_id(LookupType::Local(LocalType::Value {
                 vector_size: None,
-                kind: component_kind,
-                width: 4,
+                scalar: component_scalar,
                 pointer_space: None,
             }));
             let reconciled_id = self.gen_id();
@@ -360,8 +356,7 @@ impl<'w> BlockContext<'w> {
         // Find the SPIR-V type for the combined coordinates/index vector.
         let type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: size,
-            kind: component_kind,
-            width: 4,
+            scalar: component_scalar,
             pointer_space: None,
         }));
 
@@ -532,8 +527,7 @@ impl<'w> BlockContext<'w> {
 
         let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Sint,
-            width: 4,
+            scalar: crate::Scalar::I32,
             pointer_space: None,
         }));
 
@@ -620,8 +614,7 @@ impl<'w> BlockContext<'w> {
         let bool_type_id = self.writer.get_bool_type_id();
         let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: None,
-            kind: crate::ScalarKind::Sint,
-            width: 4,
+            scalar: crate::Scalar::I32,
             pointer_space: None,
         }));
 
@@ -688,8 +681,7 @@ impl<'w> BlockContext<'w> {
         // Compare the coordinates against the bounds.
         let coords_bool_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
             vector_size: coordinates.size,
-            kind: crate::ScalarKind::Bool,
-            width: 1,
+            scalar: crate::Scalar::BOOL,
             pointer_space: None,
         }));
         let coords_conds_id = self.gen_id();
@@ -844,8 +836,7 @@ impl<'w> BlockContext<'w> {
         let sample_result_type_id = if needs_sub_access {
             self.get_type_id(LookupType::Local(LocalType::Value {
                 vector_size: Some(crate::VectorSize::Quad),
-                kind: crate::ScalarKind::Float,
-                width: 4,
+                scalar: crate::Scalar::F32,
                 pointer_space: None,
             }))
         } else {
@@ -1045,8 +1036,7 @@ impl<'w> BlockContext<'w> {
                 };
                 let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size,
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
+                    scalar: crate::Scalar::U32,
                     pointer_space: None,
                 }));
 
@@ -1116,8 +1106,7 @@ impl<'w> BlockContext<'w> {
                 };
                 let extended_size_type_id = self.get_type_id(LookupType::Local(LocalType::Value {
                     vector_size: Some(vec_size),
-                    kind: crate::ScalarKind::Uint,
-                    width: 4,
+                    scalar: crate::Scalar::U32,
                     pointer_space: None,
                 }));
                 let id_extended = self.gen_id();

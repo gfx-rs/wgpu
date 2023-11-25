@@ -97,9 +97,6 @@ static PARTIALLY_BOUNDED_ARRAY: GpuTestConfiguration = GpuTestConfiguration::new
 
         ctx.queue.submit(Some(encoder.finish()));
 
-        assert!(
-            readback_buffers
-                .check_buffer_contents(device, bytemuck::bytes_of(&[4.0f32, 3.0, 2.0, 1.0])),
-            "texture storage values are incorrect!"
-        );
+        readback_buffers
+            .assert_buffer_contents(device, bytemuck::bytes_of(&[4.0f32, 3.0, 2.0, 1.0]));
     });

@@ -12,13 +12,9 @@ autotests = false
 publish = false
 
 [[test]]
-name = "gpu-tests"
-path = "tests/gpu.rs"
+name = "wgpu-test"
+path = "tests/root.rs"
 harness = false
-
-[[test]]
-name = "cpu-tests"
-path = "tests/cpu.rs"
 
 [features]
 webgl = ["wgpu/webgl"]
@@ -30,7 +26,6 @@ bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
-env_logger.workspace = true
 futures-lite.workspace = true
 heck.workspace = true
 libtest-mimic.workspace = true
@@ -38,14 +33,17 @@ log.workspace = true
 parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
+profiling.workspace = true
 serde_json.workspace = true
 serde.workspace = true
-wgpu.workspace = true
 wgpu-macros.workspace = true
+wgpu.workspace = true
 wgt = { workspace = true, features = ["replay"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger.workspace = true
 nv-flip.workspace = true
+parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_log.workspace = true
