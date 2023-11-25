@@ -25,6 +25,7 @@ use crate::{
         self, Buffer, QuerySet, Resource, ResourceType, Sampler, Texture, TextureView,
         TextureViewNotRenderableReason,
     },
+    resource_log,
     storage::Storage,
     track::{BindGroupStates, TextureSelector, Tracker},
     validation::{self, check_buffer_usage, check_texture_usage},
@@ -140,7 +141,7 @@ impl<A: HalApi> std::fmt::Debug for Device<A> {
 
 impl<A: HalApi> Drop for Device<A> {
     fn drop(&mut self) {
-        log::info!("Destroying Device {:?}", self.info.label());
+        resource_log!("Destroy raw Device {}", self.info.label());
         let raw = self.raw.take().unwrap();
         let pending_writes = self.pending_writes.lock().take().unwrap();
         pending_writes.dispose(&raw);

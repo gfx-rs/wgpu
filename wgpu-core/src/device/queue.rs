@@ -19,7 +19,7 @@ use crate::{
         Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, ResourceType,
         StagingBuffer, Texture, TextureInner,
     },
-    track, FastHashMap, SubmissionIndex,
+    resource_log, track, FastHashMap, SubmissionIndex,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
@@ -468,7 +468,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.staging_buffers.prepare::<G>(id_in);
         let (id, _) = fid.assign(staging_buffer);
-        log::info!("Created StagingBuffer {:?}", id);
+        resource_log!("Queue::create_staging_buffer {id:?}");
 
         Ok((id, staging_buffer_ptr))
     }
