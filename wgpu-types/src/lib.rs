@@ -3186,12 +3186,13 @@ impl TextureFormat {
 
         let sample_type = self.sample_type(None);
         let mut is_filterable = sample_type == Some(TextureSampleType::Float { filterable: true });
+        let is_blendable = is_filterable;
         if device_features.contains(Features::FLOAT32_FILTERABLE) {
             is_filterable |= sample_type == Some(TextureSampleType::Float { filterable: false });
         }
 
         flags.set(TextureFormatFeatureFlags::FILTERABLE, is_filterable);
-        flags.set(TextureFormatFeatureFlags::BLENDABLE, is_filterable);
+        flags.set(TextureFormatFeatureFlags::BLENDABLE, is_blendable);
 
         TextureFormatFeatures {
             allowed_usages,
