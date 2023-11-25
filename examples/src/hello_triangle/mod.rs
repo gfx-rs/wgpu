@@ -150,6 +150,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
 pub fn main() {
     let event_loop = EventLoop::new().unwrap();
+    #[allow(unused_mut)]
     let mut builder = winit::window::WindowBuilder::new();
     #[cfg(target_arch = "wasm32")]
     {

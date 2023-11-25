@@ -6,7 +6,7 @@
         :focus {
             outline: none;
         }
-        
+
         body {
             margin: 0px;
             background: #fff;
@@ -38,20 +38,20 @@
             margin: 0.5em 0;
         }
 
-        .column-container {
+        .backend-list-container {
             display: flex;
             flex-direction: row;
             justify-content: space-evenly;
         }
 
-        .column {
+        .backend-list {
             display: flex;
             flex-direction: column;
             flex-wrap: wrap;
             justify-content: center;
         }
 
-        .items {
+        .item-list {
             display: flex;
             flex-direction: column;
             flex-wrap: wrap;
@@ -59,7 +59,7 @@
             height: 100px;
         }
 
-        .example {
+        .example-link {
             margin-left: 7px;
             margin-right: 7px;
         }
@@ -69,8 +69,10 @@
         }
 
         .main-canvas {
-            flex: 1;
             margin: 0;
+            /* This allows the flexbox to grow to max size, this is needed for WebGPU */
+            flex: 1;
+            /* This forces CSS to ignore the width/height of the canvas, this is needed for WebGL */
             contain: size;
         }
     </style>
@@ -86,15 +88,16 @@
                     </a>
                 </p>
             </div>
-            <div class="column-container">
-                <div class="column">
+            <div class="backend-list-container">
+                <div class="backend-list">
                     <p class="backend-name">WebGL2</p>
-                    <div class="items"  id="webgl2-list">
+                    <div class="item-list" id="webgl2-list">
                         
                     </div>
-                </div><div class="column">
+                </div>
+                <div class="backend-list">
                     <p class="backend-name">WebGPU</p>
-                    <div class="items" id="webgpu-list">
+                    <div class="item-list" id="webgpu-list">
                 
                     </div>
                 </div>

@@ -185,7 +185,7 @@ fn print_examples() {
                 &format!("?backend={backend}&example={}", example.name),
             )
             .unwrap();
-            link.set_class_name("example");
+            link.set_class_name("example-link");
 
             let item = document.create_element("div").unwrap();
             item.append_child(&link).unwrap();
