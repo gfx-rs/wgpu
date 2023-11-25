@@ -825,6 +825,23 @@ impl super::InstanceShared {
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2);
                 }
+
+                if is_intel_igpu_outdated_for_robustness2(
+                    capabilities.properties,
+                    capabilities.driver,
+                ) {
+                    use crate::auxil::cstr_from_bytes_until_nul;
+                    capabilities.supported_extensions.remove(
+                        capabilities
+                            .supported_extensions
+                            .iter()
+                            .position(|&x| {
+                                cstr_from_bytes_until_nul(&x.extension_name)
+                                    == Some(vk::ExtRobustness2Fn::name())
+                            })
+                            .unwrap(),
+                    );
+                }
             };
             capabilities
         };
@@ -874,9 +891,7 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceImageRobustnessFeaturesEXT::default());
                 builder = builder.push_next(next);
             }
-            if !is_intel_igpu_outdated_for_robustness2(capabilities.properties, capabilities.driver)
-                && capabilities.supports_extension(vk::ExtRobustness2Fn::name())
-            {
+            if capabilities.supports_extension(vk::ExtRobustness2Fn::name()) {
                 let next = features
                     .robustness2
                     .insert(vk::PhysicalDeviceRobustness2FeaturesEXT::default());
@@ -1827,7 +1842,11 @@ fn is_intel_igpu_outdated_for_robustness2(
             == "Intel driver";
 
     if is_outdated {
-        log::trace!("Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X} less than 0x{:X}, the known good driver (31.0.101.2115)", props.driver_version, DRIVER_VERSION_WORKING);
+        log::warn!(
+            "Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X}, less than the known good version 0x{:X} (31.0.101.2115)",
+            props.driver_version,
+            DRIVER_VERSION_WORKING
+        );
     }
     is_outdated
 }
