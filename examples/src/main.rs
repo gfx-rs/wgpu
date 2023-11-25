@@ -170,10 +170,6 @@ fn print_examples() {
             .get_element_by_id(&format!("{backend}-list"))
             .unwrap();
 
-        let backend_item = document.create_element("li").unwrap();
-        backend_item.set_text_content(Some(backend));
-        ul.append_child(&backend_item).unwrap();
-
         for example in EXAMPLES {
             if backend == "webgl2" && !example.webgl {
                 continue;
@@ -191,7 +187,7 @@ fn print_examples() {
             .unwrap();
             link.set_class_name("example");
 
-            let item = document.create_element("li").unwrap();
+            let item = document.create_element("div").unwrap();
             item.append_child(&link).unwrap();
             ul.append_child(&item).unwrap();
         }

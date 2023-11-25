@@ -3,18 +3,33 @@
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <style type="text/css">
+        :focus {
+            outline: none;
+        }
+        
         body {
-            margin: 0 auto;
-            padding: 0;
-            text-align: center;
+            margin: 0px;
             background: #fff;
             font-family: "Calibri", "Arial", sans-serif;
+            width: 100%;
+            height: 100%;
         }
 
-        #banner {
+        .root {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .banner {
             background: #dee;
             padding: 0.5em 0;
             border-bottom: 1px solid #abb;
+        }
+
+        .banner-prefix {
+            text-align: center;
         }
 
         p {
@@ -23,36 +38,69 @@
             margin: 0.5em 0;
         }
 
-        ul {
-            margin: 0;
+        .column-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-evenly;
         }
 
-        li {
-            display: inline;
-            margin: 0.5em;
-            font-size: 0.9em;
+        .column {
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
-        canvas {
+        .items {
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            align-content: center;
+            height: 100px;
+        }
+
+        .example {
+            margin-left: 7px;
+            margin-right: 7px;
+        }
+        
+        .backend-name {
+            text-align: center;
+        }
+
+        .main-canvas {
+            flex: 1;
             margin: 0;
+            contain: size;
         }
     </style>
 </head>
 
 <body>
-    <div id="banner">
-        <p>
-            WebGPU requires Chrome (on Windows, Mac, or Chromeos) or Firefox Nightly (Windows or Linux).
-            <br />
-            Output will appear below or in the browser's console.
-        </p>
-        <p>
-            <a href="../index.html">
-                Back to home page
-            </a>
-        </p>
-        <ul id="webgl2-list"></ul>
-        <ul id="webgpu-list"></ul>
+    <div class="root">
+        <div class="banner">
+            <div class="banner-prefix">
+                <p>
+                    <a href="../index.html">
+                        Back to home page
+                    </a>
+                </p>
+            </div>
+            <div class="column-container">
+                <div class="column">
+                    <p class="backend-name">WebGL2</p>
+                    <div class="items"  id="webgl2-list">
+                        
+                    </div>
+                </div><div class="column">
+                    <p class="backend-name">WebGPU</p>
+                    <div class="items" id="webgpu-list">
+                
+                    </div>
+                </div>
+            </div>
+        </div>
+        <canvas class="main-canvas" id="canvas"></canvas>
     </div>
     <script type="module">
         const params = new URLSearchParams(window.location.search);
