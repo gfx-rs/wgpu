@@ -103,7 +103,7 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // It may also be worth noting that although on native, the usage of asynchronous
     // channels is wholely unnecessary, for the sake of portability to WASM (std channels
     // don't work on WASM,) we'll use async channels that work on both native and WASM.
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     // In order for the mapping to be completed, one of three things must happen.
     // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
@@ -112,7 +112,7 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     context.device.poll(wgpu::Maintain::Wait);
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
-    receiver.receive().await.unwrap().unwrap();
+    receiver.recv_async().await.unwrap().unwrap();
     log::info!("Result received.");
     // NOW we can call get_mapped_range.
     {

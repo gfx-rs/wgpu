@@ -98,21 +98,22 @@ impl EventLoopWrapper {
     pub fn new(title: &str) -> Self {
         let event_loop = EventLoop::new().unwrap();
         let mut builder = winit::window::WindowBuilder::new();
-        builder = builder.with_title(title);
-        let window = Arc::new(builder.build(&event_loop).unwrap());
-
         #[cfg(target_arch = "wasm32")]
         {
-            use winit::platform::web::WindowExtWebSys;
-            let canvas = window.canvas().expect("Couldn't get canvas");
-            canvas.style().set_css_text("height: 100%; width: 100%;");
-            // On wasm, append the canvas to the document body
-            web_sys::window()
-                .and_then(|win| win.document())
-                .and_then(|doc| doc.body())
-                .and_then(|body| body.append_child(&canvas).ok())
-                .expect("couldn't append canvas to document body");
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowBuilderExtWebSys;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            builder = builder.with_canvas(Some(canvas));
         }
+        builder = builder.with_title(title);
+        let window = Arc::new(builder.build(&event_loop).unwrap());
 
         Self { event_loop, window }
     }
