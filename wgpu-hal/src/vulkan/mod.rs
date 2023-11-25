@@ -65,6 +65,7 @@ impl crate::Api for Api {
     type CommandEncoder = CommandEncoder;
     type CommandBuffer = CommandBuffer;
 
+    type Semaphore = Semaphore;
     type Buffer = Buffer;
     type Texture = Texture;
     type SurfaceTexture = SurfaceTexture;
@@ -146,7 +147,6 @@ struct Swapchain {
     raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::Swapchain,
     device: Arc<DeviceShared>,
-    fence: vk::Fence,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
     view_formats: Vec<wgt::TextureFormat>,
@@ -357,6 +357,26 @@ pub struct Queue {
     /// [Intel hangs in `anv_queue_finish`](https://gitlab.freedesktop.org/mesa/mesa/-/issues/5508).
     relay_semaphores: [vk::Semaphore; 2],
     relay_index: AtomicIsize,
+}
+
+/// An owned semaphore used for synchronization.
+pub struct Semaphore {
+    device: Arc<DeviceShared>,
+    raw: vk::Semaphore,
+}
+
+impl Drop for Semaphore {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.raw.destroy_semaphore(self.raw, None);
+        }
+    }
+}
+
+impl fmt::Debug for Semaphore {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Semaphore").field("raw", &self.raw).finish()
+    }
 }
 
 #[derive(Debug)]
@@ -586,6 +606,7 @@ impl crate::Queue<Api> for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
+        wait_semaphore: Option<&Semaphore>,
     ) -> Result<(), crate::DeviceError> {
         let vk_cmd_buffers = command_buffers
             .iter()
@@ -597,6 +618,14 @@ impl crate::Queue<Api> for Queue {
         let mut fence_raw = vk::Fence::null();
         let mut vk_timeline_info;
         let mut signal_semaphores = [vk::Semaphore::null(), vk::Semaphore::null()];
+        let mut wait_semaphores = [vk::Semaphore::null(); 2];
+        let mut wait_semaphores_count = 0;
+
+        if let Some(wait_semaphore) = wait_semaphore {
+            wait_semaphores[0] = wait_semaphore.raw;
+            wait_semaphores_count = 1;
+        }
+
         let signal_values;
 
         if let Some((fence, value)) = signal_fence {
@@ -629,14 +658,23 @@ impl crate::Queue<Api> for Queue {
 
         let wait_stage_mask = [vk::PipelineStageFlags::TOP_OF_PIPE];
         let old_index = self.relay_index.load(Ordering::Relaxed);
+
         let sem_index = if old_index >= 0 {
-            vk_info = vk_info
-                .wait_semaphores(&self.relay_semaphores[old_index as usize..old_index as usize + 1])
-                .wait_dst_stage_mask(&wait_stage_mask);
+            wait_semaphores[wait_semaphores_count..].copy_from_slice(
+                &self.relay_semaphores[old_index as usize..old_index as usize + 1],
+            );
+            wait_semaphores_count += 1;
+
+            vk_info = vk_info.wait_dst_stage_mask(&wait_stage_mask);
             (old_index as usize + 1) % self.relay_semaphores.len()
         } else {
             0
         };
+
+        if wait_semaphores_count > 0 {
+            vk_info = vk_info.wait_semaphores(&wait_semaphores[..wait_semaphores_count]);
+        }
+
         self.relay_index
             .store(sem_index as isize, Ordering::Relaxed);
         signal_semaphores[0] = self.relay_semaphores[sem_index];

@@ -240,6 +240,7 @@ pub type SurfaceId = Id<crate::instance::Surface>;
 pub type DeviceId = Id<crate::device::Device<Dummy>>;
 pub type QueueId = DeviceId;
 // Resource
+pub type SemaphoreId = Id<crate::resource::Semaphore<Dummy>>;
 pub type BufferId = Id<crate::resource::Buffer<Dummy>>;
 pub type StagingBufferId = Id<crate::resource::StagingBuffer<Dummy>>;
 pub type TextureViewId = Id<crate::resource::TextureView<Dummy>>;

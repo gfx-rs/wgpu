@@ -93,6 +93,7 @@ struct WgpuContext {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
     pub uniform_buffer: wgpu::Buffer,
+    pub image_available: wgpu::Semaphore,
 }
 
 impl WgpuContext {
@@ -203,6 +204,10 @@ impl WgpuContext {
         };
         surface.configure(&device, &surface_config);
 
+        let image_available = device.create_semaphore(&wgpu::SemaphoreDescriptor {
+            label: Some("Image Available"),
+        });
+
         // (5)
         WgpuContext {
             window,
@@ -213,6 +218,7 @@ impl WgpuContext {
             pipeline,
             bind_group,
             uniform_buffer,
+            image_available,
         }
     }
 
@@ -293,7 +299,10 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                         WindowEvent::RedrawRequested => {
                             let wgpu_context_ref = wgpu_context.as_ref().unwrap();
                             let state_ref = state.as_ref().unwrap();
-                            let frame = wgpu_context_ref.surface.get_current_texture().unwrap();
+                            let frame = wgpu_context_ref
+                                .surface
+                                .get_current_texture(&wgpu_context_ref.image_available)
+                                .unwrap();
                             let view = frame
                                 .texture
                                 .create_view(&wgpu::TextureViewDescriptor::default());

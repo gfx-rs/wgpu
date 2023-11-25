@@ -534,6 +534,7 @@ impl crate::Context for Context {
     type TextureViewData = ();
     type SamplerId = wgc::id::SamplerId;
     type SamplerData = ();
+    type SemaphoreId = wgc::id::SemaphoreId;
     type BufferId = wgc::id::BufferId;
     type BufferData = Buffer;
     type TextureId = wgc::id::TextureId;
@@ -789,6 +790,7 @@ impl crate::Context for Context {
         &self,
         surface: &Self::SurfaceId,
         surface_data: &Self::SurfaceData,
+        image_available: &Self::SemaphoreId,
     ) -> (
         Option<Self::TextureId>,
         Option<Self::TextureData>,
@@ -801,7 +803,7 @@ impl crate::Context for Context {
             .lock()
             .expect("Surface was not configured?");
         match wgc::gfx_select!(
-            device_id => global.surface_get_current_texture(*surface, ())
+            device_id => global.surface_get_current_texture(*surface, (), *image_available)
         ) {
             Ok(wgc::present::SurfaceOutput { status, texture_id }) => {
                 let (id, data) = {
@@ -1281,6 +1283,32 @@ impl crate::Context for Context {
             );
         }
         (id, ())
+    }
+    fn device_create_semaphore(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &crate::SemaphoreDescriptor<'_>,
+    ) -> Self::SemaphoreId {
+        let global = &self.0;
+
+        let (id, error) = wgc::gfx_select!(device => global.device_create_semaphore(
+            *device,
+            &desc.map_label(|l| l.map(Borrowed)),
+            ()
+        ));
+
+        if let Some(cause) = error {
+            self.handle_error(
+                &device_data.error_sink,
+                cause,
+                LABEL,
+                None,
+                "Device::create_semaphore",
+            );
+        }
+
+        id
     }
     fn device_create_buffer(
         &self,
@@ -2340,13 +2368,14 @@ impl crate::Context for Context {
         queue: &Self::QueueId,
         _queue_data: &Self::QueueData,
         command_buffers: I,
+        wait_semaphore: Option<Self::SemaphoreId>,
     ) -> (Self::SubmissionIndex, Self::SubmissionIndexData) {
         let temp_command_buffers = command_buffers
             .map(|(i, _)| i)
             .collect::<SmallVec<[_; 4]>>();
 
         let global = &self.0;
-        let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers))
+        let index = match wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers, wait_semaphore))
         {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),

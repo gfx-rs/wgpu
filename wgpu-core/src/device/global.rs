@@ -14,7 +14,9 @@ use crate::{
     instance::{self, Adapter, Surface},
     pipeline, present,
     resource::{self, BufferAccessResult},
-    resource::{BufferAccessError, BufferMapOperation, CreateBufferError, Resource},
+    resource::{
+        BufferAccessError, BufferMapOperation, CreateBufferError, CreateSemaphoreError, Resource,
+    },
     validation::check_buffer_usage,
     FastHashMap, Label, LabelHelpers as _,
 };
@@ -140,6 +142,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         Ok(device.downlevel.clone())
+    }
+
+    pub fn device_create_semaphore<A: HalApi>(
+        &self,
+        device_id: DeviceId,
+        desc: &resource::SemaphoreDescriptor,
+        id_in: Input<G, id::SemaphoreId>,
+    ) -> (id::SemaphoreId, Option<CreateSemaphoreError>) {
+        profiling::scope!("Device::create_semaphore");
+
+        let hub = A::hub(self);
+        let fid = hub.semaphores.prepare::<G>(id_in);
+
+        let error = loop {
+            let device = match hub.devices.get(device_id) {
+                Ok(device) => device,
+                Err(_) => {
+                    break DeviceError::Invalid.into();
+                }
+            };
+
+            if !device.is_valid() {
+                break DeviceError::Lost.into();
+            }
+
+            let semaphore = match device.create_semaphore(desc) {
+                Ok(semaphore) => semaphore,
+                Err(e) => {
+                    break e;
+                }
+            };
+
+            let (id, resource) = fid.assign(semaphore);
+            api_log!("Device::create_semaphore({desc:?}) -> {id:?}");
+
+            device
+                .trackers
+                .lock()
+                .semaphores
+                .insert_single(id, resource);
+
+            return (id, None);
+        };
+
+        let id = fid.assign_error(desc.label.borrow_or_default());
+        (id, Some(error))
     }
 
     pub fn device_create_buffer<A: HalApi>(

@@ -496,6 +496,7 @@ where
 
 /// A full double sided tracker used by CommandBuffers and the Device.
 pub(crate) struct Tracker<A: HalApi> {
+    pub semaphores: StatelessTracker<A, id::SemaphoreId, resource::Semaphore<A>>,
     pub buffers: BufferTracker<A>,
     pub textures: TextureTracker<A>,
     pub views: StatelessTracker<A, id::TextureViewId, resource::TextureView<A>>,
@@ -510,6 +511,7 @@ pub(crate) struct Tracker<A: HalApi> {
 impl<A: HalApi> Tracker<A> {
     pub fn new() -> Self {
         Self {
+            semaphores: StatelessTracker::new(),
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
             views: StatelessTracker::new(),

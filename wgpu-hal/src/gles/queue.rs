@@ -1749,6 +1749,7 @@ impl crate::Queue<super::Api> for super::Queue {
         &self,
         command_buffers: &[&super::CommandBuffer],
         signal_fence: Option<(&mut super::Fence, crate::FenceValue)>,
+        _wait_semaphore: Option<&super::Semaphore>,
     ) -> Result<(), crate::DeviceError> {
         let shared = Arc::clone(&self.shared);
         let gl = &shared.context.lock();

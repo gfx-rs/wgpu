@@ -23,7 +23,7 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     hal_label,
-    id::{SurfaceId, TextureId},
+    id::{SemaphoreId, SurfaceId, TextureId},
     identity::{GlobalIdentityHandlerFactory, Input},
     init_tracker::TextureInitTracker,
     resource::{self, ResourceInfo},
@@ -52,6 +52,8 @@ pub(crate) struct Presentation {
 pub enum SurfaceError {
     #[error("Surface is invalid")]
     Invalid,
+    #[error("Wait image semaphore is invalid")]
+    InvalidWaitImageSemaphore,
     #[error("Surface is not configured for presentation")]
     NotConfigured,
     #[error(transparent)]
@@ -128,6 +130,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         surface_id: SurfaceId,
         texture_id_in: Input<G, TextureId>,
+        image_available: SemaphoreId,
     ) -> Result<SurfaceOutput, SurfaceError> {
         profiling::scope!("SwapChain::get_next_texture");
 
@@ -159,18 +162,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             trace.add(Action::GetSurfaceTexture {
                 id: fid.id(),
                 parent_id: surface_id,
+                image_available,
             });
         }
         #[cfg(not(feature = "trace"))]
         let _ = device;
 
+        let image_available = hub
+            .semaphores
+            .get(image_available)
+            .map_err(|_| SurfaceError::InvalidWaitImageSemaphore)?;
+
         let suf = A::get_surface(surface.as_ref());
         let (texture_id, status) = match unsafe {
-            suf.unwrap()
-                .raw
-                .acquire_texture(Some(std::time::Duration::from_millis(
-                    FRAME_TIMEOUT_MS as u64,
-                )))
+            suf.unwrap().raw.acquire_texture(
+                Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
+                &image_available.raw,
+            )
         } {
             Ok(Some(ast)) => {
                 let texture_desc = wgt::TextureDescriptor {

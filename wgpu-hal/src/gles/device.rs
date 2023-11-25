@@ -692,6 +692,10 @@ impl crate::Device<super::Api> for super::Device {
         //TODO: do we need to do anything?
     }
 
+    unsafe fn create_semaphore(&self) -> Result<super::Semaphore, crate::DeviceError> {
+        Ok(super::Semaphore)
+    }
+
     unsafe fn create_texture(
         &self,
         desc: &crate::TextureDescriptor,

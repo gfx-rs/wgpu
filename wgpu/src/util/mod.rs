@@ -111,7 +111,7 @@ impl DownloadBuffer {
             device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
         encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size);
         let command_buffer: super::CommandBuffer = encoder.finish();
-        queue.submit(Some(command_buffer));
+        queue.submit(Some(command_buffer), None);
 
         download
             .clone()

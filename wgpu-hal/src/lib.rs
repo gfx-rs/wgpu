@@ -198,6 +198,7 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type CommandEncoder: CommandEncoder<Self>;
     type CommandBuffer: WasmNotSendSync + fmt::Debug;
 
+    type Semaphore: fmt::Debug + WasmNotSendSync + 'static;
     type Buffer: fmt::Debug + WasmNotSendSync + 'static;
     type Texture: fmt::Debug + WasmNotSendSync + 'static;
     type SurfaceTexture: fmt::Debug + WasmNotSendSync + Borrow<Self::Texture>;
@@ -265,6 +266,7 @@ pub trait Surface<A: Api>: WasmNotSendSync {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        image_available: &A::Semaphore,
     ) -> Result<Option<AcquiredSurfaceTexture<A>>, SurfaceError>;
     unsafe fn discard_texture(&self, texture: A::SurfaceTexture);
 }
@@ -314,6 +316,9 @@ pub trait Device<A: Api>: WasmNotSendSync {
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &A::Buffer, ranges: I)
     where
         I: Iterator<Item = MemoryRange>;
+
+    /// Creates a semaphore.
+    unsafe fn create_semaphore(&self) -> Result<A::Semaphore, DeviceError>;
 
     /// Creates a new texture.
     ///
@@ -417,6 +422,7 @@ pub trait Queue<A: Api>: WasmNotSendSync {
         &self,
         command_buffers: &[&A::CommandBuffer],
         signal_fence: Option<(&mut A::Fence, FenceValue)>,
+        wait_semaphore: Option<&A::Semaphore>,
     ) -> Result<(), DeviceError>;
     unsafe fn present(
         &self,

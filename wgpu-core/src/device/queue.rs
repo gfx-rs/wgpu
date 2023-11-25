@@ -1118,6 +1118,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: QueueId,
         command_buffer_ids: &[id::CommandBufferId],
+        wait_semaphore: Option<id::SemaphoreId>,
     ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
         profiling::scope!("Queue::submit");
         api_log!("Queue::submit {queue_id:?}");
@@ -1129,6 +1130,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .queues
                 .get(queue_id)
                 .map_err(|_| DeviceError::InvalidQueueId)?;
+
+            let wait_semaphore = match wait_semaphore {
+                Some(id) => {
+                    let semaphore = hub
+                        .semaphores
+                        .get(id)
+                        .map_err(|_| DeviceError::InvalidSemaphoreId)?;
+
+                    if semaphore.device.as_info().id() != queue_id {
+                        return Err(DeviceError::WrongDevice.into());
+                    }
+
+                    Some(semaphore)
+                }
+                None => None,
+            };
+
+            let wait_semaphore = wait_semaphore.as_ref().map(|s| &s.raw);
 
             let device = queue.device.as_ref().unwrap();
 
@@ -1480,7 +1499,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .raw
                     .as_ref()
                     .unwrap()
-                    .submit(&refs, Some((fence, submit_index)))
+                    .submit(&refs, Some((fence, submit_index)), wait_semaphore)
                     .map_err(DeviceError::from)?;
             }
 

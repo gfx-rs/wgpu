@@ -72,6 +72,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         multiview: None,
     });
 
+    let image_available = device.create_semaphore(&wgpu::SemaphoreDescriptor {
+        label: Some("Image Available"),
+    });
+
     let mut config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: swapchain_format,
@@ -108,7 +112,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     }
                     WindowEvent::RedrawRequested => {
                         let frame = surface
-                            .get_current_texture()
+                            .get_current_texture(&image_available)
                             .expect("Failed to acquire next swap chain texture");
                         let view = frame
                             .texture

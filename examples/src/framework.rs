@@ -125,6 +125,7 @@ impl EventLoopWrapper {
 struct SurfaceWrapper {
     surface: Option<wgpu::Surface<'static>>,
     config: Option<wgpu::SurfaceConfiguration>,
+    image_available: Option<wgpu::Semaphore>,
 }
 
 impl SurfaceWrapper {
@@ -133,6 +134,7 @@ impl SurfaceWrapper {
         Self {
             surface: None,
             config: None,
+            image_available: None,
         }
     }
 
@@ -147,6 +149,13 @@ impl SurfaceWrapper {
         if cfg!(target_arch = "wasm32") {
             self.surface = Some(instance.create_surface(window).unwrap());
         }
+    }
+
+    /// Called after the device has been created.
+    fn post_device(&mut self, device: &wgpu::Device) {
+        self.image_available = Some(device.create_semaphore(&wgpu::SemaphoreDescriptor {
+            label: Some("Image Available"),
+        }));
     }
 
     /// Check if the event is the start condition for the surface.
@@ -215,12 +224,13 @@ impl SurfaceWrapper {
     /// Acquire the next surface texture.
     fn acquire(&mut self, context: &ExampleContext) -> wgpu::SurfaceTexture {
         let surface = self.surface.as_ref().unwrap();
+        let image_available = self.image_available.as_ref().unwrap();
 
-        match surface.get_current_texture() {
+        match surface.get_current_texture(image_available) {
             Ok(frame) => frame,
             // If we timed out, just try again
             Err(wgpu::SurfaceError::Timeout) => surface
-                .get_current_texture()
+                .get_current_texture(image_available)
                 .expect("Failed to acquire next surface texture!"),
             Err(
                 // If the surface is outdated, or was lost, reconfigure it.
@@ -231,7 +241,7 @@ impl SurfaceWrapper {
             ) => {
                 surface.configure(&context.device, self.config());
                 surface
-                    .get_current_texture()
+                    .get_current_texture(image_available)
                     .expect("Failed to acquire next surface texture!")
             }
         }
@@ -324,6 +334,8 @@ impl ExampleContext {
             )
             .await
             .expect("Unable to find a suitable GPU adapter!");
+
+        surface.post_device(&device);
 
         Self {
             instance,

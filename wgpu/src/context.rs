@@ -13,9 +13,9 @@ use crate::{
     DeviceDescriptor, Error, ErrorFilter, ImageCopyBuffer, ImageCopyTexture, Maintain, MapMode,
     PipelineLayoutDescriptor, QuerySetDescriptor, RenderBundleDescriptor,
     RenderBundleEncoderDescriptor, RenderPassDescriptor, RenderPipelineDescriptor,
-    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderModuleDescriptorSpirV, Texture, TextureDescriptor, TextureViewDescriptor,
-    UncapturedErrorHandler,
+    RequestAdapterOptions, RequestDeviceError, SamplerDescriptor, SemaphoreDescriptor,
+    ShaderModuleDescriptor, ShaderModuleDescriptorSpirV, Texture, TextureDescriptor,
+    TextureViewDescriptor, UncapturedErrorHandler,
 };
 
 /// Meta trait for an id tracked by a context.
@@ -47,6 +47,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type TextureViewData: ContextData;
     type SamplerId: ContextId + WasmNotSendSync;
     type SamplerData: ContextData;
+    type SemaphoreId: ContextId + WasmNotSendSync;
     type BufferId: ContextId + WasmNotSendSync;
     type BufferData: ContextData;
     type TextureId: ContextId + WasmNotSendSync;
@@ -169,6 +170,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         surface: &Self::SurfaceId,
         surface_data: &Self::SurfaceData,
+        image_available: &Self::SemaphoreId,
     ) -> (
         Option<Self::TextureId>,
         Option<Self::TextureData>,
@@ -232,6 +234,12 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         device_data: &Self::DeviceData,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (Self::ComputePipelineId, Self::ComputePipelineData);
+    fn device_create_semaphore(
+        &self,
+        device: &Self::DeviceId,
+        device_data: &Self::DeviceData,
+        desc: &SemaphoreDescriptor<'_>,
+    ) -> Self::SemaphoreId;
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -599,6 +607,7 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         queue: &Self::QueueId,
         queue_data: &Self::QueueData,
         command_buffers: I,
+        wait_semaphore: Option<Self::SemaphoreId>,
     ) -> (Self::SubmissionIndex, Self::SubmissionIndexData);
     fn queue_get_timestamp_period(
         &self,
@@ -1289,6 +1298,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         surface: &ObjectId,
         surface_data: &crate::Data,
+        image_available: &ObjectId,
     ) -> (
         Option<ObjectId>,
         Option<Box<crate::Data>>,
@@ -1348,6 +1358,12 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &ComputePipelineDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
+    fn device_create_semaphore(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &SemaphoreDescriptor<'_>,
+    ) -> ObjectId;
     fn device_create_buffer(
         &self,
         device: &ObjectId,
@@ -1665,6 +1681,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         queue: &ObjectId,
         queue_data: &crate::Data,
         command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
+        wait_semaphore: Option<ObjectId>,
     ) -> (ObjectId, Arc<crate::Data>);
     fn queue_get_timestamp_period(&self, queue: &ObjectId, queue_data: &crate::Data) -> f32;
     fn queue_on_submitted_work_done(
@@ -2227,6 +2244,7 @@ where
         &self,
         surface: &ObjectId,
         surface_data: &crate::Data,
+        image_available: &ObjectId,
     ) -> (
         Option<ObjectId>,
         Option<Box<crate::Data>>,
@@ -2234,9 +2252,10 @@ where
         Box<dyn AnyWasmNotSendSync>,
     ) {
         let surface = <T::SurfaceId>::from(*surface);
+        let image_available = <T::SemaphoreId>::from(*image_available);
         let surface_data = downcast_ref(surface_data);
         let (texture, texture_data, status, detail) =
-            Context::surface_get_current_texture(self, &surface, surface_data);
+            Context::surface_get_current_texture(self, &surface, surface_data, &image_available);
         let detail = Box::new(detail) as Box<dyn AnyWasmNotSendSync>;
         (
             texture.map(Into::into),
@@ -2373,6 +2392,18 @@ where
         let (compute_pipeline, data) =
             Context::device_create_compute_pipeline(self, &device, device_data, desc);
         (compute_pipeline.into(), Box::new(data) as _)
+    }
+
+    fn device_create_semaphore(
+        &self,
+        device: &ObjectId,
+        device_data: &crate::Data,
+        desc: &SemaphoreDescriptor<'_>,
+    ) -> ObjectId {
+        let device = <T::DeviceId>::from(*device);
+        let device_data = downcast_ref(device_data);
+        let semaphore = Context::device_create_semaphore(self, &device, device_data, desc);
+        semaphore.into()
     }
 
     fn device_create_buffer(
@@ -3117,6 +3148,7 @@ where
         queue: &ObjectId,
         queue_data: &crate::Data,
         command_buffers: Box<dyn Iterator<Item = (ObjectId, Box<crate::Data>)> + 'a>,
+        wait_semaphore: Option<ObjectId>,
     ) -> (ObjectId, Arc<crate::Data>) {
         let queue = <T::QueueId>::from(*queue);
         let queue_data = downcast_ref(queue_data);
@@ -3124,8 +3156,9 @@ where
             let command_buffer_data: <T as Context>::CommandBufferData = *data.downcast().unwrap();
             (<T::CommandBufferId>::from(id), command_buffer_data)
         });
+        let wait_semaphore = wait_semaphore.map(<T::SemaphoreId>::from);
         let (submission_index, data) =
-            Context::queue_submit(self, &queue, queue_data, command_buffers);
+            Context::queue_submit(self, &queue, queue_data, command_buffers, wait_semaphore);
         (submission_index.into(), Arc::new(data) as _)
     }
 

@@ -21,6 +21,7 @@ impl crate::Api for Api {
     type Queue = Context;
     type CommandEncoder = Encoder;
     type CommandBuffer = Resource;
+    type Semaphore = Resource;
 
     type Buffer = Resource;
     type Texture = Resource;
@@ -70,6 +71,7 @@ impl crate::Surface<Api> for Context {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        image_available: &Resource,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
     }
@@ -105,6 +107,7 @@ impl crate::Queue<Api> for Context {
         &self,
         command_buffers: &[&Resource],
         signal_fence: Option<(&mut Resource, crate::FenceValue)>,
+        wait_semaphore: Option<&Resource>,
     ) -> DeviceResult<()> {
         Ok(())
     }
@@ -139,6 +142,10 @@ impl crate::Device<Api> for Context {
     }
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
     unsafe fn invalidate_mapped_ranges<I>(&self, buffer: &Resource, ranges: I) {}
+
+    unsafe fn create_semaphore(&self) -> DeviceResult<Resource> {
+        Ok(Resource)
+    }
 
     unsafe fn create_texture(&self, desc: &crate::TextureDescriptor) -> DeviceResult<Resource> {
         Ok(Resource)

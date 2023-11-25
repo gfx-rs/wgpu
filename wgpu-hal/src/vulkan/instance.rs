@@ -176,7 +176,6 @@ impl super::Swapchain {
             // the presentation work is done, we are forced to wait until the device is idle.
             let _ = unsafe { device.device_wait_idle() };
         };
-        unsafe { device.destroy_fence(self.fence, None) };
         self
     }
 }
@@ -906,6 +905,7 @@ impl crate::Surface<super::Api> for super::Surface {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<std::time::Duration>,
+        image_available: &super::Semaphore,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let mut swapchain = self.swapchain.write();
         let sc = swapchain.as_mut().unwrap();
@@ -930,8 +930,12 @@ impl crate::Surface<super::Api> for super::Surface {
 
         // will block if no image is available
         let (index, suboptimal) = match unsafe {
-            sc.functor
-                .acquire_next_image(sc.raw, timeout_ns, vk::Semaphore::null(), sc.fence)
+            sc.functor.acquire_next_image(
+                sc.raw,
+                timeout_ns,
+                image_available.raw,
+                vk::Fence::null(),
+            )
         } {
             // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
             // See the comment in `Queue::present`.
@@ -955,12 +959,6 @@ impl crate::Surface<super::Api> for super::Surface {
         if sc.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
             return Err(crate::SurfaceError::Outdated);
         }
-
-        let fences = &[sc.fence];
-
-        unsafe { sc.device.raw.wait_for_fences(fences, true, !0) }
-            .map_err(crate::DeviceError::from)?;
-        unsafe { sc.device.raw.reset_fences(fences) }.map_err(crate::DeviceError::from)?;
 
         // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkRenderPassBeginInfo.html#VUID-VkRenderPassBeginInfo-framebuffer-03209
         let raw_flags = if sc

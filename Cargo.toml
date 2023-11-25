@@ -23,7 +23,7 @@ members = [
 exclude = []
 default-members = [
     "d3d12",
-    "examples/",
+    # "examples/",
     "naga-cli",
     "naga",
     "naga/fuzz",

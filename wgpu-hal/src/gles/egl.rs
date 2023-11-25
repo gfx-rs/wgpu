@@ -1355,6 +1355,7 @@ impl crate::Surface<super::Api> for Surface {
     unsafe fn acquire_texture(
         &self,
         _timeout_ms: Option<Duration>, //TODO
+        _image_available: &super::Semaphore,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();

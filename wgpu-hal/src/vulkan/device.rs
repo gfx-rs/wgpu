@@ -627,16 +627,11 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(crate::DeviceError::from)?;
 
-        let vk_info = vk::FenceCreateInfo::builder().build();
-        let fence = unsafe { self.shared.raw.create_fence(&vk_info, None) }
-            .map_err(crate::DeviceError::from)?;
-
         Ok(super::Swapchain {
             raw,
             raw_flags,
             functor,
             device: Arc::clone(&self.shared),
-            fence,
             images,
             config: config.clone(),
             view_formats: wgt_view_formats,
@@ -971,6 +966,22 @@ impl crate::Device<super::Api> for super::Device {
             }
             .unwrap();
         }
+    }
+
+    unsafe fn create_semaphore(&self) -> Result<super::Semaphore, crate::DeviceError> {
+        let vk_info = vk::SemaphoreCreateInfo::builder().build();
+
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_semaphore(&vk_info, None)
+                .map_err(crate::DeviceError::from)?
+        };
+
+        Ok(super::Semaphore {
+            device: self.shared.clone(),
+            raw,
+        })
     }
 
     unsafe fn create_texture(

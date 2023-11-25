@@ -16,6 +16,7 @@ struct ViewportDesc {
 struct Viewport {
     desc: ViewportDesc,
     config: wgpu::SurfaceConfiguration,
+    image_available: wgpu::Semaphore,
 }
 
 impl ViewportDesc {
@@ -44,7 +45,15 @@ impl ViewportDesc {
 
         self.surface.configure(device, &config);
 
-        Viewport { desc: self, config }
+        let image_available = device.create_semaphore(&wgpu::SemaphoreDescriptor {
+            label: Some("Image Available"),
+        });
+
+        Viewport {
+            desc: self,
+            config,
+            image_available,
+        }
     }
 }
 
@@ -57,7 +66,7 @@ impl Viewport {
     fn get_current_texture(&mut self) -> wgpu::SurfaceTexture {
         self.desc
             .surface
-            .get_current_texture()
+            .get_current_texture(&self.image_available)
             .expect("Failed to acquire next swap chain texture")
     }
 }

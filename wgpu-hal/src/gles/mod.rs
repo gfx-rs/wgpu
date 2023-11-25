@@ -145,6 +145,7 @@ impl crate::Api for Api {
     type Queue = Queue;
     type CommandEncoder = CommandEncoder;
     type CommandBuffer = CommandBuffer;
+    type Semaphore = Semaphore;
 
     type Buffer = Buffer;
     type Texture = Texture;
@@ -963,6 +964,9 @@ unsafe impl Sync for CommandBuffer {}
     not(target_feature = "atomics")
 ))]
 unsafe impl Send for CommandBuffer {}
+
+#[derive(Debug)]
+pub struct Semaphore;
 
 //TODO: we would have something like `Arc<typed_arena::Arena>`
 // here and in the command buffers. So that everything grows

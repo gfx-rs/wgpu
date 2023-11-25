@@ -22,7 +22,7 @@ use crate::{
     registry::Registry,
     resource::ResourceInfo,
     resource::{
-        self, Buffer, QuerySet, Resource, ResourceType, Sampler, Texture, TextureView,
+        self, Buffer, QuerySet, Resource, ResourceType, Sampler, Semaphore, Texture, TextureView,
         TextureViewNotRenderableReason,
     },
     resource_log,
@@ -472,6 +472,19 @@ impl<A: HalApi> Device<A> {
             }
         }
         self.lock_life().suspected_resources.extend(temp_suspected);
+    }
+
+    pub(crate) fn create_semaphore(
+        self: &Arc<Self>,
+        desc: &resource::SemaphoreDescriptor<'_>,
+    ) -> Result<Semaphore<A>, resource::CreateSemaphoreError> {
+        let semaphore = unsafe { self.raw().create_semaphore() }.map_err(DeviceError::from)?;
+
+        Ok(Semaphore {
+            raw: semaphore,
+            info: ResourceInfo::new(desc.label.borrow_or_default()),
+            device: self.clone(),
+        })
     }
 
     pub(crate) fn create_buffer(

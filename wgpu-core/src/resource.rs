@@ -8,8 +8,8 @@ use crate::{
     global::Global,
     hal_api::HalApi,
     id::{
-        AdapterId, BufferId, DeviceId, QuerySetId, SamplerId, StagingBufferId, SurfaceId,
-        TextureId, TextureViewId, TypedId,
+        AdapterId, BufferId, DeviceId, QuerySetId, SamplerId, SemaphoreId, StagingBufferId,
+        SurfaceId, TextureId, TextureViewId, TypedId,
     },
     identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -396,7 +396,28 @@ pub(crate) struct BufferPendingMapping<A: HalApi> {
     pub _parent_buffer: Arc<Buffer<A>>,
 }
 
+pub type SemaphoreDescriptor<'a> = wgt::SemaphoreDescriptor<Label<'a>>;
+
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
+
+#[derive(Debug)]
+pub struct Semaphore<A: HalApi> {
+    pub(crate) raw: A::Semaphore,
+    pub(crate) info: ResourceInfo<SemaphoreId>,
+    pub(crate) device: Arc<Device<A>>,
+}
+
+impl<A: HalApi> Resource<SemaphoreId> for Semaphore<A> {
+    const TYPE: ResourceType = "Semaphore";
+
+    fn as_info(&self) -> &ResourceInfo<SemaphoreId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<SemaphoreId> {
+        &mut self.info
+    }
+}
 
 #[derive(Debug)]
 pub struct Buffer<A: HalApi> {
@@ -583,6 +604,12 @@ impl<A: HalApi> Buffer<A> {
 
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateSemaphoreError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }
 
 #[derive(Clone, Debug, Error)]

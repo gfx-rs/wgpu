@@ -120,7 +120,7 @@ use crate::{
     instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
-    resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
+    resource::{Buffer, QuerySet, Sampler, Semaphore, StagingBuffer, Texture, TextureView},
     storage::{Element, Storage},
 };
 use std::fmt::Debug;
@@ -189,6 +189,7 @@ pub struct Hub<A: HalApi> {
     pub render_pipelines: Registry<id::RenderPipelineId, RenderPipeline<A>>,
     pub compute_pipelines: Registry<id::ComputePipelineId, ComputePipeline<A>>,
     pub query_sets: Registry<id::QuerySetId, QuerySet<A>>,
+    pub semaphores: Registry<id::SemaphoreId, Semaphore<A>>,
     pub buffers: Registry<id::BufferId, Buffer<A>>,
     pub staging_buffers: Registry<id::StagingBufferId, StagingBuffer<A>>,
     pub textures: Registry<id::TextureId, Texture<A>>,
@@ -211,6 +212,7 @@ impl<A: HalApi> Hub<A> {
             render_pipelines: Registry::new(A::VARIANT, factory),
             compute_pipelines: Registry::new(A::VARIANT, factory),
             query_sets: Registry::new(A::VARIANT, factory),
+            semaphores: Registry::new(A::VARIANT, factory),
             buffers: Registry::new(A::VARIANT, factory),
             staging_buffers: Registry::new(A::VARIANT, factory),
             textures: Registry::new(A::VARIANT, factory),

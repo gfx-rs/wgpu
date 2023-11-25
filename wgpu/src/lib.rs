@@ -168,6 +168,11 @@ pub struct Instance {
 ))]
 static_assertions::assert_impl_all!(Instance: Send, Sync);
 
+/// A semaphore that can be used for synchronization.
+pub struct Semaphore {
+    id: ObjectId,
+}
+
 /// Handle to a physical graphics and/or compute device.
 ///
 /// Adapters can be used to open a connection to the corresponding [`Device`]
@@ -1260,6 +1265,11 @@ pub type RequestAdapterOptions<'a, 'b> = RequestAdapterOptionsBase<&'a Surface<'
     )
 ))]
 static_assertions::assert_impl_all!(RequestAdapterOptions<'_, '_>: Send, Sync);
+
+/// Describes a [`Semaphore`].
+pub type SemaphoreDescriptor<'a> = wgt::SemaphoreDescriptor<Label<'a>>;
+static_assertions::assert_impl_all!(SemaphoreDescriptor<'_>: Send, Sync);
+
 /// Describes a [`Device`].
 ///
 /// For use with [`Adapter::request_device`].
@@ -2742,6 +2752,14 @@ impl Device {
             id,
             data,
         }
+    }
+
+    /// Construct a semaphore.
+    pub fn create_semaphore(&self, desc: &SemaphoreDescriptor<'_>) -> Semaphore {
+        let id =
+            DynContext::device_create_semaphore(&*self.context, &self.id, self.data.as_ref(), desc);
+
+        Semaphore { id }
     }
 
     /// Creates a [`Buffer`].
@@ -4997,6 +5015,7 @@ impl Queue {
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(
         &self,
         command_buffers: I,
+        wait_semaphore: Option<&Semaphore>,
     ) -> SubmissionIndex {
         let (raw, data) = DynContext::queue_submit(
             &*self.context,
@@ -5007,6 +5026,7 @@ impl Queue {
                     .into_iter()
                     .map(|mut comb| (comb.id.take().unwrap(), comb.data.take().unwrap())),
             ),
+            wait_semaphore.map(|s| s.id),
         );
 
         SubmissionIndex(raw, data)
@@ -5137,9 +5157,16 @@ impl Surface<'_> {
     ///
     /// If a SurfaceTexture referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
-    pub fn get_current_texture(&self) -> Result<SurfaceTexture, SurfaceError> {
-        let (texture_id, texture_data, status, detail) =
-            DynContext::surface_get_current_texture(&*self.context, &self.id, self.data.as_ref());
+    pub fn get_current_texture(
+        &self,
+        image_available: &Semaphore,
+    ) -> Result<SurfaceTexture, SurfaceError> {
+        let (texture_id, texture_data, status, detail) = DynContext::surface_get_current_texture(
+            &*self.context,
+            &self.id,
+            self.data.as_ref(),
+            &image_available.id,
+        );
 
         let suboptimal = match status {
             SurfaceStatus::Good => false,

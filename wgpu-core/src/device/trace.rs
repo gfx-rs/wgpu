@@ -61,6 +61,7 @@ pub enum Action<'a> {
     GetSurfaceTexture {
         id: id::TextureId,
         parent_id: id::SurfaceId,
+        image_available: id::SemaphoreId,
     },
     Present(id::SurfaceId),
     DiscardSurfaceTexture(id::SurfaceId),
@@ -122,7 +123,11 @@ pub enum Action<'a> {
         layout: wgt::ImageDataLayout,
         size: wgt::Extent3d,
     },
-    Submit(crate::SubmissionIndex, Vec<Command>),
+    Submit {
+        index: crate::SubmissionIndex,
+        commands: Vec<Command>,
+        wait_semaphore: Option<id::SemaphoreId>,
+    },
 }
 
 #[derive(Debug)]

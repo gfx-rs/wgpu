@@ -163,6 +163,7 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<id::RenderPipelineId>
     + IdentityHandlerFactory<id::ComputePipelineId>
     + IdentityHandlerFactory<id::QuerySetId>
+    + IdentityHandlerFactory<id::SemaphoreId>
     + IdentityHandlerFactory<id::BufferId>
     + IdentityHandlerFactory<id::StagingBufferId>
     + IdentityHandlerFactory<id::TextureId>

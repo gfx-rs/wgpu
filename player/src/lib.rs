@@ -217,9 +217,13 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
             Action::DestroySampler(id) => {
                 self.sampler_drop::<A>(id);
             }
-            Action::GetSurfaceTexture { id, parent_id } => {
+            Action::GetSurfaceTexture {
+                id,
+                parent_id,
+                image_available,
+            } => {
                 self.device_maintain_ids::<A>(device).unwrap();
-                self.surface_get_current_texture::<A>(parent_id, id)
+                self.surface_get_current_texture::<A>(parent_id, id, image_available)
                     .unwrap()
                     .texture_id
                     .unwrap();
@@ -368,10 +372,18 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                 self.queue_write_texture::<A>(device, &to, &bin, &layout, &size)
                     .unwrap();
             }
-            Action::Submit(_index, ref commands) if commands.is_empty() => {
-                self.queue_submit::<A>(device, &[]).unwrap();
+            Action::Submit {
+                ref commands,
+                wait_semaphore,
+                ..
+            } if commands.is_empty() => {
+                self.queue_submit::<A>(device, &[], wait_semaphore).unwrap();
             }
-            Action::Submit(_index, commands) => {
+            Action::Submit {
+                commands,
+                wait_semaphore,
+                ..
+            } => {
                 let (encoder, error) = self.device_create_command_encoder::<A>(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
@@ -381,7 +393,8 @@ impl GlobalPlay for wgc::global::Global<IdentityPassThroughFactory> {
                     panic!("{e}");
                 }
                 let cmdbuf = self.encode_commands::<A>(encoder, commands);
-                self.queue_submit::<A>(device, &[cmdbuf]).unwrap();
+                self.queue_submit::<A>(device, &[cmdbuf], wait_semaphore)
+                    .unwrap();
             }
         }
     }

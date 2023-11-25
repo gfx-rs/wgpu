@@ -1653,6 +1653,25 @@ pub struct AdapterInfo {
     pub backend: Backend,
 }
 
+/// Describes a semaphore.
+#[repr(C)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct SemaphoreDescriptor<L> {
+    /// Debug label of the semaphore.
+    pub label: L,
+}
+
+impl<L> SemaphoreDescriptor<L> {
+    /// Takes a closure and maps the label of the device descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> SemaphoreDescriptor<K> {
+        SemaphoreDescriptor {
+            label: fun(&self.label),
+        }
+    }
+}
+
 /// Describes a [`Device`](../wgpu/struct.Device.html).
 ///
 /// Corresponds to [WebGPU `GPUDeviceDescriptor`](
