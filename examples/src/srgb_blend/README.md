@@ -1,15 +1,15 @@
-# cube
+# srgb_blend
 
 This example shows blending in sRGB or linear space.
 
 ## To Run
 
 ```
-cargo run --bin cube -- linear
+cargo run --bin wgpu-examples srgb_blend -- linear
 ```
 
 ```
-cargo run --bin cube
+cargo run --bin wgpu-examples srgb_blend
 ```
 
 ## Screenshots
