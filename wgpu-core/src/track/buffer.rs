@@ -293,7 +293,7 @@ pub(crate) struct BufferTracker<A: HalApi> {
 }
 
 impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
-    /// Removes the buffer `id` from this tracker if it is otherwise unused.
+    /// Try to remove the buffer `id` from this tracker if it is otherwise unused.
     ///
     /// A buffer is 'otherwise unused' when the only references to it are:
     ///
@@ -308,8 +308,7 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
     /// `triage_suspected` will remove 3), leaving 1) as the sole
     /// remaining reference.
     ///
-    /// Return `true` if this tracker contained the buffer `id`. This
-    /// implies that we removed it.
+    /// Returns true if the resource was removed or if not existing in metadata.
     ///
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
@@ -339,11 +338,11 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
                         id,
                         existing_ref_count
                     );
+                    return false;
                 }
             }
         }
-
-        false
+        true
     }
 }
 
