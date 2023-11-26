@@ -313,7 +313,7 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
     /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    fn remove_abandoned(&mut self, id: BufferId, external_count: usize) -> bool {
+    fn remove_abandoned(&mut self, id: BufferId) -> bool {
         let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
@@ -327,8 +327,7 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
                 //2 ref count if only in Device Tracker and suspected resource itself and already released from user
                 //so not appearing in Registry
-                let min_ref_count = 1 + external_count;
-                if existing_ref_count <= min_ref_count {
+                if existing_ref_count <= 2 {
                     self.metadata.remove(index);
                     log::trace!("Buffer {:?} is not tracked anymore", id,);
                     return true;

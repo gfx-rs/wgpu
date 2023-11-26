@@ -2004,7 +2004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Wait for all work to finish before configuring the surface.
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(hub, fence, wgt::Maintain::Wait) {
+                match device.maintain(fence, wgt::Maintain::Wait) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2074,7 +2074,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(InvalidDevice);
         }
         device.lock_life().triage_suspected(
-            hub,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
@@ -2109,7 +2108,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
-            device.maintain(hub, fence, maintain)?
+            device.maintain(fence, maintain)?
         };
 
         closures.fire();
@@ -2143,7 +2142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(hub, fence, maintain)?;
+                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
                 closures.extend(cbs);

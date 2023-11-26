@@ -13,6 +13,9 @@ static DISCARDING_COLOR_TARGET_RESETS_TEXTURE_INIT_STATE_CHECK_VISIBLE_ON_COPY_A
         let mut case = TestCase::new(&mut ctx, TextureFormat::Rgba8UnormSrgb);
         case.create_command_encoder();
         case.discard();
+        case.submit_command_encoder_and_wait();
+
+        case.create_command_encoder();
         case.copy_texture_to_buffer();
         case.submit_command_encoder_and_wait();
 
@@ -89,7 +92,13 @@ static DISCARDING_EITHER_DEPTH_OR_STENCIL_ASPECT_TEST: GpuTestConfiguration =
                 let mut case = TestCase::new(&mut ctx, format);
                 case.create_command_encoder();
                 case.discard_depth();
+                case.submit_command_encoder_and_wait();
+
+                case.create_command_encoder();
                 case.discard_stencil();
+                case.submit_command_encoder_and_wait();
+
+                case.create_command_encoder();
                 case.copy_texture_to_buffer();
                 case.submit_command_encoder_and_wait();
 

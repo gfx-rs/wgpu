@@ -307,7 +307,6 @@ impl<A: HalApi> Device<A> {
     ///   return it to our callers.)
     pub(crate) fn maintain<'this>(
         &'this self,
-        hub: &Hub<A>,
         fence: &A::Fence,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<(UserClosures, bool), WaitIdleError> {
@@ -328,7 +327,6 @@ impl<A: HalApi> Device<A> {
             life_tracker.suspected_resources.extend(temp_suspected);
 
             life_tracker.triage_suspected(
-                hub,
                 &self.trackers,
                 #[cfg(feature = "trace")]
                 self.trace.lock().as_mut(),
@@ -368,7 +366,7 @@ impl<A: HalApi> Device<A> {
             last_done_index,
             self.command_allocator.lock().as_mut().unwrap(),
         );
-        let mapping_closures = life_tracker.handle_mapping(hub, self.raw(), &self.trackers);
+        let mapping_closures = life_tracker.handle_mapping(self.raw(), &self.trackers);
 
         //Cleaning up resources and released all unused suspected ones
         life_tracker.cleanup();

@@ -85,7 +85,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    fn remove_abandoned(&mut self, id: Id, external_count: usize) -> bool {
+    fn remove_abandoned(&mut self, id: Id) -> bool {
         let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
@@ -101,8 +101,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
                 //2 ref count if only in Device Tracker and suspected resource itself and already released from user
                 //so not appearing in Registry
-                let min_ref_count = 1 + external_count;
-                if existing_ref_count <= min_ref_count {
+                if existing_ref_count <= 2 {
                     self.metadata.remove(index);
                     log::trace!("{} {:?} is not tracked anymore", T::TYPE, id,);
                     return true;
