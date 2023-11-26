@@ -394,10 +394,10 @@ pub(crate) struct TextureTracker<A: HalApi> {
 }
 
 impl<A: HalApi> ResourceTracker<TextureId, Texture<A>> for TextureTracker<A> {
-    /// Removes the given resource from the tracker iff we have the last reference to the
+    /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
-    /// Returns true if the resource was removed.
+    /// Returns true if the resource was removed or if not exiting in metadata.
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
