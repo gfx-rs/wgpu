@@ -271,6 +271,9 @@ impl crate::framework::Example for Example {
                 block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
             }
+        } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
+            log::info!("Using etc2");
+            wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb
         } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
             log::info!("Using bc7");
             wgpu::TextureFormat::Bc7RgbaUnormSrgb
@@ -304,6 +307,7 @@ impl crate::framework::Example for Example {
                 block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
             } => &include_bytes!("images/astc.ktx2")[..],
+            wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb => &include_bytes!("images/etc2.ktx2")[..],
             wgpu::TextureFormat::Bc7RgbaUnormSrgb => &include_bytes!("images/bc7.ktx2")[..],
             wgpu::TextureFormat::Rgba8UnormSrgb => &include_bytes!("images/rgba8.ktx2")[..],
             _ => unreachable!(),
@@ -486,6 +490,19 @@ static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
     base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+    _phantom: std::marker::PhantomData::<Example>,
+};
+
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+    name: "skybox-etc2",
+    image_path: "/examples/src/skybox/screenshot_etc2.png",
+    width: 1024,
+    height: 768,
+    optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
+    base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
     _phantom: std::marker::PhantomData::<Example>,
 };
 
