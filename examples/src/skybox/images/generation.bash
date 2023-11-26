@@ -34,7 +34,7 @@ mkdir -p $TEMP
 # resize images to 256x256
 magick mogrify -path $TEMP -resize 256x256 -format png $1/*.jpg
 # create an uncompressed ktx2 cubemap file
-PVRTexToolCLI.exe -i $TEMP/right.png,$TEMP/left.png,$TEMP/top.png,$TEMP/bottom.png,$TEMP/front.png,$TEMP/back.png -ics srgb -cube -m -f r8g8b8a8 -o $SCRIPT_DIRECTORY/rgba8.ktx2
+PVRTexToolCLI.exe -i $TEMP/right.png,$TEMP/left.png,$TEMP/top.png,$TEMP/bottom.png,$TEMP/front.png,$TEMP/back.png -ics SRGB -cube -m -f r8g8b8a8,UBN,SRGB -o $SCRIPT_DIRECTORY/rgba8.ktx2
 # create the bc7 and etc2 compressed ktx2 cubemap files using compressonator
 compressonatorcli.exe -fd BC7 $SCRIPT_DIRECTORY/rgba8.ktx2 $SCRIPT_DIRECTORY/bc7.ktx2
 compressonatorcli.exe -fd ETC2_RGBA1 $SCRIPT_DIRECTORY/rgba8.ktx2 $SCRIPT_DIRECTORY/etc2.ktx2
