@@ -81,7 +81,7 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
     /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
-    /// Returns true if the resource was removed or if not exiting in metadata.
+    /// Returns true if the resource was removed or if not existing in metadata.
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.

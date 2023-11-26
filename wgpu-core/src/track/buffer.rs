@@ -308,7 +308,7 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
     /// `triage_suspected` will remove 3), leaving 1) as the sole
     /// remaining reference.
     ///
-    /// Returns true if the resource was removed or if not exiting in metadata.
+    /// Returns true if the resource was removed or if not existing in metadata.
     ///
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
