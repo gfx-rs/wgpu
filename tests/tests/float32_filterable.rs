@@ -45,7 +45,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
         }],
     });
 
-    let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    let _bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bgl,
         entries: &[wgpu::BindGroupEntry {
