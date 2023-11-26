@@ -141,8 +141,8 @@ pub enum ConstantEvaluatorError {
     InvalidAccessIndexTy,
     #[error("Constants don't support array length expressions")]
     ArrayLength,
-    #[error("Cannot cast type")]
-    InvalidCastArg,
+    #[error("Cannot cast type `{from}` to `{to}`")]
+    InvalidCastArg { from: String, to: String },
     #[error("Cannot apply the unary op to the argument")]
     InvalidUnaryOpArg,
     #[error("Cannot apply the binary op to the arguments")]
@@ -988,6 +988,22 @@ impl<'a> ConstantEvaluator<'a> {
 
         let expr = self.eval_zero_value(expr, span)?;
 
+        let make_error = || -> Result<_, ConstantEvaluatorError> {
+            let ty = self.resolve_type(expr)?;
+
+            #[cfg(feature = "wgsl-in")]
+            let from = ty.to_wgsl(&self.to_ctx());
+            #[cfg(feature = "wgsl-in")]
+            let to = target.to_wgsl();
+
+            #[cfg(not(feature = "wgsl-in"))]
+            let from = format!("{ty:?}");
+            #[cfg(not(feature = "wgsl-in"))]
+            let to = format!("{target:?}");
+
+            Err(ConstantEvaluatorError::InvalidCastArg { from, to })
+        };
+
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
                 let literal = match target {
@@ -997,7 +1013,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v as i32,
                         Literal::Bool(v) => v as i32,
                         Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
                         Literal::AbstractInt(v) => i32::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => i32::try_from_abstract(v)?,
@@ -1008,7 +1024,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v as u32,
                         Literal::Bool(v) => v as u32,
                         Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
                         Literal::AbstractInt(v) => u32::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => u32::try_from_abstract(v)?,
@@ -1019,7 +1035,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v,
                         Literal::Bool(v) => v as u32 as f32,
                         Literal::F64(_) | Literal::I64(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
                         Literal::AbstractInt(v) => f32::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => f32::try_from_abstract(v)?,
@@ -1030,7 +1046,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v as f64,
                         Literal::F64(v) => v,
                         Literal::Bool(v) => v as u32 as f64,
-                        Literal::I64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        Literal::I64(_) => return make_error(),
                         Literal::AbstractInt(v) => f64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => f64::try_from_abstract(v)?,
                     }),
@@ -1043,7 +1059,7 @@ impl<'a> ConstantEvaluator<'a> {
                         | Literal::I64(_)
                         | Literal::AbstractInt(_)
                         | Literal::AbstractFloat(_) => {
-                            return Err(ConstantEvaluatorError::InvalidCastArg)
+                            return make_error();
                         }
                     }),
                     Sc::ABSTRACT_FLOAT => Literal::AbstractFloat(match literal {
@@ -1055,11 +1071,11 @@ impl<'a> ConstantEvaluator<'a> {
                             v as f64
                         }
                         Literal::AbstractFloat(v) => v,
-                        _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+                        _ => return make_error(),
                     }),
                     _ => {
                         log::debug!("Constant evaluator refused to convert value to {target:?}");
-                        return Err(ConstantEvaluatorError::InvalidCastArg);
+                        return make_error();
                     }
                 };
                 Expression::Literal(literal)
@@ -1078,7 +1094,7 @@ impl<'a> ConstantEvaluator<'a> {
                         rows,
                         scalar: target,
                     },
-                    _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+                    _ => return make_error(),
                 };
 
                 let mut components = src_components.clone();
@@ -1104,7 +1120,7 @@ impl<'a> ConstantEvaluator<'a> {
                     value: cast_value,
                 }
             }
-            _ => return Err(ConstantEvaluatorError::InvalidCastArg),
+            _ => return make_error(),
         };
 
         self.register_evaluated_expr(expr, span)
@@ -1141,9 +1157,7 @@ impl<'a> ConstantEvaluator<'a> {
             *component = self.cast_array(*component, target, span)?;
         }
 
-        let first = components
-            .first()
-            .ok_or(ConstantEvaluatorError::InvalidCastArg)?;
+        let first = components.first().unwrap();
         let new_base = match self.resolve_type(*first)? {
             crate::proc::TypeResolution::Handle(ty) => ty,
             crate::proc::TypeResolution::Value(inner) => {
