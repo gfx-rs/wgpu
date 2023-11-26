@@ -428,11 +428,11 @@ impl<A: HalApi> ResourceTracker<TextureId, Texture<A>> for TextureTracker<A> {
                         id,
                         existing_ref_count
                     );
+                    return false;
                 }
             }
         }
-
-        false
+        true
     }
 }
 
