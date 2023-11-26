@@ -16,7 +16,7 @@ use std::{
 };
 
 pub use belt::StagingBelt;
-pub use device::{BufferInitDescriptor, DeviceExt};
+pub use device::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 pub use encoder::RenderEncoder;
 pub use init::*;
 pub use wgt::{math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs};

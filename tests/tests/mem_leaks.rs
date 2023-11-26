@@ -148,6 +148,7 @@ fn draw_test_with_reports(
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         },
+        wgpu::util::TextureDataOrder::LayerMajor,
         &[0, 0, 0, 1],
     );
     let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());

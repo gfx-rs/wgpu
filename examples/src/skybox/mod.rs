@@ -333,6 +333,8 @@ impl crate::framework::Example for Example {
                 label: None,
                 view_formats: &[],
             },
+            // KTX2 stores mip levels in mip major order.
+            wgpu::util::TextureDataOrder::MipMajor,
             &image,
         );
 
