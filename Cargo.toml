@@ -162,7 +162,7 @@ wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.38"
 wasm-bindgen-test = "0.3"
 web-time = "0.2.3"
-web-sys = "0.3.64"
+web-sys = "0.3.65"
 
 # deno dependencies
 deno_console = "0.119.0"
