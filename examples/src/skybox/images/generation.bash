@@ -38,6 +38,8 @@ PVRTexToolCLI.exe -i $TEMP/right.png,$TEMP/left.png,$TEMP/top.png,$TEMP/bottom.p
 # create the bc7 compressed ktx2 cubemap files using compressonator
 compressonatorcli.exe -fd BC7 $SCRIPT_DIRECTORY/rgba8.ktx2 $SCRIPT_DIRECTORY/bc7.ktx2
 # create the etc2 and astc compressed ktx2 cubemap file using PVRTexTool
+#
+# compressonator has support for etc2, but the result looks terrible.
 PVRTexToolCLI.exe -i $SCRIPT_DIRECTORY/rgba8.ktx2 -ics srgb -m -f ETC2_RGB_A1,UBN,SRGB -q etcslow -o $SCRIPT_DIRECTORY/etc2.ktx2
 PVRTexToolCLI.exe -i $SCRIPT_DIRECTORY/rgba8.ktx2 -ics srgb -m -f ASTC_4X4,UBN,SRGB -q astcexhaustive -o $SCRIPT_DIRECTORY/astc.ktx2
 rm -r $TEMP
