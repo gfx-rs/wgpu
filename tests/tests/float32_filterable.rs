@@ -13,7 +13,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: format,
+        format,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
@@ -35,9 +35,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
             binding: 0,
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float {
-                    filterable: filterable,
-                },
+                sample_type: wgpu::TextureSampleType::Float { filterable },
                 multisampled: false,
                 view_dimension: wgpu::TextureViewDimension::D2,
             },
