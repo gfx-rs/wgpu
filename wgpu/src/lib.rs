@@ -1542,7 +1542,7 @@ static_assertions::assert_impl_all!(RenderPipelineDescriptor: Send, Sync);
 /// For use with [`ComputePassDescriptor`].
 /// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
 ///
-/// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
+/// Corresponds to [WebGPU `GPUComputePassTimestampWrites`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrites).
 #[derive(Clone, Debug)]
 pub struct ComputePassTimestampWrites<'a> {
