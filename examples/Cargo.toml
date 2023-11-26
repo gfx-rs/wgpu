@@ -22,11 +22,11 @@ test = false
 [dependencies]
 bytemuck.workspace = true
 cfg-if.workspace = true
-ddsfile.workspace = true
 encase = { workspace = true, features = ["glam"] }
 flume.workspace = true
 getrandom.workspace = true
 glam.workspace = true
+ktx2.workspace = true
 log.workspace = true
 nanorand.workspace = true
 noise.workspace = true

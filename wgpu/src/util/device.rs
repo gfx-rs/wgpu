@@ -93,8 +93,8 @@ impl DeviceExt for crate::Device {
         let layer_iterations = desc.array_layer_count();
 
         let mut binary_offset = 0;
-        for layer in 0..layer_iterations {
-            for mip in 0..desc.mip_level_count {
+        for mip in 0..desc.mip_level_count {
+            for layer in 0..layer_iterations {
                 let mut mip_size = desc.mip_level_size(mip).unwrap();
                 // copying layers separately
                 if desc.dimension != wgt::TextureDimension::D3 {
