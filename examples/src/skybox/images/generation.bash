@@ -35,9 +35,9 @@ mkdir -p $TEMP
 magick mogrify -path $TEMP -resize 256x256 -format png $1/*.jpg
 # create an uncompressed ktx2 cubemap file
 PVRTexToolCLI.exe -i $TEMP/right.png,$TEMP/left.png,$TEMP/top.png,$TEMP/bottom.png,$TEMP/front.png,$TEMP/back.png -ics SRGB -cube -m -f r8g8b8a8,UBN,SRGB -o $SCRIPT_DIRECTORY/rgba8.ktx2
-# create the bc7 and etc2 compressed ktx2 cubemap files using compressonator
+# create the bc7 compressed ktx2 cubemap files using compressonator
 compressonatorcli.exe -fd BC7 $SCRIPT_DIRECTORY/rgba8.ktx2 $SCRIPT_DIRECTORY/bc7.ktx2
-compressonatorcli.exe -fd ETC2_RGBA1 $SCRIPT_DIRECTORY/rgba8.ktx2 $SCRIPT_DIRECTORY/etc2.ktx2
-# create the astc compressed ktx2 cubemap file using PVRTexTool
-PVRTexToolCLI.exe -i $SCRIPT_DIRECTORY/rgba8.ktx2 -ics srgb -m -f ASTC_4X4 -q astcexhaustive -o $SCRIPT_DIRECTORY/astc.ktx2
+# create the etc2 and astc compressed ktx2 cubemap file using PVRTexTool
+PVRTexToolCLI.exe -i $SCRIPT_DIRECTORY/rgba8.ktx2 -ics srgb -m -f ETC2_RGB_A1,UBN,SRGB -q etcslow -o $SCRIPT_DIRECTORY/etc2.ktx2
+PVRTexToolCLI.exe -i $SCRIPT_DIRECTORY/rgba8.ktx2 -ics srgb -m -f ASTC_4X4,UBN,SRGB -q astcexhaustive -o $SCRIPT_DIRECTORY/astc.ktx2
 rm -r $TEMP
