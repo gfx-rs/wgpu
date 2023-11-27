@@ -2,7 +2,7 @@ use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, f32::consts};
 use wgpu::{util::DeviceExt, AstcBlock, AstcChannel};
 
-const IMAGE_SIZE: u32 = 128;
+const IMAGE_SIZE: u32 = 256;
 
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -266,20 +266,20 @@ impl crate::framework::Example for Example {
         let device_features = device.features();
 
         let skybox_format = if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ASTC) {
-            log::info!("Using ASTC");
+            log::info!("Using astc");
             wgpu::TextureFormat::Astc {
                 block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
             }
         } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_ETC2) {
-            log::info!("Using ETC2");
-            wgpu::TextureFormat::Etc2Rgb8UnormSrgb
+            log::info!("Using etc2");
+            wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb
         } else if device_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
-            log::info!("Using BC");
-            wgpu::TextureFormat::Bc1RgbaUnormSrgb
+            log::info!("Using bc7");
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb
         } else {
-            log::info!("Using plain");
-            wgpu::TextureFormat::Bgra8UnormSrgb
+            log::info!("Using rgba8");
+            wgpu::TextureFormat::Rgba8UnormSrgb
         };
 
         let size = wgpu::Extent3d {
@@ -306,20 +306,26 @@ impl crate::framework::Example for Example {
             wgpu::TextureFormat::Astc {
                 block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
-            } => &include_bytes!("images/astc.dds")[..],
-            wgpu::TextureFormat::Etc2Rgb8UnormSrgb => &include_bytes!("images/etc2.dds")[..],
-            wgpu::TextureFormat::Bc1RgbaUnormSrgb => &include_bytes!("images/bc1.dds")[..],
-            wgpu::TextureFormat::Bgra8UnormSrgb => &include_bytes!("images/bgra.dds")[..],
+            } => &include_bytes!("images/astc.ktx2")[..],
+            wgpu::TextureFormat::Etc2Rgb8A1UnormSrgb => &include_bytes!("images/etc2.ktx2")[..],
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb => &include_bytes!("images/bc7.ktx2")[..],
+            wgpu::TextureFormat::Rgba8UnormSrgb => &include_bytes!("images/rgba8.ktx2")[..],
             _ => unreachable!(),
         };
 
-        let image = ddsfile::Dds::read(&mut std::io::Cursor::new(&bytes)).unwrap();
+        let reader = ktx2::Reader::new(bytes).unwrap();
+        let header = reader.header();
+
+        let mut image = Vec::with_capacity(reader.data().len());
+        for level in reader.levels() {
+            image.extend_from_slice(level);
+        }
 
         let texture = device.create_texture_with_data(
             queue,
             &wgpu::TextureDescriptor {
                 size,
-                mip_level_count: max_mips,
+                mip_level_count: header.level_count,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: skybox_format,
@@ -327,7 +333,9 @@ impl crate::framework::Example for Example {
                 label: None,
                 view_formats: &[],
             },
-            &image.data,
+            // KTX2 stores mip levels in mip major order.
+            wgpu::util::TextureDataOrder::MipMajor,
+            &image,
         );
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -477,8 +485,8 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
-    name: "skybox-bc1",
-    image_path: "/examples/src/skybox/screenshot_bc1.png",
+    name: "skybox-bc7",
+    image_path: "/examples/src/skybox/screenshot_bc7.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
