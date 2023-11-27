@@ -208,16 +208,14 @@ where
         let slot = &mut self.map[index as usize];
         // borrowck dance: we have to move the element out before we can replace it
         // with another variant with the same value.
-        if let &mut Element::Occupied(..) = slot {
+        if let &mut Element::Occupied(_, e) = slot {
             if let Element::Occupied(value, storage_epoch) =
-                std::mem::replace(slot, Element::Vacant)
+                std::mem::replace(slot, Element::Destroyed(e))
             {
                 debug_assert_eq!(storage_epoch, epoch);
-                *slot = Element::Destroyed(storage_epoch);
                 return Ok(value);
             }
         }
-
         Err(InvalidId)
     }
 
