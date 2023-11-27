@@ -44,6 +44,10 @@ Bottom level categories:
 
 This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
 
+### `DeviceExt::create_texture_with_data` Allows Mip-Major Data
+
+Previously, `DeviceExt::create_texture_with_data` only allowed data to be provided in layer major order. There is now a `order` parameter which allows you to specify if the data is in layer major or mip major order.
+
 ### New Features
 
 #### General
