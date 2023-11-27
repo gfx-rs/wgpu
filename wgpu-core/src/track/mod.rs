@@ -489,7 +489,7 @@ where
     Id: TypedId,
     R: resource::Resource<Id>,
 {
-    fn remove_abandoned(&mut self, id: Id, external_count: usize) -> bool;
+    fn remove_abandoned(&mut self, id: Id) -> bool;
 }
 
 /// A full double sided tracker used by CommandBuffers and the Device.
