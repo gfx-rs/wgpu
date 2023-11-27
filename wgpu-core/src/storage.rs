@@ -16,7 +16,7 @@ pub(crate) enum Element<T> {
 
     /// Like `Occupied`, but the resource has been marked as destroyed
     /// and hasn't been dropped yet.
-    Destroyed(Arc<T>, Epoch),
+    Destroyed(Epoch),
 
     /// Like `Occupied`, but an error occurred when creating the
     /// resource.
@@ -80,7 +80,7 @@ where
             Some(&Element::Vacant) => false,
             Some(
                 &Element::Occupied(_, storage_epoch)
-                | &Element::Destroyed(_, storage_epoch)
+                | &Element::Destroyed(storage_epoch)
                 | &Element::Error(storage_epoch, _),
             ) => storage_epoch == epoch,
             None => false,
@@ -145,7 +145,7 @@ where
         }
         match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
-            Element::Destroyed(_, storage_epoch) => {
+            Element::Destroyed(storage_epoch) => {
                 assert_ne!(
                     epoch,
                     storage_epoch,
@@ -213,15 +213,12 @@ where
                 std::mem::replace(slot, Element::Vacant)
             {
                 debug_assert_eq!(storage_epoch, epoch);
-                *slot = Element::Destroyed(value, storage_epoch);
+                *slot = Element::Destroyed(storage_epoch);
+                return Ok(value);
             }
         }
 
-        if let Element::Destroyed(ref value, ..) = *slot {
-            Ok(value.clone())
-        } else {
-            Err(InvalidId)
-        }
+        Err(InvalidId)
     }
 
     pub(crate) fn force_replace(&mut self, id: I, value: T) {
@@ -234,9 +231,13 @@ where
         log::trace!("User is removing {}{:?}", T::TYPE, id);
         let (index, epoch, _) = id.unzip();
         match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
-            Element::Occupied(value, storage_epoch) | Element::Destroyed(value, storage_epoch) => {
+            Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
                 Some(value)
+            }
+            Element::Destroyed(storage_epoch) => {
+                assert_eq!(epoch, storage_epoch);
+                None
             }
             Element::Error(..) => None,
             Element::Vacant => panic!("Cannot remove a vacant resource"),
