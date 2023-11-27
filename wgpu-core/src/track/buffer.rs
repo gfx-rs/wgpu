@@ -325,8 +325,8 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
         unsafe {
             if self.metadata.contains_unchecked(index) {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
-                //so not appearing in Registry
+                //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
+                //so it's already been released from user and so it's not inside Registry\Storage
                 if existing_ref_count <= 2 {
                     self.metadata.remove(index);
                     log::trace!("Buffer {:?} is not tracked anymore", id,);
