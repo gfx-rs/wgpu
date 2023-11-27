@@ -330,26 +330,16 @@ impl crate::Scalar {
             }
 
             // AbstractInt converts to AbstractFloat.
-            (Sk::AbstractFloat | Sk::AbstractInt, Sk::AbstractFloat | Sk::AbstractInt) => {
-                Some(Self {
-                    kind: Sk::AbstractFloat,
-                    width: crate::ABSTRACT_WIDTH,
-                })
-            }
+            (Sk::AbstractFloat, Sk::AbstractInt) => Some(self),
+            (Sk::AbstractInt, Sk::AbstractFloat) => Some(other),
 
             // AbstractFloat converts to Float.
-            (Sk::AbstractFloat, Sk::Float) => Some(Self::float(other.width)),
-            (Sk::Float, Sk::AbstractFloat) => Some(Self::float(self.width)),
+            (Sk::AbstractFloat, Sk::Float) => Some(other),
+            (Sk::Float, Sk::AbstractFloat) => Some(self),
 
             // AbstractInt converts to concrete integer or float.
-            (Sk::AbstractInt, kind @ (Sk::Uint | Sk::Sint | Sk::Float)) => Some(Self {
-                kind,
-                width: other.width,
-            }),
-            (kind @ (Sk::Uint | Sk::Sint | Sk::Float), Sk::AbstractInt) => Some(Self {
-                kind,
-                width: self.width,
-            }),
+            (Sk::AbstractInt, Sk::Uint | Sk::Sint | Sk::Float) => Some(other),
+            (Sk::Uint | Sk::Sint | Sk::Float, Sk::AbstractInt) => Some(self),
 
             // AbstractFloat can't be reconciled with concrete integer types.
             (Sk::AbstractFloat, Sk::Uint | Sk::Sint) | (Sk::Uint | Sk::Sint, Sk::AbstractFloat) => {
