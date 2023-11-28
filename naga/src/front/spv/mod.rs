@@ -532,6 +532,7 @@ struct BlockContext<'function> {
     local_arena: &'function mut Arena<crate::LocalVariable>,
     /// Constants arena of the module being processed
     const_arena: &'function mut Arena<crate::Constant>,
+    overrides: &'function mut Arena<crate::Override>,
     const_expressions: &'function mut Arena<crate::Expression>,
     /// Type arena of the module being processed
     type_arena: &'function UniqueArena<crate::Type>,
@@ -3933,7 +3934,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::TypeImage => self.parse_type_image(inst, &mut module),
                 Op::TypeSampledImage => self.parse_type_sampled_image(inst),
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
-                Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
+                Op::Constant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
                 Op::ConstantNull | Op::Undef => self.parse_null_constant(inst, &mut module),
                 Op::ConstantTrue => self.parse_bool_constant(inst, true, &mut module),

@@ -175,7 +175,7 @@ tree.
 A Naga *constant expression* is one of the following [`Expression`]
 variants, whose operands (if any) are also constant expressions:
 - [`Literal`]
-- [`Constant`], for [`Constant`s][const_type] whose `override` is `None`
+- [`Constant`], for [`Constant`]s
 - [`ZeroValue`], for fixed-size types
 - [`Compose`]
 - [`Access`]
@@ -194,8 +194,7 @@ A constant expression can be evaluated at module translation time.
 ## Override expressions
 
 A Naga *override expression* is the same as a [constant expression],
-except that it is also allowed to refer to [`Constant`s][const_type]
-whose `override` is something other than `None`.
+except that it is also allowed to reference other [`Override`]s.
 
 An override expression can be evaluated at pipeline creation time.
 
@@ -237,8 +236,6 @@ An override expression can be evaluated at pipeline creation time.
 [`Relational`]: Expression::Relational
 [`Math`]: Expression::Math
 [`As`]: Expression::As
-
-[const_type]: Constant
 
 [constant expression]: index.html#constant-expressions
 */
@@ -871,6 +868,25 @@ pub enum Literal {
     Bool(bool),
 }
 
+/// Pipeline-overridable constant.
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "clone", derive(Clone))]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct Override {
+    pub name: Option<String>,
+    /// Pipeline Constant ID.
+    pub id: Option<u16>,
+    pub ty: Handle<Type>,
+
+    /// The default value of the pipeline-overridable constant.
+    ///
+    /// This [`Handle`] refers to [`Module::const_expressions`], not
+    /// any [`Function::expressions`] arena.
+    pub init: Option<Handle<Expression>>,
+}
+
 /// Constant value.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "clone", derive(Clone))]
@@ -885,13 +901,6 @@ pub struct Constant {
     ///
     /// This [`Handle`] refers to [`Module::const_expressions`], not
     /// any [`Function::expressions`] arena.
-    ///
-    /// If `override` is `None`, then this must be a Naga
-    /// [constant expression]. Otherwise, this may be a Naga
-    /// [override expression] or [constant expression].
-    ///
-    /// [constant expression]: index.html#constant-expressions
-    /// [override expression]: index.html#override-expressions
     pub init: Handle<Expression>,
 }
 
@@ -1277,6 +1286,8 @@ pub enum Expression {
     Literal(Literal),
     /// Constant value.
     Constant(Handle<Constant>),
+    /// Pipeline-overridable constant.
+    Override(Handle<Override>),
     /// Zero value of a type.
     ZeroValue(Handle<Type>),
     /// Composite expression.
@@ -2019,6 +2030,8 @@ pub struct Module {
     pub special_types: SpecialTypes,
     /// Arena for the constants defined in this module.
     pub constants: Arena<Constant>,
+    /// Arena for the pipeline-overridable constants defined in this module.
+    pub overrides: Arena<Override>,
     /// Arena for the global variables defined in this module.
     pub global_variables: Arena<GlobalVariable>,
     /// [Constant expressions] and [override expressions] used by this module.

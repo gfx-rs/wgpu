@@ -363,6 +363,7 @@
         predeclared_types: {},
     ),
     constants: [],
+    overrides: [],
     global_variables: [
         (
             name: Some("global_const"),

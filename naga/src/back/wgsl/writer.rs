@@ -1180,6 +1180,9 @@ impl<W: Write> Writer<W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
+            Expression::Override(_) => {
+                return Err(Error::Unimplemented("overrides are WIP".into()))
+            }
             Expression::FunctionArgument(pos) => {
                 let name_key = func_ctx.argument_key(pos);
                 let name = &self.names[&name_key];

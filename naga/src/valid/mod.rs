@@ -183,6 +183,16 @@ pub enum ConstantError {
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
+pub enum OverrideError {
+    #[error("The type doesn't match the override")]
+    InvalidType,
+    #[error("The type is not constructible")]
+    NonConstructibleType,
+    #[error("The type is not a scalar")]
+    TypeNotScalar,
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error(transparent)]
     InvalidHandle(#[from] InvalidHandleError),
@@ -204,6 +214,12 @@ pub enum ValidationError {
         handle: Handle<crate::Constant>,
         name: String,
         source: ConstantError,
+    },
+    #[error("Override {handle:?} '{name}' is invalid")]
+    Override {
+        handle: Handle<crate::Override>,
+        name: String,
+        source: OverrideError,
     },
     #[error("Global variable {handle:?} '{name}' is invalid")]
     GlobalVariable {
@@ -327,6 +343,35 @@ impl Validator {
         Ok(())
     }
 
+    fn validate_override(
+        &self,
+        handle: Handle<crate::Override>,
+        gctx: crate::proc::GlobalCtx,
+        mod_info: &ModuleInfo,
+    ) -> Result<(), OverrideError> {
+        let o = &gctx.overrides[handle];
+
+        let type_info = &self.types[o.ty.index()];
+        if !type_info.flags.contains(TypeFlags::CONSTRUCTIBLE) {
+            return Err(OverrideError::NonConstructibleType);
+        }
+
+        let decl_ty = &gctx.types[o.ty].inner;
+        match decl_ty {
+            &crate::TypeInner::Scalar(_) => {}
+            _ => return Err(OverrideError::TypeNotScalar),
+        }
+
+        if let Some(init) = o.init {
+            let init_ty = mod_info[init].inner_with(gctx.types);
+            if !decl_ty.equivalent(init_ty, gctx.types) {
+                return Err(OverrideError::InvalidType);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Check the given module to be valid.
     pub fn validate(
         &mut self,
@@ -402,6 +447,18 @@ impl Validator {
                             source,
                         }
                         .with_span_handle(handle, &module.constants)
+                    })?
+            }
+
+            for (handle, override_) in module.overrides.iter() {
+                self.validate_override(handle, module.to_ctx(), &mod_info)
+                    .map_err(|source| {
+                        ValidationError::Override {
+                            handle,
+                            name: override_.name.clone().unwrap_or_default(),
+                            source,
+                        }
+                        .with_span_handle(handle, &module.overrides)
                     })?
             }
         }

@@ -2151,6 +2151,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
+            Expression::Override(_) => {
+                return Err(Error::Unimplemented("overrides are WIP".into()))
+            }
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {

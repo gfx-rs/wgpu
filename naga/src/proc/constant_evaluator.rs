@@ -337,6 +337,9 @@ impl<'a> ConstantEvaluator<'a> {
                 // This is mainly done to avoid having constants pointing to other constants.
                 Ok(self.constants[c].init)
             }
+            Expression::Override(_) => Err(ConstantEvaluatorError::NotImplemented(
+                "overrides are WIP".into(),
+            )),
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
                 self.register_evaluated_expr(expr.clone(), span)
             }

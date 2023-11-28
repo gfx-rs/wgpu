@@ -3,6 +3,7 @@ use crate::arena::{Arena, Handle};
 
 pub struct ExpressionTracer<'tracer> {
     pub constants: &'tracer Arena<crate::Constant>,
+    pub overrides: &'tracer Arena<crate::Override>,
 
     /// The arena in which we are currently tracing expressions.
     pub expressions: &'tracer Arena<crate::Expression>,
@@ -12,6 +13,9 @@ pub struct ExpressionTracer<'tracer> {
 
     /// The used map for `constants`.
     pub constants_used: &'tracer mut HandleSet<crate::Constant>,
+
+    /// The used map for `overrides`.
+    pub overrides_used: &'tracer mut HandleSet<crate::Override>,
 
     /// The used set for `arena`.
     ///
@@ -86,6 +90,22 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     match self.const_expressions_used {
                         Some(ref mut used) => used.insert(init),
                         None => self.expressions_used.insert(init),
+                    }
+                }
+                Ex::Override(handle) => {
+                    self.overrides_used.insert(handle);
+                    // Overrides and expressions are mutually recursive, which
+                    // complicates our nice one-pass algorithm. However, since
+                    // overrides don't refer to each other, we can get around
+                    // this by looking *through* each override and marking its
+                    // initializer as used. Since `expr` refers to the override,
+                    // and the override refers to the initializer, it must
+                    // precede `expr` in the arena.
+                    if let Some(init) = self.overrides[handle].init {
+                        match self.const_expressions_used {
+                            Some(ref mut used) => used.insert(init),
+                            None => self.expressions_used.insert(init),
+                        }
                     }
                 }
                 Ex::ZeroValue(ty) => self.types_used.insert(ty),
@@ -221,6 +241,7 @@ impl ModuleMap {
 
             // Expressions that contain handles that need to be adjusted.
             Ex::Constant(ref mut constant) => self.constants.adjust(constant),
+            Ex::Override(ref mut override_) => self.overrides.adjust(override_),
             Ex::ZeroValue(ref mut ty) => self.types.adjust(ty),
             Ex::Compose {
                 ref mut ty,

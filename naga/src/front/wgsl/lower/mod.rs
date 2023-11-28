@@ -784,6 +784,7 @@ enum LoweredGlobalDecl {
     Function(Handle<crate::Function>),
     Var(Handle<crate::GlobalVariable>),
     Const(Handle<crate::Constant>),
+    Override(Handle<crate::Override>),
     Type(Handle<crate::Type>),
     EntryPoint,
 }
@@ -932,6 +933,65 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     ctx.globals
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
+                }
+                ast::GlobalDeclKind::Override(ref o) => {
+                    let init = o
+                        .init
+                        .map(|init| self.expression(init, &mut ctx.as_const()))
+                        .transpose()?;
+                    let inferred_type = init
+                        .map(|init| ctx.as_const().register_type(init))
+                        .transpose()?;
+
+                    let explicit_ty =
+                        o.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx))
+                            .transpose()?;
+
+                    let id =
+                        o.id.map(|id| self.const_u32(id, &mut ctx.as_const()))
+                            .transpose()?;
+
+                    let id = if let Some((id, id_span)) = id {
+                        Some(
+                            u16::try_from(id)
+                                .map_err(|_| Error::PipelineConstantIDValue(id_span))?,
+                        )
+                    } else {
+                        None
+                    };
+
+                    let ty = match (explicit_ty, inferred_type) {
+                        (Some(explicit_ty), Some(inferred_type)) => {
+                            if explicit_ty == inferred_type {
+                                explicit_ty
+                            } else {
+                                let gctx = ctx.module.to_ctx();
+                                return Err(Error::InitializationTypeMismatch {
+                                    name: o.name.span,
+                                    expected: explicit_ty.to_wgsl(&gctx),
+                                    got: inferred_type.to_wgsl(&gctx),
+                                });
+                            }
+                        }
+                        (Some(explicit_ty), None) => explicit_ty,
+                        (None, Some(inferred_type)) => inferred_type,
+                        (None, None) => {
+                            return Err(Error::DeclMissingTypeAndInit(o.name.span));
+                        }
+                    };
+
+                    let handle = ctx.module.overrides.append(
+                        crate::Override {
+                            name: Some(o.name.name.to_string()),
+                            id,
+                            ty,
+                            init,
+                        },
+                        span,
+                    );
+
+                    ctx.globals
+                        .insert(o.name.name, LoweredGlobalDecl::Override(handle));
                 }
                 ast::GlobalDeclKind::Struct(ref s) => {
                     let handle = self.r#struct(s, span, &mut ctx)?;
@@ -1160,7 +1220,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             .as_expression(block, &mut emitter)
                             .register_type(initializer)?,
                         (None, None) => {
-                            return Err(Error::MissingType(v.name.span));
+                            return Err(Error::DeclMissingTypeAndInit(v.name.span));
                         }
                     };
 
@@ -1715,9 +1775,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 )?;
                 Ok(Some(handle))
             }
-            Some(&LoweredGlobalDecl::Const(_) | &LoweredGlobalDecl::Var(_)) => {
-                Err(Error::Unexpected(function.span, ExpectedToken::Function))
-            }
+            Some(
+                &LoweredGlobalDecl::Const(_)
+                | &LoweredGlobalDecl::Override(_)
+                | &LoweredGlobalDecl::Var(_),
+            ) => Err(Error::Unexpected(function.span, ExpectedToken::Function)),
             Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function.span)),
             Some(&LoweredGlobalDecl::Function(function)) => {
                 let arguments = arguments

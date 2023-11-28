@@ -224,6 +224,7 @@ mod tests {
         let gctx = crate::proc::GlobalCtx {
             types: &types,
             constants: &crate::Arena::new(),
+            overrides: &crate::Arena::new(),
             const_expressions: &crate::Arena::new(),
         };
         let array = crate::TypeInner::Array {

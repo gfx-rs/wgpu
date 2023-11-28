@@ -787,6 +787,14 @@ fn convert_wgsl() {
             "f64",
             Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
+        (
+            "overrides",
+            Targets::IR | Targets::ANALYSIS, // | Targets::SPIRV
+                                             // | Targets::METAL
+                                             // | Targets::GLSL
+                                             // | Targets::HLSL
+                                             // | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {

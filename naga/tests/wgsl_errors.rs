@@ -553,11 +553,11 @@ fn local_var_missing_type() {
                 var x;
             }
         "#,
-        r#"error: variable `x` needs a type
+        r#"error: declaration of `x` needs a type specifier or initializer
   ┌─ wgsl:3:21
   │
 3 │                 var x;
-  │                     ^ definition of `x`
+  │                     ^ needs a type specifier or initializer
 
 "#,
     );

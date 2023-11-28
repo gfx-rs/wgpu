@@ -46,6 +46,7 @@
         predeclared_types: {},
     ),
     constants: [],
+    overrides: [],
     global_variables: [
         (
             name: Some("v_indices"),
