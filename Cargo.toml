@@ -157,7 +157,7 @@ glutin = "0.29.1"
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.65"
+js-sys = "0.3.66"
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.38"
 wasm-bindgen-test = "0.3"

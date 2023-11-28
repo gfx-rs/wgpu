@@ -158,7 +158,7 @@ web-sys = { version = "0.3.65", features = [
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = "0.3.65"
+js-sys = "0.3.66"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
