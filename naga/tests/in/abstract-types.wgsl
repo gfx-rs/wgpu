@@ -27,6 +27,10 @@ const xmfpaiafaiai: mat2x2<f32> = mat2x2(1, 2.0, 3, 4);
 const xmfpaiaiafai: mat2x2<f32> = mat2x2(1, 2, 3.0, 4);
 const xmfpaiaiaiaf: mat2x2<f32> = mat2x2(1, 2, 3, 4.0);
 
+const imfpaiaiaiai = mat2x2(1, 2, 3, 4);
+const imfpafaiaiai = mat2x2(1.0, 2, 3, 4);
+const imfpafafafaf = mat2x2(1.0, 2.0, 3.0, 4.0);
+
 const ivispai = vec2(1);
 const ivfspaf = vec2(1.0);
 const ivis_ai = vec2<i32>(1);
