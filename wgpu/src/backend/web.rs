@@ -659,7 +659,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 11] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,

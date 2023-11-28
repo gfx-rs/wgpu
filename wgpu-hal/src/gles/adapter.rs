@@ -601,14 +601,6 @@ impl super::Adapter {
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             color_buffer_float,
         );
-        private_caps.set(
-            super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
-            if full_ver.is_some() {
-                color_buffer_float
-            } else {
-                extensions.contains("OES_texture_float_linear")
-            },
-        );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
         private_caps.set(super::PrivateCapabilities::QUERY_64BIT, full_ver.is_some());
         private_caps.set(
@@ -1030,8 +1022,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
-        let texture_float_linear =
-            private_caps_fn(super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR, filterable);
+        let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
         match format {
             Tf::R8Unorm => filterable_renderable,
