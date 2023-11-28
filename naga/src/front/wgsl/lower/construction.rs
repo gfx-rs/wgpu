@@ -346,6 +346,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     automatic_conversion_consensus(&components, ctx).map_err(|index| {
                         Error::InvalidConstructorComponentType(spans[index], index as i32)
                     })?;
+                // We actually only accept floating-point elements.
+                let consensus_scalar = consensus_scalar
+                    .automatic_conversion_combine(crate::Scalar::ABSTRACT_FLOAT)
+                    .unwrap_or(consensus_scalar);
                 ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
                 let vec_ty = ctx.ensure_type_exists(consensus_scalar.to_inner_vector(rows));
 
