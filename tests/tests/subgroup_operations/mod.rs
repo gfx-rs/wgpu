@@ -11,7 +11,12 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .features(wgpu::Features::SUBGROUP_COMPUTE)
             .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(wgpu_test::FailureCase::molten_vk()),
+            .expect_fail(wgpu_test::FailureCase::molten_vk())
+            .expect_fail(
+                // Expect metal to fail on tests involving operations in divergent control flow
+                wgpu_test::FailureCase::backend(wgpu::Backends::METAL)
+                    .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n"),
+            ),
     )
     .run_sync(|ctx| {
         let device = &ctx.device;
