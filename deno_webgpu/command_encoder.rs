@@ -475,7 +475,7 @@ pub fn op_webgpu_command_encoder_clear_buffer(
       command_encoder,
       destination_resource.1,
       offset,
-      std::num::NonZeroU64::new(size)
+      Some(size)
     ))
 }
 

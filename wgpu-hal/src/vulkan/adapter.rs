@@ -301,6 +301,7 @@ impl PhysicalDeviceFeatures {
 
     fn to_wgpu(
         &self,
+        adapter_info: &wgt::AdapterInfo,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceCapabilities,
@@ -563,6 +564,22 @@ impl PhysicalDeviceFeatures {
         features.set(
             F::BGRA8UNORM_STORAGE,
             supports_bgra8unorm_storage(instance, phd, caps.device_api_version),
+        );
+
+        features.set(
+            F::TEXTURE_FORMAT_NV12,
+            (caps.device_api_version >= vk::API_VERSION_1_1
+                || caps.supports_extension(vk::KhrSamplerYcbcrConversionFn::name()))
+                && supports_format(
+                    instance,
+                    phd,
+                    vk::Format::G8_B8R8_2PLANE_420_UNORM,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::FormatFeatureFlags::SAMPLED_IMAGE
+                        | vk::FormatFeatureFlags::TRANSFER_SRC
+                        | vk::FormatFeatureFlags::TRANSFER_DST,
+                )
+                && !adapter_info.driver.contains("MoltenVK"),
         );
 
         (features, dl_flags)
@@ -1008,7 +1025,7 @@ impl super::Instance {
         };
 
         let (available_features, downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
+            phd_features.to_wgpu(&info, &self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // see https://github.com/gfx-rs/gfx/issues/1930
@@ -1034,6 +1051,12 @@ impl super::Instance {
             if driver.conformance_version.major == 0 {
                 if driver.driver_id == ash::vk::DriverId::MOLTENVK {
                     log::debug!("Adapter is not Vulkan compliant, but is MoltenVK, continuing");
+                } else if self
+                    .shared
+                    .flags
+                    .contains(wgt::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER)
+                {
+                    log::warn!("Adapter is not Vulkan compliant: {}", info.name);
                 } else {
                     log::warn!(
                         "Adapter is not Vulkan compliant, hiding adapter: {}",
@@ -1605,14 +1628,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            match format.sample_type(None).unwrap() {
-                wgt::TextureSampleType::Float { filterable: _ } => limits
+            match format.sample_type(None) {
+                Some(wgt::TextureSampleType::Float { filterable: _ }) => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),
-                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                Some(wgt::TextureSampleType::Sint) | Some(wgt::TextureSampleType::Uint) => {
                     limits.sampled_image_integer_sample_counts
                 }
-                _ => unreachable!(),
+                _ => vk::SampleCountFlags::TYPE_1,
             }
         };
 

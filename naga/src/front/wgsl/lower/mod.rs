@@ -98,10 +98,14 @@ impl<'source> GlobalContext<'source, '_, '_> {
         }
     }
 
-    fn ensure_type_exists(&mut self, inner: crate::TypeInner) -> Handle<crate::Type> {
+    fn ensure_type_exists(
+        &mut self,
+        name: Option<String>,
+        inner: crate::TypeInner,
+    ) -> Handle<crate::Type> {
         self.module
             .types
-            .insert(crate::Type { inner, name: None }, Span::UNDEFINED)
+            .insert(crate::Type { inner, name }, Span::UNDEFINED)
     }
 }
 
@@ -635,7 +639,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     }
 
     fn ensure_type_exists(&mut self, inner: crate::TypeInner) -> Handle<crate::Type> {
-        self.as_global().ensure_type_exists(inner)
+        self.as_global().ensure_type_exists(None, inner)
     }
 }
 
@@ -959,7 +963,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
-                    let ty = self.resolve_ast_type(alias.ty, &mut ctx)?;
+                    let ty = self.resolve_named_ast_type(
+                        alias.ty,
+                        Some(alias.name.name.to_string()),
+                        &mut ctx,
+                    )?;
                     ctx.globals
                         .insert(alias.name.name, LoweredGlobalDecl::Type(ty));
                 }
@@ -1487,6 +1495,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ast::Literal::Number(Number::F32(f)) => crate::Literal::F32(f),
                     ast::Literal::Number(Number::I32(i)) => crate::Literal::I32(i),
                     ast::Literal::Number(Number::U32(u)) => crate::Literal::U32(u),
+                    ast::Literal::Number(Number::F64(f)) => crate::Literal::F64(f),
                     ast::Literal::Number(_) => {
                         unreachable!("got abstract numeric type when not expected");
                     }
@@ -2642,10 +2651,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         })
     }
 
-    /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
-    fn resolve_ast_type(
+    /// Build the Naga equivalent of a named AST type.
+    ///
+    /// Return a Naga `Handle<Type>` representing the front-end type
+    /// `handle`, which should be named `name`, if given.
+    ///
+    /// If `handle` refers to a type cached in [`SpecialTypes`],
+    /// `name` may be ignored.
+    ///
+    /// [`SpecialTypes`]: crate::SpecialTypes
+    fn resolve_named_ast_type(
         &mut self,
         handle: Handle<ast::Type<'source>>,
+        name: Option<String>,
         ctx: &mut GlobalContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
@@ -2706,7 +2724,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
         };
 
-        Ok(ctx.ensure_type_exists(inner))
+        Ok(ctx.ensure_type_exists(name, inner))
+    }
+
+    /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
+    fn resolve_ast_type(
+        &mut self,
+        handle: Handle<ast::Type<'source>>,
+        ctx: &mut GlobalContext<'source, '_, '_>,
+    ) -> Result<Handle<crate::Type>, Error<'source>> {
+        self.resolve_named_ast_type(handle, None, ctx)
     }
 
     fn binding(

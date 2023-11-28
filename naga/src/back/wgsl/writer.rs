@@ -1211,9 +1211,7 @@ impl<W: Write> Writer<W> {
                     crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
-                    crate::Literal::F64(_) => {
-                        return Err(Error::Custom("unsupported f64 literal".to_string()));
-                    }
+                    crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
                     crate::Literal::I64(_) => {
                         return Err(Error::Custom("unsupported i64 literal".to_string()));
                     }

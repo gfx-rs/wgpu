@@ -293,7 +293,7 @@ pub(crate) struct BufferTracker<A: HalApi> {
 }
 
 impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
-    /// Removes the buffer `id` from this tracker if it is otherwise unused.
+    /// Try to remove the buffer `id` from this tracker if it is otherwise unused.
     ///
     /// A buffer is 'otherwise unused' when the only references to it are:
     ///
@@ -308,13 +308,12 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
     /// `triage_suspected` will remove 3), leaving 1) as the sole
     /// remaining reference.
     ///
-    /// Return `true` if this tracker contained the buffer `id`. This
-    /// implies that we removed it.
+    /// Returns true if the resource was removed or if not existing in metadata.
     ///
     /// [`Device::trackers`]: crate::device::Device
     /// [`self.metadata`]: BufferTracker::metadata
     /// [`Hub::buffers`]: crate::hub::Hub::buffers
-    fn remove_abandoned(&mut self, id: BufferId, external_count: usize) -> bool {
+    fn remove_abandoned(&mut self, id: BufferId) -> bool {
         let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
@@ -326,24 +325,23 @@ impl<A: HalApi> ResourceTracker<BufferId, Buffer<A>> for BufferTracker<A> {
         unsafe {
             if self.metadata.contains_unchecked(index) {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
-                //so not appearing in Registry
-                let min_ref_count = 1 + external_count;
-                if existing_ref_count <= min_ref_count {
+                //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
+                //so it's already been released from user and so it's not inside Registry\Storage
+                if existing_ref_count <= 2 {
                     self.metadata.remove(index);
-                    log::info!("Buffer {:?} is not tracked anymore", id,);
+                    log::trace!("Buffer {:?} is not tracked anymore", id,);
                     return true;
                 } else {
-                    log::info!(
+                    log::trace!(
                         "Buffer {:?} is still referenced from {}",
                         id,
                         existing_ref_count
                     );
+                    return false;
                 }
             }
         }
-
-        false
+        true
     }
 }
 

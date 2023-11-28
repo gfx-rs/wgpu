@@ -26,7 +26,10 @@ use crate::id::CommandBufferId;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
-use crate::{global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory, Label};
+use crate::{
+    api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory,
+    resource_log, Label,
+};
 
 use hal::CommandEncoder as _;
 use parking_lot::Mutex;
@@ -135,7 +138,7 @@ impl<A: HalApi> Drop for CommandBuffer<A> {
         if self.data.lock().is_none() {
             return;
         }
-        log::info!("Destroying CommandBuffer {:?}", self.info.label());
+        resource_log!("resource::CommandBuffer::drop {}", self.info.label());
         let mut baked = self.extract_baked_commands();
         unsafe {
             baked.encoder.reset_all(baked.list.into_iter());
@@ -253,7 +256,7 @@ impl<A: HalApi> CommandBuffer<A> {
     }
 
     pub(crate) fn extract_baked_commands(&mut self) -> BakedCommands<A> {
-        log::info!(
+        log::trace!(
             "Extracting BakedCommands from CommandBuffer {:?}",
             self.info.label()
         );
@@ -435,7 +438,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::push_debug_group");
-        log::trace!("CommandEncoder::push_debug_group {label}");
+        api_log!("CommandEncoder::push_debug_group {label}");
 
         let hub = A::hub(self);
 
@@ -466,7 +469,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         label: &str,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::insert_debug_marker");
-        log::trace!("CommandEncoder::insert_debug_marker {label}");
+        api_log!("CommandEncoder::insert_debug_marker {label}");
 
         let hub = A::hub(self);
 
@@ -497,7 +500,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
     ) -> Result<(), CommandEncoderError> {
         profiling::scope!("CommandEncoder::pop_debug_marker");
-        log::trace!("CommandEncoder::pop_debug_group");
+        api_log!("CommandEncoder::pop_debug_group");
 
         let hub = A::hub(self);
 

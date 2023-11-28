@@ -6,7 +6,7 @@ use crate::{
     identity::{GlobalIdentityHandlerFactory, Input},
     resource::{Buffer, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation},
-    Label, DOWNLEVEL_ERROR_MESSAGE,
+    resource_log, Label, DOWNLEVEL_ERROR_MESSAGE,
 };
 
 use arrayvec::ArrayVec;
@@ -273,19 +273,15 @@ impl DeviceLostClosure {
         }
     }
 
-    #[allow(trivial_casts)]
     pub(crate) fn call(self, reason: DeviceLostReason, message: String) {
         match self.inner {
             DeviceLostClosureInner::Rust { callback } => callback(reason, message),
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
             DeviceLostClosureInner::C { inner } => unsafe {
-                // We need to pass message as a c_char typed pointer. To avoid trivial
-                // conversion warnings on some platforms, we use the allow lint.
-                (inner.callback)(
-                    inner.user_data,
-                    reason as u8,
-                    message.as_ptr() as *const c_char,
-                )
+                // Ensure message is structured as a null-terminated C string. It only
+                // needs to live as long as the callback invocation.
+                let message = std::ffi::CString::new(message).unwrap();
+                (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
             },
         }
     }
@@ -376,7 +372,10 @@ impl<A: HalApi> CommandAllocator<A> {
     }
 
     fn dispose(self, device: &A::Device) {
-        log::info!("Destroying {} command encoders", self.free_encoders.len());
+        resource_log!(
+            "CommandAllocator::dispose encoders {}",
+            self.free_encoders.len()
+        );
         for cmd_encoder in self.free_encoders {
             unsafe {
                 device.destroy_command_encoder(cmd_encoder);

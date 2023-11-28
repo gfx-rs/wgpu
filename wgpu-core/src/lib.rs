@@ -279,6 +279,26 @@ macro_rules! gfx_select {
     };
 }
 
+#[cfg(feature = "api_log_info")]
+macro_rules! api_log {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "api_log_info"))]
+macro_rules! api_log {
+    ($($arg:tt)+) => (log::trace!($($arg)+))
+}
+pub(crate) use api_log;
+
+#[cfg(feature = "resource_log_info")]
+macro_rules! resource_log {
+    ($($arg:tt)+) => (log::info!($($arg)+))
+}
+#[cfg(not(feature = "resource_log_info"))]
+macro_rules! resource_log {
+    ($($arg:tt)+) => (log::trace!($($arg)+))
+}
+pub(crate) use resource_log;
+
 /// Fast hash map used internally.
 type FastHashMap<K, V> =
     std::collections::HashMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;

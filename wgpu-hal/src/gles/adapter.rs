@@ -603,6 +603,7 @@ impl super::Adapter {
             },
         );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
+        private_caps.set(super::PrivateCapabilities::QUERY_64BIT, full_ver.is_some());
         private_caps.set(
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
@@ -1072,6 +1073,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
+            Tf::NV12 => unreachable!(),
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb

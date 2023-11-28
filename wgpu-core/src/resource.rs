@@ -13,7 +13,7 @@ use crate::{
     },
     identity::{GlobalIdentityHandlerFactory, IdentityManager},
     init_tracker::{BufferInitTracker, TextureInitTracker},
-    resource,
+    resource, resource_log,
     track::TextureSelector,
     validation::MissingBufferUsageError,
     Label, SubmissionIndex,
@@ -79,7 +79,6 @@ impl<Id: TypedId> Drop for ResourceInfo<Id> {
         if let Some(identity) = self.identity.as_ref() {
             let id = self.id.as_ref().unwrap();
             identity.free(*id);
-            log::info!("Freeing {:?}", self.label());
         }
     }
 }
@@ -418,8 +417,8 @@ pub struct Buffer<A: HalApi> {
 
 impl<A: HalApi> Drop for Buffer<A> {
     fn drop(&mut self) {
-        log::info!("Destroying Buffer {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw Buffer {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -639,8 +638,8 @@ pub struct StagingBuffer<A: HalApi> {
 
 impl<A: HalApi> Drop for StagingBuffer<A> {
     fn drop(&mut self) {
-        log::info!("Destroying StagingBuffer {:?}", self.info.label());
         if let Some(raw) = self.raw.lock().take() {
+            resource_log!("Destroy raw StagingBuffer {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_buffer(raw);
@@ -722,7 +721,7 @@ pub struct Texture<A: HalApi> {
 
 impl<A: HalApi> Drop for Texture<A> {
     fn drop(&mut self) {
-        log::info!("Destroying Texture {:?}", self.info.label());
+        resource_log!("Destroy raw Texture {}", self.info.label());
         use hal::Device;
         let mut clear_mode = self.clear_mode.write();
         let clear_mode = &mut *clear_mode;
@@ -989,6 +988,8 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
+    ///  The plane of the texture view.
+    pub plane: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -1038,8 +1039,8 @@ pub struct TextureView<A: HalApi> {
 
 impl<A: HalApi> Drop for TextureView<A> {
     fn drop(&mut self) {
-        log::info!("Destroying TextureView {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw TextureView {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_texture_view(raw);
@@ -1098,6 +1099,16 @@ pub enum CreateTextureViewError {
     FormatReinterpretation {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
+    },
+    #[error("Invalid texture view plane `{plane:?}` with view format `{view_format:?}`")]
+    InvalidTextureViewPlane {
+        plane: Option<u32>,
+        view_format: wgt::TextureFormat,
+    },
+    #[error("Invalid texture view plane `{plane:?}` on non-planar texture `{texture_format:?}`")]
+    InvalidTextureViewPlaneOnNonplanarTexture {
+        plane: Option<u32>,
+        texture_format: wgt::TextureFormat,
     },
 }
 
@@ -1160,7 +1171,7 @@ pub struct Sampler<A: HalApi> {
 
 impl<A: HalApi> Drop for Sampler<A> {
     fn drop(&mut self) {
-        log::info!("Destroying Sampler {:?}", self.info.label());
+        resource_log!("Destroy raw Sampler {}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;
@@ -1257,7 +1268,7 @@ pub struct QuerySet<A: HalApi> {
 
 impl<A: HalApi> Drop for QuerySet<A> {
     fn drop(&mut self) {
-        log::info!("Destroying QuerySet {:?}", self.info.label());
+        resource_log!("Destroy raw QuerySet {}", self.info.label());
         if let Some(raw) = self.raw.take() {
             unsafe {
                 use hal::Device;

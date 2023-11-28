@@ -8,14 +8,12 @@ use crate::{
         DeviceError, DeviceLostClosure,
     },
     hal_api::HalApi,
-    hub::Hub,
     id::{
         self, BindGroupId, BindGroupLayoutId, BufferId, ComputePipelineId, PipelineLayoutId,
         QuerySetId, RenderBundleId, RenderPipelineId, SamplerId, StagingBufferId, TextureId,
         TextureViewId,
     },
     pipeline::{ComputePipeline, RenderPipeline},
-    registry::Registry,
     resource::{
         self, Buffer, QuerySet, Resource, ResourceType, Sampler, StagingBuffer, Texture,
         TextureView,
@@ -77,16 +75,6 @@ impl ResourceMaps {
         self.maps.insert(R::TYPE, Box::new(map));
         self
     }
-    fn map<Id, R>(&self) -> &FastHashMap<Id, Arc<R>>
-    where
-        Id: id::TypedId,
-        R: Resource<Id>,
-    {
-        let map = self.maps.get(R::TYPE).unwrap();
-        let any_map = map.as_ref().as_any();
-        let map = any_map.downcast_ref::<FastHashMap<Id, Arc<R>>>().unwrap();
-        map
-    }
     fn map_mut<Id, R>(&mut self) -> &mut FastHashMap<Id, Arc<R>>
     where
         Id: id::TypedId,
@@ -131,13 +119,6 @@ impl ResourceMaps {
     {
         self.map_mut().insert(id, r);
         self
-    }
-    pub(crate) fn contains<Id, R>(&mut self, id: &Id) -> bool
-    where
-        Id: id::TypedId,
-        R: Resource<Id>,
-    {
-        self.map::<Id, R>().contains_key(id)
     }
 }
 
@@ -369,7 +350,7 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         let mut work_done_closures: SmallVec<_> = self.work_done_closures.drain(..).collect();
         for a in self.active.drain(..done_count) {
-            log::info!("Active submission {} is done", a.index);
+            log::debug!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
             for encoder in a.encoders {
@@ -424,35 +405,27 @@ impl<A: HalApi> LifetimeTracker<A> {
 }
 
 impl<A: HalApi> LifetimeTracker<A> {
-    fn triage_resources<Id, R, F, T>(
+    fn triage_resources<Id, R, T>(
         resources_map: &mut FastHashMap<Id, Arc<R>>,
         active: &mut [ActiveSubmission<A>],
         free_resources: &mut ResourceMaps,
         trackers: &mut impl ResourceTracker<Id, R>,
-        registry: &Registry<Id, R>,
-        count_fn: F,
         mut on_remove: T,
     ) -> Vec<Arc<R>>
     where
         Id: id::TypedId,
         R: Resource<Id>,
-        F: Fn(u64, &[ActiveSubmission<A>], &Id) -> usize,
         T: FnMut(&Id, &Arc<R>),
     {
         let mut removed_resources = Vec::new();
         resources_map.retain(|&id, resource| {
             let submit_index = resource.as_info().submission_index();
-            let mut count = 1;
-            count += count_fn(submit_index, active, &id);
-            count += registry.contains(id) as usize;
-
             let non_referenced_resources = active
                 .iter_mut()
                 .find(|a| a.index == submit_index)
                 .map_or(&mut *free_resources, |a| &mut a.last_resources);
-            count += non_referenced_resources.contains::<Id, R>(&id) as usize;
 
-            let is_removed = trackers.remove_abandoned(id, count);
+            let is_removed = trackers.remove_abandoned(id);
             if is_removed {
                 on_remove(&id, resource);
                 removed_resources.push(resource.clone());
@@ -465,7 +438,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_render_bundles(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -476,8 +448,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.bundles,
-            &hub.render_bundles,
-            |_submit_index, _active, _id| 0,
             |_bundle_id, _bundle| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -507,7 +477,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_bind_groups(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -518,8 +487,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.bind_groups,
-            &hub.bind_groups,
-            |_submit_index, _active, _id| 0,
             |_bind_group_id, _bind_group| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -553,7 +520,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_texture_views(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -564,8 +530,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.views,
-            &hub.texture_views,
-            |_submit_index, _active, _id| 0,
             |_texture_view_id, _texture_view| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -585,7 +549,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_textures(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -596,8 +559,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.textures,
-            &hub.textures,
-            |_submit_index, _active, _id| 0,
             |_texture_id, _texture| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -610,7 +571,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_samplers(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -621,8 +581,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.samplers,
-            &hub.samplers,
-            |_submit_index, _active, _id| 0,
             |_sampler_id, _sampler| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -635,7 +593,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_buffers(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -646,20 +603,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.buffers,
-            &hub.buffers,
-            |submit_index, active, buffer_id| {
-                let mut count = 0;
-                let mapped = active
-                    .iter()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&self.mapped, |a| &a.mapped);
-                mapped.iter().for_each(|b| {
-                    if b.as_info().id() == *buffer_id {
-                        count += 1;
-                    }
-                });
-                count
-            },
             |_buffer_id, _buffer| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -681,7 +624,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_compute_pipelines(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -692,8 +634,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.compute_pipelines,
-            &hub.compute_pipelines,
-            |_submit_index, _active, _id| 0,
             |_compute_pipeline_id, _compute_pipeline| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -712,7 +652,6 @@ impl<A: HalApi> LifetimeTracker<A> {
 
     fn triage_suspected_render_pipelines(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] trace: &mut Option<&mut trace::Trace>,
     ) -> &mut Self {
@@ -723,8 +662,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.render_pipelines,
-            &hub.render_pipelines,
-            |_submit_index, _active, _id| 0,
             |_render_pipeline_id, _render_pipeline| {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut t) = *trace {
@@ -787,11 +724,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         self
     }
 
-    fn triage_suspected_query_sets(
-        &mut self,
-        hub: &Hub<A>,
-        trackers: &Mutex<Tracker<A>>,
-    ) -> &mut Self {
+    fn triage_suspected_query_sets(&mut self, trackers: &Mutex<Tracker<A>>) -> &mut Self {
         let mut trackers = trackers.lock();
         let resource_map = self.suspected_resources.map_mut();
         Self::triage_resources(
@@ -799,8 +732,6 @@ impl<A: HalApi> LifetimeTracker<A> {
             self.active.as_mut_slice(),
             &mut self.free_resources,
             &mut trackers.query_sets,
-            &hub.query_sets,
-            |_submit_index, _active, _id| 0,
             |_query_set_id, _query_set| {},
         );
         self
@@ -858,7 +789,6 @@ impl<A: HalApi> LifetimeTracker<A> {
     /// [`self.free_resources`]: LifetimeTracker::free_resources
     pub(crate) fn triage_suspected(
         &mut self,
-        hub: &Hub<A>,
         trackers: &Mutex<Tracker<A>>,
         #[cfg(feature = "trace")] mut trace: Option<&mut trace::Trace>,
     ) {
@@ -866,25 +796,21 @@ impl<A: HalApi> LifetimeTracker<A> {
 
         //NOTE: the order is important to release resources that depends between each other!
         self.triage_suspected_render_bundles(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
         );
         self.triage_suspected_compute_pipelines(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
         );
         self.triage_suspected_render_pipelines(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
         );
         self.triage_suspected_bind_groups(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
@@ -897,28 +823,24 @@ impl<A: HalApi> LifetimeTracker<A> {
             #[cfg(feature = "trace")]
             &mut trace,
         );
-        self.triage_suspected_query_sets(hub, trackers);
+        self.triage_suspected_query_sets(trackers);
         self.triage_suspected_samplers(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
         );
         self.triage_suspected_staging_buffers();
         self.triage_suspected_texture_views(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
         );
         self.triage_suspected_textures(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
         );
         self.triage_suspected_buffers(
-            hub,
             trackers,
             #[cfg(feature = "trace")]
             &mut trace,
@@ -959,7 +881,6 @@ impl<A: HalApi> LifetimeTracker<A> {
     #[must_use]
     pub(crate) fn handle_mapping(
         &mut self,
-        hub: &Hub<A>,
         raw: &A::Device,
         trackers: &Mutex<Tracker<A>>,
     ) -> Vec<super::BufferMapPendingClosure> {
@@ -973,13 +894,11 @@ impl<A: HalApi> LifetimeTracker<A> {
             let buffer_id = buffer.info.id();
             let is_removed = {
                 let mut trackers = trackers.lock();
-                let mut count = 1;
-                count += hub.buffers.contains(buffer_id) as usize;
-                trackers.buffers.remove_abandoned(buffer_id, count)
+                trackers.buffers.remove_abandoned(buffer_id)
             };
             if is_removed {
                 *buffer.map_state.lock() = resource::BufferMapState::Idle;
-                log::info!("Buffer ready to map {:?} is not tracked anymore", buffer_id);
+                log::trace!("Buffer ready to map {:?} is not tracked anymore", buffer_id);
                 self.free_resources.insert(buffer_id, buffer.clone());
             } else {
                 let mapping = match std::mem::replace(

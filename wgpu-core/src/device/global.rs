@@ -1,7 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model, command, conv,
+    api_log, binding_model, command, conv,
     device::{
         life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
         IMPLICIT_FAILURE,
@@ -185,7 +185,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(buffer);
-            log::info!("Created Buffer {:?} with {:?}", id, desc);
+            api_log!("Device::create_buffer({desc:?}) -> {id:?}");
 
             let buffer_use = if !desc.mapped_at_creation {
                 hal::BufferUses::empty()
@@ -481,10 +481,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("Buffer::destroy");
+        api_log!("Buffer::destroy {buffer_id:?}");
 
         let hub = A::hub(self);
 
-        log::debug!("Buffer {:?} is asked to be dropped", buffer_id);
         let mut buffer_guard = hub.buffers.write();
         let buffer = buffer_guard
             .get_and_mark_destroyed(buffer_id)
@@ -494,8 +494,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn buffer_drop<A: HalApi>(&self, buffer_id: id::BufferId, wait: bool) {
         profiling::scope!("Buffer::drop");
-
-        log::debug!("Buffer {:?} is asked to be dropped", buffer_id);
+        api_log!("Buffer::drop {buffer_id:?}");
 
         let hub = A::hub(self);
 
@@ -564,7 +563,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(texture);
-            log::info!("Created Texture {:?} with {:?}", id, desc);
+            api_log!("Device::create_texture({desc:?}) -> {id:?}");
 
             device.trackers.lock().textures.insert_single(
                 id,
@@ -574,6 +573,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             return (id, None);
         };
+
+        log::error!("Device::create_texture error {error:?}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -636,7 +637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 RwLock::new(TextureInitTracker::new(desc.mip_level_count, 0));
 
             let (id, resource) = fid.assign(texture);
-            log::info!("Created Texture {:?} with {:?}", id, desc);
+            api_log!("Device::create_texture -> {id:?}");
 
             device.trackers.lock().textures.insert_single(
                 id,
@@ -646,6 +647,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             return (id, None);
         };
+
+        log::error!("Device::create_texture error {error:?}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -688,7 +691,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let buffer = device.create_buffer_from_hal(hal_buffer, desc);
 
             let (id, buffer) = fid.assign(buffer);
-            log::info!("Created buffer {:?} with {:?}", id, desc);
+            api_log!("Device::create_buffer -> {id:?}");
 
             device
                 .trackers
@@ -698,6 +701,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             return (id, None);
         };
+
+        log::error!("Device::create_buffer error {error:?}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -712,11 +717,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_id: id::TextureId,
     ) -> Result<(), resource::DestroyError> {
         profiling::scope!("Texture::destroy");
-        log::trace!("Texture::destroy {texture_id:?}");
+        api_log!("Texture::destroy {texture_id:?}");
 
         let hub = A::hub(self);
 
-        log::debug!("Texture {:?} is destroyed", texture_id);
         let mut texture_guard = hub.textures.write();
         let texture = texture_guard
             .get_and_mark_destroyed(texture_id)
@@ -754,8 +758,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn texture_drop<A: HalApi>(&self, texture_id: id::TextureId, wait: bool) {
         profiling::scope!("Texture::drop");
-
-        log::debug!("Texture {:?} is asked to be dropped", texture_id);
+        api_log!("Texture::drop {texture_id:?}");
 
         let hub = A::hub(self);
 
@@ -827,12 +830,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(view);
-            log::info!("Created TextureView {:?}", id);
+            api_log!("Texture::create_view({texture_id:?}) -> {id:?}");
             device.trackers.lock().views.insert_single(id, resource);
             return (id, None);
         };
 
-        log::error!("Texture::create_view {:?} error {:?}", texture_id, error);
+        log::error!("Texture::create_view({texture_id:?}) error {error:?}");
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -847,8 +850,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         wait: bool,
     ) -> Result<(), resource::TextureViewDestroyError> {
         profiling::scope!("TextureView::drop");
-
-        log::debug!("TextureView {:?} is asked to be dropped", texture_view_id);
+        api_log!("TextureView::drop {texture_view_id:?}");
 
         let hub = A::hub(self);
 
@@ -905,7 +907,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(sampler);
-            log::info!("Created Sampler {:?}", id);
+            api_log!("Device::create_sampler -> {id:?}");
             device.trackers.lock().samplers.insert_single(id, resource);
 
             return (id, None);
@@ -921,7 +923,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn sampler_drop<A: HalApi>(&self, sampler_id: id::SamplerId) {
         profiling::scope!("Sampler::drop");
-        log::debug!("Sampler {:?} is asked to be dropped", sampler_id);
+        api_log!("Sampler::drop {sampler_id:?}");
 
         let hub = A::hub(self);
 
@@ -981,7 +983,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let bgl_guard = hub.bind_group_layouts.read();
                 device.deduplicate_bind_group_layout(&entry_map, &*bgl_guard)
             } {
-                log::info!("Reusing BindGroupLayout {layout:?} -> {:?}", id);
+                api_log!("Reusing BindGroupLayout {layout:?} -> {:?}", id);
                 let id = fid.assign_existing(&layout);
                 return (id, None);
             }
@@ -992,7 +994,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, _layout) = fid.assign(layout);
-            log::info!("Created BindGroupLayout {:?}", id);
+            api_log!("Device::create_bind_group_layout -> {id:?}");
             return (id, None);
         };
 
@@ -1007,11 +1009,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_layout_drop<A: HalApi>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
         profiling::scope!("BindGroupLayout::drop");
-
-        log::debug!(
-            "BindGroupLayout {:?} is asked to be dropped",
-            bind_group_layout_id
-        );
+        api_log!("BindGroupLayout::drop {bind_group_layout_id:?}");
 
         let hub = A::hub(self);
 
@@ -1061,7 +1059,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, _) = fid.assign(layout);
-            log::info!("Created PipelineLayout {:?}", id);
+            api_log!("Device::create_pipeline_layout -> {id:?}");
             return (id, None);
         };
 
@@ -1075,11 +1073,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn pipeline_layout_drop<A: HalApi>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         profiling::scope!("PipelineLayout::drop");
-
-        log::debug!(
-            "PipelineLayout {:?} is asked to be dropped",
-            pipeline_layout_id
-        );
+        api_log!("PipelineLayout::drop {pipeline_layout_id:?}");
 
         let hub = A::hub(self);
         if let Some(layout) = hub.pipeline_layouts.unregister(pipeline_layout_id) {
@@ -1132,7 +1126,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(bind_group);
-            log::info!("Created BindGroup {:?}", id,);
+            api_log!("Device::create_bind_group -> {id:?}");
 
             device
                 .trackers
@@ -1152,8 +1146,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn bind_group_drop<A: HalApi>(&self, bind_group_id: id::BindGroupId) {
         profiling::scope!("BindGroup::drop");
-
-        log::debug!("BindGroup {:?} is asked to be dropped", bind_group_id);
+        api_log!("BindGroup::drop {bind_group_id:?}");
 
         let hub = A::hub(self);
 
@@ -1220,9 +1213,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, _) = fid.assign(shader);
-            log::info!("Created ShaderModule {:?} with {:?}", id, desc);
+            api_log!("Device::create_shader_module -> {id:?}");
             return (id, None);
         };
+
+        log::error!("Device::create_shader_module error: {error:?}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1275,9 +1270,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let (id, _) = fid.assign(shader);
-            log::info!("Created ShaderModule {:?} with {:?}", id, desc);
+            api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
         };
+
+        log::error!("Device::create_shader_module_spirv error: {error:?}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1289,8 +1286,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn shader_module_drop<A: HalApi>(&self, shader_module_id: id::ShaderModuleId) {
         profiling::scope!("ShaderModule::drop");
-
-        log::debug!("ShaderModule {:?} is asked to be dropped", shader_module_id);
+        api_log!("ShaderModule::drop {shader_module_id:?}");
 
         let hub = A::hub(self);
         hub.shader_modules.unregister(shader_module_id);
@@ -1340,7 +1336,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             let (id, _) = fid.assign(command_buffer);
-            log::info!("Created CommandBuffer {:?} with {:?}", id, desc);
+            api_log!("Device::create_command_encoder -> {id:?}");
             return (id, None);
         };
 
@@ -1354,11 +1350,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_encoder_drop<A: HalApi>(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("CommandEncoder::drop");
-
-        log::debug!(
-            "CommandEncoder {:?} is asked to be dropped",
-            command_encoder_id
-        );
+        api_log!("CommandEncoder::drop {command_encoder_id:?}");
 
         let hub = A::hub(self);
 
@@ -1371,11 +1363,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn command_buffer_drop<A: HalApi>(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
-
-        log::debug!(
-            "CommandBuffer {:?} is asked to be dropped",
-            command_buffer_id
-        );
+        api_log!("CommandBuffer::drop {command_buffer_id:?}");
         self.command_encoder_drop::<A>(command_buffer_id)
     }
 
@@ -1388,7 +1376,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Option<command::CreateRenderBundleError>,
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
-        log::trace!("Device::device_create_render_bundle_encoder");
+        api_log!("Device::device_create_render_bundle_encoder");
         let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
@@ -1437,7 +1425,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(render_bundle);
-            log::info!("Created RenderBundle {:?}", id);
+            api_log!("RenderBundleEncoder::finish -> {id:?}");
             device.trackers.lock().bundles.insert_single(id, resource);
             return (id, None);
         };
@@ -1452,8 +1440,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_bundle_drop<A: HalApi>(&self, render_bundle_id: id::RenderBundleId) {
         profiling::scope!("RenderBundle::drop");
-
-        log::debug!("RenderBundle {:?} is asked to be dropped", render_bundle_id);
+        api_log!("RenderBundle::drop {render_bundle_id:?}");
 
         let hub = A::hub(self);
 
@@ -1500,7 +1487,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(query_set);
-            log::info!("Created QuerySet {:?}", id);
+            api_log!("Device::create_query_set -> {id:?}");
             device
                 .trackers
                 .lock()
@@ -1516,8 +1503,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn query_set_drop<A: HalApi>(&self, query_set_id: id::QuerySetId) {
         profiling::scope!("QuerySet::drop");
-
-        log::debug!("QuerySet {:?} is asked to be dropped", query_set_id);
+        api_log!("QuerySet::drop {query_set_id:?}");
 
         let hub = A::hub(self);
 
@@ -1582,7 +1568,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
             let (id, resource) = fid.assign(pipeline);
-            log::info!("Created RenderPipeline {:?} with {:?}", id, desc);
+            api_log!("Device::create_render_pipeline -> {id:?}");
 
             device
                 .trackers
@@ -1611,6 +1597,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
             }
         }
+
+        log::error!("Device::create_render_pipeline error {error:?}");
 
         (id, Some(error))
     }
@@ -1656,11 +1644,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn render_pipeline_drop<A: HalApi>(&self, render_pipeline_id: id::RenderPipelineId) {
         profiling::scope!("RenderPipeline::drop");
-
-        log::debug!(
-            "RenderPipeline {:?} is asked to be dropped",
-            render_pipeline_id
-        );
+        api_log!("RenderPipeline::drop {render_pipeline_id:?}");
 
         let hub = A::hub(self);
 
@@ -1719,7 +1703,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let (id, resource) = fid.assign(pipeline);
-            log::info!("Created ComputePipeline {:?} with {:?}", id, desc);
+            api_log!("Device::create_compute_pipeline -> {id:?}");
 
             device
                 .trackers
@@ -1795,11 +1779,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn compute_pipeline_drop<A: HalApi>(&self, compute_pipeline_id: id::ComputePipelineId) {
         profiling::scope!("ComputePipeline::drop");
-
-        log::debug!(
-            "ComputePipeline {:?} is asked to be dropped",
-            compute_pipeline_id
-        );
+        api_log!("ComputePipeline::drop {compute_pipeline_id:?}");
 
         let hub = A::hub(self);
 
@@ -1876,7 +1856,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unreachable!("Fallback system failed to choose present mode. This is a bug. Mode: {:?}, Options: {:?}", config.present_mode, &caps.present_modes);
                 };
 
-                log::info!(
+                api_log!(
                     "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
                     config.present_mode
                 );
@@ -1920,7 +1900,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                 };
 
-                log::info!(
+                api_log!(
                     "Automatically choosing alpha mode by rule {:?}. Chose {new_alpha_mode:?}",
                     config.composite_alpha_mode
                 );
@@ -2024,7 +2004,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // Wait for all work to finish before configuring the surface.
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(hub, fence, wgt::Maintain::Wait) {
+                match device.maintain(fence, wgt::Maintain::Wait) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2094,7 +2074,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(InvalidDevice);
         }
         device.lock_life().triage_suspected(
-            hub,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
@@ -2110,7 +2089,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: DeviceId,
         maintain: wgt::Maintain<queue::WrappedSubmissionIndex>,
     ) -> Result<bool, WaitIdleError> {
-        log::trace!("Device::poll");
+        api_log!("Device::poll");
 
         let (closures, queue_empty) = {
             if let wgt::Maintain::WaitForSubmissionIndex(submission_index) = maintain {
@@ -2129,7 +2108,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
-            device.maintain(hub, fence, maintain)?
+            device.maintain(fence, maintain)?
         };
 
         closures.fire();
@@ -2163,7 +2142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(hub, fence, maintain)?;
+                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
                 closures.extend(cbs);
@@ -2180,6 +2159,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     /// Return `all_queue_empty` indicating whether there are more queue
     /// submissions still in flight.
     pub fn poll_all_devices(&self, force_wait: bool) -> Result<bool, WaitIdleError> {
+        api_log!("poll_all_devices");
         let mut closures = UserClosures::default();
         let mut all_queue_empty = true;
 
@@ -2219,7 +2199,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_start_capture<A: HalApi>(&self, id: DeviceId) {
-        log::trace!("Device::start_capture");
+        api_log!("Device::start_capture");
 
         let hub = A::hub(self);
 
@@ -2232,7 +2212,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_stop_capture<A: HalApi>(&self, id: DeviceId) {
-        log::trace!("Device::stop_capture");
+        api_log!("Device::stop_capture");
 
         let hub = A::hub(self);
 
@@ -2246,7 +2226,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn device_drop<A: HalApi>(&self, device_id: DeviceId) {
         profiling::scope!("Device::drop");
-        log::debug!("Device {:?} is asked to be dropped", device_id);
+        api_log!("Device::drop {device_id:?}");
 
         let hub = A::hub(self);
         if let Some(device) = hub.devices.unregister(device_id) {
@@ -2279,7 +2259,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_destroy<A: HalApi>(&self, device_id: DeviceId) {
-        log::trace!("Device::destroy {device_id:?}");
+        api_log!("Device::destroy {device_id:?}");
 
         let hub = A::hub(self);
 
@@ -2305,7 +2285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_mark_lost<A: HalApi>(&self, device_id: DeviceId, message: &str) {
-        log::trace!("Device::mark_lost {device_id:?}");
+        api_log!("Device::mark_lost {device_id:?}");
 
         let hub = A::hub(self);
 
@@ -2316,7 +2296,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn queue_drop<A: HalApi>(&self, queue_id: QueueId) {
         profiling::scope!("Queue::drop");
-        log::debug!("Queue {:?} is asked to be dropped", queue_id);
+        api_log!("Queue::drop {queue_id:?}");
 
         let hub = A::hub(self);
         if let Some(queue) = hub.queues.unregister(queue_id) {
@@ -2330,7 +2310,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: BufferMapOperation,
     ) -> BufferAccessResult {
-        log::trace!("Buffer::map_async {buffer_id:?}");
+        api_log!("Buffer::map_async {buffer_id:?}");
 
         // User callbacks must not be called while holding buffer_map_async_inner's locks, so we
         // defer the error callback if it needs to be called immediately (typically when running
@@ -2339,6 +2319,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
+            log::error!("Buffer::map_async error {err:?}");
             return Err(err);
         }
 
@@ -2425,7 +2406,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 };
             }
-            log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
             {
                 let mut trackers = buffer.device.as_ref().trackers.lock();
@@ -2449,7 +2429,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: Option<BufferAddress>,
     ) -> Result<(*mut u8, u64), BufferAccessError> {
         profiling::scope!("Buffer::get_mapped_range");
-        log::trace!("Buffer::get_mapped_range {buffer_id:?}");
+        api_log!("Buffer::get_mapped_range {buffer_id:?}");
 
         let hub = A::hub(self);
 
@@ -2511,7 +2491,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
     pub fn buffer_unmap<A: HalApi>(&self, buffer_id: id::BufferId) -> BufferAccessResult {
         profiling::scope!("unmap", "Buffer");
-        log::trace!("Buffer::unmap {buffer_id:?}");
+        api_log!("Buffer::unmap {buffer_id:?}");
 
         let closure;
         {

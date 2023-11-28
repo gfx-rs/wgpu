@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
+
+This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
+
+### `DeviceExt::create_texture_with_data` Allows Mip-Major Data
+
+Previously, `DeviceExt::create_texture_with_data` only allowed data to be provided in layer major order. There is now a `order` parameter which allows you to specify if the data is in layer major or mip major order.
+
 ### New Features
 
 #### General
@@ -48,33 +56,37 @@ Bottom level categories:
 
 #### OpenGL
 - `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
+#### Naga
+
+- Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
 
 ### Changes
 
-- Arcanization of wgpu core resources:
-Removed Token and LifeTime related management
-Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
-Removing mut from resources and added instead internal members locks on demand or atomics operations
-Resources now implement Drop and destroy stuff when last Arc resources is released
-Resources hold an Arc in order to be able to implement Drop
-Resources have an utility to retrieve the id of the resource itself
-Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
-Verify correct resources release when unused or not needed
-Check Web and Metal compliation (thanks to @niklaskorz)
-Fix tests on all platforms
-Test a multithreaded scenario
-Storage is now holding only user-land resources, but Arc is keeping refcount for resources
-When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
-IdentityManager is now unique and free is called on resource drop instead of storage unregister
-Identity changes due to Arcanization and Registry being just the user reference
-Added MemLeaks test and fixing mem leaks
-By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+- Arcanization of wgpu core resources: By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and thanks also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+  - Removed Token and LifeTime related management
+  - Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
+  - Removing mut from resources and added instead internal members locks on demand or atomics operations
+  - Resources now implement Drop and destroy stuff when last Arc resources is released
+  - Resources hold an Arc in order to be able to implement Drop
+  - Resources have an utility to retrieve the id of the resource itself
+  - Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
+  - Verify correct resources release when unused or not needed
+  - Check Web and Metal compliation (thanks to @niklaskorz)
+  - Fix tests on all platforms
+  - Test a multithreaded scenario
+  - Storage is now holding only user-land resources, but Arc is keeping refcount for resources
+  - When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
+  - IdentityManager is now unique and free is called on resource drop instead of storage unregister
+  - Identity changes due to Arcanization and Registry being just the user reference
+  - Added MemLeaks test and fixing mem leaks
 
 #### General
 
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
 - `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
 - Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
+- Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737)
+- Reduce the `info` log level noise. By @nical in [#4769](https://github.com/gfx-rs/wgpu/pull/4769), [#4711](https://github.com/gfx-rs/wgpu/pull/4711) and [#4772](https://github.com/gfx-rs/wgpu/pull/4772)
 
 #### Safe `Surface` creation
 
@@ -93,6 +105,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Implement WGSL abstract types (by @jimblandy):
   - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
 
+- Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
+
 ### Bug Fixes
 
 #### WGL
@@ -100,6 +114,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Create a hidden window per `wgpu::Instance` instead of sharing a global one.
 
 #### Naga
+
+- Make module compaction preserve the module's named types, even if they are unused. By @jimblandy in [#4734](https://github.com/gfx-rs/wgpu/pull/4734).
 
 - Improve algorithm used by module compaction. By @jimblandy in [#4662](https://github.com/gfx-rs/wgpu/pull/4662).
 
@@ -110,6 +126,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
 
 - Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
+
+- Record the names of WGSL `alias` declarations in Naga IR `Type`s. By @jimblandy in [#4733](https://github.com/gfx-rs/wgpu/pull/4733).
 
 ### Examples
 

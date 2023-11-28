@@ -1006,6 +1006,14 @@ impl<'a> ConstantEvaluator<'a> {
                             return Err(ConstantEvaluatorError::InvalidCastArg)
                         }
                     }),
+                    Sc::F64 => Literal::F64(match literal {
+                        Literal::I32(v) => v as f64,
+                        Literal::U32(v) => v as f64,
+                        Literal::F32(v) => v as f64,
+                        Literal::Bool(v) => v as u32 as f64,
+                        Literal::F64(v) => v,
+                        Literal::I64(_) => return Err(ConstantEvaluatorError::InvalidCastArg),
+                    }),
                     Sc::BOOL => Literal::Bool(match literal {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,

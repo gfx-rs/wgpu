@@ -9,6 +9,7 @@ use crate::{
     identity::GlobalIdentityHandlerFactory,
     instance::{Instance, Surface},
     registry::{Registry, RegistryReport},
+    resource_log,
     storage::Element,
 };
 
@@ -150,7 +151,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         profiling::scope!("Global::drop");
-        log::info!("Destroying Global");
+        resource_log!("Global::drop");
         let mut surfaces_locked = self.surfaces.write();
 
         // destroy hubs before the instance gets dropped

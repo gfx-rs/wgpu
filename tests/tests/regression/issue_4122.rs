@@ -1,4 +1,4 @@
-use std::{num::NonZeroU64, ops::Range};
+use std::ops::Range;
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
 
@@ -27,11 +27,7 @@ fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
             label: Some("encoder"),
         });
 
-    encoder.clear_buffer(
-        &gpu_buffer,
-        range.start,
-        NonZeroU64::new(range.end - range.start),
-    );
+    encoder.clear_buffer(&gpu_buffer, range.start, Some(range.end - range.start));
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, size);
 
     ctx.queue.submit(Some(encoder.finish()));

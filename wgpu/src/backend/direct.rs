@@ -1610,6 +1610,7 @@ impl crate::Context for Context {
                 base_array_layer: desc.base_array_layer,
                 array_layer_count: desc.array_layer_count,
             },
+            plane: desc.plane,
         };
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(
@@ -2059,7 +2060,7 @@ impl crate::Context for Context {
         encoder_data: &Self::CommandEncoderData,
         buffer: &crate::Buffer,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
+        size: Option<wgt::BufferAddress>,
     ) {
         let global = &self.0;
         if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_buffer(

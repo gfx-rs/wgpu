@@ -3,6 +3,7 @@ use std::{ops::Range, sync::Arc};
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
+    api_log,
     command::CommandBuffer,
     get_lowest_common_denom,
     global::Global,
@@ -16,9 +17,7 @@ use crate::{
 
 use hal::CommandEncoder as _;
 use thiserror::Error;
-use wgt::{
-    math::align_to, BufferAddress, BufferSize, BufferUsages, ImageSubresourceRange, TextureAspect,
-};
+use wgt::{math::align_to, BufferAddress, BufferUsages, ImageSubresourceRange, TextureAspect};
 
 /// Error encountered while attempting a clear.
 #[derive(Clone, Debug, Error)]
@@ -37,7 +36,7 @@ pub enum ClearError {
     #[error("Texture {0:?} can not be cleared")]
     NoValidTextureClearMode(TextureId),
     #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
-    UnalignedFillSize(BufferSize),
+    UnalignedFillSize(BufferAddress),
     #[error("Buffer offset {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("Clear of {start_offset}..{end_offset} would end up overrunning the bounds of the buffer of size {buffer_size}")]
@@ -75,10 +74,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         dst: BufferId,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_buffer");
-        log::trace!("CommandEncoder::clear_buffer {dst:?}");
+        api_log!("CommandEncoder::clear_buffer {dst:?}");
 
         let hub = A::hub(self);
 
@@ -116,10 +115,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(ClearError::UnalignedBufferOffset(offset));
         }
         if let Some(size) = size {
-            if size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(ClearError::UnalignedFillSize(size));
             }
-            let destination_end_offset = offset + size.get();
+            let destination_end_offset = offset + size;
             if destination_end_offset > dst_buffer.size {
                 return Err(ClearError::BufferOverrun {
                     start_offset: offset,
@@ -130,7 +129,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let end = match size {
-            Some(size) => offset + size.get(),
+            Some(size) => offset + size,
             None => dst_buffer.size,
         };
         if offset == end {
@@ -163,7 +162,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         subresource_range: &ImageSubresourceRange,
     ) -> Result<(), ClearError> {
         profiling::scope!("CommandEncoder::clear_texture");
-        log::trace!("CommandEncoder::clear_texture {dst:?}");
+        api_log!("CommandEncoder::clear_texture {dst:?}");
 
         let hub = A::hub(self);
 
@@ -337,6 +336,11 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
         hal::FormatAspects::from(texture_desc.format),
         hal::FormatAspects::COLOR
     );
+
+    if texture_desc.format == wgt::TextureFormat::NV12 {
+        // TODO: Currently COPY_DST for NV12 textures is unsupported.
+        return;
+    }
 
     // Gather list of zero_buffer copies and issue a single command then to perform them
     let mut zero_buffer_copy_regions = Vec::new();

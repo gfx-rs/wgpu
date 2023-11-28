@@ -76,6 +76,7 @@ fn reinterpret(
             sample_count: 1,
             view_formats: &[reinterpret_to],
         },
+        wgpu::util::TextureDataOrder::LayerMajor,
         bytemuck::cast_slice(src_data),
     );
     let tv = tex.create_view(&wgpu::TextureViewDescriptor {

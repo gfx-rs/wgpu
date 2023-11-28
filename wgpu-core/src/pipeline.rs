@@ -7,7 +7,7 @@ use crate::{
     hal_api::HalApi,
     id::{ComputePipelineId, PipelineLayoutId, RenderPipelineId, ShaderModuleId},
     resource::{Resource, ResourceInfo, ResourceType},
-    validation, Label,
+    resource_log, validation, Label,
 };
 use arrayvec::ArrayVec;
 use std::{borrow::Cow, error::Error, fmt, marker::PhantomData, num::NonZeroU32, sync::Arc};
@@ -54,8 +54,8 @@ pub struct ShaderModule<A: HalApi> {
 
 impl<A: HalApi> Drop for ShaderModule<A> {
     fn drop(&mut self) {
-        log::info!("Destroying ShaderModule {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw ShaderModule {}", self.info.label());
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *self.device.trace.lock() {
                 trace.add(trace::Action::DestroyShaderModule(self.info.id()));
@@ -253,8 +253,8 @@ pub struct ComputePipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for ComputePipeline<A> {
     fn drop(&mut self) {
-        log::info!("Destroying ComputePipeline {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw ComputePipeline {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_compute_pipeline(raw);
@@ -494,8 +494,8 @@ pub struct RenderPipeline<A: HalApi> {
 
 impl<A: HalApi> Drop for RenderPipeline<A> {
     fn drop(&mut self) {
-        log::info!("Destroying RenderPipeline {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw RenderPipeline {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_render_pipeline(raw);

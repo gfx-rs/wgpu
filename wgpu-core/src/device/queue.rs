@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
+    api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
         ClearError, CommandBuffer, CopySide, ImageCopyTexture, TransferError,
@@ -18,7 +19,7 @@ use crate::{
         Buffer, BufferAccessError, BufferMapState, Resource, ResourceInfo, ResourceType,
         StagingBuffer, Texture, TextureInner,
     },
-    track, FastHashMap, SubmissionIndex,
+    resource_log, track, FastHashMap, SubmissionIndex,
 };
 
 use hal::{CommandEncoder as _, Device as _, Queue as _};
@@ -385,6 +386,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_buffer");
+        api_log!("Queue::write_buffer {buffer_id:?} {}bytes", data.len());
 
         let hub = A::hub(self);
 
@@ -466,7 +468,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let fid = hub.staging_buffers.prepare::<G>(id_in);
         let (id, _) = fid.assign(staging_buffer);
-        log::info!("Created StagingBuffer {:?}", id);
+        resource_log!("Queue::create_staging_buffer {id:?}");
 
         Ok((id, staging_buffer_ptr))
     }
@@ -649,6 +651,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_texture");
+        api_log!("Queue::write_texture {:?} {size:?}", destination.texture);
 
         let hub = A::hub(self);
 
@@ -1115,7 +1118,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_buffer_ids: &[id::CommandBufferId],
     ) -> Result<WrappedSubmissionIndex, QueueSubmitError> {
         profiling::scope!("Queue::submit");
-        log::trace!("Queue::submit {queue_id:?}");
+        api_log!("Queue::submit {queue_id:?}");
 
         let (submit_index, callbacks) = {
             let hub = A::hub(self);
@@ -1484,7 +1487,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let (closures, _) = match device.maintain(hub, fence, wgt::Maintain::Poll) {
+            let (closures, _) = match device.maintain(fence, wgt::Maintain::Poll) {
                 Ok(closures) => closures,
                 Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
                 Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
@@ -1524,7 +1527,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: QueueId,
         closure: SubmittedWorkDoneClosure,
     ) -> Result<(), InvalidQueue> {
-        log::trace!("Queue::on_submitted_work_done {queue_id:?}");
+        api_log!("Queue::on_submitted_work_done {queue_id:?}");
 
         //TODO: flush pending writes
         let hub = A::hub(self);

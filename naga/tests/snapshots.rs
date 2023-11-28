@@ -788,6 +788,14 @@ fn convert_wgsl() {
         ),
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
         (
+            "struct-layout",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
+        ),
+        (
+            "f64",
+            Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "subgroup-operations",
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),

@@ -49,6 +49,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
             base_array_layer: 0,
             mip_level_count: Some(1),
             array_layer_count: Some(1),
+            ..Default::default()
         });
 
         let readback_buffer = device.create_buffer(&wgpu::BufferDescriptor {
