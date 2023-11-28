@@ -153,6 +153,16 @@ fn main(
         default {  }
     }
 
+    mask = 1u << 29u;
+    expected = 0u;
+    for (var i = subgroup_size; i >= 0u; i -= 1u) {
+        expected = subgroupAdd(1u);
+        if i == subgroup_invocation_id {
+            break;
+        }
+    }
+    passed |= mask * u32(expected == (subgroup_invocation_id + 1u));
+
     // Increment TEST_COUNT in subgroup_operations/mod.rs if adding more tests
 
     storage_buffer[global_id.x] = passed;
