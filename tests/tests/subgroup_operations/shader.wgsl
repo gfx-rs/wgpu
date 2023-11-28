@@ -163,6 +163,10 @@ fn main(
     }
     passed |= mask * u32(expected == (subgroup_invocation_id + 1u));
 
+    // Keep this test last, verify we are still convergent after running other tests
+    mask = 1u << 30u;
+    passed |= mask * u32(subgroup_size == subgroupAdd(1u));
+
     // Increment TEST_COUNT in subgroup_operations/mod.rs if adding more tests
 
     storage_buffer[global_id.x] = passed;
