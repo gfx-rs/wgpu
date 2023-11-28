@@ -48,6 +48,13 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    // Silence Vulkan Validation error "VUID-VkSwapchainCreateInfoKHR-pNext-07781"
+    // - it's another false positive due to the inherent racy-ness of surface resizing
+    const VUID_VKSWAPCHAINCREATEINFOKHR_PNEXT_07781: i32 = 0x4c8929c1;
+    if cd.message_id_number == VUID_VKSWAPCHAINCREATEINFOKHR_PNEXT_07781 {
+        return vk::FALSE;
+    }
+
     // Silence Vulkan Validation error "VUID-VkRenderPassBeginInfo-framebuffer-04627"
     // if the OBS layer is enabled. This is a bug in the OBS layer. As the OBS layer
     // does not have a version number they increment, there is no way to qualify the
