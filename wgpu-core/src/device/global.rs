@@ -1812,18 +1812,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         ) -> Result<(), E> {
             let width = config.extent.width;
             let height = config.extent.height;
-            if width < caps.extents.start().width
-                || width > caps.extents.end().width
-                || height < caps.extents.start().height
-                || height > caps.extents.end().height
-            {
-                log::warn!(
-                    "Requested size {}x{} is outside of the supported range: {:?}",
-                    width,
-                    height,
-                    caps.extents
-                );
-            }
+
             if !caps.present_modes.contains(&config.present_mode) {
                 let new_mode = 'b: loop {
                     // Automatic present mode checks.

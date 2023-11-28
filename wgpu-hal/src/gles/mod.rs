@@ -249,7 +249,6 @@ struct AdapterShared {
     features: wgt::Features,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
-    max_texture_size: u32,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
     es: bool,

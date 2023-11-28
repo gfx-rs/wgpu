@@ -882,11 +882,6 @@ pub struct SurfaceCapabilities {
     /// Current extent of the surface, if known.
     pub current_extent: Option<wgt::Extent3d>,
 
-    /// Range of supported extents.
-    ///
-    /// `current_extent` must be inside this range.
-    pub extents: RangeInclusive<wgt::Extent3d>,
-
     /// Supported texture usage flags.
     ///
     /// Must have at least `TextureUses::COLOR_TARGET`
