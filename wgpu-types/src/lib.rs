@@ -3184,12 +3184,13 @@ impl TextureFormat {
             Self::Astc { .. } =>          (        noaa,      basic),
         };
 
-        let sample_type = self.sample_type(None);
-        let mut is_filterable = sample_type == Some(TextureSampleType::Float { filterable: true });
-        let is_blendable = is_filterable;
-        if device_features.contains(Features::FLOAT32_FILTERABLE) {
-            is_filterable |= sample_type == Some(TextureSampleType::Float { filterable: false });
-        }
+        // Get whether the format is filterable, taking features into account
+        let sample_type1 = self.sample_type(None, device_features);
+        let is_filterable = sample_type1 == Some(TextureSampleType::Float { filterable: true });
+
+        // Features that enable filtering don't affect blendability
+        let sample_type2 = self.sample_type(None, Features::empty());
+        let is_blendable = sample_type2 == Some(TextureSampleType::Float { filterable: true });
 
         flags.set(TextureFormatFeatureFlags::FILTERABLE, is_filterable);
         flags.set(TextureFormatFeatureFlags::BLENDABLE, is_blendable);
@@ -3204,9 +3205,15 @@ impl TextureFormat {
     ///
     /// Returns `None` only if the format is combined depth-stencil
     /// and `TextureAspect::All` or no `aspect` was provided
-    pub fn sample_type(&self, aspect: Option<TextureAspect>) -> Option<TextureSampleType> {
+    pub fn sample_type(
+        &self,
+        aspect: Option<TextureAspect>,
+        device_features: Features,
+    ) -> Option<TextureSampleType> {
         let float = TextureSampleType::Float { filterable: true };
-        let unfilterable_float = TextureSampleType::Float { filterable: false };
+        let float32_sample_type = TextureSampleType::Float {
+            filterable: device_features.contains(Features::FLOAT32_FILTERABLE),
+        };
         let depth = TextureSampleType::Depth;
         let uint = TextureSampleType::Uint;
         let sint = TextureSampleType::Sint;
@@ -3227,7 +3234,7 @@ impl TextureFormat {
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float => Some(float),
 
-            Self::R32Float | Self::Rg32Float | Self::Rgba32Float => Some(unfilterable_float),
+            Self::R32Float | Self::Rg32Float | Self::Rgba32Float => Some(float32_sample_type),
 
             Self::R8Uint
             | Self::Rg8Uint

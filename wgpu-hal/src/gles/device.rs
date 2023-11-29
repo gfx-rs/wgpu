@@ -746,7 +746,7 @@ impl crate::Device<super::Api> for super::Device {
 
             unsafe { gl.bind_texture(target, Some(raw)) };
             //Note: this has to be done before defining the storage!
-            match desc.format.sample_type(None) {
+            match desc.format.sample_type(None, self.shared.features) {
                 Some(
                     wgt::TextureSampleType::Float { filterable: false }
                     | wgt::TextureSampleType::Uint

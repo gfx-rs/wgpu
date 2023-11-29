@@ -1556,8 +1556,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            match format.sample_type(None).unwrap() {
-                wgt::TextureSampleType::Float { filterable: _ } => limits
+            let stub_device_features = wgt::Features::empty(); // Actual features not required in this case
+            match format.sample_type(None, stub_device_features).unwrap() {
+                wgt::TextureSampleType::Float { .. } => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),
                 wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {

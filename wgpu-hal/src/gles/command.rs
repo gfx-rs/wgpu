@@ -604,8 +604,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         {
             if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
+                let stub_device_features = wgt::Features::empty(); // Don't need the actual device features in this case
                 self.cmd_buffer.commands.push(
-                    match cat.target.view.format.sample_type(None).unwrap() {
+                    match cat
+                        .target
+                        .view
+                        .format
+                        .sample_type(None, stub_device_features)
+                        .unwrap()
+                    {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
