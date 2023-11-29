@@ -3971,7 +3971,7 @@ impl<'a> RenderPass<'a> {
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     ///
-    /// Indirect drawing has some caviats depending on the features available. We are not currently able to validate
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
     ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
@@ -3996,7 +3996,7 @@ impl<'a> RenderPass<'a> {
     /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
-    /// Indirect drawing has some caviats depending on the features available. We are not currently able to validate
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
     ///   [`DrawIndexedIndirect::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
