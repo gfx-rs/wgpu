@@ -1,6 +1,12 @@
-# uniform-values
+# uniform_values
 
 Creates a window which displays a grayscale render of the [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set). Pressing the arrow keys will translate the set and scrolling the mouse wheel will zoom in and out. If the image appears too 'bright', it may be because you are using too few iterations or 'samples'. Use U and D to increase or decrease respectively the max number of iterations used. Make sure to play around with this too to get an optimally photogenic screen cap. The window can be resized and pressing ESC will close the window. Explore the Mandelbrot set using the power of uniform variables to transfer state from the main program to the shader!
+
+## To Run
+
+```
+cargo run --bin wgpu-examples uniform_values
+```
 
 ## Usage of Uniform Buffers / Variables
 

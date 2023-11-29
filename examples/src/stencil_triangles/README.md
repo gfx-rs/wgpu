@@ -1,4 +1,4 @@
-# hello-triangle
+# stencil_triangles
 
 This example renders two different sized triangles to display three same sized triangles,
 by demonstrating the use of stencil buffers.
@@ -10,7 +10,7 @@ Then, it draws a larger "outer" triangle which only touches pixels where the ste
 ## To Run
 
 ```
-cargo run --bin stencil-triangles
+cargo run --bin wgpu-examples stencil_triangles
 ```
 
 ## Screenshots

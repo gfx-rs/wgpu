@@ -152,13 +152,13 @@ core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.87"
-web-sys = { version = "0.3.64", features = [
+web-sys = { version = "0.3.66", features = [
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = "0.3.65"
+js-sys = "0.3.66"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -180,7 +180,7 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if = "1"
 env_logger = "0.10"
-winit = { version = "0.29.2", features = [
+winit = { version = "0.29.4", features = [
     "android-native-activity",
 ] } # for "halmark" example
 

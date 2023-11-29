@@ -122,9 +122,6 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
             data: &self.storage,
         }
     }
-    pub(crate) fn contains(&self, id: I) -> bool {
-        self.read().contains(id)
-    }
     pub(crate) fn try_get(&self, id: I) -> Result<Option<Arc<T>>, InvalidId> {
         self.read().try_get(id).map(|o| o.cloned())
     }

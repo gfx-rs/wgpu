@@ -12,7 +12,7 @@ async fn run() {
         default
     } else {
         std::env::args()
-            .skip(1)
+            .skip(2)
             .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
             .collect()
     };

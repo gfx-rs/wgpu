@@ -301,6 +301,7 @@ impl PhysicalDeviceFeatures {
 
     fn to_wgpu(
         &self,
+        adapter_info: &wgt::AdapterInfo,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceCapabilities,
@@ -538,6 +539,21 @@ impl PhysicalDeviceFeatures {
         features.set(
             F::FLOAT32_FILTERABLE,
             is_float32_filterable_supported(instance, phd),
+        );
+        features.set(
+            F::TEXTURE_FORMAT_NV12,
+            (caps.device_api_version >= vk::API_VERSION_1_1
+                || caps.supports_extension(vk::KhrSamplerYcbcrConversionFn::name()))
+                && supports_format(
+                    instance,
+                    phd,
+                    vk::Format::G8_B8R8_2PLANE_420_UNORM,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::FormatFeatureFlags::SAMPLED_IMAGE
+                        | vk::FormatFeatureFlags::TRANSFER_SRC
+                        | vk::FormatFeatureFlags::TRANSFER_DST,
+                )
+                && !adapter_info.driver.contains("MoltenVK"),
         );
 
         (features, dl_flags)
@@ -974,7 +990,7 @@ impl super::Instance {
         };
 
         let (available_features, downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
+            phd_features.to_wgpu(&info, &self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // see https://github.com/gfx-rs/gfx/issues/1930
@@ -1003,7 +1019,7 @@ impl super::Instance {
                 } else if self
                     .shared
                     .flags
-                    .contains(wgt::InstanceFlags::ALLOW_NONCOMPLIANT_ADAPTER)
+                    .contains(wgt::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER)
                 {
                     log::warn!("Adapter is not Vulkan compliant: {}", info.name);
                 } else {
@@ -1557,14 +1573,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
             let stub_device_features = wgt::Features::empty(); // Actual features not required in this case
-            match format.sample_type(None, stub_device_features).unwrap() {
-                wgt::TextureSampleType::Float { .. } => limits
+            match format.sample_type(None, stub_device_features) {
+                Some(wgt::TextureSampleType::Float { .. }) => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),
-                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                Some(wgt::TextureSampleType::Sint) | Some(wgt::TextureSampleType::Uint) => {
                     limits.sampled_image_integer_sample_counts
                 }
-                _ => unreachable!(),
+                _ => vk::SampleCountFlags::TYPE_1,
             }
         };
 

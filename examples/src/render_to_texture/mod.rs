@@ -129,10 +129,10 @@ async fn run(_path: Option<String>) {
 
     // Time to get our image.
     let buffer_slice = output_staging_buffer.slice(..);
-    let (sender, receiver) = futures_intrusive::channel::shared::oneshot_channel();
+    let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
     device.poll(wgpu::Maintain::Wait);
-    receiver.receive().await.unwrap().unwrap();
+    receiver.recv_async().await.unwrap().unwrap();
     log::info!("Output buffer mapped.");
     {
         let view = buffer_slice.get_mapped_range();

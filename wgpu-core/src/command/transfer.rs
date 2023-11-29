@@ -1,6 +1,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
+    api_log,
     command::{clear_texture, CommandBuffer, CommandEncoderError},
     conv,
     device::{Device, MissingDownlevelFlags},
@@ -567,6 +568,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         size: BufferAddress,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_buffer");
+        api_log!(
+            "CommandEncoder::copy_buffer_to_buffer {source:?} -> {destination:?} {size:?}bytes"
+        );
 
         if source == destination {
             return Err(TransferError::SameSourceDestinationBuffer.into());
@@ -727,6 +731,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_texture");
+        api_log!(
+            "CommandEncoder::copy_buffer_to_texture {:?} -> {:?} {copy_size:?}",
+            source.buffer,
+            destination.texture
+        );
 
         let hub = A::hub(self);
 
@@ -885,6 +894,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_texture_to_buffer");
+        api_log!(
+            "CommandEncoder::copy_texture_to_buffer {:?} -> {:?} {copy_size:?}",
+            source.texture,
+            destination.buffer
+        );
 
         let hub = A::hub(self);
 
@@ -1055,6 +1069,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         copy_size: &Extent3d,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_texture_to_texture");
+        api_log!(
+            "CommandEncoder::copy_texture_to_texture {:?} -> {:?} {copy_size:?}",
+            source.texture,
+            destination.texture
+        );
 
         let hub = A::hub(self);
 

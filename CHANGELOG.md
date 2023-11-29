@@ -40,9 +40,13 @@ Bottom level categories:
 
 ## Unreleased
 
-### `WGPU_ALLOW_NONCOMPLIANT_ADAPTER` environment variable
+### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
 
 This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
+
+### `DeviceExt::create_texture_with_data` Allows Mip-Major Data
+
+Previously, `DeviceExt::create_texture_with_data` only allowed data to be provided in layer major order. There is now a `order` parameter which allows you to specify if the data is in layer major or mip major order.
 
 ### New Features
 
@@ -57,24 +61,23 @@ This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_drive
 
 ### Changes
 
-- Arcanization of wgpu core resources:
-Removed Token and LifeTime related management
-Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
-Removing mut from resources and added instead internal members locks on demand or atomics operations
-Resources now implement Drop and destroy stuff when last Arc resources is released
-Resources hold an Arc in order to be able to implement Drop
-Resources have an utility to retrieve the id of the resource itself
-Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
-Verify correct resources release when unused or not needed
-Check Web and Metal compliation (thanks to @niklaskorz)
-Fix tests on all platforms
-Test a multithreaded scenario
-Storage is now holding only user-land resources, but Arc is keeping refcount for resources
-When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
-IdentityManager is now unique and free is called on resource drop instead of storage unregister
-Identity changes due to Arcanization and Registry being just the user reference
-Added MemLeaks test and fixing mem leaks
-By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+- Arcanization of wgpu core resources: By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and thanks also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+  - Removed Token and LifeTime related management
+  - Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
+  - Removing mut from resources and added instead internal members locks on demand or atomics operations
+  - Resources now implement Drop and destroy stuff when last Arc resources is released
+  - Resources hold an Arc in order to be able to implement Drop
+  - Resources have an utility to retrieve the id of the resource itself
+  - Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
+  - Verify correct resources release when unused or not needed
+  - Check Web and Metal compliation (thanks to @niklaskorz)
+  - Fix tests on all platforms
+  - Test a multithreaded scenario
+  - Storage is now holding only user-land resources, but Arc is keeping refcount for resources
+  - When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
+  - IdentityManager is now unique and free is called on resource drop instead of storage unregister
+  - Identity changes due to Arcanization and Registry being just the user reference
+  - Added MemLeaks test and fixing mem leaks
 
 #### General
 
@@ -82,6 +85,7 @@ By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and tnx also to
 - `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
 - Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
 - Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737)
+- Reduce the `info` log level noise. By @nical in [#4769](https://github.com/gfx-rs/wgpu/pull/4769), [#4711](https://github.com/gfx-rs/wgpu/pull/4711) and [#4772](https://github.com/gfx-rs/wgpu/pull/4772)
 
 #### Safe `Surface` creation
 
@@ -97,8 +101,44 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
-- Implement WGSL abstract types (by @jimblandy):
-  - Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
+-   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743)).
+
+    Abstract types make numeric literals easier to use, by
+    automatically converting literals and other constant expressions
+    from abstract numeric types to concrete types when safe and
+    necessary. For example, to build a vector of floating-point
+    numbers, Naga previously made you write:
+
+        vec3<f32>(1.0, 2.0, 3.0)
+
+    With this change, you can now simply write:
+
+        vec3<f32>(1, 2, 3)
+
+    Even though the literals are abstract integers, Naga recognizes
+    that it is safe and necessary to convert them to `f32` values in
+    order to build the vector. You can also use abstract values as
+    initializers for global constants, like this:
+
+        const unit_x: vec2<f32> = vec2(1, 0);
+
+    The literals `1` and `0` are abstract integers, and the expression
+    `vec2(1, 0)` is an abstract vector. However, Naga recognizes that
+    it can convert that to the concrete type `vec2<f32>` to satisfy
+    the given type of `unit_x`.
+
+    The WGSL specification permits abstract integers and
+    floating-point values in almost all contexts, but Naga's support
+    for this is still incomplete. Many WGSL operators and builtin
+    functions are specified to produce abstract results when applied
+    to abstract inputs, but for now Naga simply concretizes them all
+    before applying the operation. We will expand Naga's abstract type
+    support in subsequent pull requests.
+
+    As part of this work, the public types `naga::ScalarKind` and
+    `naga::Literal` now have new variants, `AbstractInt` and `AbstractFloat`.
+
+- Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
 
 - Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
 

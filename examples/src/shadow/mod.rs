@@ -398,6 +398,7 @@ impl crate::framework::Example for Example {
                     mip_level_count: None,
                     base_array_layer: i as u32,
                     array_layer_count: Some(1),
+                    ..Default::default()
                 }))
             })
             .collect::<Vec<_>>();

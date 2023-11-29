@@ -196,6 +196,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
+                    plane: None,
                 };
                 let clear_view = unsafe {
                     hal::Device::create_texture_view(
@@ -230,7 +231,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
 
                 let (id, resource) = fid.assign(texture);
-                log::info!("Created CURRENT Surface Texture {:?}", id);
+                log::debug!("Created CURRENT Surface Texture {:?}", id);
 
                 {
                     // register it in the device tracker as uninitialized

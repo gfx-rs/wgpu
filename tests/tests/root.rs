@@ -19,6 +19,7 @@ mod float32_filterable;
 mod instance;
 mod life_cycle;
 mod mem_leaks;
+mod nv12_texture;
 mod occlusion_query;
 mod partially_bounded_arrays;
 mod pipeline;

@@ -1,3 +1,5 @@
+#![cfg(feature = "wgsl-in")]
+
 use naga::{front::wgsl, valid::Validator};
 use std::{fs, path::PathBuf};
 

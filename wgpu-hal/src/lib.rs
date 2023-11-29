@@ -981,6 +981,7 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: wgt::TextureViewDimension,
     pub usage: TextureUses,
     pub range: wgt::ImageSubresourceRange,
+    pub plane: Option<u32>,
 }
 
 #[derive(Clone, Debug)]

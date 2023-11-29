@@ -5,7 +5,7 @@ This example shows how to generate and make use of mipmaps.
 ## To Run
 
 ```
-cargo run --bin mipmap
+cargo run --bin wgpu-examples mipmap
 ```
 
 ## Screenshots

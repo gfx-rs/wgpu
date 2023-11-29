@@ -77,19 +77,17 @@ cfg_aliases = "0.1"
 cfg-if = "1"
 codespan-reporting = "0.11"
 ctor = "0.2"
-# https://github.com/SiegeEngine/ddsfile/issues/15 (Updated dependencies)
-ddsfile = { version = "0.5.2-unstable", git = "https://github.com/SiegeEngine/ddsfile.git", rev = "9b597930edc00502391cbb1a39708dadde0fd0ff" }
 encase = "0.6"
 env_logger = "0.10"
 fern = "0.6"
 flume = "0.11"
-futures-lite = "1"
-futures-intrusive = "0.5"
+futures-lite = "2"
 rustc-hash = "1.1.0"
 getrandom = "0.2"
 glam = "0.24.2"
 heck = "0.4.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
+ktx2 = "0.3"
 # libloading 0.8 switches from `winapi` to `windows-sys`; permit either
 libloading = ">=0.7, <0.9"
 libc = "0.2"
@@ -159,12 +157,12 @@ glutin = "0.29.1"
 # wasm32 dependencies
 console_error_panic_hook = "0.1.7"
 console_log = "1"
-js-sys = "0.3.65"
+js-sys = "0.3.66"
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.38"
 wasm-bindgen-test = "0.3"
 web-time = "0.2.3"
-web-sys = "0.3.64"
+web-sys = "0.3.66"
 
 # deno dependencies
 deno_console = "0.119.0"

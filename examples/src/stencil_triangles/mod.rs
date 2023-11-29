@@ -170,11 +170,24 @@ impl crate::framework::Example for Example {
 
     fn resize(
         &mut self,
-        _config: &wgpu::SurfaceConfiguration,
-        _device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) {
-        // empty
+        self.stencil_buffer = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Stencil buffer"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Stencil8,
+            view_formats: &[],
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        });
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {

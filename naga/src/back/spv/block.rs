@@ -1175,7 +1175,7 @@ impl<'w> BlockContext<'w> {
                             let op = match src_scalar.kind {
                                 Sk::Sint | Sk::Uint => spirv::Op::INotEqual,
                                 Sk::Float => spirv::Op::FUnordNotEqual,
-                                Sk::Bool => unreachable!(),
+                                Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => unreachable!(),
                             };
                             let zero_scalar_id =
                                 self.writer.get_constant_scalar_with(0, src_scalar)?;

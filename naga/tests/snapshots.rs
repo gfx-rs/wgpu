@@ -275,7 +275,13 @@ fn check_targets(
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .unwrap_or_else(|_| panic!("Naga module validation failed on test '{}'", name.display()));
+        .unwrap_or_else(|err| {
+            panic!(
+                "Naga module validation failed on test `{}`:\n{:?}",
+                name.display(),
+                err
+            );
+        });
 
     #[cfg(feature = "compact")]
     let info = {
@@ -292,10 +298,11 @@ fn check_targets(
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
             .validate(module)
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|err| {
                 panic!(
-                    "Post-compaction module validation failed on test '{}'",
-                    name.display()
+                    "Post-compaction module validation failed on test '{}':\n<{:?}",
+                    name.display(),
+                    err,
                 )
             })
     };
@@ -782,6 +789,10 @@ fn convert_wgsl() {
         (
             "f64",
             Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "abstract-types",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
     ];
 

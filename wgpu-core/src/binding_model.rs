@@ -8,6 +8,7 @@ use crate::{
     },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},
+    resource_log,
     track::{BindGroupStates, UsageConflict},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, Label,
@@ -465,8 +466,8 @@ pub struct BindGroupLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroupLayout<A> {
     fn drop(&mut self) {
-        log::info!("Destroying BindGroupLayout {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw BindGroupLayout {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_bind_group_layout(raw);
@@ -606,8 +607,8 @@ pub struct PipelineLayout<A: HalApi> {
 
 impl<A: HalApi> Drop for PipelineLayout<A> {
     fn drop(&mut self) {
-        log::info!("Destroying PipelineLayout {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw PipelineLayout {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_pipeline_layout(raw);
@@ -827,8 +828,8 @@ pub struct BindGroup<A: HalApi> {
 
 impl<A: HalApi> Drop for BindGroup<A> {
     fn drop(&mut self) {
-        log::info!("Destroying BindGroup {:?}", self.info.label());
         if let Some(raw) = self.raw.take() {
+            resource_log!("Destroy raw BindGroup {}", self.info.label());
             unsafe {
                 use hal::Device;
                 self.device.raw().destroy_bind_group(raw);
