@@ -209,11 +209,14 @@ fn constructor_parameter_type_mismatch() {
                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
             }
         "#,
-        r#"error: invalid type for constructor component at index [0]
-  ┌─ wgsl:3:33
+        r#"error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
+  ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
-  │                                 ^^^^^^^^^^^ invalid component type
+  │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │                     │           │
+  │                     │           this expression has type array<{AbstractInt}, 2>
+  │                     a value of type vec2<f32> is required here
 
 "#,
     );
@@ -824,6 +827,22 @@ fn matrix_with_bad_type() {
   │
 3 │                 let m: mat3x3<i32>;
   │                               ^^^ must be floating-point (e.g. `f32`)
+
+"#,
+    );
+}
+
+#[test]
+fn matrix_constructor_inferred() {
+    check(
+        r#"
+            const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+        "#,
+        r#"error: the type of `m` is expected to be `mat2x2<f64>`, but got `mat2x2<f32>`
+  ┌─ wgsl:2:19
+  │
+2 │             const m: mat2x2<f64> = mat2x2<f32>(vec2(0), vec2(1));
+  │                   ^ definition of `m`
 
 "#,
     );
