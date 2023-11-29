@@ -87,6 +87,7 @@ Previously, `DeviceExt::create_texture_with_data` only allowed data to be provid
 - Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
 - Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737)
 - Reduce the `info` log level noise. By @nical in [#4769](https://github.com/gfx-rs/wgpu/pull/4769), [#4711](https://github.com/gfx-rs/wgpu/pull/4711) and [#4772](https://github.com/gfx-rs/wgpu/pull/4772)
+- Rename `features` & `limits` fields of `DeviceDescriptor` to `required_features` & `required_limits`. By @teoxoy in [#4803](https://github.com/gfx-rs/wgpu/pull/4803)
 
 #### Safe `Surface` creation
 
