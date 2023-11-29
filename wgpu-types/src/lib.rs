@@ -1651,11 +1651,17 @@ pub struct AdapterInfo {
 pub struct DeviceDescriptor<L> {
     /// Debug label for the device.
     pub label: L,
-    /// Features that the device should support. If any feature is not supported by
-    /// the adapter, creating a device will panic.
+    /// Specifies the features that are required by the device request.
+    /// The request will fail if the adapter cannot provide these features.
+    ///
+    /// Exactly the specified set of features, and no more or less,
+    /// will be allowed in validation of API calls on the resulting device.
     pub required_features: Features,
-    /// Limits that the device should support. If any limit is "better" than the limit exposed by
-    /// the adapter, creating a device will panic.
+    /// Specifies the limits that are required by the device request.
+    /// The request will fail if the adapter cannot provide these limits.
+    ///
+    /// Exactly the specified limits, and no better or worse,
+    /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: Limits,
 }
 
