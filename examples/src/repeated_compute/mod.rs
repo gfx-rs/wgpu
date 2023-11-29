@@ -167,7 +167,7 @@ impl WgpuContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: wgpu::Features::empty(),
+                    required_features: wgpu::Features::empty(),
                     limits: wgpu::Limits::downlevel_defaults(),
                 },
                 None,

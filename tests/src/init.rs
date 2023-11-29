@@ -85,7 +85,7 @@ pub async fn initialize_device(
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features,
+                required_features: features,
                 limits,
             },
             None,

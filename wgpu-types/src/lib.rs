@@ -1653,7 +1653,7 @@ pub struct DeviceDescriptor<L> {
     pub label: L,
     /// Features that the device should support. If any feature is not supported by
     /// the adapter, creating a device will panic.
-    pub features: Features,
+    pub required_features: Features,
     /// Limits that the device should support. If any limit is "better" than the limit exposed by
     /// the adapter, creating a device will panic.
     pub limits: Limits,
@@ -1664,7 +1664,7 @@ impl<L> DeviceDescriptor<L> {
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
-            features: self.features,
+            required_features: self.required_features,
             limits: self.limits.clone(),
         }
     }

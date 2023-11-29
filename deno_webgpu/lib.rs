@@ -657,7 +657,7 @@ pub async fn op_webgpu_request_device(
 
     let descriptor = wgpu_types::DeviceDescriptor {
         label: Some(Cow::Owned(label)),
-        features: required_features.into(),
+        required_features: required_features.into(),
         limits: required_limits.unwrap_or_default(),
     };
 

@@ -317,7 +317,7 @@ impl ExampleContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: (optional_features & adapter_features) | required_features,
+                    required_features: (optional_features & adapter_features) | required_features,
                     limits: needed_limits,
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),

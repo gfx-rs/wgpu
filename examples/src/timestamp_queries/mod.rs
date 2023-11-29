@@ -214,7 +214,7 @@ async fn run() {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features,
+                required_features: features,
                 limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
