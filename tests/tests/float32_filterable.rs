@@ -18,16 +18,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
         view_formats: &[],
     });
 
-    let view = texture.create_view(&wgpu::TextureViewDescriptor {
-        label: None,
-        format: None,
-        dimension: None,
-        aspect: wgpu::TextureAspect::All,
-        base_mip_level: 0,
-        base_array_layer: 0,
-        mip_level_count: Some(1),
-        array_layer_count: Some(1),
-    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
