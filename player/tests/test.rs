@@ -90,7 +90,7 @@ impl Test<'_> {
             &wgt::DeviceDescriptor {
                 label: None,
                 required_features: self.features,
-                limits: wgt::Limits::default(),
+                required_limits: wgt::Limits::default(),
             },
             None,
             device_id,

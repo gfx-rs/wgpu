@@ -168,7 +168,7 @@ impl WgpuContext {
                 &wgpu::DeviceDescriptor {
                     label: None,
                     required_features: wgpu::Features::empty(),
-                    limits: wgpu::Limits::downlevel_defaults(),
+                    required_limits: wgpu::Limits::downlevel_defaults(),
                 },
                 None,
             )

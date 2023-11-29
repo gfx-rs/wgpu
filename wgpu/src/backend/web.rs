@@ -1151,7 +1151,7 @@ impl crate::context::Context for Context {
 
         // TODO: Migrate to a web_sys api.
         // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = map_js_sys_limits(&desc.limits);
+        let limits_object = map_js_sys_limits(&desc.required_limits);
 
         js_sys::Reflect::set(
             &mapped_desc,

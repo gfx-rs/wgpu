@@ -272,7 +272,7 @@ impl<A: HalApi> Device<A> {
                 }
             })),
             alignments,
-            limits: desc.limits.clone(),
+            limits: desc.required_limits.clone(),
             features: desc.required_features,
             downlevel,
             instance_flags,

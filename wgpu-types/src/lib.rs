@@ -1656,7 +1656,7 @@ pub struct DeviceDescriptor<L> {
     pub required_features: Features,
     /// Limits that the device should support. If any limit is "better" than the limit exposed by
     /// the adapter, creating a device will panic.
-    pub limits: Limits,
+    pub required_limits: Limits,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1665,7 +1665,7 @@ impl<L> DeviceDescriptor<L> {
         DeviceDescriptor {
             label: fun(&self.label),
             required_features: self.required_features,
-            limits: self.limits.clone(),
+            required_limits: self.required_limits.clone(),
         }
     }
 }

@@ -372,17 +372,20 @@ impl<A: HalApi> Adapter<A> {
             //TODO
         }
 
-        if let Some(failed) = check_limits(&desc.limits, &caps.limits).pop() {
+        if let Some(failed) = check_limits(&desc.required_limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
-        let open = unsafe { self.raw.adapter.open(desc.required_features, &desc.limits) }.map_err(
-            |err| match err {
-                hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-                hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-                hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
-            },
-        )?;
+        let open = unsafe {
+            self.raw
+                .adapter
+                .open(desc.required_features, &desc.required_limits)
+        }
+        .map_err(|err| match err {
+            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
+            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
+        })?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
     }

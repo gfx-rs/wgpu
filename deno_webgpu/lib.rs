@@ -658,7 +658,7 @@ pub async fn op_webgpu_request_device(
     let descriptor = wgpu_types::DeviceDescriptor {
         label: Some(Cow::Owned(label)),
         required_features: required_features.into(),
-        limits: required_limits.unwrap_or_default(),
+        required_limits: required_limits.unwrap_or_default(),
     };
 
     let (device, _queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(
