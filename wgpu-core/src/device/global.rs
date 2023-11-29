@@ -1809,9 +1809,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fn validate_surface_configuration(
             config: &mut hal::SurfaceConfiguration,
             caps: &hal::SurfaceCapabilities,
+            max_texture_dimension_2d: u32,
         ) -> Result<(), E> {
             let width = config.extent.width;
             let height = config.extent.height;
+
+            if width > max_texture_dimension_2d || height > max_texture_dimension_2d {
+                return Err(E::TooLarge {
+                    width,
+                    height,
+                    max_texture_dimension_2d,
+                });
+            }
 
             if !caps.present_modes.contains(&config.present_mode) {
                 let new_mode = 'b: loop {
@@ -1986,7 +1995,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     view_formats: hal_view_formats,
                 };
 
-                if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
+                if let Err(error) = validate_surface_configuration(
+                    &mut hal_config,
+                    &caps,
+                    device.limits.max_texture_dimension_2d,
+                ) {
                     break error;
                 }
 
