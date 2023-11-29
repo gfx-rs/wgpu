@@ -411,20 +411,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 expr = crate::Expression::Compose { ty, components };
             }
 
-            // Matrix constructor (by columns)
+            // Matrix constructor (by columns), partial
             (
                 Components::Many {
                     mut components,
                     spans,
                 },
                 Constructor::PartialMatrix { columns, rows },
-            )
-            | (
-                Components::Many {
-                    mut components,
-                    spans,
-                },
-                Constructor::Type((_, &crate::TypeInner::Matrix { columns, rows, .. })),
             ) => {
                 let consensus_scalar =
                     automatic_conversion_consensus(&components, ctx).map_err(|index| {
@@ -436,6 +429,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     rows,
                     scalar: consensus_scalar,
                 });
+                expr = crate::Expression::Compose { ty, components };
+            }
+
+            // Matrix constructor (by columns), type given
+            (
+                Components::Many { mut components, .. },
+                Constructor::Type((
+                    ty,
+                    &crate::TypeInner::Matrix {
+                        columns: _,
+                        rows,
+                        scalar,
+                    },
+                )),
+            ) => {
+                let component_ty = crate::TypeInner::Vector { size: rows, scalar };
+                ctx.try_automatic_conversions_slice(
+                    &mut components,
+                    &Tr::Value(component_ty),
+                    span,
+                )?;
                 expr = crate::Expression::Compose { ty, components };
             }
 
