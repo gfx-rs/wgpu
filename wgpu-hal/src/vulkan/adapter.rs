@@ -1659,18 +1659,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             None
         };
 
-        let min_extent = wgt::Extent3d {
-            width: caps.min_image_extent.width,
-            height: caps.min_image_extent.height,
-            depth_or_array_layers: 1,
-        };
-
-        let max_extent = wgt::Extent3d {
-            width: caps.max_image_extent.width,
-            height: caps.max_image_extent.height,
-            depth_or_array_layers: caps.max_image_array_layers,
-        };
-
         let raw_present_modes = {
             profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
             match unsafe {
@@ -1709,7 +1697,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             formats,
             swap_chain_sizes: caps.min_image_count..=max_image_count,
             current_extent,
-            extents: min_extent..=max_extent,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
             present_modes: raw_present_modes
                 .into_iter()

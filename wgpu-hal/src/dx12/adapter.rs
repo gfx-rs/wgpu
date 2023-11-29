@@ -626,16 +626,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             // we currently use a flip effect which supports 2..=16 buffers
             swap_chain_sizes: 2..=16,
             current_extent,
-            // TODO: figure out the exact bounds
-            extents: wgt::Extent3d {
-                width: 16,
-                height: 16,
-                depth_or_array_layers: 1,
-            }..=wgt::Extent3d {
-                width: 4096,
-                height: 4096,
-                depth_or_array_layers: 1,
-            },
             usage: crate::TextureUses::COLOR_TARGET
                 | crate::TextureUses::COPY_SRC
                 | crate::TextureUses::COPY_DST,

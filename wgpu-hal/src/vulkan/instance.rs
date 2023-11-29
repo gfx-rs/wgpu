@@ -41,10 +41,11 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         }
     }
 
-    // Silence Vulkan Validation error "VUID-VkSwapchainCreateInfoKHR-imageExtent-01274"
-    // - it's a false positive due to the inherent racy-ness of surface resizing
-    const VUID_VKSWAPCHAINCREATEINFOKHR_IMAGEEXTENT_01274: i32 = 0x7cd0911d;
-    if cd.message_id_number == VUID_VKSWAPCHAINCREATEINFOKHR_IMAGEEXTENT_01274 {
+    // Silence Vulkan Validation error "VUID-VkSwapchainCreateInfoKHR-pNext-07781"
+    // This happens when a surface is configured with a size outside the allowed extent.
+    // It's s false positive due to the inherent racy-ness of surface resizing.
+    const VUID_VKSWAPCHAINCREATEINFOKHR_PNEXT_07781: i32 = 0x4c8929c1;
+    if cd.message_id_number == VUID_VKSWAPCHAINCREATEINFOKHR_PNEXT_07781 {
         return vk::FALSE;
     }
 
