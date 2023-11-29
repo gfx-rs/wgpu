@@ -99,7 +99,7 @@ version = "0.18.0"
 default_features = false
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-web-sys = { version = "0.3.65", features = [
+web-sys = { version = "0.3.66", features = [
     "HtmlCanvasElement",
     "OffscreenCanvas",
 ] }
