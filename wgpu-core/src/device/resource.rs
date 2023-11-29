@@ -192,8 +192,6 @@ impl<A: HalApi> Device<A> {
         raw_device: A::Device,
         raw_queue: &A::Queue,
         adapter: &Arc<Adapter<A>>,
-        alignments: hal::Alignments,
-        downlevel: wgt::DownlevelCapabilities,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         instance_flags: wgt::InstanceFlags,
@@ -242,6 +240,9 @@ impl<A: HalApi> Device<A> {
                     usage: hal::BufferUses::COPY_DST..hal::BufferUses::COPY_SRC,
                 }));
         }
+
+        let alignments = adapter.raw.capabilities.alignments.clone();
+        let downlevel = adapter.raw.capabilities.downlevel.clone();
 
         Ok(Self {
             raw: Some(raw_device),

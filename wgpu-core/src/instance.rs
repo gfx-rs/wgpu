@@ -309,13 +309,10 @@ impl<A: HalApi> Adapter<A> {
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        let caps = &self.raw.capabilities;
         if let Ok(device) = Device::new(
             hal_device.device,
             &hal_device.queue,
             self,
-            caps.alignments.clone(),
-            caps.downlevel.clone(),
             desc,
             trace_path,
             instance_flags,
