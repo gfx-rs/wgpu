@@ -1164,7 +1164,7 @@ impl crate::context::Context for Context {
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
-                if desc.features.contains(flag) {
+                if desc.required_features.contains(flag) {
                     Some(JsValue::from(value))
                 } else {
                     None

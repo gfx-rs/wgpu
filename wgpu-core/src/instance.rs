@@ -337,9 +337,9 @@ impl<A: HalApi> Adapter<A> {
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
-        if !self.raw.features.contains(desc.features) {
+        if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
-                desc.features - self.raw.features,
+                desc.required_features - self.raw.features,
             ));
         }
 
@@ -358,7 +358,7 @@ impl<A: HalApi> Adapter<A> {
 
         // Verify feature preconditions
         if desc
-            .features
+            .required_features
             .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
             && self.raw.info.device_type == wgt::DeviceType::DiscreteGpu
         {
@@ -376,7 +376,7 @@ impl<A: HalApi> Adapter<A> {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
-        let open = unsafe { self.raw.adapter.open(desc.features, &desc.limits) }.map_err(
+        let open = unsafe { self.raw.adapter.open(desc.required_features, &desc.limits) }.map_err(
             |err| match err {
                 hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
                 hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,

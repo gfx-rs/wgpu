@@ -273,7 +273,7 @@ impl<A: HalApi> Device<A> {
             })),
             alignments,
             limits: desc.limits.clone(),
-            features: desc.features,
+            features: desc.required_features,
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
