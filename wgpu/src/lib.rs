@@ -2383,18 +2383,12 @@ impl Adapter {
         )
     }
 
-    /// List all features that are supported with this adapter.
-    ///
-    /// Features must be explicitly requested in [`Adapter::request_device`] in order
-    /// to use them.
+    /// The features which can be used to create devices on this adapter.
     pub fn features(&self) -> Features {
         DynContext::adapter_features(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// List the "best" limits that are supported by this adapter.
-    ///
-    /// Limits must be explicitly requested in [`Adapter::request_device`] to set
-    /// the values that you are allowed to use.
+    /// The best limits which can be used to create devices on this adapter.
     pub fn limits(&self) -> Limits {
         DynContext::adapter_limits(&*self.context, &self.id, self.data.as_ref())
     }
@@ -2462,16 +2456,16 @@ impl Device {
         DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
     }
 
-    /// List all features that may be used with this device.
+    /// The features which can be used on this device.
     ///
-    /// Functions may panic if you use unsupported features.
+    /// No additional features can be used, even if the underlying adapter can support them.
     pub fn features(&self) -> Features {
         DynContext::device_features(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// List all limits that were requested of this device.
+    /// The limits which can be used on this device.
     ///
-    /// If any of these limits are exceeded, functions may panic.
+    /// No better limits can be used, even if the underlying adapter can support them.
     pub fn limits(&self) -> Limits {
         DynContext::device_limits(&*self.context, &self.id, self.data.as_ref())
     }
