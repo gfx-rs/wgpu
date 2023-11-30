@@ -1986,6 +1986,25 @@ fn function_param_redefinition_as_local() {
 }
 
 #[test]
+fn constructor_type_error_span() {
+    check(
+        "
+        fn unfortunate() {
+            var i: i32;
+            var a: array<f32, 1> = array<f32, 1>(i);
+        }
+    ",
+        r###"error: automatic conversions cannot convert `i32` to `f32`
+  ┌─ wgsl:4:36
+  │
+4 │             var a: array<f32, 1> = array<f32, 1>(i);
+  │                                    ^^^^^^^^^^^^^^^^ a value of type f32 is required here
+
+"###,
+    )
+}
+
+#[test]
 fn binding_array_local() {
     check_validation! {
         "fn f() { var x: binding_array<sampler, 4>; }":
