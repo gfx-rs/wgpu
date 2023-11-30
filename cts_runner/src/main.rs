@@ -160,8 +160,6 @@ mod native {
         fn allow_hrtime(&mut self) -> bool {
             false
         }
-
-        fn check_unstable(&self, _state: &deno_core::OpState, _api_name: &'static str) {}
     }
 }
 
