@@ -213,9 +213,8 @@ fn constructor_parameter_type_mismatch() {
   ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
-  │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │                     │           │
-  │                     │           this expression has type array<{AbstractInt}, 2>
+  │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
+  │                     │            
   │                     a value of type vec2<f32> is required here
 
 "#,
