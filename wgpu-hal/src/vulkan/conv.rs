@@ -195,13 +195,12 @@ impl crate::Attachment<'_, super::Api> {
 impl crate::ColorAttachment<'_, super::Api> {
     pub(super) unsafe fn make_vk_clear_color(&self) -> vk::ClearColorValue {
         let cv = &self.clear_value;
-        let stub_device_features = wgt::Features::empty();
         match self
             .target
             .view
             .attachment
             .view_format
-            .sample_type(None, stub_device_features)
+            .sample_type(None, None)
             .unwrap()
         {
             wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {

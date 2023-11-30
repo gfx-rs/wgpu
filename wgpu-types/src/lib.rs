@@ -3224,11 +3224,11 @@ impl TextureFormat {
         };
 
         // Get whether the format is filterable, taking features into account
-        let sample_type1 = self.sample_type(None, device_features);
+        let sample_type1 = self.sample_type(None, Some(device_features));
         let is_filterable = sample_type1 == Some(TextureSampleType::Float { filterable: true });
 
         // Features that enable filtering don't affect blendability
-        let sample_type2 = self.sample_type(None, Features::empty());
+        let sample_type2 = self.sample_type(None, None);
         let is_blendable = sample_type2 == Some(TextureSampleType::Float { filterable: true });
 
         flags.set(TextureFormatFeatureFlags::FILTERABLE, is_filterable);
@@ -3247,11 +3247,13 @@ impl TextureFormat {
     pub fn sample_type(
         &self,
         aspect: Option<TextureAspect>,
-        device_features: Features,
+        device_features: Option<Features>,
     ) -> Option<TextureSampleType> {
         let float = TextureSampleType::Float { filterable: true };
         let float32_sample_type = TextureSampleType::Float {
-            filterable: device_features.contains(Features::FLOAT32_FILTERABLE),
+            filterable: device_features
+                .unwrap_or(Features::empty())
+                .contains(Features::FLOAT32_FILTERABLE),
         };
         let depth = TextureSampleType::Depth;
         let uint = TextureSampleType::Uint;

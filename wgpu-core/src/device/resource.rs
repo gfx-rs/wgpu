@@ -2227,7 +2227,7 @@ impl<A: HalApi> Device<A> {
                 let compat_sample_type = view
                     .desc
                     .format
-                    .sample_type(Some(view.desc.range.aspect), self.features)
+                    .sample_type(Some(view.desc.range.aspect), Some(self.features))
                     .unwrap();
                 match (sample_type, compat_sample_type) {
                     (Tst::Uint, Tst::Uint) |
