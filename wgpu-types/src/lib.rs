@@ -1662,12 +1662,18 @@ pub struct AdapterInfo {
 pub struct DeviceDescriptor<L> {
     /// Debug label for the device.
     pub label: L,
-    /// Features that the device should support. If any feature is not supported by
-    /// the adapter, creating a device will panic.
-    pub features: Features,
-    /// Limits that the device should support. If any limit is "better" than the limit exposed by
-    /// the adapter, creating a device will panic.
-    pub limits: Limits,
+    /// Specifies the features that are required by the device request.
+    /// The request will fail if the adapter cannot provide these features.
+    ///
+    /// Exactly the specified set of features, and no more or less,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_features: Features,
+    /// Specifies the limits that are required by the device request.
+    /// The request will fail if the adapter cannot provide these limits.
+    ///
+    /// Exactly the specified limits, and no better or worse,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_limits: Limits,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1675,8 +1681,8 @@ impl<L> DeviceDescriptor<L> {
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
-            features: self.features,
-            limits: self.limits.clone(),
+            required_features: self.required_features,
+            required_limits: self.required_limits.clone(),
         }
     }
 }

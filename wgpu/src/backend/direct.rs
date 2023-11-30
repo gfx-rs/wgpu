@@ -122,7 +122,7 @@ impl Context {
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
-            features: desc.features,
+            features: desc.required_features,
         };
         let queue = Queue {
             id: queue_id,
@@ -646,7 +646,7 @@ impl crate::Context for Context {
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
-            features: desc.features,
+            features: desc.required_features,
         };
         let queue = Queue {
             id: queue_id,

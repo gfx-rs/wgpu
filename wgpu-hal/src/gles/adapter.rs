@@ -786,7 +786,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[cfg_attr(target_arch = "wasm32", allow(clippy::drop_ref))]
+        #[cfg_attr(target_arch = "wasm32", allow(dropping_references))]
         drop(gl);
 
         Some(crate::ExposedAdapter {
@@ -797,7 +797,6 @@ impl super::Adapter {
                     workarounds,
                     features,
                     shading_language_version,
-                    max_texture_size,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
                     es: es_ver.is_some(),
@@ -1143,15 +1142,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,
                 current_extent: None,
-                extents: wgt::Extent3d {
-                    width: 4,
-                    height: 4,
-                    depth_or_array_layers: 1,
-                }..=wgt::Extent3d {
-                    width: self.shared.max_texture_size,
-                    height: self.shared.max_texture_size,
-                    depth_or_array_layers: 1,
-                },
                 usage: crate::TextureUses::COLOR_TARGET,
             })
         } else {

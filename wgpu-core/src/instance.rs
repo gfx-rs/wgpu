@@ -309,13 +309,10 @@ impl<A: HalApi> Adapter<A> {
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        let caps = &self.raw.capabilities;
         if let Ok(device) = Device::new(
             hal_device.device,
             &hal_device.queue,
             self,
-            caps.alignments.clone(),
-            caps.downlevel.clone(),
             desc,
             trace_path,
             instance_flags,
@@ -337,9 +334,9 @@ impl<A: HalApi> Adapter<A> {
         trace_path: Option<&std::path::Path>,
     ) -> Result<(Device<A>, Queue<A>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
-        if !self.raw.features.contains(desc.features) {
+        if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
-                desc.features - self.raw.features,
+                desc.required_features - self.raw.features,
             ));
         }
 
@@ -358,7 +355,7 @@ impl<A: HalApi> Adapter<A> {
 
         // Verify feature preconditions
         if desc
-            .features
+            .required_features
             .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
             && self.raw.info.device_type == wgt::DeviceType::DiscreteGpu
         {
@@ -372,17 +369,20 @@ impl<A: HalApi> Adapter<A> {
             //TODO
         }
 
-        if let Some(failed) = check_limits(&desc.limits, &caps.limits).pop() {
+        if let Some(failed) = check_limits(&desc.required_limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
-        let open = unsafe { self.raw.adapter.open(desc.features, &desc.limits) }.map_err(
-            |err| match err {
-                hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
-                hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
-                hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
-            },
-        )?;
+        let open = unsafe {
+            self.raw
+                .adapter
+                .open(desc.required_features, &desc.required_limits)
+        }
+        .map_err(|err| match err {
+            hal::DeviceError::Lost => RequestDeviceError::DeviceLost,
+            hal::DeviceError::OutOfMemory => RequestDeviceError::OutOfMemory,
+            hal::DeviceError::ResourceCreationFailed => RequestDeviceError::Internal,
+        })?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags, trace_path)
     }

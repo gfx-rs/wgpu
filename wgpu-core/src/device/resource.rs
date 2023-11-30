@@ -192,8 +192,6 @@ impl<A: HalApi> Device<A> {
         raw_device: A::Device,
         raw_queue: &A::Queue,
         adapter: &Arc<Adapter<A>>,
-        alignments: hal::Alignments,
-        downlevel: wgt::DownlevelCapabilities,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         instance_flags: wgt::InstanceFlags,
@@ -243,6 +241,9 @@ impl<A: HalApi> Device<A> {
                 }));
         }
 
+        let alignments = adapter.raw.capabilities.alignments.clone();
+        let downlevel = adapter.raw.capabilities.downlevel.clone();
+
         Ok(Self {
             raw: Some(raw_device),
             adapter: adapter.clone(),
@@ -272,8 +273,8 @@ impl<A: HalApi> Device<A> {
                 }
             })),
             alignments,
-            limits: desc.limits.clone(),
-            features: desc.features,
+            limits: desc.required_limits.clone(),
+            features: desc.required_features,
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
