@@ -3207,13 +3207,12 @@ impl<A: HalApi> Device<A> {
         // Variant of adapter.get_texture_format_features that takes device features into account
         use wgt::TextureFormatFeatureFlags as tfsc;
         let mut format_features = adapter.get_texture_format_features(format);
-        if format == TextureFormat::R32Float
+        if (format == TextureFormat::R32Float
             || format == TextureFormat::Rg32Float
-            || format == TextureFormat::Rgba32Float
+            || format == TextureFormat::Rgba32Float)
+            && !self.features.contains(wgt::Features::FLOAT32_FILTERABLE)
         {
-            if !self.features.contains(wgt::Features::FLOAT32_FILTERABLE) {
-                format_features.flags.set(tfsc::FILTERABLE, false);
-            }
+            format_features.flags.set(tfsc::FILTERABLE, false);
         }
         format_features
     }
