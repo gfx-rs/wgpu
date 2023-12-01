@@ -54,7 +54,7 @@ naga my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Meta
 naga my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
 ```
 
-As Naga includes a default binary target, you can also use `cargo run` without installation. This is useful when you develop Naga itself or investigate the behavior of Naga at a specific commit (e.g. [wgpu](https://github.com/gfx-rs/wgpu) might pin a different version of Naga than the `HEAD` of this repository).
+As naga includes a default binary target, you can also use `cargo run` without installation. This is useful when you develop naga itself or investigate the behavior of naga at a specific commit (e.g. [wgpu](https://github.com/gfx-rs/wgpu) might pin a different version of naga than the `HEAD` of this repository).
 
 ```bash
 cargo run my_shader.wgsl
