@@ -1101,10 +1101,12 @@ impl crate::Device for super::Device {
     ) -> crate::AccelerationStructureBuildSizes {
         const CAPACITY: usize = 8;
 
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         let (geometries, primitive_counts) = match *desc.entries {
             crate::AccelerationStructureEntries::Instances(ref instances) => {
@@ -1212,10 +1214,12 @@ impl crate::Device for super::Device {
         &self,
         acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         unsafe {
             ray_tracing_functions
@@ -1231,10 +1235,12 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         let vk_buffer_info = vk::BufferCreateInfo::builder()
             .size(desc.size)
@@ -1311,10 +1317,12 @@ impl crate::Device for super::Device {
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        let ray_tracing_functions = match self.shared.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         unsafe{
             ray_tracing_functions
