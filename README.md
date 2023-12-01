@@ -93,7 +93,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 wgpu supports shaders in [WGSL](https://gpuweb.github.io/gpuweb/wgsl/), SPIR-V, and GLSL.
 Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https://github.com/KhronosGroup/glslang)
-have compilers to target SPIR-V. All of these shader languages can be used with any backend while we handle all of the conversions. Additionally, support for these shader inputs is not going away.
+have compilers to target SPIR-V. All of these shader languages can be used with any backend as we handle all of the conversions. Additionally, support for these shader inputs is not going away.
 
 While WebGPU does not support any shading language other than WGSL, we will automatically convert your
 non-WGSL shaders if you're running on WebGPU.
