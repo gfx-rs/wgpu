@@ -2029,7 +2029,7 @@ impl Instance {
     /// # Safety
     ///
     /// - layer must be a valid object to create a surface upon.
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[cfg(all(any(target_os = "ios", target_os = "macos"), feature = "metal"))]
     pub unsafe fn create_surface_from_core_animation_layer(
         &self,
         layer: *mut std::ffi::c_void,
@@ -2055,7 +2055,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid IDCompositionVisual to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_visual(
         &self,
         visual: *mut std::ffi::c_void,
@@ -2081,7 +2081,7 @@ impl Instance {
     /// # Safety
     ///
     /// - surface_handle must be a valid SurfaceHandle to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_surface_handle(
         &self,
         surface_handle: *mut std::ffi::c_void,
@@ -2107,7 +2107,7 @@ impl Instance {
     /// # Safety
     ///
     /// - visual must be a valid SwapChainPanel to create a surface upon.
-    #[cfg(target_os = "windows")]
+    #[cfg(all(target_os = "windows", feature = "dx12"))]
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
         swap_chain_panel: *mut std::ffi::c_void,
