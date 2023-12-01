@@ -103,6 +103,8 @@ pub enum TypeError {
     InvalidData(Handle<crate::Type>),
     #[error("Base type {0:?} for the array is invalid")]
     InvalidArrayBaseType(Handle<crate::Type>),
+    #[error("Matrix elements must always be floating-point types")]
+    MatrixElementNotFloat,
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} does not match the expected {expected}")]
@@ -141,6 +143,9 @@ pub enum WidthError {
 
     #[error("64-bit integers are not yet supported")]
     Unsupported64Bit,
+
+    #[error("Abstract types may only appear in constant expressions")]
+    Abstract,
 }
 
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
@@ -224,15 +229,11 @@ impl super::Validator {
         }
     }
 
-    pub(super) const fn check_width(
-        &self,
-        kind: crate::ScalarKind,
-        width: crate::Bytes,
-    ) -> Result<(), WidthError> {
-        let good = match kind {
-            crate::ScalarKind::Bool => width == crate::BOOL_WIDTH,
+    pub(super) const fn check_width(&self, scalar: crate::Scalar) -> Result<(), WidthError> {
+        let good = match scalar.kind {
+            crate::ScalarKind::Bool => scalar.width == crate::BOOL_WIDTH,
             crate::ScalarKind::Float => {
-                if width == 8 {
+                if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::FLOAT64) {
                         return Err(WidthError::MissingCapability {
                             name: "f64",
@@ -241,15 +242,23 @@ impl super::Validator {
                     }
                     true
                 } else {
-                    width == 4
+                    scalar.width == 4
                 }
             }
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
+            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                if scalar.width == 8 {
+                    return Err(WidthError::Unsupported64Bit);
+                }
+                scalar.width == 4
+            }
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                return Err(WidthError::Abstract);
+            }
         };
         if good {
             Ok(())
         } else {
-            Err(WidthError::Invalid(kind, width))
+            Err(WidthError::Invalid(scalar.kind, scalar.width))
         }
     }
 
@@ -266,9 +275,9 @@ impl super::Validator {
     ) -> Result<TypeInfo, TypeError> {
         use crate::TypeInner as Ti;
         Ok(match gctx.types[handle].inner {
-            Ti::Scalar { kind, width } => {
-                self.check_width(kind, width)?;
-                let shareable = if kind.is_numeric() {
+            Ti::Scalar(scalar) => {
+                self.check_width(scalar)?;
+                let shareable = if scalar.kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
                     TypeFlags::empty()
@@ -280,12 +289,12 @@ impl super::Validator {
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE
                         | shareable,
-                    Alignment::from_width(width),
+                    Alignment::from_width(scalar.width),
                 )
             }
-            Ti::Vector { size, kind, width } => {
-                self.check_width(kind, width)?;
-                let shareable = if kind.is_numeric() {
+            Ti::Vector { size, scalar } => {
+                self.check_width(scalar)?;
+                let shareable = if scalar.kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
                     TypeFlags::empty()
@@ -298,15 +307,18 @@ impl super::Validator {
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE
                         | shareable,
-                    Alignment::from(size) * Alignment::from_width(width),
+                    Alignment::from(size) * Alignment::from_width(scalar.width),
                 )
             }
             Ti::Matrix {
                 columns: _,
                 rows,
-                width,
+                scalar,
             } => {
-                self.check_width(crate::ScalarKind::Float, width)?;
+                if scalar.kind != crate::ScalarKind::Float {
+                    return Err(TypeError::MatrixElementNotFloat);
+                }
+                self.check_width(scalar)?;
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -314,12 +326,15 @@ impl super::Validator {
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE,
-                    Alignment::from(rows) * Alignment::from_width(width),
+                    Alignment::from(rows) * Alignment::from_width(scalar.width),
                 )
             }
-            Ti::Atomic { kind, width } => {
+            Ti::Atomic(crate::Scalar { kind, width }) => {
                 let good = match kind {
-                    crate::ScalarKind::Bool | crate::ScalarKind::Float => false,
+                    crate::ScalarKind::Bool
+                    | crate::ScalarKind::Float
+                    | crate::ScalarKind::AbstractInt
+                    | crate::ScalarKind::AbstractFloat => false,
                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
                 };
                 if !good {
@@ -373,8 +388,7 @@ impl super::Validator {
             }
             Ti::ValuePointer {
                 size: _,
-                kind,
-                width,
+                scalar,
                 space,
             } => {
                 // ValuePointer should be treated the same way as the equivalent
@@ -384,7 +398,7 @@ impl super::Validator {
                 // However, some cases are trivial: All our implicit base types
                 // are DATA and SIZED, so we can never return
                 // `InvalidPointerBase` or `InvalidPointerToUnsized`.
-                self.check_width(kind, width)?;
+                self.check_width(scalar)?;
 
                 // `Validator::validate_function` actually checks the address
                 // space of pointer arguments explicitly before checking the

@@ -8,9 +8,7 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use glam::{Affine3A, Mat4, Vec3};
 use std::{
     borrow::{Borrow, Cow},
-    iter, mem,
-    mem::{align_of, size_of},
-    ptr::{self, copy_nonoverlapping},
+    iter, mem, ptr,
     time::Instant,
 };
 use winit::window::WindowButtons;
@@ -87,7 +85,7 @@ impl AccelerationStructureInstance {
         Self::rows_to_affine(&self.transform)
     }
     pub fn set_transform(&mut self, transform: &Affine3A) {
-        self.transform = Self::affine_to_rows(&transform);
+        self.transform = Self::affine_to_rows(transform);
     }
 
     pub fn custom_index(&self) -> u32 {
@@ -228,7 +226,7 @@ impl<A: hal::Api> Example<A> {
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = {
+        let surface = {
             let raw_window_handle = window.window_handle()?.as_raw();
             let raw_display_handle = window.display_handle()?.as_raw();
 
@@ -252,7 +250,7 @@ impl<A: hal::Api> Example<A> {
             .expect("Surface doesn't support presentation");
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } =
+        let hal::OpenDevice { device, queue } =
             unsafe { adapter.open(features, &wgt::Limits::default()).unwrap() };
 
         let window_size: (u32, u32) = window.inner_size().into();
@@ -324,38 +322,6 @@ impl<A: hal::Api> Example<A> {
         };
 
         let bgl = unsafe { device.create_bind_group_layout(&bgl_desc).unwrap() };
-
-        pub fn make_spirv_raw(data: &[u8]) -> Cow<[u32]> {
-            const MAGIC_NUMBER: u32 = 0x0723_0203;
-            assert_eq!(
-                data.len() % size_of::<u32>(),
-                0,
-                "data size is not a multiple of 4"
-            );
-
-            //If the data happens to be aligned, directly use the byte array,
-            // otherwise copy the byte array in an owned vector and use that instead.
-            let words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
-                let (pre, words, post) = unsafe { data.align_to::<u32>() };
-                debug_assert!(pre.is_empty());
-                debug_assert!(post.is_empty());
-                Cow::from(words)
-            } else {
-                let mut words = vec![0u32; data.len() / size_of::<u32>()];
-                unsafe {
-                    copy_nonoverlapping(data.as_ptr(), words.as_mut_ptr() as *mut u8, data.len());
-                }
-                Cow::from(words)
-            };
-
-            assert_eq!(
-                words[0], MAGIC_NUMBER,
-                "wrong magic word {:x}. Make sure you are using a binary SPIRV file.",
-                words[0]
-            );
-
-            words
-        }
 
         let naga_shader = {
             let shader_file = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -589,6 +555,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
             range: wgt::ImageSubresourceRange::default(),
+            plane: None,
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -921,6 +888,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::COPY_DST,
             range: wgt::ImageSubresourceRange::default(),
+            plane: None,
         };
         let surface_tex_view = unsafe {
             self.device
@@ -962,7 +930,7 @@ impl<A: hal::Api> Example<A> {
             ctx.encoder.copy_texture_to_texture(
                 &self.texture,
                 hal::TextureUses::COPY_SRC,
-                &surface_tex.borrow(),
+                surface_tex.borrow(),
                 std::iter::once(hal::TextureCopy {
                     src_base: hal::TextureCopyBase {
                         mip_level: 0,
@@ -995,7 +963,7 @@ impl<A: hal::Api> Example<A> {
                 None
             };
             self.queue.submit(&[&cmd_buf], fence_param).unwrap();
-            self.queue.present(&mut self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };

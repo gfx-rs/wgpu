@@ -100,7 +100,7 @@ impl<A: hal::Api> Example<A> {
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
-        let mut surface = {
+        let surface = {
             let raw_window_handle = window.window_handle()?.as_raw();
             let raw_display_handle = window.display_handle()?.as_raw();
 
@@ -119,11 +119,12 @@ impl<A: hal::Api> Example<A> {
             let exposed = adapters.swap_remove(0);
             (exposed.adapter, exposed.capabilities)
         };
+
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
             .ok_or("failed to get surface capabilities")?;
         log::info!("Surface caps: {:#?}", surface_caps);
 
-        let hal::OpenDevice { device, mut queue } = unsafe {
+        let hal::OpenDevice { device, queue } = unsafe {
             adapter
                 .open(wgt::Features::empty(), &wgt::Limits::default())
                 .unwrap()
@@ -421,6 +422,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::RESOURCE,
             range: wgt::ImageSubresourceRange::default(),
+            plane: None,
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -659,6 +661,7 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::COLOR_TARGET,
             range: wgt::ImageSubresourceRange::default(),
+            plane: None,
         };
         let surface_tex_view = unsafe {
             self.device
@@ -729,13 +732,13 @@ impl<A: hal::Api> Example<A> {
                 None
             };
             self.queue.submit(&[&cmd_buf], fence_param).unwrap();
-            self.queue.present(&mut self.surface, surface_tex).unwrap();
+            self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
             ctx.used_views.push(surface_tex_view);
         };
 
         if do_fence {
-            log::info!("Context switch from {}", self.context_index);
+            log::debug!("Context switch from {}", self.context_index);
             let old_fence_value = ctx.fence_value;
             if self.contexts.len() == 1 {
                 let hal_desc = hal::CommandEncoderDescriptor {

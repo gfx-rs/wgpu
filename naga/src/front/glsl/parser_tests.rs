@@ -509,7 +509,7 @@ fn functions() {
 
 #[test]
 fn constants() {
-    use crate::{Constant, Expression, ScalarKind, Type, TypeInner};
+    use crate::{Constant, Expression, Type, TypeInner};
 
     let mut frontend = Frontend::default();
 
@@ -536,10 +536,7 @@ fn constants() {
         ty,
         &Type {
             name: None,
-            inner: TypeInner::Scalar {
-                kind: ScalarKind::Float,
-                width: 4
-            }
+            inner: TypeInner::Scalar(crate::Scalar::F32)
         }
     );
 

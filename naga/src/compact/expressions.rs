@@ -1,8 +1,7 @@
 use super::{HandleMap, HandleSet, ModuleMap};
-use crate::arena::{Arena, Handle, UniqueArena};
+use crate::arena::{Arena, Handle};
 
 pub struct ExpressionTracer<'tracer> {
-    pub types: &'tracer UniqueArena<crate::Type>,
     pub constants: &'tracer Arena<crate::Constant>,
 
     /// The arena in which we are currently tracing expressions.
@@ -21,34 +20,51 @@ pub struct ExpressionTracer<'tracer> {
     /// the module's constant expression arena.
     pub expressions_used: &'tracer mut HandleSet<crate::Expression>,
 
-    /// The constant expression arena and its used map, if we haven't
-    /// switched to tracing constant expressions yet.
-    pub const_expressions: Option<(
-        &'tracer Arena<crate::Expression>,
-        &'tracer mut HandleSet<crate::Expression>,
-    )>,
+    /// The used set for the module's `const_expressions` arena.
+    ///
+    /// If `None`, we are already tracing the constant expressions,
+    /// and `expressions_used` already refers to their handle set.
+    pub const_expressions_used: Option<&'tracer mut HandleSet<crate::Expression>>,
 }
 
 impl<'tracer> ExpressionTracer<'tracer> {
-    pub fn trace_expression(&mut self, expr: Handle<crate::Expression>) {
+    /// Propagate usage through `self.expressions`, starting with `self.expressions_used`.
+    ///
+    /// Treat `self.expressions_used` as the initial set of "known
+    /// live" expressions, and follow through to identify all
+    /// transitively used expressions.
+    ///
+    /// Mark types, constants, and constant expressions used directly
+    /// by `self.expressions` as used. Items used indirectly are not
+    /// marked.
+    ///
+    /// [fe]: crate::Function::expressions
+    /// [ce]: crate::Module::const_expressions
+    pub fn trace_expressions(&mut self) {
         log::trace!(
             "entering trace_expression of {}",
-            if self.const_expressions.is_some() {
+            if self.const_expressions_used.is_some() {
                 "function expressions"
             } else {
                 "const expressions"
             }
         );
-        let mut work_list = vec![expr];
-        while let Some(expr) = work_list.pop() {
-            // If we've already seen this expression, no need to trace further.
-            if !self.expressions_used.insert(expr) {
+
+        // We don't need recursion or a work list. Because an
+        // expression may only refer to other expressions that precede
+        // it in the arena, it suffices to make a single pass over the
+        // arena from back to front, marking the referents of used
+        // expressions as used themselves.
+        for (handle, expr) in self.expressions.iter().rev() {
+            // If this expression isn't used, it doesn't matter what it uses.
+            if !self.expressions_used.contains(handle) {
                 continue;
             }
+
             log::trace!("tracing new expression {:?}", expr);
 
             use crate::Expression as Ex;
-            match self.expressions[expr] {
+            match *expr {
                 // Expressions that do not contain handles that need to be traced.
                 Ex::Literal(_)
                 | Ex::FunctionArgument(_)
@@ -59,24 +75,34 @@ impl<'tracer> ExpressionTracer<'tracer> {
 
                 Ex::Constant(handle) => {
                     self.constants_used.insert(handle);
-                    let constant = &self.constants[handle];
-                    self.trace_type(constant.ty);
-                    self.trace_const_expression(constant.init);
+                    // Constants and expressions are mutually recursive, which
+                    // complicates our nice one-pass algorithm. However, since
+                    // constants don't refer to each other, we can get around
+                    // this by looking *through* each constant and marking its
+                    // initializer as used. Since `expr` refers to the constant,
+                    // and the constant refers to the initializer, it must
+                    // precede `expr` in the arena.
+                    let init = self.constants[handle].init;
+                    match self.const_expressions_used {
+                        Some(ref mut used) => used.insert(init),
+                        None => self.expressions_used.insert(init),
+                    }
                 }
-                Ex::ZeroValue(ty) => self.trace_type(ty),
+                Ex::ZeroValue(ty) => self.types_used.insert(ty),
                 Ex::Compose { ty, ref components } => {
-                    self.trace_type(ty);
-                    work_list.extend(components);
+                    self.types_used.insert(ty);
+                    self.expressions_used
+                        .insert_iter(components.iter().cloned());
                 }
-                Ex::Access { base, index } => work_list.extend([base, index]),
-                Ex::AccessIndex { base, index: _ } => work_list.push(base),
-                Ex::Splat { size: _, value } => work_list.push(value),
+                Ex::Access { base, index } => self.expressions_used.insert_iter([base, index]),
+                Ex::AccessIndex { base, index: _ } => self.expressions_used.insert(base),
+                Ex::Splat { size: _, value } => self.expressions_used.insert(value),
                 Ex::Swizzle {
                     size: _,
                     vector,
                     pattern: _,
-                } => work_list.push(vector),
-                Ex::Load { pointer } => work_list.push(pointer),
+                } => self.expressions_used.insert(vector),
+                Ex::Load { pointer } => self.expressions_used.insert(pointer),
                 Ex::ImageSample {
                     image,
                     sampler,
@@ -87,20 +113,20 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     ref level,
                     depth_ref,
                 } => {
-                    work_list.push(image);
-                    work_list.push(sampler);
-                    work_list.push(coordinate);
-                    work_list.extend(array_index);
-                    if let Some(offset) = offset {
-                        self.trace_const_expression(offset);
+                    self.expressions_used
+                        .insert_iter([image, sampler, coordinate]);
+                    self.expressions_used.insert_iter(array_index);
+                    match self.const_expressions_used {
+                        Some(ref mut used) => used.insert_iter(offset),
+                        None => self.expressions_used.insert_iter(offset),
                     }
                     use crate::SampleLevel as Sl;
                     match *level {
                         Sl::Auto | Sl::Zero => {}
-                        Sl::Exact(expr) | Sl::Bias(expr) => work_list.push(expr),
-                        Sl::Gradient { x, y } => work_list.extend([x, y]),
+                        Sl::Exact(expr) | Sl::Bias(expr) => self.expressions_used.insert(expr),
+                        Sl::Gradient { x, y } => self.expressions_used.insert_iter([x, y]),
                     }
-                    work_list.extend(depth_ref);
+                    self.expressions_used.insert_iter(depth_ref);
                 }
                 Ex::ImageLoad {
                     image,
@@ -109,33 +135,37 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     sample,
                     level,
                 } => {
-                    work_list.push(image);
-                    work_list.push(coordinate);
-                    work_list.extend(array_index);
-                    work_list.extend(sample);
-                    work_list.extend(level);
+                    self.expressions_used.insert(image);
+                    self.expressions_used.insert(coordinate);
+                    self.expressions_used.insert_iter(array_index);
+                    self.expressions_used.insert_iter(sample);
+                    self.expressions_used.insert_iter(level);
                 }
                 Ex::ImageQuery { image, ref query } => {
-                    work_list.push(image);
+                    self.expressions_used.insert(image);
                     use crate::ImageQuery as Iq;
                     match *query {
-                        Iq::Size { level } => work_list.extend(level),
+                        Iq::Size { level } => self.expressions_used.insert_iter(level),
                         Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
                     }
                 }
-                Ex::Unary { op: _, expr } => work_list.push(expr),
-                Ex::Binary { op: _, left, right } => work_list.extend([left, right]),
+                Ex::Unary { op: _, expr } => self.expressions_used.insert(expr),
+                Ex::Binary { op: _, left, right } => {
+                    self.expressions_used.insert_iter([left, right]);
+                }
                 Ex::Select {
                     condition,
                     accept,
                     reject,
-                } => work_list.extend([condition, accept, reject]),
+                } => self
+                    .expressions_used
+                    .insert_iter([condition, accept, reject]),
                 Ex::Derivative {
                     axis: _,
                     ctrl: _,
                     expr,
-                } => work_list.push(expr),
-                Ex::Relational { fun: _, argument } => work_list.push(argument),
+                } => self.expressions_used.insert(expr),
+                Ex::Relational { fun: _, argument } => self.expressions_used.insert(argument),
                 Ex::Math {
                     fun: _,
                     arg,
@@ -143,60 +173,25 @@ impl<'tracer> ExpressionTracer<'tracer> {
                     arg2,
                     arg3,
                 } => {
-                    work_list.push(arg);
-                    work_list.extend(arg1);
-                    work_list.extend(arg2);
-                    work_list.extend(arg3);
+                    self.expressions_used.insert(arg);
+                    self.expressions_used.insert_iter(arg1);
+                    self.expressions_used.insert_iter(arg2);
+                    self.expressions_used.insert_iter(arg3);
                 }
                 Ex::As {
                     expr,
                     kind: _,
                     convert: _,
-                } => work_list.push(expr),
-                Ex::AtomicResult { ty, comparison: _ } => self.trace_type(ty),
-                Ex::WorkGroupUniformLoadResult { ty } => self.trace_type(ty),
-                Ex::ArrayLength(expr) => work_list.push(expr),
+                } => self.expressions_used.insert(expr),
+                Ex::AtomicResult { ty, comparison: _ } => self.types_used.insert(ty),
+                Ex::WorkGroupUniformLoadResult { ty } => self.types_used.insert(ty),
+                Ex::ArrayLength(expr) => self.expressions_used.insert(expr),
                 Ex::RayQueryGetIntersection {
                     query,
                     committed: _,
-                } => work_list.push(query),
+                } => self.expressions_used.insert(query),
             }
         }
-    }
-
-    fn trace_type(&mut self, ty: Handle<crate::Type>) {
-        let mut types_used = super::types::TypeTracer {
-            types: self.types,
-            types_used: self.types_used,
-        };
-        types_used.trace_type(ty);
-    }
-
-    pub fn as_const_expression(&mut self) -> ExpressionTracer {
-        match self.const_expressions {
-            Some((ref mut exprs, ref mut exprs_used)) => ExpressionTracer {
-                expressions: exprs,
-                expressions_used: exprs_used,
-                types: self.types,
-                constants: self.constants,
-                types_used: self.types_used,
-                constants_used: self.constants_used,
-                const_expressions: None,
-            },
-            None => ExpressionTracer {
-                types: self.types,
-                constants: self.constants,
-                expressions: self.expressions,
-                types_used: self.types_used,
-                constants_used: self.constants_used,
-                expressions_used: self.expressions_used,
-                const_expressions: None,
-            },
-        }
-    }
-
-    fn trace_const_expression(&mut self, const_expr: Handle<crate::Expression>) {
-        self.as_const_expression().trace_expression(const_expr);
     }
 }
 

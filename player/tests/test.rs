@@ -84,50 +84,51 @@ impl Test<'_> {
         test_num: u32,
     ) {
         let backend = adapter.backend();
-        let device = wgc::id::TypedId::zip(test_num, 0, backend);
-        let (_, error) = wgc::gfx_select!(adapter => global.adapter_request_device(
+        let device_id = wgc::id::TypedId::zip(test_num, 0, backend);
+        let (_, _, error) = wgc::gfx_select!(adapter => global.adapter_request_device(
             adapter,
             &wgt::DeviceDescriptor {
                 label: None,
-                features: self.features,
-                limits: wgt::Limits::default(),
+                required_features: self.features,
+                required_limits: wgt::Limits::default(),
             },
             None,
-            device
+            device_id,
+            device_id
         ));
         if let Some(e) = error {
             panic!("{:?}", e);
         }
 
-        let mut command_buffer_id_manager = wgc::identity::IdentityManager::default();
+        let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
         println!("\t\t\tRunning...");
         for action in self.actions {
-            wgc::gfx_select!(device => global.process(device, action, dir, &mut command_buffer_id_manager));
+            wgc::gfx_select!(device_id => global.process(device_id, action, dir, &mut command_buffer_id_manager));
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
-            wgc::gfx_select!(device => global.buffer_map_async(
+            wgc::gfx_select!(device_id => global.buffer_map_async(
                 buffer,
                 expect.offset .. expect.offset+expect.data.len() as wgt::BufferAddress,
                 wgc::resource::BufferMapOperation {
                     host: wgc::device::HostMap::Read,
-                    callback: wgc::resource::BufferMapCallback::from_rust(
+                    callback: Some(wgc::resource::BufferMapCallback::from_rust(
                         Box::new(map_callback)
-                    ),
+                    )),
                 }
             ))
             .unwrap();
         }
 
         println!("\t\t\tWaiting...");
-        wgc::gfx_select!(device => global.device_poll(device, wgt::Maintain::Wait)).unwrap();
+        wgc::gfx_select!(device_id => global.device_poll(device_id, wgt::Maintain::Wait)).unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
             let (ptr, size) =
-                wgc::gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, Some(expect.data.len() as wgt::BufferAddress)))
+                wgc::gfx_select!(device_id => global.buffer_get_mapped_range(buffer, expect.offset, Some(expect.data.len() as wgt::BufferAddress)))
                     .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr, size as usize) };
             let expected_data = match expect.data {
@@ -155,7 +156,7 @@ impl Test<'_> {
             }
         }
 
-        wgc::gfx_select!(device => global.clear_backend(()));
+        wgc::gfx_select!(device_id => global.clear_backend(()));
     }
 }
 

@@ -1,34 +1,66 @@
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
-static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::always()))
-    .run_sync(|ctx| {
-        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: 256,
-            usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
+static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
+    let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 256,
+        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
 
-        buffer.destroy();
+    buffer.destroy();
 
-        buffer.destroy();
+    buffer.destroy();
 
-        ctx.device.poll(wgpu::MaintainBase::Wait);
+    ctx.device.poll(wgpu::MaintainBase::Wait);
 
+    fail(&ctx.device, || {
         buffer
             .slice(..)
             .map_async(wgpu::MapMode::Write, move |_| {});
-
-        buffer.destroy();
-
-        ctx.device.poll(wgpu::MaintainBase::Wait);
-
-        buffer.destroy();
-
-        buffer.destroy();
     });
+
+    buffer.destroy();
+
+    ctx.device.poll(wgpu::MaintainBase::Wait);
+
+    buffer.destroy();
+
+    buffer.destroy();
+
+    let descriptor = wgpu::BufferDescriptor {
+        label: None,
+        size: 256,
+        usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    };
+
+    // Scopes to mix up the drop/poll ordering.
+    {
+        let buffer = ctx.device.create_buffer(&descriptor);
+        buffer.destroy();
+        let buffer = ctx.device.create_buffer(&descriptor);
+        buffer.destroy();
+    }
+    let buffer = ctx.device.create_buffer(&descriptor);
+    buffer.destroy();
+    ctx.device.poll(wgpu::MaintainBase::Wait);
+    let buffer = ctx.device.create_buffer(&descriptor);
+    buffer.destroy();
+    {
+        let buffer = ctx.device.create_buffer(&descriptor);
+        buffer.destroy();
+        let buffer = ctx.device.create_buffer(&descriptor);
+        buffer.destroy();
+        let buffer = ctx.device.create_buffer(&descriptor);
+        ctx.device.poll(wgpu::MaintainBase::Wait);
+        buffer.destroy();
+    }
+    let buffer = ctx.device.create_buffer(&descriptor);
+    buffer.destroy();
+    ctx.device.poll(wgpu::MaintainBase::Wait);
+});
 
 #[gpu_test]
 static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

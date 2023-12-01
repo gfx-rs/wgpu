@@ -1,3 +1,4 @@
+use parking_lot::RwLock;
 use winapi::shared::{dxgi1_5, minwindef};
 
 use super::SurfaceTarget;
@@ -50,7 +51,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 }
             },
             Err(err) => {
-                log::info!("IDXGIFactory1 creation function not found: {:?}", err);
+                log::warn!("IDXGIFactory1 creation function not found: {:?}", err);
                 None
             }
         };
@@ -117,7 +118,7 @@ impl crate::Instance<super::Api> for super::Instance {
                 factory_media: self.factory_media.clone(),
                 target: SurfaceTarget::WndHandle(handle.hwnd.get() as *mut _),
                 supports_allow_tearing: self.supports_allow_tearing,
-                swap_chain: None,
+                swap_chain: RwLock::new(None),
             }),
             _ => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Win32 handle"

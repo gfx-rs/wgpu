@@ -76,6 +76,9 @@ const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
+// Must match code in glsl_built_in
+pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
+
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
@@ -235,17 +238,20 @@ bitflags::bitflags! {
         /// Supports GL_EXT_texture_shadow_lod on the host, which provides
         /// additional functions on shadows and arrays of shadows.
         const TEXTURE_SHADOW_LOD = 0x2;
+        /// Supports ARB_shader_draw_parameters on the host, which provides
+        /// support for `gl_BaseInstanceARB`, `gl_BaseVertexARB`, and `gl_DrawIDARB`.
+        const DRAW_PARAMETERS = 0x4;
         /// Include unused global variables, constants and functions. By default the output will exclude
         /// global variables that are not used in the specified entrypoint (including indirect use),
         /// all constant declarations, and functions that use excluded global variables.
-        const INCLUDE_UNUSED_ITEMS = 0x4;
+        const INCLUDE_UNUSED_ITEMS = 0x10;
         /// Emit `PointSize` output builtin to vertex shaders, which is
         /// required for drawing with `PointList` topology.
         ///
         /// https://registry.khronos.org/OpenGL/specs/es/3.2/GLSL_ES_Specification_3.20.html#built-in-language-variables
         /// The variable gl_PointSize is intended for a shader to write the size of the point to be rasterized. It is measured in pixels.
         /// If gl_PointSize is not written to, its value is undefined in subsequent pipe stages.
-        const FORCE_POINT_SIZE = 0x10;
+        const FORCE_POINT_SIZE = 0x20;
     }
 }
 
@@ -388,6 +394,24 @@ impl IdGenerator {
     }
 }
 
+/// Assorted options needed for generting varyings.
+#[derive(Clone, Copy)]
+struct VaryingOptions {
+    output: bool,
+    targetting_webgl: bool,
+    draw_parameters: bool,
+}
+
+impl VaryingOptions {
+    const fn from_writer_options(options: &Options, output: bool) -> Self {
+        Self {
+            output,
+            targetting_webgl: options.version.is_webgl(),
+            draw_parameters: options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS),
+        }
+    }
+}
+
 /// Helper wrapper used to get a name for a varying
 ///
 /// Varying have different naming schemes depending on their binding:
@@ -398,8 +422,7 @@ impl IdGenerator {
 struct VaryingName<'a> {
     binding: &'a crate::Binding,
     stage: ShaderStage,
-    output: bool,
-    targetting_webgl: bool,
+    options: VaryingOptions,
 }
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -411,7 +434,7 @@ impl fmt::Display for VaryingName<'_> {
                 write!(f, "_fs2p_location1",)
             }
             crate::Binding::Location { location, .. } => {
-                let prefix = match (self.stage, self.output) {
+                let prefix = match (self.stage, self.options.output) {
                     (ShaderStage::Compute, _) => unreachable!(),
                     // pipeline to vertex
                     (ShaderStage::Vertex, false) => "p2vs",
@@ -423,11 +446,7 @@ impl fmt::Display for VaryingName<'_> {
                 write!(f, "_{prefix}_location{location}",)
             }
             crate::Binding::BuiltIn(built_in) => {
-                write!(
-                    f,
-                    "{}",
-                    glsl_built_in(built_in, self.output, self.targetting_webgl)
-                )
+                write!(f, "{}", glsl_built_in(built_in, self.options))
             }
         }
     }
@@ -471,8 +490,8 @@ pub enum Error {
     #[error("A call was made to an unsupported external: {0}")]
     UnsupportedExternal(String),
     /// A scalar with an unsupported width was requested.
-    #[error("A scalar with an unsupported width was requested: {0:?} {1:?}")]
-    UnsupportedScalar(crate::ScalarKind, crate::Bytes),
+    #[error("A scalar with an unsupported width was requested: {0:?}")]
+    UnsupportedScalar(crate::Scalar),
     /// A image was used with multiple samplers, which isn't supported.
     #[error("A image was used with multiple samplers")]
     ImageMultipleSamplers,
@@ -569,7 +588,11 @@ impl<'a, W: Write> Writer<'a, W> {
             keywords::RESERVED_KEYWORDS,
             &[],
             &[],
-            &["gl_"],
+            &[
+                "gl_",                     // all GL built-in variables
+                "_group",                  // all normal bindings
+                "_push_constant_binding_", // all push constant bindings
+            ],
             &mut names,
         );
 
@@ -621,7 +644,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // writing the module saving some loops but some older versions (420 or less) required the
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
-        self.features.write(self.options.version, &mut self.out)?;
+        self.features.write(self.options, &mut self.out)?;
 
         // Write the additional extensions
         if self
@@ -649,6 +672,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 "layout(local_size_x = {}, local_size_y = {}, local_size_z = {}) in;",
                 workgroup_size[0], workgroup_size[1], workgroup_size[2]
             )?;
+            writeln!(self.out)?;
+        }
+
+        if self.entry_point.stage == ShaderStage::Vertex
+            && !self
+                .options
+                .writer_flags
+                .contains(WriterFlags::DRAW_PARAMETERS)
+            && self.features.contains(Features::INSTANCE_INDEX)
+        {
+            writeln!(self.out, "uniform uint {FIRST_INSTANCE_BINDING};")?;
             writeln!(self.out)?;
         }
 
@@ -963,27 +997,20 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_value_type(&mut self, inner: &TypeInner) -> BackendResult {
         match *inner {
             // Scalars are simple we just get the full name from `glsl_scalar`
-            TypeInner::Scalar { kind, width }
-            | TypeInner::Atomic { kind, width }
+            TypeInner::Scalar(scalar)
+            | TypeInner::Atomic(scalar)
             | TypeInner::ValuePointer {
                 size: None,
-                kind,
-                width,
+                scalar,
                 space: _,
-            } => write!(self.out, "{}", glsl_scalar(kind, width)?.full)?,
+            } => write!(self.out, "{}", glsl_scalar(scalar)?.full)?,
             // Vectors are just `gvecN` where `g` is the scalar prefix and `N` is the vector size
-            TypeInner::Vector { size, kind, width }
+            TypeInner::Vector { size, scalar }
             | TypeInner::ValuePointer {
                 size: Some(size),
-                kind,
-                width,
+                scalar,
                 space: _,
-            } => write!(
-                self.out,
-                "{}vec{}",
-                glsl_scalar(kind, width)?.prefix,
-                size as u8
-            )?,
+            } => write!(self.out, "{}vec{}", glsl_scalar(scalar)?.prefix, size as u8)?,
             // Matrices are written with `gmatMxN` where `g` is the scalar prefix (only floats and
             // doubles are allowed), `M` is the columns count and `N` is the rows count
             //
@@ -992,11 +1019,11 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => write!(
                 self.out,
                 "{}mat{}x{}",
-                glsl_scalar(crate::ScalarKind::Float, width)?.prefix,
+                glsl_scalar(scalar)?.prefix,
                 columns as u8,
                 rows as u8
             )?,
@@ -1083,7 +1110,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.out,
             "{}{}{}{}{}{}{}",
             precision,
-            glsl_scalar(kind, 4)?.prefix,
+            glsl_scalar(crate::Scalar { kind, width: 4 })?.prefix,
             base,
             glsl_dimension(dim),
             ms,
@@ -1278,7 +1305,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::MathFunction::Dot => {
                         // if the expression is a Dot product with integer arguments,
                         // then the args needs baking as well
-                        if let TypeInner::Scalar { kind, .. } = *inner {
+                        if let TypeInner::Scalar(crate::Scalar { kind, .. }) = *inner {
                             match kind {
                                 crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
                                     self.need_bake_expressions.insert(arg);
@@ -1429,7 +1456,10 @@ impl<'a, W: Write> Writer<'a, W> {
                             writeln!(
                                 self.out,
                                 "invariant {};",
-                                glsl_built_in(built_in, output, self.options.version.is_webgl())
+                                glsl_built_in(
+                                    built_in,
+                                    VaryingOptions::from_writer_options(self.options, output)
+                                )
                             )?;
                         }
                     }
@@ -1506,8 +1536,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 second_blend_source,
             },
             stage: self.entry_point.stage,
-            output,
-            targetting_webgl: self.options.version.is_webgl(),
+            options: VaryingOptions::from_writer_options(self.options, output),
         };
         writeln!(self.out, " {vname};")?;
 
@@ -1668,8 +1697,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             let varying_name = VaryingName {
                                 binding: member.binding.as_ref().unwrap(),
                                 stage,
-                                output: false,
-                                targetting_webgl: self.options.version.is_webgl(),
+                                options: VaryingOptions::from_writer_options(self.options, false),
                             };
                             if index != 0 {
                                 write!(self.out, ", ")?;
@@ -1682,8 +1710,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         let varying_name = VaryingName {
                             binding: arg.binding.as_ref().unwrap(),
                             stage,
-                            output: false,
-                            targetting_webgl: self.options.version.is_webgl(),
+                            options: VaryingOptions::from_writer_options(self.options, false),
                         };
                         writeln!(self.out, "{varying_name};")?;
                     }
@@ -2177,8 +2204,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                         let varying_name = VaryingName {
                                             binding: member.binding.as_ref().unwrap(),
                                             stage: ep.stage,
-                                            output: true,
-                                            targetting_webgl: self.options.version.is_webgl(),
+                                            options: VaryingOptions::from_writer_options(
+                                                self.options,
+                                                true,
+                                            ),
                                         };
                                         write!(self.out, "{varying_name} = ")?;
 
@@ -2202,8 +2231,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                     let name = VaryingName {
                                         binding: result.binding.as_ref().unwrap(),
                                         stage: ep.stage,
-                                        output: true,
-                                        targetting_webgl: self.options.version.is_webgl(),
+                                        options: VaryingOptions::from_writer_options(
+                                            self.options,
+                                            true,
+                                        ),
                                     };
                                     write!(self.out, "{name} = ")?;
                                     self.write_expr(value, ctx)?;
@@ -2417,6 +2448,14 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::I64(_) => {
+                        return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
+                    }
+                    crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                        return Err(Error::Custom(
+                            "Abstract types should not appear in IR presented to backends".into(),
+                        ));
+                    }
                 }
             }
             Expression::Constant(handle) => {
@@ -2802,10 +2841,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                 if let Some(expr) = level {
                                     let cast_to_int = matches!(
                                         *ctx.resolve_type(expr, &self.module.types),
-                                        crate::TypeInner::Scalar {
+                                        crate::TypeInner::Scalar(crate::Scalar {
                                             kind: crate::ScalarKind::Uint,
                                             ..
-                                        }
+                                        })
                                     );
 
                                     write!(self.out, ", ")?;
@@ -2906,19 +2945,19 @@ impl<'a, W: Write> Writer<'a, W> {
                 let right_inner = ctx.resolve_type(right, &self.module.types);
 
                 let function = match (left_inner, right_inner) {
-                    (&Ti::Vector { kind, .. }, &Ti::Vector { .. }) => match op {
+                    (&Ti::Vector { scalar, .. }, &Ti::Vector { .. }) => match op {
                         Bo::Less
                         | Bo::LessEqual
                         | Bo::Greater
                         | Bo::GreaterEqual
                         | Bo::Equal
                         | Bo::NotEqual => BinaryOperation::VectorCompare,
-                        Bo::Modulo if kind == Sk::Float => BinaryOperation::Modulo,
-                        Bo::And if kind == Sk::Bool => {
+                        Bo::Modulo if scalar.kind == Sk::Float => BinaryOperation::Modulo,
+                        Bo::And if scalar.kind == Sk::Bool => {
                             op = crate::BinaryOperator::LogicalAnd;
                             BinaryOperation::VectorComponentWise
                         }
-                        Bo::InclusiveOr if kind == Sk::Bool => {
+                        Bo::InclusiveOr if scalar.kind == Sk::Bool => {
                             op = crate::BinaryOperator::LogicalOr;
                             BinaryOperation::VectorComponentWise
                         }
@@ -3171,7 +3210,11 @@ impl<'a, W: Write> Writer<'a, W> {
                     // geometry
                     Mf::Dot => match *ctx.resolve_type(arg, &self.module.types) {
                         crate::TypeInner::Vector {
-                            kind: crate::ScalarKind::Float,
+                            scalar:
+                                crate::Scalar {
+                                    kind: crate::ScalarKind::Float,
+                                    ..
+                                },
                             ..
                         } => "dot",
                         crate::TypeInner::Vector { size, .. } => {
@@ -3226,9 +3269,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     // bits
                     Mf::CountTrailingZeros => {
                         match *ctx.resolve_type(arg, &self.module.types) {
-                            crate::TypeInner::Vector { size, kind, .. } => {
+                            crate::TypeInner::Vector { size, scalar, .. } => {
                                 let s = back::vector_size_str(size);
-                                if let crate::ScalarKind::Uint = kind {
+                                if let crate::ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min(uvec{s}(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
                                     write!(self.out, ")), uvec{s}(32u))")?;
@@ -3238,8 +3281,8 @@ impl<'a, W: Write> Writer<'a, W> {
                                     write!(self.out, ")), uvec{s}(32u)))")?;
                                 }
                             }
-                            crate::TypeInner::Scalar { kind, .. } => {
-                                if let crate::ScalarKind::Uint = kind {
+                            crate::TypeInner::Scalar(scalar) => {
+                                if let crate::ScalarKind::Uint = scalar.kind {
                                     write!(self.out, "min(uint(findLSB(")?;
                                     self.write_expr(arg, ctx)?;
                                     write!(self.out, ")), 32u)")?;
@@ -3256,10 +3299,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::CountLeadingZeros => {
                         if self.options.version.supports_integer_functions() {
                             match *ctx.resolve_type(arg, &self.module.types) {
-                                crate::TypeInner::Vector { size, kind, .. } => {
+                                crate::TypeInner::Vector { size, scalar } => {
                                     let s = back::vector_size_str(size);
 
-                                    if let crate::ScalarKind::Uint = kind {
+                                    if let crate::ScalarKind::Uint = scalar.kind {
                                         write!(self.out, "uvec{s}(ivec{s}(31) - findMSB(")?;
                                         self.write_expr(arg, ctx)?;
                                         write!(self.out, "))")?;
@@ -3271,8 +3314,8 @@ impl<'a, W: Write> Writer<'a, W> {
                                         write!(self.out, ", ivec{s}(0)))")?;
                                     }
                                 }
-                                crate::TypeInner::Scalar { kind, .. } => {
-                                    if let crate::ScalarKind::Uint = kind {
+                                crate::TypeInner::Scalar(scalar) => {
+                                    if let crate::ScalarKind::Uint = scalar.kind {
                                         write!(self.out, "uint(31 - findMSB(")?;
                                     } else {
                                         write!(self.out, "(")?;
@@ -3287,10 +3330,10 @@ impl<'a, W: Write> Writer<'a, W> {
                             };
                         } else {
                             match *ctx.resolve_type(arg, &self.module.types) {
-                                crate::TypeInner::Vector { size, kind, .. } => {
+                                crate::TypeInner::Vector { size, scalar } => {
                                     let s = back::vector_size_str(size);
 
-                                    if let crate::ScalarKind::Uint = kind {
+                                    if let crate::ScalarKind::Uint = scalar.kind {
                                         write!(self.out, "uvec{s}(")?;
                                         write!(self.out, "vec{s}(31.0) - floor(log2(vec{s}(")?;
                                         self.write_expr(arg, ctx)?;
@@ -3305,8 +3348,8 @@ impl<'a, W: Write> Writer<'a, W> {
                                         write!(self.out, ", ivec{s}(0u))))")?;
                                     }
                                 }
-                                crate::TypeInner::Scalar { kind, .. } => {
-                                    if let crate::ScalarKind::Uint = kind {
+                                crate::TypeInner::Scalar(scalar) => {
+                                    if let crate::ScalarKind::Uint = scalar.kind {
                                         write!(self.out, "uint(31.0 - floor(log2(float(")?;
                                         self.write_expr(arg, ctx)?;
                                         write!(self.out, ") + 0.5)))")?;
@@ -3360,14 +3403,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 // Check if the argument is an unsigned integer and return the vector size
                 // in case it's a vector
                 let maybe_uint_size = match *ctx.resolve_type(arg, &self.module.types) {
-                    crate::TypeInner::Scalar {
+                    crate::TypeInner::Scalar(crate::Scalar {
                         kind: crate::ScalarKind::Uint,
                         ..
-                    } => Some(None),
+                    }) => Some(None),
                     crate::TypeInner::Vector {
-                        kind: crate::ScalarKind::Uint,
+                        scalar:
+                            crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..
+                            },
                         size,
-                        ..
                     } => Some(Some(size)),
                     _ => None,
                 };
@@ -3450,7 +3496,10 @@ impl<'a, W: Write> Writer<'a, W> {
                 match convert {
                     Some(width) => {
                         // this is similar to `write_type`, but with the target kind
-                        let scalar = glsl_scalar(target_kind, width)?;
+                        let scalar = glsl_scalar(crate::Scalar {
+                            kind: target_kind,
+                            width,
+                        })?;
                         match *inner {
                             TypeInner::Matrix { columns, rows, .. } => write!(
                                 self.out,
@@ -3471,10 +3520,12 @@ impl<'a, W: Write> Writer<'a, W> {
                         use crate::ScalarKind as Sk;
 
                         let target_vector_type = match *inner {
-                            TypeInner::Vector { size, width, .. } => Some(TypeInner::Vector {
+                            TypeInner::Vector { size, scalar } => Some(TypeInner::Vector {
                                 size,
-                                width,
-                                kind: target_kind,
+                                scalar: crate::Scalar {
+                                    kind: target_kind,
+                                    width: scalar.width,
+                                },
                             }),
                             _ => None,
                         };
@@ -3509,6 +3560,9 @@ impl<'a, W: Write> Writer<'a, W> {
                             (Sk::Sint | Sk::Uint | Sk::Float, Sk::Bool, None) => {
                                 write!(self.out, "bool")?
                             }
+
+                            (Sk::AbstractInt | Sk::AbstractFloat, _, _)
+                            | (_, Sk::AbstractInt | Sk::AbstractFloat, _) => unreachable!(),
                         };
 
                         write!(self.out, "(")?;
@@ -3613,14 +3667,17 @@ impl<'a, W: Write> Writer<'a, W> {
             // Otherwise write just the expression (and the 1D hack if needed)
             None => {
                 let uvec_size = match *ctx.resolve_type(coordinate, &self.module.types) {
-                    TypeInner::Scalar {
+                    TypeInner::Scalar(crate::Scalar {
                         kind: crate::ScalarKind::Uint,
                         ..
-                    } => Some(None),
+                    }) => Some(None),
                     TypeInner::Vector {
                         size,
-                        kind: crate::ScalarKind::Uint,
-                        ..
+                        scalar:
+                            crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..
+                            },
                     } => Some(Some(size as u32)),
                     _ => None,
                 };
@@ -3953,7 +4010,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // End the first branch
             write!(self.out, " : ")?;
             // Write the 0 value
-            write!(self.out, "{}vec4(", glsl_scalar(kind, 4)?.prefix,)?;
+            write!(
+                self.out,
+                "{}vec4(",
+                glsl_scalar(crate::Scalar { kind, width: 4 })?.prefix,
+            )?;
             self.write_zero_init_scalar(kind)?;
             // Close the zero value constructor
             write!(self.out, ")")?;
@@ -4006,13 +4067,13 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_zero_init_value(&mut self, ty: Handle<crate::Type>) -> BackendResult {
         let inner = &self.module.types[ty].inner;
         match *inner {
-            TypeInner::Scalar { kind, .. } | TypeInner::Atomic { kind, .. } => {
-                self.write_zero_init_scalar(kind)?;
+            TypeInner::Scalar(scalar) | TypeInner::Atomic(scalar) => {
+                self.write_zero_init_scalar(scalar.kind)?;
             }
-            TypeInner::Vector { kind, .. } => {
+            TypeInner::Vector { scalar, .. } => {
                 self.write_value_type(inner)?;
                 write!(self.out, "(")?;
-                self.write_zero_init_scalar(kind)?;
+                self.write_zero_init_scalar(scalar.kind)?;
                 write!(self.out, ")")?;
             }
             TypeInner::Matrix { .. } => {
@@ -4064,6 +4125,11 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::ScalarKind::Uint => write!(self.out, "0u")?,
             crate::ScalarKind::Float => write!(self.out, "0.0")?,
             crate::ScalarKind::Sint => write!(self.out, "0")?,
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                return Err(Error::Custom(
+                    "Abstract types should not appear in IR presented to backends".to_string(),
+                ))
+            }
         }
 
         Ok(())
@@ -4265,13 +4331,10 @@ struct ScalarString<'a> {
 ///
 /// # Errors
 /// If a [`Float`](crate::ScalarKind::Float) with an width that isn't 4 or 8
-const fn glsl_scalar(
-    kind: crate::ScalarKind,
-    width: crate::Bytes,
-) -> Result<ScalarString<'static>, Error> {
+const fn glsl_scalar(scalar: crate::Scalar) -> Result<ScalarString<'static>, Error> {
     use crate::ScalarKind as Sk;
 
-    Ok(match kind {
+    Ok(match scalar.kind {
         Sk::Sint => ScalarString {
             prefix: "i",
             full: "int",
@@ -4280,7 +4343,7 @@ const fn glsl_scalar(
             prefix: "u",
             full: "uint",
         },
-        Sk::Float => match width {
+        Sk::Float => match scalar.width {
             4 => ScalarString {
                 prefix: "",
                 full: "float",
@@ -4289,39 +4352,45 @@ const fn glsl_scalar(
                 prefix: "d",
                 full: "double",
             },
-            _ => return Err(Error::UnsupportedScalar(kind, width)),
+            _ => return Err(Error::UnsupportedScalar(scalar)),
         },
         Sk::Bool => ScalarString {
             prefix: "b",
             full: "bool",
         },
+        Sk::AbstractInt | Sk::AbstractFloat => {
+            return Err(Error::UnsupportedScalar(scalar));
+        }
     })
 }
 
 /// Helper function that returns the glsl variable name for a builtin
-const fn glsl_built_in(
-    built_in: crate::BuiltIn,
-    output: bool,
-    targetting_webgl: bool,
-) -> &'static str {
+const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'static str {
     use crate::BuiltIn as Bi;
 
     match built_in {
         Bi::Position { .. } => {
-            if output {
+            if options.output {
                 "gl_Position"
             } else {
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if targetting_webgl => "int(gl_ViewID_OVR)",
+        Bi::ViewIndex if options.targetting_webgl => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",
         Bi::ClipDistance => "gl_ClipDistance",
         Bi::CullDistance => "gl_CullDistance",
-        Bi::InstanceIndex => "uint(gl_InstanceID)",
+        Bi::InstanceIndex => {
+            if options.draw_parameters {
+                "(uint(gl_InstanceID) + uint(gl_BaseInstanceARB))"
+            } else {
+                // Must match FISRT_INSTANCE_BINDING
+                "(uint(gl_InstanceID) + naga_vs_first_instance)"
+            }
+        }
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
         // fragment
@@ -4331,7 +4400,7 @@ const fn glsl_built_in(
         Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",
         Bi::SampleIndex => "gl_SampleID",
         Bi::SampleMask => {
-            if output {
+            if options.output {
                 "gl_SampleMask"
             } else {
                 "gl_SampleMaskIn"

@@ -2,6 +2,7 @@ use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::{shader_compilation, SurfaceTarget},
 };
+use parking_lot::Mutex;
 use std::{mem, ptr, sync::Arc, thread};
 use winapi::{
     shared::{
@@ -248,7 +249,8 @@ impl super::Adapter {
             | wgt::Features::PUSH_CONSTANTS
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
-            | wgt::Features::DUAL_SOURCE_BLENDING;
+            | wgt::Features::DUAL_SOURCE_BLENDING
+            | wgt::Features::TEXTURE_FORMAT_NV12;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -296,6 +298,11 @@ impl super::Adapter {
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
         let base = wgt::Limits::default();
+
+        let mut downlevel = wgt::DownlevelCapabilities::default();
+        // https://github.com/gfx-rs/wgpu/issues/2471
+        downlevel.flags -=
+            wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -391,7 +398,7 @@ impl super::Adapter {
                     )
                     .unwrap(),
                 },
-                downlevel: wgt::DownlevelCapabilities::default(),
+                downlevel,
             },
         })
     }
@@ -427,7 +434,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             device,
             queue: super::Queue {
                 raw: queue,
-                temp_lists: Vec::new(),
+                temp_lists: Mutex::new(Vec::new()),
             },
         })
     }
@@ -619,16 +626,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             // we currently use a flip effect which supports 2..=16 buffers
             swap_chain_sizes: 2..=16,
             current_extent,
-            // TODO: figure out the exact bounds
-            extents: wgt::Extent3d {
-                width: 16,
-                height: 16,
-                depth_or_array_layers: 1,
-            }..=wgt::Extent3d {
-                width: 4096,
-                height: 4096,
-                depth_or_array_layers: 1,
-            },
             usage: crate::TextureUses::COLOR_TARGET
                 | crate::TextureUses::COPY_SRC
                 | crate::TextureUses::COPY_DST,

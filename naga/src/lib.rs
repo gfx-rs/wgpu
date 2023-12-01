@@ -300,6 +300,9 @@ use serde::Serialize;
 /// Width of a boolean type, in bytes.
 pub const BOOL_WIDTH: Bytes = 1;
 
+/// Width of abstract types, in bytes.
+pub const ABSTRACT_WIDTH: Bytes = 8;
+
 /// Hash map that is faster but not resilient to DoS attacks.
 pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
 /// Hash set that is faster but not resilient to DoS attacks.
@@ -470,6 +473,29 @@ pub enum ScalarKind {
     Float,
     /// Boolean type.
     Bool,
+
+    /// WGSL abstract integer type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractInt,
+
+    /// Abstract floating-point type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractFloat,
+}
+
+/// Characteristics of a scalar type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct Scalar {
+    /// How the value's bits are to be interpreted.
+    pub kind: ScalarKind,
+
+    /// This size of the value in bytes.
+    pub width: Bytes,
 }
 
 /// Size of an array.
@@ -677,21 +703,17 @@ pub struct Type {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum TypeInner {
     /// Number of integral or floating-point kind.
-    Scalar { kind: ScalarKind, width: Bytes },
+    Scalar(Scalar),
     /// Vector of numbers.
-    Vector {
-        size: VectorSize,
-        kind: ScalarKind,
-        width: Bytes,
-    },
-    /// Matrix of floats.
+    Vector { size: VectorSize, scalar: Scalar },
+    /// Matrix of numbers.
     Matrix {
         columns: VectorSize,
         rows: VectorSize,
-        width: Bytes,
+        scalar: Scalar,
     },
     /// Atomic scalar.
-    Atomic { kind: ScalarKind, width: Bytes },
+    Atomic(Scalar),
     /// Pointer to another type.
     ///
     /// Pointers to scalars and vectors should be treated as equivalent to
@@ -737,8 +759,7 @@ pub enum TypeInner {
     /// [`TypeResolution::Value`]: proc::TypeResolution::Value
     ValuePointer {
         size: Option<VectorSize>,
-        kind: ScalarKind,
-        width: Bytes,
+        scalar: Scalar,
         space: AddressSpace,
     },
 
@@ -861,7 +882,10 @@ pub enum Literal {
     F32(f32),
     U32(u32),
     I32(i32),
+    I64(i64),
     Bool(bool),
+    AbstractInt(i64),
+    AbstractFloat(f64),
 }
 
 #[derive(Debug, PartialEq)]
@@ -1966,10 +1990,7 @@ pub struct EntryPoint {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum PredeclaredType {
-    AtomicCompareExchangeWeakResult {
-        kind: ScalarKind,
-        width: Bytes,
-    },
+    AtomicCompareExchangeWeakResult(Scalar),
     ModfResult {
         size: Option<VectorSize>,
         width: Bytes,

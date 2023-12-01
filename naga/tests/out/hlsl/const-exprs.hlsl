@@ -61,6 +61,12 @@ void compose_of_constant()
 
 }
 
+void compose_of_splat()
+{
+    float4 x_1 = float4(2.0, 1.0, 1.0, 1.0);
+
+}
+
 uint map_texture_kind(int texture_kind)
 {
     switch(texture_kind) {
@@ -88,5 +94,6 @@ void main()
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    compose_of_splat();
     return;
 }

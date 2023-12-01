@@ -10,6 +10,11 @@ license = "MIT OR Apache-2.0"
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 resolver = "2"
 rust-version = "1.65"
+autotests = false
+
+[[test]]
+name = "naga-test"
+path = "tests/root.rs"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -26,11 +31,9 @@ deserialize = ["serde", "bitflags/serde", "indexmap/serde"]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["petgraph", "spirv"]
 spv-out = ["spirv"]
-wgsl-in = ["codespan-reporting", "hexf-parse", "termcolor", "unicode-xid"]
+wgsl-in = ["hexf-parse", "unicode-xid", "compact"]
 wgsl-out = []
 hlsl-out = []
-span = ["codespan-reporting", "termcolor"]
-validate = []
 compact = []
 
 [[bench]]
@@ -41,18 +44,18 @@ harness = false
 arbitrary = { version = "1.3", features = ["derive"], optional = true }
 bitflags = "2.2"
 bit-set = "0.5"
-termcolor = { version = "1.0.4", optional = true }
+termcolor = { version = "1.4.0" }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
-codespan-reporting = { version = "0.11.0", optional = true }
+codespan-reporting = { version = "0.11.0" }
 rustc-hash = "1.1.0"
 indexmap = { version = "2", features = ["std"] }
 log = "0.4"
 num-traits = "0.2"
 spirv = { version = "0.2", optional = true }
 thiserror = "1.0.21"
-serde = { version = "1.0.192", features = ["derive"], optional = true }
+serde = { version = "1.0.193", features = ["derive"], optional = true }
 petgraph = { version = "0.6", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }

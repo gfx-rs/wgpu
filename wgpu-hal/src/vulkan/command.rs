@@ -23,7 +23,7 @@ impl super::Texture {
                 buffer_offset: r.buffer_layout.offset,
                 buffer_row_length: r.buffer_layout.bytes_per_row.map_or(0, |bpr| {
                     let block_size = format
-                        .block_size(Some(r.texture_base.aspect.map()))
+                        .block_copy_size(Some(r.texture_base.aspect.map()))
                         .unwrap();
                     block_width * (bpr / block_size)
                 }),
@@ -959,9 +959,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
 
     unsafe fn draw(
         &mut self,
-        start_vertex: u32,
+        first_vertex: u32,
         vertex_count: u32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
         unsafe {
@@ -969,17 +969,17 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 self.active,
                 vertex_count,
                 instance_count,
-                start_vertex,
-                start_instance,
+                first_vertex,
+                first_instance,
             )
         };
     }
     unsafe fn draw_indexed(
         &mut self,
-        start_index: u32,
+        first_index: u32,
         index_count: u32,
         base_vertex: i32,
-        start_instance: u32,
+        first_instance: u32,
         instance_count: u32,
     ) {
         unsafe {
@@ -987,9 +987,9 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 self.active,
                 index_count,
                 instance_count,
-                start_index,
+                first_index,
                 base_vertex,
-                start_instance,
+                first_instance,
             )
         };
     }

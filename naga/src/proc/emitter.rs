@@ -28,7 +28,6 @@ impl Emitter {
             #[allow(unused_mut)]
             let mut span = crate::span::Span::default();
             let range = arena.range_from(start_len);
-            #[cfg(feature = "span")]
             for handle in range.clone() {
                 span.subsume(arena.get_span(handle))
             }

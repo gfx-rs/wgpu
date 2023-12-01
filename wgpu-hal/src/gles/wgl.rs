@@ -4,7 +4,7 @@ use glutin_wgl_sys::wgl_extra::{
     CONTEXT_PROFILE_MASK_ARB,
 };
 use once_cell::sync::Lazy;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use std::{
     collections::HashSet,
@@ -527,7 +527,7 @@ impl crate::Instance<super::Api> for Instance {
         Ok(Surface {
             window: window.hwnd.get() as *mut _,
             presentable: true,
-            swapchain: None,
+            swapchain: RwLock::new(None),
             srgb_capable: self.srgb_capable,
         })
     }
@@ -573,7 +573,7 @@ pub struct Swapchain {
 pub struct Surface {
     window: HWND,
     pub(super) presentable: bool,
-    swapchain: Option<Swapchain>,
+    swapchain: RwLock<Option<Swapchain>>,
     srgb_capable: bool,
 }
 
@@ -582,11 +582,12 @@ unsafe impl Sync for Surface {}
 
 impl Surface {
     pub(super) unsafe fn present(
-        &mut self,
+        &self,
         _suf_texture: super::Texture,
         context: &AdapterContext,
     ) -> Result<(), crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let dc = unsafe { GetDC(self.window) };
         if dc.is_null() {
             log::error!(
@@ -662,7 +663,7 @@ impl Surface {
 
 impl crate::Surface<super::Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -756,7 +757,7 @@ impl crate::Surface<super::Api> for Surface {
             return Err(crate::SurfaceError::Other("unable to set swap interval"));
         }
 
-        self.swapchain = Some(Swapchain {
+        self.swapchain.write().replace(Swapchain {
             renderbuffer,
             framebuffer,
             extent: config.extent,
@@ -768,9 +769,9 @@ impl crate::Surface<super::Api> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &super::Device) {
+    unsafe fn unconfigure(&self, device: &super::Device) {
         let gl = &device.shared.context.lock();
-        if let Some(sc) = self.swapchain.take() {
+        if let Some(sc) = self.swapchain.write().take() {
             unsafe {
                 gl.delete_renderbuffer(sc.renderbuffer);
                 gl.delete_framebuffer(sc.framebuffer)
@@ -779,10 +780,11 @@ impl crate::Surface<super::Api> for Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         _timeout_ms: Option<Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
-        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain = self.swapchain.read();
+        let sc = swapchain.as_ref().unwrap();
         let texture = super::Texture {
             inner: super::TextureInner::Renderbuffer {
                 raw: sc.renderbuffer,
@@ -803,5 +805,5 @@ impl crate::Surface<super::Api> for Surface {
             suboptimal: false,
         }))
     }
-    unsafe fn discard_texture(&mut self, _texture: super::Texture) {}
+    unsafe fn discard_texture(&self, _texture: super::Texture) {}
 }

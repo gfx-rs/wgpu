@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     front::Typifier, proc::Emitter, AddressSpace, Arena, BinaryOperator, Block, Expression,
-    FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction, ScalarKind,
+    FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction, Scalar,
     Span, Statement, Type, TypeInner, VectorSize,
 };
 use std::ops::Index;
@@ -602,7 +602,7 @@ impl<'a> Context<'a> {
 
                 match op {
                     BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => {
-                        self.implicit_conversion(&mut right, right_meta, ScalarKind::Uint, 4)?
+                        self.implicit_conversion(&mut right, right_meta, Scalar::U32)?
                     }
                     _ => self
                         .binary_implicit_conversion(&mut left, left_meta, &mut right, right_meta)?,
@@ -619,12 +619,12 @@ impl<'a> Context<'a> {
                         &TypeInner::Matrix {
                             columns: left_columns,
                             rows: left_rows,
-                            width: left_width,
+                            scalar: left_scalar,
                         },
                         &TypeInner::Matrix {
                             columns: right_columns,
                             rows: right_rows,
-                            width: right_width,
+                            scalar: right_scalar,
                         },
                     ) => {
                         let dimensions_ok = if op == BinaryOperator::Multiply {
@@ -634,7 +634,7 @@ impl<'a> Context<'a> {
                         };
 
                         // Check that the two arguments have the same dimensions
-                        if !dimensions_ok || left_width != right_width {
+                        if !dimensions_ok || left_scalar != right_scalar {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -682,7 +682,7 @@ impl<'a> Context<'a> {
                                         inner: TypeInner::Matrix {
                                             columns: left_columns,
                                             rows: left_rows,
-                                            width: left_width,
+                                            scalar: left_scalar,
                                         },
                                     },
                                     Span::default(),
@@ -824,17 +824,15 @@ impl<'a> Context<'a> {
                         _ => self.add_expression(Expression::Binary { left, op, right }, meta)?,
                     },
                     (
-                        &TypeInner::Scalar {
-                            width: left_width, ..
-                        },
+                        &TypeInner::Scalar(left_scalar),
                         &TypeInner::Matrix {
                             rows,
                             columns,
-                            width: right_width,
+                            scalar: right_scalar,
                         },
                     ) => {
-                        // Check that the two arguments have the same width
-                        if left_width != right_width {
+                        // Check that the two arguments have the same scalar type
+                        if left_scalar != right_scalar {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -891,7 +889,7 @@ impl<'a> Context<'a> {
                                         inner: TypeInner::Matrix {
                                             columns,
                                             rows,
-                                            width: left_width,
+                                            scalar: left_scalar,
                                         },
                                     },
                                     Span::default(),
@@ -909,14 +907,12 @@ impl<'a> Context<'a> {
                         &TypeInner::Matrix {
                             rows,
                             columns,
-                            width: left_width,
+                            scalar: left_scalar,
                         },
-                        &TypeInner::Scalar {
-                            width: right_width, ..
-                        },
+                        &TypeInner::Scalar(right_scalar),
                     ) => {
-                        // Check that the two arguments have the same width
-                        if left_width != right_width {
+                        // Check that the two arguments have the same scalar type
+                        if left_scalar != right_scalar {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
@@ -974,7 +970,7 @@ impl<'a> Context<'a> {
                                         inner: TypeInner::Matrix {
                                             columns,
                                             rows,
-                                            width: left_width,
+                                            scalar: left_scalar,
                                         },
                                     },
                                     Span::default(),
@@ -1100,37 +1096,24 @@ impl<'a> Context<'a> {
 
                 // We need to do some custom implicit conversions since the two target expressions
                 // are in different bodies
-                if let (
-                    Some((accept_power, accept_width, accept_kind)),
-                    Some((reject_power, reject_width, reject_kind)),
-                ) = (
+                if let (Some((accept_power, accept_scalar)), Some((reject_power, reject_scalar))) = (
                     // Get the components of both branches and calculate the type power
                     self.expr_scalar_components(accept, accept_meta)?
-                        .and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
+                        .and_then(|scalar| Some((type_power(scalar)?, scalar))),
                     self.expr_scalar_components(reject, reject_meta)?
-                        .and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
+                        .and_then(|scalar| Some((type_power(scalar)?, scalar))),
                 ) {
                     match accept_power.cmp(&reject_power) {
                         std::cmp::Ordering::Less => {
                             accept_body = self.with_body(accept_body, |ctx| {
-                                ctx.conversion(
-                                    &mut accept,
-                                    accept_meta,
-                                    reject_kind,
-                                    reject_width,
-                                )?;
+                                ctx.conversion(&mut accept, accept_meta, reject_scalar)?;
                                 Ok(())
                             })?;
                         }
                         std::cmp::Ordering::Equal => {}
                         std::cmp::Ordering::Greater => {
                             reject_body = self.with_body(reject_body, |ctx| {
-                                ctx.conversion(
-                                    &mut reject,
-                                    reject_meta,
-                                    accept_kind,
-                                    accept_width,
-                                )?;
+                                ctx.conversion(&mut reject, reject_meta, accept_scalar)?;
                                 Ok(())
                             })?;
                         }
@@ -1201,8 +1184,8 @@ impl<'a> Context<'a> {
                     ref ty => ty,
                 };
 
-                if let Some((kind, width)) = scalar_components(ty) {
-                    self.implicit_conversion(&mut value, value_meta, kind, width)?;
+                if let Some(scalar) = scalar_components(ty) {
+                    self.implicit_conversion(&mut value, value_meta, scalar)?;
                 }
 
                 self.lower_store(pointer, value, meta)?;
@@ -1218,26 +1201,25 @@ impl<'a> Context<'a> {
                 };
 
                 let res = match *self.resolve_type(left, meta)? {
-                    TypeInner::Scalar { kind, width } => {
-                        let ty = TypeInner::Scalar { kind, width };
-                        Literal::one(kind, width).map(|i| (ty, i, None, None))
+                    TypeInner::Scalar(scalar) => {
+                        let ty = TypeInner::Scalar(scalar);
+                        Literal::one(scalar).map(|i| (ty, i, None, None))
                     }
-                    TypeInner::Vector { size, kind, width } => {
-                        let ty = TypeInner::Vector { size, kind, width };
-                        Literal::one(kind, width).map(|i| (ty, i, Some(size), None))
+                    TypeInner::Vector { size, scalar } => {
+                        let ty = TypeInner::Vector { size, scalar };
+                        Literal::one(scalar).map(|i| (ty, i, Some(size), None))
                     }
                     TypeInner::Matrix {
                         columns,
                         rows,
-                        width,
+                        scalar,
                     } => {
                         let ty = TypeInner::Matrix {
                             columns,
                             rows,
-                            width,
+                            scalar,
                         };
-                        Literal::one(ScalarKind::Float, width)
-                            .map(|i| (ty, i, Some(rows), Some(columns)))
+                        Literal::one(scalar).map(|i| (ty, i, Some(rows), Some(columns)))
                     }
                     _ => None,
                 };
@@ -1323,19 +1305,14 @@ impl<'a> Context<'a> {
                                     Expression::Literal(Literal::U32(size.get())),
                                     meta,
                                 )?;
-                                self.forced_conversion(
-                                    &mut array_length,
-                                    meta,
-                                    ScalarKind::Sint,
-                                    4,
-                                )?;
+                                self.forced_conversion(&mut array_length, meta, Scalar::I32)?;
                                 array_length
                             }
                             // let the error be handled in type checking if it's not a dynamic array
                             _ => {
                                 let mut array_length = self
                                     .add_expression(Expression::ArrayLength(lowered_array), meta)?;
-                                self.conversion(&mut array_length, meta, ScalarKind::Sint, 4)?;
+                                self.conversion(&mut array_length, meta, Scalar::I32)?;
                                 array_length
                             }
                         }
@@ -1376,7 +1353,7 @@ impl<'a> Context<'a> {
         &mut self,
         expr: Handle<Expression>,
         meta: Span,
-    ) -> Result<Option<(ScalarKind, crate::Bytes)>> {
+    ) -> Result<Option<Scalar>> {
         let ty = self.resolve_type(expr, meta)?;
         Ok(scalar_components(ty))
     }
@@ -1384,21 +1361,20 @@ impl<'a> Context<'a> {
     pub fn expr_power(&mut self, expr: Handle<Expression>, meta: Span) -> Result<Option<u32>> {
         Ok(self
             .expr_scalar_components(expr, meta)?
-            .and_then(|(kind, width)| type_power(kind, width)))
+            .and_then(type_power))
     }
 
     pub fn conversion(
         &mut self,
         expr: &mut Handle<Expression>,
         meta: Span,
-        kind: ScalarKind,
-        width: crate::Bytes,
+        scalar: Scalar,
     ) -> Result<()> {
         *expr = self.add_expression(
             Expression::As {
                 expr: *expr,
-                kind,
-                convert: Some(width),
+                kind: scalar.kind,
+                convert: Some(scalar.width),
             },
             meta,
         )?;
@@ -1410,14 +1386,13 @@ impl<'a> Context<'a> {
         &mut self,
         expr: &mut Handle<Expression>,
         meta: Span,
-        kind: ScalarKind,
-        width: crate::Bytes,
+        scalar: Scalar,
     ) -> Result<()> {
         if let (Some(tgt_power), Some(expr_power)) =
-            (type_power(kind, width), self.expr_power(*expr, meta)?)
+            (type_power(scalar), self.expr_power(*expr, meta)?)
         {
             if tgt_power > expr_power {
-                self.conversion(expr, meta, kind, width)?;
+                self.conversion(expr, meta, scalar)?;
             }
         }
 
@@ -1428,12 +1403,11 @@ impl<'a> Context<'a> {
         &mut self,
         expr: &mut Handle<Expression>,
         meta: Span,
-        kind: ScalarKind,
-        width: crate::Bytes,
+        scalar: Scalar,
     ) -> Result<()> {
-        if let Some((expr_scalar_kind, expr_width)) = self.expr_scalar_components(*expr, meta)? {
-            if expr_scalar_kind != kind || expr_width != width {
-                self.conversion(expr, meta, kind, width)?;
+        if let Some(expr_scalar) = self.expr_scalar_components(*expr, meta)? {
+            if expr_scalar != scalar {
+                self.conversion(expr, meta, scalar)?;
             }
         }
 
@@ -1450,21 +1424,17 @@ impl<'a> Context<'a> {
         let left_components = self.expr_scalar_components(*left, left_meta)?;
         let right_components = self.expr_scalar_components(*right, right_meta)?;
 
-        if let (
-            Some((left_power, left_width, left_kind)),
-            Some((right_power, right_width, right_kind)),
-        ) = (
-            left_components.and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
-            right_components
-                .and_then(|(kind, width)| Some((type_power(kind, width)?, width, kind))),
+        if let (Some((left_power, left_scalar)), Some((right_power, right_scalar))) = (
+            left_components.and_then(|scalar| Some((type_power(scalar)?, scalar))),
+            right_components.and_then(|scalar| Some((type_power(scalar)?, scalar))),
         ) {
             match left_power.cmp(&right_power) {
                 std::cmp::Ordering::Less => {
-                    self.conversion(left, left_meta, right_kind, right_width)?;
+                    self.conversion(left, left_meta, right_scalar)?;
                 }
                 std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Greater => {
-                    self.conversion(right, right_meta, left_kind, left_width)?;
+                    self.conversion(right, right_meta, left_scalar)?;
                 }
             }
         }

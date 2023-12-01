@@ -35,7 +35,7 @@ use std::{
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use metal::foreign_types::ForeignTypeRef as _;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -184,8 +184,8 @@ struct PrivateCapabilities {
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
-    base_instance: bool,
-    base_vertex_instance_drawing: bool,
+    indirect_draw_dispatch: bool,
+    base_vertex_first_instance_drawing: bool,
     dual_source_blending: bool,
     low_power: bool,
     headless: bool,
@@ -336,8 +336,8 @@ pub struct Device {
 pub struct Surface {
     view: Option<NonNull<objc::runtime::Object>>,
     render_layer: Mutex<metal::MetalLayer>,
-    swapchain_format: Option<wgt::TextureFormat>,
-    extent: wgt::Extent3d,
+    swapchain_format: RwLock<Option<wgt::TextureFormat>>,
+    extent: RwLock<wgt::Extent3d>,
     main_thread_id: thread::ThreadId,
     // Useful for UI-intensive applications that are sensitive to
     // window resizing.
@@ -365,7 +365,7 @@ unsafe impl Sync for SurfaceTexture {}
 
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
@@ -412,8 +412,8 @@ impl crate::Queue<Api> for Queue {
         Ok(())
     }
     unsafe fn present(
-        &mut self,
-        _surface: &mut Surface,
+        &self,
+        _surface: &Surface,
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         let queue = &self.raw.lock();
@@ -697,6 +697,7 @@ impl PipelineStageInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct RenderPipeline {
     raw: metal::RenderPipelineState,
     #[allow(dead_code)]
@@ -716,6 +717,7 @@ pub struct RenderPipeline {
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
+#[derive(Debug)]
 pub struct ComputePipeline {
     raw: metal::ComputePipelineState,
     #[allow(dead_code)]

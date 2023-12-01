@@ -8,6 +8,8 @@ Usage: xtask <COMMAND>
 
 Commands:
   run-wasm
+    --release   Build in release mode
+    --no-serve  Just build the generated files, don't serve them
   test
     --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
 
@@ -49,33 +51,6 @@ pub enum Subcommand {
 }
 
 impl Subcommand {
-    /// Returns the name of the subcommand as a string.
-    ///
-    /// Opposite of [`Self::parse`].
-    pub fn to_str(&self) -> &'static str {
-        match self {
-            Self::RunWasm => "run-wasm",
-            Self::Test => "test",
-        }
-    }
-
-    /// Returns true if all required features are enabled for this subcommand.
-    pub fn required_features_enabled(&self) -> bool {
-        match self {
-            Self::RunWasm => cfg!(feature = "run-wasm"),
-            Self::Test => true,
-        }
-    }
-
-    /// Comma separated list of features required by this subcommand.
-    pub fn features(&self) -> &'static str {
-        match self {
-            Self::RunWasm => "run-wasm",
-            // We will never ask for the features if required_features_enabled always returns true.
-            Self::Test => unreachable!(),
-        }
-    }
-
     fn parse(args: &mut Arguments) -> anyhow::Result<Subcommand> {
         let subcmd = args
             .subcommand()

@@ -275,7 +275,13 @@ fn check_targets(
 
     let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
         .validate(module)
-        .unwrap_or_else(|_| panic!("Naga module validation failed on test '{}'", name.display()));
+        .unwrap_or_else(|err| {
+            panic!(
+                "Naga module validation failed on test `{}`:\n{:?}",
+                name.display(),
+                err
+            );
+        });
 
     #[cfg(feature = "compact")]
     let info = {
@@ -292,10 +298,11 @@ fn check_targets(
 
         naga::valid::Validator::new(naga::valid::ValidationFlags::all(), capabilities)
             .validate(module)
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|err| {
                 panic!(
-                    "Post-compaction module validation failed on test '{}'",
-                    name.display()
+                    "Post-compaction module validation failed on test '{}':\n<{:?}",
+                    name.display(),
+                    err,
                 )
             })
     };
@@ -311,14 +318,10 @@ fn check_targets(
 
     #[cfg(all(feature = "deserialize", feature = "spv-out"))]
     {
-        let debug_info = if cfg!(feature = "span") {
-            source_code.map(|code| naga::back::spv::DebugInfo {
-                source_code: code,
-                file_name: name.as_ref(),
-            })
-        } else {
-            None
-        };
+        let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
+            source_code: code,
+            file_name: name.as_ref(),
+        });
 
         if targets.contains(Targets::SPIRV) {
             write_output_spv(
@@ -779,6 +782,18 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
+        (
+            "struct-layout",
+            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
+        ),
+        (
+            "f64",
+            Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
+            "abstract-types",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -787,11 +802,13 @@ fn convert_wgsl() {
         let source = input.read_source();
         match naga::front::wgsl::parse_str(&source) {
             Ok(mut module) => check_targets(&input, &mut module, targets, None),
-            Err(e) => panic!("{}", e.emit_to_string(&source)),
+            Err(e) => panic!(
+                "{}",
+                e.emit_to_string_with_path(&source, input.input_path())
+            ),
         }
     }
 
-    #[cfg(feature = "span")]
     {
         let inputs = [
             ("debug-symbol-simple", Targets::SPIRV),
@@ -803,7 +820,10 @@ fn convert_wgsl() {
             let source = input.read_source();
             match naga::front::wgsl::parse_str(&source) {
                 Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source)),
-                Err(e) => panic!("{}", e.emit_to_string(&source)),
+                Err(e) => panic!(
+                    "{}",
+                    e.emit_to_string_with_path(&source, input.input_path())
+                ),
             }
         }
     }

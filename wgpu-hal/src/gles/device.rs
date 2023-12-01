@@ -187,7 +187,7 @@ impl super::Device {
         unsafe { gl.shader_source(raw, shader) };
         unsafe { gl.compile_shader(raw) };
 
-        log::info!("\tCompiled shader {:?}", raw);
+        log::debug!("\tCompiled shader {:?}", raw);
 
         let compiled_ok = unsafe { gl.get_shader_compile_status(raw) };
         let msg = unsafe { gl.get_shader_info_log(raw) };
@@ -398,7 +398,7 @@ impl super::Device {
             unsafe { gl.delete_shader(shader) };
         }
 
-        log::info!("\tLinked program {:?}", program);
+        log::debug!("\tLinked program {:?}", program);
 
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
@@ -467,9 +467,17 @@ impl super::Device {
             }
         }
 
+        let first_instance_location = if has_stages.contains(wgt::ShaderStages::VERTEX) {
+            // If this returns none (the uniform isn't active), that's fine, we just won't set it.
+            unsafe { gl.get_uniform_location(program, naga::back::glsl::FIRST_INSTANCE_BINDING) }
+        } else {
+            None
+        };
+
         Ok(Arc::new(super::PipelineInner {
             program,
             sampler_map,
+            first_instance_location,
             push_constant_descs: uniforms,
         }))
     }
@@ -1082,6 +1090,12 @@ impl crate::Device<super::Api> for super::Device {
                 .private_caps
                 .contains(super::PrivateCapabilities::SHADER_TEXTURE_SHADOW_LOD),
         );
+        writer_flags.set(
+            glsl::WriterFlags::DRAW_PARAMETERS,
+            self.shared
+                .private_caps
+                .contains(super::PrivateCapabilities::FULLY_FEATURED_INSTANCING),
+        );
         // We always force point size to be written and it will be ignored by the driver if it's not a point list primitive.
         // https://github.com/gfx-rs/wgpu/pull/3440/files#r1095726950
         writer_flags.set(glsl::WriterFlags::FORCE_POINT_SIZE, true);
@@ -1345,31 +1359,18 @@ impl crate::Device<super::Api> for super::Device {
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
         let gl = &self.shared.context.lock();
-        let mut temp_string = String::new();
 
         let mut queries = Vec::with_capacity(desc.count as usize);
-        for i in 0..desc.count {
+        for _ in 0..desc.count {
             let query =
                 unsafe { gl.create_query() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
-            #[cfg(not(target_arch = "wasm32"))]
-            if gl.supports_debug() {
-                use std::fmt::Write;
 
-                // Initialize the query so we can label it
-                match desc.ty {
-                    wgt::QueryType::Timestamp => unsafe {
-                        gl.query_counter(query, glow::TIMESTAMP)
-                    },
-                    _ => (),
-                }
+            // We aren't really able to, in general, label queries.
+            //
+            // We could take a timestamp here to "initialize" the query,
+            // but that's a bit of a hack, and we don't want to insert
+            // random timestamps into the command stream of we don't have to.
 
-                if let Some(label) = desc.label {
-                    temp_string.clear();
-                    let _ = write!(temp_string, "{label}[{i}]");
-                    let name = unsafe { mem::transmute(query) };
-                    unsafe { gl.object_label(glow::QUERY, name, Some(&temp_string)) };
-                }
-            }
             queries.push(query);
         }
 
@@ -1420,27 +1421,27 @@ impl crate::Device<super::Api> for super::Device {
             } else {
                 (timeout_ms as u64 * 1_000_000).min(!0u32 as u64)
             };
-            let &(_, sync) = fence
+            if let Some(&(_, sync)) = fence
                 .pending
                 .iter()
                 .find(|&&(value, _)| value >= wait_value)
-                .unwrap();
-            match unsafe {
-                gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
-            } {
-                // for some reason firefox returns WAIT_FAILED, to investigate
-                #[cfg(target_arch = "wasm32")]
-                glow::WAIT_FAILED => {
-                    log::warn!("wait failed!");
-                    Ok(false)
-                }
-                glow::TIMEOUT_EXPIRED => Ok(false),
-                glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
-                _ => Err(crate::DeviceError::Lost),
+            {
+                return match unsafe {
+                    gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
+                } {
+                    // for some reason firefox returns WAIT_FAILED, to investigate
+                    #[cfg(target_arch = "wasm32")]
+                    glow::WAIT_FAILED => {
+                        log::warn!("wait failed!");
+                        Ok(false)
+                    }
+                    glow::TIMEOUT_EXPIRED => Ok(false),
+                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => Ok(true),
+                    _ => Err(crate::DeviceError::Lost),
+                };
             }
-        } else {
-            Ok(true)
         }
+        Ok(true)
     }
 
     unsafe fn start_capture(&self) -> bool {

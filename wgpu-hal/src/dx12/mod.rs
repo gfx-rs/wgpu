@@ -47,7 +47,7 @@ mod view;
 use crate::auxil::{self, dxgi::result::HResult as _};
 
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::{ffi, fmt, mem, num::NonZeroU32, sync::Arc};
 use winapi::{
     shared::{dxgi, dxgi1_4, dxgitype, windef, winerror},
@@ -110,7 +110,7 @@ impl Instance {
             factory_media: self.factory_media.clone(),
             target: SurfaceTarget::Visual(unsafe { d3d12::ComPtr::from_raw(visual) }),
             supports_allow_tearing: self.supports_allow_tearing,
-            swap_chain: None,
+            swap_chain: RwLock::new(None),
         }
     }
 
@@ -123,7 +123,7 @@ impl Instance {
             factory_media: self.factory_media.clone(),
             target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
-            swap_chain: None,
+            swap_chain: RwLock::new(None),
         }
     }
 
@@ -138,7 +138,7 @@ impl Instance {
                 d3d12::ComPtr::from_raw(swap_chain_panel)
             }),
             supports_allow_tearing: self.supports_allow_tearing,
-            swap_chain: None,
+            swap_chain: RwLock::new(None),
         }
     }
 }
@@ -170,7 +170,7 @@ pub struct Surface {
     factory_media: Option<d3d12::FactoryMedia>,
     target: SurfaceTarget,
     supports_allow_tearing: bool,
-    swap_chain: Option<SwapChain>,
+    swap_chain: RwLock<Option<SwapChain>>,
 }
 
 unsafe impl Send for Surface {}
@@ -263,7 +263,7 @@ unsafe impl Sync for Device {}
 
 pub struct Queue {
     raw: d3d12::CommandQueue,
-    temp_lists: Vec<d3d12::CommandList>,
+    temp_lists: Mutex<Vec<d3d12::CommandList>>,
 }
 
 unsafe impl Send for Queue {}
@@ -293,8 +293,8 @@ enum RootElement {
     Empty,
     Constant,
     SpecialConstantBuffer {
-        base_vertex: i32,
-        base_instance: u32,
+        first_vertex: i32,
+        first_instance: u32,
         other: u32,
     },
     /// Descriptor table.
@@ -501,7 +501,7 @@ pub struct BindGroupLayout {
     copy_counts: Vec<u32>, // all 1's
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum BufferViewKind {
     Constant,
     ShaderResource,
@@ -526,19 +526,20 @@ bitflags::bitflags! {
 // Element (also known as parameter) index into the root signature.
 type RootIndex = u32;
 
+#[derive(Debug)]
 struct BindGroupInfo {
     base_root_index: RootIndex,
     tables: TableTypes,
     dynamic_buffers: Vec<BufferViewKind>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct RootConstantInfo {
     root_index: RootIndex,
     range: std::ops::Range<u32>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct PipelineLayoutShared {
     signature: d3d12::RootSignature,
     total_root_elements: RootIndex,
@@ -549,6 +550,7 @@ struct PipelineLayoutShared {
 unsafe impl Send for PipelineLayoutShared {}
 unsafe impl Sync for PipelineLayoutShared {}
 
+#[derive(Debug)]
 pub struct PipelineLayout {
     shared: PipelineLayoutShared,
     // Storing for each associated bind group, which tables we created
@@ -580,6 +582,7 @@ impl CompiledShader {
     unsafe fn destroy(self) {}
 }
 
+#[derive(Debug)]
 pub struct RenderPipeline {
     raw: d3d12::PipelineState,
     layout: PipelineLayoutShared,
@@ -590,6 +593,7 @@ pub struct RenderPipeline {
 unsafe impl Send for RenderPipeline {}
 unsafe impl Sync for RenderPipeline {}
 
+#[derive(Debug)]
 pub struct ComputePipeline {
     raw: d3d12::PipelineState,
     layout: PipelineLayoutShared,
@@ -628,7 +632,7 @@ impl SwapChain {
 
 impl crate::Surface<Api> for Surface {
     unsafe fn configure(
-        &mut self,
+        &self,
         device: &Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
@@ -649,7 +653,7 @@ impl crate::Surface<Api> for Surface {
 
         let non_srgb_format = auxil::dxgi::conv::map_texture_format_nosrgb(config.format);
 
-        let swap_chain = match self.swap_chain.take() {
+        let swap_chain = match self.swap_chain.write().take() {
             //Note: this path doesn't properly re-initialize all of the things
             Some(sc) => {
                 let raw = unsafe { sc.release_resources() };
@@ -798,7 +802,8 @@ impl crate::Surface<Api> for Surface {
             resources.push(resource);
         }
 
-        self.swap_chain = Some(SwapChain {
+        let mut swapchain = self.swap_chain.write();
+        *swapchain = Some(SwapChain {
             raw: swap_chain,
             resources,
             waitable,
@@ -811,8 +816,8 @@ impl crate::Surface<Api> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure(&mut self, device: &Device) {
-        if let Some(sc) = self.swap_chain.take() {
+    unsafe fn unconfigure(&self, device: &Device) {
+        if let Some(sc) = self.swap_chain.write().take() {
             unsafe {
                 // While `unconfigure`s contract ensures that no work on the GPU's main queues
                 // are in flight, we still need to wait for the present queue to be idle.
@@ -828,10 +833,11 @@ impl crate::Surface<Api> for Surface {
     }
 
     unsafe fn acquire_texture(
-        &mut self,
+        &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
-        let sc = self.swap_chain.as_mut().unwrap();
+        let mut swapchain = self.swap_chain.write();
+        let sc = swapchain.as_mut().unwrap();
 
         unsafe { sc.wait(timeout) }?;
 
@@ -853,26 +859,28 @@ impl crate::Surface<Api> for Surface {
             suboptimal: false,
         }))
     }
-    unsafe fn discard_texture(&mut self, _texture: Texture) {
-        let sc = self.swap_chain.as_mut().unwrap();
+    unsafe fn discard_texture(&self, _texture: Texture) {
+        let mut swapchain = self.swap_chain.write();
+        let sc = swapchain.as_mut().unwrap();
         sc.acquired_count -= 1;
     }
 }
 
 impl crate::Queue<Api> for Queue {
     unsafe fn submit(
-        &mut self,
+        &self,
         command_buffers: &[&CommandBuffer],
         signal_fence: Option<(&mut Fence, crate::FenceValue)>,
     ) -> Result<(), crate::DeviceError> {
-        self.temp_lists.clear();
+        let mut temp_lists = self.temp_lists.lock();
+        temp_lists.clear();
         for cmd_buf in command_buffers {
-            self.temp_lists.push(cmd_buf.raw.as_list());
+            temp_lists.push(cmd_buf.raw.as_list());
         }
 
         {
             profiling::scope!("ID3D12CommandQueue::ExecuteCommandLists");
-            self.raw.execute_command_lists(&self.temp_lists);
+            self.raw.execute_command_lists(&temp_lists);
         }
 
         if let Some((fence, value)) = signal_fence {
@@ -890,11 +898,12 @@ impl crate::Queue<Api> for Queue {
         Ok(())
     }
     unsafe fn present(
-        &mut self,
-        surface: &mut Surface,
+        &self,
+        surface: &Surface,
         _texture: Texture,
     ) -> Result<(), crate::SurfaceError> {
-        let sc = surface.swap_chain.as_mut().unwrap();
+        let mut swapchain = surface.swap_chain.write();
+        let sc = swapchain.as_mut().unwrap();
         sc.acquired_count -= 1;
 
         let (interval, flags) = match sc.present_mode {
