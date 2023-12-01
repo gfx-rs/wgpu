@@ -198,7 +198,7 @@ git checkout $(cat ../cts_runner/revision.txt)
 To run a given set of tests:
 
 ```
-# Must be inside the CTS folder we just checked out, else this will fail
+# Must be inside the `cts` folder we just checked out, else this will fail
 cargo run --manifest-path ../Cargo.toml --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
 ```
 
