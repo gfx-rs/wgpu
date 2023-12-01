@@ -220,12 +220,11 @@ impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
-            flags: if cfg!(debug_assertions) {
-                wgt::InstanceFlags::all()
-            } else {
-                wgt::InstanceFlags::empty()
+            flags: wgt::InstanceFlags::default(),
+            dx12_shader_compiler: wgt::Dx12Compiler::Dxc {
+                dxil_path: None,
+                dxc_path: None,
             },
-            dx12_shader_compiler: wgt::Dx12Compiler::Fxc,
             gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
@@ -358,15 +357,32 @@ impl<A: hal::Api> Example<A> {
             words
         }
 
+        let naga_shader = {
+            let shader_file = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("examples")
+                .join("ray-traced-triangle")
+                .join("shader.wgsl");
+            let source = std::fs::read_to_string(shader_file).unwrap();
+            let module = naga::front::wgsl::Frontend::new().parse(&source).unwrap();
+            let info = naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::RAY_QUERY,
+            )
+            .validate(&module)
+            .unwrap();
+            hal::NagaShader {
+                module: Cow::Owned(module),
+                info,
+                debug_source: None,
+            }
+        };
+        let shader_desc = hal::ShaderModuleDescriptor {
+            label: None,
+            runtime_checks: false,
+        };
         let shader_module = unsafe {
             device
-                .create_shader_module(
-                    &hal::ShaderModuleDescriptor {
-                        label: None,
-                        runtime_checks: false,
-                    },
-                    hal::ShaderInput::SpirV(&make_spirv_raw(include_bytes!("shader.comp.spv"))),
-                )
+                .create_shader_module(&shader_desc, hal::ShaderInput::Naga(naga_shader))
                 .unwrap()
         };
 
