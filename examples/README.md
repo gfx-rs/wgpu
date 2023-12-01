@@ -94,5 +94,5 @@ All framework-based examples render to the window and are reftested against the 
 You can record an API trace for any of the framework-based examples by starting them as:
 
 ```sh
-mkdir -p trace && WGPU_TRACE=trace cargo run --features trace --bin <example-name>
+mkdir -p trace && WGPU_TRACE=trace cargo run --features trace --bin wgpu-examples <example-name>
 ```
