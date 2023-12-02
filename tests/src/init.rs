@@ -1,6 +1,15 @@
 use wgpu::{Adapter, Device, Instance, Queue};
 use wgt::{Backends, Features, Limits};
 
+/// Initialize the logger for the test runner.
+pub fn init_logger() {
+    // We don't actually care if it fails
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = env_logger::try_init();
+    #[cfg(target_arch = "wasm32")]
+    let _ = console_log::init_with_level(log::Level::Info);
+}
+
 /// Initialize a wgpu instance with the options from the environment.
 pub fn initialize_instance() -> Instance {
     // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
@@ -19,7 +28,7 @@ pub fn initialize_instance() -> Instance {
 }
 
 /// Initialize a wgpu adapter, taking the `n`th adapter from the instance.
-pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<SurfaceGuard>) {
+pub async fn initialize_adapter(adapter_index: usize) -> (Instance, Adapter, Option<SurfaceGuard>) {
     let instance = initialize_instance();
     #[allow(unused_variables)]
     let _surface: wgpu::Surface;
@@ -63,7 +72,7 @@ pub async fn initialize_adapter(adapter_index: usize) -> (Adapter, Option<Surfac
 
     log::info!("Testing using adapter: {:#?}", adapter.get_info());
 
-    (adapter, surface_guard)
+    (instance, adapter, surface_guard)
 }
 
 /// Initialize a wgpu device from a given adapter.
@@ -76,8 +85,8 @@ pub async fn initialize_device(
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features,
-                limits,
+                required_features: features,
+                required_limits: limits,
             },
             None,
         )

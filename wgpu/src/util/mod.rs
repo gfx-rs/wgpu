@@ -6,7 +6,6 @@
 mod belt;
 mod device;
 mod encoder;
-mod indirect;
 mod init;
 
 use std::sync::Arc;
@@ -17,11 +16,10 @@ use std::{
 };
 
 pub use belt::StagingBelt;
-pub use device::{BufferInitDescriptor, DeviceExt};
+pub use device::{BufferInitDescriptor, DeviceExt, TextureDataOrder};
 pub use encoder::RenderEncoder;
-pub use indirect::*;
 pub use init::*;
-pub use wgt::math::*;
+pub use wgt::{math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs};
 
 /// Treat the given byte slice as a SPIR-V module.
 ///
@@ -51,7 +49,7 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
     );
     assert_ne!(data.len(), 0, "data size must be larger than zero");
 
-    //If the data happens to be aligned, directly use the byte array,
+    // If the data happens to be aligned, directly use the byte array,
     // otherwise copy the byte array in an owned vector and use that instead.
     let mut words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
         let (pre, words, post) = unsafe { data.align_to::<u32>() };

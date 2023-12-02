@@ -367,11 +367,11 @@ fn make_local(inner: &crate::TypeInner) -> Option<LocalType> {
         crate::TypeInner::Matrix {
             columns,
             rows,
-            width,
+            scalar,
         } => LocalType::Matrix {
             columns,
             rows,
-            width,
+            width: scalar.width,
         },
         crate::TypeInner::Pointer { base, space } => LocalType::Pointer {
             base,

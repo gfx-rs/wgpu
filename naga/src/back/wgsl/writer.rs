@@ -524,14 +524,14 @@ impl<W: Write> Writer<W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 write!(
                     self.out,
                     "mat{}x{}<{}>",
                     back::vector_size_str(columns),
                     back::vector_size_str(rows),
-                    scalar_kind_str(crate::Scalar::float(width))
+                    scalar_kind_str(scalar)
                 )?;
             }
             TypeInner::Pointer { base, space } => {
@@ -1091,13 +1091,19 @@ impl<W: Write> Writer<W> {
                 match literal {
                     // Floats are written using `Debug` instead of `Display` because it always appends the
                     // decimal part even it's zero
-                    crate::Literal::F64(_) => {
-                        return Err(Error::Custom("unsupported f64 literal".to_string()));
-                    }
                     crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
                     crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
+                    crate::Literal::I64(_) => {
+                        return Err(Error::Custom("unsupported i64 literal".to_string()));
+                    }
+                    crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                        return Err(Error::Custom(
+                            "Abstract types should not appear in IR presented to backends".into(),
+                        ));
+                    }
                 }
             }
             Expression::Constant(handle) => {
@@ -1409,12 +1415,11 @@ impl<W: Write> Writer<W> {
                     TypeInner::Matrix {
                         columns,
                         rows,
-                        width,
-                        ..
+                        scalar,
                     } => {
                         let scalar = crate::Scalar {
                             kind,
-                            width: convert.unwrap_or(width),
+                            width: convert.unwrap_or(scalar.width),
                         };
                         let scalar_kind_str = scalar_kind_str(scalar);
                         write!(

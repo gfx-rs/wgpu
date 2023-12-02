@@ -338,6 +338,10 @@ impl crate::Scalar {
                 kind: Sk::Bool,
                 width: _,
             } => "bool",
+            Self {
+                kind: Sk::AbstractInt | Sk::AbstractFloat,
+                width: _,
+            } => unreachable!(),
         }
     }
 }
@@ -357,11 +361,6 @@ fn should_pack_struct_member(
     module: &crate::Module,
 ) -> Option<crate::Scalar> {
     let member = &members[index];
-    //Note: this is imperfect - the same structure can be used for host-shared
-    // things, where packed float would matter.
-    if member.binding.is_some() {
-        return None;
-    }
 
     let ty_inner = &module.types[member.ty].inner;
     let last_offset = member.offset + ty_inner.size(module.to_ctx());
@@ -375,7 +374,7 @@ fn should_pack_struct_member(
         crate::TypeInner::Vector {
             size: crate::VectorSize::Tri,
             scalar: scalar @ crate::Scalar { width: 4, .. },
-        } if member.offset & 0xF != 0 || is_tight => Some(scalar),
+        } if is_tight => Some(scalar),
         _ => None,
     }
 }
@@ -1274,8 +1273,14 @@ impl<W: Write> Writer<W> {
                 crate::Literal::I32(value) => {
                     write!(self.out, "{value}")?;
                 }
+                crate::Literal::I64(value) => {
+                    write!(self.out, "{value}L")?;
+                }
                 crate::Literal::Bool(value) => {
                     write!(self.out, "{value}")?;
+                }
+                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                    return Err(Error::Validation);
                 }
             },
             crate::Expression::Constant(handle) => {
@@ -1939,11 +1944,11 @@ impl<W: Write> Writer<W> {
                 crate::TypeInner::Matrix {
                     columns,
                     rows,
-                    width,
+                    scalar,
                 } => {
                     let target_scalar = crate::Scalar {
                         kind,
-                        width: convert.unwrap_or(width),
+                        width: convert.unwrap_or(scalar.width),
                     };
                     put_numeric_type(&mut self.out, target_scalar, &[rows, columns])?;
                     write!(self.out, "(")?;
@@ -2552,10 +2557,9 @@ impl<W: Write> Writer<W> {
             TypeResolution::Value(crate::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             }) => {
-                let element = crate::Scalar::float(width);
-                put_numeric_type(&mut self.out, element, &[rows, columns])?;
+                put_numeric_type(&mut self.out, scalar, &[rows, columns])?;
             }
             TypeResolution::Value(ref other) => {
                 log::warn!("Type {:?} isn't a known local", other); //TEMP!
@@ -3305,8 +3309,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "struct {name} {{")?;
                     let mut last_offset = 0;
                     for (index, member) in members.iter().enumerate() {
-                        // quick and dirty way to figure out if we need this...
-                        if member.binding.is_none() && member.offset > last_offset {
+                        if member.offset > last_offset {
                             self.struct_member_pads.insert((handle, index as u32));
                             let pad = member.offset - last_offset;
                             writeln!(self.out, "{}char _pad{}[{}];", back::INDENT, index, pad)?;
@@ -4272,6 +4275,13 @@ impl<W: Write> Writer<W> {
                             let name = &flattened_member_names[&key];
                             if member_index != 0 {
                                 write!(self.out, ", ")?;
+                            }
+                            // insert padding initialization, if needed
+                            if self
+                                .struct_member_pads
+                                .contains(&(arg.ty, member_index as u32))
+                            {
+                                write!(self.out, "{{}}, ")?;
                             }
                             if let Some(crate::Binding::Location { .. }) = member.binding {
                                 write!(self.out, "{varyings_member_name}.")?;

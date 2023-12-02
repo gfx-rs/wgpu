@@ -280,12 +280,21 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const TIMESTAMP_QUERY = 1 << 1;
-        /// Allows non-zero value for the "first instance" in indirect draw calls.
+        /// Allows non-zero value for the `first_instance` member in indirect draw calls.
+        ///
+        /// If this feature is not enabled, and the `first_instance` member is non-zero, the behavior may be:
+        /// - The draw call is ignored.
+        /// - The draw call is executed as if the `first_instance` is zero.
+        /// - The draw call is executed with the correct `first_instance` value.
         ///
         /// Supported Platforms:
         /// - Vulkan (mostly)
         /// - DX12
-        /// - Metal
+        /// - Metal on Apple3+ or Mac1+
+        /// - OpenGL (Desktop 4.2+ with ARB_shader_draw_parameters only)
+        ///
+        /// Not Supported:
+        /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
         const INDIRECT_FIRST_INSTANCE = 1 << 2;
@@ -613,7 +622,7 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - DX12
         /// - Vulkan
-        /// - Metal (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
+        /// - Metal on Apple3+ or Mac1+ (Emulated on top of `draw_indirect` and `draw_indexed_indirect`)
         ///
         /// This is a native only feature.
         ///
@@ -762,7 +771,16 @@ bitflags::bitflags! {
         /// - OpenGL
         const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
 
-        // 54..59 available
+        /// Allows for creation of textures of format [`TextureFormat::NV12`]
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const TEXTURE_FORMAT_NV12 = 1 << 55;
+
+        // 55..59 available
 
         // Shader:
 
@@ -849,6 +867,16 @@ bitflags::bitflags! {
         const VALIDATION = 1 << 1;
         /// Don't pass labels to wgpu-hal.
         const DISCARD_HAL_LABELS = 1 << 2;
+        /// Whether wgpu should expose adapters that run on top of non-compliant adapters.
+        ///
+        /// Turning this on might mean that some of the functionality provided by the wgpu
+        /// adapter/device is not working or is broken. It could be that all the functionality
+        /// wgpu currently exposes works but we can't tell for sure since we have no additional
+        /// transparency into what is working and what is not on the underlying adapter.
+        ///
+        /// This mainly applies to a Vulkan driver's compliance version. If the major compliance version
+        /// is `0`, then the driver is ignored. This flag allows that driver to be enabled for testing.
+        const ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER = 1 << 3;
     }
 }
 
@@ -900,6 +928,9 @@ impl InstanceFlags {
         }
         if let Some(bit) = env("WGPU_DEBUG") {
             self.set(Self::DEBUG, bit);
+        }
+        if let Some(bit) = env("WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER") {
+            self.set(Self::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER, bit);
         }
 
         self
@@ -1385,9 +1416,18 @@ bitflags::bitflags! {
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
         ///
-        /// DX11 on FL10 level hardware, WebGL2, and GLES 3.0 devices do not support indirect.
+        /// DX11 on FL10 level hardware, WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
-        /// Supports non-zero `base_vertex` parameter to indexed draw calls.
+        /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
+        ///
+        /// Indirect calls, if supported, always support non-zero `base_vertex`.
+        ///
+        /// Supported by:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal on Apple3+ or Mac1+
+        /// - OpenGL 3.2+
+        /// - OpenGL ES 3.2
         const BASE_VERTEX = 1 << 3;
         /// Supports reading from a depth/stencil texture while using it as a read-only
         /// depth/stencil attachment.
@@ -1486,6 +1526,34 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
+
+        /// If this is true, use of `@builtin(vertex_index)` and `@builtin(instance_index)` will properly take into consideration
+        /// the `first_vertex` and `first_instance` parameters of indirect draw calls.
+        ///
+        /// If this is false, `@builtin(vertex_index)` and `@builtin(instance_index)` will start by counting from 0, ignoring the
+        /// `first_vertex` and `first_instance` parameters.
+        ///
+        /// For example, if you had a draw call like this:
+        /// - `first_vertex: 4,`
+        /// - `vertex_count: 12,`
+        ///
+        /// When this flag is present, `@builtin(vertex_index)` will start at 4 and go up to 15 (12 invocations).
+        ///
+        /// When this flag is not present, `@builtin(vertex_index)` will start at 0 and go up to 11 (12 invocations).
+        ///
+        /// This only affects the builtins in the shaders,
+        /// vertex buffers and instance rate vertex buffers will behave like expected with this flag disabled.
+        ///
+        /// See also [`Features::`]
+        ///
+        /// Supported By:
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL
+        ///
+        /// Will be implemented in the future by:
+        /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
+        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
 
@@ -1583,12 +1651,18 @@ pub struct AdapterInfo {
 pub struct DeviceDescriptor<L> {
     /// Debug label for the device.
     pub label: L,
-    /// Features that the device should support. If any feature is not supported by
-    /// the adapter, creating a device will panic.
-    pub features: Features,
-    /// Limits that the device should support. If any limit is "better" than the limit exposed by
-    /// the adapter, creating a device will panic.
-    pub limits: Limits,
+    /// Specifies the features that are required by the device request.
+    /// The request will fail if the adapter cannot provide these features.
+    ///
+    /// Exactly the specified set of features, and no more or less,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_features: Features,
+    /// Specifies the limits that are required by the device request.
+    /// The request will fail if the adapter cannot provide these limits.
+    ///
+    /// Exactly the specified limits, and no better or worse,
+    /// will be allowed in validation of API calls on the resulting device.
+    pub required_limits: Limits,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1596,8 +1670,8 @@ impl<L> DeviceDescriptor<L> {
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> DeviceDescriptor<K> {
         DeviceDescriptor {
             label: fun(&self.label),
-            features: self.features,
-            limits: self.limits.clone(),
+            required_features: self.required_features,
+            required_limits: self.required_limits.clone(),
         }
     }
 }
@@ -2318,6 +2392,21 @@ pub enum TextureFormat {
     /// [`Features::DEPTH32FLOAT_STENCIL8`] must be enabled to use this texture format.
     Depth32FloatStencil8,
 
+    /// YUV 4:2:0 chroma subsampled format.
+    ///
+    /// Contains two planes:
+    /// - 0: Single 8 bit channel luminance.
+    /// - 1: Dual 8 bit channel chrominance at half width and half height.
+    ///
+    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
+    ///
+    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
+    ///
+    /// Width and height must be even.
+    ///
+    /// [`Features::TEXTURE_FORMAT_NV12`] must be enabled to use this texture format.
+    NV12,
+
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
     /// [0, 63] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
@@ -2547,6 +2636,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "depth16unorm" => TextureFormat::Depth16Unorm,
                     "depth24plus" => TextureFormat::Depth24Plus,
                     "depth24plus-stencil8" => TextureFormat::Depth24PlusStencil8,
+                    "nv12" => TextureFormat::NV12,
                     "rgb9e5ufloat" => TextureFormat::Rgb9e5Ufloat,
                     "bc1-rgba-unorm" => TextureFormat::Bc1RgbaUnorm,
                     "bc1-rgba-unorm-srgb" => TextureFormat::Bc1RgbaUnormSrgb,
@@ -2674,6 +2764,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
             TextureFormat::Depth24Plus => "depth24plus",
             TextureFormat::Depth24PlusStencil8 => "depth24plus-stencil8",
+            TextureFormat::NV12 => "nv12",
             TextureFormat::Rgb9e5Ufloat => "rgb9e5ufloat",
             TextureFormat::Bc1RgbaUnorm => "bc1-rgba-unorm",
             TextureFormat::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
@@ -2868,6 +2959,8 @@ impl TextureFormat {
             | Self::Depth32Float
             | Self::Depth32FloatStencil8 => (1, 1),
 
+            Self::NV12 => (2, 2),
+
             Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
             | Self::Bc2RgbaUnorm
@@ -2966,6 +3059,8 @@ impl TextureFormat {
 
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
+            Self::NV12 => Features::TEXTURE_FORMAT_NV12,
+
             Self::R16Unorm
             | Self::R16Snorm
             | Self::Rg16Unorm
@@ -3020,6 +3115,7 @@ impl TextureFormat {
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
+        let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = TextureUsages::all();
         let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
             attachment
@@ -3080,6 +3176,9 @@ impl TextureFormat {
             Self::Depth24PlusStencil8 =>  (        msaa, attachment),
             Self::Depth32Float =>         (        msaa, attachment),
             Self::Depth32FloatStencil8 => (        msaa, attachment),
+
+            // We only support sampling nv12 textures until we implement transfer plane data.
+            Self::NV12 =>                 (        noaa,    binding),
 
             Self::R16Unorm =>             (        msaa,    storage),
             Self::R16Snorm =>             (        msaa,    storage),
@@ -3187,6 +3286,8 @@ impl TextureFormat {
                 Some(TextureAspect::DepthOnly) => Some(depth),
                 Some(TextureAspect::StencilOnly) => Some(uint),
             },
+
+            Self::NV12 => None,
 
             Self::R16Unorm
             | Self::R16Snorm
@@ -3304,6 +3405,8 @@ impl TextureFormat {
                 Some(TextureAspect::StencilOnly) => Some(1),
             },
 
+            Self::NV12 => None,
+
             Self::Bc1RgbaUnorm | Self::Bc1RgbaUnormSrgb | Self::Bc4RUnorm | Self::Bc4RSnorm => {
                 Some(8)
             }
@@ -3394,6 +3497,8 @@ impl TextureFormat {
                 TextureAspect::All => 2,
                 TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
             },
+
+            Self::NV12 => 3,
 
             Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
             Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,
@@ -6507,44 +6612,84 @@ impl_bitflags!(PipelineStatisticsTypes);
 
 /// Argument buffer layout for draw_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
-    /// Offset into the vertex buffers, in vertices, to begin drawing from.
+    /// The Index of the first vertex to draw.
     pub first_vertex: u32,
-    /// First instance to draw.
+    /// The instance ID of the first instance to draw.
+    ///
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
+}
+
+impl DrawIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Argument buffer layout for draw_indexed_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
     /// The number of instances to draw.
     pub instance_count: u32,
-    /// Offset into the index buffer, in indices, begin drawing from.
+    /// The first index within the index buffer.
     pub first_index: u32,
-    /// Added to each index value before indexing into the vertex buffers.
+    /// The value added to the vertex index before indexing into the vertex buffer.
     pub base_vertex: i32,
-    /// First instance to draw.
+    /// The instance ID of the first instance to draw.
+    ///
+    /// Has to be 0, unless [`Features::INDIRECT_FIRST_INSTANCE`](crate::Features::INDIRECT_FIRST_INSTANCE) is enabled.
     pub first_instance: u32,
+}
+
+impl DrawIndexedIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written in a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Argument buffer layout for dispatch_indirect commands.
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct DispatchIndirectArgs {
-    /// X dimension of the grid of workgroups to dispatch.
-    pub group_size_x: u32,
-    /// Y dimension of the grid of workgroups to dispatch.
-    pub group_size_y: u32,
-    /// Z dimension of the grid of workgroups to dispatch.
-    pub group_size_z: u32,
+    /// The number of work groups in X dimension.
+    pub x: u32,
+    /// The number of work groups in Y dimension.
+    pub y: u32,
+    /// The number of work groups in Z dimension.
+    pub z: u32,
+}
+
+impl DispatchIndirectArgs {
+    /// Returns the bytes representation of the struct, ready to be written into a buffer.
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::mem::transmute(std::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                std::mem::size_of::<Self>(),
+            ))
+        }
+    }
 }
 
 /// Describes how shader bound checks should be performed.

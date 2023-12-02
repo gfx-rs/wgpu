@@ -112,7 +112,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                     continue;
                 }
                 Err(err) => {
-                    log::info!("Failed casting Adapter1 to Adapter3: {}", err);
+                    log::warn!("Failed casting Adapter1 to Adapter3: {}", err);
                 }
             }
         }
@@ -125,7 +125,7 @@ pub fn enumerate_adapters(factory: d3d12::DxgiFactory) -> Vec<d3d12::DxgiAdapter
                     continue;
                 }
                 Err(err) => {
-                    log::info!("Failed casting Adapter1 to Adapter2: {}", err);
+                    log::warn!("Failed casting Adapter1 to Adapter2: {}", err);
                 }
             }
         }
@@ -190,9 +190,9 @@ pub fn create_factory(
                 err,
             ));
         }
-        // If we don't print it to info as all win7 will hit this case.
+        // If we don't print it to warn as all win7 will hit this case.
         Err(err) => {
-            log::info!("IDXGIFactory1 creation function not found: {err:?}");
+            log::warn!("IDXGIFactory1 creation function not found: {err:?}");
             None
         }
     };
@@ -211,9 +211,9 @@ pub fn create_factory(
                     "failed to cast IDXGIFactory4 to IDXGIFactory6: {err:?}"
                 )));
             }
-            // If we don't print it to info.
+            // If we don't print it to warn.
             Err(err) => {
-                log::info!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
+                log::warn!("Failed to cast IDXGIFactory4 to IDXGIFactory6: {:?}", err);
                 return Ok((lib_dxgi, d3d12::DxgiFactory::Factory4(factory4)));
             }
         }
@@ -252,9 +252,9 @@ pub fn create_factory(
                 "failed to cast IDXGIFactory1 to IDXGIFactory2: {err:?}"
             )));
         }
-        // If we don't print it to info.
+        // If we don't print it to warn.
         Err(err) => {
-            log::info!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
+            log::warn!("Failed to cast IDXGIFactory1 to IDXGIFactory2: {:?}", err);
         }
     }
 

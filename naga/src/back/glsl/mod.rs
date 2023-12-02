@@ -76,6 +76,9 @@ const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
+// Must match code in glsl_built_in
+pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
+
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
 
@@ -235,17 +238,20 @@ bitflags::bitflags! {
         /// Supports GL_EXT_texture_shadow_lod on the host, which provides
         /// additional functions on shadows and arrays of shadows.
         const TEXTURE_SHADOW_LOD = 0x2;
+        /// Supports ARB_shader_draw_parameters on the host, which provides
+        /// support for `gl_BaseInstanceARB`, `gl_BaseVertexARB`, and `gl_DrawIDARB`.
+        const DRAW_PARAMETERS = 0x4;
         /// Include unused global variables, constants and functions. By default the output will exclude
         /// global variables that are not used in the specified entrypoint (including indirect use),
         /// all constant declarations, and functions that use excluded global variables.
-        const INCLUDE_UNUSED_ITEMS = 0x4;
+        const INCLUDE_UNUSED_ITEMS = 0x10;
         /// Emit `PointSize` output builtin to vertex shaders, which is
         /// required for drawing with `PointList` topology.
         ///
         /// https://registry.khronos.org/OpenGL/specs/es/3.2/GLSL_ES_Specification_3.20.html#built-in-language-variables
         /// The variable gl_PointSize is intended for a shader to write the size of the point to be rasterized. It is measured in pixels.
         /// If gl_PointSize is not written to, its value is undefined in subsequent pipe stages.
-        const FORCE_POINT_SIZE = 0x10;
+        const FORCE_POINT_SIZE = 0x20;
     }
 }
 
@@ -388,6 +394,24 @@ impl IdGenerator {
     }
 }
 
+/// Assorted options needed for generting varyings.
+#[derive(Clone, Copy)]
+struct VaryingOptions {
+    output: bool,
+    targetting_webgl: bool,
+    draw_parameters: bool,
+}
+
+impl VaryingOptions {
+    const fn from_writer_options(options: &Options, output: bool) -> Self {
+        Self {
+            output,
+            targetting_webgl: options.version.is_webgl(),
+            draw_parameters: options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS),
+        }
+    }
+}
+
 /// Helper wrapper used to get a name for a varying
 ///
 /// Varying have different naming schemes depending on their binding:
@@ -398,8 +422,7 @@ impl IdGenerator {
 struct VaryingName<'a> {
     binding: &'a crate::Binding,
     stage: ShaderStage,
-    output: bool,
-    targetting_webgl: bool,
+    options: VaryingOptions,
 }
 impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -411,7 +434,7 @@ impl fmt::Display for VaryingName<'_> {
                 write!(f, "_fs2p_location1",)
             }
             crate::Binding::Location { location, .. } => {
-                let prefix = match (self.stage, self.output) {
+                let prefix = match (self.stage, self.options.output) {
                     (ShaderStage::Compute, _) => unreachable!(),
                     // pipeline to vertex
                     (ShaderStage::Vertex, false) => "p2vs",
@@ -423,11 +446,7 @@ impl fmt::Display for VaryingName<'_> {
                 write!(f, "_{prefix}_location{location}",)
             }
             crate::Binding::BuiltIn(built_in) => {
-                write!(
-                    f,
-                    "{}",
-                    glsl_built_in(built_in, self.output, self.targetting_webgl)
-                )
+                write!(f, "{}", glsl_built_in(built_in, self.options))
             }
         }
     }
@@ -569,7 +588,11 @@ impl<'a, W: Write> Writer<'a, W> {
             keywords::RESERVED_KEYWORDS,
             &[],
             &[],
-            &["gl_"],
+            &[
+                "gl_",                     // all GL built-in variables
+                "_group",                  // all normal bindings
+                "_push_constant_binding_", // all push constant bindings
+            ],
             &mut names,
         );
 
@@ -621,7 +644,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // writing the module saving some loops but some older versions (420 or less) required the
         // extensions to appear before being used, even though extensions are part of the
         // preprocessor not the processor ¯\_(ツ)_/¯
-        self.features.write(self.options.version, &mut self.out)?;
+        self.features.write(self.options, &mut self.out)?;
 
         // Write the additional extensions
         if self
@@ -649,6 +672,17 @@ impl<'a, W: Write> Writer<'a, W> {
                 "layout(local_size_x = {}, local_size_y = {}, local_size_z = {}) in;",
                 workgroup_size[0], workgroup_size[1], workgroup_size[2]
             )?;
+            writeln!(self.out)?;
+        }
+
+        if self.entry_point.stage == ShaderStage::Vertex
+            && !self
+                .options
+                .writer_flags
+                .contains(WriterFlags::DRAW_PARAMETERS)
+            && self.features.contains(Features::INSTANCE_INDEX)
+        {
+            writeln!(self.out, "uniform uint {FIRST_INSTANCE_BINDING};")?;
             writeln!(self.out)?;
         }
 
@@ -985,11 +1019,11 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => write!(
                 self.out,
                 "{}mat{}x{}",
-                glsl_scalar(crate::Scalar::float(width))?.prefix,
+                glsl_scalar(scalar)?.prefix,
                 columns as u8,
                 rows as u8
             )?,
@@ -1422,7 +1456,10 @@ impl<'a, W: Write> Writer<'a, W> {
                             writeln!(
                                 self.out,
                                 "invariant {};",
-                                glsl_built_in(built_in, output, self.options.version.is_webgl())
+                                glsl_built_in(
+                                    built_in,
+                                    VaryingOptions::from_writer_options(self.options, output)
+                                )
                             )?;
                         }
                     }
@@ -1499,8 +1536,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 second_blend_source,
             },
             stage: self.entry_point.stage,
-            output,
-            targetting_webgl: self.options.version.is_webgl(),
+            options: VaryingOptions::from_writer_options(self.options, output),
         };
         writeln!(self.out, " {vname};")?;
 
@@ -1661,8 +1697,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             let varying_name = VaryingName {
                                 binding: member.binding.as_ref().unwrap(),
                                 stage,
-                                output: false,
-                                targetting_webgl: self.options.version.is_webgl(),
+                                options: VaryingOptions::from_writer_options(self.options, false),
                             };
                             if index != 0 {
                                 write!(self.out, ", ")?;
@@ -1675,8 +1710,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         let varying_name = VaryingName {
                             binding: arg.binding.as_ref().unwrap(),
                             stage,
-                            output: false,
-                            targetting_webgl: self.options.version.is_webgl(),
+                            options: VaryingOptions::from_writer_options(self.options, false),
                         };
                         writeln!(self.out, "{varying_name};")?;
                     }
@@ -2170,8 +2204,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                         let varying_name = VaryingName {
                                             binding: member.binding.as_ref().unwrap(),
                                             stage: ep.stage,
-                                            output: true,
-                                            targetting_webgl: self.options.version.is_webgl(),
+                                            options: VaryingOptions::from_writer_options(
+                                                self.options,
+                                                true,
+                                            ),
                                         };
                                         write!(self.out, "{varying_name} = ")?;
 
@@ -2195,8 +2231,10 @@ impl<'a, W: Write> Writer<'a, W> {
                                     let name = VaryingName {
                                         binding: result.binding.as_ref().unwrap(),
                                         stage: ep.stage,
-                                        output: true,
-                                        targetting_webgl: self.options.version.is_webgl(),
+                                        options: VaryingOptions::from_writer_options(
+                                            self.options,
+                                            true,
+                                        ),
                                     };
                                     write!(self.out, "{name} = ")?;
                                     self.write_expr(value, ctx)?;
@@ -2410,6 +2448,14 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
                     crate::Literal::I32(value) => write!(self.out, "{}", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::I64(_) => {
+                        return Err(Error::Custom("GLSL has no 64-bit integer type".into()));
+                    }
+                    crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                        return Err(Error::Custom(
+                            "Abstract types should not appear in IR presented to backends".into(),
+                        ));
+                    }
                 }
             }
             Expression::Constant(handle) => {
@@ -3514,6 +3560,9 @@ impl<'a, W: Write> Writer<'a, W> {
                             (Sk::Sint | Sk::Uint | Sk::Float, Sk::Bool, None) => {
                                 write!(self.out, "bool")?
                             }
+
+                            (Sk::AbstractInt | Sk::AbstractFloat, _, _)
+                            | (_, Sk::AbstractInt | Sk::AbstractFloat, _) => unreachable!(),
                         };
 
                         write!(self.out, "(")?;
@@ -4076,6 +4125,11 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::ScalarKind::Uint => write!(self.out, "0u")?,
             crate::ScalarKind::Float => write!(self.out, "0.0")?,
             crate::ScalarKind::Sint => write!(self.out, "0")?,
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                return Err(Error::Custom(
+                    "Abstract types should not appear in IR presented to backends".to_string(),
+                ))
+            }
         }
 
         Ok(())
@@ -4304,33 +4358,39 @@ const fn glsl_scalar(scalar: crate::Scalar) -> Result<ScalarString<'static>, Err
             prefix: "b",
             full: "bool",
         },
+        Sk::AbstractInt | Sk::AbstractFloat => {
+            return Err(Error::UnsupportedScalar(scalar));
+        }
     })
 }
 
 /// Helper function that returns the glsl variable name for a builtin
-const fn glsl_built_in(
-    built_in: crate::BuiltIn,
-    output: bool,
-    targetting_webgl: bool,
-) -> &'static str {
+const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'static str {
     use crate::BuiltIn as Bi;
 
     match built_in {
         Bi::Position { .. } => {
-            if output {
+            if options.output {
                 "gl_Position"
             } else {
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if targetting_webgl => "int(gl_ViewID_OVR)",
+        Bi::ViewIndex if options.targetting_webgl => "int(gl_ViewID_OVR)",
         Bi::ViewIndex => "gl_ViewIndex",
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",
         Bi::ClipDistance => "gl_ClipDistance",
         Bi::CullDistance => "gl_CullDistance",
-        Bi::InstanceIndex => "uint(gl_InstanceID)",
+        Bi::InstanceIndex => {
+            if options.draw_parameters {
+                "(uint(gl_InstanceID) + uint(gl_BaseInstanceARB))"
+            } else {
+                // Must match FISRT_INSTANCE_BINDING
+                "(uint(gl_InstanceID) + naga_vs_first_instance)"
+            }
+        }
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
         // fragment
@@ -4340,7 +4400,7 @@ const fn glsl_built_in(
         Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",
         Bi::SampleIndex => "gl_SampleID",
         Bi::SampleMask => {
-            if output {
+            if options.output {
                 "gl_SampleMask"
             } else {
                 "gl_SampleMaskIn"

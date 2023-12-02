@@ -50,12 +50,9 @@ pub fn validate_compose(
         Ti::Matrix {
             columns,
             rows,
-            width,
+            scalar,
         } => {
-            let inner = Ti::Vector {
-                size: rows,
-                scalar: crate::Scalar::float(width),
-            };
+            let inner = Ti::Vector { size: rows, scalar };
             if columns as usize != component_resolutions.len() {
                 return Err(ComposeError::ComponentCount {
                     expected: columns as u32,

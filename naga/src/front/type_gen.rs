@@ -156,7 +156,7 @@ impl crate::Module {
                 inner: crate::TypeInner::Matrix {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Tri,
-                    width: 4,
+                    scalar: crate::Scalar::F32,
                 },
             },
             Span::UNDEFINED,

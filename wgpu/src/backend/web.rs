@@ -398,12 +398,14 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> web_sys::GpuStencilFa
 }
 
 fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> web_sys::GpuDepthStencilState {
-    let mut mapped = web_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
+    let mut mapped = web_sys::GpuDepthStencilState::new(
+        map_compare_function(desc.depth_compare),
+        desc.depth_write_enabled,
+        map_texture_format(desc.format),
+    );
     mapped.depth_bias(desc.bias.constant);
     mapped.depth_bias_clamp(desc.bias.clamp);
     mapped.depth_bias_slope_scale(desc.bias.slope_scale);
-    mapped.depth_compare(map_compare_function(desc.depth_compare));
-    mapped.depth_write_enabled(desc.depth_write_enabled);
     mapped.stencil_back(&map_stencil_state_face(&desc.stencil.back));
     mapped.stencil_front(&map_stencil_state_face(&desc.stencil.front));
     mapped.stencil_read_mask(desc.stencil.read_mask);
@@ -1149,7 +1151,7 @@ impl crate::context::Context for Context {
 
         // TODO: Migrate to a web_sys api.
         // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = map_js_sys_limits(&desc.limits);
+        let limits_object = map_js_sys_limits(&desc.required_limits);
 
         js_sys::Reflect::set(
             &mapped_desc,
@@ -1162,7 +1164,7 @@ impl crate::context::Context for Context {
             .iter()
             .copied()
             .flat_map(|(flag, value)| {
-                if desc.features.contains(flag) {
+                if desc.required_features.contains(flag) {
                     Some(JsValue::from(value))
                 } else {
                     None
@@ -1952,6 +1954,10 @@ impl crate::context::Context for Context {
         // with a callback.
     }
 
+    fn queue_drop(&self, _queue: &Self::QueueId, _queue_data: &Self::QueueData) {
+        // Queue is dropped automatically
+    }
+
     fn device_set_device_lost_callback(
         &self,
         _device: &Self::DeviceId,
@@ -2444,15 +2450,15 @@ impl crate::context::Context for Context {
         encoder_data: &Self::CommandEncoderData,
         buffer: &crate::Buffer,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
+        size: Option<wgt::BufferAddress>,
     ) {
         let buffer: &<Context as crate::Context>::BufferData = downcast_ref(buffer.data.as_ref());
         match size {
-            Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
-                &buffer.0.buffer,
-                offset as f64,
-                size.get() as f64,
-            ),
+            Some(size) => {
+                encoder_data
+                    .0
+                    .clear_buffer_with_f64_and_f64(&buffer.0, offset as f64, size as f64)
+            }
             None => encoder_data
                 .0
                 .clear_buffer_with_f64(&buffer.0.buffer, offset as f64),
@@ -2748,13 +2754,13 @@ impl crate::context::Context for Context {
         offsets: &[wgt::DynamicOffset],
     ) {
         if offsets.is_empty() {
-            pass_data.0.set_bind_group(index, &bind_group_data.0);
+            pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
             pass_data
                 .0
                 .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    &bind_group_data.0,
+                    Some(&bind_group_data.0),
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -2878,13 +2884,15 @@ impl crate::context::Context for Context {
         offsets: &[wgt::DynamicOffset],
     ) {
         if offsets.is_empty() {
-            encoder_data.0.set_bind_group(index, &bind_group_data.0);
+            encoder_data
+                .0
+                .set_bind_group(index, Some(&bind_group_data.0));
         } else {
             encoder_data
                 .0
                 .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    &bind_group_data.0,
+                    Some(&bind_group_data.0),
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -2935,7 +2943,7 @@ impl crate::context::Context for Context {
             Some(s) => {
                 encoder_data.0.set_vertex_buffer_with_f64_and_f64(
                     slot,
-                    &buffer_data.0.buffer,
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                     s.get() as f64,
                 );
@@ -2943,7 +2951,7 @@ impl crate::context::Context for Context {
             None => {
                 encoder_data.0.set_vertex_buffer_with_f64(
                     slot,
-                    &buffer_data.0.buffer,
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                 );
             }
@@ -3099,13 +3107,13 @@ impl crate::context::Context for Context {
         offsets: &[wgt::DynamicOffset],
     ) {
         if offsets.is_empty() {
-            pass_data.0.set_bind_group(index, &bind_group_data.0);
+            pass_data.0.set_bind_group(index, Some(&bind_group_data.0));
         } else {
             pass_data
                 .0
                 .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    &bind_group_data.0,
+                    Some(&bind_group_data.0),
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3156,7 +3164,7 @@ impl crate::context::Context for Context {
             Some(s) => {
                 pass_data.0.set_vertex_buffer_with_f64_and_f64(
                     slot,
-                    &buffer_data.0.buffer,
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                     s.get() as f64,
                 );
@@ -3164,7 +3172,7 @@ impl crate::context::Context for Context {
             None => {
                 pass_data
                     .0
-                    .set_vertex_buffer_with_f64(slot, &buffer_data.0.buffer, offset as f64);
+                    .set_vertex_buffer_with_f64(slot, Some(&buffer_data.0.buffer), offset as f64);
             }
         };
     }

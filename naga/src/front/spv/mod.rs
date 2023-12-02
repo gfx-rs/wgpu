@@ -2831,8 +2831,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
                     let scalar = match ctx.type_arena[ty_lookup.handle].inner {
                         crate::TypeInner::Scalar(scalar)
-                        | crate::TypeInner::Vector { scalar, .. } => scalar,
-                        crate::TypeInner::Matrix { width, .. } => crate::Scalar::float(width),
+                        | crate::TypeInner::Vector { scalar, .. }
+                        | crate::TypeInner::Matrix { scalar, .. } => scalar,
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
@@ -4377,7 +4377,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             crate::TypeInner::Vector { size, scalar } => crate::TypeInner::Matrix {
                 columns: map_vector_size(num_columns)?,
                 rows: size,
-                width: scalar.width,
+                scalar,
             },
             _ => return Err(Error::InvalidInnerType(vector_type_id)),
         };
@@ -4674,17 +4674,17 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             if let crate::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } = *inner
             {
                 if let Some(stride) = decor.matrix_stride {
-                    let expected_stride = Alignment::from(rows) * width as u32;
+                    let expected_stride = Alignment::from(rows) * scalar.width as u32;
                     if stride.get() != expected_stride {
                         return Err(Error::UnsupportedMatrixStride {
                             stride: stride.get(),
                             columns: columns as u8,
                             rows: rows as u8,
-                            width,
+                            width: scalar.width,
                         });
                     }
                 }
@@ -4879,6 +4879,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let low = self.next()?;
                 match width {
                     4 => crate::Literal::I32(low as i32),
+                    8 => {
+                        inst.expect(5)?;
+                        let high = self.next()?;
+                        crate::Literal::I64((u64::from(high) << 32 | u64::from(low)) as i64)
+                    }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
             }

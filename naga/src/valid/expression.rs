@@ -671,7 +671,7 @@ impl super::Validator {
                     Bo::Add | Bo::Subtract => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
-                            Sk::Bool => false,
+                            Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
                         Ti::Matrix { .. } => left_inner == right_inner,
                         _ => false,
@@ -679,14 +679,14 @@ impl super::Validator {
                     Bo::Divide | Bo::Modulo => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
-                            Sk::Bool => false,
+                            Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
                         _ => false,
                     },
                     Bo::Multiply => {
                         let kind_allowed = match left_inner.scalar_kind() {
                             Some(Sk::Uint | Sk::Sint | Sk::Float) => true,
-                            Some(Sk::Bool) | None => false,
+                            Some(Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat) | None => false,
                         };
                         let types_match = match (left_inner, right_inner) {
                             // Straight scalar and mixed scalar/vector.
@@ -763,7 +763,7 @@ impl super::Validator {
                         match *left_inner {
                             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                                 Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
-                                Sk::Bool => false,
+                                Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                             },
                             ref other => {
                                 log::error!("Op {:?} left type {:?}", op, other);
@@ -785,7 +785,7 @@ impl super::Validator {
                     Bo::And | Bo::InclusiveOr => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Bool | Sk::Sint | Sk::Uint => left_inner == right_inner,
-                            Sk::Float => false,
+                            Sk::Float | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
                         ref other => {
                             log::error!("Op {:?} left type {:?}", op, other);
@@ -795,7 +795,7 @@ impl super::Validator {
                     Bo::ExclusiveOr => match *left_inner {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => match scalar.kind {
                             Sk::Sint | Sk::Uint => left_inner == right_inner,
-                            Sk::Bool | Sk::Float => false,
+                            Sk::Bool | Sk::Float | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
                         ref other => {
                             log::error!("Op {:?} left type {:?}", op, other);
@@ -824,7 +824,7 @@ impl super::Validator {
                         };
                         match base_scalar.kind {
                             Sk::Sint | Sk::Uint => base_size.is_ok() && base_size == shift_size,
-                            Sk::Float | Sk::Bool => false,
+                            Sk::Float | Sk::AbstractInt | Sk::AbstractFloat | Sk::Bool => false,
                         }
                     }
                 };
@@ -1501,7 +1501,7 @@ impl super::Validator {
                     crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
                         scalar
                     }
-                    crate::TypeInner::Matrix { width, .. } => crate::Scalar::float(width),
+                    crate::TypeInner::Matrix { scalar, .. } => scalar,
                     _ => return Err(ExpressionError::InvalidCastArgument),
                 };
                 base_scalar.kind = kind;
@@ -1649,4 +1649,149 @@ pub fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> 
     }
 
     Ok(())
+}
+
+#[cfg(all(test, feature = "validate"))]
+/// Validate a module containing the given expression, expecting an error.
+fn validate_with_expression(
+    expr: crate::Expression,
+    caps: super::Capabilities,
+) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+    use crate::span::Span;
+
+    let mut function = crate::Function::default();
+    function.expressions.append(expr, Span::default());
+    function.body.push(
+        crate::Statement::Emit(function.expressions.range_from(0)),
+        Span::default(),
+    );
+
+    let mut module = crate::Module::default();
+    module.functions.append(function, Span::default());
+
+    let mut validator = super::Validator::new(super::ValidationFlags::EXPRESSIONS, caps);
+
+    validator.validate(&module)
+}
+
+#[cfg(all(test, feature = "validate"))]
+/// Validate a module containing the given constant expression, expecting an error.
+fn validate_with_const_expression(
+    expr: crate::Expression,
+    caps: super::Capabilities,
+) -> Result<ModuleInfo, crate::span::WithSpan<super::ValidationError>> {
+    use crate::span::Span;
+
+    let mut module = crate::Module::default();
+    module.const_expressions.append(expr, Span::default());
+
+    let mut validator = super::Validator::new(super::ValidationFlags::CONSTANTS, caps);
+
+    validator.validate(&module)
+}
+
+/// Using F64 in a function's expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn f64_runtime_literals() {
+    let result = validate_with_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::Function {
+            source: super::FunctionError::Expression {
+                source: super::ExpressionError::Literal(super::LiteralError::Width(
+                    super::r#type::WidthError::MissingCapability {
+                        name: "f64",
+                        flag: "FLOAT64",
+                    }
+                ),),
+                ..
+            },
+            ..
+        }
+    ));
+
+    let result = validate_with_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default() | super::Capabilities::FLOAT64,
+    );
+    assert!(result.is_ok());
+}
+
+/// Using F64 in a module's constant expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn f64_const_literals() {
+    let result = validate_with_const_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::ConstExpression {
+            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
+                super::r#type::WidthError::MissingCapability {
+                    name: "f64",
+                    flag: "FLOAT64",
+                }
+            )),
+            ..
+        }
+    ));
+
+    let result = validate_with_const_expression(
+        crate::Expression::Literal(crate::Literal::F64(0.57721_56649)),
+        super::Capabilities::default() | super::Capabilities::FLOAT64,
+    );
+    assert!(result.is_ok());
+}
+
+/// Using I64 in a function's expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn i64_runtime_literals() {
+    let result = validate_with_expression(
+        crate::Expression::Literal(crate::Literal::I64(1729)),
+        // There is no capability that enables this.
+        super::Capabilities::all(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::Function {
+            source: super::FunctionError::Expression {
+                source: super::ExpressionError::Literal(super::LiteralError::Width(
+                    super::r#type::WidthError::Unsupported64Bit
+                ),),
+                ..
+            },
+            ..
+        }
+    ));
+}
+
+/// Using I64 in a module's constant expression arena is forbidden.
+#[cfg(feature = "validate")]
+#[test]
+fn i64_const_literals() {
+    let result = validate_with_const_expression(
+        crate::Expression::Literal(crate::Literal::I64(1729)),
+        // There is no capability that enables this.
+        super::Capabilities::all(),
+    );
+    let error = result.unwrap_err().into_inner();
+    assert!(matches!(
+        error,
+        crate::valid::ValidationError::ConstExpression {
+            source: super::ConstExpressionError::Literal(super::LiteralError::Width(
+                super::r#type::WidthError::Unsupported64Bit,
+            ),),
+            ..
+        }
+    ));
 }

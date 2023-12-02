@@ -8,7 +8,7 @@ static PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration = GpuTestConfigu
     .parameters(
         TestParameters::default()
             // https://github.com/gfx-rs/wgpu/issues/4167
-            .expect_fail(FailureCase::always()),
+            .expect_fail(FailureCase::always().panic("Pipeline is invalid")),
     )
     .run_sync(|ctx| {
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);

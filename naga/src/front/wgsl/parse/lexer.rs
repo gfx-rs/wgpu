@@ -448,6 +448,7 @@ impl<'a> Lexer<'a> {
 }
 
 #[cfg(test)]
+#[track_caller]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source);
     for &token in expected_tokens {
@@ -464,13 +465,13 @@ fn test_numbers() {
     sub_test(
         "0x123 0X123u 1u 123 0 0i 0x3f",
         &[
-            Token::Number(Ok(Number::I32(291))),
+            Token::Number(Ok(Number::AbstractInt(291))),
             Token::Number(Ok(Number::U32(291))),
             Token::Number(Ok(Number::U32(1))),
-            Token::Number(Ok(Number::I32(123))),
+            Token::Number(Ok(Number::AbstractInt(123))),
+            Token::Number(Ok(Number::AbstractInt(0))),
             Token::Number(Ok(Number::I32(0))),
-            Token::Number(Ok(Number::I32(0))),
-            Token::Number(Ok(Number::I32(63))),
+            Token::Number(Ok(Number::AbstractInt(63))),
         ],
     );
     // decimal floating point
@@ -478,17 +479,17 @@ fn test_numbers() {
         "0.e+4f 01. .01 12.34 .0f 0h 1e-3 0xa.fp+2 0x1P+4f 0X.3 0x3p+2h 0X1.fp-4 0x3.2p+2h",
         &[
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Ok(Number::F32(1.))),
-            Token::Number(Ok(Number::F32(0.01))),
-            Token::Number(Ok(Number::F32(12.34))),
+            Token::Number(Ok(Number::AbstractFloat(1.))),
+            Token::Number(Ok(Number::AbstractFloat(0.01))),
+            Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
             Token::Number(Err(NumberError::UnimplementedF16)),
-            Token::Number(Ok(Number::F32(0.001))),
-            Token::Number(Ok(Number::F32(43.75))),
+            Token::Number(Ok(Number::AbstractFloat(0.001))),
+            Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
-            Token::Number(Ok(Number::F32(0.1875))),
+            Token::Number(Ok(Number::AbstractFloat(0.1875))),
             Token::Number(Err(NumberError::UnimplementedF16)),
-            Token::Number(Ok(Number::F32(0.12109375))),
+            Token::Number(Ok(Number::AbstractFloat(0.12109375))),
             Token::Number(Err(NumberError::UnimplementedF16)),
         ],
     );
@@ -625,17 +626,36 @@ fn test_numbers() {
 }
 
 #[test]
+fn double_floats() {
+    sub_test(
+        "0x1.2p4lf 0x1p8lf 0.0625lf 625e-4lf 10lf 10l",
+        &[
+            Token::Number(Ok(Number::F64(18.0))),
+            Token::Number(Ok(Number::F64(256.0))),
+            Token::Number(Ok(Number::F64(0.0625))),
+            Token::Number(Ok(Number::F64(0.0625))),
+            Token::Number(Ok(Number::F64(10.0))),
+            Token::Number(Ok(Number::AbstractInt(10))),
+            Token::Word("l"),
+        ],
+    )
+}
+
+#[test]
 fn test_tokens() {
     sub_test("id123_OK", &[Token::Word("id123_OK")]);
     sub_test(
         "92No",
-        &[Token::Number(Ok(Number::I32(92))), Token::Word("No")],
+        &[
+            Token::Number(Ok(Number::AbstractInt(92))),
+            Token::Word("No"),
+        ],
     );
     sub_test(
         "2u3o",
         &[
             Token::Number(Ok(Number::U32(2))),
-            Token::Number(Ok(Number::I32(3))),
+            Token::Number(Ok(Number::AbstractInt(3))),
             Token::Word("o"),
         ],
     );
@@ -643,7 +663,7 @@ fn test_tokens() {
         "2.4f44po",
         &[
             Token::Number(Ok(Number::F32(2.4))),
-            Token::Number(Ok(Number::I32(44))),
+            Token::Number(Ok(Number::AbstractInt(44))),
             Token::Word("po"),
         ],
     );
@@ -674,6 +694,24 @@ fn test_tokens() {
             Token::Operation('/'),
         ],
     );
+
+    // Type suffixes are only allowed on hex float literals
+    // if you provided an exponent.
+    sub_test(
+        "0x1.2f 0x1.2f 0x1.2h 0x1.2H 0x1.2lf",
+        &[
+            // The 'f' suffixes are taken as a hex digit:
+            // the fractional part is 0x2f / 256.
+            Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
+            Token::Number(Ok(Number::AbstractFloat(1.0 + 0x2f as f64 / 256.0))),
+            Token::Number(Ok(Number::AbstractFloat(1.125))),
+            Token::Word("h"),
+            Token::Number(Ok(Number::AbstractFloat(1.125))),
+            Token::Word("H"),
+            Token::Number(Ok(Number::AbstractFloat(1.125))),
+            Token::Word("lf"),
+        ],
+    )
 }
 
 #[test]
@@ -684,7 +722,7 @@ fn test_variable_decl() {
             Token::Attribute,
             Token::Word("group"),
             Token::Paren('('),
-            Token::Number(Ok(Number::I32(0))),
+            Token::Number(Ok(Number::AbstractInt(0))),
             Token::Paren(')'),
             Token::Word("var"),
             Token::Paren('<'),

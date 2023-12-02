@@ -60,11 +60,7 @@
             init: None,
         ),
     ],
-    const_expressions: [
-        Literal(I32(0)),
-        Literal(I32(0)),
-        Literal(I32(1)),
-    ],
+    const_expressions: [],
     functions: [
         (
             name: Some("collatz_iterations"),

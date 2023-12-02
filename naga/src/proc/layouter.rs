@@ -190,9 +190,9 @@ impl Layouter {
                 Ti::Matrix {
                     columns: _,
                     rows,
-                    width,
+                    scalar,
                 } => {
-                    let alignment = Alignment::new(width as u32)
+                    let alignment = Alignment::new(scalar.width as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
                     TypeLayout {
                         size,

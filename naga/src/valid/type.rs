@@ -103,6 +103,8 @@ pub enum TypeError {
     InvalidData(Handle<crate::Type>),
     #[error("Base type {0:?} for the array is invalid")]
     InvalidArrayBaseType(Handle<crate::Type>),
+    #[error("Matrix elements must always be floating-point types")]
+    MatrixElementNotFloat,
     #[error("The constant {0:?} is specialized, and cannot be used as an array size")]
     UnsupportedSpecializedArrayLength(Handle<crate::Constant>),
     #[error("Array stride {stride} does not match the expected {expected}")]
@@ -141,6 +143,9 @@ pub enum WidthError {
 
     #[error("64-bit integers are not yet supported")]
     Unsupported64Bit,
+
+    #[error("Abstract types may only appear in constant expressions")]
+    Abstract,
 }
 
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
@@ -240,7 +245,15 @@ impl super::Validator {
                     scalar.width == 4
                 }
             }
-            crate::ScalarKind::Sint | crate::ScalarKind::Uint => scalar.width == 4,
+            crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
+                if scalar.width == 8 {
+                    return Err(WidthError::Unsupported64Bit);
+                }
+                scalar.width == 4
+            }
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                return Err(WidthError::Abstract);
+            }
         };
         if good {
             Ok(())
@@ -300,9 +313,12 @@ impl super::Validator {
             Ti::Matrix {
                 columns: _,
                 rows,
-                width,
+                scalar,
             } => {
-                self.check_width(crate::Scalar::float(width))?;
+                if scalar.kind != crate::ScalarKind::Float {
+                    return Err(TypeError::MatrixElementNotFloat);
+                }
+                self.check_width(scalar)?;
                 TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -310,12 +326,15 @@ impl super::Validator {
                         | TypeFlags::HOST_SHAREABLE
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE,
-                    Alignment::from(rows) * Alignment::from_width(width),
+                    Alignment::from(rows) * Alignment::from_width(scalar.width),
                 )
             }
             Ti::Atomic(crate::Scalar { kind, width }) => {
                 let good = match kind {
-                    crate::ScalarKind::Bool | crate::ScalarKind::Float => false,
+                    crate::ScalarKind::Bool
+                    | crate::ScalarKind::Float
+                    | crate::ScalarKind::AbstractInt
+                    | crate::ScalarKind::AbstractFloat => false,
                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => width == 4,
                 };
                 if !good {

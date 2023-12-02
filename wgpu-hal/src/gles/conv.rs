@@ -87,6 +87,7 @@ impl super::AdapterShared {
                 glow::DEPTH_STENCIL,
                 glow::UNSIGNED_INT_24_8,
             ),
+            Tf::NV12 => unreachable!(),
             Tf::Rgb9e5Ufloat => (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
             Tf::Bc1RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT1_EXT, glow::RGBA, 0),
             Tf::Bc1RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, glow::RGBA, 0),

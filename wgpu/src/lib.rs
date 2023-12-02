@@ -940,6 +940,14 @@ pub struct Queue {
 ))]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
 
+impl Drop for Queue {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.queue_drop(&self.id, self.data.as_ref());
+        }
+    }
+}
+
 /// Resource that can be bound to a pipeline.
 ///
 /// Corresponds to [WebGPU `GPUBindingResource`](
@@ -1293,6 +1301,8 @@ pub struct TextureViewDescriptor<'a> {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
+    /// The index (plane slice number) of the plane to use in the texture.
+    pub plane: Option<u32>,
 }
 static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);
 
@@ -1565,7 +1575,7 @@ static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
 /// For use with [`ComputePassDescriptor`].
 /// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
 ///
-/// Corresponds to [WebGPU `GPUComputePassTimestampWrite`](
+/// Corresponds to [WebGPU `GPUComputePassTimestampWrites`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucomputepasstimestampwrites).
 #[derive(Clone, Debug)]
 pub struct ComputePassTimestampWrites<'a> {
@@ -2373,18 +2383,12 @@ impl Adapter {
         )
     }
 
-    /// List all features that are supported with this adapter.
-    ///
-    /// Features must be explicitly requested in [`Adapter::request_device`] in order
-    /// to use them.
+    /// The features which can be used to create devices on this adapter.
     pub fn features(&self) -> Features {
         DynContext::adapter_features(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// List the "best" limits that are supported by this adapter.
-    ///
-    /// Limits must be explicitly requested in [`Adapter::request_device`] to set
-    /// the values that you are allowed to use.
+    /// The best limits which can be used to create devices on this adapter.
     pub fn limits(&self) -> Limits {
         DynContext::adapter_limits(&*self.context, &self.id, self.data.as_ref())
     }
@@ -2452,16 +2456,16 @@ impl Device {
         DynContext::device_poll(&*self.context, &self.id, self.data.as_ref(), maintain)
     }
 
-    /// List all features that may be used with this device.
+    /// The features which can be used on this device.
     ///
-    /// Functions may panic if you use unsupported features.
+    /// No additional features can be used, even if the underlying adapter can support them.
     pub fn features(&self) -> Features {
         DynContext::device_features(&*self.context, &self.id, self.data.as_ref())
     }
 
-    /// List all limits that were requested of this device.
+    /// The limits which can be used on this device.
     ///
-    /// If any of these limits are exceeded, functions may panic.
+    /// No better limits can be used, even if the underlying adapter can support them.
     pub fn limits(&self) -> Limits {
         DynContext::device_limits(&*self.context, &self.id, self.data.as_ref())
     }
@@ -3635,7 +3639,7 @@ impl CommandEncoder {
         &mut self,
         buffer: &Buffer,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferAddress>,
     ) {
         DynContext::command_encoder_clear_buffer(
             &*self.context,
@@ -3867,6 +3871,35 @@ impl<'a> RenderPass<'a> {
         );
     }
 
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        DynContext::render_pass_insert_debug_marker(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            label,
+        );
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        DynContext::render_pass_push_debug_group(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+            label,
+        );
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        DynContext::render_pass_pop_debug_group(
+            &*self.parent.context,
+            &mut self.id,
+            self.data.as_mut(),
+        );
+    }
+
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
@@ -3896,35 +3929,6 @@ impl<'a> RenderPass<'a> {
             vertices,
             instances,
         )
-    }
-
-    /// Inserts debug marker.
-    pub fn insert_debug_marker(&mut self, label: &str) {
-        DynContext::render_pass_insert_debug_marker(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-            label,
-        );
-    }
-
-    /// Start record commands and group it into debug marker group.
-    pub fn push_debug_group(&mut self, label: &str) {
-        DynContext::render_pass_push_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-            label,
-        );
-    }
-
-    /// Stops command recording and creates debug group.
-    pub fn pop_debug_group(&mut self) {
-        DynContext::render_pass_pop_debug_group(
-            &*self.parent.context,
-            &mut self.id,
-            self.data.as_mut(),
-        );
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -3964,12 +3968,17 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
+    /// these and issue an error.
+    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
+    ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
+    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
-    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
-    /// It is not affected by changes to the state that are performed after it is called.
+    /// See details on the individual flags for more information.
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_pass_draw_indirect(
             &*self.parent.context,
@@ -3984,13 +3993,17 @@ impl<'a> RenderPass<'a> {
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
     /// based on the contents of the `indirect_buffer`.
     ///
-    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
+    /// these and issue an error.
+    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
+    ///   [`DrawIndexedIndirect::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
+    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
+    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
-    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
-    /// It is not affected by changes to the state that are performed after it is called.
+    /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4035,7 +4048,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
@@ -4063,7 +4076,7 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
@@ -4096,7 +4109,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
     /// The structure expected in `count_buffer` is the following:
@@ -4142,7 +4155,7 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
     /// These draw structures are expected to be tightly packed.
     ///
@@ -4398,7 +4411,7 @@ impl<'a> ComputePass<'a> {
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirect`](crate::util::DispatchIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
     pub fn dispatch_workgroups_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -4646,7 +4659,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirect`](crate::util::DrawIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         DynContext::render_bundle_encoder_draw_indirect(
             &*self.parent.context,
@@ -4664,7 +4677,7 @@ impl<'a> RenderBundleEncoder<'a> {
     /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
     ///
-    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirect`](crate::util::DrawIndexedIndirect).
+    /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
@@ -5096,11 +5109,7 @@ impl Surface<'_> {
         target_os = "emscripten",
         feature = "webgl"
     ))]
-    pub unsafe fn as_hal_mut<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::Surface>) -> R,
-        R,
-    >(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
         &mut self,
         hal_surface_callback: F,
     ) -> R {
@@ -5109,10 +5118,7 @@ impl Surface<'_> {
                 .as_any()
                 .downcast_ref::<crate::backend::Context>()
                 .unwrap()
-                .surface_as_hal_mut::<A, F, R>(
-                    self.data.downcast_ref().unwrap(),
-                    hal_surface_callback,
-                )
+                .surface_as_hal::<A, F, R>(self.data.downcast_ref().unwrap(), hal_surface_callback)
         }
     }
 }
@@ -5171,10 +5177,9 @@ impl Adapter {
     /// Returns a globally-unique identifier for this `Adapter`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Adapter`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Adapter> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5184,10 +5189,9 @@ impl Device {
     /// Returns a globally-unique identifier for this `Device`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Device`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Device> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5197,10 +5201,9 @@ impl Queue {
     /// Returns a globally-unique identifier for this `Queue`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Queue`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Queue> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5210,10 +5213,9 @@ impl ShaderModule {
     /// Returns a globally-unique identifier for this `ShaderModule`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `ShaderModule`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<ShaderModule> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5223,10 +5225,9 @@ impl BindGroupLayout {
     /// Returns a globally-unique identifier for this `BindGroupLayout`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `BindGroupLayout`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<BindGroupLayout> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5236,10 +5237,9 @@ impl BindGroup {
     /// Returns a globally-unique identifier for this `BindGroup`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `BindGroup`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<BindGroup> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5249,10 +5249,9 @@ impl TextureView {
     /// Returns a globally-unique identifier for this `TextureView`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `TextureView`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<TextureView> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5262,10 +5261,9 @@ impl Sampler {
     /// Returns a globally-unique identifier for this `Sampler`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Sampler`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Sampler> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5275,10 +5273,9 @@ impl Buffer {
     /// Returns a globally-unique identifier for this `Buffer`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Buffer`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Buffer> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5288,10 +5285,9 @@ impl Texture {
     /// Returns a globally-unique identifier for this `Texture`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Texture`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<Texture> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5301,10 +5297,9 @@ impl QuerySet {
     /// Returns a globally-unique identifier for this `QuerySet`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `QuerySet`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<QuerySet> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5314,10 +5309,9 @@ impl PipelineLayout {
     /// Returns a globally-unique identifier for this `PipelineLayout`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `PipelineLayout`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<PipelineLayout> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5327,10 +5321,9 @@ impl RenderPipeline {
     /// Returns a globally-unique identifier for this `RenderPipeline`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `RenderPipeline`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<RenderPipeline> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5340,10 +5333,9 @@ impl ComputePipeline {
     /// Returns a globally-unique identifier for this `ComputePipeline`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `ComputePipeline`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<ComputePipeline> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5353,10 +5345,9 @@ impl RenderBundle {
     /// Returns a globally-unique identifier for this `RenderBundle`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `RenderBundle`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
-    pub fn global_id(&self) -> Id<RenderBundle> {
+    pub fn global_id(&self) -> Id<Self> {
         Id(self.id.global_id(), std::marker::PhantomData)
     }
 }
@@ -5366,8 +5357,7 @@ impl Surface<'_> {
     /// Returns a globally-unique identifier for this `Surface`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
-    /// The returned value is guaranteed to be unique among all `Surface`s created from the same
-    /// `Instance`.
+    /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
     #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Surface<'_>> {
         Id(self.id.global_id(), std::marker::PhantomData)

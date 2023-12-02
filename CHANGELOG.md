@@ -40,12 +40,54 @@ Bottom level categories:
 
 ## Unreleased
 
+### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
+
+This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
+
+### `DeviceExt::create_texture_with_data` Allows Mip-Major Data
+
+Previously, `DeviceExt::create_texture_with_data` only allowed data to be provided in layer major order. There is now a `order` parameter which allows you to specify if the data is in layer major or mip major order.
+
+### New Features
+
+#### General
+- Added `DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW` to know if `@builtin(vertex_index)` and `@builtin(instance_index)` will respect the `first_vertex` / `first_instance` in indirect calls. If this is not present, both will always start counting from 0. Currently enabled on all backends except DX12. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722)
+- No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+
+#### OpenGL
+- `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
+#### Naga
+
+- Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
+
 ### Changes
+
+- Arcanization of wgpu core resources: By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and thanks also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
+  - Removed Token and LifeTime related management
+  - Removed RefCount and MultiRefCount in favour of using only Arc internal reference count
+  - Removing mut from resources and added instead internal members locks on demand or atomics operations
+  - Resources now implement Drop and destroy stuff when last Arc resources is released
+  - Resources hold an Arc in order to be able to implement Drop
+  - Resources have an utility to retrieve the id of the resource itself
+  - Remove all guards and just retrive the Arc needed on-demand to unlock registry of resources asap
+  - Verify correct resources release when unused or not needed
+  - Check Web and Metal compliation (thanks to @niklaskorz)
+  - Fix tests on all platforms
+  - Test a multithreaded scenario
+  - Storage is now holding only user-land resources, but Arc is keeping refcount for resources
+  - When user unregister a resource, it's not dropped if still in use due to refcount inside wgpu
+  - IdentityManager is now unique and free is called on resource drop instead of storage unregister
+  - Identity changes due to Arcanization and Registry being just the user reference
+  - Added MemLeaks test and fixing mem leaks
 
 #### General
 
 - Log vulkan validation layer messages during instance creation and destruction: By @exrook in [#4586](https://github.com/gfx-rs/wgpu/pull/4586)
 - `TextureFormat::block_size` is deprecated, use `TextureFormat::block_copy_size` instead: By @wumpf in [#4647](https://github.com/gfx-rs/wgpu/pull/4647)
+- Rename of `DispatchIndirect`, `DrawIndexedIndirect`, and `DrawIndirect` types in the `wgpu::util` module to `DispatchIndirectArgs`, `DrawIndexedIndirectArgs`, and `DrawIndirectArgs`. By @cwfitzgerald in [#4723](https://github.com/gfx-rs/wgpu/pull/4723).
+- Make the size parameter of `encoder.clear_buffer` an `Option<u64>` instead of `Option<NonZero<u64>>`. By @nical in [#4737](https://github.com/gfx-rs/wgpu/pull/4737)
+- Reduce the `info` log level noise. By @nical in [#4769](https://github.com/gfx-rs/wgpu/pull/4769), [#4711](https://github.com/gfx-rs/wgpu/pull/4711) and [#4772](https://github.com/gfx-rs/wgpu/pull/4772)
+- Rename `features` & `limits` fields of `DeviceDescriptor` to `required_features` & `required_limits`. By @teoxoy in [#4803](https://github.com/gfx-rs/wgpu/pull/4803)
 
 #### Safe `Surface` creation
 
@@ -61,6 +103,47 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
+-   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743)).
+
+    Abstract types make numeric literals easier to use, by
+    automatically converting literals and other constant expressions
+    from abstract numeric types to concrete types when safe and
+    necessary. For example, to build a vector of floating-point
+    numbers, Naga previously made you write:
+
+        vec3<f32>(1.0, 2.0, 3.0)
+
+    With this change, you can now simply write:
+
+        vec3<f32>(1, 2, 3)
+
+    Even though the literals are abstract integers, Naga recognizes
+    that it is safe and necessary to convert them to `f32` values in
+    order to build the vector. You can also use abstract values as
+    initializers for global constants, like this:
+
+        const unit_x: vec2<f32> = vec2(1, 0);
+
+    The literals `1` and `0` are abstract integers, and the expression
+    `vec2(1, 0)` is an abstract vector. However, Naga recognizes that
+    it can convert that to the concrete type `vec2<f32>` to satisfy
+    the given type of `unit_x`.
+
+    The WGSL specification permits abstract integers and
+    floating-point values in almost all contexts, but Naga's support
+    for this is still incomplete. Many WGSL operators and builtin
+    functions are specified to produce abstract results when applied
+    to abstract inputs, but for now Naga simply concretizes them all
+    before applying the operation. We will expand Naga's abstract type
+    support in subsequent pull requests.
+
+    As part of this work, the public types `naga::ScalarKind` and
+    `naga::Literal` now have new variants, `AbstractInt` and `AbstractFloat`.
+
+- Add a new `naga::Literal` variant, `I64`, for signed 64-bit literals. [#4711](https://github.com/gfx-rs/wgpu/pull/4711)
+
+- Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
+
 ### Bug Fixes
 
 #### WebGPU
@@ -73,13 +156,19 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 #### Naga
 
+- Make module compaction preserve the module's named types, even if they are unused. By @jimblandy in [#4734](https://github.com/gfx-rs/wgpu/pull/4734).
+
 - Improve algorithm used by module compaction. By @jimblandy in [#4662](https://github.com/gfx-rs/wgpu/pull/4662).
 
 - When reading GLSL, fix the argument types of the double-precision floating-point overloads of the `dot`, `reflect`, `distance`, and `ldexp` builtin functions. Correct the WGSL generated for constructing 64-bit floating-point matrices. Add tests for all the above. By @jimblandy in [#4684](https://github.com/gfx-rs/wgpu/pull/4684).
 
+- Allow Naga's IR types to represent matrices with elements elements of any scalar kind. This makes it possible for Naga IR types to represent WGSL abstract matrices. By @jimblandy in [#4735](https://github.com/gfx-rs/wgpu/pull/4735).
+
 - When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
 
 - Preserve the source spans for constants and expressions correctly across module compaction. By @jimblandy in [#4696](https://github.com/gfx-rs/wgpu/pull/4696).
+
+- Record the names of WGSL `alias` declarations in Naga IR `Type`s. By @jimblandy in [#4733](https://github.com/gfx-rs/wgpu/pull/4733).
 
 ### Examples
 
@@ -1126,7 +1215,7 @@ both `raw_window_handle::HasRawWindowHandle` and `raw_window_handle::HasRawDispl
 
 #### Vulkan
 
-- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
+- Fix `astc_hdr` formats support by @jinleili in [#2971]](https://github.com/gfx-rs/wgpu/pull/2971)
 - Update to Naga b209d911 (2022-9-1) to avoid generating SPIR-V that
   violates Vulkan valid usage rules `VUID-StandaloneSpirv-Flat-06202`
   and `VUID-StandaloneSpirv-Flat-04744`. By @jimblandy in

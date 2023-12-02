@@ -105,12 +105,13 @@ impl Context {
         trace_dir: Option<&std::path::Path>,
     ) -> Result<(Device, Queue), crate::RequestDeviceError> {
         let global = &self.0;
-        let (device_id, error) = unsafe {
+        let (device_id, queue_id, error) = unsafe {
             global.create_device_from_hal(
                 *adapter,
                 hal_device,
                 &desc.map_label(|l| l.map(Borrowed)),
                 trace_dir,
+                (),
                 (),
             )
         };
@@ -121,10 +122,10 @@ impl Context {
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
-            features: desc.features,
+            features: desc.required_features,
         };
         let queue = Queue {
-            id: device_id,
+            id: queue_id,
             error_sink,
         };
         Ok((device, queue))
@@ -198,9 +199,9 @@ impl Context {
         }
     }
 
-    pub unsafe fn surface_as_hal_mut<
+    pub unsafe fn surface_as_hal<
         A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::Surface>) -> R,
+        F: FnOnce(Option<&A::Surface>) -> R,
         R,
     >(
         &self,
@@ -209,7 +210,7 @@ impl Context {
     ) -> R {
         unsafe {
             self.0
-                .surface_as_hal_mut::<A, F, R>(surface.id, hal_surface_callback)
+                .surface_as_hal::<A, F, R>(surface.id, hal_surface_callback)
         }
     }
 
@@ -631,10 +632,11 @@ impl crate::Context for Context {
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
         let global = &self.0;
-        let (device_id, error) = wgc::gfx_select!(*adapter => global.adapter_request_device(
+        let (device_id, queue_id, error) = wgc::gfx_select!(*adapter => global.adapter_request_device(
             *adapter,
             &desc.map_label(|l| l.map(Borrowed)),
             trace_dir,
+            (),
             ()
         ));
         if let Some(err) = error {
@@ -644,10 +646,10 @@ impl crate::Context for Context {
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
-            features: desc.features,
+            features: desc.required_features,
         };
         let queue = Queue {
-            id: device_id,
+            id: queue_id,
             error_sink,
         };
         ready(Ok((device_id, device, device_id, queue)))
@@ -1444,17 +1446,20 @@ impl crate::Context for Context {
     }
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     fn device_drop(&self, device: &Self::DeviceId, _device_data: &Self::DeviceData) {
-        let global = &self.0;
-
         #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         {
+            let global = &self.0;
             match wgc::gfx_select!(device => global.device_poll(*device, wgt::Maintain::Wait)) {
                 Ok(_) => (),
                 Err(err) => self.handle_error_fatal(err, "Device::drop"),
             }
+            wgc::gfx_select!(device => global.device_drop(*device));
         }
-
-        wgc::gfx_select!(device => global.device_drop(*device));
+    }
+    #[cfg_attr(target_arch = "wasm32", allow(unused))]
+    fn queue_drop(&self, queue: &Self::QueueId, _device_data: &Self::QueueData) {
+        let global = &self.0;
+        wgc::gfx_select!(queue => global.queue_drop(*queue));
     }
     fn device_set_device_lost_callback(
         &self,
@@ -1541,10 +1546,12 @@ impl crate::Context for Context {
                 MapMode::Read => wgc::device::HostMap::Read,
                 MapMode::Write => wgc::device::HostMap::Write,
             },
-            callback: wgc::resource::BufferMapCallback::from_rust(Box::new(|status| {
-                let res = status.map_err(|_| crate::BufferAsyncError);
-                callback(res);
-            })),
+            callback: Some(wgc::resource::BufferMapCallback::from_rust(Box::new(
+                |status| {
+                    let res = status.map_err(|_| crate::BufferAsyncError);
+                    callback(res);
+                },
+            ))),
         };
 
         let global = &self.0;
@@ -1603,6 +1610,7 @@ impl crate::Context for Context {
                 base_array_layer: desc.base_array_layer,
                 array_layer_count: desc.array_layer_count,
             },
+            plane: desc.plane,
         };
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(
@@ -2052,7 +2060,7 @@ impl crate::Context for Context {
         encoder_data: &Self::CommandEncoderData,
         buffer: &crate::Buffer,
         offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
+        size: Option<wgt::BufferAddress>,
     ) {
         let global = &self.0;
         if let Err(cause) = wgc::gfx_select!(encoder => global.command_encoder_clear_buffer(
@@ -2344,10 +2352,6 @@ impl crate::Context for Context {
             Ok(index) => index,
             Err(err) => self.handle_error_fatal(err, "Queue::submit"),
         };
-
-        for cmdbuf in &temp_command_buffers {
-            wgc::gfx_select!(*queue => global.command_buffer_drop(*cmdbuf));
-        }
 
         (Unused, index)
     }
@@ -3056,7 +3060,10 @@ impl crate::Context for Context {
     }
 }
 
-impl<T> From<ObjectId> for wgc::id::Id<T> {
+impl<T> From<ObjectId> for wgc::id::Id<T>
+where
+    T: 'static + WasmNotSendSync,
+{
     fn from(id: ObjectId) -> Self {
         // If the id32 feature is enabled in wgpu-core, this will make sure that the id fits in a NonZeroU32.
         #[allow(clippy::useless_conversion)]
@@ -3066,7 +3073,10 @@ impl<T> From<ObjectId> for wgc::id::Id<T> {
     }
 }
 
-impl<T> From<wgc::id::Id<T>> for ObjectId {
+impl<T> From<wgc::id::Id<T>> for ObjectId
+where
+    T: 'static + WasmNotSendSync,
+{
     fn from(id: wgc::id::Id<T>) -> Self {
         // If the id32 feature is enabled in wgpu-core, the conversion is not useless
         #[allow(clippy::useless_conversion)]

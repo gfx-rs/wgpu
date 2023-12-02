@@ -43,13 +43,10 @@ fn element_or_member_type(
         ),
         // The child type of a matrix is a vector of floats with the same
         // width and the size of the matrix rows.
-        TypeInner::Matrix { rows, width, .. } => types.insert(
+        TypeInner::Matrix { rows, scalar, .. } => types.insert(
             Type {
                 name: None,
-                inner: TypeInner::Vector {
-                    size: rows,
-                    scalar: Scalar::float(width),
-                },
+                inner: TypeInner::Vector { size: rows, scalar },
             },
             Default::default(),
         ),

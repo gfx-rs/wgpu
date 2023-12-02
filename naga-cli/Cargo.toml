@@ -8,6 +8,11 @@ repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga-cli"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
 
+[[bin]]
+name = "naga"
+path = "src/bin/naga.rs"
+test = false
+
 [dependencies]
 bincode = "1"
 log = "0.4"

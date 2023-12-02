@@ -180,23 +180,20 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             crate::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 write!(
                     self.out,
                     "{}{}x{}(",
-                    crate::Scalar::float(width).to_hlsl_str()?,
+                    scalar.to_hlsl_str()?,
                     columns as u8,
                     rows as u8,
                 )?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
-                let row_stride = Alignment::from(rows) * width as u32;
+                let row_stride = Alignment::from(rows) * scalar.width as u32;
                 let iter = (0..columns as u32).map(|i| {
-                    let ty_inner = crate::TypeInner::Vector {
-                        size: rows,
-                        scalar: crate::Scalar::float(width),
-                    };
+                    let ty_inner = crate::TypeInner::Vector { size: rows, scalar };
                     (TypeResolution::Value(ty_inner), i * row_stride)
                 });
                 self.write_storage_load_sequence(module, var_handle, iter, func_ctx)?;
@@ -316,7 +313,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
             crate::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
                 // first, assign the value to a temporary
                 writeln!(self.out, "{level}{{")?;
@@ -325,7 +322,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     self.out,
                     "{}{}{}x{} {}{} = ",
                     level.next(),
-                    crate::Scalar::float(width).to_hlsl_str()?,
+                    scalar.to_hlsl_str()?,
                     columns as u8,
                     rows as u8,
                     STORE_TEMP_NAME,
@@ -335,16 +332,13 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 writeln!(self.out, ";")?;
 
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
-                let row_stride = Alignment::from(rows) * width as u32;
+                let row_stride = Alignment::from(rows) * scalar.width as u32;
 
                 // then iterate the stores
                 for i in 0..columns as u32 {
                     self.temp_access_chain
                         .push(SubAccess::Offset(i * row_stride));
-                    let ty_inner = crate::TypeInner::Vector {
-                        size: rows,
-                        scalar: crate::Scalar::float(width),
-                    };
+                    let ty_inner = crate::TypeInner::Vector { size: rows, scalar };
                     let sv = StoreValue::TempIndex {
                         depth,
                         index: i,
@@ -467,10 +461,10 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     crate::TypeInner::Vector { scalar, .. } => Parent::Array {
                         stride: scalar.width as u32,
                     },
-                    crate::TypeInner::Matrix { rows, width, .. } => Parent::Array {
+                    crate::TypeInner::Matrix { rows, scalar, .. } => Parent::Array {
                         // The stride between matrices is the count of rows as this is how
                         // long each column is.
-                        stride: Alignment::from(rows) * width as u32,
+                        stride: Alignment::from(rows) * scalar.width as u32,
                     },
                     _ => unreachable!(),
                 },

@@ -112,7 +112,7 @@ pub enum FunctionError {
     InvalidStorePointer(Handle<crate::Expression>),
     #[error("The value {0:?} can not be stored")]
     InvalidStoreValue(Handle<crate::Expression>),
-    #[error("Store of {value:?} into {pointer:?} doesn't have matching types")]
+    #[error("The type of {value:?} doesn't match the type stored in {pointer:?}")]
     InvalidStoreTypes {
         pointer: Handle<crate::Expression>,
         value: Handle<crate::Expression>,

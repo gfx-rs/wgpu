@@ -10,7 +10,7 @@ impl crate::ScalarKind {
             Self::Float => "asfloat",
             Self::Sint => "asint",
             Self::Uint => "asuint",
-            Self::Bool => unreachable!(),
+            Self::Bool | Self::AbstractInt | Self::AbstractFloat => unreachable!(),
         }
     }
 }
@@ -30,6 +30,9 @@ impl crate::Scalar {
                 _ => Err(Error::UnsupportedScalar(self)),
             },
             crate::ScalarKind::Bool => Ok("bool"),
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
+                Err(Error::UnsupportedScalar(self))
+            }
         }
     }
 }
@@ -47,10 +50,10 @@ impl crate::TypeInner {
             Self::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => {
-                let stride = Alignment::from(rows) * width as u32;
-                let last_row_size = rows as u32 * width as u32;
+                let stride = Alignment::from(rows) * scalar.width as u32;
+                let last_row_size = rows as u32 * scalar.width as u32;
                 ((columns as u32 - 1) * stride) + last_row_size
             }
             Self::Array { base, size, stride } => {
@@ -82,10 +85,10 @@ impl crate::TypeInner {
             crate::TypeInner::Matrix {
                 columns,
                 rows,
-                width,
+                scalar,
             } => Cow::Owned(format!(
                 "{}{}x{}",
-                crate::Scalar::float(width).to_hlsl_str()?,
+                scalar.to_hlsl_str()?,
                 crate::back::vector_size_str(columns),
                 crate::back::vector_size_str(rows),
             )),

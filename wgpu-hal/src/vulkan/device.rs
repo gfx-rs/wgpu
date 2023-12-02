@@ -539,7 +539,7 @@ struct CompiledStage {
 impl super::Device {
     pub(super) unsafe fn create_swapchain(
         &self,
-        surface: &mut super::Surface,
+        surface: &super::Surface,
         config: &crate::SurfaceConfiguration,
         provided_old_swapchain: Option<super::Swapchain>,
     ) -> Result<super::Swapchain, crate::SurfaceError> {
@@ -1062,7 +1062,7 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let subresource_range = conv::map_subresource_range(&desc.range, desc.format);
+        let subresource_range = conv::map_subresource_range(&desc.range, desc.format, desc.plane);
         let mut vk_info = vk::ImageViewCreateInfo::builder()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)

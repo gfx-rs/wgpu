@@ -1,6 +1,6 @@
 fn main_1() {
-    var a: vec4<f64>;
-    var b: vec4<f64>;
+    var a: vec4<f64> = vec4(1.0lf);
+    var b: vec4<f64> = vec4(2.0lf);
     var m: mat4x4<f64>;
     var i: i32 = 5;
     var ceilOut: vec4<f64>;
@@ -29,8 +29,6 @@ fn main_1() {
     var smoothStepVector: vec4<f64>;
     var smoothStepMixed: vec4<f64>;
 
-    a = vec4(f64(1.0));
-    b = vec4(f64(2.0));
     let _e8 = a;
     let _e9 = b;
     let _e10 = a;
@@ -95,8 +93,8 @@ fn main_1() {
     let _e152 = i;
     ldexpOut = ldexp(_e150.x, _e152);
     smoothStepScalar = f64(smoothstep(0.0, 1.0, 0.5));
-    smoothStepVector = smoothstep(vec4(f64(0.0)), vec4(f64(1.0)), vec4(f64(0.5)));
-    smoothStepMixed = smoothstep(vec4(f64(0.0)), vec4(f64(1.0)), vec4(f64(0.5)));
+    smoothStepVector = smoothstep(vec4(0.0lf), vec4(1.0lf), vec4(0.5lf));
+    smoothStepMixed = smoothstep(vec4(0.0lf), vec4(1.0lf), vec4(0.5lf));
     return;
 }
 

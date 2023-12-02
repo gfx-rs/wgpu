@@ -186,7 +186,7 @@ impl super::Device {
         }
 
         let value = cur_value + 1;
-        log::info!("Waiting for idle with value {}", value);
+        log::debug!("Waiting for idle with value {}", value);
         self.present_queue.signal(&self.idler.fence, value);
         let hr = self
             .idler
@@ -467,7 +467,11 @@ impl crate::Device<super::Api> for super::Device {
             aspects: view_desc.aspects,
             target_base: (
                 texture.resource.clone(),
-                texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
+                texture.calc_subresource(
+                    desc.range.base_mip_level,
+                    desc.range.base_array_layer,
+                    desc.plane.unwrap_or(0),
+                ),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
                 let raw_desc = unsafe { view_desc.to_srv() };
@@ -983,7 +987,7 @@ impl crate::Device<super::Api> for super::Device {
         debug_assert_eq!(ranges.len(), total_non_dynamic_entries);
 
         let (special_constants_root_index, special_constants_binding) = if desc.flags.intersects(
-            crate::PipelineLayoutFlags::BASE_VERTEX_INSTANCE
+            crate::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE
                 | crate::PipelineLayoutFlags::NUM_WORK_GROUPS,
         ) {
             let parameter_index = parameters.len();
@@ -991,7 +995,7 @@ impl crate::Device<super::Api> for super::Device {
             parameters.push(d3d12::RootParameter::constants(
                 d3d12::ShaderVisibility::All, // really needed for VS and CS only
                 native_binding(&bind_cbv),
-                3, // 0 = base vertex, 1 = base instance, 2 = other
+                3, // 0 = first_vertex, 1 = first_instance, 2 = other
             ));
             let binding = bind_cbv.clone();
             bind_cbv.register += 1;

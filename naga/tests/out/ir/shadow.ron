@@ -138,7 +138,10 @@
             inner: Matrix(
                 columns: Quad,
                 rows: Quad,
-                width: 4,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
             ),
         ),
         (
