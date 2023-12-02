@@ -2454,11 +2454,11 @@ impl crate::context::Context for Context {
     ) {
         let buffer: &<Context as crate::Context>::BufferData = downcast_ref(buffer.data.as_ref());
         match size {
-            Some(size) => {
-                encoder_data
-                    .0
-                    .clear_buffer_with_f64_and_f64(&buffer.0, offset as f64, size as f64)
-            }
+            Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
+                &buffer.0.buffer,
+                offset as f64,
+                size as f64,
+            ),
             None => encoder_data
                 .0
                 .clear_buffer_with_f64(&buffer.0.buffer, offset as f64),
@@ -3170,9 +3170,11 @@ impl crate::context::Context for Context {
                 );
             }
             None => {
-                pass_data
-                    .0
-                    .set_vertex_buffer_with_f64(slot, Some(&buffer_data.0.buffer), offset as f64);
+                pass_data.0.set_vertex_buffer_with_f64(
+                    slot,
+                    Some(&buffer_data.0.buffer),
+                    offset as f64,
+                );
             }
         };
     }
