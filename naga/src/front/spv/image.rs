@@ -3,7 +3,7 @@ use crate::{
     Scalar,
 };
 
-use super::{Error, LookupExpression, LookupHelper as _};
+use super::{image, Error, LookupExpression, LookupHelper as _};
 
 #[derive(Clone, Debug)]
 pub(super) struct LookupSampledImage {
@@ -526,7 +526,67 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             image_ops ^= bit;
         }
 
-        let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
+        let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id);
+
+        let si_lexp = match si_lexp {
+            Ok(si_lexp) => Ok(si_lexp.clone()),
+            Err(e) => {
+                match self.options.combined_image_sampler_desugaring {
+                    super::CombinedImageSamplerDesugaring::None => Err(e),
+                    super::CombinedImageSamplerDesugaring::SplitIntoOverlappedBinding => {
+                        let load_exp = self.lookup_expression.lookup(sampled_image_id)?.clone();
+                        let image_handle = load_exp.handle;
+
+                        match ctx.expressions[image_handle] {
+                            crate::Expression::GlobalVariable(image_handle) => {
+                                let image = &ctx.global_arena[image_handle];
+                                let sampler_type = ctx.type_arena.insert(
+                                    crate::Type {
+                                        name: None,
+                                        inner: crate::TypeInner::Sampler { comparison: false },
+                                    },
+                                    self.span_from_with_op(start),
+                                );
+
+                                let sampler_def = ctx.global_arena.append(
+                                    crate::GlobalVariable {
+                                        name: image
+                                            .name
+                                            .as_ref()
+                                            .map(|n| format!("_{}_sampler", n)),
+                                        space: image.space,
+                                        binding: image.binding.clone(),
+                                        ty: sampler_type,
+                                        init: None,
+                                    },
+                                    self.span_from_with_op(start),
+                                );
+
+                                self.handle_sampling
+                                    .insert(sampler_def, image::SamplingFlags::empty());
+
+                                // The created global variable expression isn't part of the block expressions.
+                                block.extend(emitter.finish(ctx.expressions));
+
+                                let sampler_load = crate::Expression::GlobalVariable(sampler_def);
+                                let sampler_load = ctx
+                                    .expressions
+                                    .append(sampler_load, self.span_from_with_op(start));
+
+                                emitter.start(ctx.expressions);
+
+                                Ok(LookupSampledImage {
+                                    image: load_exp.handle,
+                                    sampler: sampler_load,
+                                })
+                            }
+                            _ => Err(e),
+                        }
+                    }
+                }
+            }
+        }?;
+
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_handle =
             self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);

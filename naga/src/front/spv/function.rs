@@ -129,8 +129,8 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             local_arena: &mut fun.local_variables,
             const_arena: &mut module.constants,
             const_expressions: &mut module.const_expressions,
-            type_arena: &module.types,
-            global_arena: &module.global_variables,
+            type_arena: &mut module.types,
+            global_arena: &mut module.global_variables,
             arguments: &fun.arguments,
             parameter_sampling: &mut parameters_sampling,
         };

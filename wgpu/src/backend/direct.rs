@@ -908,6 +908,8 @@ impl crate::Context for Context {
                     adjust_coordinate_space: false, // we require NDC_Y_UP feature
                     strict_capabilities: true,
                     block_ctx_dump_prefix: None,
+                    combined_image_sampler_desugaring:
+                        naga::front::spv::CombinedImageSamplerDesugaring::None,
                 };
                 let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
                 let module = parser.parse().unwrap();

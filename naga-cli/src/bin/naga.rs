@@ -283,6 +283,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
         block_ctx_dump_prefix: args.block_ctx_dir.map(std::path::PathBuf::from),
+        combined_image_sampler_desugaring: naga::front::spv::CombinedImageSamplerDesugaring::None,
     };
 
     params.entry_point = args.entry_point;

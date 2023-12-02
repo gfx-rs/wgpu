@@ -840,6 +840,8 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
             adjust_coordinate_space,
             strict_capabilities: false,
             block_ctx_dump_prefix: None,
+            combined_image_sampler_desugaring:
+                naga::front::spv::CombinedImageSamplerDesugaring::None,
         },
     )
     .unwrap();

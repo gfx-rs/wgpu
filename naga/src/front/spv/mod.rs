@@ -347,6 +347,18 @@ enum ExtendedClass {
     Output,
 }
 
+/// How to desugar combined image samplers into Naga IR
+#[derive(Clone, Copy, Debug)]
+pub enum CombinedImageSamplerDesugaring {
+    /// Do not do any special handling for combined image samplers.
+    None,
+    /// Split a combined image sampler by creating a new sampler binding
+    /// at the same descriptor set and binding location as the original
+    /// combined image sampler.
+    ///
+    /// The resulting module will fail validation until bindings have been adjusted to not overlap.
+    SplitIntoOverlappedBinding,
+}
 #[derive(Clone, Debug)]
 pub struct Options {
     /// The IR coordinate space matches all the APIs except SPIR-V,
@@ -356,6 +368,8 @@ pub struct Options {
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
     pub block_ctx_dump_prefix: Option<PathBuf>,
+    /// How to desugar combined image samplers
+    pub combined_image_sampler_desugaring: CombinedImageSamplerDesugaring,
 }
 
 impl Default for Options {
@@ -364,6 +378,7 @@ impl Default for Options {
             adjust_coordinate_space: true,
             strict_capabilities: false,
             block_ctx_dump_prefix: None,
+            combined_image_sampler_desugaring: CombinedImageSamplerDesugaring::None,
         }
     }
 }
@@ -540,9 +555,9 @@ struct BlockContext<'function> {
     const_arena: &'function mut Arena<crate::Constant>,
     const_expressions: &'function mut Arena<crate::Expression>,
     /// Type arena of the module being processed
-    type_arena: &'function UniqueArena<crate::Type>,
+    type_arena: &'function mut UniqueArena<crate::Type>,
     /// Global arena of the module being processed
-    global_arena: &'function Arena<crate::GlobalVariable>,
+    global_arena: &'function mut Arena<crate::GlobalVariable>,
     /// Arguments of the function currently being processed
     arguments: &'function [crate::FunctionArgument],
     /// Metadata about the usage of function parameters as sampling objects
@@ -575,6 +590,7 @@ pub struct Frontend<I> {
     // Load overrides are used to work around row-major matrices
     lookup_load_override: FastHashMap<spirv::Word, LookupLoadOverride>,
     lookup_sampled_image: FastHashMap<spirv::Word, image::LookupSampledImage>,
+
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, LookupFunction>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
@@ -5326,6 +5342,7 @@ pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, E
 
 #[cfg(test)]
 mod test {
+
     #[test]
     fn parse() {
         let bin = vec![
