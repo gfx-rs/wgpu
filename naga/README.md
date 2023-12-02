@@ -33,7 +33,7 @@ DOT (GraphViz)  | :ok:               | dot-out  | Not a shading language |
 
 ## Conversion tool
 
-Naga can be used as a CLI, which allows to test the conversion of different code paths.
+Naga can be used as a CLI, which allows testing the conversion of different code paths.
 
 First, install `naga-cli` from crates.io or directly from GitHub.
 
@@ -54,7 +54,7 @@ naga my_shader.spv my_shader.metal --flow-dir flow-dir # convert the SPV to Meta
 naga my_shader.wgsl my_shader.vert --profile es310 # convert the WGSL to GLSL vertex stage under ES 3.20 profile
 ```
 
-As naga includes a default binary target, you can also use `cargo run` without installation. This is useful when you develop naga itself, or investigate the behavior of naga at a specific commit (e.g. [wgpu](https://github.com/gfx-rs/wgpu) might pin a different version of naga than the `HEAD` of this repository).
+As naga includes a default binary target, you can also use `cargo run` without installation. This is useful when you develop naga itself or investigate the behavior of naga at a specific commit (e.g. [wgpu](https://github.com/gfx-rs/wgpu) might pin a different version of naga than the `HEAD` of this repository).
 
 ```bash
 cargo run my_shader.wgsl
@@ -63,7 +63,7 @@ cargo run my_shader.wgsl
 ## Development workflow
 
 The main instrument aiding the development is the good old `cargo test --all-features --workspace`,
-which will run the unit tests, and also update all the snapshots. You'll see these
+which will run the unit tests and also update all the snapshots. You'll see these
 changes in git before committing the code.
 
 If working on a particular front-end or back-end, it may be convenient to
@@ -71,7 +71,7 @@ enable the relevant features in `Cargo.toml`, e.g.
 ```toml
 default = ["spv-out"] #TEMP!
 ```
-This allows IDE basic checks to report errors there, unless your IDE is sufficiently configurable already.
+This allows IDE basic checks to report errors there unless your IDE is sufficiently configurable already.
 
 Finally, when changes to the snapshots are made, we should verify that the produced shaders
 are indeed valid for the target platforms they are compiled for:

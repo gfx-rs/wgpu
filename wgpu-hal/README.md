@@ -15,7 +15,7 @@ such as running out-of-memory, or losing the device.
 For the counter-example, there is no error for mapping a buffer that's not mappable.
 As the buffer creator, the user should already know if they can map it.
 
-The API accept iterators in order to avoid forcing the user to store data in particular containers. The implementation doesn't guarantee that any of the iterators are drained, unless stated otherwise by the function documentation.
+The API accepts iterators in order to avoid forcing the user to store data in particular containers. The implementation doesn't guarantee that any of the iterators are drained, unless stated otherwise by the function documentation.
 For this reason, we recommend that iterators don't do any mutating work.
 
 # Debugging
