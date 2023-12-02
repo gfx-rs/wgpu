@@ -124,6 +124,7 @@ pub struct Device<A: HalApi> {
     pub(crate) downlevel: wgt::DownlevelCapabilities,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) pending_writes: Mutex<Option<PendingWrites<A>>>,
+    pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
 }
@@ -278,6 +279,7 @@ impl<A: HalApi> Device<A> {
             downlevel,
             instance_flags,
             pending_writes: Mutex::new(Some(pending_writes)),
+            last_acceleration_structure_build_command_index: AtomicU64::new(0),
         })
     }
 
@@ -445,6 +447,16 @@ impl<A: HalApi> Device<A> {
             for resource in trackers.query_sets.used_resources() {
                 if resource.is_unique() {
                     temp_suspected.insert(resource.as_info().id(), resource.clone());
+                }
+            }
+            for id in trackers.blas_s.used() {
+                if blas_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.blas_s.push(id);
+                }
+            }
+            for id in trackers.tlas_s.used() {
+                if tlas_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.tlas_s.push(id);
                 }
             }
         }
@@ -1352,6 +1364,10 @@ impl<A: HalApi> Device<A> {
                 .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
         );
         caps.set(
+            Caps::RAY_QUERY,
+            self.features.contains(wgt::Features::RAY_QUERY),
+        );
+        caps.set(
             Caps::DUAL_SOURCE_BLENDING,
             self.features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
         );
@@ -1642,6 +1658,7 @@ impl<A: HalApi> Device<A> {
                         },
                     )
                 }
+                Bt::AccelerationStructure => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -1938,6 +1955,7 @@ impl<A: HalApi> Device<A> {
         let buffer_guard = hub.buffers.read();
         let texture_view_guard = hub.texture_views.read();
         let sampler_guard = hub.samplers.read();
+        let tlas_guard = hub.tlas_s.read();
 
         let mut used_buffer_ranges = Vec::new();
         let mut used_texture_ranges = Vec::new();
@@ -1945,6 +1963,7 @@ impl<A: HalApi> Device<A> {
         let mut hal_buffers = Vec::new();
         let mut hal_samplers = Vec::new();
         let mut hal_textures = Vec::new();
+        let mut hal_tlas_s = Vec::new();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -2112,6 +2131,18 @@ impl<A: HalApi> Device<A> {
 
                     (res_index, num_bindings)
                 }
+                Br::AccelerationStructure(id) => {
+                    let tlas = used
+                        .acceleration_structures
+                        .add_single(&tlas_guard, id)
+                        .ok_or(Error::InvalidTlas(id))?;
+
+                    let raw = tlas.raw.as_ref().ok_or(Error::InvalidTlas(id))?;
+
+                    let res_index = hal_tlas_s.len();
+                    hal_tlas_s.push(raw);
+                    (res_index, 1)
+                }
             };
 
             hal_entries.push(hal::BindGroupEntry {
@@ -2136,6 +2167,7 @@ impl<A: HalApi> Device<A> {
             buffers: &hal_buffers,
             samplers: &hal_samplers,
             textures: &hal_textures,
+            acceleration_structures: &hal_tlas_s,
         };
         let raw = unsafe {
             self.raw

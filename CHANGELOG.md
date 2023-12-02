@@ -708,6 +708,20 @@ By @cwfitzgerald in [#3671](https://github.com/gfx-rs/wgpu/pull/3671).
 - Change type of `bytes_per_row` and `rows_per_image` (members of `ImageDataLayout`) from `Option<NonZeroU32>` to `Option<u32>`. By @teoxoy in [#3529](https://github.com/gfx-rs/wgpu/pull/3529)
 - On Web, `Instance::create_surface_from_canvas()` and `create_surface_from_offscreen_canvas()` now take the canvas by value. By @daxpedda in [#3690](https://github.com/gfx-rs/wgpu/pull/3690)
 
+### Added/New Features
+
+#### General
+- Added feature flags for ray-tracing (currently only hal): `RAY_QUERY` and `RAY_TRACING` @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+
+#### Vulkan
+
+- Implemented basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+
+#### Hal 
+
+- Added basic ray-tracing api for acceleration structures, and ray-queries @daniel-keitel (started by @expenses) in [#3507](https://github.com/gfx-rs/wgpu/pull/3507)
+
+
 ### Changes
 
 #### General

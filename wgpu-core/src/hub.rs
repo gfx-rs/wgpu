@@ -120,7 +120,10 @@ use crate::{
     instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
-    resource::{Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView},
+    resource::{
+        Blas, Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView,
+        Tlas,
+    },
     storage::{Element, Storage},
 };
 use std::fmt::Debug;
@@ -194,6 +197,8 @@ pub struct Hub<A: HalApi> {
     pub textures: Registry<id::TextureId, Texture<A>>,
     pub texture_views: Registry<id::TextureViewId, TextureView<A>>,
     pub samplers: Registry<id::SamplerId, Sampler<A>>,
+    pub blas_s: Registry<Blas<A>, id::BlasId, F>,
+    pub tlas_s: Registry<Tlas<A>, id::TlasId, F>,
 }
 
 impl<A: HalApi> Hub<A> {
@@ -216,6 +221,8 @@ impl<A: HalApi> Hub<A> {
             textures: Registry::new(A::VARIANT, factory),
             texture_views: Registry::new(A::VARIANT, factory),
             samplers: Registry::new(A::VARIANT, factory),
+            blas_s: Registry::new(A::VARIANT, factory),
+            tlas_s: Registry::new(A::VARIANT, factory),
         }
     }
 

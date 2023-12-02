@@ -36,6 +36,8 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type AccelerationStructure = AccelerationStructure;
 }
 
 pub struct Instance {
@@ -110,6 +112,8 @@ pub struct PipelineLayout {}
 pub struct ShaderModule {}
 #[derive(Debug)]
 pub struct RenderPipeline {}
+#[derive(Debug)]
+pub struct AccelerationStructure {}
 #[derive(Debug)]
 pub struct ComputePipeline {}
 

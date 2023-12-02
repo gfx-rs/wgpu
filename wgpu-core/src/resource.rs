@@ -37,6 +37,8 @@ use std::{
     },
 };
 
+use std::num::NonZeroU64;
+
 /// Information about the wgpu-core resource.
 ///
 /// Each type representing a `wgpu-core` resource, like [`Device`],
@@ -1303,4 +1305,48 @@ pub enum DestroyError {
     Invalid,
     #[error("Resource is already destroyed")]
     AlreadyDestroyed,
+}
+
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+
+pub struct Blas<A: hal::Api> {
+    pub(crate) raw: Option<A::AccelerationStructure>,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: Option<NonZeroU64>,
+    pub(crate) handle: u64,
+}
+
+impl<A: hal::Api> Resource for Blas<A> {
+    const TYPE: &'static str = "Blas";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
+}
+
+pub struct Tlas<A: hal::Api> {
+    pub(crate) raw: Option<A::AccelerationStructure>,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+    pub(crate) size_info: hal::AccelerationStructureBuildSizes,
+    pub(crate) max_instance_count: u32,
+    pub(crate) flags: wgt::AccelerationStructureFlags,
+    pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
+    pub(crate) built_index: Option<NonZeroU64>,
+    pub(crate) dependencies: Vec<crate::id::BlasId>,
+    pub(crate) instance_buffer: Option<A::Buffer>,
+}
+
+impl<A: hal::Api> Resource for Tlas<A> {
+    const TYPE: &'static str = "Tlas";
+
+    fn life_guard(&self) -> &LifeGuard {
+        &self.life_guard
+    }
 }

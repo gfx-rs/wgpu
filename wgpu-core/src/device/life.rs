@@ -102,6 +102,7 @@ impl ResourceMaps {
         maps.add_type::<PipelineLayoutId, PipelineLayout<A>>();
         maps.add_type::<RenderBundleId, RenderBundle<A>>();
         maps.add_type::<QuerySetId, QuerySet<A>>();
+        //TODO Come back here
         maps
     }
     pub(crate) fn clear(&mut self) {
@@ -286,6 +287,9 @@ impl<A: HalApi> LifetimeTracker<A> {
                 TempResource::Texture(raw) => {
                     last_resources.insert(raw.as_info().id(), raw);
                 }
+                TempResource::AccelerationStructure(raw) => {
+                    last_resources.acceleration_structures.push(raw)
+                }
             }
         }
 
@@ -387,6 +391,7 @@ impl<A: HalApi> LifetimeTracker<A> {
             TempResource::Texture(raw) => {
                 resources.insert(raw.as_info().id(), raw);
             }
+            TempResource::AccelerationStructure(raw) => resources.acceleration_structures.push(raw),
         }
     }
 
@@ -795,6 +800,7 @@ impl<A: HalApi> LifetimeTracker<A> {
         profiling::scope!("triage_suspected");
 
         //NOTE: the order is important to release resources that depends between each other!
+        //TODO and here
         self.triage_suspected_render_bundles(
             trackers,
             #[cfg(feature = "trace")]

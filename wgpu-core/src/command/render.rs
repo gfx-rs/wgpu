@@ -1351,6 +1351,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let buffer_guard = hub.buffers.read();
             let texture_guard = hub.textures.read();
             let view_guard = hub.texture_views.read();
+            let tlas_guard = hub.tlas_s.read();
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -1385,6 +1386,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(&*render_pipeline_guard),
                 Some(&*bundle_guard),
                 Some(&*query_set_guard),
+                None,
+                Some(&*tlas_guard),
             );
 
             let raw = &mut encoder.raw;
@@ -1471,11 +1474,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
 
+                        cmd_buf.tlas_actions.extend(
+                            bind_group.used.acceleration_structures.used().map(|id| {
+                                cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
+                                crate::ray_tracing::TlasAction {
+                                    id: id.0,
+                                    kind: crate::ray_tracing::TlasActionKind::Use,
+                                }
+                            }),
+                        );
+
                         let pipeline_layout = state.binder.pipeline_layout.clone();
                         let entries =
                             state
                                 .binder
-                                .assign_group(index as usize, bind_group, &temp_offsets);
+                                .assign_group(index as usize, id::Valid(bind_group_id), bind_group, &temp_offsets);
                         if !entries.is_empty() && pipeline_layout.is_some() {
                             let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {

@@ -463,6 +463,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None,
             None,
             Some(&*query_set_guard),
+            None,
+            Some(&*tlas_guard),
         );
 
         let discard_hal_labels = self
@@ -536,6 +538,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         pending_discard_init_fixups
                             .extend(texture_memory_actions.register_init_action(action));
                     }
+
+                    cmd_buf.tlas_actions.extend(
+                        bind_group.used.acceleration_structures.used().map(|id| {
+                            cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
+                            crate::ray_tracing::TlasAction {
+                                id: id.0,
+                                kind: crate::ray_tracing::TlasActionKind::Use,
+                            }
+                        }),
+                    );
 
                     let pipeline_layout = state.binder.pipeline_layout.clone();
                     let entries =

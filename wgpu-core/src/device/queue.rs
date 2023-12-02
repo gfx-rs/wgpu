@@ -164,6 +164,8 @@ pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
     Texture(Arc<Texture<A>>),
+    //TODO come back
+    AccelerationStructure(A::AccelerationStructure),
 }
 
 /// A queue execution for a particular command encoder.
@@ -373,6 +375,10 @@ pub enum QueueSubmitError {
     SurfaceUnconfigured,
     #[error("GPU got stuck :(")]
     StuckGpu,
+    #[error(transparent)]
+    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
+    #[error(transparent)]
+    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -1335,6 +1341,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                         }
+                        for id in cmdbuf.trackers.blas_s.used() {
+                            if !blas_guard[id].life_guard.use_at(submit_index) {
+                                device.temp_suspected.blas_s.push(id);
+                            }
+                        }
+                        for id in cmdbuf.trackers.tlas_s.used() {
+                            if !tlas_guard[id].life_guard.use_at(submit_index) {
+                                device.temp_suspected.tlas_s.push(id);
+                            }
+                        }
+
                         let mut baked = cmdbuf.from_arc_into_baked();
                         // execute resource transitions
                         unsafe {
@@ -1356,6 +1373,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         baked
                             .initialize_texture_memory(&mut *trackers, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
+
+                        baked.validate_blas_actions(&mut *blas_guard)?;
+                        baked.validate_tlas_actions(&*blas_guard, &mut *tlas_guard)?;
+
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
                         CommandBuffer::insert_barriers_from_tracker(

@@ -169,6 +169,8 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<id::TextureViewId>
     + IdentityHandlerFactory<id::SamplerId>
     + IdentityHandlerFactory<id::SurfaceId>
+    + IdentityHandlerFactory<id::BlasId>
+    + IdentityHandlerFactory<id::TlasId>
 {
 }
 

@@ -16,6 +16,7 @@ enum ResourceType {
     Sampler {
         comparison: bool,
     },
+    AccelerationStructure,
 }
 
 #[derive(Debug)]
@@ -516,6 +517,7 @@ impl Resource {
                     });
                 }
             }
+            ResourceType::AccelerationStructure => (),
         };
 
         Ok(())
@@ -593,6 +595,7 @@ impl Resource {
                     },
                 }
             }
+            ResourceType::AccelerationStructure => BindingType::AccelerationStructure,
         })
     }
 }
@@ -873,6 +876,7 @@ impl Interface {
                 naga::TypeInner::Array { stride, .. } => ResourceType::Buffer {
                     size: wgt::BufferSize::new(stride as u64).unwrap(),
                 },
+                naga::TypeInner::AccelerationStructure => ResourceType::AccelerationStructure,
                 ref other => ResourceType::Buffer {
                     size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },

@@ -5,6 +5,7 @@ mod compute;
 mod draw;
 mod memory_init;
 mod query;
+mod ray_tracing;
 mod render;
 mod transfer;
 
@@ -25,6 +26,7 @@ use crate::id::CommandBufferId;
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::resource::{Resource, ResourceInfo, ResourceType};
+use crate::ray_tracing::{BlasAction, TlasAction};
 use crate::track::{Tracker, UsageScope};
 use crate::{
     api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory,
@@ -101,6 +103,8 @@ pub struct BakedCommands<A: HalApi> {
     pub(crate) trackers: Tracker<A>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
+    blas_actions: Vec<BlasAction>,
+    tlas_actions: Vec<TlasAction>,
 }
 
 pub(crate) struct DestroyedBufferError(pub id::BufferId);
@@ -113,6 +117,8 @@ pub struct CommandBufferMutable<A: HalApi> {
     buffer_memory_init_actions: Vec<BufferInitTrackerAction<A>>,
     texture_memory_actions: CommandBufferTextureMemoryActions<A>,
     pub(crate) pending_query_resets: QueryResetMap<A>,
+    blas_actions: Vec<BlasAction>,
+    tlas_actions: Vec<TlasAction>,
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }
@@ -167,6 +173,7 @@ impl<A: HalApi> CommandBuffer<A> {
                     .unwrap_or(&String::from("<CommandBuffer>"))
                     .as_str(),
             ),
+            //Todo come back
             data: Mutex::new(Some(CommandBufferMutable {
                 encoder: CommandEncoder {
                     raw: encoder,
@@ -179,6 +186,8 @@ impl<A: HalApi> CommandBuffer<A> {
                 buffer_memory_init_actions: Default::default(),
                 texture_memory_actions: Default::default(),
                 pending_query_resets: QueryResetMap::new(),
+                blas_actions: Default::default(),
+                tlas_actions: Default::default(),
                 #[cfg(feature = "trace")]
                 commands: if enable_tracing {
                     Some(Vec::new())
@@ -267,6 +276,8 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: data.trackers,
             buffer_memory_init_actions: data.buffer_memory_init_actions,
             texture_memory_actions: data.texture_memory_actions,
+            blas_actions: self.blas_actions,
+            tlas_actions: self.tlas_actions,
         }
     }
 

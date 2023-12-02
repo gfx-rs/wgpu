@@ -12,6 +12,20 @@ pub mod util;
 #[macro_use]
 mod macros;
 
+/// Module to add ray tracing support to wgpu.
+/// It adds support for acceleration structures and ray queries.
+/// The features [`wgpu::Features::RAY_QUERY`] and [`wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE`] where added and are required to use this module.
+/// This is an experimental feature and is not available on all backends.
+/// It is not part of the WebGPU standard and is only natively supported with the Vulkan backend so far.
+/// DirectX 12 and Metal support are planned, the API is subject to change.
+/// (It should be somewhat stable, unless adding ray tracing to the WebGPU standard requires deep changes.)
+///
+/// Functions to create and build acceleration structures are provided, In traits on the [`Device`] and [`CommandEncoder`].
+/// To use ray queries, add a top level acceleration structure to a bind group, and use the ray query extension in a shader.
+/// Naga (our shader compiler) has support for the ray query extension for "wgsl" shaders.
+/// For more details see the examples (starting with ray-).
+pub mod ray_tracing;
+
 use std::{
     any::Any,
     borrow::Cow,
@@ -990,6 +1004,8 @@ pub enum BindingResource<'a> {
     /// Corresponds to [`wgt::BindingType::Texture`] and [`wgt::BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [&'a TextureView]),
+    /// Todo
+    AccelerationStructure(&'a crate::ray_tracing::Tlas),
 }
 #[cfg(any(
     not(target_arch = "wasm32"),
