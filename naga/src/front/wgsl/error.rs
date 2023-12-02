@@ -35,7 +35,7 @@ impl ParseError {
                 self.labels
                     .iter()
                     .map(|label| {
-                        Label::primary((), label.0.to_range().unwrap())
+                        Label::primary((), label.0.to_range().unwrap_or_default())
                             .with_message(label.1.to_string())
                     })
                     .collect(),
