@@ -1,0 +1,29 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void main_1(
+    thread metal::float4& color,
+    metal::texture2d<float, metal::access::sample> tex,
+    metal::sampler _tex_sampler
+) {
+    metal::float4 _e4 = tex.sample(_tex_sampler, metal::float2(0.0, 0.0));
+    color = _e4;
+    return;
+}
+
+struct main_Output {
+    metal::float4 member [[color(0)]];
+};
+fragment main_Output main_(
+  metal::texture2d<float, metal::access::sample> tex [[user(fake0)]]
+, metal::sampler _tex_sampler [[user(fake0)]]
+) {
+    metal::float4 color = {};
+    main_1(color, tex, _tex_sampler);
+    metal::float4 _e1 = color;
+    return main_Output { _e1 };
+}

@@ -875,8 +875,83 @@ fn convert_spv_all() {
         true,
         Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
     );
+
+    // Convert SPIR-V with desugared image samplers
+    convert_spv_combined_image_sampler_desugared(
+        "combined-image-sampler",
+        true,
+        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+    );
+    // Neither the msl-out or glsl-out support binding arrays at the moment.
+    convert_spv_combined_image_sampler_desugared(
+        "combined-image-sampler-array",
+        true,
+        Targets::HLSL | Targets::WGSL,
+    );
 }
 
+#[cfg(feature = "spv-in")]
+fn convert_spv_combined_image_sampler_desugared(
+    name: &str,
+    adjust_coordinate_space: bool,
+    targets: Targets,
+) {
+    let _ = env_logger::try_init();
+
+    let input = Input::new(Some("spv"), name, "spv");
+    let mut module = naga::front::spv::parse_u8_slice(
+        &input.read_bytes(),
+        &naga::front::spv::Options {
+            adjust_coordinate_space,
+            strict_capabilities: false,
+            block_ctx_dump_prefix: None,
+            combined_image_sampler_desugaring:
+                naga::front::spv::CombinedImageSamplerDesugaring::SplitIntoOverlappedBinding,
+        },
+    )
+    .unwrap();
+
+    let images = module
+        .global_variables
+        .iter()
+        .filter(|&(_, gv)| {
+            let ty = &module.types[gv.ty];
+            match ty.inner {
+                naga::TypeInner::Image { .. } => true,
+                naga::TypeInner::BindingArray { base, .. } => {
+                    let ty = &module.types[base];
+                    matches!(ty.inner, naga::TypeInner::Image { .. })
+                }
+                _ => false,
+            }
+        })
+        .map(|(_, gv)| (gv.binding.clone(), gv.space))
+        .collect::<naga::FastHashSet<_>>();
+
+    module
+        .global_variables
+        .iter_mut()
+        .filter(|(_, gv)| {
+            let ty = &module.types[gv.ty];
+            match ty.inner {
+                naga::TypeInner::Sampler { .. } => true,
+                naga::TypeInner::BindingArray { base, .. } => {
+                    let ty = &module.types[base];
+                    matches!(ty.inner, naga::TypeInner::Sampler { .. })
+                }
+                _ => false,
+            }
+        })
+        .for_each(|(_, gv)| {
+            if images.contains(&(gv.binding.clone(), gv.space)) {
+                if let Some(binding) = &mut gv.binding {
+                    binding.group = 1;
+                }
+            }
+        });
+
+    check_targets(&input, &mut module, targets, None);
+}
 #[cfg(feature = "glsl-in")]
 #[test]
 fn convert_glsl_variations_check() {
