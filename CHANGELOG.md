@@ -146,6 +146,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 ### Bug Fixes
 
+#### General
+
+- `BufferMappedRange` trait is now `WasmNotSendSync`, i.e. it is `Send`/`Sync` if not on wasm or `fragile-send-sync-non-atomic-wasm` is enabled. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+
 #### WGL
 
 - Create a hidden window per `wgpu::Instance` instead of sharing a global one.
