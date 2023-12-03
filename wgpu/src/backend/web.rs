@@ -3467,13 +3467,20 @@ impl QueueWriteBuffer for WebQueueWriteBuffer {
     }
 }
 
+/// Stores the state of a GPU buffer and a reference to its mapped `ArrayBuffer` (if any).
+/// The WebGPU specification forbids calling `getMappedRange` on a `web_sys::GpuBuffer` more than
+/// once, so this struct stores the initial mapped range and re-uses it, allowing for multiple `get_mapped_range`
+/// calls on the Rust-side.
 #[derive(Debug)]
 pub struct WebBuffer {
+    /// The associated GPU buffer.
     buffer: web_sys::GpuBuffer,
+    /// The mapped array buffer and mapped range.
     mapping: RefCell<WebBufferMapState>,
 }
 
 impl WebBuffer {
+    /// Creates a new web buffer for the given Javascript object and description.
     fn new(buffer: web_sys::GpuBuffer, desc: &crate::BufferDescriptor<'_>) -> Self {
         Self {
             buffer,
@@ -3484,6 +3491,7 @@ impl WebBuffer {
         }
     }
 
+    /// Creates a raw Javascript array buffer over the provided range.
     fn get_mapped_array_buffer(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::ArrayBuffer {
         self.buffer.get_mapped_range_with_f64_and_f64(
             sub_range.start as f64,
@@ -3491,6 +3499,7 @@ impl WebBuffer {
         )
     }
 
+    /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
     fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
         let mut mapping = self.mapping.borrow_mut();
         let range = mapping.range.clone();
@@ -3507,14 +3516,19 @@ impl WebBuffer {
         )
     }
 
+    /// Sets the range of the buffer which is presently mapped.
     fn set_mapped_range(&self, range: Range<wgt::BufferAddress>) {
         self.mapping.borrow_mut().range = range;
     }
 }
 
+/// Remembers which portion of a buffer has been mapped, along with a reference
+/// to the mapped portion.
 #[derive(Debug)]
 struct WebBufferMapState {
+    /// The mapped memory of the buffer.
     pub mapped_buffer: Option<js_sys::ArrayBuffer>,
+    /// The total range which has been mapped in the buffer overall.
     pub range: Range<wgt::BufferAddress>,
 }
 
