@@ -4095,7 +4095,7 @@ where
     }
 }
 
-pub trait QueueWriteBuffer: WasmNotSendSync {
+pub trait QueueWriteBuffer: WasmNotSendSync + Debug {
     fn slice(&self) -> &[u8];
 
     fn slice_mut(&mut self) -> &mut [u8];
