@@ -2,6 +2,7 @@ use crate::{
     arena::{Handle, UniqueArena},
     Scalar,
 };
+use std::collections::hash_map::Entry;
 
 use super::{image, Error, LookupExpression, LookupHelper as _};
 
@@ -414,6 +415,79 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         Ok(())
     }
 
+    fn insert_sampler_for_combined_image_sampler(
+        &mut self,
+        ctx: &mut super::BlockContext,
+        image_base_handle: Handle<crate::GlobalVariable>,
+        start: usize,
+    ) -> Result<&Handle<crate::GlobalVariable>, Error> {
+        let image = &ctx.global_arena[image_base_handle];
+        let span = self.span_from_with_op(start);
+        let sampler_type = match self
+            .lookup_combined_image_sampler_type
+            .entry(image_base_handle)
+        {
+            Entry::Occupied(o) => o.into_mut(),
+            Entry::Vacant(v) => {
+                let image_ty = &ctx.type_arena[image.ty];
+
+                match image_ty.inner {
+                    crate::TypeInner::Image { .. } => v.insert(ctx.type_arena.insert(
+                        crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Sampler { comparison: false },
+                        },
+                        span,
+                    )),
+                    crate::TypeInner::BindingArray { size, .. } => {
+                        // The inner type of the sampler doesn't need to be looked up later
+                        let base = ctx.type_arena.insert(
+                            crate::Type {
+                                name: None,
+                                inner: crate::TypeInner::Sampler { comparison: false },
+                            },
+                            span,
+                        );
+
+                        v.insert(ctx.type_arena.insert(
+                            crate::Type {
+                                name: None,
+                                inner: crate::TypeInner::BindingArray { base, size },
+                            },
+                            span,
+                        ))
+                    }
+                    _ => return Err(Error::InvalidImage(image.ty)),
+                }
+            }
+        };
+
+        let sampler_def = match self
+            .lookup_combined_image_sampler_variable
+            .entry(image_base_handle)
+        {
+            Entry::Occupied(o) => o.into_mut(),
+            Entry::Vacant(v) => {
+                let handle = ctx.global_arena.append(
+                    crate::GlobalVariable {
+                        name: image.name.as_ref().map(|n| format!("_{}_sampler", n)),
+                        space: image.space,
+                        binding: image.binding.clone(),
+                        ty: *sampler_type,
+                        init: None,
+                    },
+                    span,
+                );
+
+                self.handle_sampling
+                    .insert(handle, image::SamplingFlags::empty());
+                v.insert(handle)
+            }
+        };
+
+        Ok(sampler_def)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn parse_image_sample(
         &mut self,
@@ -539,36 +613,16 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
                         match ctx.expressions[image_handle] {
                             crate::Expression::GlobalVariable(image_handle) => {
-                                let image = &ctx.global_arena[image_handle];
-                                let sampler_type = ctx.type_arena.insert(
-                                    crate::Type {
-                                        name: None,
-                                        inner: crate::TypeInner::Sampler { comparison: false },
-                                    },
-                                    self.span_from_with_op(start),
-                                );
-
-                                let sampler_def = ctx.global_arena.append(
-                                    crate::GlobalVariable {
-                                        name: image
-                                            .name
-                                            .as_ref()
-                                            .map(|n| format!("_{}_sampler", n)),
-                                        space: image.space,
-                                        binding: image.binding.clone(),
-                                        ty: sampler_type,
-                                        init: None,
-                                    },
-                                    self.span_from_with_op(start),
-                                );
-
-                                self.handle_sampling
-                                    .insert(sampler_def, image::SamplingFlags::empty());
+                                let sampler_def = self.insert_sampler_for_combined_image_sampler(
+                                    ctx,
+                                    image_handle,
+                                    start,
+                                )?;
 
                                 // The created global variable expression isn't part of the block expressions.
                                 block.extend(emitter.finish(ctx.expressions));
 
-                                let sampler_load = crate::Expression::GlobalVariable(sampler_def);
+                                let sampler_load = crate::Expression::GlobalVariable(*sampler_def);
                                 let sampler_load = ctx
                                     .expressions
                                     .append(sampler_load, self.span_from_with_op(start));
@@ -579,6 +633,43 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                                     image: load_exp.handle,
                                     sampler: sampler_load,
                                 })
+                            }
+                            crate::Expression::Access { base, index } => {
+                                if let crate::Expression::GlobalVariable(image_handle) =
+                                    ctx.expressions[base]
+                                {
+                                    let sampler_def = self
+                                        .insert_sampler_for_combined_image_sampler(
+                                            ctx,
+                                            image_handle,
+                                            start,
+                                        )?;
+
+                                    // The created global variable expression isn't part of the block expressions.
+                                    block.extend(emitter.finish(ctx.expressions));
+                                    let sampler_load =
+                                        crate::Expression::GlobalVariable(*sampler_def);
+                                    let sampler_load = ctx
+                                        .expressions
+                                        .append(sampler_load, self.span_from_with_op(start));
+                                    emitter.start(ctx.expressions);
+
+                                    // The access is though
+                                    let sampler_load = crate::Expression::Access {
+                                        base: sampler_load,
+                                        index,
+                                    };
+                                    let sampler_load = ctx
+                                        .expressions
+                                        .append(sampler_load, self.span_from_with_op(start));
+
+                                    Ok(LookupSampledImage {
+                                        image: load_exp.handle,
+                                        sampler: sampler_load,
+                                    })
+                                } else {
+                                    Err(e)
+                                }
                             }
                             _ => Err(e),
                         }

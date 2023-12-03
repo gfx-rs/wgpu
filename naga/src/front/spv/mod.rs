@@ -357,6 +357,8 @@ pub enum CombinedImageSamplerDesugaring {
     /// combined image sampler.
     ///
     /// The resulting module will fail validation until bindings have been adjusted to not overlap.
+    ///
+    /// For texture arrays, a sampler array of the same size will be created.
     SplitIntoOverlappedBinding,
 }
 #[derive(Clone, Debug)]
@@ -591,6 +593,12 @@ pub struct Frontend<I> {
     lookup_load_override: FastHashMap<spirv::Word, LookupLoadOverride>,
     lookup_sampled_image: FastHashMap<spirv::Word, image::LookupSampledImage>,
 
+    // Combined image sampler handling for desugaring
+    lookup_combined_image_sampler_type:
+        FastHashMap<Handle<crate::GlobalVariable>, Handle<crate::Type>>,
+    lookup_combined_image_sampler_variable:
+        FastHashMap<Handle<crate::GlobalVariable>, Handle<crate::GlobalVariable>>,
+
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, LookupFunction>,
     lookup_entry_point: FastHashMap<spirv::Word, EntryPoint>,
@@ -642,6 +650,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             lookup_expression: FastHashMap::default(),
             lookup_load_override: FastHashMap::default(),
             lookup_sampled_image: FastHashMap::default(),
+            lookup_combined_image_sampler_type: FastHashMap::default(),
+            lookup_combined_image_sampler_variable: FastHashMap::default(),
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
             lookup_entry_point: FastHashMap::default(),
