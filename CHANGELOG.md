@@ -31,7 +31,6 @@ Bottom level categories:
 - DX12
 - Vulkan
 - Metal
-- DX11
 - GLES
 - WebGPU
 - Emscripten

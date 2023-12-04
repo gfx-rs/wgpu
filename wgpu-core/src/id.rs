@@ -131,7 +131,6 @@ where
             1 => Backend::Vulkan,
             2 => Backend::Metal,
             3 => Backend::Dx12,
-            4 => Backend::Dx11,
             5 => Backend::Gl,
             _ => unreachable!(),
         }
@@ -159,7 +158,6 @@ where
             Backend::Vulkan => "vk",
             Backend::Metal => "mtl",
             Backend::Dx12 => "d3d12",
-            Backend::Dx11 => "d3d11",
             Backend::Gl => "gl",
             Backend::BrowserWebGpu => "webgpu",
             Backend::Empty => "_",
@@ -280,7 +278,6 @@ fn test_id_backend() {
         Backend::Vulkan,
         Backend::Metal,
         Backend::Dx12,
-        Backend::Dx11,
         Backend::Gl,
     ] {
         let id: Id<()> = Id::zip(1, 0, b);
@@ -300,7 +297,6 @@ fn test_id() {
         Backend::Vulkan,
         Backend::Metal,
         Backend::Dx12,
-        Backend::Dx11,
         Backend::Gl,
     ];
     for &i in &indexes {
