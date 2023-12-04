@@ -441,6 +441,7 @@ impl<A: HalApi> State<A> {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
                 index: bind_mask.trailing_zeros(),
+                diff: self.binder.bgl_diff()
             });
         }
         if self.pipeline.is_none() {
@@ -642,6 +643,11 @@ impl PrettyError for RenderPassErrorInner {
         fmt.error(self);
         if let Self::InvalidAttachment(id) = *self {
             fmt.texture_view_label_with_key(&id, "attachment");
+        };
+        if let Self::Draw(DrawError::IncompatibleBindGroup { diff, .. }) = self {
+            for d in diff {
+                fmt.note(&d);
+            }
         };
     }
 }
