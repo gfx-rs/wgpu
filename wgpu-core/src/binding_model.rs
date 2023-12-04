@@ -4,10 +4,7 @@ use crate::{
     hal_api::HalApi,
     id::{
         BindGroupId, BindGroupLayoutId, BufferId, PipelineLayoutId, SamplerId, TextureId,
-        TextureViewId,
-    },
-    id::{
-        BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureId, TextureViewId, TlasId, Valid,
+        TextureViewId, DeviceId, TlasId, Valid,
     },
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     resource::{Resource, ResourceInfo, ResourceType},

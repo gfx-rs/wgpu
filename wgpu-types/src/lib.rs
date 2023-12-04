@@ -849,7 +849,7 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const RAY_QUERY = 1 << 64;
+        const RAY_QUERY = 1 << 63;
     }
 }
 
