@@ -526,7 +526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
+                    Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
                 }
             }
         }
@@ -574,7 +574,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error {error:?}");
+        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -648,7 +648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error {error:?}");
+        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -702,7 +702,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_buffer error {error:?}");
+        log::error!("Device::create_buffer error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -790,7 +790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for texture {:?}: {:?}", texture_id, e),
+                    Err(e) => log::error!("Failed to wait for texture {texture_id:?}: {e}"),
                 }
             }
         }
@@ -835,7 +835,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Texture::create_view({texture_id:?}) error {error:?}");
+        log::error!("Texture::create_view({texture_id:?}) error: {error}");
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -865,11 +865,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match view.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!(
-                        "Failed to wait for texture view {:?}: {:?}",
-                        texture_view_id,
-                        e
-                    ),
+                    Err(e) => {
+                        log::error!("Failed to wait for texture view {texture_view_id:?}: {e}")
+                    }
                 }
             }
         }
@@ -1217,7 +1215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module error: {error:?}");
+        log::error!("Device::create_shader_module error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1274,7 +1272,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module_spirv error: {error:?}");
+        log::error!("Device::create_shader_module_spirv error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1598,7 +1596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        log::error!("Device::create_render_pipeline error {error:?}");
+        log::error!("Device::create_render_pipeline error: {error}");
 
         (id, Some(error))
     }
@@ -2321,7 +2319,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
-            log::error!("Buffer::map_async error {err:?}");
+            log::error!("Buffer::map_async error: {err}");
             return Err(err);
         }
 
