@@ -155,6 +155,10 @@ impl super::Adapter {
         // bgra8unorm-storage is never supported on dx11 according to:
         // https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/format-support-for-direct3d-11-0-feature-level-hardware#dxgi_format_b8g8r8a8_unormfcs-87
 
+        // float32-filterable should always be available on dx11
+        // https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/format-support-for-direct3d-11-0-feature-level-hardware#dxgi_format_r32g32b32a32_floatfcs-2
+        features.set(wgt::Features::FLOAT32_FILTERABLE, true);
+
         //
         // Fill out limits and alignments
         //

@@ -15,6 +15,7 @@ mod create_surface_error;
 mod device;
 mod encoder;
 mod external_texture;
+mod float32_filterable;
 mod instance;
 mod life_cycle;
 mod mem_leaks;

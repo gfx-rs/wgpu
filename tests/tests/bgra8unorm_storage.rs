@@ -1,4 +1,4 @@
-//! Tests for texture copy bounds checks.
+//! Tests for BGRA8UNORM_STORAGE feature
 
 use std::borrow::Cow;
 

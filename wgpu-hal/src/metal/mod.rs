@@ -191,6 +191,7 @@ struct PrivateCapabilities {
     function_specialization: bool,
     depth_clip_mode: bool,
     texture_cube_array: bool,
+    supports_float_filtering: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8_filter: bool,
     format_depth32_stencil8_none: bool,

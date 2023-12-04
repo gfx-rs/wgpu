@@ -199,7 +199,7 @@ impl crate::ColorAttachment<'_, super::Api> {
             .view
             .attachment
             .view_format
-            .sample_type(None)
+            .sample_type(None, None)
             .unwrap()
         {
             wgt::TextureSampleType::Float { .. } => vk::ClearColorValue {

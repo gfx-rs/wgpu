@@ -549,6 +549,13 @@ impl super::Adapter {
             );
         }
 
+        features.set(
+            wgt::Features::FLOAT32_FILTERABLE,
+            extensions.contains("GL_ARB_color_buffer_float")
+                || extensions.contains("GL_EXT_color_buffer_float")
+                || extensions.contains("OES_texture_float_linear"),
+        );
+
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 
         let mut private_caps = super::PrivateCapabilities::empty();
@@ -593,14 +600,6 @@ impl super::Adapter {
         private_caps.set(
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             color_buffer_float,
-        );
-        private_caps.set(
-            super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
-            if full_ver.is_some() {
-                color_buffer_float
-            } else {
-                extensions.contains("OES_texture_float_linear")
-            },
         );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
         private_caps.set(super::PrivateCapabilities::QUERY_64BIT, full_ver.is_some());
@@ -1022,8 +1021,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
-        let texture_float_linear =
-            private_caps_fn(super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR, filterable);
+        let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
         match format {
             Tf::R8Unorm => filterable_renderable,

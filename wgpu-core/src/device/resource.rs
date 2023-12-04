@@ -2048,7 +2048,7 @@ impl<A: HalApi> Device<A> {
                         .views
                         .add_single(&*texture_view_guard, id)
                         .ok_or(Error::InvalidTextureView(id))?;
-                    let (pub_usage, internal_use) = Self::texture_use_parameters(
+                    let (pub_usage, internal_use) = self.texture_use_parameters(
                         binding,
                         decl,
                         view,
@@ -2079,7 +2079,7 @@ impl<A: HalApi> Device<A> {
                             .add_single(&*texture_view_guard, id)
                             .ok_or(Error::InvalidTextureView(id))?;
                         let (pub_usage, internal_use) =
-                            Self::texture_use_parameters(binding, decl, view,
+                            self.texture_use_parameters(binding, decl, view,
                                                          "SampledTextureArray, ReadonlyStorageTextureArray or WriteonlyStorageTextureArray")?;
                         Self::create_texture_binding(
                             view,
@@ -2181,6 +2181,7 @@ impl<A: HalApi> Device<A> {
     }
 
     pub(crate) fn texture_use_parameters(
+        self: &Arc<Self>,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,
         view: &TextureView<A>,
@@ -2211,7 +2212,7 @@ impl<A: HalApi> Device<A> {
                 let compat_sample_type = view
                     .desc
                     .format
-                    .sample_type(Some(view.desc.range.aspect))
+                    .sample_type(Some(view.desc.range.aspect), Some(self.features))
                     .unwrap();
                 match (sample_type, compat_sample_type) {
                     (Tst::Uint, Tst::Uint) |
@@ -3182,6 +3183,24 @@ impl<A: HalApi> Device<A> {
         Ok(pipeline)
     }
 
+    pub(crate) fn get_texture_format_features(
+        &self,
+        adapter: &Adapter<A>,
+        format: TextureFormat,
+    ) -> wgt::TextureFormatFeatures {
+        // Variant of adapter.get_texture_format_features that takes device features into account
+        use wgt::TextureFormatFeatureFlags as tfsc;
+        let mut format_features = adapter.get_texture_format_features(format);
+        if (format == TextureFormat::R32Float
+            || format == TextureFormat::Rg32Float
+            || format == TextureFormat::Rgba32Float)
+            && !self.features.contains(wgt::Features::FLOAT32_FILTERABLE)
+        {
+            format_features.flags.set(tfsc::FILTERABLE, false);
+        }
+        format_features
+    }
+
     pub(crate) fn describe_format_features(
         &self,
         adapter: &Adapter<A>,
@@ -3197,7 +3216,7 @@ impl<A: HalApi> Device<A> {
         let downlevel = !self.downlevel.is_webgpu_compliant();
 
         if using_device_features || downlevel {
-            Ok(adapter.get_texture_format_features(format))
+            Ok(self.get_texture_format_features(adapter, format))
         } else {
             Ok(format.guaranteed_format_features(self.features))
         }
