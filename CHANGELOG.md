@@ -39,6 +39,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### Direct3D 11 backend removal
+
+This backend had no functionality, and with the recent support for GL on Desktop, which allows wgpu to run on older devices, there is no need to keep the backend.
+
 ### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
 
 This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_driver_properties to be enumerated. This is intended for testing new Vulkan drivers which are not Vulkan compliant yet.
