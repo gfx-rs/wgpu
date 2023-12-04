@@ -268,7 +268,7 @@ impl<A: HalApi> Device<A> {
                     Some(trace)
                 }
                 Err(e) => {
-                    log::error!("Unable to start a trace in '{:?}': {:?}", path, e);
+                    log::error!("Unable to start a trace in '{path:?}': {e}");
                     None
                 }
             })),
@@ -3358,7 +3358,7 @@ impl<A: HalApi> Device<A> {
                 .unwrap()
                 .wait(fence, current_index, CLEANUP_WAIT_MS)
         } {
-            log::error!("failed to wait for the device: {:?}", error);
+            log::error!("failed to wait for the device: {error}");
         }
         let mut life_tracker = self.lock_life();
         let _ = life_tracker.triage_submissions(
