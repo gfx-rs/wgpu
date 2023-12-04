@@ -337,11 +337,6 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
         hal::FormatAspects::COLOR
     );
 
-    if texture_desc.format == wgt::TextureFormat::NV12 {
-        // TODO: Currently COPY_DST for NV12 textures is unsupported.
-        return;
-    }
-
     // Gather list of zero_buffer copies and issue a single command then to perform them
     let mut zero_buffer_copy_regions = Vec::new();
     let buffer_copy_pitch = alignments.buffer_copy_pitch.get() as u32;

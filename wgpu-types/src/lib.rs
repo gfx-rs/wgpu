@@ -771,16 +771,7 @@ bitflags::bitflags! {
         /// - OpenGL
         const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
 
-        /// Allows for creation of textures of format [`TextureFormat::NV12`]
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        ///
-        /// This is a native only feature.
-        const TEXTURE_FORMAT_NV12 = 1 << 55;
-
-        // 55..59 available
+        // 54..59 available
 
         // Shader:
 
@@ -2392,21 +2383,6 @@ pub enum TextureFormat {
     /// [`Features::DEPTH32FLOAT_STENCIL8`] must be enabled to use this texture format.
     Depth32FloatStencil8,
 
-    /// YUV 4:2:0 chroma subsampled format.
-    ///
-    /// Contains two planes:
-    /// - 0: Single 8 bit channel luminance.
-    /// - 1: Dual 8 bit channel chrominance at half width and half height.
-    ///
-    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
-    ///
-    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
-    ///
-    /// Width and height must be even.
-    ///
-    /// [`Features::TEXTURE_FORMAT_NV12`] must be enabled to use this texture format.
-    NV12,
-
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
     /// [0, 63] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
@@ -2636,7 +2612,6 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "depth16unorm" => TextureFormat::Depth16Unorm,
                     "depth24plus" => TextureFormat::Depth24Plus,
                     "depth24plus-stencil8" => TextureFormat::Depth24PlusStencil8,
-                    "nv12" => TextureFormat::NV12,
                     "rgb9e5ufloat" => TextureFormat::Rgb9e5Ufloat,
                     "bc1-rgba-unorm" => TextureFormat::Bc1RgbaUnorm,
                     "bc1-rgba-unorm-srgb" => TextureFormat::Bc1RgbaUnormSrgb,
@@ -2764,7 +2739,6 @@ impl Serialize for TextureFormat {
             TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
             TextureFormat::Depth24Plus => "depth24plus",
             TextureFormat::Depth24PlusStencil8 => "depth24plus-stencil8",
-            TextureFormat::NV12 => "nv12",
             TextureFormat::Rgb9e5Ufloat => "rgb9e5ufloat",
             TextureFormat::Bc1RgbaUnorm => "bc1-rgba-unorm",
             TextureFormat::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
@@ -2959,8 +2933,6 @@ impl TextureFormat {
             | Self::Depth32Float
             | Self::Depth32FloatStencil8 => (1, 1),
 
-            Self::NV12 => (2, 2),
-
             Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
             | Self::Bc2RgbaUnorm
@@ -3059,8 +3031,6 @@ impl TextureFormat {
 
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
-            Self::NV12 => Features::TEXTURE_FORMAT_NV12,
-
             Self::R16Unorm
             | Self::R16Snorm
             | Self::Rg16Unorm
@@ -3115,7 +3085,6 @@ impl TextureFormat {
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
         let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
-        let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = TextureUsages::all();
         let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
             attachment
@@ -3176,9 +3145,6 @@ impl TextureFormat {
             Self::Depth24PlusStencil8 =>  (        msaa, attachment),
             Self::Depth32Float =>         (        msaa, attachment),
             Self::Depth32FloatStencil8 => (        msaa, attachment),
-
-            // We only support sampling nv12 textures until we implement transfer plane data.
-            Self::NV12 =>                 (        noaa,    binding),
 
             Self::R16Unorm =>             (        msaa,    storage),
             Self::R16Snorm =>             (        msaa,    storage),
@@ -3286,8 +3252,6 @@ impl TextureFormat {
                 Some(TextureAspect::DepthOnly) => Some(depth),
                 Some(TextureAspect::StencilOnly) => Some(uint),
             },
-
-            Self::NV12 => None,
 
             Self::R16Unorm
             | Self::R16Snorm
@@ -3405,8 +3369,6 @@ impl TextureFormat {
                 Some(TextureAspect::StencilOnly) => Some(1),
             },
 
-            Self::NV12 => None,
-
             Self::Bc1RgbaUnorm | Self::Bc1RgbaUnormSrgb | Self::Bc4RUnorm | Self::Bc4RSnorm => {
                 Some(8)
             }
@@ -3497,8 +3459,6 @@ impl TextureFormat {
                 TextureAspect::All => 2,
                 TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
             },
-
-            Self::NV12 => 3,
 
             Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
             Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,

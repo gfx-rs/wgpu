@@ -1301,8 +1301,6 @@ pub struct TextureViewDescriptor<'a> {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
-    /// The index (plane slice number) of the plane to use in the texture.
-    pub plane: Option<u32>,
 }
 static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);
 

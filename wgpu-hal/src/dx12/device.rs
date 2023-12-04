@@ -467,11 +467,7 @@ impl crate::Device<super::Api> for super::Device {
             aspects: view_desc.aspects,
             target_base: (
                 texture.resource.clone(),
-                texture.calc_subresource(
-                    desc.range.base_mip_level,
-                    desc.range.base_array_layer,
-                    desc.plane.unwrap_or(0),
-                ),
+                texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
             ),
             handle_srv: if desc.usage.intersects(crate::TextureUses::RESOURCE) {
                 let raw_desc = unsafe { view_desc.to_srv() };

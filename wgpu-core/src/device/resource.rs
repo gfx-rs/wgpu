@@ -751,8 +751,7 @@ impl<A: HalApi> Device<A> {
             if desc.format == *format {
                 continue;
             }
-
-            if !check_texture_view_format_compatible(desc.format, *format) {
+            if desc.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
                 return Err(CreateTextureError::InvalidViewFormat(*format, desc.format));
             }
             hal_view_formats.push(*format);
@@ -805,35 +804,23 @@ impl<A: HalApi> Device<A> {
             let mut clear_views = SmallVec::new();
             for mip_level in 0..desc.mip_level_count {
                 for array_layer in 0..desc.size.depth_or_array_layers {
-                    macro_rules! push_clear_view {
-                        ($format:expr, $plane:expr) => {
-                            let desc = hal::TextureViewDescriptor {
-                                label: clear_label,
-                                format: $format,
-                                dimension,
-                                usage,
-                                range: wgt::ImageSubresourceRange {
-                                    aspect: wgt::TextureAspect::All,
-                                    base_mip_level: mip_level,
-                                    mip_level_count: Some(1),
-                                    base_array_layer: array_layer,
-                                    array_layer_count: Some(1),
-                                },
-                                plane: $plane,
-                            };
-                            clear_views.push(Some(
-                                unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
-                                    .map_err(DeviceError::from)?,
-                            ));
-                        };
-                    }
-
-                    if desc.format == wgt::TextureFormat::NV12 {
-                        push_clear_view!(wgt::TextureFormat::R8Unorm, Some(0));
-                        push_clear_view!(wgt::TextureFormat::Rg8Unorm, Some(1));
-                    } else {
-                        push_clear_view!(desc.format, None);
-                    }
+                    let desc = hal::TextureViewDescriptor {
+                        label: clear_label,
+                        format: desc.format,
+                        dimension,
+                        usage,
+                        range: wgt::ImageSubresourceRange {
+                            aspect: wgt::TextureAspect::All,
+                            base_mip_level: mip_level,
+                            mip_level_count: Some(1),
+                            base_array_layer: array_layer,
+                            array_layer_count: Some(1),
+                        },
+                    };
+                    clear_views.push(Some(
+                        unsafe { self.raw().create_texture_view(&raw_texture, &desc) }
+                            .map_err(DeviceError::from)?,
+                    ));
                 }
             }
             resource::TextureClearMode::RenderPass {
@@ -1028,8 +1015,6 @@ impl<A: HalApi> Device<A> {
             });
         };
 
-        validate_texture_view_plane(texture.desc.format, resolved_format, desc.plane)?;
-
         // https://gpuweb.github.io/gpuweb/#abstract-opdef-renderable-texture-view
         let render_extent = 'b: loop {
             if !texture
@@ -1121,7 +1106,6 @@ impl<A: HalApi> Device<A> {
             dimension: resolved_dimension,
             usage,
             range: resolved_range,
-            plane: desc.plane,
         };
 
         let raw = unsafe {
@@ -3363,41 +3347,5 @@ impl<A: HalApi> Resource<DeviceId> for Device<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<DeviceId> {
         &mut self.info
-    }
-}
-
-fn check_texture_view_format_compatible(
-    texture_format: TextureFormat,
-    view_format: TextureFormat,
-) -> bool {
-    use TextureFormat::*;
-
-    match (texture_format, view_format) {
-        (NV12, R8Unorm | R8Uint | Rg8Unorm | Rg8Uint) => true,
-        _ => texture_format.remove_srgb_suffix() == view_format.remove_srgb_suffix(),
-    }
-}
-
-fn validate_texture_view_plane(
-    texture_format: TextureFormat,
-    view_format: TextureFormat,
-    plane: Option<u32>,
-) -> Result<(), resource::CreateTextureViewError> {
-    use TextureFormat::*;
-
-    match (texture_format, view_format, plane) {
-        (NV12, R8Unorm | R8Uint, Some(0)) => Ok(()),
-        (NV12, Rg8Unorm | Rg8Uint, Some(1)) => Ok(()),
-        (NV12, _, _) => {
-            Err(resource::CreateTextureViewError::InvalidTextureViewPlane { plane, view_format })
-        }
-
-        (_, _, Some(_)) => Err(
-            resource::CreateTextureViewError::InvalidTextureViewPlaneOnNonplanarTexture {
-                plane,
-                texture_format,
-            },
-        ),
-        _ => Ok(()),
     }
 }
