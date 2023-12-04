@@ -59,7 +59,7 @@ Previously, `DeviceExt::create_texture_with_data` only allowed data to be provid
 #### Naga
 
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
-
+- Added `CombinedImageSamplerDesugaring::SplitIntoOverlappedBinding` to spv-in to optionally split combined image samplers to a separate image and sampler at the same binding location. The resultant module will not validate until the binding locations for each separated image and sampler have been adjusted to not overlap. This allows SPIR-V inputs that use combined image samplers to be converted to valid WGSL. By @chyyran in [#4819](https://github.com/gfx-rs/wgpu/pull/4819)
 ### Changes
 
 - Arcanization of wgpu core resources: By @gents83 in [#3626](https://github.com/gfx-rs/wgpu/pull/3626) and thanks also to @jimblandy, @nical, @Wumpf, @Elabajaba & @cwfitzgerald
