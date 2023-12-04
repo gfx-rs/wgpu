@@ -38,6 +38,7 @@ use std::{
 };
 
 use std::num::NonZeroU64;
+use crate::id::{BlasId, TlasId};
 
 /// Information about the wgpu-core resource.
 ///
@@ -1312,8 +1313,8 @@ pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
 pub struct Blas<A: hal::Api> {
     pub(crate) raw: Option<A::AccelerationStructure>,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<BlasId>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
@@ -1322,18 +1323,22 @@ pub struct Blas<A: hal::Api> {
     pub(crate) handle: u64,
 }
 
-impl<A: hal::Api> Resource for Blas<A> {
+impl<A: hal::Api> Resource<BlasId> for Blas<A> {
     const TYPE: &'static str = "Blas";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn as_info(&self) -> &ResourceInfo<BlasId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<BlasId> {
+        &mut self.info
     }
 }
 
 pub struct Tlas<A: hal::Api> {
     pub(crate) raw: Option<A::AccelerationStructure>,
-    pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) device: Arc<Device<A>>,
+    pub(crate) info: ResourceInfo<TlasId>,
     pub(crate) size_info: hal::AccelerationStructureBuildSizes,
     pub(crate) max_instance_count: u32,
     pub(crate) flags: wgt::AccelerationStructureFlags,
@@ -1343,10 +1348,14 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) instance_buffer: Option<A::Buffer>,
 }
 
-impl<A: hal::Api> Resource for Tlas<A> {
+impl<A: hal::Api> Resource<TlasId> for Tlas<A> {
     const TYPE: &'static str = "Tlas";
 
-    fn life_guard(&self) -> &LifeGuard {
-        &self.life_guard
+    fn as_info(&self) -> &ResourceInfo<TlasId> {
+        &self.info
+    }
+
+    fn as_info_mut(&mut self) -> &mut ResourceInfo<TlasId> {
+        &mut self.info
     }
 }
