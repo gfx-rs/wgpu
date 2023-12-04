@@ -526,7 +526,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             image_ops ^= bit;
         }
 
-        let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
+        let si_lexp = match self.lookup_sampled_image.get(&sampled_image_id) {
+            Some(si_lexp) => si_lexp.clone(),
+            None => {
+                let load_exp = self.lookup_expression.lookup(sampled_image_id)?.clone();
+                let combined_image_sampler = load_exp.handle;
+                LookupSampledImage {
+                    image: combined_image_sampler,
+                    sampler: combined_image_sampler,
+                }
+            }
+        };
+
         let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
         let coord_handle =
             self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
