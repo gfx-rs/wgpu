@@ -213,9 +213,8 @@ fn constructor_parameter_type_mismatch() {
   ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
-  │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │                     │           │
-  │                     │           this expression has type array<{AbstractInt}, 2>
+  │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
+  │                     │            
   │                     a value of type vec2<f32> is required here
 
 "#,
@@ -1980,6 +1979,25 @@ fn function_param_redefinition_as_local() {
   │              ^ previous definition of `a`
 3 │             let a = 0.0;
   │                 ^ redefinition of `a`
+
+"###,
+    )
+}
+
+#[test]
+fn constructor_type_error_span() {
+    check(
+        "
+        fn unfortunate() {
+            var i: i32;
+            var a: array<f32, 1> = array<f32, 1>(i);
+        }
+    ",
+        r###"error: automatic conversions cannot convert `i32` to `f32`
+  ┌─ wgsl:4:36
+  │
+4 │             var a: array<f32, 1> = array<f32, 1>(i);
+  │                                    ^^^^^^^^^^^^^^^^ a value of type f32 is required here
 
 "###,
     )
