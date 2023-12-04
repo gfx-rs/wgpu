@@ -761,14 +761,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 53;
-        /// Allows for the creation of ray-tracing acceleration structures.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 54;
-
         /// Allows vertex shaders to have outputs which are not consumed
         /// by the fragment shader.
         ///
@@ -777,7 +769,6 @@ bitflags::bitflags! {
         /// - Metal
         /// - OpenGL
         const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
-
         /// Allows for creation of textures of format [`TextureFormat::NV12`]
         ///
         /// Supported platforms:
@@ -786,11 +777,25 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_NV12 = 1 << 55;
+        /// Allows for the creation of ray-tracing acceleration structures.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 56;
 
-        // 55..59 available
+        // 57 available
 
         // Shader:
 
+        /// Allows for the creation of ray-tracing queries within shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_QUERY = 1 << 58;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -842,14 +847,6 @@ bitflags::bitflags! {
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
         const DUAL_SOURCE_BLENDING = 1 << 63;
-
-        /// Allows for the creation of ray-tracing queries within shaders.
-        ///
-        /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        const RAY_QUERY = 1 << 63;
     }
 }
 

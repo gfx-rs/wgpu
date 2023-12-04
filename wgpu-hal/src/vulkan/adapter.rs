@@ -1403,6 +1403,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
             }
 
+            if features.contains(wgt::Features::RAY_QUERY) {
+                capabilities.push(spv::Capability::RayQueryKHR);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,

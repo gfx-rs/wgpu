@@ -423,10 +423,12 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         const CAPACITY_INNER: usize = 1;
         let descriptor_count = descriptor_count as usize;
 
-        let ray_tracing_functions = match self.device.extension_fns.ray_tracing {
-            Some(ref functions) => functions,
-            None => panic!("Feature `RAY_TRACING` not enabled"),
-        };
+        let ray_tracing_functions = self
+            .device
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
 
         let get_device_address = |buffer: Option<&super::Buffer>| unsafe {
             match buffer {
@@ -618,39 +620,11 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             ranges_ptrs.push(&ranges_storage[i]);
         }
 
-        // let mut geometry_infos =
-        //     Vec::<vk::AccelerationStructureBuildGeometryInfoKHR>::with_capacity(descriptors.len());
-
-        // let mut ranges_vec =
-        //     Vec::<&[vk::AccelerationStructureBuildRangeInfoKHR]>::with_capacity(descriptors.len());
-
-        // let mut ranges_storage =
-        //     Vec::<Vec::<vk::AccelerationStructureBuildRangeInfoKHR>>::with_capacity(descriptors.len());
-
-        // for desc in descriptors {
-        //     let (ranges, geometry_info) = prepare_geometry_info_and_ranges(desc);
-        //     geometry_infos.push(geometry_info);
-        //     ranges_storage.push(ranges);
-
-        // }
-
-        // for i in 0..descriptors.len() {
-        //     ranges_vec.push(&ranges_storage[i]);
-        // }
-
-        // let (ranges, geometry_info) = prepare_geometry_info_and_ranges(descriptors[0]);
-
         unsafe {
             ray_tracing_functions
                 .acceleration_structure
                 .cmd_build_acceleration_structures(self.active, &geometry_infos, &ranges_ptrs);
         }
-
-        // unsafe {
-        //     ray_tracing_functions
-        //         .acceleration_structure
-        //         .cmd_build_acceleration_structures(self.active, &geometry_infos, &ranges_vec);
-        // }
     }
 
     unsafe fn place_acceleration_structure_barrier(

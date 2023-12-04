@@ -111,9 +111,9 @@ pub struct PipelineLayout {}
 #[derive(Debug)]
 pub struct ShaderModule {}
 #[derive(Debug)]
-pub struct RenderPipeline {}
-#[derive(Debug)]
 pub struct AccelerationStructure {}
+#[derive(Debug)]
+pub struct RenderPipeline {}
 #[derive(Debug)]
 pub struct ComputePipeline {}
 
