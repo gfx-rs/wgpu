@@ -266,6 +266,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     if features.contains(wgpu_types::Features::BGRA8UNORM_STORAGE) {
         return_features.push("bgra8unorm-storage");
     }
+    if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
+        return_features.push("float32-filterable");
+    }
 
     // extended from spec
 
@@ -497,6 +500,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
         features.set(
             wgpu_types::Features::BGRA8UNORM_STORAGE,
             required_features.0.contains("bgra8unorm-storage"),
+        );
+        features.set(
+            wgpu_types::Features::FLOAT32_FILTERABLE,
+            required_features.0.contains("float32-filterable"),
         );
 
         // extended from spec
