@@ -1997,7 +1997,7 @@ fn constructor_type_error_span() {
   ┌─ wgsl:4:36
   │
 4 │             var a: array<f32, 1> = array<f32, 1>(i);
-  │                                    ^^^^^^^^^^^^^^^^ a value of type f32 is required here
+  │                                    ^^^^^^^^^^^^^ a value of type f32 is required here
 
 "###,
     )
