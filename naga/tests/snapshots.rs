@@ -939,3 +939,291 @@ fn convert_glsl_folder() {
         }
     }
 }
+
+#[cfg(feature="spv-in")]
+#[test]
+fn convert_spv_with_combined_image_sampler_remapped() {
+    convert_spv_combined_image_sampler_desugared(
+        "combined-image-sampler",
+        false,
+        Targets::WGSL | Targets::GLSL | Targets::METAL | Targets::HLSL
+    )
+}
+
+#[cfg(feature = "spv-in")]
+fn convert_spv_combined_image_sampler_desugared(
+    name: &str,
+    adjust_coordinate_space: bool,
+    targets: Targets,
+) {
+    let _ = env_logger::try_init();
+
+    let input = Input::new(Some("spv"), name, "spv");
+    let mut module = naga::front::spv::parse_u8_slice(
+        &input.read_bytes(),
+        &naga::front::spv::Options {
+            adjust_coordinate_space,
+            strict_capabilities: false,
+            block_ctx_dump_prefix: None,
+        },
+    )
+        .unwrap();
+
+
+    use naga::{Arena, Handle, Expression, Statement,
+               Block, Range, AtomicFunction, RayQueryFunction,
+    Span, ResourceBinding, };
+
+    // Replace combined image sampler to make valid
+    fn replace_combined_image_samplers(module: &mut naga::Module) {
+        for (_, function) in module.functions.iter_mut() {
+
+            let expressions = &mut function.expressions;
+
+            let mut image_sample_exprs = Vec::new();
+            {
+                for (handle, expr) in expressions.iter() {
+                    if let Expression::ImageSample {
+                        image,
+                        sampler,
+                        ..
+                    } = expr {
+                        if *image == *sampler {
+                            let image_expr = &expressions[*image];
+
+                            let &naga::Expression::GlobalVariable(gv) = image_expr else {
+                                todo!("nah")
+                            };
+                            let gv = &module.global_variables[gv];
+                            let gv_ty = &module.types[gv.ty];
+                            let Some(binding) = &gv.binding else {
+                                todo!("nah")
+                            };
+
+                            let sampler_ty = match gv_ty.inner {
+                                naga::TypeInner::Image { .. } => {
+                                    module.types.insert(naga::Type {
+                                        name: None,
+                                        inner: naga::TypeInner::Sampler { comparison: false },
+                                    }, Span::UNDEFINED)
+                                },
+                                naga::TypeInner::BindingArray { size, .. } => {
+                                    // The inner type of the sampler doesn't need to be looked up later
+                                    let base = module.types.insert(naga::Type {
+                                        name: None,
+                                        inner: naga::TypeInner::Sampler { comparison: false },
+                                    }, Span::UNDEFINED);
+
+
+                                    module.types.insert(
+                                        naga::Type {
+                                            name: None,
+                                            inner: naga::TypeInner::BindingArray { base, size },
+                                        },
+                                        Span::UNDEFINED,
+                                    )
+                                }
+                                _ => todo!("nah"),
+                            };
+
+
+                            let sampler_def = module.global_variables.append(
+                                naga::GlobalVariable {
+                                    name: gv.name.as_ref().map(|n| format!("_{}_sampler", n)),
+                                    space: gv.space,
+                                    binding: Some(ResourceBinding {
+                                        group: 1,
+                                        binding: binding.binding,
+                                    }),
+                                    ty: sampler_ty,
+                                    init: None,
+                                },
+                                Span::UNDEFINED,
+                            );
+
+                            image_sample_exprs.push((handle, sampler_def));
+                            eprintln!("{:?}", image_expr);
+                        }
+                    }
+                }
+            }
+
+
+            for (expr, sampler_def) in image_sample_exprs {
+                let mut reinsert = expressions[expr].clone();
+
+                // Replace the OpSample with OpLoad of the created sampler
+                let sampler_load = naga::Expression::GlobalVariable(sampler_def);
+                expressions[expr] = sampler_load;
+                let sampler_load = expr;
+
+                // Adjust the sampler to load from the generated sampler
+                if let naga::Expression::ImageSample { sampler, .. } = &mut reinsert  {
+                    *sampler = sampler_load;
+                }
+
+                // Replace the image sample expression so it appears after the global variable load
+                let expr = expressions
+                    .append(reinsert, Span::UNDEFINED);
+
+                replace_expression(&expressions, sampler_load, expr, &mut function.body);
+            }
+        }
+
+    }
+    fn replace_expression(arena: &Arena<Expression>,
+                          needle: Handle<Expression>,
+                          replacement: Handle<Expression>, haystack: &mut Block) {
+        let replace_if = |handle: &mut Handle<Expression>| {
+            if *handle == needle {
+                *handle = replacement;
+            }
+        };
+
+        for statement in haystack.iter_mut() {
+            match statement {
+                Statement::Emit(range) => {
+
+                    let Some((first, last)) = range.first_and_last() else {
+                        continue;
+                    };
+
+                    // [n..n]
+                    if first == last {
+                        if first == needle {
+                            // replace the unitary range, this is easy enough
+                            *range = Range::new_from_bounds(replacement, replacement);
+                        }
+                    }
+
+                    // [n..n+m]
+                    if first > last {
+                        if first == needle {
+                            // [needle..]
+                            let mut range_raw = range.zero_based_index_range();
+                            range_raw.start += 1;
+
+                            let truncated = Range::from_zero_based_index_range(range_raw, arena);
+
+                            *statement = Statement::Block(Block::from_vec(vec![
+                                Statement::Emit(Range::new_from_bounds(replacement, replacement)),
+                                Statement::Emit(truncated)
+                            ]))
+                        } else if last == needle {
+                            // [..needle]
+                            let mut range_raw = range.zero_based_index_range();
+                            range_raw.end += 1;
+
+                            let truncated = Range::from_zero_based_index_range(range_raw, arena);
+
+                            *statement = Statement::Block(Block::from_vec(vec![
+                                Statement::Emit(truncated),
+                                Statement::Emit(Range::new_from_bounds(replacement, replacement)),
+                            ]))
+                        } else {
+                            // [n..needle..m]
+                            let mut range_raw_start = range.zero_based_index_range();
+                            let mut range_raw_end = range.zero_based_index_range();
+
+                            range_raw_start.end = needle.index() as u32;
+                            range_raw_end.start = needle.index() as u32 + 1;
+
+
+                            *statement = Statement::Block(Block::from_vec(vec![
+                                Statement::Emit(Range::from_zero_based_index_range(range_raw_start, arena)),
+                                Statement::Emit(Range::new_from_bounds(replacement, replacement)),
+                                Statement::Emit(Range::from_zero_based_index_range(range_raw_end, arena)),
+                            ]))
+                        }
+                    }
+                }
+                Statement::Block(block) => replace_expression(arena, needle, replacement, block),
+                Statement::If { condition, accept, reject } => {
+                    replace_if(condition);
+                    replace_expression(arena, needle, replacement, accept);
+                    replace_expression(arena, needle, replacement, reject);
+                }
+                Statement::Switch { selector, cases } => {
+                    replace_if(selector);
+                    for case in cases {
+                        replace_expression(arena, needle, replacement, &mut case.body)
+                    }
+                }
+                Statement::Loop { body, continuing, break_if } => {
+                    if let Some(break_if) = break_if {
+                        replace_if(break_if);
+                    }
+                    replace_expression(arena, needle, replacement, body);
+                    replace_expression(arena, needle, replacement, continuing);
+                }
+                Statement::Break => {}
+                Statement::Continue => {}
+                Statement::Return { value } => {
+                    if let Some(value) = value {
+                        replace_if(value);
+                    }
+                }
+                Statement::Kill => {}
+                Statement::Barrier(_) => {}
+                Statement::Store { pointer, value } => {
+                    replace_if(pointer);
+                    replace_if(value);
+                }
+                Statement::ImageStore { image,
+                    coordinate,
+                    array_index,
+                    value
+                } => {
+                    replace_if(image);
+                    replace_if(coordinate);
+                    if let Some(array_index) = array_index {
+                        replace_if(array_index);
+                    }
+                    replace_if(value)
+                }
+                Statement::Atomic { pointer, fun, value, result, } => {
+                    replace_if(pointer);
+                    replace_if(value);
+                    replace_if(result);
+                    match fun {
+                        AtomicFunction::Exchange { compare } => {
+                            if let Some(compare) = compare {
+                                replace_if(compare)
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Statement::WorkGroupUniformLoad { pointer, result } => {
+                    replace_if(pointer);
+                    replace_if(result);
+                }
+                Statement::Call { arguments, result, .. } => {
+                    if let Some(result) = result {
+                        replace_if(result);
+                    }
+
+                    for args in arguments.iter_mut() {
+                        replace_if(args);
+                    }
+                }
+                Statement::RayQuery { query, fun, } => {
+                    replace_if(query);
+                    match fun {
+                        RayQueryFunction::Initialize { acceleration_structure, descriptor } => {
+                            replace_if(acceleration_structure);
+                            replace_if(descriptor);
+                        }
+                        RayQueryFunction::Proceed { result } => {
+                            replace_if(result)
+                        }
+                        RayQueryFunction::Terminate => {}
+                    }
+                }
+            }
+        }
+    }
+
+    replace_combined_image_samplers(&mut module);
+    check_targets(&input, &mut module, targets, None);
+}
