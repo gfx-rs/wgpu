@@ -543,4 +543,3 @@ static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
             "Device lost callback should have been called."
         );
     });
-
