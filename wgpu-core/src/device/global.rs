@@ -2230,6 +2230,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = A::hub(self);
         if let Some(device) = hub.devices.unregister(device_id) {
+            device.lose("Device dropped.");
+
             // The things `Device::prepare_to_die` takes care are mostly
             // unnecessary here. We know our queue is empty, so we don't
             // need to wait for submissions or triage them. We know we were
