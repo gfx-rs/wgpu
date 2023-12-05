@@ -514,10 +514,11 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static DEVICE_DROP_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
     .run_sync(|ctx| {
         // This test checks that when the device is dropped (such as in a GC),
         // the provided DeviceLostClosure is called with reason DeviceLostReason::Unknown.
+        // Fails on webgl because webgl doesn't implement drop.
         let was_called = std::sync::Arc::<std::sync::atomic::AtomicBool>::new(false.into());
 
         // Set a LoseDeviceCallback on the device.
