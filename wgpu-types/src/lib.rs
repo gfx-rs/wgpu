@@ -2890,6 +2890,11 @@ impl TextureFormat {
         }
     }
 
+    /// Returns `true` if the format is a multi-planar format
+    pub fn is_multi_planar_format(&self) -> bool {
+        matches!(*self, Self::NV12)
+    }
+
     /// Returns `true` if the format has a color aspect
     pub fn has_color_aspect(&self) -> bool {
         !self.is_depth_stencil_format()
