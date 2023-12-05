@@ -55,6 +55,11 @@ fn compose_of_constant() {
 
 }
 
+fn compose_of_splat() {
+    var x_1: vec4<f32> = vec4<f32>(2.0, 1.0, 1.0, 1.0);
+
+}
+
 fn map_texture_kind(texture_kind: i32) -> u32 {
     switch texture_kind {
         case 0: {
@@ -80,5 +85,6 @@ fn main() {
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    compose_of_splat();
     return;
 }

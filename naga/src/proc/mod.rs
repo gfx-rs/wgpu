@@ -661,17 +661,19 @@ pub fn flatten_compose<'arenas>(
     expressions: &'arenas crate::Arena<crate::Expression>,
     types: &'arenas crate::UniqueArena<crate::Type>,
 ) -> impl Iterator<Item = crate::Handle<crate::Expression>> + 'arenas {
-    // Returning `impl Iterator` is a bit tricky. We may or may not want to
-    // flatten the components, but we have to settle on a single concrete
-    // type to return. The below is a single iterator chain that handles
-    // both the flattening and non-flattening cases.
+    // Returning `impl Iterator` is a bit tricky. We may or may not
+    // want to flatten the components, but we have to settle on a
+    // single concrete type to return. This function returns a single
+    // iterator chain that handles both the flattening and
+    // non-flattening cases.
     let (size, is_vector) = if let crate::TypeInner::Vector { size, .. } = types[ty].inner {
         (size as usize, true)
     } else {
         (components.len(), false)
     };
 
-    fn flattener<'c>(
+    /// Flatten `Compose` expressions if `is_vector` is true.
+    fn flatten_compose<'c>(
         component: &'c crate::Handle<crate::Expression>,
         is_vector: bool,
         expressions: &'c crate::Arena<crate::Expression>,
@@ -688,14 +690,35 @@ pub fn flatten_compose<'arenas>(
         std::slice::from_ref(component)
     }
 
-    // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to flatten
-    // two levels.
+    /// Flatten `Splat` expressions if `is_vector` is true.
+    fn flatten_splat<'c>(
+        component: &'c crate::Handle<crate::Expression>,
+        is_vector: bool,
+        expressions: &'c crate::Arena<crate::Expression>,
+    ) -> impl Iterator<Item = crate::Handle<crate::Expression>> {
+        let mut expr = *component;
+        let mut count = 1;
+        if is_vector {
+            if let crate::Expression::Splat { size, value } = expressions[expr] {
+                expr = value;
+                count = size as usize;
+            }
+        }
+        std::iter::repeat(expr).take(count)
+    }
+
+    // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to
+    // flatten up to two levels of `Compose` expressions.
+    //
+    // Expressions like `vec4(vec3(1.0), 1.0)` require us to flatten
+    // `Splat` expressions. Fortunately, the operand of a `Splat` must
+    // be a scalar, so we can stop there.
     components
         .iter()
-        .flat_map(move |component| flattener(component, is_vector, expressions))
-        .flat_map(move |component| flattener(component, is_vector, expressions))
+        .flat_map(move |component| flatten_compose(component, is_vector, expressions))
+        .flat_map(move |component| flatten_compose(component, is_vector, expressions))
+        .flat_map(move |component| flatten_splat(component, is_vector, expressions))
         .take(size)
-        .cloned()
 }
 
 #[test]
