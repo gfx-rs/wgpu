@@ -60,6 +60,8 @@ Previously, `DeviceExt::create_texture_with_data` only allowed data to be provid
 
 #### OpenGL
 - `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
+- Desktop GL now supports `POLYGON_MODE_LINE` and `POLYGON_MODE_POINT`. By @valaphee in [#4836](https://github.com/gfx-rs/wgpu/pull/4836)
+
 #### Naga
 
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).

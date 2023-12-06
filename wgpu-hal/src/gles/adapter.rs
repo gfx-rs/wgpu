@@ -219,10 +219,7 @@ impl super::Adapter {
         log::debug!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
-        let es_ver = full_ver
-            .is_none()
-            .then_some(())
-            .and_then(|_| Self::parse_version(&version).ok());
+        let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
         let web_gl = cfg!(target_arch = "wasm32");
 
         if let Some(full_ver) = full_ver {
@@ -555,6 +552,10 @@ impl super::Adapter {
                 || extensions.contains("GL_EXT_color_buffer_float")
                 || extensions.contains("OES_texture_float_linear"),
         );
+
+        if es_ver.is_none() {
+            features |= wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT;
+        }
 
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 
