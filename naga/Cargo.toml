@@ -1,6 +1,6 @@
 [package]
 name = "naga"
-version = "0.14.1"
+version = "0.14.2"
 authors = ["Naga Developers"]
 edition = "2021"
 description = "Shader translation infrastructure"
