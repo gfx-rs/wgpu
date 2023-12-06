@@ -1125,6 +1125,7 @@ impl crate::Device<super::Api> for super::Device {
                         ty: wgt::BufferBindingType::Storage { .. },
                         ..
                     } => &mut num_storage_buffers,
+                    wgt::BindingType::AccelerationStructure => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1211,6 +1212,7 @@ impl crate::Device<super::Api> for super::Device {
                         format: format_desc.internal,
                     })
                 }
+                wgt::BindingType::AccelerationStructure => unimplemented!(),
             };
             contents.push(binding);
         }
@@ -1458,6 +1460,25 @@ impl crate::Device<super::Api> for super::Device {
                 .end_frame_capture(ptr::null_mut(), ptr::null_mut())
         }
     }
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<(), crate::DeviceError> {
+        unimplemented!()
+    }
+    unsafe fn get_acceleration_structure_build_sizes<'a>(
+        &self,
+        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+    ) -> crate::AccelerationStructureBuildSizes {
+        unimplemented!()
+    }
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        _acceleration_structure: &(),
+    ) -> wgt::BufferAddress {
+        unimplemented!()
+    }
+    unsafe fn destroy_acceleration_structure(&self, _acceleration_structure: ()) {}
 }
 
 #[cfg(all(

@@ -1216,6 +1216,24 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         let encoder = self.state.compute.as_ref().unwrap();
         encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
     }
+
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
+        unimplemented!()
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        unimplemented!()
+    }
 }
 
 impl Drop for super::CommandEncoder {

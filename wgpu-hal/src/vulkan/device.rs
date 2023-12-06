@@ -863,12 +863,21 @@ impl crate::Device<super::Api> for super::Device {
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
 
+        let alignment_mask = if desc.usage.intersects(
+            crate::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
+                | crate::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+        ) {
+            16
+        } else {
+            req.alignment
+        } - 1;
+
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
                     size: req.size,
-                    align_mask: req.alignment - 1,
+                    align_mask: alignment_mask,
                     usage: alloc_usage,
                     memory_types: req.memory_type_bits & self.valid_ash_memory_types,
                 },
@@ -1256,6 +1265,9 @@ impl crate::Device<super::Api> for super::Device {
                 wgt::BindingType::StorageTexture { .. } => {
                     desc_count.storage_image += count;
                 }
+                wgt::BindingType::AccelerationStructure => {
+                    desc_count.acceleration_structure += count;
+                }
             }
         }
 
@@ -1430,6 +1442,10 @@ impl crate::Device<super::Api> for super::Device {
         let mut buffer_infos = Vec::with_capacity(desc.buffers.len());
         let mut sampler_infos = Vec::with_capacity(desc.samplers.len());
         let mut image_infos = Vec::with_capacity(desc.textures.len());
+        let mut acceleration_structure_infos =
+            Vec::with_capacity(desc.acceleration_structures.len());
+        let mut raw_acceleration_structures =
+            Vec::with_capacity(desc.acceleration_structures.len());
         for entry in desc.entries {
             let (ty, size) = desc.layout.types[entry.binding as usize];
             if size == 0 {
@@ -1439,6 +1455,9 @@ impl crate::Device<super::Api> for super::Device {
                 .dst_set(*set.raw())
                 .dst_binding(entry.binding)
                 .descriptor_type(ty);
+
+            let mut extra_descriptor_count = 0;
+
             write = match ty {
                 vk::DescriptorType::SAMPLER => {
                     let index = sampler_infos.len();
@@ -1489,9 +1508,44 @@ impl crate::Device<super::Api> for super::Device {
                     ));
                     write.buffer_info(&buffer_infos[index..])
                 }
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
+                    let index = acceleration_structure_infos.len();
+                    let start = entry.resource_index;
+                    let end = start + entry.count;
+
+                    let raw_start = raw_acceleration_structures.len();
+
+                    raw_acceleration_structures.extend(
+                        desc.acceleration_structures[start as usize..end as usize]
+                            .iter()
+                            .map(|acceleration_structure| acceleration_structure.raw),
+                    );
+
+                    let acceleration_structure_info =
+                        vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+                            .acceleration_structures(&raw_acceleration_structures[raw_start..]);
+
+                    // todo: Dereference the struct to get around lifetime issues. Safe as long as we never resize
+                    // `raw_acceleration_structures`.
+                    let acceleration_structure_info: vk::WriteDescriptorSetAccelerationStructureKHR = *acceleration_structure_info;
+
+                    assert!(
+                        index < desc.acceleration_structures.len(),
+                        "Encountered more acceleration structures then expected"
+                    );
+                    acceleration_structure_infos.push(acceleration_structure_info);
+
+                    extra_descriptor_count += 1;
+
+                    write.push_next(&mut acceleration_structure_infos[index])
+                }
                 _ => unreachable!(),
             };
-            writes.push(write.build());
+
+            let mut write = write.build();
+            write.descriptor_count += extra_descriptor_count;
+
+            writes.push(write);
         }
 
         unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
@@ -2022,6 +2076,231 @@ impl crate::Device<super::Api> for super::Device {
                 self.render_doc
                     .end_frame_capture(raw_vk_instance_dispatch_table, ptr::null_mut())
             }
+        }
+    }
+
+    unsafe fn get_acceleration_structure_build_sizes<'a>(
+        &self,
+        desc: &crate::GetAccelerationStructureBuildSizesDescriptor<'a, super::Api>,
+    ) -> crate::AccelerationStructureBuildSizes {
+        const CAPACITY: usize = 8;
+
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        let (geometries, primitive_counts) = match *desc.entries {
+            crate::AccelerationStructureEntries::Instances(ref instances) => {
+                let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::default();
+
+                let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+                    .geometry(vk::AccelerationStructureGeometryDataKHR {
+                        instances: instance_data,
+                    });
+
+                (
+                    smallvec::smallvec![*geometry],
+                    smallvec::smallvec![instances.count],
+                )
+            }
+            crate::AccelerationStructureEntries::Triangles(ref in_geometries) => {
+                let mut primitive_counts =
+                    smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
+                let mut geometries = smallvec::SmallVec::<
+                    [vk::AccelerationStructureGeometryKHR; CAPACITY],
+                >::with_capacity(in_geometries.len());
+
+                for triangles in in_geometries {
+                    let mut triangle_data =
+                        vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                            .vertex_format(conv::map_vertex_format(triangles.vertex_format))
+                            .max_vertex(triangles.vertex_count)
+                            .vertex_stride(triangles.vertex_stride);
+
+                    let pritive_count = if let Some(ref indices) = triangles.indices {
+                        triangle_data =
+                            triangle_data.index_type(conv::map_index_format(indices.format));
+                        indices.count / 3
+                    } else {
+                        triangles.vertex_count
+                    };
+
+                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                        .geometry(vk::AccelerationStructureGeometryDataKHR {
+                            triangles: *triangle_data,
+                        })
+                        .flags(conv::map_acceleration_structure_geomety_flags(
+                            triangles.flags,
+                        ));
+
+                    geometries.push(*geometry);
+                    primitive_counts.push(pritive_count);
+                }
+                (geometries, primitive_counts)
+            }
+            crate::AccelerationStructureEntries::AABBs(ref in_geometries) => {
+                let mut primitive_counts =
+                    smallvec::SmallVec::<[u32; CAPACITY]>::with_capacity(in_geometries.len());
+                let mut geometries = smallvec::SmallVec::<
+                    [vk::AccelerationStructureGeometryKHR; CAPACITY],
+                >::with_capacity(in_geometries.len());
+                for aabb in in_geometries {
+                    let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                        .stride(aabb.stride);
+
+                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        .geometry_type(vk::GeometryTypeKHR::AABBS)
+                        .geometry(vk::AccelerationStructureGeometryDataKHR { aabbs: *aabbs_data })
+                        .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+
+                    geometries.push(*geometry);
+                    primitive_counts.push(aabb.count);
+                }
+                (geometries, primitive_counts)
+            }
+        };
+
+        let ty = match *desc.entries {
+            crate::AccelerationStructureEntries::Instances(_) => {
+                vk::AccelerationStructureTypeKHR::TOP_LEVEL
+            }
+            _ => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
+        };
+
+        let geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            .ty(ty)
+            .flags(conv::map_acceleration_structure_flags(desc.flags))
+            .geometries(&geometries);
+
+        let raw = unsafe {
+            ray_tracing_functions
+                .acceleration_structure
+                .get_acceleration_structure_build_sizes(
+                    vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                    &geometry_info,
+                    &primitive_counts,
+                )
+        };
+
+        crate::AccelerationStructureBuildSizes {
+            acceleration_structure_size: raw.acceleration_structure_size,
+            update_scratch_size: raw.update_scratch_size,
+            build_scratch_size: raw.build_scratch_size,
+        }
+    }
+
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &super::AccelerationStructure,
+    ) -> wgt::BufferAddress {
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        unsafe {
+            ray_tracing_functions
+                .acceleration_structure
+                .get_acceleration_structure_device_address(
+                    &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                        .acceleration_structure(acceleration_structure.raw),
+                )
+        }
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &crate::AccelerationStructureDescriptor,
+    ) -> Result<super::AccelerationStructure, crate::DeviceError> {
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        let vk_buffer_info = vk::BufferCreateInfo::builder()
+            .size(desc.size)
+            .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        unsafe {
+            let raw_buffer = self.shared.raw.create_buffer(&vk_buffer_info, None)?;
+            let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
+
+            let block = self.mem_allocator.lock().alloc(
+                &*self.shared,
+                gpu_alloc::Request {
+                    size: req.size,
+                    align_mask: req.alignment - 1,
+                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+                },
+            )?;
+
+            self.shared
+                .raw
+                .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())?;
+
+            if let Some(label) = desc.label {
+                self.shared
+                    .set_object_name(vk::ObjectType::BUFFER, raw_buffer, label);
+            }
+
+            let vk_info = vk::AccelerationStructureCreateInfoKHR::builder()
+                .buffer(raw_buffer)
+                .offset(0)
+                .size(desc.size)
+                .ty(conv::map_acceleration_structure_format(desc.format));
+
+            let raw_acceleration_structure = ray_tracing_functions
+                .acceleration_structure
+                .create_acceleration_structure(&vk_info, None)?;
+
+            if let Some(label) = desc.label {
+                self.shared.set_object_name(
+                    vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
+                    raw_acceleration_structure,
+                    label,
+                );
+            }
+
+            Ok(super::AccelerationStructure {
+                raw: raw_acceleration_structure,
+                buffer: raw_buffer,
+                block: Mutex::new(block),
+            })
+        }
+    }
+
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: super::AccelerationStructure,
+    ) {
+        let ray_tracing_functions = self
+            .shared
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        unsafe {
+            ray_tracing_functions
+                .acceleration_structure
+                .destroy_acceleration_structure(acceleration_structure.raw, None);
+            self.shared
+                .raw
+                .destroy_buffer(acceleration_structure.buffer, None);
+            self.mem_allocator
+                .lock()
+                .dealloc(&*self.shared, acceleration_structure.block.into_inner());
         }
     }
 }

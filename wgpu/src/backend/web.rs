@@ -1584,6 +1584,7 @@ impl crate::context::Context for Context {
                         storage_texture.view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.storage_texture(&storage_texture);
                     }
+                    wgt::BindingType::AccelerationStructure => todo!(),
                 }
 
                 mapped_entry
