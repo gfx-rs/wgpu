@@ -40,6 +40,13 @@ Bottom level categories:
 
 ## Unreleased
 
+## v0.18.2 (2023-XX-XX)
+
+(naga version 0.14.2)
+
+#### Naga
+- When evaluating const-expressions and generating SPIR-V, properly handle `Compose` expressions whose operands are `Splat` expressions. Such expressions are created and marked as constant by the constant evaluator. By @jimblandy in [#4695](https://github.com/gfx-rs/wgpu/pull/4695).
+
 ## v0.18.1 (2023-11-15)
 
 (naga version 0.14.1)
