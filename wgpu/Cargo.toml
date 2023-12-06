@@ -38,7 +38,6 @@ angle = ["wgc/gles"]
 webgl = ["hal", "wgc/gles"]
 # Enables the Vulkan backend on macOS & iOS
 vulkan-portability = ["wgc/vulkan"]
-expose-ids = []
 # Implement `Send` and `Sync` on Wasm.
 fragile-send-sync-non-atomic-wasm = [
     "hal/fragile-send-sync-non-atomic-wasm",

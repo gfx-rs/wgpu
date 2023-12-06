@@ -1033,7 +1033,6 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
 pub struct ObjectId {
     /// ID that is unique at any given time
     id: Option<NonZeroU64>,
-    #[cfg(feature = "expose-ids")]
     /// ID that is unique at all times
     global_id: Option<NonZeroU64>,
 }
@@ -1041,14 +1040,12 @@ pub struct ObjectId {
 impl ObjectId {
     pub(crate) const UNUSED: Self = ObjectId {
         id: None,
-        #[cfg(feature = "expose-ids")]
         global_id: None,
     };
 
-    pub fn new(id: NonZeroU64, #[cfg(feature = "expose-ids")] global_id: NonZeroU64) -> Self {
+    pub fn new(id: NonZeroU64, global_id: NonZeroU64) -> Self {
         Self {
             id: Some(id),
-            #[cfg(feature = "expose-ids")]
             global_id: Some(global_id),
         }
     }
@@ -1057,7 +1054,6 @@ impl ObjectId {
     pub fn from_global_id(global_id: NonZeroU64) -> Self {
         Self {
             id: Some(global_id),
-            #[cfg(feature = "expose-ids")]
             global_id: Some(global_id),
         }
     }
@@ -1067,8 +1063,6 @@ impl ObjectId {
         self.id.unwrap()
     }
 
-    #[cfg(feature = "expose-ids")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> NonZeroU64 {
         self.global_id.unwrap()
     }
