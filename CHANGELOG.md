@@ -153,6 +153,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 ### Bug Fixes
 
+#### WebGPU
+
+- Allow calling `BufferSlice::get_mapped_range` multiple times on the same buffer slice (instead of throwing a Javascript exception): By @DouglasDwyer in [#4726](https://github.com/gfx-rs/wgpu/pull/4726)
+
 #### WGL
 
 - Create a hidden window per `wgpu::Instance` instead of sharing a global one.
