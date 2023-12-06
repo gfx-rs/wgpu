@@ -131,7 +131,7 @@ where
             1 => Backend::Vulkan,
             2 => Backend::Metal,
             3 => Backend::Dx12,
-            5 => Backend::Gl,
+            4 => Backend::Gl,
             _ => unreachable!(),
         }
     }
@@ -155,12 +155,12 @@ where
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let (index, epoch, backend) = self.unzip();
         let backend = match backend {
+            Backend::Empty => "_",
             Backend::Vulkan => "vk",
             Backend::Metal => "mtl",
             Backend::Dx12 => "d3d12",
             Backend::Gl => "gl",
             Backend::BrowserWebGpu => "webgpu",
-            Backend::Empty => "_",
         };
         write!(formatter, "Id({index},{epoch},{backend})")?;
         Ok(())

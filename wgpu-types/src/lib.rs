@@ -103,9 +103,9 @@ pub enum Backend {
     /// Direct3D-12 (Windows)
     Dx12 = 3,
     /// OpenGL ES-3 (Linux, Android)
-    Gl = 5,
+    Gl = 4,
     /// WebGPU in the browser
-    BrowserWebGpu = 6,
+    BrowserWebGpu = 5,
 }
 
 impl Backend {
