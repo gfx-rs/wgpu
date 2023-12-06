@@ -33,8 +33,6 @@ mod macros {
         wgpu_types::Backend::Metal => $global.$method::<wgpu_core::api::Metal>( $($param),* ),
         #[cfg(all(not(target_arch = "wasm32"), windows))]
         wgpu_types::Backend::Dx12 => $global.$method::<wgpu_core::api::Dx12>( $($param),* ),
-        #[cfg(all(not(target_arch = "wasm32"), windows))]
-        wgpu_types::Backend::Dx11 => $global.$method::<wgpu_core::api::Dx11>( $($param),* ),
         #[cfg(any(
             all(unix, not(target_os = "macos"), not(target_os = "ios")),
             feature = "angle",

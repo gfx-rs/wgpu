@@ -11,7 +11,7 @@
 /// ```
 /// # use wgpu_test::*;
 /// FailureCase {
-///     backends: Some(wgpu::Backends::DX11 | wgpu::Backends::DX12),
+///     backends: Some(wgpu::Backends::DX12),
 ///     vendor: None,
 ///     adapter: Some("RTX"),
 ///     driver: None,

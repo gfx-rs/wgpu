@@ -31,7 +31,6 @@ Bottom level categories:
 - DX12
 - Vulkan
 - Metal
-- DX11
 - GLES
 - WebGPU
 - Emscripten
@@ -39,6 +38,10 @@ Bottom level categories:
 -->
 
 ## Unreleased
+
+### Direct3D 11 backend removal
+
+This backend had no functionality, and with the recent support for GL on Desktop, which allows wgpu to run on older devices, there is no need to keep the backend.
 
 ### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
 

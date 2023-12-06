@@ -2178,11 +2178,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             all_queue_empty =
                 self.poll_device::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(all(feature = "dx11", windows))]
-        {
-            all_queue_empty =
-                self.poll_device::<hal::api::Dx11>(force_wait, &mut closures)? && all_queue_empty;
-        }
         #[cfg(feature = "gles")]
         {
             all_queue_empty =
