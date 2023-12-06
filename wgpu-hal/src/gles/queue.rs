@@ -1,6 +1,5 @@
 use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
-use bitflags::Flags;
 use glow::HasContext;
 use std::{
     mem, slice,
