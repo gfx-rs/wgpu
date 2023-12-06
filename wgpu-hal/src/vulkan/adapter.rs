@@ -537,6 +537,10 @@ impl PhysicalDeviceFeatures {
         );
 
         features.set(
+            F::FLOAT32_FILTERABLE,
+            is_float32_filterable_supported(instance, phd),
+        );
+        features.set(
             F::TEXTURE_FORMAT_NV12,
             (caps.device_api_version >= vk::API_VERSION_1_1
                 || caps.supports_extension(vk::KhrSamplerYcbcrConversionFn::name()))
@@ -989,13 +993,6 @@ impl super::Instance {
             phd_features.to_wgpu(&info, &self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
-            // see https://github.com/gfx-rs/gfx/issues/1930
-            let _is_windows_intel_dual_src_bug = cfg!(windows)
-                && phd_capabilities.properties.vendor_id == db::intel::VENDOR
-                && (phd_capabilities.properties.device_id & db::intel::DEVICE_KABY_LAKE_MASK
-                    == db::intel::DEVICE_KABY_LAKE_MASK
-                    || phd_capabilities.properties.device_id & db::intel::DEVICE_SKY_LAKE_MASK
-                        == db::intel::DEVICE_SKY_LAKE_MASK);
             // TODO: only enable for particular devices
             workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
             workarounds.set(
@@ -1568,8 +1565,8 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            match format.sample_type(None) {
-                Some(wgt::TextureSampleType::Float { filterable: _ }) => limits
+            match format.sample_type(None, None) {
+                Some(wgt::TextureSampleType::Float { .. }) => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),
                 Some(wgt::TextureSampleType::Sint) | Some(wgt::TextureSampleType::Uint) => {
@@ -1758,6 +1755,21 @@ fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDev
     );
 
     r16unorm && r16snorm && rg16unorm && rg16snorm && rgba16unorm && rgba16snorm
+}
+
+fn is_float32_filterable_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
+    let tiling = vk::ImageTiling::OPTIMAL;
+    let features = vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR;
+    let r_float = supports_format(instance, phd, vk::Format::R32_SFLOAT, tiling, features);
+    let rg_float = supports_format(instance, phd, vk::Format::R32G32_SFLOAT, tiling, features);
+    let rgba_float = supports_format(
+        instance,
+        phd,
+        vk::Format::R32G32B32A32_SFLOAT,
+        tiling,
+        features,
+    );
+    r_float && rg_float && rgba_float
 }
 
 fn supports_format(

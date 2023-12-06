@@ -94,27 +94,6 @@ impl HalApi for hal::api::Dx12 {
     }
 }
 
-#[cfg(all(feature = "dx11", windows))]
-impl HalApi for hal::api::Dx11 {
-    const VARIANT: Backend = Backend::Dx11;
-    fn create_instance_from_hal(name: &str, hal_instance: Self::Instance) -> Instance {
-        Instance {
-            name: name.to_owned(),
-            dx11: Some(hal_instance),
-            ..Default::default()
-        }
-    }
-    fn instance_as_hal(instance: &Instance) -> Option<&Self::Instance> {
-        instance.dx11.as_ref()
-    }
-    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self> {
-        &global.hubs.dx11
-    }
-    fn get_surface(surface: &Surface) -> Option<&HalSurface<Self>> {
-        surface.raw.downcast_ref()
-    }
-}
-
 #[cfg(feature = "gles")]
 impl HalApi for hal::api::Gles {
     const VARIANT: Backend = Backend::Gl;
