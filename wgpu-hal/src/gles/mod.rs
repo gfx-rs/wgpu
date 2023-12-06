@@ -153,6 +153,7 @@ impl crate::Api for Api {
     type Sampler = Sampler;
     type QuerySet = QuerySet;
     type Fence = Fence;
+    type AccelerationStructure = ();
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;

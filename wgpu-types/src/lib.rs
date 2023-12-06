@@ -764,7 +764,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const VERTEX_ATTRIBUTE_64BIT = 1 << 53;
-
         /// Allows vertex shaders to have outputs which are not consumed
         /// by the fragment shader.
         ///
@@ -773,7 +772,6 @@ bitflags::bitflags! {
         /// - Metal
         /// - OpenGL
         const SHADER_UNUSED_VERTEX_OUTPUT = 1 << 54;
-
         /// Allows for creation of textures of format [`TextureFormat::NV12`]
         ///
         /// Supported platforms:
@@ -782,11 +780,25 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const TEXTURE_FORMAT_NV12 = 1 << 55;
+        /// Allows for the creation of ray-tracing acceleration structures.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 56;
 
-        // 55..59 available
+        // 57 available
 
         // Shader:
 
+        /// Allows for the creation of ray-tracing queries within shaders.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native-only feature.
+        const RAY_QUERY = 1 << 58;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -825,7 +837,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_EARLY_DEPTH_TEST = 1 << 62;
-
         /// Allows two outputs from a shader to be used for blending.
         /// Note that dual-source blending doesn't support multiple render targets.
         ///
@@ -6175,6 +6186,21 @@ pub enum BindingType {
         /// Dimension of the texture view that is going to be sampled.
         view_dimension: TextureViewDimension,
     },
+
+    /// A ray-tracing acceleration structure binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var as: acceleration_structure;
+    /// ```
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform accelerationStructureEXT as;
+    /// ```
+    AccelerationStructure,
 }
 
 impl BindingType {
@@ -6824,6 +6850,36 @@ impl Default for InstanceDescriptor {
         }
     }
 }
+
+bitflags::bitflags!(
+    /// Flags for acceleration structures
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct AccelerationStructureFlags: u8 {
+        /// Allow for incremental updates (no change in size)
+        const ALLOW_UPDATE = 1 << 0;
+        /// Allow the acceleration structure to be compacted in a copy operation
+        const ALLOW_COMPACTION = 1 << 1;
+        /// Optimize for fast ray tracing performance
+        const PREFER_FAST_TRACE = 1 << 2;
+        /// Optimize for fast build time
+        const PREFER_FAST_BUILD = 1 << 3;
+        /// Optimize for low memory footprint (scratch and output)
+        const LOW_MEMORY = 1 << 4;
+    }
+);
+impl_bitflags!(AccelerationStructureFlags);
+
+bitflags::bitflags!(
+    /// Flags for acceleration structure geometries
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct AccelerationStructureGeometryFlags: u8 {
+        /// Is OPAQUE
+        const OPAQUE = 1 << 0;
+        /// NO_DUPLICATE_ANY_HIT_INVOCATION
+        const NO_DUPLICATE_ANY_HIT_INVOCATION = 1 << 1;
+    }
+);
+impl_bitflags!(AccelerationStructureGeometryFlags);
 
 pub use send_sync::*;
 

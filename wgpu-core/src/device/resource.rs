@@ -1642,6 +1642,7 @@ impl<A: HalApi> Device<A> {
                         },
                     )
                 }
+                Bt::AccelerationStructure => todo!(),
             };
 
             // Validate the count parameter
@@ -2136,6 +2137,7 @@ impl<A: HalApi> Device<A> {
             buffers: &hal_buffers,
             samplers: &hal_samplers,
             textures: &hal_textures,
+            acceleration_structures: &[],
         };
         let raw = unsafe {
             self.raw

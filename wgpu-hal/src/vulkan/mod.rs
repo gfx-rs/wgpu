@@ -72,6 +72,7 @@ impl crate::Api for Api {
     type Sampler = Sampler;
     type QuerySet = QuerySet;
     type Fence = Fence;
+    type AccelerationStructure = AccelerationStructure;
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -193,6 +194,12 @@ enum ExtensionFn<T> {
 struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::DrawIndirectCount>,
     timeline_semaphore: Option<ExtensionFn<khr::TimelineSemaphore>>,
+    ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
+}
+
+struct RayTracingDeviceExtensionFunctions {
+    acceleration_structure: khr::AccelerationStructure,
+    buffer_device_address: khr::BufferDeviceAddress,
 }
 
 /// Set of internal capabilities, which don't show up in the exposed
@@ -356,6 +363,13 @@ pub struct Queue {
 pub struct Buffer {
     raw: vk::Buffer,
     block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
+}
+
+#[derive(Debug)]
+pub struct AccelerationStructure {
+    raw: vk::AccelerationStructureKHR,
+    buffer: vk::Buffer,
+    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
 }
 
 #[derive(Debug)]
