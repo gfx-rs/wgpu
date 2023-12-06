@@ -51,6 +51,10 @@ This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_drive
 
 Previously, `DeviceExt::create_texture_with_data` only allowed data to be provided in layer major order. There is now a `order` parameter which allows you to specify if the data is in layer major or mip major order.
 
+### `expose-ids` feature now available unconditionally
+
+This feature allowed you to call `global_id` on any wgpu opaque handle to get a unique hashable identity for the given resource. This is now available without the feature flag. By @cwfitzgerald in [#4841](https://github.com/gfx-rs/wgpu/pull/4841)
+
 ### New Features
 
 #### General
