@@ -49,16 +49,16 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
             sample_count: 1,
-            view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
+            view_formats: &[],
         });
         let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::R8Unorm),
-            plane: Some(0),
+            aspect: wgpu::TextureAspect::Plane0,
             ..Default::default()
         });
         let uv_view = tex.create_view(&wgpu::TextureViewDescriptor {
             format: Some(wgpu::TextureFormat::Rg8Unorm),
-            plane: Some(1),
+            aspect: wgpu::TextureAspect::Plane1,
             ..Default::default()
         });
         let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
@@ -119,29 +119,6 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
     });
 
 #[gpu_test]
-static NV12_TEXTURE_CREATION_BAD_VIEW_FORMATS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
-    .run_sync(|ctx| {
-        let size = wgpu::Extent3d {
-            width: 256,
-            height: 256,
-            depth_or_array_layers: 1,
-        };
-        fail(&ctx.device, || {
-            let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                dimension: wgpu::TextureDimension::D2,
-                size,
-                format: wgpu::TextureFormat::NV12,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                mip_level_count: 1,
-                sample_count: 1,
-                view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
-            });
-        });
-    });
-
-#[gpu_test]
 static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
@@ -163,7 +140,7 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
             });
             fail(&ctx.device, || {
                 let _ = tex.create_view(&wgpu::TextureViewDescriptor {
-                    plane: Some(0),
+                    aspect: wgpu::TextureAspect::Plane0,
                     ..Default::default()
                 });
             });
@@ -186,12 +163,12 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
             sample_count: 1,
-            view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
+            view_formats: &[],
         });
         fail(&ctx.device, || {
             let _ = tex.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(wgpu::TextureFormat::R8Unorm),
-                plane: Some(2),
+                aspect: wgpu::TextureAspect::Plane2,
                 ..Default::default()
             });
         });
@@ -214,12 +191,12 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
             sample_count: 1,
-            view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
+            view_formats: &[],
         });
         fail(&ctx.device, || {
             let _ = tex.create_view(&wgpu::TextureViewDescriptor {
                 format: Some(wgpu::TextureFormat::Rg8Unorm),
-                plane: Some(0),
+                aspect: wgpu::TextureAspect::Plane0,
                 ..Default::default()
             });
         });
@@ -244,7 +221,7 @@ static NV12_TEXTURE_BAD_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 mip_level_count: 1,
                 sample_count: 1,
-                view_formats: &[wgpu::TextureFormat::R8Unorm, wgpu::TextureFormat::Rg8Unorm],
+                view_formats: &[],
             });
         });
     });

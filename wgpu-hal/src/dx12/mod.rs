@@ -456,6 +456,7 @@ impl Texture {
 pub struct TextureView {
     raw_format: d3d12::Format,
     aspects: crate::FormatAspects,
+    /// only used by resolve
     target_base: (d3d12::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,

@@ -133,7 +133,6 @@ impl Example {
                     mip_level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
-                    ..Default::default()
                 })
             })
             .collect::<Vec<_>>();

@@ -396,7 +396,7 @@ impl crate::Device<super::Api> for super::Device {
             conv::map_texture_view_dimension(desc.dimension)
         };
 
-        let aspects = crate::FormatAspects::new(desc.format, desc.range.aspect);
+        let aspects = crate::FormatAspects::new(texture.format, desc.range.aspect);
 
         let raw_format = self
             .shared

@@ -606,6 +606,9 @@ fn map_texture_aspect(aspect: wgt::TextureAspect) -> web_sys::GpuTextureAspect {
         wgt::TextureAspect::All => web_sys::GpuTextureAspect::All,
         wgt::TextureAspect::StencilOnly => web_sys::GpuTextureAspect::StencilOnly,
         wgt::TextureAspect::DepthOnly => web_sys::GpuTextureAspect::DepthOnly,
+        wgt::TextureAspect::Plane0 | wgt::TextureAspect::Plane1 | wgt::TextureAspect::Plane2 => {
+            panic!("multi-plane textures are not supported")
+        }
     }
 }
 

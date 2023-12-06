@@ -555,7 +555,6 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
             range: wgt::ImageSubresourceRange::default(),
-            plane: None,
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -888,7 +887,6 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::COPY_DST,
             range: wgt::ImageSubresourceRange::default(),
-            plane: None,
         };
         let surface_tex_view = unsafe {
             self.device
