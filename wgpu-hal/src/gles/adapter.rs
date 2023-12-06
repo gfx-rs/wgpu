@@ -553,7 +553,7 @@ impl super::Adapter {
                 || extensions.contains("OES_texture_float_linear"),
         );
 
-        if full_ver.is_some() {
+        if es_ver.is_none() {
             features |= wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT;
         }
 
