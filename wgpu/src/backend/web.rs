@@ -7,9 +7,11 @@ use std::{
     fmt,
     future::Future,
     marker::PhantomData,
+    num::NonZeroU64,
     ops::Range,
     pin::Pin,
     rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
@@ -20,15 +22,12 @@ use crate::{
 };
 
 fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "expose-ids")] {
-            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-            let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            (Identified(core::num::NonZeroU64::new(id).unwrap(), PhantomData), Sendable(value))
-        } else {
-            (Identified(PhantomData), Sendable(value))
-        }
-    }
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    (
+        Identified(NonZeroU64::new(id).unwrap(), PhantomData),
+        Sendable(value),
+    )
 }
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
@@ -39,25 +38,18 @@ fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-#[allow(unused_variables)]
 impl<T> From<ObjectId> for Identified<T> {
     fn from(object_id: ObjectId) -> Self {
-        Self(
-            #[cfg(feature = "expose-ids")]
-            object_id.global_id(),
-            PhantomData,
-        )
+        Self(object_id.global_id(), PhantomData)
     }
 }
 
-#[allow(unused_variables)]
 impl<T> From<Identified<T>> for ObjectId {
     fn from(identified: Identified<T>) -> Self {
         Self::new(
             // TODO: the ID isn't used, so we hardcode it to 1 for now until we rework this
             // API.
-            core::num::NonZeroU64::new(1).unwrap(),
-            #[cfg(feature = "expose-ids")]
+            NonZeroU64::new(1).unwrap(),
             identified.0,
         )
     }
@@ -77,10 +69,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(
-    #[cfg(feature = "expose-ids")] std::num::NonZeroU64,
-    PhantomData<T>,
-);
+pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
 #[cfg(all(
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
