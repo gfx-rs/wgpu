@@ -1,5 +1,6 @@
 use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
 use arrayvec::ArrayVec;
+use bitflags::Flags;
 use glow::HasContext;
 use std::{
     mem, slice,
@@ -1330,6 +1331,7 @@ impl super::Queue {
                         unsafe { gl.disable(glow::DEPTH_CLAMP) };
                     }
                 }
+                unsafe { gl.polygon_mode(glow::FRONT_AND_BACK, state.polygon_mode) };
             }
             C::SetBlendConstant(c) => {
                 unsafe { gl.blend_color(c[0], c[1], c[2], c[3]) };
