@@ -4980,6 +4980,7 @@ webidl.converters["GPUFeatureName"] = webidl.createEnumConverter(
     "texture-compression-astc",
     "rg11b10ufloat-renderable",
     "bgra8unorm-storage",
+    "float32-filterable",
 
     // extended from spec
 

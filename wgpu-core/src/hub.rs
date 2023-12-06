@@ -308,15 +308,12 @@ pub struct Hubs {
     pub(crate) metal: Hub<hal::api::Metal>,
     #[cfg(all(feature = "dx12", windows))]
     pub(crate) dx12: Hub<hal::api::Dx12>,
-    #[cfg(all(feature = "dx11", windows))]
-    pub(crate) dx11: Hub<hal::api::Dx11>,
     #[cfg(feature = "gles")]
     pub(crate) gl: Hub<hal::api::Gles>,
     #[cfg(all(
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
         not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
         not(all(feature = "dx12", windows)),
-        not(all(feature = "dx11", windows)),
         not(feature = "gles"),
     ))]
     pub(crate) empty: Hub<hal::api::Empty>,
@@ -331,15 +328,12 @@ impl Hubs {
             metal: Hub::new(factory),
             #[cfg(all(feature = "dx12", windows))]
             dx12: Hub::new(factory),
-            #[cfg(all(feature = "dx11", windows))]
-            dx11: Hub::new(factory),
             #[cfg(feature = "gles")]
             gl: Hub::new(factory),
             #[cfg(all(
                 not(all(feature = "vulkan", not(target_arch = "wasm32"))),
                 not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
                 not(all(feature = "dx12", windows)),
-                not(all(feature = "dx11", windows)),
                 not(feature = "gles"),
             ))]
             empty: Hub::new(factory),

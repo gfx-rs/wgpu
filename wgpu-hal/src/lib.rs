@@ -11,7 +11,7 @@
  *  General design direction is to follow the majority by the following weights:
  *  - wgpu-core: 1.5
  *  - primary backends (Vulkan/Metal/DX12): 1.0 each
- *  - secondary backends (DX11/GLES): 0.5 each
+ *  - secondary backend (GLES): 0.5
  */
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -51,9 +51,6 @@
     clippy::pattern_type_mismatch,
 )]
 
-/// DirectX11 API internals.
-#[cfg(all(feature = "dx11", windows))]
-pub mod dx11;
 /// DirectX12 API internals.
 #[cfg(all(feature = "dx12", windows))]
 pub mod dx12;
@@ -71,8 +68,6 @@ pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(all(feature = "dx11", windows))]
-    pub use super::dx11::Api as Dx11;
     #[cfg(all(feature = "dx12", windows))]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;

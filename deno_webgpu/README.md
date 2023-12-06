@@ -19,7 +19,7 @@ running through our WPT runner. This will be used to validate implementation
 conformance.
 
 GitHub CI doesn't run with GPUs, so testing relies on software like DX WARP &
-Vulkan lavapipe. Currently only using DX WARP works, so tests are only run on
+Vulkan lavapipe. Currently, only using DX WARP works, so tests are only run on
 Windows.
 
 ## Links

@@ -604,6 +604,9 @@ impl super::PrivateCapabilities {
             function_specialization: Self::supports_any(device, FUNCTION_SPECIALIZATION_SUPPORT),
             depth_clip_mode: Self::supports_any(device, DEPTH_CLIP_MODE),
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
+            supports_float_filtering: os_is_mac
+                || (version.at_least((11, 0), (14, 0), os_is_mac)
+                    && device.supports_32bit_float_filtering()),
             format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
             format_depth32_stencil8_filter: os_is_mac,
             format_depth32_stencil8_none: !os_is_mac,
@@ -821,6 +824,7 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE;
 
+        features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(
             F::INDIRECT_FIRST_INSTANCE | F::MULTI_DRAW_INDIRECT,
             self.indirect_draw_dispatch,
