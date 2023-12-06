@@ -68,7 +68,7 @@ pub mod resource;
 pub mod storage;
 mod track;
 // This is public for users who pre-compile shaders while still wanting to
-// preserve all run-time checks that `wgpu-hal` does.
+// preserve all run-time checks that `wgpu-core` does.
 // See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
 // made private again.
 pub mod validation;
