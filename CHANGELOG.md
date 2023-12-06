@@ -105,7 +105,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
--   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743)).
+-   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](https://github.com/gfx-rs/wgpu/pull/4755)).
 
     Abstract types make numeric literals easier to use, by
     automatically converting literals and other constant expressions
@@ -122,9 +122,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
     Even though the literals are abstract integers, Naga recognizes
     that it is safe and necessary to convert them to `f32` values in
     order to build the vector. You can also use abstract values as
-    initializers for global constants, like this:
+    initializers for global constants and global and local variables,
+    like this:
 
-        const unit_x: vec2<f32> = vec2(1, 0);
+        var unit_x: vec2<f32> = vec2(1, 0);
 
     The literals `1` and `0` are abstract integers, and the expression
     `vec2(1, 0)` is an abstract vector. However, Naga recognizes that

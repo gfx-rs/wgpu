@@ -875,10 +875,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast::GlobalDeclKind::Var(ref v) => {
                     let ty = self.resolve_ast_type(v.ty, &mut ctx)?;
 
-                    let init = v
-                        .init
-                        .map(|init| self.expression(init, &mut ctx.as_const()))
-                        .transpose()?;
+                    let init;
+                    if let Some(init_ast) = v.init {
+                        let mut ectx = ctx.as_const();
+                        let lowered = self.expression_for_abstract(init_ast, &mut ectx)?;
+                        let ty_res = crate::proc::TypeResolution::Handle(ty);
+                        let converted = ectx
+                            .try_automatic_conversions(lowered, &ty_res, v.name.span)
+                            .map_err(|error| match error {
+                                Error::AutoConversion {
+                                    dest_span: _,
+                                    dest_type,
+                                    source_span: _,
+                                    source_type,
+                                } => Error::InitializationTypeMismatch {
+                                    name: v.name.span,
+                                    expected: dest_type,
+                                    got: source_type,
+                                },
+                                other => other,
+                            })?;
+                        init = Some(converted);
+                    } else {
+                        init = None;
+                    }
 
                     let binding = if let Some(ref binding) = v.binding {
                         Some(crate::ResourceBinding {
@@ -1142,45 +1162,49 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
-                    let mut emitter = Emitter::default();
-                    emitter.start(&ctx.function.expressions);
-
-                    let initializer = match v.init {
-                        Some(init) => Some(
-                            self.expression(init, &mut ctx.as_expression(block, &mut emitter))?,
-                        ),
-                        None => None,
-                    };
-
                     let explicit_ty =
-                        v.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
+                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_global()))
                             .transpose()?;
 
-                    let ty = match (explicit_ty, initializer) {
-                        (Some(explicit), Some(initializer)) => {
-                            let mut ctx = ctx.as_expression(block, &mut emitter);
-                            let initializer_ty = resolve_inner!(ctx, initializer);
-                            if !ctx.module.types[explicit]
-                                .inner
-                                .equivalent(initializer_ty, &ctx.module.types)
-                            {
-                                let gctx = &ctx.module.to_ctx();
-                                return Err(Error::InitializationTypeMismatch {
+                    let mut emitter = Emitter::default();
+                    emitter.start(&ctx.function.expressions);
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+
+                    let ty;
+                    let initializer;
+                    match (v.init, explicit_ty) {
+                        (Some(init), Some(explicit_ty)) => {
+                            let init = self.expression_for_abstract(init, &mut ectx)?;
+                            let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
+                            let init = ectx
+                                .try_automatic_conversions(init, &ty_res, v.name.span)
+                                .map_err(|error| match error {
+                                Error::AutoConversion {
+                                    dest_span: _,
+                                    dest_type,
+                                    source_span: _,
+                                    source_type,
+                                } => Error::InitializationTypeMismatch {
                                     name: v.name.span,
-                                    expected: explicit.to_wgsl(gctx),
-                                    got: initializer_ty.to_wgsl(gctx),
-                                });
-                            }
-                            explicit
+                                    expected: dest_type,
+                                    got: source_type,
+                                },
+                                other => other,
+                            })?;
+                            ty = explicit_ty;
+                            initializer = Some(init);
                         }
-                        (Some(explicit), None) => explicit,
-                        (None, Some(initializer)) => ctx
-                            .as_expression(block, &mut emitter)
-                            .register_type(initializer)?,
-                        (None, None) => {
-                            return Err(Error::MissingType(v.name.span));
+                        (Some(init), None) => {
+                            let concretized = self.expression(init, &mut ectx)?;
+                            ty = ectx.register_type(concretized)?;
+                            initializer = Some(concretized);
                         }
-                    };
+                        (None, Some(explicit_ty)) => {
+                            ty = explicit_ty;
+                            initializer = None;
+                        }
+                        (None, None) => return Err(Error::MissingType(v.name.span)),
+                    }
 
                     let (const_initializer, initializer) = {
                         match initializer {
