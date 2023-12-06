@@ -980,7 +980,7 @@ impl crate::Device<super::Api> for super::Device {
             wgt_view_formats = desc.view_formats.clone();
             wgt_view_formats.push(desc.format);
 
-            if self.shared.private_caps.image_format_list {
+            if self.shared.private_caps.image_format_list && !desc.format.is_multi_planar_format() {
                 vk_view_formats = desc
                     .view_formats
                     .iter()

@@ -78,8 +78,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 | ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
 | Vulkan      | :white_check_mark:             | :white_check_mark: | :volcano:                 |                           |
 | Metal       |                                |                    | :white_check_mark:        |                           |
-| DX12        | :white_check_mark:             |                    |                           |                           | 
-| DX11        | :hammer_and_wrench:            |                    |                           |                           |
+| DX12        | :white_check_mark:             |                    |                           |                           |
 | OpenGL      | :ok: (GL 3.3+)                 | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
 | WebGPU      |                                |                    |                           | :white_check_mark:        |
 
@@ -138,7 +137,7 @@ determined by the value of `MINIMUM_RUST_VERSION` in
 All testing and example infrastructure share the same set of environment variables that determine which Backend/GPU it will run on.
 
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
-- `WGPU_BACKEND` with a comma-separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
+- `WGPU_BACKEND` with a comma-separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, or `gl`).
 - `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high`, `low` or `none`)
 - `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc` or `fxc`, note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory otherwise it will fall back to `fxc`)
 - `WGPU_GLES_MINOR_VERSION` with the minor OpenGL ES 3 version number to request (`0`, `1`, `2` or `automatic`).

@@ -35,10 +35,6 @@ impl AnySurface {
         if self.downcast_ref::<hal::api::Dx12>().is_some() {
             return Backend::Dx12;
         }
-        #[cfg(all(feature = "dx11", windows))]
-        if self.downcast_ref::<hal::api::Dx11>().is_some() {
-            return Backend::Dx11;
-        }
         #[cfg(feature = "gles")]
         if self.downcast_ref::<hal::api::Gles>().is_some() {
             return Backend::Gl;

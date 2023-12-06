@@ -38,7 +38,6 @@ resource_log_info = []
 metal = ["hal/metal"]
 vulkan = ["hal/vulkan"]
 gles = ["hal/gles"]
-dx11 = ["hal/dx11"]
 dx12 = ["hal/dx12"]
 
 # Use static linking for libraries. Disale to manually link. Enabled by default.
