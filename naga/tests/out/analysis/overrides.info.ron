@@ -1,0 +1,26 @@
+(
+    type_flags: [
+        ("DATA | SIZED | COPY | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | ARGUMENT | CONSTRUCTIBLE"),
+    ],
+    functions: [],
+    entry_points: [],
+    const_expression_types: [
+        Value(Scalar((
+            kind: Bool,
+            width: 1,
+        ))),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
+    ],
+)

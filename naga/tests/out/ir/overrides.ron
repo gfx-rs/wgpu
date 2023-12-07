@@ -1,0 +1,71 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [
+        (
+            name: Some("has_point_light"),
+            id: Some(0),
+            ty: 1,
+            init: Some(1),
+        ),
+        (
+            name: Some("specular_param"),
+            id: Some(1200),
+            ty: 2,
+            init: Some(2),
+        ),
+        (
+            name: Some("gain"),
+            id: Some(1300),
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("width"),
+            id: None,
+            ty: 2,
+            init: Some(3),
+        ),
+        (
+            name: Some("depth"),
+            id: None,
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("inferred_f32"),
+            id: None,
+            ty: 2,
+            init: Some(4),
+        ),
+    ],
+    global_variables: [],
+    const_expressions: [
+        Literal(Bool(true)),
+        Literal(F32(2.3)),
+        Literal(F32(0.0)),
+        Literal(F32(2.718)),
+    ],
+    functions: [],
+    entry_points: [],
+)
