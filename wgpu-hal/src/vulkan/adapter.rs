@@ -943,6 +943,17 @@ impl super::InstanceShared {
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2);
                 }
+
+                if is_intel_igpu_outdated_for_robustness2(
+                    capabilities.properties,
+                    capabilities.driver,
+                ) {
+                    use crate::auxil::cstr_from_bytes_until_nul;
+                    capabilities.supported_extensions.retain(|&x| {
+                        cstr_from_bytes_until_nul(&x.extension_name)
+                            != Some(vk::ExtRobustness2Fn::name())
+                    });
+                }
             };
             capabilities
         };
@@ -1952,4 +1963,30 @@ fn supports_bgra8unorm_storage(
         features2.contains(vk::FormatFeatureFlags::STORAGE_IMAGE)
             && features3.contains(vk::FormatFeatureFlags2::STORAGE_WRITE_WITHOUT_FORMAT)
     }
+}
+
+// For https://github.com/gfx-rs/wgpu/issues/4599
+// Intel iGPUs with outdated drivers can break rendering if `VK_EXT_robustness2` is used.
+// Driver version 31.0.101.2115 works, but there's probably an earlier functional version.
+fn is_intel_igpu_outdated_for_robustness2(
+    props: vk::PhysicalDeviceProperties,
+    driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
+) -> bool {
+    const DRIVER_VERSION_WORKING: u32 = (101 << 14) | 2115; // X.X.101.2115
+
+    let is_outdated = props.vendor_id == crate::auxil::db::intel::VENDOR
+        && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
+        && props.driver_version < DRIVER_VERSION_WORKING
+        && driver
+            .map(|driver| driver.driver_id == vk::DriverId::INTEL_PROPRIETARY_WINDOWS)
+            .unwrap_or_default();
+
+    if is_outdated {
+        log::warn!(
+            "Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X}, less than the known good version 0x{:X} (31.0.101.2115)",
+            props.driver_version,
+            DRIVER_VERSION_WORKING
+        );
+    }
+    is_outdated
 }

@@ -158,6 +158,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 ### Bug Fixes
 
+#### Vulkan
+
+- Use `VK_EXT_robustness2` only when not using an outdated intel iGPU driver. By @TheoDulka in [#4602](https://github.com/gfx-rs/wgpu/pull/4602).
+
 #### WebGPU
 
 - Allow calling `BufferSlice::get_mapped_range` multiple times on the same buffer slice (instead of throwing a Javascript exception): By @DouglasDwyer in [#4726](https://github.com/gfx-rs/wgpu/pull/4726)
