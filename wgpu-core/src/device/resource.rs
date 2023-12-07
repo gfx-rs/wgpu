@@ -53,8 +53,8 @@ use std::{
 use super::{
     life::{self, ResourceMaps},
     queue::{self},
-    DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, EP_FAILURE,
-    IMPLICIT_FAILURE, ZERO_BUFFER_SIZE,
+    DeviceDescriptor, DeviceError, ImplicitPipelineContext, UserClosures, ENTRYPOINT_FAILURE_ERROR,
+    IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL, ZERO_BUFFER_SIZE,
 };
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -1422,7 +1422,6 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             interface: Some(interface),
             info: ResourceInfo::new(desc.label.borrow_or_default()),
-            #[cfg(debug_assertions)]
             label: desc.label.borrow_or_default().to_string(),
         })
     }
@@ -1464,7 +1463,6 @@ impl<A: HalApi> Device<A> {
             device: self.clone(),
             interface: None,
             info: ResourceInfo::new(desc.label.borrow_or_default()),
-            #[cfg(debug_assertions)]
             label: desc.label.borrow_or_default().to_string(),
         })
     }
@@ -1724,14 +1722,13 @@ impl<A: HalApi> Device<A> {
         Ok(BindGroupLayout {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(label.unwrap_or("<BindGroupLayoyt>")),
+            info: ResourceInfo::new(label.unwrap_or("<BindGroupLayout>")),
             dynamic_count: entry_map
                 .values()
                 .filter(|b| b.ty.has_dynamic_offset())
                 .count(),
             count_validator,
             entries: entry_map,
-            #[cfg(debug_assertions)]
             label: label.unwrap_or_default().to_string(),
         })
     }
@@ -2493,10 +2490,10 @@ impl<A: HalApi> Device<A> {
         // that are not even in the storage.
         if let Some(ref ids) = implicit_context {
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             let mut bgl_guard = hub.bind_group_layouts.write();
             for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
 
@@ -2590,7 +2587,7 @@ impl<A: HalApi> Device<A> {
                 pipeline::CreateComputePipelineError::Internal(msg)
             }
             hal::PipelineError::EntryPoint(_stage) => {
-                pipeline::CreateComputePipelineError::Internal(EP_FAILURE.to_string())
+                pipeline::CreateComputePipelineError::Internal(ENTRYPOINT_FAILURE_ERROR.to_string())
             }
         })?;
 
@@ -2622,9 +2619,9 @@ impl<A: HalApi> Device<A> {
             //TODO: only lock mutable if the layout is derived
             let mut pipeline_layout_guard = hub.pipeline_layouts.write();
             let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
 
@@ -3148,7 +3145,7 @@ impl<A: HalApi> Device<A> {
             hal::PipelineError::EntryPoint(stage) => {
                 pipeline::CreateRenderPipelineError::Internal {
                     stage: hal::auxil::map_naga_stage(stage),
-                    error: EP_FAILURE.to_string(),
+                    error: ENTRYPOINT_FAILURE_ERROR.to_string(),
                 }
             }
         })?;

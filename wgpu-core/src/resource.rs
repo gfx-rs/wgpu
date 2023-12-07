@@ -70,7 +70,6 @@ pub struct ResourceInfo<Id: TypedId> {
     submission_index: AtomicUsize,
 
     /// The `label` from the descriptor used to create the resource.
-    #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
@@ -90,25 +89,19 @@ impl<Id: TypedId> ResourceInfo<Id> {
             id: None,
             identity: None,
             submission_index: AtomicUsize::new(0),
-            #[cfg(debug_assertions)]
             label: label.to_string(),
         }
     }
 
-    #[allow(unused_assignments)]
     pub(crate) fn label(&self) -> String
     where
         Id: Debug,
     {
-        let mut label = String::new();
-        #[cfg(debug_assertions)]
-        {
-            label = format!("[{}] ", self.label);
-        }
         if let Some(id) = self.id.as_ref() {
-            label.push_str(format!("{:?}", id).as_str());
+            format!("[{}] {:?}", self.label, id)
+        } else {
+            format!("[{}]", self.label)
         }
-        label
     }
 
     pub(crate) fn id(&self) -> Id {
@@ -139,10 +132,7 @@ pub trait Resource<Id: TypedId>: 'static + WasmNotSendSync {
     fn as_info(&self) -> &ResourceInfo<Id>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Id>;
     fn label(&self) -> String {
-        #[cfg(debug_assertions)]
-        return self.as_info().label.clone();
-        #[cfg(not(debug_assertions))]
-        return String::new();
+        self.as_info().label.clone()
     }
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
