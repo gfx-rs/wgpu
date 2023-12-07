@@ -19,7 +19,7 @@ water
 ## To run
 
 ```
-cargo run --bin water
+cargo run --bin wgpu-examples water
 ```
 
 ## Screenshot

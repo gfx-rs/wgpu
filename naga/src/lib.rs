@@ -300,6 +300,9 @@ use serde::Serialize;
 /// Width of a boolean type, in bytes.
 pub const BOOL_WIDTH: Bytes = 1;
 
+/// Width of abstract types, in bytes.
+pub const ABSTRACT_WIDTH: Bytes = 8;
+
 /// Hash map that is faster but not resilient to DoS attacks.
 pub type FastHashMap<K, T> = rustc_hash::FxHashMap<K, T>;
 /// Hash set that is faster but not resilient to DoS attacks.
@@ -470,6 +473,16 @@ pub enum ScalarKind {
     Float,
     /// Boolean type.
     Bool,
+
+    /// WGSL abstract integer type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractInt,
+
+    /// Abstract floating-point type.
+    ///
+    /// These are forbidden by validation, and should never reach backends.
+    AbstractFloat,
 }
 
 /// Characteristics of a scalar type.
@@ -871,6 +884,8 @@ pub enum Literal {
     I32(i32),
     I64(i64),
     Bool(bool),
+    AbstractInt(i64),
+    AbstractFloat(f64),
 }
 
 #[derive(Debug, PartialEq)]

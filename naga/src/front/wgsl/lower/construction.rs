@@ -5,6 +5,7 @@ use crate::{Handle, Span};
 
 use crate::front::wgsl::error::Error;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
+use crate::front::wgsl::Scalar;
 
 /// A cooked form of `ast::ConstructorType` that uses Naga types whenever
 /// possible.
@@ -80,7 +81,6 @@ enum Components<'a> {
     Many {
         components: Vec<Handle<crate::Expression>>,
         spans: Vec<Span>,
-        first_component_ty_inner: &'a crate::TypeInner,
     },
 }
 
@@ -116,13 +116,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         components: &[Handle<ast::Expression<'source>>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'source>> {
+        use crate::proc::TypeResolution as Tr;
+
         let constructor_h = self.constructor(constructor, ctx)?;
 
         let components = match *components {
             [] => Components::None,
             [component] => {
                 let span = ctx.ast_expressions.get_span(component);
-                let component = self.expression(component, ctx)?;
+                let component = self.expression_for_abstract(component, ctx)?;
                 let ty_inner = super::resolve_inner!(ctx, component);
 
                 Components::One {
@@ -131,30 +133,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ty_inner,
                 }
             }
-            [component, ref rest @ ..] => {
-                let span = ctx.ast_expressions.get_span(component);
-                let component = self.expression(component, ctx)?;
-
-                let components = std::iter::once(Ok(component))
-                    .chain(
-                        rest.iter()
-                            .map(|&component| self.expression(component, ctx)),
-                    )
+            ref ast_components @ [_, _, ..] => {
+                let components = ast_components
+                    .iter()
+                    .map(|&expr| self.expression_for_abstract(expr, ctx))
                     .collect::<Result<_, _>>()?;
-                let spans = std::iter::once(span)
-                    .chain(
-                        rest.iter()
-                            .map(|&component| ctx.ast_expressions.get_span(component)),
-                    )
+                let spans = ast_components
+                    .iter()
+                    .map(|&expr| ctx.ast_expressions.get_span(expr))
                     .collect();
 
-                let first_component_ty_inner = super::resolve_inner!(ctx, component);
-
-                Components::Many {
-                    components,
-                    spans,
-                    first_component_ty_inner,
+                for &component in &components {
+                    ctx.grow_types(component)?;
                 }
+
+                Components::Many { components, spans }
             }
         };
 
@@ -163,7 +156,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         // above can have mutable access to the type arena.
         let constructor = constructor_h.borrow_inner(ctx.module);
 
-        let expr = match (components, constructor) {
+        let expr;
+        match (components, constructor) {
             // Empty constructor
             (Components::None, dst_ty) => match dst_ty {
                 Constructor::Type((result_ty, _)) => {
@@ -186,11 +180,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ..
                 },
                 Constructor::Type((_, &crate::TypeInner::Scalar(scalar))),
-            ) => crate::Expression::As {
-                expr: component,
-                kind: scalar.kind,
-                convert: Some(scalar.width),
-            },
+            ) => {
+                expr = crate::Expression::As {
+                    expr: component,
+                    kind: scalar.kind,
+                    convert: Some(scalar.width),
+                };
+            }
 
             // Vector conversion (vector -> vector)
             (
@@ -206,11 +202,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar: dst_scalar,
                     },
                 )),
-            ) if dst_size == src_size => crate::Expression::As {
-                expr: component,
-                kind: dst_scalar.kind,
-                convert: Some(dst_scalar.width),
-            },
+            ) if dst_size == src_size => {
+                expr = crate::Expression::As {
+                    expr: component,
+                    kind: dst_scalar.kind,
+                    convert: Some(dst_scalar.width),
+                };
+            }
 
             // Vector conversion (vector -> vector) - partial
             (
@@ -247,11 +245,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar: dst_scalar,
                     },
                 )),
-            ) if dst_columns == src_columns && dst_rows == src_rows => crate::Expression::As {
-                expr: component,
-                kind: crate::ScalarKind::Float,
-                convert: Some(dst_scalar.width),
-            },
+            ) if dst_columns == src_columns && dst_rows == src_rows => {
+                expr = crate::Expression::As {
+                    expr: component,
+                    kind: dst_scalar.kind,
+                    convert: Some(dst_scalar.width),
+                };
+            }
 
             // Matrix conversion (matrix -> matrix) - partial
             (
@@ -284,69 +284,99 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ..
                 },
                 Constructor::PartialVector { size },
-            ) => crate::Expression::Splat {
-                size,
-                value: component,
-            },
+            ) => {
+                expr = crate::Expression::Splat {
+                    size,
+                    value: component,
+                };
+            }
 
             // Vector constructor (splat)
             (
                 Components::One {
-                    component,
-                    ty_inner: &crate::TypeInner::Scalar(src_scalar),
-                    ..
-                },
-                Constructor::Type((
-                    _,
-                    &crate::TypeInner::Vector {
-                        size,
-                        scalar: dst_scalar,
-                    },
-                )),
-            ) if dst_scalar == src_scalar => crate::Expression::Splat {
-                size,
-                value: component,
-            },
-
-            // Vector constructor (by elements)
-            (
-                Components::Many {
-                    components,
-                    first_component_ty_inner:
-                        &crate::TypeInner::Scalar(scalar) | &crate::TypeInner::Vector { scalar, .. },
-                    ..
-                },
-                Constructor::PartialVector { size },
-            )
-            | (
-                Components::Many {
-                    components,
-                    first_component_ty_inner:
-                        &crate::TypeInner::Scalar { .. } | &crate::TypeInner::Vector { .. },
+                    mut component,
+                    ty_inner: &crate::TypeInner::Scalar(_),
                     ..
                 },
                 Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
             ) => {
-                let inner = crate::TypeInner::Vector { size, scalar };
-                let ty = ctx.ensure_type_exists(inner);
-                crate::Expression::Compose { ty, components }
+                ctx.convert_slice_to_common_scalar(std::slice::from_mut(&mut component), scalar)?;
+                expr = crate::Expression::Splat {
+                    size,
+                    value: component,
+                };
             }
 
-            // Matrix constructor (by elements)
+            // Vector constructor (by elements), partial
             (
                 Components::Many {
-                    components,
-                    first_component_ty_inner: &crate::TypeInner::Scalar(scalar),
-                    ..
+                    mut components,
+                    spans,
+                },
+                Constructor::PartialVector { size },
+            ) => {
+                let consensus_scalar =
+                    automatic_conversion_consensus(&components, ctx).map_err(|index| {
+                        Error::InvalidConstructorComponentType(spans[index], index as i32)
+                    })?;
+                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                let inner = consensus_scalar.to_inner_vector(size);
+                let ty = ctx.ensure_type_exists(inner);
+                expr = crate::Expression::Compose { ty, components };
+            }
+
+            // Vector constructor (by elements), full type given
+            (
+                Components::Many { mut components, .. },
+                Constructor::Type((ty, &crate::TypeInner::Vector { scalar, .. })),
+            ) => {
+                ctx.try_automatic_conversions_for_vector(&mut components, scalar, ty_span)?;
+                expr = crate::Expression::Compose { ty, components };
+            }
+
+            // Matrix constructor (by elements), partial
+            (
+                Components::Many {
+                    mut components,
+                    spans,
                 },
                 Constructor::PartialMatrix { columns, rows },
-            )
-            | (
-                Components::Many {
-                    components,
-                    first_component_ty_inner: &crate::TypeInner::Scalar { .. },
-                    ..
-                },
+            ) if components.len() == columns as usize * rows as usize => {
+                let consensus_scalar =
+                    automatic_conversion_consensus(&components, ctx).map_err(|index| {
+                        Error::InvalidConstructorComponentType(spans[index], index as i32)
+                    })?;
+                // We actually only accept floating-point elements.
+                let consensus_scalar = consensus_scalar
+                    .automatic_conversion_combine(crate::Scalar::ABSTRACT_FLOAT)
+                    .unwrap_or(consensus_scalar);
+                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                let vec_ty = ctx.ensure_type_exists(consensus_scalar.to_inner_vector(rows));
+
+                let components = components
+                    .chunks(rows as usize)
+                    .map(|vec_components| {
+                        ctx.append_expression(
+                            crate::Expression::Compose {
+                                ty: vec_ty,
+                                components: Vec::from(vec_components),
+                            },
+                            Default::default(),
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
+                    columns,
+                    rows,
+                    scalar: consensus_scalar,
+                });
+                expr = crate::Expression::Compose { ty, components };
+            }
+
+            // Matrix constructor (by elements), type given
+            (
+                Components::Many { mut components, .. },
                 Constructor::Type((
                     _,
                     &crate::TypeInner::Matrix {
@@ -355,9 +385,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar,
                     },
                 )),
-            ) => {
-                let vec_ty =
-                    ctx.ensure_type_exists(crate::TypeInner::Vector { scalar, size: rows });
+            ) if components.len() == columns as usize * rows as usize => {
+                let element = Tr::Value(crate::TypeInner::Scalar(scalar));
+                ctx.try_automatic_conversions_slice(&mut components, &element, ty_span)?;
+                let vec_ty = ctx.ensure_type_exists(scalar.to_inner_vector(rows));
 
                 let components = components
                     .chunks(rows as usize)
@@ -377,44 +408,74 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     rows,
                     scalar,
                 });
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
-            // Matrix constructor (by columns)
+            // Matrix constructor (by columns), partial
             (
                 Components::Many {
-                    components,
-                    first_component_ty_inner: &crate::TypeInner::Vector { scalar, .. },
-                    ..
+                    mut components,
+                    spans,
                 },
                 Constructor::PartialMatrix { columns, rows },
-            )
-            | (
-                Components::Many {
-                    components,
-                    first_component_ty_inner: &crate::TypeInner::Vector { .. },
-                    ..
-                },
+            ) => {
+                let consensus_scalar =
+                    automatic_conversion_consensus(&components, ctx).map_err(|index| {
+                        Error::InvalidConstructorComponentType(spans[index], index as i32)
+                    })?;
+                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
+                    columns,
+                    rows,
+                    scalar: consensus_scalar,
+                });
+                expr = crate::Expression::Compose { ty, components };
+            }
+
+            // Matrix constructor (by columns), type given
+            (
+                Components::Many { mut components, .. },
                 Constructor::Type((
-                    _,
+                    ty,
                     &crate::TypeInner::Matrix {
-                        columns,
+                        columns: _,
                         rows,
                         scalar,
                     },
                 )),
             ) => {
-                let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
-                    columns,
-                    rows,
-                    scalar,
-                });
-                crate::Expression::Compose { ty, components }
+                let component_ty = crate::TypeInner::Vector { size: rows, scalar };
+                ctx.try_automatic_conversions_slice(
+                    &mut components,
+                    &Tr::Value(component_ty),
+                    ty_span,
+                )?;
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // Array constructor - infer type
             (components, Constructor::PartialArray) => {
-                let components = components.into_components_vec();
+                let mut components = components.into_components_vec();
+                if let Ok(consensus_scalar) = automatic_conversion_consensus(&components, ctx) {
+                    // Note that this will *not* necessarily convert all the
+                    // components to the same type! The `automatic_conversion_consensus`
+                    // function only considers the parameters' leaf scalar
+                    // types; the parameters themselves could be any mix of
+                    // vectors, matrices, and scalars.
+                    //
+                    // But *if* it is possible for this array construction
+                    // expression to be well-typed at all, then all the
+                    // parameters must have the same type constructors (vec,
+                    // matrix, scalar) applied to their leaf scalars, so
+                    // reconciling their scalars is always the right thing to
+                    // do. And if this array construction is not well-typed,
+                    // these conversions will not make it so, and we can let
+                    // validation catch the error.
+                    ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                } else {
+                    // There's no consensus scalar. Emit the `Compose`
+                    // expression anyway, and let validation catch the problem.
+                }
 
                 let base = ctx.register_type(components[0])?;
 
@@ -430,19 +491,34 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
                 let ty = ctx.ensure_type_exists(inner);
 
-                crate::Expression::Compose { ty, components }
+                expr = crate::Expression::Compose { ty, components };
             }
 
-            // Array or Struct constructor
+            // Array constructor, explicit type
+            (components, Constructor::Type((ty, &crate::TypeInner::Array { base, .. }))) => {
+                let mut components = components.into_components_vec();
+                ctx.try_automatic_conversions_slice(&mut components, &Tr::Handle(base), ty_span)?;
+                expr = crate::Expression::Compose { ty, components };
+            }
+
+            // Struct constructor
             (
                 components,
-                Constructor::Type((
-                    ty,
-                    &crate::TypeInner::Array { .. } | &crate::TypeInner::Struct { .. },
-                )),
+                Constructor::Type((ty, &crate::TypeInner::Struct { ref members, .. })),
             ) => {
-                let components = components.into_components_vec();
-                crate::Expression::Compose { ty, components }
+                let mut components = components.into_components_vec();
+                let struct_ty_span = ctx.module.types.get_span(ty);
+
+                // Make a vector of the members' type handles in advance, to
+                // avoid borrowing `members` from `ctx` while we generate
+                // new code.
+                let members: Vec<Handle<crate::Type>> = members.iter().map(|m| m.ty).collect();
+
+                for (component, &ty) in components.iter_mut().zip(&members) {
+                    *component =
+                        ctx.try_automatic_conversions(*component, &Tr::Handle(ty), struct_ty_span)?;
+                }
+                expr = crate::Expression::Compose { ty, components };
             }
 
             // ERRORS
@@ -466,22 +542,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Err(Error::UnexpectedComponents(span));
             }
 
-            // Parameters are of the wrong type for vector or matrix constructor
-            (
-                Components::Many { spans, .. },
-                Constructor::Type((
-                    _,
-                    &crate::TypeInner::Vector { .. } | &crate::TypeInner::Matrix { .. },
-                ))
-                | Constructor::PartialVector { .. }
-                | Constructor::PartialMatrix { .. },
-            ) => {
-                return Err(Error::InvalidConstructorComponentType(spans[0], 0));
-            }
-
             // Other types can't be constructed
             _ => return Err(Error::TypeNotConstructible(ty_span)),
-        };
+        }
 
         let expr = ctx.append_expression(expr, span)?;
         Ok(expr)
@@ -545,4 +608,51 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         Ok(handle)
     }
+}
+
+/// Find the consensus scalar of `components` under WGSL's automatic
+/// conversions.
+///
+/// If `components` can all be converted to any common scalar via
+/// WGSL's automatic conversions, return the best such scalar.
+///
+/// The `components` slice must not be empty. All elements' types must
+/// have been resolved.
+///
+/// If `components` are definitely not acceptable as arguments to such
+/// constructors, return `Err(i)`, where `i` is the index in
+/// `components` of some problematic argument.
+///
+/// This function doesn't fully type-check the arguments - it only
+/// considers their leaf scalar types. This means it may return `Ok`
+/// even when the Naga validator will reject the resulting
+/// construction expression later.
+fn automatic_conversion_consensus(
+    components: &[Handle<crate::Expression>],
+    ctx: &ExpressionContext<'_, '_, '_>,
+) -> Result<Scalar, usize> {
+    let types = &ctx.module.types;
+    let mut inners = components
+        .iter()
+        .map(|&c| ctx.typifier()[c].inner_with(types));
+    log::debug!(
+        "wgsl automatic_conversion_consensus: {:?}",
+        inners
+            .clone()
+            .map(|inner| inner.to_wgsl(&ctx.module.to_ctx()))
+            .collect::<Vec<String>>()
+    );
+    let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
+    for (inner, i) in inners.zip(1..) {
+        let scalar = inner.scalar().ok_or(i)?;
+        match best.automatic_conversion_combine(scalar) {
+            Some(new_best) => {
+                best = new_best;
+            }
+            None => return Err(i),
+        }
+    }
+
+    log::debug!("    consensus: {:?}", best.to_wgsl());
+    Ok(best)
 }

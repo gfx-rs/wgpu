@@ -9,7 +9,6 @@
         not(all(feature = "vulkan", not(target_arch = "wasm32"))),
         not(all(feature = "metal", any(target_os = "macos", target_os = "ios"))),
         not(all(feature = "dx12", windows)),
-        not(all(feature = "dx11", windows)),
         not(feature = "gles"),
     ),
     allow(unused, clippy::let_and_return)
@@ -67,7 +66,11 @@ pub mod registry;
 pub mod resource;
 pub mod storage;
 mod track;
-mod validation;
+// This is public for users who pre-compile shaders while still wanting to
+// preserve all run-time checks that `wgpu-core` does.
+// See <https://github.com/gfx-rs/wgpu/issues/3103>, after which this can be
+// made private again.
+pub mod validation;
 
 pub use hal::{api, MAX_BIND_GROUPS, MAX_COLOR_ATTACHMENTS, MAX_VERTEX_BUFFERS};
 
@@ -217,7 +220,6 @@ macro_rules! define_backend_caller {
 define_backend_caller! { gfx_if_vulkan, gfx_if_vulkan_hidden, "vulkan" if all(feature = "vulkan", not(target_arch = "wasm32")) }
 define_backend_caller! { gfx_if_metal, gfx_if_metal_hidden, "metal" if all(feature = "metal", any(target_os = "macos", target_os = "ios")) }
 define_backend_caller! { gfx_if_dx12, gfx_if_dx12_hidden, "dx12" if all(feature = "dx12", windows) }
-define_backend_caller! { gfx_if_dx11, gfx_if_dx11_hidden, "dx11" if all(feature = "dx11", windows) }
 define_backend_caller! { gfx_if_gles, gfx_if_gles_hidden, "gles" if feature = "gles" }
 
 /// Dispatch on an [`Id`]'s backend to a backend-generic method.
@@ -272,7 +274,6 @@ macro_rules! gfx_select {
             wgt::Backend::Vulkan => $crate::gfx_if_vulkan!($global.$method::<$crate::api::Vulkan>( $($param),* )),
             wgt::Backend::Metal => $crate::gfx_if_metal!($global.$method::<$crate::api::Metal>( $($param),* )),
             wgt::Backend::Dx12 => $crate::gfx_if_dx12!($global.$method::<$crate::api::Dx12>( $($param),* )),
-            wgt::Backend::Dx11 => $crate::gfx_if_dx11!($global.$method::<$crate::api::Dx11>( $($param),* )),
             wgt::Backend::Gl => $crate::gfx_if_gles!($global.$method::<$crate::api::Gles>( $($param),+ )),
             other => panic!("Unexpected backend {:?}", other),
         }

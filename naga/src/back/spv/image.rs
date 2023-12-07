@@ -334,6 +334,10 @@ impl<'w> BlockContext<'w> {
             (_, crate::ScalarKind::Bool | crate::ScalarKind::Float) => {
                 unreachable!("we don't allow bool or float for array index")
             }
+            (crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat, _)
+            | (_, crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat) => {
+                unreachable!("abstract types should never reach backends")
+            }
         };
         let reconciled_array_index_id = if let Some(cast) = cast {
             let component_ty_id = self.get_type_id(LookupType::Local(LocalType::Value {

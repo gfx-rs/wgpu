@@ -122,7 +122,7 @@ impl Context {
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
-            features: desc.features,
+            features: desc.required_features,
         };
         let queue = Queue {
             id: queue_id,
@@ -646,7 +646,7 @@ impl crate::Context for Context {
         let device = Device {
             id: device_id,
             error_sink: error_sink.clone(),
-            features: desc.features,
+            features: desc.required_features,
         };
         let queue = Queue {
             id: queue_id,
@@ -1610,6 +1610,7 @@ impl crate::Context for Context {
                 base_array_layer: desc.base_array_layer,
                 array_layer_count: desc.array_layer_count,
             },
+            plane: desc.plane,
         };
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(

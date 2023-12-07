@@ -12,7 +12,7 @@ async fn run() {
         default
     } else {
         std::env::args()
-            .skip(1)
+            .skip(2)
             .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
             .collect()
     };
@@ -48,8 +48,8 @@ async fn execute_gpu(numbers: &[u32]) -> Option<Vec<u32>> {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::downlevel_defaults(),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
             },
             None,
         )

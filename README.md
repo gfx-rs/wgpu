@@ -8,9 +8,9 @@
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
 [![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/trunk/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
-`wgpu` is a cross-platform, safe, pure-rust graphics api. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
+`wgpu` is a cross-platform, safe, pure-rust graphics API. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
-The api is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox and Deno.
+The API is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox and Deno.
 
 ## Repo Overview
 
@@ -26,7 +26,7 @@ The repository hosts the following libraries:
 
 The following binaries:
 
-- [![Crates.io](https://img.shields.io/crates/v/naga-cli.svg?label=naga-cli)](https://crates.io/crates/naga-cli) - Tool for translating shaders between different languages using naga.
+- [![Crates.io](https://img.shields.io/crates/v/naga-cli.svg?label=naga-cli)](https://crates.io/crates/naga-cli) - Tool for translating shaders between different languages using `naga`.
 - [![Crates.io](https://img.shields.io/crates/v/wgpu-info.svg?label=wgpu-info)](https://crates.io/crates/wgpu-info) - Tool for getting information on GPUs in the system.
 - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
 - `player` - standalone application for replaying the API traces.
@@ -39,9 +39,9 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin wgpu-examples <example>`. See the [list of examples](examples).
 
-To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin wgpu-example`. Then connect to `http://localhost:8000` in your WebGPU enabled browser, and you can choose an example to run.
+To run the examples on WebGPU on wasm, run `cargo xtask run-wasm --bin wgpu-example`. Then connect to `http://localhost:8000` in your WebGPU-enabled browser, and you can choose an example to run.
 
-To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin wgpu-example --features webgl`. Then connect to `http://localhost:8000` in your WebGL enabled browser, and you can choose an example to run.
+To run the examples on WebGL on wasm, run `cargo xtask run-wasm --bin wgpu-example --features webgl`. Then connect to `http://localhost:8000` in your WebGL-enabled browser, and you can choose an example to run.
 
 If you are looking for a wgpu tutorial, look at the following:
 
@@ -78,8 +78,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 | ----------- | ------------------------------ | ------------------ | ------------------------- | ------------------------- |
 | Vulkan      | :white_check_mark:             | :white_check_mark: | :volcano:                 |                           |
 | Metal       |                                |                    | :white_check_mark:        |                           |
-| DX12        | :white_check_mark:             |                    |                           |                           | 
-| DX11        | :hammer_and_wrench:            |                    |                           |                           |
+| DX12        | :white_check_mark:             |                    |                           |                           |
 | OpenGL      | :ok: (GL 3.3+)                 | :ok: (GL ES 3.0+)  | :triangular_ruler:        | :ok: (WebGL2)             | 
 | WebGPU      |                                |                    |                           | :white_check_mark:        |
 
@@ -93,8 +92,7 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) that serves as a knowledge
 
 wgpu supports shaders in [WGSL](https://gpuweb.github.io/gpuweb/wgsl/), SPIR-V, and GLSL.
 Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https://github.com/KhronosGroup/glslang)
-have compilers to target SPIR-V. All of these shader languages can be used with any backend, we
-will handle all of the conversion. Additionally, support for these shader inputs is not going away.
+have compilers to target SPIR-V. All of these shader languages can be used with any backend as we handle all of the conversions. Additionally, support for these shader inputs is not going away.
 
 While WebGPU does not support any shading language other than WGSL, we will automatically convert your
 non-WGSL shaders if you're running on WebGPU.
@@ -110,9 +108,9 @@ To enable GLSL shaders, enable the `glsl` feature of wgpu.
 
 ### Angle
 
-[Angle](http://angleproject.org) is a translation layer from GLES to other backends, developed by Google.
+[Angle](http://angleproject.org) is a translation layer from GLES to other backends developed by Google.
 We support running our GLES3 backend over it in order to reach platforms DX11 support, which aren't accessible otherwise.
-In order to run with Angle, "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
+In order to run with Angle, the "angle" feature has to be enabled, and Angle libraries placed in a location visible to the application.
 These binaries can be downloaded from [gfbuild-angle](https://github.com/DileSoft/gfbuild-angle) artifacts, [manual compilation](https://github.com/google/angle/blob/main/doc/DevSetup.md) may be required on Macs with Apple silicon.
 
 On Windows, you generally need to copy them into the working directory, in the same directory as the executable, or somewhere in your path.
@@ -122,10 +120,10 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
  - `d3d12`, `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.65**.
- - The rest of the workspace has the MSRV of **1.70**.
+ - The rest of the workspace has an MSRV of **1.71**.
 
-It is enforced on CI (in "/.github/workflows/ci.yml") with `CORE_MSRV` and `REPO_MSRV` variable.
-This version can only be upgraded in breaking releases, though we release a breaking version every 3 months.
+It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
+This version can only be upgraded in breaking releases, though we release a breaking version every three months.
 
 The `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates should never
 require an MSRV ahead of Firefox's MSRV for nightly builds, as
@@ -136,10 +134,10 @@ determined by the value of `MINIMUM_RUST_VERSION` in
 
 ## Environment Variables
 
-All testing and example infrastructure shares the same set of environment variables that determine which Backend/GPU it will run on.
+All testing and example infrastructure share the same set of environment variables that determine which Backend/GPU it will run on.
 
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
-- `WGPU_BACKEND` with a comma separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, `dx11`, or `gl`).
+- `WGPU_BACKEND` with a comma-separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, or `gl`).
 - `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high`, `low` or `none`)
 - `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc` or `fxc`, note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory otherwise it will fall back to `fxc`)
 - `WGPU_GLES_MINOR_VERSION` with the minor OpenGL ES 3 version number to request (`0`, `1`, `2` or `automatic`).
@@ -187,7 +185,7 @@ If you are a user and want a way to help contribute to wgpu, we always need more
 
 WebGPU includes a Conformance Test Suite to validate that implementations are working correctly. We can run this CTS against wgpu.
 
-To run the CTS, first you need to check it out:
+To run the CTS, first, you need to check it out:
 
 ```
 git clone https://github.com/gpuweb/cts.git
@@ -199,7 +197,7 @@ git checkout $(cat ../cts_runner/revision.txt)
 To run a given set of tests:
 
 ```
-# Must be inside the cts folder we just checked out, else this will fail
+# Must be inside the `cts` folder we just checked out, else this will fail
 cargo run --manifest-path ../Cargo.toml --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
 ```
 
@@ -224,7 +222,7 @@ Exactly which WGSL features `wgpu` supports depends on how you are using it:
   to translate WGSL code into the shading language of your platform's native GPU API.
   Naga has [a milestone][naga wgsl milestone]
   for catching up to the WGSL specification,
-  but in general there is no up-to-date summary
+  but in general, there is no up-to-date summary
   of the differences between Naga and the WGSL spec.
 
 - When running in a web browser (by compilation to WebAssembly)

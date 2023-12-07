@@ -33,8 +33,6 @@ mod macros {
         wgpu_types::Backend::Metal => $global.$method::<wgpu_core::api::Metal>( $($param),* ),
         #[cfg(all(not(target_arch = "wasm32"), windows))]
         wgpu_types::Backend::Dx12 => $global.$method::<wgpu_core::api::Dx12>( $($param),* ),
-        #[cfg(all(not(target_arch = "wasm32"), windows))]
-        wgpu_types::Backend::Dx11 => $global.$method::<wgpu_core::api::Dx11>( $($param),* ),
         #[cfg(any(
             all(unix, not(target_os = "macos"), not(target_os = "ios")),
             feature = "angle",
@@ -265,6 +263,9 @@ fn deserialize_features(features: &wgpu_types::Features) -> Vec<&'static str> {
     }
     if features.contains(wgpu_types::Features::BGRA8UNORM_STORAGE) {
         return_features.push("bgra8unorm-storage");
+    }
+    if features.contains(wgpu_types::Features::FLOAT32_FILTERABLE) {
+        return_features.push("float32-filterable");
     }
 
     // extended from spec
@@ -498,6 +499,10 @@ impl From<GpuRequiredFeatures> for wgpu_types::Features {
             wgpu_types::Features::BGRA8UNORM_STORAGE,
             required_features.0.contains("bgra8unorm-storage"),
         );
+        features.set(
+            wgpu_types::Features::FLOAT32_FILTERABLE,
+            required_features.0.contains("float32-filterable"),
+        );
 
         // extended from spec
 
@@ -657,8 +662,8 @@ pub async fn op_webgpu_request_device(
 
     let descriptor = wgpu_types::DeviceDescriptor {
         label: Some(Cow::Owned(label)),
-        features: required_features.into(),
-        limits: required_limits.unwrap_or_default(),
+        required_features: required_features.into(),
+        required_limits: required_limits.unwrap_or_default(),
     };
 
     let (device, _queue, maybe_err) = gfx_select!(adapter => instance.adapter_request_device(

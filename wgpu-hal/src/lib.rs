@@ -11,7 +11,7 @@
  *  General design direction is to follow the majority by the following weights:
  *  - wgpu-core: 1.5
  *  - primary backends (Vulkan/Metal/DX12): 1.0 each
- *  - secondary backends (DX11/GLES): 0.5 each
+ *  - secondary backend (GLES): 0.5
  */
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -51,9 +51,6 @@
     clippy::pattern_type_mismatch,
 )]
 
-/// DirectX11 API internals.
-#[cfg(all(feature = "dx11", windows))]
-pub mod dx11;
 /// DirectX12 API internals.
 #[cfg(all(feature = "dx12", windows))]
 pub mod dx12;
@@ -71,8 +68,6 @@ pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(all(feature = "dx11", windows))]
-    pub use super::dx11::Api as Dx11;
     #[cfg(all(feature = "dx12", windows))]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
@@ -217,6 +212,8 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type ShaderModule: fmt::Debug + WasmNotSendSync;
     type RenderPipeline: fmt::Debug + WasmNotSendSync;
     type ComputePipeline: fmt::Debug + WasmNotSendSync;
+
+    type AccelerationStructure: fmt::Debug + WasmNotSendSync + 'static;
 }
 
 pub trait Instance<A: Api>: Sized + WasmNotSendSync {
@@ -390,6 +387,23 @@ pub trait Device<A: Api>: WasmNotSendSync {
 
     unsafe fn start_capture(&self) -> bool;
     unsafe fn stop_capture(&self);
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &AccelerationStructureDescriptor,
+    ) -> Result<A::AccelerationStructure, DeviceError>;
+    unsafe fn get_acceleration_structure_build_sizes(
+        &self,
+        desc: &GetAccelerationStructureBuildSizesDescriptor<A>,
+    ) -> AccelerationStructureBuildSizes;
+    unsafe fn get_acceleration_structure_device_address(
+        &self,
+        acceleration_structure: &A::AccelerationStructure,
+    ) -> wgt::BufferAddress;
+    unsafe fn destroy_acceleration_structure(
+        &self,
+        acceleration_structure: A::AccelerationStructure,
+    );
 }
 
 pub trait Queue<A: Api>: WasmNotSendSync {
@@ -618,6 +632,26 @@ pub trait CommandEncoder<A: Api>: WasmNotSendSync + fmt::Debug {
 
     unsafe fn dispatch(&mut self, count: [u32; 3]);
     unsafe fn dispatch_indirect(&mut self, buffer: &A::Buffer, offset: wgt::BufferAddress);
+
+    /// To get the required sizes for the buffer allocations use `get_acceleration_structure_build_sizes` per descriptor
+    /// All buffers must be synchronized externally
+    /// All buffer regions, which are written to may only be passed once per function call,
+    /// with the exception of updates in the same descriptor.
+    /// Consequences of this limitation:
+    /// - scratch buffers need to be unique
+    /// - a tlas can't be build in the same call with a blas it contains
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        descriptor_count: u32,
+        descriptors: T,
+    ) where
+        A: 'a,
+        T: IntoIterator<Item = BuildAccelerationStructureDescriptor<'a, A>>;
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: AccelerationStructureBarrier,
+    );
 }
 
 bitflags!(
@@ -778,12 +812,15 @@ bitflags::bitflags! {
         const INDIRECT = 1 << 9;
         /// A buffer used to store query results.
         const QUERY_RESOLVE = 1 << 10;
+        const ACCELERATION_STRUCTURE_SCRATCH = 1 << 11;
+        const BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 12;
+        const TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT = 1 << 13;
         /// The combination of states that a buffer may be in _at the same time_.
         const INCLUSIVE = Self::MAP_READ.bits() | Self::COPY_SRC.bits() |
             Self::INDEX.bits() | Self::VERTEX.bits() | Self::UNIFORM.bits() |
-            Self::STORAGE_READ.bits() | Self::INDIRECT.bits();
+            Self::STORAGE_READ.bits() | Self::INDIRECT.bits() | Self::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits() | Self::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT.bits();
         /// The combination of states that a buffer must exclusively be in.
-        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits();
+        const EXCLUSIVE = Self::MAP_WRITE.bits() | Self::COPY_DST.bits() | Self::STORAGE_READ_WRITE.bits() | Self::ACCELERATION_STRUCTURE_SCRATCH.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
@@ -882,11 +919,6 @@ pub struct SurfaceCapabilities {
     /// Current extent of the surface, if known.
     pub current_extent: Option<wgt::Extent3d>,
 
-    /// Range of supported extents.
-    ///
-    /// `current_extent` must be inside this range.
-    pub extents: RangeInclusive<wgt::Extent3d>,
-
     /// Supported texture usage flags.
     ///
     /// Must have at least `TextureUses::COLOR_TARGET`
@@ -981,6 +1013,7 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: wgt::TextureViewDimension,
     pub usage: TextureUses,
     pub range: wgt::ImageSubresourceRange,
+    pub plane: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -1095,6 +1128,7 @@ pub struct BindGroupDescriptor<'a, A: Api> {
     pub samplers: &'a [&'a A::Sampler],
     pub textures: &'a [TextureBinding<'a, A>],
     pub entries: &'a [BindGroupEntry],
+    pub acceleration_structures: &'a [&'a A::AccelerationStructure],
 }
 
 #[derive(Clone, Debug)]
@@ -1425,4 +1459,135 @@ impl ValidationCanary {
 fn test_default_limits() {
     let limits = wgt::Limits::default();
     assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+}
+
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureDescriptor<'a> {
+    pub label: Label<'a>,
+    pub size: wgt::BufferAddress,
+    pub format: AccelerationStructureFormat,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccelerationStructureFormat {
+    TopLevel,
+    BottomLevel,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AccelerationStructureBuildMode {
+    Build,
+    Update,
+}
+
+/// Information of the required size for a corresponding entries struct (+ flags)
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct AccelerationStructureBuildSizes {
+    pub acceleration_structure_size: wgt::BufferAddress,
+    pub update_scratch_size: wgt::BufferAddress,
+    pub build_scratch_size: wgt::BufferAddress,
+}
+
+/// Updates use source_acceleration_structure if present, else the update will be performed in place.
+/// For updates, only the data is allowed to change (not the meta data or sizes).
+#[derive(Clone, Debug)]
+pub struct BuildAccelerationStructureDescriptor<'a, A: Api> {
+    pub entries: &'a AccelerationStructureEntries<'a, A>,
+    pub mode: AccelerationStructureBuildMode,
+    pub flags: AccelerationStructureBuildFlags,
+    pub source_acceleration_structure: Option<&'a A::AccelerationStructure>,
+    pub destination_acceleration_structure: &'a A::AccelerationStructure,
+    pub scratch_buffer: &'a A::Buffer,
+    pub scratch_buffer_offset: wgt::BufferAddress,
+}
+
+/// - All buffers, buffer addresses and offsets will be ignored.
+/// - The build mode will be ignored.
+/// - Reducing the amount of Instances, Triangle groups or AABB groups (or the number of Triangles/AABBs in corresponding groups),
+/// may result in reduced size requirements.
+/// - Any other change may result in a bigger or smaller size requirement.
+#[derive(Clone, Debug)]
+pub struct GetAccelerationStructureBuildSizesDescriptor<'a, A: Api> {
+    pub entries: &'a AccelerationStructureEntries<'a, A>,
+    pub flags: AccelerationStructureBuildFlags,
+}
+
+/// Entries for a single descriptor
+/// * `Instances` - Multiple instances for a top level acceleration structure
+/// * `Triangles` - Multiple triangle meshes for a bottom level acceleration structure
+/// * `AABBs` - List of list of axis aligned bounding boxes for a bottom level acceleration structure
+#[derive(Debug)]
+pub enum AccelerationStructureEntries<'a, A: Api> {
+    Instances(AccelerationStructureInstances<'a, A>),
+    Triangles(Vec<AccelerationStructureTriangles<'a, A>>),
+    AABBs(Vec<AccelerationStructureAABBs<'a, A>>),
+}
+
+/// * `first_vertex` - offset in the vertex buffer (as number of vertices)
+/// * `indices` - optional index buffer with attributes
+/// * `transform` - optional transform
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangles<'a, A: Api> {
+    pub vertex_buffer: Option<&'a A::Buffer>,
+    pub vertex_format: wgt::VertexFormat,
+    pub first_vertex: u32,
+    pub vertex_count: u32,
+    pub vertex_stride: wgt::BufferAddress,
+    pub indices: Option<AccelerationStructureTriangleIndices<'a, A>>,
+    pub transform: Option<AccelerationStructureTriangleTransform<'a, A>>,
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureAABBs<'a, A: Api> {
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+    pub stride: wgt::BufferAddress,
+    pub flags: AccelerationStructureGeometryFlags,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureInstances<'a, A: Api> {
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangleIndices<'a, A: Api> {
+    pub format: wgt::IndexFormat,
+    pub buffer: Option<&'a A::Buffer>,
+    pub offset: u32,
+    pub count: u32,
+}
+
+/// * `offset` - offset in bytes
+#[derive(Clone, Debug)]
+pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
+    pub buffer: &'a A::Buffer,
+    pub offset: u32,
+}
+
+pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
+pub use wgt::AccelerationStructureGeometryFlags;
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct AccelerationStructureUses: u8 {
+        // For blas used as input for tlas
+        const BUILD_INPUT = 1 << 0;
+        // Target for acceleration structure build
+        const BUILD_OUTPUT = 1 << 1;
+        // Tlas used in a shader
+        const SHADER_INPUT = 1 << 2;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccelerationStructureBarrier {
+    pub usage: Range<AccelerationStructureUses>,
 }

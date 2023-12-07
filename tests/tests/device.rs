@@ -79,8 +79,8 @@ async fn request_device_error_message() {
         .request_device(
             &wgpu::DeviceDescriptor {
                 // Force a failure by requesting absurd limits.
-                features: wgpu::Features::all(),
-                limits: wgpu::Limits {
+                required_features: wgpu::Features::all(),
+                required_limits: wgpu::Limits {
                     max_texture_dimension_1d: u32::MAX,
                     max_texture_dimension_2d: u32::MAX,
                     max_texture_dimension_3d: u32::MAX,

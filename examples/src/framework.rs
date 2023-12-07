@@ -4,7 +4,7 @@ use wgpu::{Instance, Surface};
 use winit::{
     dpi::PhysicalSize,
     event::{Event, KeyEvent, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
+    event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::{Key, NamedKey},
     window::Window,
 };
@@ -218,7 +218,17 @@ impl SurfaceWrapper {
 
         match surface.get_current_texture() {
             Ok(frame) => frame,
-            Err(_) => {
+            // If we timed out, just try again
+            Err(wgpu::SurfaceError::Timeout) => surface
+                .get_current_texture()
+                .expect("Failed to acquire next surface texture!"),
+            Err(
+                // If the surface is outdated, or was lost, reconfigure it.
+                wgpu::SurfaceError::Outdated
+                | wgpu::SurfaceError::Lost
+                // If OutOfMemory happens, reconfiguring may not help, but we might as well try
+                | wgpu::SurfaceError::OutOfMemory,
+            ) => {
                 surface.configure(&context.device, self.config());
                 surface
                     .get_current_texture()
@@ -307,8 +317,8 @@ impl ExampleContext {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: None,
-                    features: (optional_features & adapter_features) | required_features,
-                    limits: needed_limits,
+                    required_features: (optional_features & adapter_features) | required_features,
+                    required_limits: needed_limits,
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
             )
@@ -380,9 +390,6 @@ async fn start<E: Example>(title: &str) {
     let _ = (event_loop_function)(
         window_loop.event_loop,
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
-            // We set to refresh as fast as possible.
-            target.set_control_flow(ControlFlow::Poll);
-
             match event {
                 ref e if SurfaceWrapper::start_condition(e) => {
                     surface.resume(&context, window_loop.window.clone(), E::SRGB);

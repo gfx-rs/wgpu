@@ -38,7 +38,6 @@ angle = ["wgc/gles"]
 webgl = ["hal", "wgc/gles"]
 # Enables the Vulkan backend on macOS & iOS
 vulkan-portability = ["wgc/vulkan"]
-expose-ids = []
 # Implement `Send` and `Sync` on Wasm.
 fragile-send-sync-non-atomic-wasm = [
     "hal/fragile-send-sync-non-atomic-wasm",
@@ -66,10 +65,10 @@ features = ["raw-window-handle"]
 workspace = true
 features = ["metal"]
 
-# We want the wgpu-core Direct3D backends and OpenGL (via WGL) on Windows.
+# We want the wgpu-core Direct3D backend and OpenGL (via WGL) on Windows.
 [target.'cfg(windows)'.dependencies.wgc]
 workspace = true
-features = ["dx11", "dx12", "gles"]
+features = ["dx12", "gles"]
 
 # We want the wgpu-core Vulkan backend on Unix (but not emscripten, macOS, iOS) and Windows.
 [target.'cfg(any(windows, all(unix, not(target_os = "emscripten"), not(target_os = "ios"), not(target_os = "macos"))))'.dependencies.wgc]
@@ -167,7 +166,7 @@ web-sys = { workspace = true, features = [
     "GpuCompilationMessageType",
     "GpuComputePassDescriptor",
     "GpuComputePassEncoder",
-    "GpuComputePassTimestampWrite",
+    "GpuComputePassTimestampWrites",
     "GpuComputePipeline",
     "GpuComputePipelineDescriptor",
     "GpuCullMode",

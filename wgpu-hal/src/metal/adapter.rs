@@ -232,6 +232,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 }
                 flags
             }
+            Tf::NV12 => return Tfc::empty(),
             Tf::Rgb9e5Ufloat => {
                 if pc.msaa_apple3 {
                     all_caps
@@ -338,15 +339,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             ],
 
             current_extent,
-            extents: wgt::Extent3d {
-                width: 4,
-                height: 4,
-                depth_or_array_layers: 1,
-            }..=wgt::Extent3d {
-                width: pc.max_texture_size as u32,
-                height: pc.max_texture_size as u32,
-                depth_or_array_layers: 1,
-            },
             usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
         })
     }
@@ -612,6 +604,9 @@ impl super::PrivateCapabilities {
             function_specialization: Self::supports_any(device, FUNCTION_SPECIALIZATION_SUPPORT),
             depth_clip_mode: Self::supports_any(device, DEPTH_CLIP_MODE),
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
+            supports_float_filtering: os_is_mac
+                || (version.at_least((11, 0), (14, 0), os_is_mac)
+                    && device.supports_32bit_float_filtering()),
             format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
             format_depth32_stencil8_filter: os_is_mac,
             format_depth32_stencil8_none: !os_is_mac,
@@ -829,6 +824,7 @@ impl super::PrivateCapabilities {
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE;
 
+        features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(
             F::INDIRECT_FIRST_INSTANCE | F::MULTI_DRAW_INDIRECT,
             self.indirect_draw_dispatch,
@@ -1022,6 +1018,7 @@ impl super::PrivateCapabilities {
                     Depth32Float_Stencil8
                 }
             }
+            Tf::NV12 => unreachable!(),
             Tf::Rgb9e5Ufloat => RGB9E5Float,
             Tf::Bc1RgbaUnorm => BC1_RGBA,
             Tf::Bc1RgbaUnormSrgb => BC1_RGBA_sRGB,

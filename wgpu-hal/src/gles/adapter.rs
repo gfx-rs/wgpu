@@ -219,10 +219,7 @@ impl super::Adapter {
         log::debug!("Version: {}", version);
 
         let full_ver = Self::parse_full_version(&version).ok();
-        let es_ver = full_ver
-            .is_none()
-            .then_some(())
-            .and_then(|_| Self::parse_version(&version).ok());
+        let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
         let web_gl = cfg!(target_arch = "wasm32");
 
         if let Some(full_ver) = full_ver {
@@ -549,6 +546,17 @@ impl super::Adapter {
             );
         }
 
+        features.set(
+            wgt::Features::FLOAT32_FILTERABLE,
+            extensions.contains("GL_ARB_color_buffer_float")
+                || extensions.contains("GL_EXT_color_buffer_float")
+                || extensions.contains("OES_texture_float_linear"),
+        );
+
+        if es_ver.is_none() {
+            features |= wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT;
+        }
+
         // We *might* be able to emulate bgra8unorm-storage but currently don't attempt to.
 
         let mut private_caps = super::PrivateCapabilities::empty();
@@ -593,14 +601,6 @@ impl super::Adapter {
         private_caps.set(
             super::PrivateCapabilities::COLOR_BUFFER_FLOAT,
             color_buffer_float,
-        );
-        private_caps.set(
-            super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR,
-            if full_ver.is_some() {
-                color_buffer_float
-            } else {
-                extensions.contains("OES_texture_float_linear")
-            },
         );
         private_caps.set(super::PrivateCapabilities::QUERY_BUFFERS, query_buffers);
         private_caps.set(super::PrivateCapabilities::QUERY_64BIT, full_ver.is_some());
@@ -787,7 +787,7 @@ impl super::Adapter {
         // Drop the GL guard so we can move the context into AdapterShared
         // ( on Wasm the gl handle is just a ref so we tell clippy to allow
         // dropping the ref )
-        #[cfg_attr(target_arch = "wasm32", allow(clippy::drop_ref))]
+        #[cfg_attr(target_arch = "wasm32", allow(dropping_references))]
         drop(gl);
 
         Some(crate::ExposedAdapter {
@@ -798,7 +798,6 @@ impl super::Adapter {
                     workarounds,
                     features,
                     shading_language_version,
-                    max_texture_size,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
                     es: es_ver.is_some(),
@@ -1023,8 +1022,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 | Tfc::MULTISAMPLE_RESOLVE,
         );
 
-        let texture_float_linear =
-            private_caps_fn(super::PrivateCapabilities::TEXTURE_FLOAT_LINEAR, filterable);
+        let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
         match format {
             Tf::R8Unorm => filterable_renderable,
@@ -1073,6 +1071,7 @@ impl crate::Adapter<super::Api> for super::Adapter {
             | Tf::Depth32FloatStencil8
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
+            Tf::NV12 => unreachable!(),
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
@@ -1144,15 +1143,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 swap_chain_sizes: 2..=2,
                 current_extent: None,
-                extents: wgt::Extent3d {
-                    width: 4,
-                    height: 4,
-                    depth_or_array_layers: 1,
-                }..=wgt::Extent3d {
-                    width: self.shared.max_texture_size,
-                    height: self.shared.max_texture_size,
-                    depth_or_array_layers: 1,
-                },
                 usage: crate::TextureUses::COLOR_TARGET,
             })
         } else {

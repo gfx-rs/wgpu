@@ -4,7 +4,7 @@ use crate::{
     api_log, binding_model, command, conv,
     device::{
         life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_FAILURE,
+        IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -526,7 +526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
+                    Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
                 }
             }
         }
@@ -574,7 +574,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error {error:?}");
+        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -648,7 +648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error {error:?}");
+        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -702,7 +702,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_buffer error {error:?}");
+        log::error!("Device::create_buffer error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -790,7 +790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for texture {:?}: {:?}", texture_id, e),
+                    Err(e) => log::error!("Failed to wait for texture {texture_id:?}: {e}"),
                 }
             }
         }
@@ -835,7 +835,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Texture::create_view({texture_id:?}) error {error:?}");
+        log::error!("Texture::create_view({texture_id:?}) error: {error}");
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -865,11 +865,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match view.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!(
-                        "Failed to wait for texture view {:?}: {:?}",
-                        texture_view_id,
-                        e
-                    ),
+                    Err(e) => {
+                        log::error!("Failed to wait for texture view {texture_view_id:?}: {e}")
+                    }
                 }
             }
         }
@@ -1217,7 +1215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module error: {error:?}");
+        log::error!("Device::create_shader_module error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1274,7 +1272,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module_spirv error: {error:?}");
+        log::error!("Device::create_shader_module_spirv error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1589,16 +1587,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
 
-        log::error!("Device::create_render_pipeline error {error:?}");
+        log::error!("Device::create_render_pipeline error: {error}");
 
         (id, Some(error))
     }
@@ -1723,12 +1721,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
         (id, Some(error))
@@ -1809,21 +1807,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         fn validate_surface_configuration(
             config: &mut hal::SurfaceConfiguration,
             caps: &hal::SurfaceCapabilities,
+            max_texture_dimension_2d: u32,
         ) -> Result<(), E> {
             let width = config.extent.width;
             let height = config.extent.height;
-            if width < caps.extents.start().width
-                || width > caps.extents.end().width
-                || height < caps.extents.start().height
-                || height > caps.extents.end().height
-            {
-                log::warn!(
-                    "Requested size {}x{} is outside of the supported range: {:?}",
+
+            if width > max_texture_dimension_2d || height > max_texture_dimension_2d {
+                return Err(E::TooLarge {
                     width,
                     height,
-                    caps.extents
-                );
+                    max_texture_dimension_2d,
+                });
             }
+
             if !caps.present_modes.contains(&config.present_mode) {
                 let new_mode = 'b: loop {
                     // Automatic present mode checks.
@@ -1997,14 +1993,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     view_formats: hal_view_formats,
                 };
 
-                if let Err(error) = validate_surface_configuration(&mut hal_config, &caps) {
+                if let Err(error) = validate_surface_configuration(
+                    &mut hal_config,
+                    &caps,
+                    device.limits.max_texture_dimension_2d,
+                ) {
                     break error;
                 }
 
                 // Wait for all work to finish before configuring the surface.
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                match device.maintain(hub, fence, wgt::Maintain::Wait) {
+                match device.maintain(fence, wgt::Maintain::Wait) {
                     Ok((closures, _)) => {
                         user_callbacks = closures;
                     }
@@ -2074,7 +2074,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(InvalidDevice);
         }
         device.lock_life().triage_suspected(
-            hub,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
@@ -2109,7 +2108,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map_err(|_| DeviceError::Invalid)?;
             let fence = device.fence.read();
             let fence = fence.as_ref().unwrap();
-            device.maintain(hub, fence, maintain)?
+            device.maintain(fence, maintain)?
         };
 
         closures.fire();
@@ -2143,7 +2142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 let fence = device.fence.read();
                 let fence = fence.as_ref().unwrap();
-                let (cbs, queue_empty) = device.maintain(hub, fence, maintain)?;
+                let (cbs, queue_empty) = device.maintain(fence, maintain)?;
                 all_queue_empty = all_queue_empty && queue_empty;
 
                 closures.extend(cbs);
@@ -2178,11 +2177,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             all_queue_empty =
                 self.poll_device::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
-        }
-        #[cfg(all(feature = "dx11", windows))]
-        {
-            all_queue_empty =
-                self.poll_device::<hal::api::Dx11>(force_wait, &mut closures)? && all_queue_empty;
         }
         #[cfg(feature = "gles")]
         {
@@ -2320,7 +2314,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
-            log::error!("Buffer::map_async error {err:?}");
+            log::error!("Buffer::map_async error: {err}");
             return Err(err);
         }
 

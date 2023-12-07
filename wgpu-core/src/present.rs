@@ -77,6 +77,12 @@ pub enum ConfigureSurfaceError {
     PreviousOutputExists,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
     ZeroArea,
+    #[error("`Surface` width and height must be within the maximum supported texture size. Requested was ({width}, height), maximum extent is {max_texture_dimension_2d}.")]
+    TooLarge {
+        width: u32,
+        height: u32,
+        max_texture_dimension_2d: u32,
+    },
     #[error("Surface does not support the adapter's queue family")]
     UnsupportedQueueFamily,
     #[error("Requested format {requested:?} is not in list of supported formats: {available:?}")]
@@ -196,6 +202,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     dimension: wgt::TextureViewDimension::D2,
                     usage: hal::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
+                    plane: None,
                 };
                 let clear_view = unsafe {
                     hal::Device::create_texture_view(

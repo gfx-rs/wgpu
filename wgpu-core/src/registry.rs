@@ -88,7 +88,6 @@ impl<I: id::TypedId + Copy, T: Resource<I>> FutureId<'_, I, T> {
 
     pub fn assign_existing(self, value: &Arc<T>) -> I {
         let mut data = self.data.write();
-        #[cfg(debug_assertions)]
         debug_assert!(!data.contains(self.id));
         data.insert(self.id, value.clone());
         self.id
@@ -121,9 +120,6 @@ impl<I: id::TypedId, T: Resource<I>> Registry<I, T> {
             identity: self.identity.clone(),
             data: &self.storage,
         }
-    }
-    pub(crate) fn contains(&self, id: I) -> bool {
-        self.read().contains(id)
     }
     pub(crate) fn try_get(&self, id: I) -> Result<Option<Arc<T>>, InvalidId> {
         self.read().try_get(id).map(|o| o.cloned())

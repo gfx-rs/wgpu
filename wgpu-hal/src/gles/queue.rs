@@ -1330,6 +1330,10 @@ impl super::Queue {
                         unsafe { gl.disable(glow::DEPTH_CLAMP) };
                     }
                 }
+                // POLYGON_MODE_LINE also implies POLYGON_MODE_POINT
+                if self.features.contains(wgt::Features::POLYGON_MODE_LINE) {
+                    unsafe { gl.polygon_mode(glow::FRONT_AND_BACK, state.polygon_mode) };
+                }
             }
             C::SetBlendConstant(c) => {
                 unsafe { gl.blend_color(c[0], c[1], c[2], c[3]) };

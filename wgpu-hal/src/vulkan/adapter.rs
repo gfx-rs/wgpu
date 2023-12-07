@@ -35,6 +35,9 @@ pub struct PhysicalDeviceFeatures {
         vk::PhysicalDeviceShaderFloat16Int8Features,
         vk::PhysicalDevice16BitStorageFeatures,
     )>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
+    buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
+    ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
     zero_initialize_workgroup_memory:
         Option<vk::PhysicalDeviceZeroInitializeWorkgroupMemoryFeatures>,
 }
@@ -73,6 +76,15 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(_16bit_feature);
         }
         if let Some(ref mut feature) = self.zero_initialize_workgroup_memory {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.acceleration_structure {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.buffer_device_address {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_query {
             info = info.push_next(feature);
         }
         info
@@ -283,6 +295,37 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            acceleration_structure: if enabled_extensions
+                .contains(&vk::KhrAccelerationStructureFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+                        .acceleration_structure(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            buffer_device_address: if enabled_extensions
+                .contains(&vk::KhrBufferDeviceAddressFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::builder()
+                        .buffer_device_address(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            ray_query: if enabled_extensions.contains(&vk::KhrRayQueryFn::name()) {
+                Some(
+                    vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
+                        .ray_query(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
             zero_initialize_workgroup_memory: if device_api_version >= vk::API_VERSION_1_3
                 || enabled_extensions.contains(&vk::KhrZeroInitializeWorkgroupMemoryFn::name())
             {
@@ -301,6 +344,7 @@ impl PhysicalDeviceFeatures {
 
     fn to_wgpu(
         &self,
+        adapter_info: &wgt::AdapterInfo,
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceCapabilities,
@@ -519,6 +563,18 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
+        features.set(
+            F::RAY_TRACING_ACCELERATION_STRUCTURE,
+            caps.supports_extension(vk::KhrDeferredHostOperationsFn::name())
+                && caps.supports_extension(vk::KhrAccelerationStructureFn::name())
+                && caps.supports_extension(vk::KhrBufferDeviceAddressFn::name()),
+        );
+
+        features.set(
+            F::RAY_QUERY,
+            caps.supports_extension(vk::KhrRayQueryFn::name()),
+        );
+
         let rg11b10ufloat_renderable = supports_format(
             instance,
             phd,
@@ -535,6 +591,26 @@ impl PhysicalDeviceFeatures {
             supports_bgra8unorm_storage(instance, phd, caps.device_api_version),
         );
 
+        features.set(
+            F::FLOAT32_FILTERABLE,
+            is_float32_filterable_supported(instance, phd),
+        );
+        features.set(
+            F::TEXTURE_FORMAT_NV12,
+            (caps.device_api_version >= vk::API_VERSION_1_1
+                || caps.supports_extension(vk::KhrSamplerYcbcrConversionFn::name()))
+                && supports_format(
+                    instance,
+                    phd,
+                    vk::Format::G8_B8R8_2PLANE_420_UNORM,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::FormatFeatureFlags::SAMPLED_IMAGE
+                        | vk::FormatFeatureFlags::TRANSFER_SRC
+                        | vk::FormatFeatureFlags::TRANSFER_DST,
+                )
+                && !adapter_info.driver.contains("MoltenVK"),
+        );
+
         (features, dl_flags)
     }
 
@@ -549,12 +625,13 @@ impl PhysicalDeviceFeatures {
 }
 
 /// Information gathered about a physical device capabilities.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PhysicalDeviceCapabilities {
     supported_extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
     maintenance_3: Option<vk::PhysicalDeviceMaintenance3Properties>,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingPropertiesEXT>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructurePropertiesKHR>,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
     /// The device API version.
     ///
@@ -685,6 +762,18 @@ impl PhysicalDeviceCapabilities {
             extensions.push(vk::KhrDrawIndirectCountFn::name());
         }
 
+        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
+        if requested_features.contains(wgt::Features::RAY_TRACING_ACCELERATION_STRUCTURE) {
+            extensions.push(vk::KhrDeferredHostOperationsFn::name());
+            extensions.push(vk::KhrAccelerationStructureFn::name());
+            extensions.push(vk::KhrBufferDeviceAddressFn::name());
+        }
+
+        // Require `VK_KHR_ray_query` if the associated feature was requested
+        if requested_features.contains(wgt::Features::RAY_QUERY) {
+            extensions.push(vk::KhrRayQueryFn::name());
+        }
+
         // Require `VK_EXT_conservative_rasterization` if the associated feature was requested
         if requested_features.contains(wgt::Features::CONSERVATIVE_RASTERIZATION) {
             extensions.push(vk::ExtConservativeRasterizationFn::name());
@@ -800,6 +889,9 @@ impl super::InstanceShared {
                     >= vk::API_VERSION_1_2
                     || capabilities.supports_extension(vk::KhrDriverPropertiesFn::name());
 
+                let supports_acceleration_structure =
+                    capabilities.supports_extension(vk::KhrAccelerationStructureFn::name());
+
                 let mut builder = vk::PhysicalDeviceProperties2KHR::builder();
                 if supports_maintenance3 {
                     capabilities.maintenance_3 =
@@ -811,6 +903,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .descriptor_indexing
                         .insert(vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::default());
+                    builder = builder.push_next(next);
+                }
+
+                if supports_acceleration_structure {
+                    let next = capabilities
+                        .acceleration_structure
+                        .insert(vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default());
                     builder = builder.push_next(next);
                 }
 
@@ -907,6 +1006,12 @@ impl super::InstanceShared {
                 builder = builder.push_next(&mut next.0);
                 builder = builder.push_next(&mut next.1);
             }
+            if capabilities.supports_extension(vk::KhrAccelerationStructureFn::name()) {
+                let next = features
+                    .acceleration_structure
+                    .insert(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default());
+                builder = builder.push_next(next);
+            }
 
             // `VK_KHR_zero_initialize_workgroup_memory` is promoted to 1.3
             if capabilities.device_api_version >= vk::API_VERSION_1_3
@@ -980,16 +1085,9 @@ impl super::Instance {
         };
 
         let (available_features, downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
+            phd_features.to_wgpu(&info, &self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
-            // see https://github.com/gfx-rs/gfx/issues/1930
-            let _is_windows_intel_dual_src_bug = cfg!(windows)
-                && phd_capabilities.properties.vendor_id == db::intel::VENDOR
-                && (phd_capabilities.properties.device_id & db::intel::DEVICE_KABY_LAKE_MASK
-                    == db::intel::DEVICE_KABY_LAKE_MASK
-                    || phd_capabilities.properties.device_id & db::intel::DEVICE_SKY_LAKE_MASK
-                        == db::intel::DEVICE_SKY_LAKE_MASK);
             // TODO: only enable for particular devices
             workarounds |= super::Workarounds::SEPARATE_ENTRY_POINTS;
             workarounds.set(
@@ -1249,6 +1347,22 @@ impl super::Adapter {
         } else {
             None
         };
+        let ray_tracing_fns = if enabled_extensions.contains(&khr::AccelerationStructure::name())
+            && enabled_extensions.contains(&khr::BufferDeviceAddress::name())
+        {
+            Some(super::RayTracingDeviceExtensionFunctions {
+                acceleration_structure: khr::AccelerationStructure::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ),
+                buffer_device_address: khr::BufferDeviceAddress::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ),
+            })
+        } else {
+            None
+        };
 
         let naga_options = {
             use naga::back::spv;
@@ -1295,6 +1409,10 @@ impl super::Adapter {
             }
             if features.contains(wgt::Features::BGRA8UNORM_STORAGE) {
                 capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
+            }
+
+            if features.contains(wgt::Features::RAY_QUERY) {
+                capabilities.push(spv::Capability::RayQueryKHR);
             }
 
             let mut flags = spv::WriterFlags::empty();
@@ -1364,6 +1482,7 @@ impl super::Adapter {
             extension_fns: super::DeviceExtensionFunctions {
                 draw_indirect_count: indirect_count_fn,
                 timeline_semaphore: timeline_semaphore_fn,
+                ray_tracing: ray_tracing_fns,
             },
             vendor_id: self.phd_capabilities.properties.vendor_id,
             timestamp_period: self.phd_capabilities.properties.limits.timestamp_period,
@@ -1418,7 +1537,8 @@ impl super::Adapter {
                         size: memory_heap.size,
                     })
                     .collect(),
-                buffer_device_address: false,
+                buffer_device_address: enabled_extensions
+                    .contains(&khr::BufferDeviceAddress::name()),
             };
             gpu_alloc::GpuAllocator::new(config, properties)
         };
@@ -1562,14 +1682,14 @@ impl crate::Adapter<super::Api> for super::Adapter {
                 .framebuffer_stencil_sample_counts
                 .min(limits.sampled_image_stencil_sample_counts)
         } else {
-            match format.sample_type(None).unwrap() {
-                wgt::TextureSampleType::Float { filterable: _ } => limits
+            match format.sample_type(None, None) {
+                Some(wgt::TextureSampleType::Float { .. }) => limits
                     .framebuffer_color_sample_counts
                     .min(limits.sampled_image_color_sample_counts),
-                wgt::TextureSampleType::Sint | wgt::TextureSampleType::Uint => {
+                Some(wgt::TextureSampleType::Sint) | Some(wgt::TextureSampleType::Uint) => {
                     limits.sampled_image_integer_sample_counts
                 }
-                _ => unreachable!(),
+                _ => vk::SampleCountFlags::TYPE_1,
             }
         };
 
@@ -1653,18 +1773,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             None
         };
 
-        let min_extent = wgt::Extent3d {
-            width: caps.min_image_extent.width,
-            height: caps.min_image_extent.height,
-            depth_or_array_layers: 1,
-        };
-
-        let max_extent = wgt::Extent3d {
-            width: caps.max_image_extent.width,
-            height: caps.max_image_extent.height,
-            depth_or_array_layers: caps.max_image_array_layers,
-        };
-
         let raw_present_modes = {
             profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
             match unsafe {
@@ -1703,7 +1811,6 @@ impl crate::Adapter<super::Api> for super::Adapter {
             formats,
             swap_chain_sizes: caps.min_image_count..=max_image_count,
             current_extent,
-            extents: min_extent..=max_extent,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
             present_modes: raw_present_modes
                 .into_iter()
@@ -1765,6 +1872,21 @@ fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDev
     );
 
     r16unorm && r16snorm && rg16unorm && rg16snorm && rgba16unorm && rgba16snorm
+}
+
+fn is_float32_filterable_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
+    let tiling = vk::ImageTiling::OPTIMAL;
+    let features = vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR;
+    let r_float = supports_format(instance, phd, vk::Format::R32_SFLOAT, tiling, features);
+    let rg_float = supports_format(instance, phd, vk::Format::R32G32_SFLOAT, tiling, features);
+    let rgba_float = supports_format(
+        instance,
+        phd,
+        vk::Format::R32G32B32A32_SFLOAT,
+        tiling,
+        features,
+    );
+    r_float && rg_float && rgba_float
 }
 
 fn supports_format(

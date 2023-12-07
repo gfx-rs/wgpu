@@ -18,9 +18,9 @@ rust-version = "1.65"
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
 #
-# However the metal features fails to be documented because the docs.rs runner cross compiling under
+# However, the metal features fail to be documented because the docs.rs runner cross-compiling under
 # x86_64-unknown-linux-gnu and metal-rs cannot compile in that environment at the moment. The same applies
-# with the dx11 and dx12 features.
+# for the dx12 feature.
 features = ["vulkan", "gles", "renderdoc"]
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
@@ -44,17 +44,6 @@ vulkan = [
     "smallvec",
 ]
 gles = ["naga/glsl-out", "glow", "glutin_wgl_sys", "khronos-egl", "libloading"]
-dx11 = [
-    "naga/hlsl-out",
-    "d3d12",
-    "libloading",
-    "winapi/d3d11",
-    "winapi/std",
-    "winapi/d3d11_1",
-    "winapi/d3d11_2",
-    "winapi/d3d11sdklayers",
-    "winapi/dxgi1_6",
-]
 dx12 = [
     "naga/hlsl-out",
     "d3d12",
@@ -152,13 +141,13 @@ core-graphics-types = "0.1"
 
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wasm-bindgen = "0.2.87"
-web-sys = { version = "0.3.64", features = [
+web-sys = { version = "0.3.66", features = [
     "Window",
     "HtmlCanvasElement",
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = "0.3.65"
+js-sys = "0.3.66"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -180,7 +169,8 @@ features = ["wgsl-in"]
 [dev-dependencies]
 cfg-if = "1"
 env_logger = "0.10"
-winit = { version = "0.29.2", features = [
+glam = "0.24.2" # for ray-traced-triangle example
+winit = { version = "0.29.4", features = [
     "android-native-activity",
 ] } # for "halmark" example
 

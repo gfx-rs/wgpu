@@ -153,6 +153,7 @@ impl crate::Api for Api {
     type Sampler = Sampler;
     type QuerySet = QuerySet;
     type Fence = Fence;
+    type AccelerationStructure = ();
 
     type BindGroupLayout = BindGroupLayout;
     type BindGroup = BindGroup;
@@ -186,8 +187,6 @@ bitflags::bitflags! {
         const COLOR_BUFFER_HALF_FLOAT = 1 << 8;
         /// Supports `f11/f10` and `f32` color buffers
         const COLOR_BUFFER_FLOAT = 1 << 9;
-        /// Supports linear flitering `f32` textures.
-        const TEXTURE_FLOAT_LINEAR = 1 << 10;
         /// Supports query buffer objects.
         const QUERY_BUFFERS = 1 << 11;
         /// Supports 64 bit queries via `glGetQueryObjectui64v`
@@ -249,7 +248,6 @@ struct AdapterShared {
     features: wgt::Features,
     workarounds: Workarounds,
     shading_language_version: naga::back::glsl::Version,
-    max_texture_size: u32,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
     es: bool,
@@ -739,6 +737,7 @@ struct PrimitiveState {
     front_face: u32,
     cull_face: u32,
     unclipped_depth: bool,
+    polygon_mode: u32,
 }
 
 type InvalidatedAttachments = ArrayVec<u32, { crate::MAX_COLOR_ATTACHMENTS + 2 }>;

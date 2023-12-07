@@ -214,7 +214,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
 pub fn main() {
     let mut args = std::env::args();
     args.next();
-    if Some("linear") == args.next().as_deref() {
+    if Some("linear") == args.nth(1).as_deref() {
         crate::framework::run::<Example<false>>("srgb-blend-linear");
     } else {
         crate::framework::run::<Example<true>>("srgb-blend-srg");

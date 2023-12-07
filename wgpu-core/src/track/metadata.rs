@@ -122,14 +122,7 @@ impl<A: HalApi, I: TypedId, T: Resource<I>> ResourceMetadata<A, I, T> {
     /// existing tables. See `tracker_assert_in_bounds`.
     #[inline(always)]
     pub(super) unsafe fn get_ref_count_unchecked(&self, index: usize) -> usize {
-        unsafe {
-            Arc::strong_count(
-                self.resources
-                    .get_unchecked(index)
-                    .as_ref()
-                    .unwrap_unchecked(),
-            )
-        }
+        unsafe { Arc::strong_count(self.get_resource_unchecked(index)) }
     }
 
     /// Returns an iterator over the resources owned by `self`.

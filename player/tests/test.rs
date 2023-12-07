@@ -68,7 +68,6 @@ impl Test<'_> {
             wgt::Backend::Vulkan => "Vulkan",
             wgt::Backend::Metal => "Metal",
             wgt::Backend::Dx12 => "Dx12",
-            wgt::Backend::Dx11 => "Dx11",
             wgt::Backend::Gl => "Gl",
             _ => unreachable!(),
         };
@@ -89,8 +88,8 @@ impl Test<'_> {
             adapter,
             &wgt::DeviceDescriptor {
                 label: None,
-                features: self.features,
-                limits: wgt::Limits::default(),
+                required_features: self.features,
+                required_limits: wgt::Limits::default(),
             },
             None,
             device_id,
@@ -170,7 +169,6 @@ const BACKENDS: &[wgt::Backend] = &[
     wgt::Backend::Vulkan,
     wgt::Backend::Metal,
     wgt::Backend::Dx12,
-    wgt::Backend::Dx11,
     wgt::Backend::Gl,
 ];
 

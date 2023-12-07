@@ -78,14 +78,14 @@ pub(crate) struct StatelessTracker<A: HalApi, Id: TypedId, T: Resource<Id>> {
 impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
     for StatelessTracker<A, Id, T>
 {
-    /// Removes the given resource from the tracker iff we have the last reference to the
+    /// Try to remove the given resource from the tracker iff we have the last reference to the
     /// resource and the epoch matches.
     ///
-    /// Returns true if the resource was removed.
+    /// Returns true if the resource was removed or if not existing in metadata.
     ///
     /// If the ID is higher than the length of internal vectors,
     /// false will be returned.
-    fn remove_abandoned(&mut self, id: Id, external_count: usize) -> bool {
+    fn remove_abandoned(&mut self, id: Id) -> bool {
         let index = id.unzip().0 as usize;
 
         if index > self.metadata.size() {
@@ -99,10 +99,9 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
         unsafe {
             if self.metadata.contains_unchecked(index) {
                 let existing_ref_count = self.metadata.get_ref_count_unchecked(index);
-                //2 ref count if only in Device Tracker and suspected resource itself and already released from user
-                //so not appearing in Registry
-                let min_ref_count = 1 + external_count;
-                if existing_ref_count <= min_ref_count {
+                //RefCount 2 means that resource is hold just by DeviceTracker and this suspected resource itself
+                //so it's already been released from user and so it's not inside Registry\Storage
+                if existing_ref_count <= 2 {
                     self.metadata.remove(index);
                     log::trace!("{} {:?} is not tracked anymore", T::TYPE, id,);
                     return true;
@@ -113,11 +112,11 @@ impl<A: HalApi, Id: TypedId, T: Resource<Id>> ResourceTracker<Id, T>
                         id,
                         existing_ref_count
                     );
+                    return false;
                 }
             }
         }
-
-        false
+        true
     }
 }
 
