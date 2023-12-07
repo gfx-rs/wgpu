@@ -4,7 +4,7 @@ use crate::{
     api_log, binding_model, command, conv,
     device::{
         life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_FAILURE,
+        IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -1587,12 +1587,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
 
@@ -1721,12 +1721,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
         (id, Some(error))
