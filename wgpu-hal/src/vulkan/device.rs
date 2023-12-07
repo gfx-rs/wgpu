@@ -667,6 +667,9 @@ impl super::Device {
                 vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
             view_formats.push(desc.format)
         }
+        if desc.format.is_multi_planar_format() {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+        }
 
         super::Texture {
             raw: vk_image,
@@ -989,7 +992,7 @@ impl crate::Device<super::Api> for super::Device {
             wgt_view_formats = desc.view_formats.clone();
             wgt_view_formats.push(desc.format);
 
-            if self.shared.private_caps.image_format_list && !desc.format.is_multi_planar_format() {
+            if self.shared.private_caps.image_format_list {
                 vk_view_formats = desc
                     .view_formats
                     .iter()
@@ -997,6 +1000,9 @@ impl crate::Device<super::Api> for super::Device {
                     .collect();
                 vk_view_formats.push(original_format)
             }
+        }
+        if desc.format.is_multi_planar_format() {
+            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
         }
 
         let mut vk_info = vk::ImageCreateInfo::builder()
@@ -1071,7 +1077,7 @@ impl crate::Device<super::Api> for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
-        let subresource_range = conv::map_subresource_range(&desc.range, desc.format, desc.plane);
+        let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
         let mut vk_info = vk::ImageViewCreateInfo::builder()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)

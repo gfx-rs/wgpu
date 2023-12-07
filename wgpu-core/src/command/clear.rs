@@ -332,10 +332,7 @@ fn clear_texture_via_buffer_copies<A: HalApi>(
     encoder: &mut A::CommandEncoder,
     dst_raw: &A::Texture,
 ) {
-    assert_eq!(
-        hal::FormatAspects::from(texture_desc.format),
-        hal::FormatAspects::COLOR
-    );
+    assert!(!texture_desc.format.is_depth_stencil_format());
 
     if texture_desc.format == wgt::TextureFormat::NV12 {
         // TODO: Currently COPY_DST for NV12 textures is unsupported.

@@ -892,6 +892,20 @@ pub enum TextureDimensionError {
         block_height: u32,
         format: wgt::TextureFormat,
     },
+    #[error(
+        "Width {width} is not a multiple of {format:?}'s width multiple requirement ({multiple})"
+    )]
+    WidthNotMultipleOf {
+        width: u32,
+        multiple: u32,
+        format: wgt::TextureFormat,
+    },
+    #[error("Height {height} is not a multiple of {format:?}'s height multiple requirement ({multiple})")]
+    HeightNotMultipleOf {
+        height: u32,
+        multiple: u32,
+        format: wgt::TextureFormat,
+    },
     #[error("Multisampled texture depth or array layers must be 1, got {0}")]
     MultisampledDepthOrArrayLayer(u32),
 }
@@ -978,12 +992,11 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
-    ///  The plane of the texture view.
-    pub plane: Option<u32>,
 }
 
 #[derive(Debug)]
 pub(crate) struct HalTextureViewDescriptor {
+    pub texture_format: wgt::TextureFormat,
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
@@ -991,7 +1004,7 @@ pub(crate) struct HalTextureViewDescriptor {
 
 impl HalTextureViewDescriptor {
     pub fn aspects(&self) -> hal::FormatAspects {
-        hal::FormatAspects::new(self.format, self.range.aspect)
+        hal::FormatAspects::new(self.texture_format, self.range.aspect)
     }
 }
 
@@ -1089,16 +1102,6 @@ pub enum CreateTextureViewError {
     FormatReinterpretation {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
-    },
-    #[error("Invalid texture view plane `{plane:?}` with view format `{view_format:?}`")]
-    InvalidTextureViewPlane {
-        plane: Option<u32>,
-        view_format: wgt::TextureFormat,
-    },
-    #[error("Invalid texture view plane `{plane:?}` on non-planar texture `{texture_format:?}`")]
-    InvalidTextureViewPlaneOnNonplanarTexture {
-        plane: Option<u32>,
-        texture_format: wgt::TextureFormat,
     },
 }
 
