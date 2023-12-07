@@ -3,6 +3,7 @@ use crate::arena::{Arena, Handle};
 
 pub struct ExpressionTracer<'tracer> {
     pub constants: &'tracer Arena<crate::Constant>,
+    pub overrides: &'tracer Arena<crate::Override>,
 
     /// The arena in which we are currently tracing expressions.
     pub expressions: &'tracer Arena<crate::Expression>,
@@ -87,6 +88,11 @@ impl<'tracer> ExpressionTracer<'tracer> {
                         Some(ref mut used) => used.insert(init),
                         None => self.expressions_used.insert(init),
                     }
+                }
+                Ex::Override(_) => {
+                    // All overrides are considered used by definition. We mark
+                    // their types and initialization expressions as used in
+                    // `compact::compact`, so we have no more work to do here.
                 }
                 Ex::ZeroValue(ty) => self.types_used.insert(ty),
                 Ex::Compose { ty, ref components } => {
@@ -218,6 +224,9 @@ impl ModuleMap {
             | Ex::LocalVariable(_)
             | Ex::CallResult(_)
             | Ex::RayQueryProceedResult => {}
+
+            // All overrides are retained, so their handles never change.
+            Ex::Override(_) => {}
 
             // Expressions that contain handles that need to be adjusted.
             Ex::Constant(ref mut constant) => self.constants.adjust(constant),
