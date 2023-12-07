@@ -1572,8 +1572,8 @@ pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
     pub offset: u32,
 }
 
-pub type AccelerationStructureBuildFlags = wgt::AccelerationStructureFlags;
-pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
+pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
+pub use wgt::AccelerationStructureGeometryFlags;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
