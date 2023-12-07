@@ -76,12 +76,7 @@ impl super::Validator {
             |handle| Self::validate_expression_handle(handle, const_expressions);
 
         for (_handle, constant) in constants.iter() {
-            let &crate::Constant {
-                name: _,
-                r#override: _,
-                ty,
-                init,
-            } = constant;
+            let &crate::Constant { name: _, ty, init } = constant;
             validate_type(ty)?;
             validate_const_expr(init)?;
         }
@@ -679,7 +674,6 @@ fn constant_deps() {
     let self_referential_const = constants.append(
         Constant {
             name: None,
-            r#override: crate::Override::None,
             ty: i32_handle,
             init: fun_expr,
         },

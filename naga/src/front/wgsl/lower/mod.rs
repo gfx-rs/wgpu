@@ -924,7 +924,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = ctx.module.constants.append(
                         crate::Constant {
                             name: Some(c.name.name.to_string()),
-                            r#override: crate::Override::None,
                             ty: inferred_type,
                             init,
                         },
