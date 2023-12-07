@@ -557,7 +557,6 @@ fn constants() {
         constants.next().unwrap().1,
         &Constant {
             name: Some("a".to_owned()),
-            r#override: crate::Override::None,
             ty: ty_handle,
             init: init_handle
         }
@@ -567,7 +566,6 @@ fn constants() {
         constants.next().unwrap().1,
         &Constant {
             name: Some("b".to_owned()),
-            r#override: crate::Override::None,
             ty: ty_handle,
             init: init_handle
         }

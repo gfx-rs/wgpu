@@ -252,9 +252,7 @@ impl super::Validator {
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
                 }
-                if dynamic_indexing_restricted
-                    && function.expressions[index].is_dynamic_index(module)
-                {
+                if dynamic_indexing_restricted && function.expressions[index].is_dynamic_index() {
                     return Err(ExpressionError::IndexMustBeConstant(base));
                 }
 
