@@ -4,7 +4,7 @@ use crate::{
     api_log, binding_model, command, conv,
     device::{
         life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_FAILURE,
+        IMPLICIT_FAILURE, bgl_pool,
     },
     global::Global,
     hal_api::HalApi,
@@ -16,7 +16,7 @@ use crate::{
     resource::{self, BufferAccessResult},
     resource::{BufferAccessError, BufferMapOperation, Resource},
     validation::check_buffer_usage,
-    FastHashMap, Label, LabelHelpers as _,
+    Label, LabelHelpers as _,
 };
 
 use hal::Device as _;
@@ -948,7 +948,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = A::hub(self);
         let fid = hub.bind_group_layouts.prepare::<G>(id_in);
 
-        let error = 'outer: loop {
+        let error = loop {
             let device = match hub.devices.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
@@ -962,20 +962,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
             }
 
-            let mut entry_map = FastHashMap::default();
-            for entry in desc.entries.iter() {
-                if entry.binding > device.limits.max_bindings_per_bind_group {
-                    break 'outer binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
-                        binding: entry.binding,
-                        maximum: device.limits.max_bindings_per_bind_group,
-                    };
-                }
-                if entry_map.insert(entry.binding, *entry).is_some() {
-                    break 'outer binding_model::CreateBindGroupLayoutError::ConflictBinding(
-                        entry.binding,
-                    );
-                }
-            }
+            let entry_map = match bgl_pool::BindGroupLayoutEntryMap::from_entries(&device.limits, &desc.entries) {
+                Ok(map) => map,
+                Err(e) => break e,
+            };
 
             if let Some((id, layout)) = {
                 let bgl_guard = hub.bind_group_layouts.read();

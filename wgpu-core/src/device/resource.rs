@@ -6,6 +6,7 @@ use crate::{
     device::life::{LifetimeTracker, WaitIdleError},
     device::queue::PendingWrites,
     device::{
+        bgl_pool::{self, BindGroupLayoutPool},
         AttachmentData, CommandAllocator, DeviceLostInvocation, MissingDownlevelFlags,
         MissingFeatures, RenderPassContext, CLEANUP_WAIT_MS,
     },
@@ -118,6 +119,8 @@ pub struct Device<A: HalApi> {
     /// Temporary storage for resource management functions. Cleared at the end
     /// of every call (unless an error occurs).
     pub(crate) temp_suspected: Mutex<Option<ResourceMaps>>,
+    /// Pool of bind group layouts, allowing deduplication.
+    pub(super) bgl_pool: BindGroupLayoutPool,
     pub(crate) alignments: hal::Alignments,
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
@@ -258,6 +261,7 @@ impl<A: HalApi> Device<A> {
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: Mutex::new(Some(life::ResourceMaps::new::<A>())),
+            bgl_pool: bgl_pool::BindGroupLayoutPool::new(),
             #[cfg(feature = "trace")]
             trace: Mutex::new(trace_path.and_then(|path| match trace::Trace::new(path) {
                 Ok(mut trace) => {
@@ -1508,7 +1512,7 @@ impl<A: HalApi> Device<A> {
             .map(|(group_index, bgl)| pipeline::LateSizedBufferGroup {
                 shader_sizes: bgl
                     .entries
-                    .values()
+                    .entries()
                     .filter_map(|entry| match entry.ty {
                         wgt::BindingType::Buffer {
                             min_binding_size: None,
@@ -1532,7 +1536,7 @@ impl<A: HalApi> Device<A> {
     pub(crate) fn create_bind_group_layout(
         self: &Arc<Self>,
         label: &crate::Label,
-        entry_map: binding_model::BindEntryMap,
+        entry_map: bgl_pool::BindGroupLayoutEntryMap,
     ) -> Result<BindGroupLayout<A>, binding_model::CreateBindGroupLayoutError> {
         #[derive(PartialEq)]
         enum WritableStorage {
@@ -1540,7 +1544,7 @@ impl<A: HalApi> Device<A> {
             No,
         }
 
-        for entry in entry_map.values() {
+        for entry in entry_map.entries() {
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
@@ -1695,9 +1699,8 @@ impl<A: HalApi> Device<A> {
 
         let bgl_flags = conv::bind_group_layout_flags(self.features);
 
-        let mut hal_bindings = entry_map.values().cloned().collect::<Vec<_>>();
+        let mut hal_bindings = entry_map.entries().copied().collect::<Vec<_>>();
         let label = label.to_hal(self.instance_flags);
-        hal_bindings.sort_by_key(|b| b.binding);
         let hal_desc = hal::BindGroupLayoutDescriptor {
             label,
             flags: bgl_flags,
@@ -1712,7 +1715,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
-        for entry in entry_map.values() {
+        for entry in entry_map.entries() {
             count_validator.add_binding(entry);
         }
         // If a single bind group layout violates limits, the pipeline layout is
@@ -1725,11 +1728,7 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(label.unwrap_or("<BindGroupLayoyt>")),
-            dynamic_count: entry_map
-                .values()
-                .filter(|b| b.ty.has_dynamic_offset())
-                .count(),
-            count_validator,
+            binding_count_validator: count_validator,
             entries: entry_map,
             #[cfg(debug_assertions)]
             label: label.unwrap_or_default().to_string(),
@@ -1951,7 +1950,7 @@ impl<A: HalApi> Device<A> {
             // Find the corresponding declaration in the layout
             let decl = layout
                 .entries
-                .get(&binding)
+                .get(binding)
                 .ok_or(Error::MissingBindingDeclaration(binding))?;
             let (res_index, count) = match entry.resource {
                 Br::Buffer(ref bb) => {
@@ -2159,8 +2158,8 @@ impl<A: HalApi> Device<A> {
             // collect in the order of BGL iteration
             late_buffer_binding_sizes: layout
                 .entries
-                .keys()
-                .flat_map(|binding| late_buffer_binding_sizes.get(binding).cloned())
+                .indices()
+                .flat_map(|binding| late_buffer_binding_sizes.get(&binding).cloned())
                 .collect(),
         })
     }
@@ -2395,7 +2394,7 @@ impl<A: HalApi> Device<A> {
                 return Err(DeviceError::WrongDevice.into());
             }
 
-            count_validator.merge(&bind_group_layout.count_validator);
+            count_validator.merge(&bind_group_layout.binding_count_validator);
         }
         count_validator
             .validate(&self.limits)

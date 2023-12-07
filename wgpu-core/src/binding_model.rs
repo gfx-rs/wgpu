@@ -1,5 +1,5 @@
 use crate::{
-    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT},
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT, bgl_pool},
     error::{ErrorFormatter, PrettyError},
     hal_api::HalApi,
     id::{
@@ -345,6 +345,10 @@ impl BindingTypeMaxCountValidator {
         }
     }
 
+    pub(crate) fn dynamic_binding_count(&self) -> u32 {
+        self.dynamic_uniform_buffers + self.dynamic_storage_buffers
+    }
+
     pub(crate) fn merge(&mut self, other: &Self) {
         self.dynamic_uniform_buffers += other.dynamic_uniform_buffers;
         self.dynamic_storage_buffers += other.dynamic_storage_buffers;
@@ -456,10 +460,9 @@ pub type BindGroupLayouts<A> = crate::storage::Storage<BindGroupLayout<A>, BindG
 pub struct BindGroupLayout<A: HalApi> {
     pub(crate) raw: Option<A::BindGroupLayout>,
     pub(crate) device: Arc<Device<A>>,
-    pub(crate) entries: BindEntryMap,
+    pub(crate) entries: bgl_pool::BindGroupLayoutEntryMap,
     #[allow(unused)]
-    pub(crate) dynamic_count: usize,
-    pub(crate) count_validator: BindingTypeMaxCountValidator,
+    pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayoutId>,
     #[cfg(debug_assertions)]
     pub(crate) label: String,
