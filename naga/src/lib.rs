@@ -175,7 +175,7 @@ tree.
 A Naga *constant expression* is one of the following [`Expression`]
 variants, whose operands (if any) are also constant expressions:
 - [`Literal`]
-- [`Constant`], for [`Constant`s][const_type] whose [`override`] is [`None`]
+- [`Constant`], for [`Constant`s][const_type] whose `override` is `None`
 - [`ZeroValue`], for fixed-size types
 - [`Compose`]
 - [`Access`]
@@ -195,7 +195,7 @@ A constant expression can be evaluated at module translation time.
 
 A Naga *override expression* is the same as a [constant expression],
 except that it is also allowed to refer to [`Constant`s][const_type]
-whose [`override`] is something other than [`None`].
+whose `override` is something other than `None`.
 
 An override expression can be evaluated at pipeline creation time.
 
@@ -239,8 +239,6 @@ An override expression can be evaluated at pipeline creation time.
 [`As`]: Expression::As
 
 [const_type]: Constant
-[`override`]: Constant::override
-[`None`]: Override::None
 
 [constant expression]: index.html#constant-expressions
 */
@@ -888,17 +886,6 @@ pub enum Literal {
     AbstractFloat(f64),
 }
 
-#[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "clone", derive(Clone))]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum Override {
-    None,
-    ByName,
-    ByNameOrId(u32),
-}
-
 /// Constant value.
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "clone", derive(Clone))]
@@ -907,7 +894,6 @@ pub enum Override {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub struct Constant {
     pub name: Option<String>,
-    pub r#override: Override,
     pub ty: Handle<Type>,
 
     /// The value of the constant.
@@ -915,12 +901,10 @@ pub struct Constant {
     /// This [`Handle`] refers to [`Module::const_expressions`], not
     /// any [`Function::expressions`] arena.
     ///
-    /// If [`override`] is [`None`], then this must be a Naga
+    /// If `override` is `None`, then this must be a Naga
     /// [constant expression]. Otherwise, this may be a Naga
     /// [override expression] or [constant expression].
     ///
-    /// [`override`]: Constant::override
-    /// [`None`]: Override::None
     /// [constant expression]: index.html#constant-expressions
     /// [override expression]: index.html#override-expressions
     pub init: Handle<Expression>,

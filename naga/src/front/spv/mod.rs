@@ -196,7 +196,6 @@ struct Decoration {
     location: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
-    specialization: Option<spirv::Word>,
     storage_buffer: bool,
     offset: Option<spirv::Word>,
     array_stride: Option<NonZeroU32>,
@@ -214,11 +213,6 @@ impl Decoration {
             Some(ref name) => name.as_str(),
             None => "?",
         }
-    }
-
-    fn specialization(&self) -> crate::Override {
-        self.specialization
-            .map_or(crate::Override::None, crate::Override::ByNameOrId)
     }
 
     const fn resource_binding(&self) -> Option<crate::ResourceBinding> {
@@ -751,9 +745,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             spirv::Decoration::RowMajor => {
                 dec.matrix_major = Some(Majority::Row);
-            }
-            spirv::Decoration::SpecId => {
-                dec.specialization = Some(self.next()?);
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);
@@ -4918,7 +4909,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        r#override: decor.specialization(),
                         name: decor.name,
                         ty,
                         init,
@@ -4969,7 +4959,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        r#override: decor.specialization(),
                         name: decor.name,
                         ty,
                         init,
@@ -5004,7 +4993,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .append(crate::Expression::ZeroValue(ty), span);
         let handle = module.constants.append(
             crate::Constant {
-                r#override: decor.specialization(),
                 name: decor.name,
                 ty,
                 init,
@@ -5043,7 +5031,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             LookupConstant {
                 handle: module.constants.append(
                     crate::Constant {
-                        r#override: decor.specialization(),
                         name: decor.name,
                         ty,
                         init,

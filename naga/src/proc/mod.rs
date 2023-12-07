@@ -538,13 +538,9 @@ impl crate::Expression {
     ///
     /// [`Access`]: crate::Expression::Access
     /// [`ResolveContext`]: crate::proc::ResolveContext
-    pub fn is_dynamic_index(&self, module: &crate::Module) -> bool {
+    pub const fn is_dynamic_index(&self) -> bool {
         match *self {
-            Self::Literal(_) | Self::ZeroValue(_) => false,
-            Self::Constant(handle) => {
-                let constant = &module.constants[handle];
-                !matches!(constant.r#override, crate::Override::None)
-            }
+            Self::Literal(_) | Self::ZeroValue(_) | Self::Constant(_) => false,
             _ => true,
         }
     }
