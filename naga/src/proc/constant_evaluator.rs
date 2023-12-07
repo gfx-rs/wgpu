@@ -1916,7 +1916,6 @@ mod tests {
         let h = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: scalar_ty,
                 init: const_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
@@ -1927,7 +1926,6 @@ mod tests {
         let h1 = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: scalar_ty,
                 init: const_expressions
                     .append(Expression::Literal(Literal::I32(8)), Default::default()),
@@ -1938,7 +1936,6 @@ mod tests {
         let vec_h = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: vec_ty,
                 init: const_expressions.append(
                     Expression::Compose {
@@ -2037,7 +2034,6 @@ mod tests {
         let h = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: scalar_ty,
                 init: const_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
@@ -2124,7 +2120,6 @@ mod tests {
         let vec1 = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: vec_ty,
                 init: const_expressions.append(
                     Expression::Compose {
@@ -2140,7 +2135,6 @@ mod tests {
         let vec2 = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: vec_ty,
                 init: const_expressions.append(
                     Expression::Compose {
@@ -2156,7 +2150,6 @@ mod tests {
         let h = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: matrix_ty,
                 init: const_expressions.append(
                     Expression::Compose {
@@ -2252,7 +2245,6 @@ mod tests {
         let h = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: i32_ty,
                 init: const_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
@@ -2332,7 +2324,6 @@ mod tests {
         let h = constants.append(
             Constant {
                 name: None,
-                r#override: crate::Override::None,
                 ty: i32_ty,
                 init: const_expressions
                     .append(Expression::Literal(Literal::I32(4)), Default::default()),
