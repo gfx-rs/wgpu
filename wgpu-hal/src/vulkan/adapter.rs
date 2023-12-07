@@ -831,16 +831,10 @@ impl super::InstanceShared {
                     capabilities.driver,
                 ) {
                     use crate::auxil::cstr_from_bytes_until_nul;
-                    capabilities.supported_extensions.remove(
-                        capabilities
-                            .supported_extensions
-                            .iter()
-                            .position(|&x| {
-                                cstr_from_bytes_until_nul(&x.extension_name)
-                                    == Some(vk::ExtRobustness2Fn::name())
-                            })
-                            .unwrap(),
-                    );
+                    capabilities.supported_extensions.retain(|&x| {
+                        cstr_from_bytes_until_nul(&x.extension_name)
+                            != Some(vk::ExtRobustness2Fn::name())
+                    });
                 }
             };
             capabilities
@@ -1827,19 +1821,14 @@ fn is_intel_igpu_outdated_for_robustness2(
     props: vk::PhysicalDeviceProperties,
     driver: Option<vk::PhysicalDeviceDriverPropertiesKHR>,
 ) -> bool {
-    use crate::auxil::cstr_from_bytes_until_nul;
-
-    const DRIVER_VERSION_31_0_101: u32 = 0x194000;
-    const DRIVER_VERSION_WORKING: u32 = DRIVER_VERSION_31_0_101 + 2115;
+    const DRIVER_VERSION_WORKING: u32 = (101 << 14) | 2115; // X.X.101.2115
 
     let is_outdated = props.vendor_id == crate::auxil::db::intel::VENDOR
         && props.device_type == vk::PhysicalDeviceType::INTEGRATED_GPU
         && props.driver_version < DRIVER_VERSION_WORKING
-        && cstr_from_bytes_until_nul(&driver.unwrap_or_default().driver_info)
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default()
-            == "Intel driver";
+        && driver
+            .map(|driver| driver.driver_id == vk::DriverId::INTEL_PROPRIETARY_WINDOWS)
+            .unwrap_or_default();
 
     if is_outdated {
         log::warn!(
