@@ -48,7 +48,6 @@ pub struct ShaderModule<A: HalApi> {
     pub(crate) device: Arc<Device<A>>,
     pub(crate) interface: Option<validation::Interface>,
     pub(crate) info: ResourceInfo<ShaderModuleId>,
-    #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
@@ -80,10 +79,7 @@ impl<A: HalApi> Resource<ShaderModuleId> for ShaderModule<A> {
     }
 
     fn label(&self) -> String {
-        #[cfg(debug_assertions)]
-        return self.label.clone();
-        #[cfg(not(debug_assertions))]
-        return String::new();
+        self.label.clone()
     }
 }
 
