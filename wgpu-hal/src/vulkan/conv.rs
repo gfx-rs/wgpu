@@ -222,7 +222,7 @@ pub fn derive_image_layout(
     format: wgt::TextureFormat,
 ) -> vk::ImageLayout {
     // Note: depth textures are always sampled with RODS layout
-    let is_color = crate::FormatAspects::from(format).contains(crate::FormatAspects::COLOR);
+    let is_color = !format.is_depth_stencil_format();
     match usage {
         crate::TextureUses::UNINITIALIZED => vk::ImageLayout::UNDEFINED,
         crate::TextureUses::COPY_SRC => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -402,24 +402,25 @@ pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> vk::Format {
     }
 }
 
-pub fn map_aspects(aspects: crate::FormatAspects, plane: Option<u32>) -> vk::ImageAspectFlags {
+pub fn map_aspects(aspects: crate::FormatAspects) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
-    match plane {
-        Some(0) => flags |= vk::ImageAspectFlags::PLANE_0,
-        Some(1) => flags |= vk::ImageAspectFlags::PLANE_1,
-        Some(2) => flags |= vk::ImageAspectFlags::PLANE_2,
-        Some(plane) => panic!("Unexpected plane {}", plane),
-        None => {
-            if aspects.contains(crate::FormatAspects::COLOR) {
-                flags |= vk::ImageAspectFlags::COLOR;
-            }
-        }
+    if aspects.contains(crate::FormatAspects::COLOR) {
+        flags |= vk::ImageAspectFlags::COLOR;
     }
     if aspects.contains(crate::FormatAspects::DEPTH) {
         flags |= vk::ImageAspectFlags::DEPTH;
     }
     if aspects.contains(crate::FormatAspects::STENCIL) {
         flags |= vk::ImageAspectFlags::STENCIL;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_0) {
+        flags |= vk::ImageAspectFlags::PLANE_0;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_1) {
+        flags |= vk::ImageAspectFlags::PLANE_1;
+    }
+    if aspects.contains(crate::FormatAspects::PLANE_2) {
+        flags |= vk::ImageAspectFlags::PLANE_2;
     }
     flags
 }
@@ -614,10 +615,9 @@ pub fn map_copy_extent(extent: &crate::CopyExtent) -> vk::Extent3D {
 pub fn map_subresource_range(
     range: &wgt::ImageSubresourceRange,
     format: wgt::TextureFormat,
-    plane: Option<u32>,
 ) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
-        aspect_mask: map_aspects(crate::FormatAspects::new(format, range.aspect), plane),
+        aspect_mask: map_aspects(crate::FormatAspects::new(format, range.aspect)),
         base_mip_level: range.base_mip_level,
         level_count: range.mip_level_count.unwrap_or(vk::REMAINING_MIP_LEVELS),
         base_array_layer: range.base_array_layer,
@@ -634,7 +634,7 @@ pub(super) fn map_subresource_range_combined_aspect(
     format: wgt::TextureFormat,
     private_caps: &super::PrivateCapabilities,
 ) -> vk::ImageSubresourceRange {
-    let mut range = map_subresource_range(range, format, None);
+    let mut range = map_subresource_range(range, format);
     if !private_caps.texture_s8 && format == wgt::TextureFormat::Stencil8 {
         range.aspect_mask |= vk::ImageAspectFlags::DEPTH;
     }
@@ -650,7 +650,7 @@ pub fn map_subresource_layers(
         z: base.origin.z as i32,
     };
     let subresource = vk::ImageSubresourceLayers {
-        aspect_mask: map_aspects(base.aspect, None),
+        aspect_mask: map_aspects(base.aspect),
         mip_level: base.mip_level,
         base_array_layer: base.array_layer,
         layer_count: 1,
