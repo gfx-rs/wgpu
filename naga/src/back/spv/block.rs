@@ -239,6 +239,9 @@ impl<'w> BlockContext<'w> {
                 let init = self.ir_module.constants[handle].init;
                 self.writer.constant_ids[init.index()]
             }
+            crate::Expression::Override(_) => {
+                return Err(Error::FeatureNotImplemented("overrides are WIP"))
+            }
             crate::Expression::ZeroValue(_) => self.writer.get_constant_null(result_type_id),
             crate::Expression::Compose { ty, ref components } => {
                 self.temp_list.clear();

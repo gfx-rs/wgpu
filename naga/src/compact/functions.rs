@@ -4,6 +4,7 @@ use super::{FunctionMap, ModuleMap};
 pub struct FunctionTracer<'a> {
     pub function: &'a crate::Function,
     pub constants: &'a crate::Arena<crate::Constant>,
+    pub overrides: &'a crate::Arena<crate::Override>,
 
     pub types_used: &'a mut HandleSet<crate::Type>,
     pub constants_used: &'a mut HandleSet<crate::Constant>,
@@ -47,6 +48,7 @@ impl<'a> FunctionTracer<'a> {
     fn as_expression(&mut self) -> super::expressions::ExpressionTracer {
         super::expressions::ExpressionTracer {
             constants: self.constants,
+            overrides: self.overrides,
             expressions: &self.function.expressions,
 
             types_used: self.types_used,
