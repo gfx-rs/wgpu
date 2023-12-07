@@ -55,8 +55,8 @@ pub fn compact(module: &mut crate::Module) {
     }
 
     // We treat all overrides as used by definition.
-    for (handle, override_) in module.overrides.iter() {
-        module_tracer.overrides_used.insert(handle);
+    for (_, override_) in module.overrides.iter() {
+        module_tracer.types_used.insert(override_.ty);
         if let Some(init) = override_.init {
             module_tracer.const_expressions_used.insert(init);
         }
@@ -105,11 +105,6 @@ pub fn compact(module: &mut crate::Module) {
     for (handle, constant) in module.constants.iter() {
         if module_tracer.constants_used.contains(handle) {
             module_tracer.types_used.insert(constant.ty);
-        }
-    }
-    for (handle, override_) in module.overrides.iter() {
-        if module_tracer.overrides_used.contains(handle) {
-            module_tracer.types_used.insert(override_.ty);
         }
     }
 
@@ -171,19 +166,14 @@ pub fn compact(module: &mut crate::Module) {
         }
     });
 
-    // Drop unused overrides in place, reusing existing storage.
+    // Adjust override types and initializers.
     log::trace!("adjusting overrides");
-    module.overrides.retain_mut(|handle, override_| {
-        if module_map.overrides.used(handle) {
-            module_map.types.adjust(&mut override_.ty);
-            if let Some(init) = override_.init.as_mut() {
-                module_map.const_expressions.adjust(init);
-            }
-            true
-        } else {
-            false
+    for (_, override_) in module.overrides.iter_mut() {
+        module_map.types.adjust(&mut override_.ty);
+        if let Some(init) = override_.init.as_mut() {
+            module_map.const_expressions.adjust(init);
         }
-    });
+    }
 
     // Adjust global variables' types and initializers.
     log::trace!("adjusting global variables");
@@ -220,7 +210,6 @@ struct ModuleTracer<'module> {
     module: &'module crate::Module,
     types_used: HandleSet<crate::Type>,
     constants_used: HandleSet<crate::Constant>,
-    overrides_used: HandleSet<crate::Override>,
     const_expressions_used: HandleSet<crate::Expression>,
 }
 
@@ -230,7 +219,6 @@ impl<'module> ModuleTracer<'module> {
             module,
             types_used: HandleSet::for_arena(&module.types),
             constants_used: HandleSet::for_arena(&module.constants),
-            overrides_used: HandleSet::for_arena(&module.overrides),
             const_expressions_used: HandleSet::for_arena(&module.const_expressions),
         }
     }
@@ -267,7 +255,6 @@ impl<'module> ModuleTracer<'module> {
             overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
-            overrides_used: &mut self.overrides_used,
             expressions_used: &mut self.const_expressions_used,
             const_expressions_used: None,
         }
@@ -283,7 +270,6 @@ impl<'module> ModuleTracer<'module> {
             overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
-            overrides_used: &mut self.overrides_used,
             const_expressions_used: &mut self.const_expressions_used,
             expressions_used: HandleSet::for_arena(&function.expressions),
         }
@@ -293,7 +279,6 @@ impl<'module> ModuleTracer<'module> {
 struct ModuleMap {
     types: HandleMap<crate::Type>,
     constants: HandleMap<crate::Constant>,
-    overrides: HandleMap<crate::Override>,
     const_expressions: HandleMap<crate::Expression>,
 }
 
@@ -302,7 +287,6 @@ impl From<ModuleTracer<'_>> for ModuleMap {
         ModuleMap {
             types: HandleMap::from_set(used.types_used),
             constants: HandleMap::from_set(used.constants_used),
-            overrides: HandleMap::from_set(used.overrides_used),
             const_expressions: HandleMap::from_set(used.const_expressions_used),
         }
     }

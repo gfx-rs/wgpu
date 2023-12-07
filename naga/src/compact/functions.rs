@@ -8,7 +8,6 @@ pub struct FunctionTracer<'a> {
 
     pub types_used: &'a mut HandleSet<crate::Type>,
     pub constants_used: &'a mut HandleSet<crate::Constant>,
-    pub overrides_used: &'a mut HandleSet<crate::Override>,
     pub const_expressions_used: &'a mut HandleSet<crate::Expression>,
 
     /// Function-local expressions used.
@@ -54,7 +53,6 @@ impl<'a> FunctionTracer<'a> {
 
             types_used: self.types_used,
             constants_used: self.constants_used,
-            overrides_used: self.overrides_used,
             expressions_used: &mut self.expressions_used,
             const_expressions_used: Some(&mut self.const_expressions_used),
         }
