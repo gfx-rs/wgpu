@@ -1431,6 +1431,9 @@ impl<W: Write> Writer<W> {
                     |writer, context, expr| writer.put_expression(expr, context, true),
                 )?;
             }
+            crate::Expression::Override(_) => {
+                return Err(Error::FeatureNotImplemented("overrides are WIP".into()))
+            }
             crate::Expression::Access { base, .. }
             | crate::Expression::AccessIndex { base, .. } => {
                 // This is an acceptable place to generate a `ReadZeroSkipWrite` check.
