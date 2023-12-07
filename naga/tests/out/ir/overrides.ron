@@ -52,6 +52,12 @@
             ty: 2,
             init: None,
         ),
+        (
+            name: Some("inferred_f32"),
+            id: None,
+            ty: 2,
+            init: Some(7),
+        ),
     ],
     global_variables: [],
     const_expressions: [
@@ -61,6 +67,7 @@
         Literal(I32(1200)),
         Literal(I32(1300)),
         Literal(F32(0.0)),
+        Literal(F32(2.718)),
     ],
     functions: [],
     entry_points: [],

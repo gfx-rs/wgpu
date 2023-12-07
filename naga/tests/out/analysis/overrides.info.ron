@@ -18,5 +18,9 @@
             kind: Float,
             width: 4,
         ))),
+        Value(Scalar((
+            kind: Float,
+            width: 4,
+        ))),
     ],
 )

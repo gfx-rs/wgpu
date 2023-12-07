@@ -10,3 +10,5 @@
                                                   // (if not set at the API level),
                                                   // depends on another
                                                   // overridable constant.
+
+override inferred_f32 = 2.718;
