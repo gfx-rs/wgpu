@@ -1,7 +1,7 @@
 use crate::{
     arena::{Arena, Handle, UniqueArena},
-    ArraySize, BinaryOperator, Constant, Expression, Literal, ScalarKind, Span, Type, TypeInner,
-    UnaryOperator,
+    ArraySize, BinaryOperator, Constant, Expression, Literal, Override, ScalarKind, Span, Type,
+    TypeInner, UnaryOperator,
 };
 
 #[derive(Debug)]
@@ -42,6 +42,9 @@ pub struct ConstantEvaluator<'a> {
 
     /// The module's constant arena.
     constants: &'a Arena<Constant>,
+
+    /// The module's override arena.
+    overrides: &'a Arena<Override>,
 
     /// The arena to which we are contributing expressions.
     expressions: &'a mut Arena<Expression>,
@@ -208,6 +211,7 @@ impl<'a> ConstantEvaluator<'a> {
             behavior,
             types: &mut module.types,
             constants: &module.constants,
+            overrides: &module.overrides,
             expressions: &mut module.const_expressions,
             function_local_data: None,
         }
@@ -267,6 +271,7 @@ impl<'a> ConstantEvaluator<'a> {
             behavior,
             types: &mut module.types,
             constants: &module.constants,
+            overrides: &module.overrides,
             expressions,
             function_local_data: Some(FunctionLocalData {
                 const_expressions: &module.const_expressions,
@@ -281,6 +286,7 @@ impl<'a> ConstantEvaluator<'a> {
         crate::proc::GlobalCtx {
             types: self.types,
             constants: self.constants,
+            overrides: self.overrides,
             const_expressions: match self.function_local_data {
                 Some(ref data) => data.const_expressions,
                 None => self.expressions,
@@ -357,6 +363,9 @@ impl<'a> ConstantEvaluator<'a> {
                 // This is mainly done to avoid having constants pointing to other constants.
                 Ok(self.constants[c].init)
             }
+            Expression::Override(_) => Err(ConstantEvaluatorError::NotImplemented(
+                "overrides are WIP".into(),
+            )),
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
                 self.register_evaluated_expr(expr.clone(), span)
             }
@@ -1615,6 +1624,7 @@ mod tests {
     fn unary_op() {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
+        let overrides = Arena::new();
         let mut const_expressions = Arena::new();
 
         let scalar_ty = types.insert(
@@ -1693,6 +1703,7 @@ mod tests {
             behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
+            overrides: &overrides,
             expressions: &mut const_expressions,
             function_local_data: None,
         };
@@ -1744,6 +1755,7 @@ mod tests {
     fn cast() {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
+        let overrides = Arena::new();
         let mut const_expressions = Arena::new();
 
         let scalar_ty = types.insert(
@@ -1776,6 +1788,7 @@ mod tests {
             behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
+            overrides: &overrides,
             expressions: &mut const_expressions,
             function_local_data: None,
         };
@@ -1794,6 +1807,7 @@ mod tests {
     fn access() {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
+        let overrides = Arena::new();
         let mut const_expressions = Arena::new();
 
         let matrix_ty = types.insert(
@@ -1891,6 +1905,7 @@ mod tests {
             behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
+            overrides: &overrides,
             expressions: &mut const_expressions,
             function_local_data: None,
         };
@@ -1944,6 +1959,7 @@ mod tests {
     fn compose_of_constants() {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
+        let overrides = Arena::new();
         let mut const_expressions = Arena::new();
 
         let i32_ty = types.insert(
@@ -1981,6 +1997,7 @@ mod tests {
             behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
+            overrides: &overrides,
             expressions: &mut const_expressions,
             function_local_data: None,
         };
@@ -2023,6 +2040,7 @@ mod tests {
     fn splat_of_constant() {
         let mut types = UniqueArena::new();
         let mut constants = Arena::new();
+        let overrides = Arena::new();
         let mut const_expressions = Arena::new();
 
         let i32_ty = types.insert(
@@ -2060,6 +2078,7 @@ mod tests {
             behavior: Behavior::Wgsl,
             types: &mut types,
             constants: &constants,
+            overrides: &overrides,
             expressions: &mut const_expressions,
             function_local_data: None,
         };

@@ -633,6 +633,7 @@ impl crate::Module {
         GlobalCtx {
             types: &self.types,
             constants: &self.constants,
+            overrides: &self.overrides,
             const_expressions: &self.const_expressions,
         }
     }
@@ -648,6 +649,7 @@ pub(super) enum U32EvalError {
 pub struct GlobalCtx<'a> {
     pub types: &'a crate::UniqueArena<crate::Type>,
     pub constants: &'a crate::Arena<crate::Constant>,
+    pub overrides: &'a crate::Arena<crate::Override>,
     pub const_expressions: &'a crate::Arena<crate::Expression>,
 }
 

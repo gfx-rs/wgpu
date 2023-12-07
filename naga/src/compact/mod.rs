@@ -54,6 +54,14 @@ pub fn compact(module: &mut crate::Module) {
         }
     }
 
+    // We treat all overrides as used by definition.
+    for (_, override_) in module.overrides.iter() {
+        module_tracer.types_used.insert(override_.ty);
+        if let Some(init) = override_.init {
+            module_tracer.const_expressions_used.insert(init);
+        }
+    }
+
     // We assume that all functions are used.
     //
     // Observe which types, constant expressions, constants, and
@@ -158,6 +166,15 @@ pub fn compact(module: &mut crate::Module) {
         }
     });
 
+    // Adjust override types and initializers.
+    log::trace!("adjusting overrides");
+    for (_, override_) in module.overrides.iter_mut() {
+        module_map.types.adjust(&mut override_.ty);
+        if let Some(init) = override_.init.as_mut() {
+            module_map.const_expressions.adjust(init);
+        }
+    }
+
     // Adjust global variables' types and initializers.
     log::trace!("adjusting global variables");
     for (_, global) in module.global_variables.iter_mut() {
@@ -235,6 +252,7 @@ impl<'module> ModuleTracer<'module> {
         expressions::ExpressionTracer {
             expressions: &self.module.const_expressions,
             constants: &self.module.constants,
+            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             expressions_used: &mut self.const_expressions_used,
@@ -249,6 +267,7 @@ impl<'module> ModuleTracer<'module> {
         FunctionTracer {
             function,
             constants: &self.module.constants,
+            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             const_expressions_used: &mut self.const_expressions_used,

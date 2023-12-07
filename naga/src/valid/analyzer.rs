@@ -527,7 +527,7 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(vector),
                 requirements: UniformityRequirements::empty(),
             },
-            E::Literal(_) | E::Constant(_) | E::ZeroValue(_) => Uniformity::new(),
+            E::Literal(_) | E::Constant(_) | E::Override(_) | E::ZeroValue(_) => Uniformity::new(),
             E::Compose { ref components, .. } => {
                 let non_uniform_result = components
                     .iter()
@@ -1139,6 +1139,7 @@ fn uniform_control_flow() {
     };
     let resolve_context = ResolveContext {
         constants: &Arena::new(),
+        overrides: &Arena::new(),
         types: &type_arena,
         special_types: &crate::SpecialTypes::default(),
         global_vars: &global_var_arena,
