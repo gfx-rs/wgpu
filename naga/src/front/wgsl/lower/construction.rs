@@ -299,7 +299,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 },
                 Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
             ) => {
-                ctx.convert_slice_to_common_scalar(std::slice::from_mut(&mut component), scalar)?;
+                ctx.convert_slice_to_common_leaf_scalar(
+                    std::slice::from_mut(&mut component),
+                    scalar,
+                )?;
                 expr = crate::Expression::Splat {
                     size,
                     value: component,
@@ -319,7 +322,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .map_err(|index| {
                             Error::InvalidConstructorComponentType(spans[index], index as i32)
                         })?;
-                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let inner = consensus_scalar.to_inner_vector(size);
                 let ty = ctx.ensure_type_exists(inner);
                 expr = crate::Expression::Compose { ty, components };
@@ -351,7 +354,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let consensus_scalar = consensus_scalar
                     .automatic_conversion_combine(crate::Scalar::ABSTRACT_FLOAT)
                     .unwrap_or(consensus_scalar);
-                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let vec_ty = ctx.ensure_type_exists(consensus_scalar.to_inner_vector(rows));
 
                 let components = components
@@ -425,7 +428,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .map_err(|index| {
                             Error::InvalidConstructorComponentType(spans[index], index as i32)
                         })?;
-                ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
                     rows,
@@ -473,7 +476,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // do. And if this array construction is not well-typed,
                     // these conversions will not make it so, and we can let
                     // validation catch the error.
-                    ctx.convert_slice_to_common_scalar(&mut components, consensus_scalar)?;
+                    ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 } else {
                     // There's no consensus scalar. Emit the `Compose`
                     // expression anyway, and let validation catch the problem.
