@@ -196,6 +196,53 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
 
         Ok(expr)
     }
+
+    /// Find the consensus scalar of `components` under WGSL's automatic
+    /// conversions.
+    ///
+    /// If `components` can all be converted to any common scalar via
+    /// WGSL's automatic conversions, return the best such scalar.
+    ///
+    /// The `components` slice must not be empty. All elements' types must
+    /// have been resolved.
+    ///
+    /// If `components` are definitely not acceptable as arguments to such
+    /// constructors, return `Err(i)`, where `i` is the index in
+    /// `components` of some problematic argument.
+    ///
+    /// This function doesn't fully type-check the arguments - it only
+    /// considers their leaf scalar types. This means it may return `Ok`
+    /// even when the Naga validator will reject the resulting
+    /// construction expression later.
+    pub fn automatic_conversion_consensus(
+        &self,
+        components: &[Handle<crate::Expression>],
+    ) -> Result<crate::Scalar, usize> {
+        let types = &self.module.types;
+        let mut inners = components
+            .iter()
+            .map(|&c| self.typifier()[c].inner_with(types));
+        log::debug!(
+            "wgsl automatic_conversion_consensus: {:?}",
+            inners
+                .clone()
+                .map(|inner| inner.to_wgsl(&self.module.to_ctx()))
+                .collect::<Vec<String>>()
+        );
+        let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
+        for (inner, i) in inners.zip(1..) {
+            let scalar = inner.scalar().ok_or(i)?;
+            match best.automatic_conversion_combine(scalar) {
+                Some(new_best) => {
+                    best = new_best;
+                }
+                None => return Err(i),
+            }
+        }
+
+        log::debug!("    consensus: {:?}", best.to_wgsl());
+        Ok(best)
+    }
 }
 
 impl crate::TypeInner {
