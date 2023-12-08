@@ -197,8 +197,8 @@ pub struct Hub<A: HalApi> {
     pub textures: Registry<id::TextureId, Texture<A>>,
     pub texture_views: Registry<id::TextureViewId, TextureView<A>>,
     pub samplers: Registry<id::SamplerId, Sampler<A>>,
-    pub blas_s: Registry<Blas<A>, id::BlasId>,
-    pub tlas_s: Registry<Tlas<A>, id::TlasId>,
+    pub blas_s: Registry<id::BlasId, Blas<A>>,
+    pub tlas_s: Registry<id::TlasId, Tlas<A>>,
 }
 
 impl<A: HalApi> Hub<A> {

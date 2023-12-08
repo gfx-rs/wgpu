@@ -287,8 +287,11 @@ impl<A: HalApi> LifetimeTracker<A> {
                 TempResource::Texture(raw) => {
                     last_resources.insert(raw.as_info().id(), raw);
                 }
-                TempResource::AccelerationStructure(raw) => {
-                    last_resources.acceleration_structures.push(raw)
+                TempResource::Tlas(raw) => {
+                    last_resources.insert(raw.as_info().id(),raw);
+                }
+                TempResource::Blas(raw) => {
+                    last_resources.insert(raw.as_info().id(),raw);
                 }
             }
         }
@@ -391,7 +394,12 @@ impl<A: HalApi> LifetimeTracker<A> {
             TempResource::Texture(raw) => {
                 resources.insert(raw.as_info().id(), raw);
             }
-            TempResource::AccelerationStructure(raw) => resources.acceleration_structures.push(raw),
+            TempResource::Tlas(raw) => {
+                resources.insert(raw.as_info().id(), raw);
+            }
+            TempResource::Blas(raw) => {
+                resources.insert(raw.as_info().id(), raw);
+            }
         }
     }
 

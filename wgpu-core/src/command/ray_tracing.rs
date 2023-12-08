@@ -3,7 +3,6 @@ use crate::{
     device::queue::TempResource,
     global::Global,
     hal_api::HalApi,
-    hub::Token,
     id::{BlasId, CommandEncoderId, TlasId},
     identity::GlobalIdentityHandlerFactory,
     init_tracker::MemoryInitKind,
@@ -17,10 +16,15 @@ use crate::{
     FastHashSet,
 };
 
-use hal::{CommandEncoder, Device};
 use wgt::{math::align_to, BufferUsages};
 
 use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
+use std::ops::Deref;
+use std::sync::Arc;
+use parking_lot::Mutex;
+use hal::{BufferUses, CommandEncoder, Device};
+use crate::resource::{Buffer, Resource, ResourceInfo, StagingBuffer};
+use crate::track::PendingTransition;
 
 use super::BakedCommands;
 
@@ -37,16 +41,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::build_acceleration_structures_unsafe_tlas");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (blas_guard, mut token) = hub.blas_s.read(&mut token);
-        let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+        let mut device_guard = hub.devices.write();
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let buffer_guard = hub.buffers.read();
+        let blas_guard = hub.blas_s.read();
+        let tlas_guard = hub.tlas_s.read();
 
-        let device = &mut device_guard[cmd_buf.device_id.value];
+        let device = &mut device_guard.get(cmd_buf.device.as_info().id()).unwrap();
 
         let build_command_index = NonZeroU64::new(
             device
@@ -86,9 +88,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         let trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
-
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
             list.push(
                 crate::device::trace::Command::BuildAccelerationStructuresUnsafeTlas {
                     blas: trace_blas.clone(),
@@ -134,9 +135,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::<(&Blas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
-
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         for entry in blas_iter {
-            let blas = cmd_buf
+            let blas = cmd_buf_data
                 .trackers
                 .blas_s
                 .add_single(&blas_guard, entry.blas_id)
@@ -146,7 +148,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
             }
 
-            cmd_buf.blas_actions.push(BlasAction {
+            cmd_buf_data.blas_actions.push(BlasAction {
                 id: entry.blas_id,
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
             });
@@ -173,11 +175,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             || size_desc.vertex_format != mesh.size.vertex_format
                             || size_desc.index_count.is_none() != mesh.size.index_count.is_none()
                             || (size_desc.index_count.is_none()
-                                || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
+                            || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
                             || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
                             || (size_desc.index_format.is_none()
-                                || size_desc.index_format.unwrap()
-                                    != mesh.size.index_format.unwrap())
+                            || size_desc.index_format.unwrap()
+                            != mesh.size.index_format.unwrap())
                         {
                             return Err(
                                 BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
@@ -193,13 +195,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         let vertex_buffer = {
-                            let (vertex_buffer, vertex_pending) = cmd_buf
+                            let (vertex_buffer, vertex_pending) = cmd_buf_data
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*buffer_guard,
-                                    mesh.vertex_buffer,
-                                    hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                                    &*match buffer_guard.get(mesh.vertex_buffer) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => {
+                                            return Err(BuildAccelerationStructureError::InvalidBuffer(
+                                                mesh.vertex_buffer,
+                                            ))
+                                        }
+                                    },
+                                    BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
                                 .ok_or(BuildAccelerationStructureError::InvalidBuffer(
                                     mesh.vertex_buffer,
@@ -215,7 +223,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
                             if let Some(barrier) =
-                                vertex_pending.map(|pending| pending.into_hal(vertex_buffer))
+                                vertex_pending.map(|pending| pending.into_hal(&vertex_buffer))
                             {
                                 input_barriers.push(barrier);
                             }
@@ -234,9 +242,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             let vertex_buffer_offset =
                                 mesh.first_vertex as u64 * mesh.vertex_stride;
-                            cmd_buf.buffer_memory_init_actions.extend(
-                                vertex_buffer.initialization_status.create_action(
-                                    mesh.vertex_buffer,
+                            cmd_buf_data.buffer_memory_init_actions.extend(
+                                vertex_buffer.initialization_status.read().create_action(
+                                        buffer_guard.get(mesh.vertex_buffer).unwrap(),
                                     vertex_buffer_offset
                                         ..(vertex_buffer_offset
                                             + mesh.size.vertex_count as u64 * mesh.vertex_stride),
@@ -256,12 +264,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     ),
                                 );
                             }
-                            let (index_buffer, index_pending) = cmd_buf
+                            let (index_buffer, index_pending) = cmd_buf_data
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*buffer_guard,
-                                    index_id,
+                                    &*match buffer_guard.get(index_id) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(index_id)) },
+                                    },
                                     hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
                                 .ok_or(BuildAccelerationStructureError::InvalidBuffer(index_id))?;
@@ -277,7 +287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
                             if let Some(barrier) =
-                                index_pending.map(|pending| pending.into_hal(index_buffer))
+                                index_pending.map(|pending| pending.into_hal(&index_buffer))
                             {
                                 input_barriers.push(barrier);
                             }
@@ -315,9 +325,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
 
-                            cmd_buf.buffer_memory_init_actions.extend(
-                                index_buffer.initialization_status.create_action(
-                                    index_id,
+                            cmd_buf_data.buffer_memory_init_actions.extend(
+                                index_buffer.initialization_status.read().create_action(
+                                    match buffer_guard.get(index_id) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer( index_id, )),
+                                    },
                                     mesh.index_buffer_offset.unwrap()
                                         ..(mesh.index_buffer_offset.unwrap() + index_buffer_size),
                                     MemoryInitKind::NeedsInitializedMemory,
@@ -335,12 +348,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     ),
                                 );
                             }
-                            let (transform_buffer, transform_pending) = cmd_buf
+                            let (transform_buffer, transform_pending) = cmd_buf_data
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*buffer_guard,
-                                    transform_id,
+                                    &*match buffer_guard.get(transform_id) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(transform_id)) },
+                                    },
                                     hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
                                 .ok_or(BuildAccelerationStructureError::InvalidBuffer(
@@ -357,7 +372,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
                             if let Some(barrier) =
-                                transform_pending.map(|pending| pending.into_hal(transform_buffer))
+                                transform_pending.map(|pending| pending.into_hal(&transform_buffer))
                             {
                                 input_barriers.push(barrier);
                             }
@@ -380,9 +395,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     ),
                                 );
                             }
-                            cmd_buf.buffer_memory_init_actions.extend(
-                                transform_buffer.initialization_status.create_action(
-                                    transform_id,
+                            cmd_buf_data.buffer_memory_init_actions.extend(
+                                transform_buffer.initialization_status.read().create_action(
+                                    buffer_guard.get(transform_id).unwrap(),
                                     mesh.transform_buffer_offset.unwrap()
                                         ..(mesh.index_buffer_offset.unwrap() + 48),
                                     MemoryInitKind::NeedsInitializedMemory,
@@ -434,18 +449,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+
         let mut scratch_buffer_tlas_size = 0;
         let mut tlas_storage = Vec::<(&Tlas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
 
         for entry in tlas_iter {
             let instance_buffer = {
-                let (instance_buffer, instance_pending) = cmd_buf
+                let (instance_buffer, instance_pending) = cmd_buf_data
                     .trackers
                     .buffers
                     .set_single(
-                        &*buffer_guard,
-                        entry.instance_buffer_id,
-                        hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        &*match buffer_guard.get(entry.instance_buffer_id) {
+                            Ok(buffer) => buffer,
+                            Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer(entry.instance_buffer_id, )),
+                        },
+                        BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     )
                     .ok_or(BuildAccelerationStructureError::InvalidBuffer(
                         entry.instance_buffer_id,
@@ -459,14 +477,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     ));
                 }
                 if let Some(barrier) =
-                    instance_pending.map(|pending| pending.into_hal(instance_buffer))
+                    instance_pending.map(|pending| pending.into_hal(instance_buffer.as_ref()))
                 {
                     input_barriers.push(barrier);
                 }
                 instance_raw
             };
 
-            let tlas = cmd_buf
+            let tlas = cmd_buf_data
                 .trackers
                 .tlas_s
                 .add_single(&tlas_guard, entry.tlas_id)
@@ -476,7 +494,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidTlas(entry.tlas_id));
             }
 
-            cmd_buf.tlas_actions.push(TlasAction {
+            cmd_buf_data.tlas_actions.push(TlasAction {
                 id: entry.tlas_id,
                 kind: crate::ray_tracing::TlasActionKind::Build {
                     build_index: build_command_index,
@@ -493,7 +511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             tlas_storage.push((
                 tlas,
                 hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(instance_buffer),
+                    buffer: Some(&instance_buffer),
                     offset: 0,
                     count: entry.instance_count,
                 }),
@@ -507,7 +525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let scratch_buffer = unsafe {
             device
-                .raw
+                .raw()
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("(wgpu) scratch buffer"),
                     size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
@@ -562,7 +580,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open();
         unsafe {
             cmd_buf_raw.transition_buffers(input_barriers.into_iter());
 
@@ -609,11 +627,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
         }
-
+        let scratch_mapping = unsafe {
+            device
+                .raw()
+                .map_buffer(
+                    &scratch_buffer,
+                    0..max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
+                )
+                .map_err(crate::device::DeviceError::from)?
+        };
         device
             .pending_writes
+            .lock()
+            .as_mut()
+            .unwrap()
             .temp_resources
-            .push(TempResource::Buffer(scratch_buffer));
+            .push(TempResource::StagingBuffer(
+                Arc::new(StagingBuffer {
+                    raw: Mutex::new(Some(scratch_buffer)),
+                    device: device.clone(),
+                    size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
+                    info: ResourceInfo::new("Ratracing scratch buffer"),
+                    is_coherent: scratch_mapping.is_coherent,
+                })));
 
         Ok(())
     }
@@ -627,16 +663,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("CommandEncoder::build_acceleration_structures");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmd_buf = CommandBuffer::get_encoder_mut(&mut *cmd_buf_guard, command_encoder_id)?;
-        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (blas_guard, mut token) = hub.blas_s.read(&mut token);
-        let (tlas_guard, _) = hub.tlas_s.read(&mut token);
+        let mut device_guard = hub.devices.write();
+        let cmd_buf = CommandBuffer::get_encoder(hub, command_encoder_id)?;
+        let buffer_guard = hub.buffers.read();
+        let blas_guard = hub.blas_s.read();
+        let tlas_guard = hub.tlas_s.read();
 
-        let device = &mut device_guard[cmd_buf.device_id.value];
+        let device = &cmd_buf.device;
 
         let build_command_index = NonZeroU64::new(
             device
@@ -697,7 +731,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .collect();
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.commands {
+        if let Some(ref mut list) = cmd_buf.data.lock().as_mut().unwrap().commands {
             list.push(crate::device::trace::Command::BuildAccelerationStructures {
                 blas: trace_blas.clone(),
                 tlas: trace_tlas.clone(),
@@ -754,9 +788,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::<(&Blas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
-
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_buf_data = cmd_buf_data.as_mut().unwrap();
         for entry in blas_iter {
-            let blas = cmd_buf
+            let blas = cmd_buf_data
                 .trackers
                 .blas_s
                 .add_single(&blas_guard, entry.blas_id)
@@ -766,7 +801,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(BuildAccelerationStructureError::InvalidBlas(entry.blas_id));
             }
 
-            cmd_buf.blas_actions.push(BlasAction {
+            cmd_buf_data.blas_actions.push(BlasAction {
                 id: entry.blas_id,
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
             });
@@ -813,12 +848,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         let vertex_buffer = {
-                            let (vertex_buffer, vertex_pending) = cmd_buf
+                            let (vertex_buffer, vertex_pending) = cmd_buf_data
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*buffer_guard,
-                                    mesh.vertex_buffer,
+                                    &*match buffer_guard.get(mesh.vertex_buffer) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer( mesh.vertex_buffer, )),
+                                    },
                                     hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
                                 .ok_or(BuildAccelerationStructureError::InvalidBuffer(
@@ -835,7 +872,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
                             if let Some(barrier) =
-                                vertex_pending.map(|pending| pending.into_hal(vertex_buffer))
+                                vertex_pending.map(|pending| pending.into_hal(vertex_buffer.deref()))
                             {
                                 input_barriers.push(barrier);
                             }
@@ -854,9 +891,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             let vertex_buffer_offset =
                                 mesh.first_vertex as u64 * mesh.vertex_stride;
-                            cmd_buf.buffer_memory_init_actions.extend(
-                                vertex_buffer.initialization_status.create_action(
-                                    mesh.vertex_buffer,
+                            cmd_buf_data.buffer_memory_init_actions.extend(
+                                vertex_buffer.initialization_status.read().create_action(
+                                    match buffer_guard.get(mesh.vertex_buffer) {
+                                        Ok(buf) => buf,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer(mesh.vertex_buffer)),
+                                    },
                                     vertex_buffer_offset
                                         ..(vertex_buffer_offset
                                             + mesh.size.vertex_count as u64 * mesh.vertex_stride),
@@ -876,12 +916,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     ),
                                 );
                             }
-                            let (index_buffer, index_pending) = cmd_buf
+                            let (index_buffer, index_pending) = cmd_buf_data
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*buffer_guard,
-                                    index_id,
+                                    &*match buffer_guard.get(index_id) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer( index_id, )),
+                                    },
                                     hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
                                 .ok_or(BuildAccelerationStructureError::InvalidBuffer(index_id))?;
@@ -897,7 +939,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
                             if let Some(barrier) =
-                                index_pending.map(|pending| pending.into_hal(index_buffer))
+                                index_pending.map(|pending| pending.into_hal(index_buffer.deref()))
                             {
                                 input_barriers.push(barrier);
                             }
@@ -935,9 +977,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
 
-                            cmd_buf.buffer_memory_init_actions.extend(
-                                index_buffer.initialization_status.create_action(
-                                    index_id,
+                            cmd_buf_data.buffer_memory_init_actions.extend(
+                                index_buffer.initialization_status.read().create_action(
+                                    match buffer_guard.get(index_id) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer( index_id, )),
+                                    },
                                     mesh.index_buffer_offset.unwrap()
                                         ..(mesh.index_buffer_offset.unwrap() + index_buffer_size),
                                     MemoryInitKind::NeedsInitializedMemory,
@@ -955,18 +1000,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     ),
                                 );
                             }
-                            let (transform_buffer, transform_pending) = cmd_buf
+                            let (transform_buffer, transform_pending) = cmd_buf_data
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*buffer_guard,
-                                    transform_id,
+                                    &*match buffer_guard.get(transform_id) {
+                                        Ok(buffer) => buffer,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer( transform_id, )),
+                                    },
                                     hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
                                 .ok_or(BuildAccelerationStructureError::InvalidBuffer(
                                     transform_id,
                                 ))?;
-                            let transform_raw = transform_buffer.raw.as_ref().ok_or(
+                            let transform_raw = transform_buffer.raw.ok_or(
                                 BuildAccelerationStructureError::InvalidBuffer(transform_id),
                             )?;
                             if !transform_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
@@ -977,7 +1024,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 );
                             }
                             if let Some(barrier) =
-                                transform_pending.map(|pending| pending.into_hal(transform_buffer))
+                                transform_pending.map(|pending| pending.into_hal(transform_buffer.deref()))
                             {
                                 input_barriers.push(barrier);
                             }
@@ -1000,9 +1047,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     ),
                                 );
                             }
-                            cmd_buf.buffer_memory_init_actions.extend(
-                                transform_buffer.initialization_status.create_action(
-                                    transform_id,
+                            cmd_buf_data.buffer_memory_init_actions.extend(
+                                transform_buffer.initialization_status.read().create_action(
+                                    match buffer_guard.get(transform_id) {
+                                        Ok(buf) => buf,
+                                        Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer(transform_id)),
+                                    },
                                     mesh.transform_buffer_offset.unwrap()
                                         ..(mesh.index_buffer_offset.unwrap() + 48),
                                     MemoryInitKind::NeedsInitializedMemory,
@@ -1027,7 +1077,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     count: mesh.size.index_count.unwrap(),
                                 }
                             }),
-                            transform: transform_buffer.map(|transform_buffer| {
+                            transform: transform_buffer.as_ref().map(|transform_buffer| {
                                 hal::AccelerationStructureTriangleTransform {
                                     buffer: transform_buffer,
                                     offset: mesh.transform_buffer_offset.unwrap() as u32,
@@ -1064,7 +1114,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut instance_buffer_staging_source = Vec::<u8>::new();
 
         for entry in tlas_iter {
-            let tlas = cmd_buf
+            let tlas = cmd_buf_data
                 .trackers
                 .tlas_s
                 .add_single(&tlas_guard, entry.tlas_id)
@@ -1091,7 +1141,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         entry.tlas_id,
                     ));
                 }
-                let blas = cmd_buf
+                let blas = cmd_buf_data
                     .trackers
                     .blas_s
                     .add_single(&blas_guard, instance.blas_id)
@@ -1106,13 +1156,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 dependencies.push(instance.blas_id);
 
-                cmd_buf.blas_actions.push(BlasAction {
+                cmd_buf_data.blas_actions.push(BlasAction {
                     id: instance.blas_id,
                     kind: crate::ray_tracing::BlasActionKind::Use,
                 });
             }
 
-            cmd_buf.tlas_actions.push(TlasAction {
+            cmd_buf_data.tlas_actions.push(TlasAction {
                 id: entry.tlas_id,
                 kind: crate::ray_tracing::TlasActionKind::Build {
                     build_index: build_command_index,
@@ -1131,7 +1181,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             tlas_storage.push((
                 tlas,
                 hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(tlas.instance_buffer.as_ref().unwrap()),
+                    buffer: Some(tlas.instance_buffer.read().as_ref().unwrap()),
                     offset: 0,
                     count: instance_count,
                 }),
@@ -1146,7 +1196,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let scratch_buffer = unsafe {
             device
-                .raw
+                .raw()
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("(wgpu) scratch buffer"),
                     size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
@@ -1159,7 +1209,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let staging_buffer = if !instance_buffer_staging_source.is_empty() {
             unsafe {
                 let staging_buffer = device
-                    .raw
+                    .raw()
                     .create_buffer(&hal::BufferDescriptor {
                         label: Some("(wgpu) instance staging buffer"),
                         size: instance_buffer_staging_source.len() as u64,
@@ -1167,9 +1217,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         memory_flags: hal::MemoryFlags::empty(),
                     })
                     .map_err(crate::device::DeviceError::from)?;
-
                 let mapping = device
-                    .raw
+                    .raw()
                     .map_buffer(
                         &staging_buffer,
                         0..instance_buffer_staging_source.len() as u64,
@@ -1182,12 +1231,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     instance_buffer_staging_source.len(),
                 );
                 device
-                    .raw
+                    .raw()
                     .unmap_buffer(&staging_buffer)
                     .map_err(crate::device::DeviceError::from)?;
                 assert!(mapping.is_coherent);
 
-                Some(staging_buffer)
+                Some(StagingBuffer {
+                    raw: Mutex::new(Some(staging_buffer)),
+                    device: device.clone(),
+                    size: instance_buffer_staging_source.len() as u64,
+                    info: ResourceInfo::new("Raytracing staging buffer"),
+                    is_coherent: mapping.is_coherent,
+                })
             }
         } else {
             None
@@ -1230,8 +1285,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let scratch_buffer_barrier = hal::BufferBarrier::<A> {
             buffer: &scratch_buffer,
-            usage: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH
-                ..hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+            usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH
+                ..BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
         };
 
         let instance_buffer_barriers = tlas_storage.iter().filter_map(
@@ -1241,9 +1296,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     None
                 } else {
                     Some(hal::BufferBarrier::<A> {
-                        buffer: tlas.instance_buffer.as_ref().unwrap(),
-                        usage: hal::BufferUses::COPY_DST
-                            ..hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        buffer: tlas.instance_buffer.read().as_ref().unwrap(),
+                        usage: BufferUses::COPY_DST
+                            ..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     })
                 }
             },
@@ -1252,7 +1307,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let cmd_buf_raw = cmd_buf.encoder.open();
+        let mut binding = cmd_buf_data.as_mut().unwrap();
+        let cmd_buf_raw = binding.encoder.open();
 
         unsafe {
             cmd_buf_raw.transition_buffers(input_barriers.into_iter());
@@ -1298,7 +1354,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             unsafe {
                 if let Some(ref staging_buffer) = staging_buffer {
                     cmd_buf_raw.transition_buffers(iter::once(hal::BufferBarrier::<A> {
-                        buffer: staging_buffer,
+                        buffer: staging_buffer.raw.lock().as_ref().unwrap(),
                         usage: hal::BufferUses::MAP_WRITE..hal::BufferUses::COPY_SRC,
                     }));
                 }
@@ -1316,8 +1372,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size: NonZeroU64::new(size).unwrap(),
                     };
                     cmd_buf_raw.copy_buffer_to_buffer(
-                        staging_buffer.as_ref().unwrap(),
-                        tlas.instance_buffer.as_ref().unwrap(),
+                        staging_buffer.as_ref().unwrap().raw.lock().as_ref().unwrap(),
+                        tlas.instance_buffer.read().as_ref().unwrap(),
                         iter::once(temp),
                     );
                 }
@@ -1340,15 +1396,38 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(staging_buffer) = staging_buffer {
                 device
                     .pending_writes
+                    .lock()
+                    .as_mut()
+                    .unwrap()
                     .temp_resources
-                    .push(TempResource::Buffer(staging_buffer));
+                    .push(TempResource::StagingBuffer(
+                        Arc::new(staging_buffer)
+                    ));
             }
         }
-
+        let scratch_mapping = unsafe {
+            device
+            .raw()
+            .map_buffer(
+                &scratch_buffer,
+                0..instance_buffer_staging_source.len() as u64,
+            )
+            .map_err(crate::device::DeviceError::from)?
+        };
         device
             .pending_writes
+            .lock()
+            .as_mut()
+            .unwrap()
             .temp_resources
-            .push(TempResource::Buffer(scratch_buffer));
+            .push(TempResource::StagingBuffer(
+                Arc::new(StagingBuffer {
+                    raw: Mutex::new(Some(scratch_buffer)),
+                    device: device.clone(),
+                    size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
+                    info: ResourceInfo::new("Ratracing scratch buffer"),
+                    is_coherent: scratch_mapping.is_coherent,
+                })));
 
         Ok(())
     }
@@ -1367,16 +1446,16 @@ impl<A: HalApi> BakedCommands<A> {
                 crate::ray_tracing::BlasActionKind::Build(id) => {
                     built.insert(action.id);
                     let blas = blas_guard
-                        .get_mut(action.id)
+                        .get(action.id)
                         .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
-                    blas.built_index = Some(id);
+                    *blas.built_index.write() = Some(id);
                 }
                 crate::ray_tracing::BlasActionKind::Use => {
                     if !built.contains(&action.id) {
                         let blas = blas_guard
                             .get(action.id)
                             .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
-                        if blas.built_index == None {
+                        if *blas.built_index.read() == None {
                             return Err(ValidateBlasActionsError::UsedUnbuilt(action.id));
                         }
                     }
@@ -1400,28 +1479,28 @@ impl<A: HalApi> BakedCommands<A> {
                     dependencies,
                 } => {
                     let tlas = tlas_guard
-                        .get_mut(action.id)
+                        .get(action.id)
                         .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
 
-                    tlas.built_index = Some(build_index);
-                    tlas.dependencies = dependencies;
+                    *tlas.built_index.write() = Some(build_index);
+                    *tlas.dependencies.write() = dependencies;
                 }
                 crate::ray_tracing::TlasActionKind::Use => {
                     let tlas = tlas_guard
                         .get(action.id)
                         .map_err(|_| ValidateTlasActionsError::InvalidTlas(action.id))?;
 
-                    let tlas_build_index = tlas.built_index;
-                    let dependencies = &tlas.dependencies;
+                    let tlas_build_index = tlas.built_index.read();
+                    let dependencies = tlas.dependencies.read();
 
-                    if tlas_build_index == None {
+                    if *tlas_build_index == None {
                         return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
                     }
-                    for dependency in dependencies {
+                    for dependency in dependencies.deref() {
                         let blas = blas_guard.get(*dependency).map_err(|_| {
                             ValidateTlasActionsError::InvalidBlas(*dependency, action.id)
                         })?;
-                        let blas_build_index = blas.built_index;
+                        let blas_build_index = blas.built_index.read().clone();
                         if blas_build_index == None {
                             return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
                         }

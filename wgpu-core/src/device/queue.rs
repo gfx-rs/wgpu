@@ -30,6 +30,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
+use crate::resource::{Blas, Tlas};
 
 use super::Device;
 
@@ -164,8 +165,8 @@ pub enum TempResource<A: HalApi> {
     Buffer(Arc<Buffer<A>>),
     StagingBuffer(Arc<StagingBuffer<A>>),
     Texture(Arc<Texture<A>>),
-    //TODO come back
-    AccelerationStructure(A::AccelerationStructure),
+    Tlas(Arc<Tlas<A>>),
+    Blas(Arc<Blas<A>>)
 }
 
 /// A queue execution for a particular command encoder.
@@ -1340,15 +1341,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         .insert(bundle.as_info().id(), bundle.clone());
                                 }
                             }
-                        }
-                        for id in cmdbuf.trackers.blas_s.used() {
-                            if !blas_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.blas_s.push(id);
+                            for blas in cmd_buf_trackers.blas_s.used_resources() {
+                                blas.info.use_at(submit_index);
+                                if blas.is_unique() {
+                                    temp_suspected.as_mut().unwrap().insert(blas.as_info().id(), blas.clone());
+                                }
                             }
-                        }
-                        for id in cmdbuf.trackers.tlas_s.used() {
-                            if !tlas_guard[id].life_guard.use_at(submit_index) {
-                                device.temp_suspected.tlas_s.push(id);
+                            for tlas in cmd_buf_trackers.tlas_s.used_resources() {
+                                tlas.info.use_at(submit_index);
+                                if tlas.is_unique() {
+                                    temp_suspected.as_mut().unwrap().insert(tlas.as_info().id(), tlas.clone());
+                                }
                             }
                         }
 
@@ -1373,9 +1376,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         baked
                             .initialize_texture_memory(&mut *trackers, device)
                             .map_err(|err| QueueSubmitError::DestroyedTexture(err.0))?;
-
-                        baked.validate_blas_actions(&mut *blas_guard)?;
-                        baked.validate_tlas_actions(&*blas_guard, &mut *tlas_guard)?;
+                        let mut blas_guard = hub.blas_s.write();
+                        baked.validate_blas_actions(&mut blas_guard)?;
+                        let mut tlas_guard = hub.tlas_s.write();
+                        baked.validate_tlas_actions(&blas_guard, &mut tlas_guard)?;
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.

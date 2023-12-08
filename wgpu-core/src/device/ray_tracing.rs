@@ -1,23 +1,25 @@
+use std::sync::Arc;
+use parking_lot::{Mutex, RwLock};
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
     device::{queue::TempResource, Device, DeviceError},
     global::Global,
     hal_api::HalApi,
-    hub::Token,
     id::{self, BlasId, TlasId},
     identity::{GlobalIdentityHandlerFactory, Input},
     ray_tracing::{get_raw_tlas_instance_size, CreateBlasError, CreateTlasError},
     resource,
     storage::InvalidId,
-    LabelHelpers, LifeGuard, Stored,
+    LabelHelpers,
 };
 
 use hal::{AccelerationStructureTriangleIndices, Device as _};
+use crate::resource::{ResourceInfo, StagingBuffer};
 
 impl<A: HalApi> Device<A> {
     fn create_blas(
-        &self,
+        self: &Arc<Self>,
         self_id: id::DeviceId,
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
@@ -52,7 +54,7 @@ impl<A: HalApi> Device<A> {
                     });
                 }
                 unsafe {
-                    self.raw.get_acceleration_structure_build_sizes(
+                    self.raw().get_acceleration_structure_build_sizes(
                         &hal::GetAccelerationStructureBuildSizesDescriptor {
                             entries: &hal::AccelerationStructureEntries::Triangles(entries),
                             flags: blas_desc.flags,
@@ -63,7 +65,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let raw = unsafe {
-            self.raw
+            self.raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
                     label: blas_desc.label.borrow_option(),
                     size: size_info.acceleration_structure_size,
@@ -72,33 +74,30 @@ impl<A: HalApi> Device<A> {
         }
         .map_err(DeviceError::from)?;
 
-        let handle = unsafe { self.raw.get_acceleration_structure_device_address(&raw) };
+        let handle = unsafe { self.raw().get_acceleration_structure_device_address(&raw) };
 
         Ok(resource::Blas {
             raw: Some(raw),
-            device_id: Stored {
-                value: id::Valid(self_id),
-                ref_count: self.life_guard.add_ref(),
-            },
-            life_guard: LifeGuard::new(blas_desc.label.borrow_or_default()),
+            device: self.clone(),
+            info: ResourceInfo::new(blas_desc.label.to_hal(self.instance_flags).unwrap_or("<BindGroupLayoyt>")),
             size_info,
             sizes,
             flags: blas_desc.flags,
             update_mode: blas_desc.update_mode,
             handle,
-            built_index: None,
+            built_index: RwLock::new(None),
         })
     }
 
     fn create_tlas(
-        &self,
+        self: &Arc<Self>,
         self_id: id::DeviceId,
         desc: &resource::TlasDescriptor,
     ) -> Result<resource::Tlas<A>, CreateTlasError> {
         debug_assert_eq!(self_id.backend(), A::VARIANT);
 
         let size_info = unsafe {
-            self.raw.get_acceleration_structure_build_sizes(
+            self.raw().get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
                     entries: &hal::AccelerationStructureEntries::Instances(
                         hal::AccelerationStructureInstances {
@@ -113,7 +112,7 @@ impl<A: HalApi> Device<A> {
         };
 
         let raw = unsafe {
-            self.raw
+            self.raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
                     label: desc.label.borrow_option(),
                     size: size_info.acceleration_structure_size,
@@ -125,7 +124,7 @@ impl<A: HalApi> Device<A> {
         let instance_buffer_size =
             get_raw_tlas_instance_size::<A>() * std::cmp::max(desc.max_instances, 1) as usize;
         let instance_buffer = unsafe {
-            self.raw.create_buffer(&hal::BufferDescriptor {
+            self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),
                 size: instance_buffer_size as u64,
                 usage: hal::BufferUses::COPY_DST
@@ -137,17 +136,14 @@ impl<A: HalApi> Device<A> {
 
         Ok(resource::Tlas {
             raw: Some(raw),
-            device_id: Stored {
-                value: id::Valid(self_id),
-                ref_count: self.life_guard.add_ref(),
-            },
-            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+            device: self.clone(),
+            info: ResourceInfo::new(desc.label.to_hal(self.instance_flags).unwrap_or("<BindGroupLayoyt>")),
             size_info,
             flags: desc.flags,
             update_mode: desc.update_mode,
-            built_index: None,
-            dependencies: Vec::new(),
-            instance_buffer: Some(instance_buffer),
+            built_index: RwLock::new(None),
+            dependencies: RwLock::new(Vec::new()),
+            instance_buffer: RwLock::new(Some(instance_buffer)),
             max_instance_count: desc.max_instances,
         })
     }
@@ -164,18 +160,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Device::create_blas");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.blas_s.prepare(id_in);
+        let fid = hub.blas_s.prepare::<G>(id_in);
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device_guard = hub.devices.read();
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
             #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace.lock().add(trace::Action::CreateBlas {
+            if let Some(trace) = device.trace.lock().as_mut() {
+                trace.add(trace::Action::CreateBlas {
                     id: fid.id(),
                     desc: desc.clone(),
                     sizes: sizes.clone(),
@@ -188,17 +183,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let handle = blas.handle;
 
-            let ref_count = blas.life_guard.add_ref();
 
-            let id = fid.assign(blas, &mut token);
-            log::info!("Created blas {:?} with {:?}", id, desc);
+            let id = fid.assign(blas);
+            log::info!("Created blas {:?} with {:?}", id.0, desc);
 
-            device.trackers.lock().blas_s.insert_single(id, ref_count);
+            device.trackers.lock().blas_s.insert_single(id.0, id.1);
 
             return (id.0, Some(handle), None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, None, Some(error))
     }
 
@@ -211,18 +205,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Device::create_tlas");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
-        let fid = hub.tlas_s.prepare(id_in);
+        let fid = hub.tlas_s.prepare::<G>(id_in);
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device_guard = hub.devices.read();
         let error = loop {
             let device = match device_guard.get(device_id) {
                 Ok(device) => device,
                 Err(_) => break DeviceError::Invalid.into(),
             };
             #[cfg(feature = "trace")]
-            if let Some(ref trace) = device.trace {
-                trace.lock().add(trace::Action::CreateTlas {
+            if let Some(trace) = device.trace.lock().as_mut() {
+                trace.add(trace::Action::CreateTlas {
                     id: fid.id(),
                     desc: desc.clone(),
                 });
@@ -232,17 +225,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(tlas) => tlas,
                 Err(e) => break e,
             };
-            let ref_count = tlas.life_guard.add_ref();
 
-            let id = fid.assign(tlas, &mut token);
-            log::info!("Created blas {:?} with {:?}", id, desc);
+            let id = fid.assign(tlas);
+            log::info!("Created blas {:?} with {:?}", id.0, desc);
 
-            device.trackers.lock().tlas_s.insert_single(id, ref_count);
+            device.trackers.lock().tlas_s.insert_single(id.0, id.1);
 
             return (id.0, None);
         };
 
-        let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
 
@@ -250,33 +242,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Blas::destroy");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let device_guard = hub.devices.write();
 
         log::info!("Blas {:?} is destroyed", blas_id);
-        let (mut blas_guard, _) = hub.blas_s.write(&mut token);
+        let blas_guard = hub.blas_s.write();
         let blas = blas_guard
-            .get_mut(blas_id)
+            .get(blas_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &mut device_guard[blas.device_id.value];
+        let device = device_guard.get(blas.device.info.id()).unwrap();
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::FreeBlas(blas_id));
+        if let Some(trace) = device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeBlas(blas_id));
         }
 
-        let raw = blas
-            .raw
-            .take()
-            .ok_or(resource::DestroyError::AlreadyDestroyed)?;
-        let temp = TempResource::AccelerationStructure(raw);
+        let temp = TempResource::Blas(blas.clone());
         {
-            let last_submit_index = blas.life_guard.life_count();
+            let last_submit_index = blas.info.submission_index();
             drop(blas_guard);
             device
-                .lock_life(&mut token)
+                .lock_life()
                 .schedule_resource_destruction(temp, last_submit_index);
         }
 
@@ -288,34 +275,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("blas {:?} is dropped", blas_id);
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (last_submit_index, device_id) = {
-            let (mut blas_guard, _) = hub.blas_s.write(&mut token);
-            match blas_guard.get_mut(blas_id) {
+        let (last_submit_index, device) = {
+            let mut blas_guard = hub.blas_s.write();
+            match blas_guard.get(blas_id) {
                 Ok(blas) => {
-                    let last_submit_index = blas.life_guard.life_count();
-                    (last_submit_index, blas.device_id.value)
+                    let last_submit_index = blas.info.submission_index();
+                    (last_submit_index, blas.device.clone())
                 }
-                Err(InvalidId) => {
+                Err(_) => {
                     hub.blas_s.unregister_locked(blas_id, &mut *blas_guard);
                     return;
                 }
             }
         };
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
+        let blas_guard = hub.blas_s.read();
+        let blas = blas_guard.get(blas_id).unwrap();
         {
-            let mut life_lock = device.lock_life(&mut token);
+            let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
-                .blas_s
-                .push(id::Valid(blas_id));
+                .insert(blas_id, blas.clone());
         }
 
         if wait {
-            match device.wait_for_submit(last_submit_index, &mut token) {
+            match device.wait_for_submit(last_submit_index) {
                 Ok(()) => (),
                 Err(e) => log::error!("Failed to wait for blas {:?}: {:?}", blas_id, e),
             }
@@ -326,36 +311,53 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         profiling::scope!("Tlas::destroy");
 
         let hub = A::hub(self);
-        let mut token = Token::root();
 
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let device_guard = hub.devices.write();
 
         log::info!("Tlas {:?} is destroyed", tlas_id);
-        let (mut tlas_guard, _) = hub.tlas_s.write(&mut token);
+        let tlas_guard = hub.tlas_s.write();
         let tlas = tlas_guard
-            .get_mut(tlas_id)
+            .get(tlas_id)
             .map_err(|_| resource::DestroyError::Invalid)?;
 
-        let device = &mut device_guard[tlas.device_id.value];
+        let device = &mut device_guard.get(tlas.device.info.id()).unwrap();
 
         #[cfg(feature = "trace")]
-        if let Some(ref trace) = device.trace {
-            trace.lock().add(trace::Action::FreeTlas(tlas_id));
+        if let Some(trace) = device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeTlas(tlas_id));
         }
 
-        let raw = tlas
-            .raw
-            .take()
-            .ok_or(resource::DestroyError::AlreadyDestroyed)?;
+        let temp = TempResource::Tlas(tlas.clone());
 
-        let temp = TempResource::AccelerationStructure(raw);
-
-        let raw_instance_buffer = tlas.instance_buffer.take();
-        let temp_instance_buffer = raw_instance_buffer.map(|e| TempResource::Buffer(e));
+        let raw_instance_buffer = tlas.instance_buffer.write().take();
+        let temp_instance_buffer = match raw_instance_buffer {
+            None => {None}
+            Some(e) => {
+                let size = get_raw_tlas_instance_size::<A>() as u64 * std::cmp::max(tlas.max_instance_count, 1) as u64;
+                let mapping = unsafe {
+                    device
+                        .raw()
+                        .map_buffer(
+                            &e,
+                            0..size,
+                        )
+                        .map_err(|_| resource::DestroyError::Invalid)?
+                };
+                Some(TempResource::StagingBuffer(Arc::new(
+                    StagingBuffer {
+                        raw: Mutex::new(Some(e)),
+                        device: device.clone(),
+                        size,
+                        info: ResourceInfo::new("Ratracing scratch buffer"),
+                        is_coherent: mapping.is_coherent,
+                    }
+                )))
+            }
+        };
         {
-            let last_submit_index = tlas.life_guard.life_count();
+            let last_submit_index = tlas.info.submission_index();
             drop(tlas_guard);
-            let guard = &mut device.lock_life(&mut token);
+            let guard = &mut device.lock_life();
 
             guard.schedule_resource_destruction(temp, last_submit_index);
             if let Some(temp_instance_buffer) = temp_instance_buffer {
@@ -371,14 +373,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::debug!("tlas {:?} is dropped", tlas_id);
 
         let hub = A::hub(self);
-        let mut token = Token::root();
+        let device_guard = hub.devices.write();
 
-        let (last_submit_index, device_id) = {
-            let (mut tlas_guard, _) = hub.tlas_s.write(&mut token);
-            match tlas_guard.get_mut(tlas_id) {
+        let (last_submit_index, device) = {
+            let mut tlas_guard = hub.tlas_s.write();
+            match tlas_guard.get(tlas_id) {
                 Ok(tlas) => {
-                    let last_submit_index = tlas.life_guard.life_count();
-                    (last_submit_index, tlas.device_id.value)
+                    let last_submit_index = tlas.info.submission_index();
+                    (last_submit_index, device_guard.get(tlas.device.info.id()).unwrap())
                 }
                 Err(InvalidId) => {
                     hub.tlas_s.unregister_locked(tlas_id, &mut *tlas_guard);
@@ -387,18 +389,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         };
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
+        let tlas_guard = hub.tlas_s.read();
+        let tlas = tlas_guard.get(tlas_id).unwrap();
         {
-            let mut life_lock = device.lock_life(&mut token);
+            let mut life_lock = device.lock_life();
             life_lock
                 .suspected_resources
-                .tlas_s
-                .push(id::Valid(tlas_id));
+                .insert(tlas_id, tlas.clone());
         }
 
         if wait {
-            match device.wait_for_submit(last_submit_index, &mut token) {
+            match device.wait_for_submit(last_submit_index) {
                 Ok(()) => (),
                 Err(e) => log::error!("Failed to wait for tlas {:?}: {:?}", tlas_id, e),
             }

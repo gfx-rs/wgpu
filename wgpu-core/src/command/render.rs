@@ -1474,21 +1474,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        cmd_buf.tlas_actions.extend(
-                            bind_group.used.acceleration_structures.used().map(|id| {
-                                cmd_buf.trackers.tlas_s.add_single(&tlas_guard, id.0);
-                                crate::ray_tracing::TlasAction {
-                                    id: id.0,
-                                    kind: crate::ray_tracing::TlasActionKind::Use,
-                                }
-                            }),
+                        let mapped_used_resources = bind_group.used.acceleration_structures.used_resources().map(|blas| {
+                            tracker.tlas_s.add_single(&tlas_guard, blas.as_info().id());
+                            crate::ray_tracing::TlasAction {
+                                id: blas.as_info().id(),
+                                kind: crate::ray_tracing::TlasActionKind::Use,
+                            }
+                        });
+
+                        cmd_buf_data.tlas_actions.extend(
+                            mapped_used_resources,
                         );
 
                         let pipeline_layout = state.binder.pipeline_layout.clone();
                         let entries =
                             state
                                 .binder
-                                .assign_group(index as usize, id::Valid(bind_group_id), bind_group, &temp_offsets);
+                                .assign_group(index as usize, bind_group, &temp_offsets);
                         if !entries.is_empty() && pipeline_layout.is_some() {
                             let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
                             for (i, e) in entries.iter().enumerate() {

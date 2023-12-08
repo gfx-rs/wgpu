@@ -276,8 +276,8 @@ impl<A: HalApi> CommandBuffer<A> {
             trackers: data.trackers,
             buffer_memory_init_actions: data.buffer_memory_init_actions,
             texture_memory_actions: data.texture_memory_actions,
-            blas_actions: self.blas_actions,
-            tlas_actions: self.tlas_actions,
+            blas_actions: data.blas_actions,
+            tlas_actions: data.tlas_actions,
         }
     }
 

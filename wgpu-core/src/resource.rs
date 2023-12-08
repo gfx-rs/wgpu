@@ -1311,7 +1311,8 @@ pub enum DestroyError {
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
-pub struct Blas<A: hal::Api> {
+#[derive(Debug)]
+pub struct Blas<A: HalApi> {
     pub(crate) raw: Option<A::AccelerationStructure>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<BlasId>,
@@ -1319,11 +1320,11 @@ pub struct Blas<A: hal::Api> {
     pub(crate) sizes: wgt::BlasGeometrySizeDescriptors,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
-    pub(crate) built_index: Option<NonZeroU64>,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
     pub(crate) handle: u64,
 }
 
-impl<A: hal::Api> Resource<BlasId> for Blas<A> {
+impl<A: HalApi> Resource<BlasId> for Blas<A> {
     const TYPE: &'static str = "Blas";
 
     fn as_info(&self) -> &ResourceInfo<BlasId> {
@@ -1335,7 +1336,8 @@ impl<A: hal::Api> Resource<BlasId> for Blas<A> {
     }
 }
 
-pub struct Tlas<A: hal::Api> {
+#[derive(Debug)]
+pub struct Tlas<A: HalApi> {
     pub(crate) raw: Option<A::AccelerationStructure>,
     pub(crate) device: Arc<Device<A>>,
     pub(crate) info: ResourceInfo<TlasId>,
@@ -1343,12 +1345,12 @@ pub struct Tlas<A: hal::Api> {
     pub(crate) max_instance_count: u32,
     pub(crate) flags: wgt::AccelerationStructureFlags,
     pub(crate) update_mode: wgt::AccelerationStructureUpdateMode,
-    pub(crate) built_index: Option<NonZeroU64>,
-    pub(crate) dependencies: Vec<crate::id::BlasId>,
-    pub(crate) instance_buffer: Option<A::Buffer>,
+    pub(crate) built_index: RwLock<Option<NonZeroU64>>,
+    pub(crate) dependencies: RwLock<Vec<BlasId>>,
+    pub(crate) instance_buffer: RwLock<Option<A::Buffer>>,
 }
 
-impl<A: hal::Api> Resource<TlasId> for Tlas<A> {
+impl<A: HalApi> Resource<TlasId> for Tlas<A> {
     const TYPE: &'static str = "Tlas";
 
     fn as_info(&self) -> &ResourceInfo<TlasId> {

@@ -449,14 +449,14 @@ impl<A: HalApi> Device<A> {
                     temp_suspected.insert(resource.as_info().id(), resource.clone());
                 }
             }
-            for id in trackers.blas_s.used() {
-                if blas_guard[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.blas_s.push(id);
+            for resource in trackers.blas_s.used_resources() {
+                if resource.is_unique() {
+                    temp_suspected.insert(resource.as_info().id(), resource.clone());
                 }
             }
-            for id in trackers.tlas_s.used() {
-                if tlas_guard[id].life_guard.ref_count.is_none() {
-                    self.temp_suspected.tlas_s.push(id);
+            for resource in trackers.tlas_s.used_resources() {
+                if resource.is_unique() {
+                    temp_suspected.insert(resource.as_info().id(), resource.clone());
                 }
             }
         }

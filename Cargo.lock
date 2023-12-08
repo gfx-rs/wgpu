@@ -4150,6 +4150,7 @@ dependencies = [
  "ctor",
  "env_logger",
  "futures-lite",
+ "glam",
  "heck",
  "image",
  "js-sys",
