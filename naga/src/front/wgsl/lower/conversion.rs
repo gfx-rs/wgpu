@@ -130,6 +130,28 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
         Ok(())
     }
 
+    /// Convert `expr` to the leaf scalar type `scalar`.
+    pub fn convert_to_leaf_scalar(
+        &mut self,
+        expr: &mut Handle<crate::Expression>,
+        goal: crate::Scalar,
+    ) -> Result<(), super::Error<'source>> {
+        let inner = super::resolve_inner!(self, *expr);
+        // Do nothing if `inner` doesn't even have leaf scalars;
+        // it's a type error that validation will catch.
+        if inner.scalar() != Some(goal) {
+            let cast = crate::Expression::As {
+                expr: *expr,
+                kind: goal.kind,
+                convert: Some(goal.width),
+            };
+            let expr_span = self.get_expression_span(*expr);
+            *expr = self.append_expression(cast, expr_span)?;
+        }
+
+        Ok(())
+    }
+
     /// Convert all expressions in `exprs` to a common scalar type.
     ///
     /// Note that the caller is responsible for making sure these
@@ -146,18 +168,7 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
         goal: crate::Scalar,
     ) -> Result<(), super::Error<'source>> {
         for expr in exprs.iter_mut() {
-            let inner = super::resolve_inner!(self, *expr);
-            // Do nothing if `inner` doesn't even have leaf scalars;
-            // it's a type error that validation will catch.
-            if inner.scalar() != Some(goal) {
-                let cast = crate::Expression::As {
-                    expr: *expr,
-                    kind: goal.kind,
-                    convert: Some(goal.width),
-                };
-                let expr_span = self.get_expression_span(*expr);
-                *expr = self.append_expression(cast, expr_span)?;
-            }
+            self.convert_to_leaf_scalar(expr, goal)?;
         }
 
         Ok(())
