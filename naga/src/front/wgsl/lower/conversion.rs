@@ -140,7 +140,7 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
     /// themselves whether the casts we we generate are justified,
     /// perhaps by calling `TypeInner::automatically_converts_to` or
     /// `Scalar::automatic_conversion_combine`.
-    pub fn convert_slice_to_common_scalar(
+    pub fn convert_slice_to_common_leaf_scalar(
         &mut self,
         exprs: &mut [Handle<crate::Expression>],
         goal: crate::Scalar,
