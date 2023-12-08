@@ -214,13 +214,17 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
     /// considers their leaf scalar types. This means it may return `Ok`
     /// even when the Naga validator will reject the resulting
     /// construction expression later.
-    pub fn automatic_conversion_consensus(
+    pub fn automatic_conversion_consensus<'handle, I>(
         &self,
-        components: &[Handle<crate::Expression>],
-    ) -> Result<crate::Scalar, usize> {
+        components: I,
+    ) -> Result<crate::Scalar, usize>
+    where
+        I: IntoIterator<Item = &'handle Handle<crate::Expression>>,
+        I::IntoIter: Clone, // for debugging
+    {
         let types = &self.module.types;
         let mut inners = components
-            .iter()
+            .into_iter()
             .map(|&c| self.typifier()[c].inner_with(types));
         log::debug!(
             "wgsl automatic_conversion_consensus: {:?}",
