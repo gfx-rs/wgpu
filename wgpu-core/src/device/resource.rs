@@ -3346,7 +3346,10 @@ impl<A: HalApi> Device<A> {
         let mut life_lock = self.lock_life();
         let closure = life_lock.device_lost_closure.take();
         if let Some(device_lost_closure) = closure {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_lock);
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
+            life_lock = self.lock_life();
         }
 
         // 2) Complete any outstanding mapAsync() steps.
