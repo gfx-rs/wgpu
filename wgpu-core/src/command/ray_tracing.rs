@@ -1307,8 +1307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
 
-        let mut binding = cmd_buf_data.as_mut().unwrap();
-        let cmd_buf_raw = binding.encoder.open();
+        let cmd_buf_raw = cmd_buf_data.encoder.open();
 
         unsafe {
             cmd_buf_raw.transition_buffers(input_barriers.into_iter());
