@@ -34,9 +34,9 @@ impl ParseError {
             .with_labels(
                 self.labels
                     .iter()
-                    .map(|label| {
-                        Label::primary((), label.0.to_range().unwrap())
-                            .with_message(label.1.to_string())
+                    .filter_map(|label| label.0.to_range().map(|range| (label, range)))
+                    .map(|(label, range)| {
+                        Label::primary((), range).with_message(label.1.to_string())
                     })
                     .collect(),
             )

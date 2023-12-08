@@ -1628,7 +1628,6 @@ impl crate::Context for Context {
                 base_array_layer: desc.base_array_layer,
                 array_layer_count: desc.array_layer_count,
             },
-            plane: desc.plane,
         };
         let global = &self.0;
         let (id, error) = wgc::gfx_select!(

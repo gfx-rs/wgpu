@@ -22,8 +22,6 @@ pub struct GlobalReport {
     pub metal: Option<HubReport>,
     #[cfg(all(feature = "dx12", windows))]
     pub dx12: Option<HubReport>,
-    #[cfg(all(feature = "dx11", windows))]
-    pub dx11: Option<HubReport>,
     #[cfg(feature = "gles")]
     pub gl: Option<HubReport>,
 }
@@ -40,8 +38,6 @@ impl GlobalReport {
             Backend::Metal => self.metal.as_ref().unwrap(),
             #[cfg(all(feature = "dx12", windows))]
             Backend::Dx12 => self.dx12.as_ref().unwrap(),
-            #[cfg(all(feature = "dx11", windows))]
-            Backend::Dx11 => self.dx11.as_ref().unwrap(),
             #[cfg(feature = "gles")]
             Backend::Gl => self.gl.as_ref().unwrap(),
             _ => panic!("HubReport is not supported on this backend"),
@@ -132,12 +128,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             } else {
                 None
             },
-            #[cfg(all(feature = "dx11", windows))]
-            dx11: if self.instance.dx11.is_some() {
-                Some(self.hubs.dx11.generate_report())
-            } else {
-                None
-            },
             #[cfg(feature = "gles")]
             gl: if self.instance.gl.is_some() {
                 Some(self.hubs.gl.generate_report())
@@ -166,10 +156,6 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         #[cfg(all(feature = "dx12", windows))]
         {
             self.hubs.dx12.clear(&surfaces_locked, true);
-        }
-        #[cfg(all(feature = "dx11", windows))]
-        {
-            self.hubs.dx11.clear(&surfaces_locked, true);
         }
         #[cfg(feature = "gles")]
         {

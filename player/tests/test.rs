@@ -68,7 +68,6 @@ impl Test<'_> {
             wgt::Backend::Vulkan => "Vulkan",
             wgt::Backend::Metal => "Metal",
             wgt::Backend::Dx12 => "Dx12",
-            wgt::Backend::Dx11 => "Dx11",
             wgt::Backend::Gl => "Gl",
             _ => unreachable!(),
         };
@@ -170,7 +169,6 @@ const BACKENDS: &[wgt::Backend] = &[
     wgt::Backend::Vulkan,
     wgt::Backend::Metal,
     wgt::Backend::Dx12,
-    wgt::Backend::Dx11,
     wgt::Backend::Gl,
 ];
 

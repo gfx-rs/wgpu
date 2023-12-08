@@ -102,12 +102,10 @@ pub enum Backend {
     Metal = 2,
     /// Direct3D-12 (Windows)
     Dx12 = 3,
-    /// Direct3D-11 (Windows)
-    Dx11 = 4,
     /// OpenGL ES-3 (Linux, Android)
-    Gl = 5,
+    Gl = 4,
     /// WebGPU in the browser
-    BrowserWebGpu = 6,
+    BrowserWebGpu = 5,
 }
 
 impl Backend {
@@ -118,7 +116,6 @@ impl Backend {
             Backend::Vulkan => "vulkan",
             Backend::Metal => "metal",
             Backend::Dx12 => "dx12",
-            Backend::Dx11 => "dx11",
             Backend::Gl => "gl",
             Backend::BrowserWebGpu => "webgpu",
         }
@@ -158,8 +155,6 @@ bitflags::bitflags! {
         const METAL = 1 << Backend::Metal as u32;
         /// Supported on Windows 10
         const DX12 = 1 << Backend::Dx12 as u32;
-        /// Supported on Windows 7+
-        const DX11 = 1 << Backend::Dx11 as u32;
         /// Supported when targeting the web through webassembly
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
         /// All the apis that wgpu offers first tier of support for.
@@ -172,8 +167,8 @@ bitflags::bitflags! {
         /// All the apis that wgpu offers second tier of support for. These may
         /// be unsupported/still experimental.
         ///
-        /// OpenGL + DX11
-        const SECONDARY = Self::GL.bits() | Self::DX11.bits();
+        /// OpenGL
+        const SECONDARY = Self::GL.bits();
     }
 }
 
@@ -337,7 +332,18 @@ bitflags::bitflags! {
 
         // ? const NORM16_FILTERABLE = 1 << 17; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const NORM16_RESOLVE = 1 << 18; (https://github.com/gpuweb/gpuweb/issues/3839)
-        // TODO const FLOAT32_FILTERABLE = 1 << 19;
+
+        /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be filterable.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (mainly on Desktop GPUs)
+        /// - DX12
+        /// - Metal on macOS or Apple9+ GPUs, optional on iOS/iPadOS with Apple7/8 GPUs
+        /// - GL with one of `GL_ARB_color_buffer_float`/`GL_EXT_color_buffer_float`/`OES_texture_float_linear`
+        ///
+        /// This is a web and native feature.
+        const FLOAT32_FILTERABLE = 1 << 19;
+
         // ? const FLOAT32_BLENDABLE = 1 << 20; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << 21; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << 22; (https://github.com/gpuweb/gpuweb/issues/3844)
@@ -654,7 +660,6 @@ bitflags::bitflags! {
         /// - DX12
         /// - Vulkan
         /// - Metal
-        /// - DX11 (emulated with uniforms)
         /// - OpenGL (emulated with uniforms)
         ///
         /// This is a native only feature.
@@ -670,7 +675,6 @@ bitflags::bitflags! {
         /// - DX12
         /// - Vulkan
         /// - Metal
-        /// - DX11
         /// - OpenGL
         ///
         /// This is a native only feature.
@@ -682,7 +686,6 @@ bitflags::bitflags! {
         /// - DX12
         /// - Vulkan
         /// - Metal (macOS 10.12+ only)
-        /// - DX11
         /// - OpenGL
         ///
         /// This is a native only feature.
@@ -821,7 +824,6 @@ bitflags::bitflags! {
         ///
         /// Supported platforms:
         /// - Vulkan
-        /// - DX11 (feature level 10+)
         /// - DX12
         /// - Metal (some)
         /// - OpenGL (some)
@@ -835,7 +837,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const SHADER_EARLY_DEPTH_TEST = 1 << 62;
-
         /// Allows two outputs from a shader to be used for blending.
         /// Note that dual-source blending doesn't support multiple render targets.
         ///
@@ -1077,7 +1078,7 @@ pub struct Limits {
     /// - Vulkan: 128-256 bytes
     /// - DX12: 256 bytes
     /// - Metal: 4096 bytes
-    /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
+    /// - OpenGL doesn't natively support push constants, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
     pub max_push_constant_size: u32,
 
@@ -1422,13 +1423,13 @@ bitflags::bitflags! {
     pub struct DownlevelFlags: u32 {
         /// The device supports compiling and using compute shaders.
         ///
-        /// DX11 on FL10 level hardware, WebGL2, and GLES3.0 devices do not support compute.
+        /// WebGL2, and GLES3.0 devices do not support compute.
         const COMPUTE_SHADERS = 1 << 0;
         /// Supports binding storage buffers and textures to fragment shaders.
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
         ///
-        /// DX11 on FL10 level hardware, WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
+        /// WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
         ///
@@ -2410,9 +2411,9 @@ pub enum TextureFormat {
     /// - 0: Single 8 bit channel luminance.
     /// - 1: Dual 8 bit channel chrominance at half width and half height.
     ///
-    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`] and [`TextureFormat::R8Uint`].
+    /// Valid view formats for luminance are [`TextureFormat::R8Unorm`].
     ///
-    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`] and [`TextureFormat::Rg8Uint`].
+    /// Valid view formats for chrominance are [`TextureFormat::Rg8Unorm`].
     ///
     /// Width and height must be even.
     ///
@@ -2834,6 +2835,18 @@ impl Serialize for TextureFormat {
     }
 }
 
+impl TextureAspect {
+    /// Returns the texture aspect for a given plane.
+    pub fn from_plane(plane: u32) -> Option<Self> {
+        Some(match plane {
+            0 => Self::Plane0,
+            1 => Self::Plane1,
+            2 => Self::Plane2,
+            _ => return None,
+        })
+    }
+}
+
 impl TextureFormat {
     /// Returns the aspect-specific format of the original format
     ///
@@ -2851,7 +2864,10 @@ impl TextureFormat {
             ) => Some(Self::Stencil8),
             (Self::Depth24PlusStencil8, TextureAspect::DepthOnly) => Some(Self::Depth24Plus),
             (Self::Depth32FloatStencil8, TextureAspect::DepthOnly) => Some(Self::Depth32Float),
-            (format, TextureAspect::All) => Some(format),
+            (Self::NV12, TextureAspect::Plane0) => Some(Self::R8Unorm),
+            (Self::NV12, TextureAspect::Plane1) => Some(Self::Rg8Unorm),
+            // views to multi-planar formats must specify the plane
+            (format, TextureAspect::All) if !format.is_multi_planar_format() => Some(format),
             _ => None,
         }
     }
@@ -2891,6 +2907,19 @@ impl TextureFormat {
         }
     }
 
+    /// Returns `true` if the format is a multi-planar format
+    pub fn is_multi_planar_format(&self) -> bool {
+        self.planes().is_some()
+    }
+
+    /// Returns the number of planes a multi-planar format has.
+    pub fn planes(&self) -> Option<u32> {
+        match *self {
+            Self::NV12 => Some(2),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if the format has a color aspect
     pub fn has_color_aspect(&self) -> bool {
         !self.is_depth_stencil_format()
@@ -2913,6 +2942,14 @@ impl TextureFormat {
         match *self {
             Self::Stencil8 | Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => true,
             _ => false,
+        }
+    }
+
+    /// Returns the size multiple requirement for a texture using this format.
+    pub fn size_multiple_requirement(&self) -> (u32, u32) {
+        match *self {
+            Self::NV12 => (2, 2),
+            _ => self.block_dimensions(),
         }
     }
 
@@ -2969,9 +3006,8 @@ impl TextureFormat {
             | Self::Depth24Plus
             | Self::Depth24PlusStencil8
             | Self::Depth32Float
-            | Self::Depth32FloatStencil8 => (1, 1),
-
-            Self::NV12 => (2, 2),
+            | Self::Depth32FloatStencil8
+            | Self::NV12 => (1, 1),
 
             Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
@@ -3230,10 +3266,16 @@ impl TextureFormat {
             Self::Astc { .. } =>          (        noaa,      basic),
         };
 
-        let is_filterable =
-            self.sample_type(None) == Some(TextureSampleType::Float { filterable: true });
+        // Get whether the format is filterable, taking features into account
+        let sample_type1 = self.sample_type(None, Some(device_features));
+        let is_filterable = sample_type1 == Some(TextureSampleType::Float { filterable: true });
+
+        // Features that enable filtering don't affect blendability
+        let sample_type2 = self.sample_type(None, None);
+        let is_blendable = sample_type2 == Some(TextureSampleType::Float { filterable: true });
+
         flags.set(TextureFormatFeatureFlags::FILTERABLE, is_filterable);
-        flags.set(TextureFormatFeatureFlags::BLENDABLE, is_filterable);
+        flags.set(TextureFormatFeatureFlags::BLENDABLE, is_blendable);
 
         TextureFormatFeatures {
             allowed_usages,
@@ -3241,13 +3283,22 @@ impl TextureFormat {
         }
     }
 
-    /// Returns the sample type compatible with this format and aspect
+    /// Returns the sample type compatible with this format and aspect.
     ///
-    /// Returns `None` only if the format is combined depth-stencil
-    /// and `TextureAspect::All` or no `aspect` was provided
-    pub fn sample_type(&self, aspect: Option<TextureAspect>) -> Option<TextureSampleType> {
+    /// Returns `None` only if this is a combined depth-stencil format or a multi-planar format
+    /// and `TextureAspect::All` or no `aspect` was provided.
+    pub fn sample_type(
+        &self,
+        aspect: Option<TextureAspect>,
+        device_features: Option<Features>,
+    ) -> Option<TextureSampleType> {
         let float = TextureSampleType::Float { filterable: true };
         let unfilterable_float = TextureSampleType::Float { filterable: false };
+        let float32_sample_type = TextureSampleType::Float {
+            filterable: device_features
+                .unwrap_or(Features::empty())
+                .contains(Features::FLOAT32_FILTERABLE),
+        };
         let depth = TextureSampleType::Depth;
         let uint = TextureSampleType::Uint;
         let sint = TextureSampleType::Sint;
@@ -3268,7 +3319,7 @@ impl TextureFormat {
             | Self::Rgb10a2Unorm
             | Self::Rg11b10Float => Some(float),
 
-            Self::R32Float | Self::Rg32Float | Self::Rgba32Float => Some(unfilterable_float),
+            Self::R32Float | Self::Rg32Float | Self::Rgba32Float => Some(float32_sample_type),
 
             Self::R8Uint
             | Self::Rg8Uint
@@ -3294,12 +3345,17 @@ impl TextureFormat {
             Self::Stencil8 => Some(uint),
             Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => Some(depth),
             Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
-                None | Some(TextureAspect::All) => None,
                 Some(TextureAspect::DepthOnly) => Some(depth),
                 Some(TextureAspect::StencilOnly) => Some(uint),
+                _ => None,
             },
 
-            Self::NV12 => None,
+            Self::NV12 => match aspect {
+                Some(TextureAspect::Plane0) | Some(TextureAspect::Plane1) => {
+                    Some(unfilterable_float)
+                }
+                _ => None,
+            },
 
             Self::R16Unorm
             | Self::R16Snorm
@@ -3348,7 +3404,8 @@ impl TextureFormat {
     /// since uncompressed formats have a block size of 1x1.
     ///
     /// Returns `None` if any of the following are true:
-    ///  - the format is combined depth-stencil and no `aspect` was provided
+    ///  - the format is a combined depth-stencil and no `aspect` was provided
+    ///  - the format is a multi-planar format and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
     #[deprecated(since = "0.19.0", note = "Use `block_copy_size` instead.")]
@@ -3364,7 +3421,8 @@ impl TextureFormat {
     /// since uncompressed formats have a block size of 1x1.
     ///
     /// Returns `None` if any of the following are true:
-    ///  - the format is combined depth-stencil and no `aspect` was provided
+    ///  - the format is a combined depth-stencil and no `aspect` was provided
+    ///  - the format is a multi-planar format and no `aspect` was provided
     ///  - the format is `Depth24Plus`
     ///  - the format is `Depth24PlusStencil8` and `aspect` is depth.
     pub fn block_copy_size(&self, aspect: Option<TextureAspect>) -> Option<u32> {
@@ -3407,17 +3465,21 @@ impl TextureFormat {
             Self::Depth32Float => Some(4),
             Self::Depth24Plus => None,
             Self::Depth24PlusStencil8 => match aspect {
-                None | Some(TextureAspect::All) => None,
                 Some(TextureAspect::DepthOnly) => None,
                 Some(TextureAspect::StencilOnly) => Some(1),
+                _ => None,
             },
             Self::Depth32FloatStencil8 => match aspect {
-                None | Some(TextureAspect::All) => None,
                 Some(TextureAspect::DepthOnly) => Some(4),
                 Some(TextureAspect::StencilOnly) => Some(1),
+                _ => None,
             },
 
-            Self::NV12 => None,
+            Self::NV12 => match aspect {
+                Some(TextureAspect::Plane0) => Some(1),
+                Some(TextureAspect::Plane1) => Some(2),
+                _ => None,
+            },
 
             Self::Bc1RgbaUnorm | Self::Bc1RgbaUnormSrgb | Self::Bc4RUnorm | Self::Bc4RSnorm => {
                 Some(8)
@@ -3455,7 +3517,7 @@ impl TextureFormat {
 
     /// Returns the number of components this format has taking into account the `aspect`.
     ///
-    /// The `aspect` is only relevant for combined depth-stencil formats.
+    /// The `aspect` is only relevant for combined depth-stencil formats and multi-planar formats.
     pub fn components_with_aspect(&self, aspect: TextureAspect) -> u8 {
         match *self {
             Self::R8Unorm
@@ -3506,11 +3568,15 @@ impl TextureFormat {
             Self::Stencil8 | Self::Depth16Unorm | Self::Depth24Plus | Self::Depth32Float => 1,
 
             Self::Depth24PlusStencil8 | Self::Depth32FloatStencil8 => match aspect {
-                TextureAspect::All => 2,
                 TextureAspect::DepthOnly | TextureAspect::StencilOnly => 1,
+                _ => 2,
             },
 
-            Self::NV12 => 3,
+            Self::NV12 => match aspect {
+                TextureAspect::Plane0 => 1,
+                TextureAspect::Plane1 => 2,
+                _ => 3,
+            },
 
             Self::Bc4RUnorm | Self::Bc4RSnorm => 1,
             Self::Bc5RgUnorm | Self::Bc5RgSnorm => 2,
@@ -4918,7 +4984,7 @@ pub enum PresentMode {
     ///
     /// No tearing will be observed.
     ///
-    /// Supported on DX11/12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
+    /// Supported on DX12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
     ///
     /// This is traditionally called "Fast Vsync"
     Mailbox = 5,
@@ -5617,6 +5683,12 @@ pub enum TextureAspect {
     StencilOnly,
     /// Depth.
     DepthOnly,
+    /// Plane 0.
+    Plane0,
+    /// Plane 1.
+    Plane1,
+    /// Plane 2.
+    Plane2,
 }
 
 /// How edges should be handled in texture addressing.

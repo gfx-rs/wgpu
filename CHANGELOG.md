@@ -31,7 +31,6 @@ Bottom level categories:
 - DX12
 - Vulkan
 - Metal
-- DX11
 - GLES
 - WebGPU
 - Emscripten
@@ -39,6 +38,10 @@ Bottom level categories:
 -->
 
 ## Unreleased
+
+### Direct3D 11 backend removal
+
+This backend had no functionality, and with the recent support for GL on Desktop, which allows wgpu to run on older devices, there is no need to keep the backend.
 
 ### `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` environment variable
 
@@ -48,14 +51,21 @@ This adds a way to allow a Vulkan driver which is non-compliant per VK_KHR_drive
 
 Previously, `DeviceExt::create_texture_with_data` only allowed data to be provided in layer major order. There is now a `order` parameter which allows you to specify if the data is in layer major or mip major order.
 
+### `expose-ids` feature now available unconditionally
+
+This feature allowed you to call `global_id` on any wgpu opaque handle to get a unique hashable identity for the given resource. This is now available without the feature flag. By @cwfitzgerald in [#4841](https://github.com/gfx-rs/wgpu/pull/4841)
+
 ### New Features
 
 #### General
 - Added `DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW` to know if `@builtin(vertex_index)` and `@builtin(instance_index)` will respect the `first_vertex` / `first_instance` in indirect calls. If this is not present, both will always start counting from 0. Currently enabled on all backends except DX12. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722)
 - No longer validate surfaces against their allowed extent range on configure. This caused warnings that were almost impossible to avoid. As before, the resulting behavior depends on the compositor. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+- Added support for the float32-filterable feature. By @almarklein in [#4759](https://github.com/gfx-rs/wgpu/pull/4759)
 
 #### OpenGL
 - `@builtin(instance_index)` now properly reflects the range provided in the draw call instead of always counting from 0. By @cwfitzgerald in [#4722](https://github.com/gfx-rs/wgpu/pull/4722).
+- Desktop GL now supports `POLYGON_MODE_LINE` and `POLYGON_MODE_POINT`. By @valaphee in [#4836](https://github.com/gfx-rs/wgpu/pull/4836)
+
 #### Naga
 
 - Naga's WGSL front and back ends now have experimental support for 64-bit floating-point literals: `1.0lf` denotes an `f64` value. There has been experimental support for an `f64` type for a while, but until now there was no syntax for writing literals with that type. As before, Naga module validation rejects `f64` values unless `naga::valid::Capabilities::FLOAT64` is requested. By @jimblandy in [#4747](https://github.com/gfx-rs/wgpu/pull/4747).
@@ -103,7 +113,7 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Introduce a new `Scalar` struct type for use in Naga's IR, and update all frontend, middle, and backend code appropriately. By @jimblandy in [#4673](https://github.com/gfx-rs/wgpu/pull/4673).
 - Add more metal keywords. By @fornwall in [#4707](https://github.com/gfx-rs/wgpu/pull/4707).
 
--   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743)).
+-   Add partial support for WGSL abstract types (@jimblandy in [#4743](https://github.com/gfx-rs/wgpu/pull/4743), [#4755](https://github.com/gfx-rs/wgpu/pull/4755)).
 
     Abstract types make numeric literals easier to use, by
     automatically converting literals and other constant expressions
@@ -120,9 +130,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
     Even though the literals are abstract integers, Naga recognizes
     that it is safe and necessary to convert them to `f32` values in
     order to build the vector. You can also use abstract values as
-    initializers for global constants, like this:
+    initializers for global constants and global and local variables,
+    like this:
 
-        const unit_x: vec2<f32> = vec2(1, 0);
+        var unit_x: vec2<f32> = vec2(1, 0);
 
     The literals `1` and `0` are abstract integers, and the expression
     `vec2(1, 0)` is an abstract vector. However, Naga recognizes that
@@ -145,6 +156,14 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 - Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
 
 ### Bug Fixes
+
+#### Vulkan
+
+- Use `VK_EXT_robustness2` only when not using an outdated intel iGPU driver. By @TheoDulka in [#4602](https://github.com/gfx-rs/wgpu/pull/4602).
+
+#### WebGPU
+
+- Allow calling `BufferSlice::get_mapped_range` multiple times on the same buffer slice (instead of throwing a Javascript exception): By @DouglasDwyer in [#4726](https://github.com/gfx-rs/wgpu/pull/4726)
 
 #### WGL
 

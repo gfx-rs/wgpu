@@ -448,7 +448,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ctx.try_automatic_conversions_slice(
                     &mut components,
                     &Tr::Value(component_ty),
-                    span,
+                    ty_span,
                 )?;
                 expr = crate::Expression::Compose { ty, components };
             }
@@ -497,7 +497,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             // Array constructor, explicit type
             (components, Constructor::Type((ty, &crate::TypeInner::Array { base, .. }))) => {
                 let mut components = components.into_components_vec();
-                ctx.try_automatic_conversions_slice(&mut components, &Tr::Handle(base), span)?;
+                ctx.try_automatic_conversions_slice(&mut components, &Tr::Handle(base), ty_span)?;
                 expr = crate::Expression::Compose { ty, components };
             }
 

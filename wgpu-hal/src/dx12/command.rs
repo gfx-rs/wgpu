@@ -415,6 +415,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             wgt::TextureAspect::All => 0..2,
                             wgt::TextureAspect::DepthOnly => 0..1,
                             wgt::TextureAspect::StencilOnly => 1..2,
+                            _ => unreachable!(),
+                        }
+                    } else if let Some(planes) = barrier.texture.format.planes() {
+                        match barrier.range.aspect {
+                            wgt::TextureAspect::All => 0..planes,
+                            wgt::TextureAspect::Plane0 => 0..1,
+                            wgt::TextureAspect::Plane1 => 1..2,
+                            wgt::TextureAspect::Plane2 => 2..3,
+                            _ => unreachable!(),
                         }
                     } else {
                         match barrier.texture.format {

@@ -11,7 +11,7 @@
  *  General design direction is to follow the majority by the following weights:
  *  - wgpu-core: 1.5
  *  - primary backends (Vulkan/Metal/DX12): 1.0 each
- *  - secondary backends (DX11/GLES): 0.5 each
+ *  - secondary backend (GLES): 0.5
  */
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -51,9 +51,6 @@
     clippy::pattern_type_mismatch,
 )]
 
-/// DirectX11 API internals.
-#[cfg(all(feature = "dx11", windows))]
-pub mod dx11;
 /// DirectX12 API internals.
 #[cfg(all(feature = "dx12", windows))]
 pub mod dx12;
@@ -71,8 +68,6 @@ pub mod vulkan;
 
 pub mod auxil;
 pub mod api {
-    #[cfg(all(feature = "dx11", windows))]
-    pub use super::dx11::Api as Dx11;
     #[cfg(all(feature = "dx12", windows))]
     pub use super::dx12::Api as Dx12;
     pub use super::empty::Api as Empty;
@@ -730,6 +725,11 @@ bitflags!(
         const COLOR = 1 << 0;
         const DEPTH = 1 << 1;
         const STENCIL = 1 << 2;
+        const PLANE_0 = 1 << 3;
+        const PLANE_1 = 1 << 4;
+        const PLANE_2 = 1 << 5;
+
+        const DEPTH_STENCIL = Self::DEPTH.bits() | Self::STENCIL.bits();
     }
 );
 
@@ -739,6 +739,9 @@ impl FormatAspects {
             wgt::TextureAspect::All => Self::all(),
             wgt::TextureAspect::DepthOnly => Self::DEPTH,
             wgt::TextureAspect::StencilOnly => Self::STENCIL,
+            wgt::TextureAspect::Plane0 => Self::PLANE_0,
+            wgt::TextureAspect::Plane1 => Self::PLANE_1,
+            wgt::TextureAspect::Plane2 => Self::PLANE_2,
         };
         Self::from(format) & aspect_mask
     }
@@ -753,6 +756,9 @@ impl FormatAspects {
             Self::COLOR => wgt::TextureAspect::All,
             Self::DEPTH => wgt::TextureAspect::DepthOnly,
             Self::STENCIL => wgt::TextureAspect::StencilOnly,
+            Self::PLANE_0 => wgt::TextureAspect::Plane0,
+            Self::PLANE_1 => wgt::TextureAspect::Plane1,
+            Self::PLANE_2 => wgt::TextureAspect::Plane2,
             _ => unreachable!(),
         }
     }
@@ -766,8 +772,9 @@ impl From<wgt::TextureFormat> for FormatAspects {
             | wgt::TextureFormat::Depth32Float
             | wgt::TextureFormat::Depth24Plus => Self::DEPTH,
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
-                Self::DEPTH | Self::STENCIL
+                Self::DEPTH_STENCIL
             }
+            wgt::TextureFormat::NV12 => Self::PLANE_0 | Self::PLANE_1,
             _ => Self::COLOR,
         }
     }
@@ -1018,7 +1025,6 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: wgt::TextureViewDimension,
     pub usage: TextureUses,
     pub range: wgt::ImageSubresourceRange,
-    pub plane: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -1577,8 +1583,8 @@ pub struct AccelerationStructureTriangleTransform<'a, A: Api> {
     pub offset: u32,
 }
 
-pub type AccelerationStructureBuildFlags = wgt::AccelerationStructureFlags;
-pub type AccelerationStructureGeometryFlags = wgt::AccelerationStructureGeometryFlags;
+pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
+pub use wgt::AccelerationStructureGeometryFlags;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

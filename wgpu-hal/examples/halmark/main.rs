@@ -422,7 +422,6 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::RESOURCE,
             range: wgt::ImageSubresourceRange::default(),
-            plane: None,
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -661,7 +660,6 @@ impl<A: hal::Api> Example<A> {
             dimension: wgt::TextureViewDimension::D2,
             usage: hal::TextureUses::COLOR_TARGET,
             range: wgt::ImageSubresourceRange::default(),
-            plane: None,
         };
         let surface_tex_view = unsafe {
             self.device

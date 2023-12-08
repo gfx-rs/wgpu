@@ -466,7 +466,6 @@ pub struct BindGroupLayout<A: HalApi> {
     pub(crate) dynamic_count: usize,
     pub(crate) count_validator: BindingTypeMaxCountValidator,
     pub(crate) info: ResourceInfo<BindGroupLayoutId>,
-    #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
@@ -494,10 +493,7 @@ impl<A: HalApi> Resource<BindGroupLayoutId> for BindGroupLayout<A> {
     }
 
     fn label(&self) -> String {
-        #[cfg(debug_assertions)]
-        return self.label.clone();
-        #[cfg(not(debug_assertions))]
-        return String::new();
+        self.label.clone()
     }
 }
 impl<A: HalApi> BindGroupLayout<A> {
