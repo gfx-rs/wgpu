@@ -378,15 +378,19 @@ impl<A: HalApi> Device<A> {
         // our caller. This will complete the steps for both destroy and for
         // "lose the device".
         let mut device_lost_invocations = SmallVec::new();
-        if !self.is_valid()
-            && life_tracker.queue_empty()
-            && life_tracker.device_lost_closure.is_some()
-        {
-            device_lost_invocations.push(DeviceLostInvocation {
-                closure: life_tracker.device_lost_closure.take().unwrap(),
-                reason: DeviceLostReason::Destroyed,
-                message: String::new(),
-            });
+        if !self.is_valid() && life_tracker.queue_empty() {
+            // We can release gpu resources associated with this device.
+            life_tracker.release_gpu_resources();
+
+            // If we have a DeviceLostClosure, build an invocation with the
+            // reason DeviceLostReason::Destroyed and no message.
+            if life_tracker.device_lost_closure.is_some() {
+                device_lost_invocations.push(DeviceLostInvocation {
+                    closure: life_tracker.device_lost_closure.take().unwrap(),
+                    reason: DeviceLostReason::Destroyed,
+                    message: String::new(),
+                });
+            }
         }
 
         let closures = UserClosures {
@@ -3339,9 +3343,13 @@ impl<A: HalApi> Device<A> {
         self.valid.store(false, Ordering::Release);
 
         // 1) Resolve the GPUDevice device.lost promise.
-        let closure = self.lock_life().device_lost_closure.take();
+        let mut life_lock = self.lock_life();
+        let closure = life_lock.device_lost_closure.take();
         if let Some(device_lost_closure) = closure {
+            // It's important to not hold the lock while calling the closure.
+            drop(life_lock);
             device_lost_closure.call(DeviceLostReason::Unknown, message.to_string());
+            life_lock = self.lock_life();
         }
 
         // 2) Complete any outstanding mapAsync() steps.
@@ -3351,6 +3359,9 @@ impl<A: HalApi> Device<A> {
         // since that will prevent any new work from being added to the queues.
         // Future calls to poll_devices will continue to check the work queues
         // until they are cleared, and then drop the device.
+
+        // Eagerly release GPU resources.
+        life_lock.release_gpu_resources();
     }
 }
 
