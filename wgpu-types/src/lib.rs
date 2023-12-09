@@ -5344,7 +5344,7 @@ impl Default for Origin3d {
 
 impl std::fmt::Debug for Origin3d {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        (self.x, self.y, self.x).fmt(f)
+        (self.x, self.y, self.z).fmt(f)
     }
 }
 
