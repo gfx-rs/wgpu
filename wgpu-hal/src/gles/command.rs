@@ -605,7 +605,7 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             if !cat.ops.contains(crate::AttachmentOps::LOAD) {
                 let c = &cat.clear_value;
                 self.cmd_buffer.commands.push(
-                    match cat.target.view.format.sample_type(None).unwrap() {
+                    match cat.target.view.format.sample_type(None, None).unwrap() {
                         wgt::TextureSampleType::Float { .. } => C::ClearColorF {
                             draw_buffer: i as u32,
                             color: [c.r as f32, c.g as f32, c.b as f32, c.a as f32],
@@ -1165,5 +1165,23 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
             indirect_buf: buffer.raw.unwrap(),
             indirect_offset: offset,
         });
+    }
+
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
+        unimplemented!()
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        unimplemented!()
     }
 }

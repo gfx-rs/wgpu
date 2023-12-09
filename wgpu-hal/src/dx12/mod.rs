@@ -82,6 +82,8 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type AccelerationStructure = AccelerationStructure;
 }
 
 // Limited by D3D12's root signature size of 64. Each element takes 1 or 2 entries.
@@ -454,6 +456,7 @@ impl Texture {
 pub struct TextureView {
     raw_format: d3d12::Format,
     aspects: crate::FormatAspects,
+    /// only used by resolve
     target_base: (d3d12::Resource, u32),
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
@@ -599,6 +602,9 @@ pub struct ComputePipeline {
 
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
+
+#[derive(Debug)]
+pub struct AccelerationStructure {}
 
 impl SwapChain {
     unsafe fn release_resources(self) -> d3d12::ComPtr<dxgi1_4::IDXGISwapChain3> {

@@ -66,6 +66,8 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type AccelerationStructure = AccelerationStructure;
 }
 
 pub struct Instance {
@@ -191,6 +193,7 @@ struct PrivateCapabilities {
     function_specialization: bool,
     depth_clip_mode: bool,
     texture_cube_array: bool,
+    supports_float_filtering: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8_filter: bool,
     format_depth32_stencil8_none: bool,
@@ -843,3 +846,6 @@ pub struct CommandBuffer {
 
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
+
+#[derive(Debug)]
+pub struct AccelerationStructure;

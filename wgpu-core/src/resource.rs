@@ -70,7 +70,6 @@ pub struct ResourceInfo<Id: TypedId> {
     submission_index: AtomicUsize,
 
     /// The `label` from the descriptor used to create the resource.
-    #[cfg(debug_assertions)]
     pub(crate) label: String,
 }
 
@@ -90,25 +89,19 @@ impl<Id: TypedId> ResourceInfo<Id> {
             id: None,
             identity: None,
             submission_index: AtomicUsize::new(0),
-            #[cfg(debug_assertions)]
             label: label.to_string(),
         }
     }
 
-    #[allow(unused_assignments)]
     pub(crate) fn label(&self) -> String
     where
         Id: Debug,
     {
-        let mut label = String::new();
-        #[cfg(debug_assertions)]
-        {
-            label = format!("[{}] ", self.label);
-        }
         if let Some(id) = self.id.as_ref() {
-            label.push_str(format!("{:?}", id).as_str());
+            format!("[{}] {:?}", self.label, id)
+        } else {
+            format!("[{}]", self.label)
         }
-        label
     }
 
     pub(crate) fn id(&self) -> Id {
@@ -139,10 +132,7 @@ pub trait Resource<Id: TypedId>: 'static + WasmNotSendSync {
     fn as_info(&self) -> &ResourceInfo<Id>;
     fn as_info_mut(&mut self) -> &mut ResourceInfo<Id>;
     fn label(&self) -> String {
-        #[cfg(debug_assertions)]
-        return self.as_info().label.clone();
-        #[cfg(not(debug_assertions))]
-        return String::new();
+        self.as_info().label.clone()
     }
     fn ref_count(self: &Arc<Self>) -> usize {
         Arc::strong_count(self)
@@ -902,6 +892,20 @@ pub enum TextureDimensionError {
         block_height: u32,
         format: wgt::TextureFormat,
     },
+    #[error(
+        "Width {width} is not a multiple of {format:?}'s width multiple requirement ({multiple})"
+    )]
+    WidthNotMultipleOf {
+        width: u32,
+        multiple: u32,
+        format: wgt::TextureFormat,
+    },
+    #[error("Height {height} is not a multiple of {format:?}'s height multiple requirement ({multiple})")]
+    HeightNotMultipleOf {
+        height: u32,
+        multiple: u32,
+        format: wgt::TextureFormat,
+    },
     #[error("Multisampled texture depth or array layers must be 1, got {0}")]
     MultisampledDepthOrArrayLayer(u32),
 }
@@ -988,12 +992,11 @@ pub struct TextureViewDescriptor<'a> {
     pub dimension: Option<wgt::TextureViewDimension>,
     /// Range within the texture that is accessible via this view.
     pub range: wgt::ImageSubresourceRange,
-    ///  The plane of the texture view.
-    pub plane: Option<u32>,
 }
 
 #[derive(Debug)]
 pub(crate) struct HalTextureViewDescriptor {
+    pub texture_format: wgt::TextureFormat,
     pub format: wgt::TextureFormat,
     pub dimension: wgt::TextureViewDimension,
     pub range: wgt::ImageSubresourceRange,
@@ -1001,7 +1004,7 @@ pub(crate) struct HalTextureViewDescriptor {
 
 impl HalTextureViewDescriptor {
     pub fn aspects(&self) -> hal::FormatAspects {
-        hal::FormatAspects::new(self.format, self.range.aspect)
+        hal::FormatAspects::new(self.texture_format, self.range.aspect)
     }
 }
 
@@ -1099,16 +1102,6 @@ pub enum CreateTextureViewError {
     FormatReinterpretation {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
-    },
-    #[error("Invalid texture view plane `{plane:?}` with view format `{view_format:?}`")]
-    InvalidTextureViewPlane {
-        plane: Option<u32>,
-        view_format: wgt::TextureFormat,
-    },
-    #[error("Invalid texture view plane `{plane:?}` on non-planar texture `{texture_format:?}`")]
-    InvalidTextureViewPlaneOnNonplanarTexture {
-        plane: Option<u32>,
-        texture_format: wgt::TextureFormat,
     },
 }
 

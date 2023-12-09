@@ -285,18 +285,6 @@ pub fn map_primitive_topology(topology: wgt::PrimitiveTopology) -> u32 {
 }
 
 pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::PrimitiveState {
-    match state.polygon_mode {
-        wgt::PolygonMode::Fill => {}
-        wgt::PolygonMode::Line => panic!(
-            "{:?} is not enabled for this backend",
-            wgt::Features::POLYGON_MODE_LINE
-        ),
-        wgt::PolygonMode::Point => panic!(
-            "{:?} is not enabled for this backend",
-            wgt::Features::POLYGON_MODE_POINT
-        ),
-    }
-
     super::PrimitiveState {
         //Note: we are flipping the front face, so that
         // the Y-flip in the generated GLSL keeps the same visibility.
@@ -311,6 +299,11 @@ pub(super) fn map_primitive_state(state: &wgt::PrimitiveState) -> super::Primiti
             None => 0,
         },
         unclipped_depth: state.unclipped_depth,
+        polygon_mode: match state.polygon_mode {
+            wgt::PolygonMode::Fill => glow::FILL,
+            wgt::PolygonMode::Line => glow::LINE,
+            wgt::PolygonMode::Point => glow::POINT,
+        },
     }
 }
 

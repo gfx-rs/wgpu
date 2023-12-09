@@ -415,6 +415,15 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                             wgt::TextureAspect::All => 0..2,
                             wgt::TextureAspect::DepthOnly => 0..1,
                             wgt::TextureAspect::StencilOnly => 1..2,
+                            _ => unreachable!(),
+                        }
+                    } else if let Some(planes) = barrier.texture.format.planes() {
+                        match barrier.range.aspect {
+                            wgt::TextureAspect::All => 0..planes,
+                            wgt::TextureAspect::Plane0 => 0..1,
+                            wgt::TextureAspect::Plane1 => 1..2,
+                            wgt::TextureAspect::Plane2 => 2..3,
+                            _ => unreachable!(),
                         }
                     } else {
                         match barrier.texture.format {
@@ -1191,5 +1200,25 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
                 0,
             )
         };
+    }
+
+    unsafe fn build_acceleration_structures<'a, T>(
+        &mut self,
+        _descriptor_count: u32,
+        _descriptors: T,
+    ) where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
+        // Implement using `BuildRaytracingAccelerationStructure`:
+        // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
+        todo!()
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        _barriers: crate::AccelerationStructureBarrier,
+    ) {
+        todo!()
     }
 }

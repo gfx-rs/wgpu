@@ -930,7 +930,7 @@ impl<A: HalApi> LifetimeTracker<A> {
                             Ok(())
                         }
                         Err(e) => {
-                            log::error!("Mapping failed {:?}", e);
+                            log::error!("Mapping failed: {e}");
                             Err(e)
                         }
                     }

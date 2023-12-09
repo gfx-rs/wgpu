@@ -4,7 +4,7 @@ use crate::{
     api_log, binding_model, command, conv,
     device::{
         life::WaitIdleError, map_buffer, queue, DeviceError, DeviceLostClosure, HostMap,
-        IMPLICIT_FAILURE,
+        IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL,
     },
     global::Global,
     hal_api::HalApi,
@@ -526,7 +526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
+                    Err(e) => log::error!("Failed to wait for buffer {:?}: {}", buffer_id, e),
                 }
             }
         }
@@ -574,7 +574,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error {error:?}");
+        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -648,7 +648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error {error:?}");
+        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -702,7 +702,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_buffer error {error:?}");
+        log::error!("Device::create_buffer error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -790,7 +790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!("Failed to wait for texture {:?}: {:?}", texture_id, e),
+                    Err(e) => log::error!("Failed to wait for texture {texture_id:?}: {e}"),
                 }
             }
         }
@@ -835,7 +835,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Texture::create_view({texture_id:?}) error {error:?}");
+        log::error!("Texture::create_view({texture_id:?}) error: {error}");
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
     }
@@ -865,11 +865,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if wait {
                 match view.device.wait_for_submit(last_submit_index) {
                     Ok(()) => (),
-                    Err(e) => log::error!(
-                        "Failed to wait for texture view {:?}: {:?}",
-                        texture_view_id,
-                        e
-                    ),
+                    Err(e) => {
+                        log::error!("Failed to wait for texture view {texture_view_id:?}: {e}")
+                    }
                 }
             }
         }
@@ -1217,7 +1215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module error: {error:?}");
+        log::error!("Device::create_shader_module error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1274,7 +1272,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module_spirv error: {error:?}");
+        log::error!("Device::create_shader_module_spirv error: {error}");
 
         let id = fid.assign_error(desc.label.borrow_or_default());
         (id, Some(error))
@@ -1589,16 +1587,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
 
-        log::error!("Device::create_render_pipeline error {error:?}");
+        log::error!("Device::create_render_pipeline error: {error}");
 
         (id, Some(error))
     }
@@ -1723,12 +1721,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if pipeline_layout_guard.contains(ids.root_id) {
                 pipeline_layout_guard.remove(ids.root_id);
             }
-            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_FAILURE);
+            pipeline_layout_guard.insert_error(ids.root_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             for &bgl_id in ids.group_ids.iter() {
                 if bgl_guard.contains(bgl_id) {
                     bgl_guard.remove(bgl_id);
                 }
-                bgl_guard.insert_error(bgl_id, IMPLICIT_FAILURE);
+                bgl_guard.insert_error(bgl_id, IMPLICIT_BIND_GROUP_LAYOUT_ERROR_LABEL);
             }
         }
         (id, Some(error))
@@ -2180,11 +2178,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             all_queue_empty =
                 self.poll_device::<hal::api::Dx12>(force_wait, &mut closures)? && all_queue_empty;
         }
-        #[cfg(all(feature = "dx11", windows))]
-        {
-            all_queue_empty =
-                self.poll_device::<hal::api::Dx11>(force_wait, &mut closures)? && all_queue_empty;
-        }
         #[cfg(feature = "gles")]
         {
             all_queue_empty =
@@ -2321,7 +2314,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(callback) = operation.callback.take() {
                 callback.call(Err(err.clone()));
             }
-            log::error!("Buffer::map_async error {err:?}");
+            log::error!("Buffer::map_async error: {err}");
             return Err(err);
         }
 

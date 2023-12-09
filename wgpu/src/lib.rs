@@ -18,7 +18,7 @@ use std::{
     error, fmt,
     future::Future,
     marker::PhantomData,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
     sync::Arc,
     thread,
@@ -1301,8 +1301,6 @@ pub struct TextureViewDescriptor<'a> {
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
     pub array_layer_count: Option<u32>,
-    /// The index (plane slice number) of the plane to use in the texture.
-    pub plane: Option<u32>,
 }
 static_assertions::assert_impl_all!(TextureViewDescriptor<'_>: Send, Sync);
 
@@ -5124,243 +5122,201 @@ impl Surface<'_> {
 }
 
 /// Opaque globally-unique identifier
-#[cfg(feature = "expose-ids")]
-#[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
 #[repr(transparent)]
-pub struct Id<T>(::core::num::NonZeroU64, std::marker::PhantomData<*mut T>);
+pub struct Id<T>(NonZeroU64, PhantomData<*mut T>);
 
 // SAFETY: `Id` is a bare `NonZeroU64`, the type parameter is a marker purely to avoid confusing Ids
 // returned for different types , so `Id` can safely implement Send and Sync.
-#[cfg(feature = "expose-ids")]
 unsafe impl<T> Send for Id<T> {}
 
 // SAFETY: See the implementation for `Send`.
-#[cfg(feature = "expose-ids")]
 unsafe impl<T> Sync for Id<T> {}
 
-#[cfg(feature = "expose-ids")]
 impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl<T> Copy for Id<T> {}
 
-#[cfg(feature = "expose-ids")]
 impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Id").field(&self.0).finish()
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl<T> PartialEq for Id<T> {
     fn eq(&self, other: &Id<T>) -> bool {
         self.0 == other.0
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl<T> Eq for Id<T> {}
 
-#[cfg(feature = "expose-ids")]
 impl<T> std::hash::Hash for Id<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Adapter {
     /// Returns a globally-unique identifier for this `Adapter`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Device {
     /// Returns a globally-unique identifier for this `Device`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Queue {
     /// Returns a globally-unique identifier for this `Queue`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl ShaderModule {
     /// Returns a globally-unique identifier for this `ShaderModule`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl BindGroupLayout {
     /// Returns a globally-unique identifier for this `BindGroupLayout`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl BindGroup {
     /// Returns a globally-unique identifier for this `BindGroup`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl TextureView {
     /// Returns a globally-unique identifier for this `TextureView`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Sampler {
     /// Returns a globally-unique identifier for this `Sampler`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Buffer {
     /// Returns a globally-unique identifier for this `Buffer`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Texture {
     /// Returns a globally-unique identifier for this `Texture`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl QuerySet {
     /// Returns a globally-unique identifier for this `QuerySet`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl PipelineLayout {
     /// Returns a globally-unique identifier for this `PipelineLayout`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl RenderPipeline {
     /// Returns a globally-unique identifier for this `RenderPipeline`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl ComputePipeline {
     /// Returns a globally-unique identifier for this `ComputePipeline`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl RenderBundle {
     /// Returns a globally-unique identifier for this `RenderBundle`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Self> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 
-#[cfg(feature = "expose-ids")]
 impl Surface<'_> {
     /// Returns a globally-unique identifier for this `Surface`.
     ///
     /// Calling this method multiple times on the same object will always return the same value.
     /// The returned value is guaranteed to be different for all resources created from the same `Instance`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "expose-ids")))]
     pub fn global_id(&self) -> Id<Surface<'_>> {
-        Id(self.id.global_id(), std::marker::PhantomData)
+        Id(self.id.global_id(), PhantomData)
     }
 }
 

@@ -7,9 +7,11 @@ use std::{
     fmt,
     future::Future,
     marker::PhantomData,
+    num::NonZeroU64,
     ops::Range,
     pin::Pin,
     rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
     task::{self, Poll},
 };
 use wasm_bindgen::{prelude::*, JsCast};
@@ -20,15 +22,12 @@ use crate::{
 };
 
 fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "expose-ids")] {
-            static NEXT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-            let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            (Identified(core::num::NonZeroU64::new(id).unwrap(), PhantomData), Sendable(value))
-        } else {
-            (Identified(PhantomData), Sendable(value))
-        }
-    }
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    (
+        Identified(NonZeroU64::new(id).unwrap(), PhantomData),
+        Sendable(value),
+    )
 }
 
 // We need to make a wrapper for some of the handle types returned by the web backend to make them
@@ -39,25 +38,18 @@ fn create_identified<T>(value: T) -> (Identified<T>, Sendable<T>) {
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-#[allow(unused_variables)]
 impl<T> From<ObjectId> for Identified<T> {
     fn from(object_id: ObjectId) -> Self {
-        Self(
-            #[cfg(feature = "expose-ids")]
-            object_id.global_id(),
-            PhantomData,
-        )
+        Self(object_id.global_id(), PhantomData)
     }
 }
 
-#[allow(unused_variables)]
 impl<T> From<Identified<T>> for ObjectId {
     fn from(identified: Identified<T>) -> Self {
         Self::new(
             // TODO: the ID isn't used, so we hardcode it to 1 for now until we rework this
             // API.
-            core::num::NonZeroU64::new(1).unwrap(),
-            #[cfg(feature = "expose-ids")]
+            NonZeroU64::new(1).unwrap(),
             identified.0,
         )
     }
@@ -77,10 +69,7 @@ unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
 #[derive(Clone, Debug)]
-pub(crate) struct Identified<T>(
-    #[cfg(feature = "expose-ids")] std::num::NonZeroU64,
-    PhantomData<T>,
-);
+pub(crate) struct Identified<T>(std::num::NonZeroU64, PhantomData<T>);
 #[cfg(all(
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
@@ -569,7 +558,7 @@ fn map_texture_view_dimension(
 
 fn map_buffer_copy_view(view: crate::ImageCopyBuffer<'_>) -> web_sys::GpuImageCopyBuffer {
     let buffer: &<Context as crate::Context>::BufferData = downcast_ref(view.buffer.data.as_ref());
-    let mut mapped = web_sys::GpuImageCopyBuffer::new(&buffer.0);
+    let mut mapped = web_sys::GpuImageCopyBuffer::new(&buffer.0.buffer);
     if let Some(bytes_per_row) = view.layout.bytes_per_row {
         mapped.bytes_per_row(bytes_per_row);
     }
@@ -617,6 +606,9 @@ fn map_texture_aspect(aspect: wgt::TextureAspect) -> web_sys::GpuTextureAspect {
         wgt::TextureAspect::All => web_sys::GpuTextureAspect::All,
         wgt::TextureAspect::StencilOnly => web_sys::GpuTextureAspect::StencilOnly,
         wgt::TextureAspect::DepthOnly => web_sys::GpuTextureAspect::DepthOnly,
+        wgt::TextureAspect::Plane0 | wgt::TextureAspect::Plane1 | wgt::TextureAspect::Plane2 => {
+            panic!("multi-plane textures are not supported")
+        }
     }
 }
 
@@ -661,7 +653,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
+const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 11] = [
     //TODO: update the name
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
@@ -702,6 +694,10 @@ const FEATURES_MAPPING: [(wgt::Features, web_sys::GpuFeatureName); 10] = [
     (
         wgt::Features::BGRA8UNORM_STORAGE,
         web_sys::GpuFeatureName::Bgra8unormStorage,
+    ),
+    (
+        wgt::Features::FLOAT32_FILTERABLE,
+        web_sys::GpuFeatureName::Float32Filterable,
     ),
 ];
 
@@ -1018,8 +1014,8 @@ impl crate::context::Context for Context {
     type TextureViewData = Sendable<web_sys::GpuTextureView>;
     type SamplerId = Identified<web_sys::GpuSampler>;
     type SamplerData = Sendable<web_sys::GpuSampler>;
-    type BufferId = Identified<web_sys::GpuBuffer>;
-    type BufferData = Sendable<web_sys::GpuBuffer>;
+    type BufferId = Identified<WebBuffer>;
+    type BufferData = Sendable<WebBuffer>;
     type TextureId = Identified<web_sys::GpuTexture>;
     type TextureData = Sendable<web_sys::GpuTexture>;
     type QuerySetId = Identified<web_sys::GpuQuerySet>;
@@ -1580,6 +1576,7 @@ impl crate::context::Context for Context {
                         storage_texture.view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.storage_texture(&storage_texture);
                     }
+                    wgt::BindingType::AccelerationStructure => todo!(),
                 }
 
                 mapped_entry
@@ -1611,7 +1608,8 @@ impl crate::context::Context for Context {
                     }) => {
                         let buffer: &<Context as crate::Context>::BufferData =
                             downcast_ref(buffer.data.as_ref());
-                        let mut mapped_buffer_binding = web_sys::GpuBufferBinding::new(&buffer.0);
+                        let mut mapped_buffer_binding =
+                            web_sys::GpuBufferBinding::new(&buffer.0.buffer);
                         mapped_buffer_binding.offset(offset as f64);
                         if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
@@ -1814,7 +1812,10 @@ impl crate::context::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        create_identified(device_data.0.create_buffer(&mapped_desc))
+        create_identified(WebBuffer::new(
+            device_data.0.create_buffer(&mapped_desc),
+            desc,
+        ))
     }
 
     fn device_create_texture(
@@ -2022,11 +2023,13 @@ impl crate::context::Context for Context {
         range: Range<wgt::BufferAddress>,
         callback: crate::context::BufferMapCallback,
     ) {
-        let map_promise = buffer_data.0.map_async_with_f64_and_f64(
+        let map_promise = buffer_data.0.buffer.map_async_with_f64_and_f64(
             map_map_mode(mode),
             range.start as f64,
             (range.end - range.start) as f64,
         );
+
+        buffer_data.0.set_mapped_range(range);
 
         register_then_closures(&map_promise, callback, Ok(()), Err(crate::BufferAsyncError));
     }
@@ -2037,9 +2040,7 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> Box<dyn crate::context::BufferMappedRange> {
-        let array_buffer =
-            self.buffer_get_mapped_range_as_array_buffer(_buffer, buffer_data, sub_range);
-        let actual_mapping = js_sys::Uint8Array::new(&array_buffer);
+        let actual_mapping = buffer_data.0.get_mapped_range(sub_range);
         let temporary_mapping = actual_mapping.to_vec();
         Box::new(BufferMappedRange {
             actual_mapping,
@@ -2053,14 +2054,12 @@ impl crate::context::Context for Context {
         buffer_data: &Self::BufferData,
         sub_range: Range<wgt::BufferAddress>,
     ) -> js_sys::ArrayBuffer {
-        buffer_data.0.get_mapped_range_with_f64_and_f64(
-            sub_range.start as f64,
-            (sub_range.end - sub_range.start) as f64,
-        )
+        buffer_data.0.get_mapped_array_buffer(sub_range)
     }
 
     fn buffer_unmap(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
-        buffer_data.0.unmap();
+        buffer_data.0.buffer.unmap();
+        buffer_data.0.mapping.borrow_mut().mapped_buffer = None;
     }
 
     fn texture_create_view(
@@ -2100,7 +2099,7 @@ impl crate::context::Context for Context {
     }
 
     fn buffer_destroy(&self, _buffer: &Self::BufferId, buffer_data: &Self::BufferData) {
-        buffer_data.0.destroy();
+        buffer_data.0.buffer.destroy();
     }
 
     fn buffer_drop(&self, _buffer: &Self::BufferId, _buffer_data: &Self::BufferData) {
@@ -2236,9 +2235,9 @@ impl crate::context::Context for Context {
         encoder_data
             .0
             .copy_buffer_to_buffer_with_f64_and_f64_and_f64(
-                &source_data.0,
+                &source_data.0.buffer,
                 source_offset as f64,
-                &destination_data.0,
+                &destination_data.0.buffer,
                 destination_offset as f64,
                 copy_size as f64,
             )
@@ -2452,14 +2451,14 @@ impl crate::context::Context for Context {
     ) {
         let buffer: &<Context as crate::Context>::BufferData = downcast_ref(buffer.data.as_ref());
         match size {
-            Some(size) => {
-                encoder_data
-                    .0
-                    .clear_buffer_with_f64_and_f64(&buffer.0, offset as f64, size as f64)
-            }
+            Some(size) => encoder_data.0.clear_buffer_with_f64_and_f64(
+                &buffer.0.buffer,
+                offset as f64,
+                size as f64,
+            ),
             None => encoder_data
                 .0
-                .clear_buffer_with_f64(&buffer.0, offset as f64),
+                .clear_buffer_with_f64(&buffer.0.buffer, offset as f64),
         }
     }
 
@@ -2521,7 +2520,7 @@ impl crate::context::Context for Context {
             &query_set_data.0,
             first_query,
             query_count,
-            &destination_data.0,
+            &destination_data.0.buffer,
             destination_offset as u32,
         );
     }
@@ -2563,7 +2562,7 @@ impl crate::context::Context for Context {
         queue_data
             .0
             .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
-                &buffer_data.0,
+                &buffer_data.0.buffer,
                 offset as f64,
                 &js_sys::Uint8Array::from(data).buffer(),
                 0f64,
@@ -2580,7 +2579,7 @@ impl crate::context::Context for Context {
         offset: wgt::BufferAddress,
         size: wgt::BufferSize,
     ) -> Option<()> {
-        let usage = wgt::BufferUsages::from_bits_truncate(buffer_data.0.usage());
+        let usage = wgt::BufferUsages::from_bits_truncate(buffer_data.0.buffer.usage());
         // TODO: actually send this down the error scope
         if !usage.contains(wgt::BufferUsages::COPY_DST) {
             log::error!("Destination buffer is missing the `COPY_DST` usage flag");
@@ -2601,8 +2600,8 @@ impl crate::context::Context for Context {
             );
             return None;
         }
-        if write_size + offset > buffer_data.0.size() as u64 {
-            log::error!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer_data.0.size());
+        if write_size + offset > buffer_data.0.buffer.size() as u64 {
+            log::error!("copy of {}..{} would end up overrunning the bounds of the destination buffer of size {}", offset, offset + write_size, buffer_data.0.buffer.size());
             return None;
         }
         Some(())
@@ -2856,9 +2855,10 @@ impl crate::context::Context for Context {
         indirect_buffer_data: &Self::BufferData,
         indirect_offset: wgt::BufferAddress,
     ) {
-        pass_data
-            .0
-            .dispatch_workgroups_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+        pass_data.0.dispatch_workgroups_indirect_with_f64(
+            &indirect_buffer_data.0.buffer,
+            indirect_offset as f64,
+        );
     }
 
     fn render_bundle_encoder_set_pipeline(
@@ -2910,7 +2910,7 @@ impl crate::context::Context for Context {
         match size {
             Some(s) => {
                 encoder_data.0.set_index_buffer_with_f64_and_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                     s.get() as f64,
@@ -2918,7 +2918,7 @@ impl crate::context::Context for Context {
             }
             None => {
                 encoder_data.0.set_index_buffer_with_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                 );
@@ -2940,7 +2940,7 @@ impl crate::context::Context for Context {
             Some(s) => {
                 encoder_data.0.set_vertex_buffer_with_f64_and_f64(
                     slot,
-                    Some(&buffer_data.0),
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                     s.get() as f64,
                 );
@@ -2948,7 +2948,7 @@ impl crate::context::Context for Context {
             None => {
                 encoder_data.0.set_vertex_buffer_with_f64(
                     slot,
-                    Some(&buffer_data.0),
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                 );
             }
@@ -3012,7 +3012,7 @@ impl crate::context::Context for Context {
     ) {
         encoder_data
             .0
-            .draw_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_bundle_encoder_draw_indexed_indirect(
@@ -3025,7 +3025,7 @@ impl crate::context::Context for Context {
     ) {
         encoder_data
             .0
-            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_bundle_encoder_multi_draw_indirect(
@@ -3131,7 +3131,7 @@ impl crate::context::Context for Context {
         match size {
             Some(s) => {
                 pass_data.0.set_index_buffer_with_f64_and_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                     s.get() as f64,
@@ -3139,7 +3139,7 @@ impl crate::context::Context for Context {
             }
             None => {
                 pass_data.0.set_index_buffer_with_f64(
-                    &buffer_data.0,
+                    &buffer_data.0.buffer,
                     map_index_format(index_format),
                     offset as f64,
                 );
@@ -3161,15 +3161,17 @@ impl crate::context::Context for Context {
             Some(s) => {
                 pass_data.0.set_vertex_buffer_with_f64_and_f64(
                     slot,
-                    Some(&buffer_data.0),
+                    Some(&buffer_data.0.buffer),
                     offset as f64,
                     s.get() as f64,
                 );
             }
             None => {
-                pass_data
-                    .0
-                    .set_vertex_buffer_with_f64(slot, Some(&buffer_data.0), offset as f64);
+                pass_data.0.set_vertex_buffer_with_f64(
+                    slot,
+                    Some(&buffer_data.0.buffer),
+                    offset as f64,
+                );
             }
         };
     }
@@ -3231,7 +3233,7 @@ impl crate::context::Context for Context {
     ) {
         pass_data
             .0
-            .draw_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_pass_draw_indexed_indirect(
@@ -3244,7 +3246,7 @@ impl crate::context::Context for Context {
     ) {
         pass_data
             .0
-            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0, indirect_offset as f64);
+            .draw_indexed_indirect_with_f64(&indirect_buffer_data.0.buffer, indirect_offset as f64);
     }
 
     fn render_pass_multi_draw_indirect(
@@ -3460,6 +3462,71 @@ impl QueueWriteBuffer for WebQueueWriteBuffer {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
+
+/// Stores the state of a GPU buffer and a reference to its mapped `ArrayBuffer` (if any).
+/// The WebGPU specification forbids calling `getMappedRange` on a `web_sys::GpuBuffer` more than
+/// once, so this struct stores the initial mapped range and re-uses it, allowing for multiple `get_mapped_range`
+/// calls on the Rust-side.
+#[derive(Debug)]
+pub struct WebBuffer {
+    /// The associated GPU buffer.
+    buffer: web_sys::GpuBuffer,
+    /// The mapped array buffer and mapped range.
+    mapping: RefCell<WebBufferMapState>,
+}
+
+impl WebBuffer {
+    /// Creates a new web buffer for the given Javascript object and description.
+    fn new(buffer: web_sys::GpuBuffer, desc: &crate::BufferDescriptor<'_>) -> Self {
+        Self {
+            buffer,
+            mapping: RefCell::new(WebBufferMapState {
+                mapped_buffer: None,
+                range: 0..desc.size,
+            }),
+        }
+    }
+
+    /// Creates a raw Javascript array buffer over the provided range.
+    fn get_mapped_array_buffer(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::ArrayBuffer {
+        self.buffer.get_mapped_range_with_f64_and_f64(
+            sub_range.start as f64,
+            (sub_range.end - sub_range.start) as f64,
+        )
+    }
+
+    /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
+    fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
+        let mut mapping = self.mapping.borrow_mut();
+        let range = mapping.range.clone();
+        let array_buffer = mapping.mapped_buffer.get_or_insert_with(|| {
+            self.buffer.get_mapped_range_with_f64_and_f64(
+                range.start as f64,
+                (range.end - range.start) as f64,
+            )
+        });
+        js_sys::Uint8Array::new_with_byte_offset_and_length(
+            array_buffer,
+            (sub_range.start - range.start) as u32,
+            (sub_range.end - sub_range.start) as u32,
+        )
+    }
+
+    /// Sets the range of the buffer which is presently mapped.
+    fn set_mapped_range(&self, range: Range<wgt::BufferAddress>) {
+        self.mapping.borrow_mut().range = range;
+    }
+}
+
+/// Remembers which portion of a buffer has been mapped, along with a reference
+/// to the mapped portion.
+#[derive(Debug)]
+struct WebBufferMapState {
+    /// The mapped memory of the buffer.
+    pub mapped_buffer: Option<js_sys::ArrayBuffer>,
+    /// The total range which has been mapped in the buffer overall.
+    pub range: Range<wgt::BufferAddress>,
 }
 
 #[derive(Debug)]

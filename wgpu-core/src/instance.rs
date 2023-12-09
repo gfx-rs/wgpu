@@ -68,8 +68,6 @@ pub struct Instance {
     pub metal: Option<HalInstance<hal::api::Metal>>,
     #[cfg(all(feature = "dx12", windows))]
     pub dx12: Option<HalInstance<hal::api::Dx12>>,
-    #[cfg(all(feature = "dx11", windows))]
-    pub dx11: Option<HalInstance<hal::api::Dx11>>,
     #[cfg(feature = "gles")]
     pub gl: Option<HalInstance<hal::api::Gles>>,
     pub flags: wgt::InstanceFlags,
@@ -113,8 +111,6 @@ impl Instance {
             metal: init(hal::api::Metal, &instance_desc),
             #[cfg(all(feature = "dx12", windows))]
             dx12: init(hal::api::Dx12, &instance_desc),
-            #[cfg(all(feature = "dx11", windows))]
-            dx11: init(hal::api::Dx11, &instance_desc),
             #[cfg(feature = "gles")]
             gl: init(hal::api::Gles, &instance_desc),
             flags: instance_desc.flags,
@@ -144,8 +140,6 @@ impl Instance {
             Backend::Metal => destroy(hal::api::Metal, &self.metal, surface.raw),
             #[cfg(all(feature = "dx12", windows))]
             Backend::Dx12 => destroy(hal::api::Dx12, &self.dx12, surface.raw),
-            #[cfg(all(feature = "dx11", windows))]
-            Backend::Dx11 => destroy(hal::api::Dx11, &self.dx11, surface.raw),
             #[cfg(feature = "gles")]
             Backend::Gl => destroy(hal::api::Gles, &self.gl, surface.raw),
             _ => unreachable!(),
@@ -531,13 +525,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             display_handle,
             window_handle,
         );
-        #[cfg(all(feature = "dx11", windows))]
-        init::<hal::api::Dx11>(
-            &mut hal_surface,
-            &self.instance.dx11,
-            display_handle,
-            window_handle,
-        );
         #[cfg(feature = "gles")]
         init::<hal::api::Gles>(
             &mut hal_surface,
@@ -787,8 +774,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unconfigure::<_, hal::api::Metal>(self, &surface.raw, &present);
                 #[cfg(all(feature = "dx12", windows))]
                 unconfigure::<_, hal::api::Dx12>(self, &surface.raw, &present);
-                #[cfg(all(feature = "dx11", windows))]
-                unconfigure::<_, hal::api::Dx11>(self, &surface.raw, &present);
                 #[cfg(feature = "gles")]
                 unconfigure::<_, hal::api::Gles>(self, &surface.raw, &present);
             }
@@ -849,8 +834,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         #[cfg(all(feature = "dx12", windows))]
         self.enumerate(hal::api::Dx12, &self.instance.dx12, &inputs, &mut adapters);
-        #[cfg(all(feature = "dx11", windows))]
-        self.enumerate(hal::api::Dx11, &self.instance.dx11, &inputs, &mut adapters);
         #[cfg(feature = "gles")]
         self.enumerate(hal::api::Gles, &self.instance.gl, &inputs, &mut adapters);
 
@@ -960,15 +943,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             desc.force_fallback_adapter,
             &mut device_types,
         );
-        #[cfg(all(feature = "dx11", windows))]
-        let (id_dx11, adapters_dx11) = gather(
-            hal::api::Dx11,
-            self.instance.dx11.as_ref(),
-            &inputs,
-            compatible_surface,
-            desc.force_fallback_adapter,
-            &mut device_types,
-        );
         #[cfg(feature = "gles")]
         let (id_gl, adapters_gl) = gather(
             hal::api::Gles,
@@ -1042,10 +1016,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(id) = self.select(&mut selected, id_dx12, adapters_dx12) {
             return Ok(id);
         }
-        #[cfg(all(feature = "dx11", windows))]
-        if let Some(id) = self.select(&mut selected, id_dx11, adapters_dx11) {
-            return Ok(id);
-        }
         #[cfg(feature = "gles")]
         if let Some(id) = self.select(&mut selected, id_gl, adapters_gl) {
             return Ok(id);
@@ -1076,8 +1046,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Backend::Metal => fid.assign(Adapter::new(hal_adapter)),
                 #[cfg(all(feature = "dx12", windows))]
                 Backend::Dx12 => fid.assign(Adapter::new(hal_adapter)),
-                #[cfg(all(feature = "dx11", windows))]
-                Backend::Dx11 => fid.assign(Adapter::new(hal_adapter)),
                 #[cfg(feature = "gles")]
                 Backend::Gl => fid.assign(Adapter::new(hal_adapter)),
                 _ => unreachable!(),
@@ -1283,7 +1251,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 /// Names:
 /// - vulkan = "vulkan" or "vk"
 /// - dx12   = "dx12" or "d3d12"
-/// - dx11   = "dx11" or "d3d11"
 /// - metal  = "metal" or "mtl"
 /// - gles   = "opengl" or "gles" or "gl"
 /// - webgpu = "webgpu"
@@ -1293,7 +1260,6 @@ pub fn parse_backends_from_comma_list(string: &str) -> Backends {
         backends |= match backend.trim() {
             "vulkan" | "vk" => Backends::VULKAN,
             "dx12" | "d3d12" => Backends::DX12,
-            "dx11" | "d3d11" => Backends::DX11,
             "metal" | "mtl" => Backends::METAL,
             "opengl" | "gles" | "gl" => Backends::GL,
             "webgpu" => Backends::BROWSER_WEBGPU,

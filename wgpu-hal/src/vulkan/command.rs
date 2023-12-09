@@ -414,6 +414,243 @@ impl crate::CommandEncoder<super::Api> for super::CommandEncoder {
         };
     }
 
+    unsafe fn build_acceleration_structures<'a, T>(&mut self, descriptor_count: u32, descriptors: T)
+    where
+        super::Api: 'a,
+        T: IntoIterator<Item = crate::BuildAccelerationStructureDescriptor<'a, super::Api>>,
+    {
+        const CAPACITY_OUTER: usize = 8;
+        const CAPACITY_INNER: usize = 1;
+        let descriptor_count = descriptor_count as usize;
+
+        let ray_tracing_functions = self
+            .device
+            .extension_fns
+            .ray_tracing
+            .as_ref()
+            .expect("Feature `RAY_TRACING` not enabled");
+
+        let get_device_address = |buffer: Option<&super::Buffer>| unsafe {
+            match buffer {
+                Some(buffer) => ray_tracing_functions
+                    .buffer_device_address
+                    .get_buffer_device_address(
+                        &vk::BufferDeviceAddressInfo::builder().buffer(buffer.raw),
+                    ),
+                None => panic!("Buffers are required to build acceleration structures"),
+            }
+        };
+
+        // storage to all the data required for cmd_build_acceleration_structures
+        let mut ranges_storage = smallvec::SmallVec::<
+            [smallvec::SmallVec<[vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER]>;
+                CAPACITY_OUTER],
+        >::with_capacity(descriptor_count);
+        let mut geometries_storage = smallvec::SmallVec::<
+            [smallvec::SmallVec<[vk::AccelerationStructureGeometryKHR; CAPACITY_INNER]>;
+                CAPACITY_OUTER],
+        >::with_capacity(descriptor_count);
+
+        // pointers to all the data required for cmd_build_acceleration_structures
+        let mut geometry_infos = smallvec::SmallVec::<
+            [vk::AccelerationStructureBuildGeometryInfoKHR; CAPACITY_OUTER],
+        >::with_capacity(descriptor_count);
+        let mut ranges_ptrs = smallvec::SmallVec::<
+            [&[vk::AccelerationStructureBuildRangeInfoKHR]; CAPACITY_OUTER],
+        >::with_capacity(descriptor_count);
+
+        for desc in descriptors {
+            let (geometries, ranges) = match *desc.entries {
+                crate::AccelerationStructureEntries::Instances(ref instances) => {
+                    let instance_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder(
+                    )
+                    .data(vk::DeviceOrHostAddressConstKHR {
+                        device_address: get_device_address(instances.buffer),
+                    });
+
+                    let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                        .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+                        .geometry(vk::AccelerationStructureGeometryDataKHR {
+                            instances: *instance_data,
+                        });
+
+                    let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                        .primitive_count(instances.count)
+                        .primitive_offset(instances.offset);
+
+                    (smallvec::smallvec![*geometry], smallvec::smallvec![*range])
+                }
+                crate::AccelerationStructureEntries::Triangles(ref in_geometries) => {
+                    let mut ranges = smallvec::SmallVec::<
+                        [vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
+                    let mut geometries = smallvec::SmallVec::<
+                        [vk::AccelerationStructureGeometryKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
+                    for triangles in in_geometries {
+                        let mut triangle_data =
+                            vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                                .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                                    device_address: get_device_address(triangles.vertex_buffer),
+                                })
+                                .vertex_format(conv::map_vertex_format(triangles.vertex_format))
+                                .max_vertex(triangles.vertex_count)
+                                .vertex_stride(triangles.vertex_stride);
+
+                        let mut range = vk::AccelerationStructureBuildRangeInfoKHR::builder();
+
+                        if let Some(ref indices) = triangles.indices {
+                            triangle_data = triangle_data
+                                .index_data(vk::DeviceOrHostAddressConstKHR {
+                                    device_address: get_device_address(indices.buffer),
+                                })
+                                .index_type(conv::map_index_format(indices.format));
+
+                            range = range
+                                .primitive_count(indices.count / 3)
+                                .primitive_offset(indices.offset)
+                                .first_vertex(triangles.first_vertex);
+                        } else {
+                            range = range
+                                .primitive_count(triangles.vertex_count)
+                                .first_vertex(triangles.first_vertex);
+                        }
+
+                        if let Some(ref transform) = triangles.transform {
+                            let transform_device_address = unsafe {
+                                ray_tracing_functions
+                                    .buffer_device_address
+                                    .get_buffer_device_address(
+                                        &vk::BufferDeviceAddressInfo::builder()
+                                            .buffer(transform.buffer.raw),
+                                    )
+                            };
+                            triangle_data =
+                                triangle_data.transform_data(vk::DeviceOrHostAddressConstKHR {
+                                    device_address: transform_device_address,
+                                });
+
+                            range = range.transform_offset(transform.offset);
+                        }
+
+                        let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                            .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+                            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                                triangles: *triangle_data,
+                            })
+                            .flags(conv::map_acceleration_structure_geomety_flags(
+                                triangles.flags,
+                            ));
+
+                        geometries.push(*geometry);
+                        ranges.push(*range);
+                    }
+                    (geometries, ranges)
+                }
+                crate::AccelerationStructureEntries::AABBs(ref in_geometries) => {
+                    let mut ranges = smallvec::SmallVec::<
+                        [vk::AccelerationStructureBuildRangeInfoKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
+                    let mut geometries = smallvec::SmallVec::<
+                        [vk::AccelerationStructureGeometryKHR; CAPACITY_INNER],
+                    >::with_capacity(in_geometries.len());
+                    for aabb in in_geometries {
+                        let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                            .data(vk::DeviceOrHostAddressConstKHR {
+                                device_address: get_device_address(aabb.buffer),
+                            })
+                            .stride(aabb.stride);
+
+                        let range = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+                            .primitive_count(aabb.count)
+                            .primitive_offset(aabb.offset);
+
+                        let geometry = vk::AccelerationStructureGeometryKHR::builder()
+                            .geometry_type(vk::GeometryTypeKHR::AABBS)
+                            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                                aabbs: *aabbs_data,
+                            })
+                            .flags(conv::map_acceleration_structure_geomety_flags(aabb.flags));
+
+                        geometries.push(*geometry);
+                        ranges.push(*range);
+                    }
+                    (geometries, ranges)
+                }
+            };
+
+            ranges_storage.push(ranges);
+            geometries_storage.push(geometries);
+
+            let scratch_device_address = unsafe {
+                ray_tracing_functions
+                    .buffer_device_address
+                    .get_buffer_device_address(
+                        &vk::BufferDeviceAddressInfo::builder().buffer(desc.scratch_buffer.raw),
+                    )
+            };
+            let ty = match *desc.entries {
+                crate::AccelerationStructureEntries::Instances(_) => {
+                    vk::AccelerationStructureTypeKHR::TOP_LEVEL
+                }
+                _ => vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
+            };
+            let mut geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+                .ty(ty)
+                .mode(conv::map_acceleration_structure_build_mode(desc.mode))
+                .flags(conv::map_acceleration_structure_flags(desc.flags))
+                .dst_acceleration_structure(desc.destination_acceleration_structure.raw)
+                .scratch_data(vk::DeviceOrHostAddressKHR {
+                    device_address: scratch_device_address + desc.scratch_buffer_offset,
+                });
+
+            if desc.mode == crate::AccelerationStructureBuildMode::Update {
+                geometry_info.src_acceleration_structure = desc
+                    .source_acceleration_structure
+                    .unwrap_or(desc.destination_acceleration_structure)
+                    .raw;
+            }
+
+            geometry_infos.push(*geometry_info);
+        }
+
+        for (i, geometry_info) in geometry_infos.iter_mut().enumerate() {
+            geometry_info.geometry_count = geometries_storage[i].len() as u32;
+            geometry_info.p_geometries = geometries_storage[i].as_ptr();
+            ranges_ptrs.push(&ranges_storage[i]);
+        }
+
+        unsafe {
+            ray_tracing_functions
+                .acceleration_structure
+                .cmd_build_acceleration_structures(self.active, &geometry_infos, &ranges_ptrs);
+        }
+    }
+
+    unsafe fn place_acceleration_structure_barrier(
+        &mut self,
+        barrier: crate::AccelerationStructureBarrier,
+    ) {
+        let (src_stage, src_access) =
+            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.start);
+        let (dst_stage, dst_access) =
+            conv::map_acceleration_structure_usage_to_barrier(barrier.usage.end);
+
+        unsafe {
+            self.device.raw.cmd_pipeline_barrier(
+                self.active,
+                src_stage | vk::PipelineStageFlags::TOP_OF_PIPE,
+                dst_stage | vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                vk::DependencyFlags::empty(),
+                &[vk::MemoryBarrier::builder()
+                    .src_access_mask(src_access)
+                    .dst_access_mask(dst_access)
+                    .build()],
+                &[],
+                &[],
+            )
+        };
+    }
     // render
 
     unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<super::Api>) {
