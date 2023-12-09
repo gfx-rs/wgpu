@@ -339,7 +339,9 @@ impl crate::Adapter<super::Api> for super::Adapter {
             ],
 
             current_extent,
-            usage: crate::TextureUses::COLOR_TARGET | crate::TextureUses::COPY_DST, //TODO: expose more
+            usage: crate::TextureUses::COLOR_TARGET
+                | crate::TextureUses::COPY_SRC
+                | crate::TextureUses::COPY_DST,
         })
     }
 

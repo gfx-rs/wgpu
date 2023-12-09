@@ -189,6 +189,10 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 - Record the names of WGSL `alias` declarations in Naga IR `Type`s. By @jimblandy in [#4733](https://github.com/gfx-rs/wgpu/pull/4733).
 
+#### Metal
+
+- Allow the `COPY_SRC` usage flag in surface configuration. By @Toqozz in [#4852](https://github.com/gfx-rs/wgpu/pull/4852).
+
 ### Examples
 
 - remove winit dependency from hello-compute example by @psvri in [#4699](https://github.com/gfx-rs/wgpu/pull/4699)
