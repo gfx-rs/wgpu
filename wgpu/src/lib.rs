@@ -3674,7 +3674,7 @@ impl CommandEncoder {
 
     /// Resolves a query set, writing the results into the supplied destination buffer.
     ///
-    /// Occlusion and timestamp queries are 8 bytes each (see [`wgpu::QUERY_SIZE`]). For pipeline statistics queries,
+    /// Occlusion and timestamp queries are 8 bytes each (see [`crate::QUERY_SIZE`]). For pipeline statistics queries,
     /// see [`PipelineStatisticsTypes`] for more information.
     pub fn resolve_query_set(
         &mut self,
