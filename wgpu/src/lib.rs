@@ -3687,6 +3687,31 @@ impl CommandEncoder {
         let id = self.id.as_ref().unwrap();
         DynContext::command_encoder_pop_debug_group(&*self.context, id, self.data.as_ref());
     }
+
+    /// Resolves a query set, writing the results into the supplied destination buffer.
+    ///
+    /// Occlusion and timestamp queries are 8 bytes each (see [`crate::QUERY_SIZE`]). For pipeline statistics queries,
+    /// see [`PipelineStatisticsTypes`] for more information.
+    pub fn resolve_query_set(
+        &mut self,
+        query_set: &QuerySet,
+        query_range: Range<u32>,
+        destination: &Buffer,
+        destination_offset: BufferAddress,
+    ) {
+        DynContext::command_encoder_resolve_query_set(
+            &*self.context,
+            self.id.as_ref().unwrap(),
+            self.data.as_ref(),
+            &query_set.id,
+            query_set.data.as_ref(),
+            query_range.start,
+            query_range.end - query_range.start,
+            &destination.id,
+            destination.data.as_ref(),
+            destination_offset,
+        )
+    }
 }
 
 /// [`Features::TIMESTAMP_QUERY`] must be enabled on the device in order to call these functions.
@@ -3706,33 +3731,6 @@ impl CommandEncoder {
             &query_set.id,
             query_set.data.as_ref(),
             query_index,
-        )
-    }
-}
-
-/// [`Features::TIMESTAMP_QUERY`] or [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
-impl CommandEncoder {
-    /// Resolve a query set, writing the results into the supplied destination buffer.
-    ///
-    /// Queries may be between 8 and 40 bytes each. See [`PipelineStatisticsTypes`] for more information.
-    pub fn resolve_query_set(
-        &mut self,
-        query_set: &QuerySet,
-        query_range: Range<u32>,
-        destination: &Buffer,
-        destination_offset: BufferAddress,
-    ) {
-        DynContext::command_encoder_resolve_query_set(
-            &*self.context,
-            self.id.as_ref().unwrap(),
-            self.data.as_ref(),
-            &query_set.id,
-            query_set.data.as_ref(),
-            query_range.start,
-            query_range.end - query_range.start,
-            &destination.id,
-            destination.data.as_ref(),
-            destination_offset,
         )
     }
 }

@@ -4331,7 +4331,7 @@ where
     }
 }
 
-pub trait QueueWriteBuffer: WasmNotSendSync {
+pub trait QueueWriteBuffer: WasmNotSendSync + Debug {
     fn slice(&self) -> &[u8];
 
     fn slice_mut(&mut self) -> &mut [u8];
@@ -4339,7 +4339,7 @@ pub trait QueueWriteBuffer: WasmNotSendSync {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub trait BufferMappedRange: Debug {
+pub trait BufferMappedRange: WasmNotSendSync + Debug {
     fn slice(&self) -> &[u8];
     fn slice_mut(&mut self) -> &mut [u8];
 }
