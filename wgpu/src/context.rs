@@ -2124,18 +2124,18 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         device_data: &crate::Data,
         desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
-    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
+    fn command_encoder_build_acceleration_structures_unsafe_tlas(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'a>>,
+        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'_>>,
         tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasBuildEntry>,
     );
-    fn command_encoder_build_acceleration_structures<'a>(
+    fn command_encoder_build_acceleration_structures(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'a>>,
+        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'_>>,
         tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasPackage<'_>>,
     );
     fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data);
@@ -4182,11 +4182,11 @@ where
         (tlas.into(), Box::new(data) as _)
     }
 
-    fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
+    fn command_encoder_build_acceleration_structures_unsafe_tlas(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'a>>,
+        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'_>>,
         tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasBuildEntry>,
     ) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
@@ -4240,11 +4240,11 @@ where
         )
     }
 
-    fn command_encoder_build_acceleration_structures<'a>(
+    fn command_encoder_build_acceleration_structures(
         &self,
         encoder: &ObjectId,
         encoder_data: &crate::Data,
-        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'a>>,
+        blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'_>>,
         tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasPackage<'_>>,
     ) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
