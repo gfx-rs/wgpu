@@ -80,9 +80,10 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(
-                blas_desc.label
+                blas_desc
+                    .label
                     .to_hal(self.instance_flags)
-                    .unwrap_or("<BindGroupLayoyt>")
+                    .unwrap_or("<BindGroupLayoyt>"),
             ),
             size_info,
             sizes,
@@ -142,8 +143,7 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(
-                desc
-                    .label
+                desc.label
                     .to_hal(self.instance_flags)
                     .unwrap_or("<BindGroupLayoyt>"),
             ),

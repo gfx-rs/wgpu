@@ -1474,8 +1474,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .extend(texture_memory_actions.register_init_action(action));
                         }
 
-                        let mapped_used_resources = bind_group.
-                            used
+                        let mapped_used_resources = bind_group
+                            .used
                             .acceleration_structures
                             .used_resources()
                             .map(|blas| {

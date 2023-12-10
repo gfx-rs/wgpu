@@ -1175,14 +1175,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let mut tlas_lock_store = Vec::<(RwLockReadGuard<Option<A::Buffer>>, Option<TlasPackage>, Arc<Tlas<A>>)>::new();
+        let mut tlas_lock_store = Vec::<(
+            RwLockReadGuard<Option<A::Buffer>>,
+            Option<TlasPackage>,
+            Arc<Tlas<A>>,
+        )>::new();
 
         for package in tlas_iter {
             let tlas = cmd_buf_data
                 .trackers
                 .tlas_s
                 .add_single(&tlas_guard, package.tlas_id)
-                .ok_or(BuildAccelerationStructureError::InvalidTlas(package.tlas_id))?;
+                .ok_or(BuildAccelerationStructureError::InvalidTlas(
+                    package.tlas_id
+                ))?;
             tlas_lock_store.push((tlas.instance_buffer.read(), Some(package), tlas.clone()))
         }
 
@@ -1199,7 +1205,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let package = entry.1.take().unwrap();
             let tlas = &entry.2;
             if tlas.raw.is_none() {
-                return Err(BuildAccelerationStructureError::InvalidTlas(package.tlas_id));
+                return Err(BuildAccelerationStructureError::InvalidTlas(
+                    package.tlas_id
+                ));
             }
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
@@ -1241,7 +1249,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             cmd_buf_data.tlas_actions.push(TlasAction {
-                id: package .tlas_id,
+                id: package.tlas_id,
                 kind: crate::ray_tracing::TlasActionKind::Build {
                     build_index: build_command_index,
                     dependencies,
@@ -1379,11 +1387,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let instance_buffer_barriers = lock_vec.iter().filter_map(|lock| {
-                lock.as_ref().map(|lock| hal::BufferBarrier::<A> {
-                    buffer: lock.as_ref().unwrap(),
-                    usage: BufferUses::COPY_DST..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                })
-            });
+            lock.as_ref().map(|lock| hal::BufferBarrier::<A> {
+                buffer: lock.as_ref().unwrap(),
+                usage: BufferUses::COPY_DST..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+            })
+        });
 
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
