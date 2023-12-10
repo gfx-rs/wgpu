@@ -5278,7 +5278,7 @@ pub enum TextureDimension {
 /// Corresponds to [WebGPU `GPUOrigin2D`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin2ddict).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -5303,12 +5303,18 @@ impl Origin2d {
     }
 }
 
+impl std::fmt::Debug for Origin2d {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self.x, self.y).fmt(f)
+    }
+}
+
 /// Origin of a copy to/from a texture.
 ///
 /// Corresponds to [WebGPU `GPUOrigin3D`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuorigin3ddict).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -5340,12 +5346,18 @@ impl Default for Origin3d {
     }
 }
 
+impl std::fmt::Debug for Origin3d {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self.x, self.y, self.z).fmt(f)
+    }
+}
+
 /// Extent of a texture related operation.
 ///
 /// Corresponds to [WebGPU `GPUExtent3D`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuextent3ddict).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
@@ -5357,6 +5369,12 @@ pub struct Extent3d {
     /// The depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
     pub depth_or_array_layers: u32,
+}
+
+impl std::fmt::Debug for Extent3d {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self.width, self.height, self.depth_or_array_layers).fmt(f)
+    }
 }
 
 #[cfg(feature = "serde")]
