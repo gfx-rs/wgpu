@@ -1378,17 +1378,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             })
         }
 
-        let instance_buffer_barriers = lock_vec.iter().filter_map(
-            |lock| {
-                lock.as_ref().map(|lock| {
-                    hal::BufferBarrier::<A> {
-                        buffer: lock.as_ref().unwrap(),
-                        usage: BufferUses::COPY_DST
-                            ..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                    }
+        let instance_buffer_barriers = lock_vec.iter().filter_map(|lock| {
+                lock.as_ref().map(|lock| hal::BufferBarrier::<A> {
+                    buffer: lock.as_ref().unwrap(),
+                    usage: BufferUses::COPY_DST..BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 })
-            },
-        );
+            });
 
         let blas_present = !blas_storage.is_empty();
         let tlas_present = !tlas_storage.is_empty();
@@ -1457,7 +1452,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         size: NonZeroU64::new(size).unwrap(),
                     };
                     cmd_buf_raw.copy_buffer_to_buffer(
-                        staging_buffer.as_ref().unwrap().raw.lock().as_ref().unwrap(),
+                        staging_buffer
+                            .as_ref()
+                            .unwrap()
+                            .raw
+                            .lock()
+                            .as_ref()
+                            .unwrap(),
                         tlas.instance_buffer.read().as_ref().unwrap(),
                         iter::once(temp),
                     );
@@ -1485,19 +1486,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_mut()
                     .unwrap()
                     .temp_resources
-                    .push(TempResource::StagingBuffer(
-                        Arc::new(staging_buffer)
-                    ));
+                    .push(TempResource::StagingBuffer(Arc::new(staging_buffer)));
             }
         }
         let scratch_mapping = unsafe {
             device
-            .raw()
-            .map_buffer(
-                &scratch_buffer,
-                0..instance_buffer_staging_source.len() as u64,
-            )
-            .map_err(crate::device::DeviceError::from)?
+                .raw()
+                .map_buffer(
+                    &scratch_buffer,
+                    0..instance_buffer_staging_source.len() as u64,
+                )
+                .map_err(crate::device::DeviceError::from)?
         };
         device
             .pending_writes
@@ -1505,14 +1504,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .as_mut()
             .unwrap()
             .temp_resources
-            .push(TempResource::StagingBuffer(
-                Arc::new(StagingBuffer {
-                    raw: Mutex::new(Some(scratch_buffer)),
-                    device: device.clone(),
-                    size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
-                    info: ResourceInfo::new("Ratracing scratch buffer"),
-                    is_coherent: scratch_mapping.is_coherent,
-                })));
+            .push(TempResource::StagingBuffer(Arc::new(StagingBuffer {
+                raw: Mutex::new(Some(scratch_buffer)),
+                device: device.clone(),
+                size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
+                info: ResourceInfo::new("Ratracing scratch buffer"),
+                is_coherent: scratch_mapping.is_coherent,
+            })));
 
         Ok(())
     }

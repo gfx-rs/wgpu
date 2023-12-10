@@ -37,8 +37,8 @@ use std::{
     },
 };
 
-use std::num::NonZeroU64;
 use crate::id::{BlasId, TlasId};
+use std::num::NonZeroU64;
 
 /// Information about the wgpu-core resource.
 ///

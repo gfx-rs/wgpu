@@ -25,12 +25,12 @@ use crate::{
 use hal::{CommandEncoder as _, Device as _, Queue as _};
 use parking_lot::Mutex;
 
+use crate::resource::{Blas, Tlas};
 use std::{
     iter, mem, ptr,
     sync::{atomic::Ordering, Arc},
 };
 use thiserror::Error;
-use crate::resource::{Blas, Tlas};
 
 use super::Device;
 
@@ -166,7 +166,7 @@ pub enum TempResource<A: HalApi> {
     StagingBuffer(Arc<StagingBuffer<A>>),
     Texture(Arc<Texture<A>>),
     Tlas(Arc<Tlas<A>>),
-    Blas(Arc<Blas<A>>)
+    Blas(Arc<Blas<A>>),
 }
 
 /// A queue execution for a particular command encoder.
@@ -1344,13 +1344,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             for blas in cmd_buf_trackers.blas_s.used_resources() {
                                 blas.info.use_at(submit_index);
                                 if blas.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(blas.as_info().id(), blas.clone());
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .insert(blas.as_info().id(), blas.clone());
                                 }
                             }
                             for tlas in cmd_buf_trackers.tlas_s.used_resources() {
                                 tlas.info.use_at(submit_index);
                                 if tlas.is_unique() {
-                                    temp_suspected.as_mut().unwrap().insert(tlas.as_info().id(), tlas.clone());
+                                    temp_suspected
+                                        .as_mut()
+                                        .unwrap()
+                                        .insert(tlas.as_info().id(), tlas.clone());
                                 }
                             }
                         }

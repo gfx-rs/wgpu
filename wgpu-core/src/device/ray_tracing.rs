@@ -11,8 +11,8 @@ use crate::{
     storage::InvalidId,
     LabelHelpers,
 };
-use std::sync::Arc;
 use parking_lot::{Mutex, RwLock};
+use std::sync::Arc;
 
 use crate::resource::{ResourceInfo, StagingBuffer};
 use hal::{AccelerationStructureTriangleIndices, Device as _};
@@ -142,9 +142,10 @@ impl<A: HalApi> Device<A> {
             raw: Some(raw),
             device: self.clone(),
             info: ResourceInfo::new(
-                desc.label
+                desc
+                    .label
                     .to_hal(self.instance_flags)
-                    .unwrap_or("<BindGroupLayoyt>")
+                    .unwrap_or("<BindGroupLayoyt>"),
             ),
             size_info,
             flags: desc.flags,

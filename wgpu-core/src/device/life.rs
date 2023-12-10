@@ -288,10 +288,10 @@ impl<A: HalApi> LifetimeTracker<A> {
                     last_resources.insert(raw.as_info().id(), raw);
                 }
                 TempResource::Tlas(raw) => {
-                    last_resources.insert(raw.as_info().id(),raw);
+                    last_resources.insert(raw.as_info().id(), raw);
                 }
                 TempResource::Blas(raw) => {
-                    last_resources.insert(raw.as_info().id(),raw);
+                    last_resources.insert(raw.as_info().id(), raw);
                 }
             }
         }
