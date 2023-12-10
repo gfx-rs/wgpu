@@ -27,11 +27,11 @@ static_assertions::assert_impl_all!(AccelerationStructureUpdateMode: Send, Sync)
 
 /// Descriptor to create bottom level acceleration structures.
 pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(CreateBlasDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 
 /// Descriptor to create top level acceleration structures.
 pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
-static_assertions::assert_impl_all!(CreateTlasDescriptor: Send, Sync);
+static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 
 #[derive(Debug)]
 /// Definition for a triangle geometry.
@@ -55,14 +55,14 @@ pub struct BlasTriangleGeometry<'a> {
     /// Transform buffer offset in bytes (optional, required if transform buffer is present).
     pub transform_buffer_offset: Option<wgt::BufferAddress>,
 }
-static_assertions::assert_impl_all!(BlasTriangleGeometry: Send, Sync);
+static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: Send, Sync);
 
 /// Geometries for a bottom level acceleration structure.
 pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
     TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
 }
-static_assertions::assert_impl_all!(BlasGeometries: Send, Sync);
+static_assertions::assert_impl_all!(BlasGeometries<'_>: Send, Sync);
 
 /// Entry for a bottom level acceleration structure build.
 pub struct BlasBuildEntry<'a> {
@@ -71,7 +71,7 @@ pub struct BlasBuildEntry<'a> {
     /// Geometries.
     pub geometry: BlasGeometries<'a>,
 }
-static_assertions::assert_impl_all!(BlasBuildEntry: Send, Sync);
+static_assertions::assert_impl_all!(BlasBuildEntry<'_>: Send, Sync);
 
 #[derive(Debug)]
 /// Bottom level acceleration structure.
@@ -138,7 +138,7 @@ pub struct TlasBuildEntry<'a> {
     /// Number of instances in the instance buffer.
     pub instance_count: u32,
 }
-static_assertions::assert_impl_all!(TlasBuildEntry: Send, Sync);
+static_assertions::assert_impl_all!(TlasBuildEntry<'_>: Send, Sync);
 
 /// Safe instance for a top level acceleration structure.
 #[derive(Debug, Clone)]
@@ -247,7 +247,7 @@ impl TlasPackage {
     }
 
     /// Get the binding resource for the underling acceleration structure, to be used in a
-    pub fn as_binding(&self) -> BindingResource {
+    pub fn as_binding(&self) -> BindingResource<'_> {
         BindingResource::AccelerationStructure(&self.tlas)
     }
 
@@ -337,15 +337,15 @@ pub trait DeviceRayTracing {
     /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
     /// - desc: The descriptor of the acceleration structure.
     /// - sizes: Size descriptor limiting what can be built into the acceleration structure.
-    fn create_blas(&self, desc: &CreateBlasDescriptor, sizes: BlasGeometrySizeDescriptors) -> Blas;
+    fn create_blas(&self, desc: &CreateBlasDescriptor<'_>, sizes: BlasGeometrySizeDescriptors) -> Blas;
 
     /// Create a top level acceleration structure, used for ray tracing.
     /// - desc: The descriptor of the acceleration structure.
-    fn create_tlas(&self, desc: &CreateTlasDescriptor) -> Tlas;
+    fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas;
 }
 
 impl DeviceRayTracing for Device {
-    fn create_blas(&self, desc: &CreateBlasDescriptor, sizes: BlasGeometrySizeDescriptors) -> Blas {
+    fn create_blas(&self, desc: &CreateBlasDescriptor<'_>, sizes: BlasGeometrySizeDescriptors) -> Blas {
         let (id, handle, data) = DynContext::device_create_blas(
             &*self.context,
             &self.id,
@@ -362,7 +362,7 @@ impl DeviceRayTracing for Device {
         }
     }
 
-    fn create_tlas(&self, desc: &CreateTlasDescriptor) -> Tlas {
+    fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
         let (id, data) =
             DynContext::device_create_tlas(&*self.context, &self.id, self.data.as_ref(), desc);
 
@@ -425,10 +425,10 @@ impl CommandEncoderRayTracing for CommandEncoder {
     ) {
         let id = self.id.as_ref().unwrap();
 
-        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry| {
+        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
             let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry| {
+                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry<'_>| {
                         DynContextBlasTriangleGeometry {
                             size: tg.size,
                             vertex_buffer: tg.vertex_buffer.id,
@@ -486,10 +486,10 @@ impl CommandEncoderRayTracing for CommandEncoder {
     ) {
         let id = self.id.as_ref().unwrap();
 
-        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry| {
+        let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
             let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry| {
+                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry<'_>| {
                         DynContextBlasTriangleGeometry {
                             size: tg.size,
                             vertex_buffer: tg.vertex_buffer.id,
@@ -517,7 +517,7 @@ impl CommandEncoderRayTracing for CommandEncoder {
 
         let mut tlas = tlas
             .into_iter()
-            .map(|e: &TlasBuildEntry| DynContextTlasBuildEntry {
+            .map(|e: &TlasBuildEntry<'_>| DynContextTlasBuildEntry {
                 tlas_id: e.tlas.id,
                 instance_buffer_id: e.instance_buffer.id,
                 instance_count: e.instance_count,

@@ -3146,7 +3146,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
 
-        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<Self>| {
+        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<'_, Self>| {
             let geometries = match e.geometries {
                 crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
                     triangle_geometries,
@@ -3204,7 +3204,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
 
-        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<Self>| {
+        let blas = blas.map(|e: crate::ray_tracing::ContextBlasBuildEntry<'_, Self>| {
             let geometries = match e.geometries {
                 crate::ray_tracing::ContextBlasGeometries::TriangleGeometries(
                     triangle_geometries,
@@ -3231,18 +3231,15 @@ impl crate::Context for Context {
         });
 
         let tlas = tlas.into_iter().map(|e| {
-            let instances = e.instances.into_iter().map(
-                |instance: Option<crate::ray_tracing::ContextTlasInstance<_>>| {
-                    if let Some(instance) = instance {
-                        Some(wgc::ray_tracing::TlasInstance {
+            let instances = e.instances.map(
+                |instance: Option<crate::ray_tracing::ContextTlasInstance<'_, _>>| {
+                    instance.map(|instance|
+                        wgc::ray_tracing::TlasInstance {
                             blas_id: instance.blas_id,
                             transform: instance.transform,
                             custom_index: instance.custom_index,
                             mask: instance.mask,
-                        })
-                    } else {
-                        None
-                    }
+                    })
                 },
             );
             wgc::ray_tracing::TlasPackage {

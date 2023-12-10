@@ -74,9 +74,9 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
     type SurfaceId: ContextId + WasmNotSendSync;
     type SurfaceData: ContextData;
 
-    type BlasId: ContextId + WasmNotSend + WasmNotSync;
+    type BlasId: ContextId + WasmNotSendSync;
     type BlasData: ContextData;
-    type TlasId: ContextId + WasmNotSend + WasmNotSync;
+    type TlasId: ContextId + WasmNotSendSync;
     type TlasData: ContextData;
 
     type SurfaceOutputDetail: WasmNotSendSync + 'static;
@@ -1036,14 +1036,14 @@ pub trait Context: Debug + WasmNotSendSync + Sized {
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::ray_tracing::CreateBlasDescriptor,
+        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (Self::BlasId, Option<u64>, Self::BlasData);
     fn device_create_tlas(
         &self,
         device: &Self::DeviceId,
         device_data: &Self::DeviceData,
-        desc: &crate::ray_tracing::CreateTlasDescriptor,
+        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (Self::TlasId, Self::TlasData);
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &'a self,
@@ -2115,14 +2115,14 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        desc: &crate::ray_tracing::CreateBlasDescriptor,
+        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (ObjectId, Option<u64>, Box<crate::Data>);
     fn device_create_tlas(
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        desc: &crate::ray_tracing::CreateTlasDescriptor,
+        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>);
     fn command_encoder_build_acceleration_structures_unsafe_tlas<'a>(
         &self,
@@ -2136,7 +2136,7 @@ pub(crate) trait DynContext: Debug + WasmNotSendSync {
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasPackage>,
+        tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasPackage<'_>>,
     );
     fn blas_destroy(&self, blas: &ObjectId, blas_data: &crate::Data);
     fn blas_drop(&self, blas: &ObjectId, blas_data: &crate::Data);
@@ -4160,7 +4160,7 @@ where
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        desc: &crate::ray_tracing::CreateBlasDescriptor,
+        desc: &crate::ray_tracing::CreateBlasDescriptor<'_>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> (ObjectId, Option<u64>, Box<crate::Data>) {
         let device = <T::DeviceId>::from(*device);
@@ -4174,7 +4174,7 @@ where
         &self,
         device: &ObjectId,
         device_data: &crate::Data,
-        desc: &crate::ray_tracing::CreateTlasDescriptor,
+        desc: &crate::ray_tracing::CreateTlasDescriptor<'_>,
     ) -> (ObjectId, Box<crate::Data>) {
         let device = <T::DeviceId>::from(*device);
         let device_data = downcast_ref(device_data);
@@ -4245,7 +4245,7 @@ where
         encoder: &ObjectId,
         encoder_data: &crate::Data,
         blas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextBlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasPackage>,
+        tlas: &mut dyn Iterator<Item = crate::ray_tracing::DynContextTlasPackage<'_>>,
     ) {
         let encoder = <T::CommandEncoderId>::from(*encoder);
         let encoder_data = downcast_ref(encoder_data);
@@ -4279,9 +4279,9 @@ where
 
         let tlas = tlas
             .into_iter()
-            .map(|e: crate::ray_tracing::DynContextTlasPackage| {
-                let instances = e.instances.into_iter().map(
-                    |instance: Option<crate::ray_tracing::DynContextTlasInstance>| {
+            .map(|e: crate::ray_tracing::DynContextTlasPackage<'_>| {
+                let instances = e.instances.map(
+                    |instance: Option<crate::ray_tracing::DynContextTlasInstance<'_>>| {
                         instance.map(|instance| crate::ray_tracing::ContextTlasInstance {
                             blas_id: <T::BlasId>::from(instance.blas),
                             transform: instance.transform,

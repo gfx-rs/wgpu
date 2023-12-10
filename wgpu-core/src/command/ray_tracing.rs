@@ -198,7 +198,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .buffers
                             .set_single(
-                                &*match buffer_guard.get(mesh.vertex_buffer) {
+                                match buffer_guard.get(mesh.vertex_buffer) {
                                     Ok(buffer) => buffer,
                                     Err(_) => {
                                         return Err(BuildAccelerationStructureError::InvalidBuffer(
@@ -226,7 +226,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*match buffer_guard.get(index_id) {
+                                    match buffer_guard.get(index_id) {
                                         Ok(buffer) => buffer,
                                         Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(index_id)) },
                                     },
@@ -249,7 +249,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*match buffer_guard.get(transform_id) {
+                                    match buffer_guard.get(transform_id) {
                                         Ok(buffer) => buffer,
                                         Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(transform_id)) },
                                     },
@@ -288,7 +288,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                 }
                 if let Some(barrier) =
-                    buf.1.take().map(|pending| pending.into_hal(&vertex_buffer))
+                    buf.1.take().map(|pending| pending.into_hal(vertex_buffer))
                 {
                     input_barriers.push(barrier);
                 }
@@ -472,7 +472,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ) as u64;
 
                 blas_storage.push((
-                    &*blas,
+                    blas,
                     hal::AccelerationStructureEntries::Triangles(triangle_entries),
                     scratch_buffer_offset,
                 ));
@@ -489,7 +489,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .trackers
                 .buffers
                 .set_single(
-                    &*match buffer_guard.get(entry.instance_buffer_id) {
+                    match buffer_guard.get(entry.instance_buffer_id) {
                         Ok(buffer) => buffer,
                         Err(_) => return Err(BuildAccelerationStructureError::InvalidBuffer(entry.instance_buffer_id, )),
                     },
@@ -554,7 +554,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             tlas_storage.push((
                 tlas,
                 hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                    buffer: Some(&instance_buffer),
+                    buffer: Some(instance_buffer),
                     offset: 0,
                     count: entry.instance_count,
                 }),
@@ -892,7 +892,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .buffers
                             .set_single(
-                                &*match buffer_guard.get(mesh.vertex_buffer) {
+                                match buffer_guard.get(mesh.vertex_buffer) {
                                     Ok(buffer) => buffer,
                                     Err(_) => {
                                         return Err(BuildAccelerationStructureError::InvalidBuffer(
@@ -920,7 +920,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*match buffer_guard.get(index_id) {
+                                    match buffer_guard.get(index_id) {
                                         Ok(buffer) => buffer,
                                         Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(index_id)) },
                                     },
@@ -943,7 +943,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .trackers
                                 .buffers
                                 .set_single(
-                                    &*match buffer_guard.get(transform_id) {
+                                    match buffer_guard.get(transform_id) {
                                         Ok(buffer) => buffer,
                                         Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(transform_id)) },
                                     },
@@ -983,7 +983,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                 }
                 if let Some(barrier) =
-                    buf.1.take().map(|pending| pending.into_hal(&vertex_buffer))
+                    buf.1.take().map(|pending| pending.into_hal(vertex_buffer))
                 {
                     input_barriers.push(barrier);
                 }
@@ -1167,7 +1167,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ) as u64;
 
                 blas_storage.push((
-                    &*blas,
+                    blas,
                     hal::AccelerationStructureEntries::Triangles(triangle_entries),
                     scratch_buffer_offset,
                 ));
@@ -1540,7 +1540,7 @@ impl<A: HalApi> BakedCommands<A> {
                         let blas = blas_guard
                             .get(action.id)
                             .map_err(|_| ValidateBlasActionsError::InvalidBlas(action.id))?;
-                        if *blas.built_index.read() == None {
+                        if (*blas.built_index.read()).is_none() {
                             return Err(ValidateBlasActionsError::UsedUnbuilt(action.id));
                         }
                     }
@@ -1578,15 +1578,15 @@ impl<A: HalApi> BakedCommands<A> {
                     let tlas_build_index = tlas.built_index.read();
                     let dependencies = tlas.dependencies.read();
 
-                    if *tlas_build_index == None {
+                    if (*tlas_build_index).is_none() {
                         return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
                     }
                     for dependency in dependencies.deref() {
                         let blas = blas_guard.get(*dependency).map_err(|_| {
                             ValidateTlasActionsError::InvalidBlas(*dependency, action.id)
                         })?;
-                        let blas_build_index = blas.built_index.read().clone();
-                        if blas_build_index == None {
+                        let blas_build_index = *blas.built_index.read();
+                        if blas_build_index.is_none() {
                             return Err(ValidateTlasActionsError::UsedUnbuilt(action.id));
                         }
                         if blas_build_index.unwrap() > tlas_build_index.unwrap() {
