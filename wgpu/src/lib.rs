@@ -14,7 +14,7 @@ mod macros;
 
 /// Module to add ray tracing support to wgpu.
 /// It adds support for acceleration structures and ray queries.
-/// The features [`wgpu::Features::RAY_QUERY`] and [`wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE`] where added and are required to use this module.
+/// The features [`Features::RAY_QUERY`] and [`Features::RAY_TRACING_ACCELERATION_STRUCTURE`] where added and are required to use this module.
 /// This is an experimental feature and is not available on all backends.
 /// It is not part of the WebGPU standard and is only natively supported with the Vulkan backend so far.
 /// DirectX 12 and Metal support are planned, the API is subject to change.

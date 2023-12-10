@@ -402,7 +402,7 @@ pub trait CommandEncoderRayTracing {
     );
 
     /// Build bottom and top level acceleration structures.
-    /// See [`build_acceleration_structures`] for the safe version and more details.
+    /// See [`CommandEncoderRayTracing::build_acceleration_structures`] for the safe version and more details.
     ///
     /// # Safety
     ///
