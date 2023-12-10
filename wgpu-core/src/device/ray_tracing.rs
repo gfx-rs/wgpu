@@ -1,5 +1,3 @@
-use std::sync::Arc;
-use parking_lot::{Mutex, RwLock};
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
@@ -13,9 +11,11 @@ use crate::{
     storage::InvalidId,
     LabelHelpers,
 };
+use std::sync::Arc;
+use parking_lot::{Mutex, RwLock};
 
-use hal::{AccelerationStructureTriangleIndices, Device as _};
 use crate::resource::{ResourceInfo, StagingBuffer};
+use hal::{AccelerationStructureTriangleIndices, Device as _};
 
 impl<A: HalApi> Device<A> {
     fn create_blas(
@@ -79,7 +79,11 @@ impl<A: HalApi> Device<A> {
         Ok(resource::Blas {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(blas_desc.label.to_hal(self.instance_flags).unwrap_or("<BindGroupLayoyt>")),
+            info: ResourceInfo::new(
+                blas_desc.label
+                    .to_hal(self.instance_flags)
+                    .unwrap_or("<BindGroupLayoyt>")
+            ),
             size_info,
             sizes,
             flags: blas_desc.flags,
@@ -137,7 +141,11 @@ impl<A: HalApi> Device<A> {
         Ok(resource::Tlas {
             raw: Some(raw),
             device: self.clone(),
-            info: ResourceInfo::new(desc.label.to_hal(self.instance_flags).unwrap_or("<BindGroupLayoyt>")),
+            info: ResourceInfo::new(
+                desc.label
+                    .to_hal(self.instance_flags)
+                    .unwrap_or("<BindGroupLayoyt>")
+            ),
             size_info,
             flags: desc.flags,
             update_mode: desc.update_mode,
@@ -182,7 +190,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(e) => break e,
             };
             let handle = blas.handle;
-
 
             let id = fid.assign(blas);
             log::info!("Created blas {:?} with {:?}", id.0, desc);
@@ -294,9 +301,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let blas = blas_guard.get(blas_id).unwrap();
         {
             let mut life_lock = device.lock_life();
-            life_lock
-                .suspected_resources
-                .insert(blas_id, blas.clone());
+            life_lock.suspected_resources.insert(blas_id, blas.clone());
         }
 
         if wait {
@@ -331,27 +336,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let raw_instance_buffer = tlas.instance_buffer.write().take();
         let temp_instance_buffer = match raw_instance_buffer {
-            None => {None}
+            None => None,
             Some(e) => {
-                let size = get_raw_tlas_instance_size::<A>() as u64 * std::cmp::max(tlas.max_instance_count, 1) as u64;
+                let size = get_raw_tlas_instance_size::<A>() as u64
+                    * std::cmp::max(tlas.max_instance_count, 1) as u64;
                 let mapping = unsafe {
                     device
                         .raw()
-                        .map_buffer(
-                            &e,
-                            0..size,
-                        )
+                        .map_buffer(&e, 0..size)
                         .map_err(|_| resource::DestroyError::Invalid)?
                 };
-                Some(TempResource::StagingBuffer(Arc::new(
-                    StagingBuffer {
-                        raw: Mutex::new(Some(e)),
-                        device: device.clone(),
-                        size,
-                        info: ResourceInfo::new("Ratracing scratch buffer"),
-                        is_coherent: mapping.is_coherent,
-                    }
-                )))
+                Some(TempResource::StagingBuffer(Arc::new(StagingBuffer {
+                    raw: Mutex::new(Some(e)),
+                    device: device.clone(),
+                    size,
+                    info: ResourceInfo::new("Ratracing scratch buffer"),
+                    is_coherent: mapping.is_coherent,
+                })))
             }
         };
         {
@@ -380,7 +381,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             match tlas_guard.get(tlas_id) {
                 Ok(tlas) => {
                     let last_submit_index = tlas.info.submission_index();
-                    (last_submit_index, device_guard.get(tlas.device.info.id()).unwrap())
+                    (
+                        last_submit_index,
+                        device_guard.get(tlas.device.info.id()).unwrap(),
+                    )
                 }
                 Err(InvalidId) => {
                     hub.tlas_s.unregister_locked(tlas_id, &mut *tlas_guard);
@@ -393,9 +397,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let tlas = tlas_guard.get(tlas_id).unwrap();
         {
             let mut life_lock = device.lock_life();
-            life_lock
-                .suspected_resources
-                .insert(tlas_id, tlas.clone());
+            life_lock.suspected_resources.insert(tlas_id, tlas.clone());
         }
 
         if wait {

@@ -120,10 +120,7 @@ use crate::{
     instance::{Adapter, HalSurface, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
-    resource::{
-        Blas, Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView,
-        Tlas,
-    },
+    resource::{Blas, Buffer, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas},
     storage::{Element, Storage},
 };
 use std::fmt::Debug;
