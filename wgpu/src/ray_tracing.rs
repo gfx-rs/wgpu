@@ -1,4 +1,5 @@
 use std::{fmt::Debug, ops::Range, sync::Arc, thread};
+use wgt::WasmNotSendSync;
 
 use crate::{
     context::{Context, DynContext, ObjectId},
@@ -55,14 +56,14 @@ pub struct BlasTriangleGeometry<'a> {
     /// Transform buffer offset in bytes (optional, required if transform buffer is present).
     pub transform_buffer_offset: Option<wgt::BufferAddress>,
 }
-static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: Send, Sync);
+static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: WasmNotSendSync);
 
 /// Geometries for a bottom level acceleration structure.
 pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
     TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
 }
-static_assertions::assert_impl_all!(BlasGeometries<'_>: Send, Sync);
+static_assertions::assert_impl_all!(BlasGeometries<'_>: WasmNotSendSync);
 
 /// Entry for a bottom level acceleration structure build.
 pub struct BlasBuildEntry<'a> {
@@ -71,7 +72,7 @@ pub struct BlasBuildEntry<'a> {
     /// Geometries.
     pub geometry: BlasGeometries<'a>,
 }
-static_assertions::assert_impl_all!(BlasBuildEntry<'_>: Send, Sync);
+static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 
 #[derive(Debug)]
 /// Bottom level acceleration structure.
@@ -82,7 +83,7 @@ pub struct Blas {
     pub(crate) data: Box<Data>,
     pub(crate) handle: Option<u64>,
 }
-static_assertions::assert_impl_all!(Blas: Send, Sync);
+static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
 
 impl Blas {
     /// Raw handle to the acceleration structure, used inside raw instance buffers.
@@ -111,7 +112,7 @@ pub struct Tlas {
     pub(crate) id: ObjectId,
     pub(crate) data: Box<Data>,
 }
-static_assertions::assert_impl_all!(Tlas: Send, Sync);
+static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
 impl Tlas {
     /// Destroy the associated native resources as soon as possible.
@@ -138,7 +139,7 @@ pub struct TlasBuildEntry<'a> {
     /// Number of instances in the instance buffer.
     pub instance_count: u32,
 }
-static_assertions::assert_impl_all!(TlasBuildEntry<'_>: Send, Sync);
+static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
 
 /// Safe instance for a top level acceleration structure.
 #[derive(Debug, Clone)]
@@ -194,7 +195,7 @@ pub struct TlasPackage {
     pub(crate) instances: Vec<Option<TlasInstance>>,
     pub(crate) lowest_unmodified: u32,
 }
-static_assertions::assert_impl_all!(TlasPackage: Send, Sync);
+static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 
 impl TlasPackage {
     /// Construct TlasPackage consuming the Tlas (prevents modification of the Tlas without using this package).
