@@ -15,9 +15,9 @@ fn builtins() -> vec4<f32> {
     return (((((vec4<f32>((vec4(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
-fn splat() -> vec4<f32> {
-    let a_2 = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
-    let b = (vec4(5) % vec4(2));
+fn splat(m: f32, n: i32) -> vec4<f32> {
+    let a_2 = (((vec2(2.0) + vec2(m)) - vec2(4.0)) / vec2(8.0));
+    let b = (vec4(n) % vec4(2));
     return (a_2.xyxy + vec4<f32>(b));
 }
 
@@ -241,10 +241,10 @@ fn negation_avoids_prefix_decrement() {
 }
 
 @compute @workgroup_size(1, 1, 1) 
-fn main() {
-    let _e0 = builtins();
-    let _e1 = splat();
-    let _e6 = bool_cast(vec3<f32>(1.0, 1.0, 1.0));
+fn main(@builtin(workgroup_id) id: vec3<u32>) {
+    let _e1 = builtins();
+    let _e6 = splat(f32(id.x), i32(id.y));
+    let _e11 = bool_cast(vec3<f32>(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();
