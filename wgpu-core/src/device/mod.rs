@@ -225,6 +225,7 @@ pub type DeviceLostCallback = Box<dyn FnOnce(DeviceLostReason, String) + 'static
 pub struct DeviceLostClosureC {
     pub callback: unsafe extern "C" fn(user_data: *mut u8, reason: u8, message: *const c_char),
     pub user_data: *mut u8,
+    pub called: bool,
 }
 
 #[cfg(any(
@@ -235,6 +236,20 @@ pub struct DeviceLostClosureC {
     )
 ))]
 unsafe impl Send for DeviceLostClosureC {}
+
+impl Drop for DeviceLostClosureC {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.called {
+                self.called = true;
+                // Invoke the closure with reason Destroyed so embedder can recover
+                // the memory.
+                let message = std::ffi::CString::new("Dropped").unwrap();
+                (self.callback)(self.user_data, DeviceLostReason::Destroyed as u8, message.as_ptr())
+            }
+        }
+    }
+}
 
 pub struct DeviceLostClosure {
     // We wrap this so creating the enum in the C variant can be unsafe,
@@ -267,7 +282,14 @@ impl DeviceLostClosure {
     ///
     /// - Both pointers must point to `'static` data, as the callback may happen at
     ///   an unspecified time.
-    pub unsafe fn from_c(inner: DeviceLostClosureC) -> Self {
+    pub unsafe fn from_c(closure: DeviceLostClosureC) -> Self {
+        // Build an inner with the values from closure, ensuring that
+        // inner.called is false.
+        let inner = DeviceLostClosureC {
+            callback: closure.callback,
+            user_data: closure.user_data,
+            called: false,
+        };
         Self {
             inner: DeviceLostClosureInner::C { inner },
         }
@@ -277,11 +299,14 @@ impl DeviceLostClosure {
         match self.inner {
             DeviceLostClosureInner::Rust { callback } => callback(reason, message),
             // SAFETY: the contract of the call to from_c says that this unsafe is sound.
-            DeviceLostClosureInner::C { inner } => unsafe {
-                // Ensure message is structured as a null-terminated C string. It only
-                // needs to live as long as the callback invocation.
-                let message = std::ffi::CString::new(message).unwrap();
-                (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
+            DeviceLostClosureInner::C { mut inner } => unsafe {
+                if !inner.called {
+                    inner.called = true;
+                    // Ensure message is structured as a null-terminated C string. It only
+                    // needs to live as long as the callback invocation.
+                    let message = std::ffi::CString::new(message).unwrap();
+                    (inner.callback)(inner.user_data, reason as u8, message.as_ptr())
+                }
             },
         }
     }
