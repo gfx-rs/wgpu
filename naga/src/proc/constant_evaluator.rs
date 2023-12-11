@@ -141,7 +141,7 @@ pub enum ConstantEvaluatorError {
     InvalidAccessIndexTy,
     #[error("Constants don't support array length expressions")]
     ArrayLength,
-    #[error("Cannot cast type `{from}` to `{to}`")]
+    #[error("Cannot cast scalar components of expression `{from}` to type `{to}`")]
     InvalidCastArg { from: String, to: String },
     #[error("Cannot apply the unary op to the argument")]
     InvalidUnaryOpArg,
@@ -989,15 +989,11 @@ impl<'a> ConstantEvaluator<'a> {
         let expr = self.eval_zero_value(expr, span)?;
 
         let make_error = || -> Result<_, ConstantEvaluatorError> {
-            let ty = self.resolve_type(expr)?;
+            let from = format!("{:?} {:?}", expr, self.expressions[expr]);
 
-            #[cfg(feature = "wgsl-in")]
-            let from = ty.to_wgsl(&self.to_ctx());
             #[cfg(feature = "wgsl-in")]
             let to = target.to_wgsl();
 
-            #[cfg(not(feature = "wgsl-in"))]
-            let from = format!("{ty:?}");
             #[cfg(not(feature = "wgsl-in"))]
             let to = format!("{target:?}");
 
@@ -1325,6 +1321,47 @@ impl<'a> ConstantEvaluator<'a> {
                             BinaryOperator::Modulo => a % b,
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
+                        (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
+                            Literal::AbstractInt(match op {
+                                BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("addition".into())
+                                })?,
+                                BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("subtraction".into())
+                                })?,
+                                BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
+                                    ConstantEvaluatorError::Overflow("multiplication".into())
+                                })?,
+                                BinaryOperator::Divide => a.checked_div(b).ok_or_else(|| {
+                                    if b == 0 {
+                                        ConstantEvaluatorError::DivisionByZero
+                                    } else {
+                                        ConstantEvaluatorError::Overflow("division".into())
+                                    }
+                                })?,
+                                BinaryOperator::Modulo => a.checked_rem(b).ok_or_else(|| {
+                                    if b == 0 {
+                                        ConstantEvaluatorError::RemainderByZero
+                                    } else {
+                                        ConstantEvaluatorError::Overflow("remainder".into())
+                                    }
+                                })?,
+                                BinaryOperator::And => a & b,
+                                BinaryOperator::ExclusiveOr => a ^ b,
+                                BinaryOperator::InclusiveOr => a | b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
+                        (Literal::AbstractFloat(a), Literal::AbstractFloat(b)) => {
+                            Literal::AbstractFloat(match op {
+                                BinaryOperator::Add => a + b,
+                                BinaryOperator::Subtract => a - b,
+                                BinaryOperator::Multiply => a * b,
+                                BinaryOperator::Divide => a / b,
+                                BinaryOperator::Modulo => a % b,
+                                _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                            })
+                        }
                         (Literal::Bool(a), Literal::Bool(b)) => Literal::Bool(match op {
                             BinaryOperator::LogicalAnd => a && b,
                             BinaryOperator::LogicalOr => a || b,
@@ -1550,7 +1587,10 @@ impl<'a> ConstantEvaluator<'a> {
                 };
                 Tr::Value(TypeInner::Vector { scalar, size })
             }
-            _ => return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant),
+            _ => {
+                log::debug!("resolve_type: SubexpressionsAreNotConstant");
+                return Err(ConstantEvaluatorError::SubexpressionsAreNotConstant);
+            }
         };
 
         Ok(resolution)

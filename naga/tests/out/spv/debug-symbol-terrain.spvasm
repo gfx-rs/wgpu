@@ -555,9 +555,9 @@ OpDecorate %582 Location 0
 %79 = OpConstantComposite  %4  %78 %78 %78
 %80 = OpConstantComposite  %4  %74 %74 %74
 %81 = OpConstant  %5  2.0
-%82 = OpConstant  %5  1.7928429
-%83 = OpConstant  %5  0.85373473
-%84 = OpConstantComposite  %4  %82 %82 %82
+%82 = OpConstant  %5  0.85373473
+%83 = OpConstant  %5  1.7928429
+%84 = OpConstantComposite  %4  %83 %83 %83
 %85 = OpConstant  %5  130.0
 %87 = OpTypePointer Function %6
 %88 = OpConstantNull  %6
@@ -659,6 +659,7 @@ OpBranch %60
 %60 = OpLabel
 OpLine %3 10 52
 %61 = OpVectorTimesScalar  %4  %52 %55
+OpLine %3 10 63
 OpLine %3 10 50
 %62 = OpFAdd  %4  %61 %57
 %63 = OpFMul  %4  %62 %52
@@ -755,6 +756,7 @@ OpLine %3 21 28
 %154 = OpVectorShuffle  %6  %153 %153 2 3
 %155 = OpDot  %5  %152 %154
 %156 = OpCompositeConstruct  %4  %145 %150 %155
+OpLine %3 21 28
 %157 = OpFSub  %4  %79 %156
 OpLine %3 21 24
 %158 = OpExtInst  %4  %1 FMax %157 %80
@@ -772,17 +774,21 @@ OpLine %3 23 9
 %164 = OpFMul  %4  %162 %163
 OpLine %3 23 5
 OpStore %94 %164
-OpLine %3 24 13
+OpLine %3 24 18
 %165 = OpVectorShuffle  %4  %73 %73 3 3 3
 %166 = OpFMul  %4  %144 %165
 %167 = OpExtInst  %4  %1 Fract %166
+OpLine %3 24 13
 %168 = OpVectorTimesScalar  %4  %167 %81
+OpLine %3 24 37
 OpLine %3 24 13
 %169 = OpFSub  %4  %168 %57
 OpLine %3 25 13
 %170 = OpExtInst  %4  %1 FAbs %169
+OpLine %3 25 22
 OpLine %3 25 13
 %171 = OpFSub  %4  %170 %79
+OpLine %3 26 24
 OpLine %3 26 14
 %172 = OpFAdd  %4  %169 %79
 %173 = OpExtInst  %4  %1 Floor %172
@@ -790,11 +796,13 @@ OpLine %3 27 14
 %174 = OpFSub  %4  %169 %173
 OpLine %3 1 1
 %175 = OpLoad  %4  %94
-OpLine %3 28 9
+OpLine %3 28 53
 %176 = OpFMul  %4  %174 %174
 %177 = OpFMul  %4  %171 %171
 %178 = OpFAdd  %4  %176 %177
-%179 = OpVectorTimesScalar  %4  %178 %83
+OpLine %3 28 14
+%179 = OpVectorTimesScalar  %4  %178 %82
+OpLine %3 28 9
 %180 = OpFSub  %4  %84 %179
 %181 = OpFMul  %4  %175 %180
 OpLine %3 28 5
@@ -817,9 +825,10 @@ OpLine %3 29 13
 %196 = OpFMul  %6  %193 %195
 %197 = OpFAdd  %6  %192 %196
 %198 = OpCompositeConstruct  %4  %188 %197
-OpLine %3 30 12
+OpLine %3 30 19
 %199 = OpLoad  %4  %94
 %200 = OpDot  %5  %199 %198
+OpLine %3 30 12
 %201 = OpFMul  %5  %85 %200
 OpReturnValue %201
 OpFunctionEnd
@@ -1149,6 +1158,7 @@ OpLine %3 163 14
 %429 = OpCompositeConstruct  %6  %424 %428
 OpLine %3 165 30
 %430 = OpVectorTimesScalar  %6  %429 %81
+OpLine %3 165 30
 %431 = OpFAdd  %6  %419 %430
 OpLine %3 165 20
 %432 = OpCompositeConstruct  %7  %431 %74 %56
