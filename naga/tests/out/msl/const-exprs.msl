@@ -16,6 +16,8 @@ constant metal::float4 DIV = metal::float4(0.44444445, 0.0, 0.0, 0.0);
 constant int TEXTURE_KIND_REGULAR = 0;
 constant int TEXTURE_KIND_WARP = 1;
 constant int TEXTURE_KIND_SKY = 2;
+constant metal::float2 add_vec = metal::float2(4.0, 5.0);
+constant metal::bool2 compare_vec = metal::bool2(true, false);
 
 void swizzle_of_compose(
 ) {
