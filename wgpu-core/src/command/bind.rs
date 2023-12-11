@@ -55,7 +55,7 @@ mod compat {
         }
 
         fn bgl_diff(&self) -> Vec<String> {
-            let mut diff = vec![];
+            let mut diff = Vec::new();
 
             if let Some(expected_bgl) = self.expected.as_ref() {
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
@@ -169,11 +169,10 @@ mod compat {
         pub fn bgl_diff(&self) -> Vec<String> {
             for e in &self.entries {
                 if !e.is_valid() {
-                
                     return e.bgl_diff()
                 }                   
             }
-            vec![format!("huh?!")]
+            vec![String::from("No differences detected?")]
         }
     }
 }
