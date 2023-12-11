@@ -10,6 +10,8 @@ const DIV: vec4<f32> = vec4<f32>(0.44444445, 0.0, 0.0, 0.0);
 const TEXTURE_KIND_REGULAR: i32 = 0;
 const TEXTURE_KIND_WARP: i32 = 1;
 const TEXTURE_KIND_SKY: i32 = 2;
+const add_vec: vec2<f32> = vec2<f32>(4.0, 5.0);
+const compare_vec: vec2<bool> = vec2<bool>(true, false);
 
 fn swizzle_of_compose() {
     var out: vec4<i32> = vec4<i32>(4, 3, 2, 1);
