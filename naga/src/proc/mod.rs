@@ -115,6 +115,16 @@ impl super::Scalar {
         width: crate::ABSTRACT_WIDTH,
     };
 
+    pub const fn is_abstract(self) -> bool {
+        match self.kind {
+            crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => true,
+            crate::ScalarKind::Sint
+            | crate::ScalarKind::Uint
+            | crate::ScalarKind::Float
+            | crate::ScalarKind::Bool => false,
+        }
+    }
+
     /// Construct a float `Scalar` with the given width.
     ///
     /// This is especially common when dealing with
