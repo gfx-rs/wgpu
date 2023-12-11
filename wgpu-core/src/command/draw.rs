@@ -28,9 +28,8 @@ pub enum DrawError {
     #[error("The pipeline layout, associated with the current render pipeline, contains a incompatible bind group layout at index {index}")]
     IncompatibleBindGroup {
         index: u32,
-        diff: Vec<String>
-        //expected: BindGroupLayoutId,
-        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
+        diff: Vec<String>, //expected: BindGroupLayoutId,
+                           //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
     #[error("Vertex {last_vertex} extends beyond limit {vertex_limit} imposed by the buffer in slot {slot}. Did you bind the correct `Vertex` step-rate vertex buffer?")]
     VertexBeyondLimit {

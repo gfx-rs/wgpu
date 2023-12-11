@@ -441,7 +441,7 @@ impl<A: HalApi> State<A> {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
                 index: bind_mask.trailing_zeros(),
-                diff: self.binder.bgl_diff()
+                diff: self.binder.bgl_diff(),
             });
         }
         if self.pipeline.is_none() {

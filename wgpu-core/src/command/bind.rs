@@ -59,24 +59,33 @@ mod compat {
 
             if let Some(expected_bgl) = self.expected.as_ref() {
                 if let Some(assigned_bgl) = self.assigned.as_ref() {
-
                     for (id, e_entry) in &expected_bgl.entries {
                         if let Some(a_entry) = assigned_bgl.entries.get(id) {
-
                             if a_entry.binding != e_entry.binding {
-                                    diff.push(format!("Entry {id} binding expected {}, got {}", e_entry.binding, a_entry.binding));
-                                }
-                                if a_entry.count != e_entry.count {
-                                    diff.push(format!("Entry {id} count expected {:?}, got {:?}", e_entry.count, a_entry.count));
-                                }
-                                if a_entry.ty != e_entry.ty {
-                                    diff.push(format!("Entry {id} type expected {:?}, got {:?}", e_entry.ty, a_entry.ty));
-                                }
-                                if a_entry.visibility != e_entry.visibility {
-                                    diff.push(format!("Entry {id} visibility expected {:?}, got {:?}", e_entry.visibility, a_entry.visibility));
-                                }
-
-                            } else {
+                                diff.push(format!(
+                                    "Entry {id} binding expected {}, got {}",
+                                    e_entry.binding, a_entry.binding
+                                ));
+                            }
+                            if a_entry.count != e_entry.count {
+                                diff.push(format!(
+                                    "Entry {id} count expected {:?}, got {:?}",
+                                    e_entry.count, a_entry.count
+                                ));
+                            }
+                            if a_entry.ty != e_entry.ty {
+                                diff.push(format!(
+                                    "Entry {id} type expected {:?}, got {:?}",
+                                    e_entry.ty, a_entry.ty
+                                ));
+                            }
+                            if a_entry.visibility != e_entry.visibility {
+                                diff.push(format!(
+                                    "Entry {id} visibility expected {:?}, got {:?}",
+                                    e_entry.visibility, a_entry.visibility
+                                ));
+                            }
+                        } else {
                             diff.push(format!("Entry {id} not found in assigned bindgroup layout"))
                         }
                     }
@@ -86,15 +95,17 @@ mod compat {
                             diff.push(format!("Entry {id} not found in expected bindgroup layout"))
                         }
                     });
-
                 } else {
-                    diff.push("Assigned bindgroup layout is implicit, expected explicit".to_owned());
+                    diff.push(
+                        "Assigned bindgroup layout is implicit, expected explicit".to_owned(),
+                    );
                 }
             } else if let Some(_assigned_bgl) = self.assigned.as_ref() {
-                diff.push("Assigned bindgroup layout is not implicit, expected implicit".to_owned());
+                diff.push(
+                    "Assigned bindgroup layout is not implicit, expected implicit".to_owned(),
+                );
             }
 
-            
             diff
         }
     }
@@ -169,8 +180,8 @@ mod compat {
         pub fn bgl_diff(&self) -> Vec<String> {
             for e in &self.entries {
                 if !e.is_valid() {
-                    return e.bgl_diff()
-                }                   
+                    return e.bgl_diff();
+                }
             }
             vec![String::from("No differences detected?")]
         }
