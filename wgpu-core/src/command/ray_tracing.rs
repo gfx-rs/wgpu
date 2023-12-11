@@ -1187,7 +1187,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .tlas_s
                 .add_single(&tlas_guard, package.tlas_id)
                 .ok_or(BuildAccelerationStructureError::InvalidTlas(
-                    package.tlas_id
+                    package.tlas_id,
                 ))?;
             tlas_lock_store.push((tlas.instance_buffer.read(), Some(package), tlas.clone()))
         }
@@ -1206,7 +1206,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let tlas = &entry.2;
             if tlas.raw.is_none() {
                 return Err(BuildAccelerationStructureError::InvalidTlas(
-                    package.tlas_id
+                    package.tlas_id,
                 ));
             }
 

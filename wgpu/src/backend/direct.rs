@@ -3233,12 +3233,11 @@ impl crate::Context for Context {
         let tlas = tlas.into_iter().map(|e| {
             let instances = e.instances.map(
                 |instance: Option<crate::ray_tracing::ContextTlasInstance<'_, _>>| {
-                    instance.map(|instance|
-                        wgc::ray_tracing::TlasInstance {
-                            blas_id: instance.blas_id,
-                            transform: instance.transform,
-                            custom_index: instance.custom_index,
-                            mask: instance.mask,
+                    instance.map(|instance| wgc::ray_tracing::TlasInstance {
+                        blas_id: instance.blas_id,
+                        transform: instance.transform,
+                        custom_index: instance.custom_index,
+                        mask: instance.mask,
                     })
                 },
             );

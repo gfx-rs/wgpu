@@ -20,7 +20,7 @@ fn required_features() -> wgpu::Features {
         | wgpu::Features::RAY_TRACING_ACCELERATION_STRUCTURE
 }
 
-fn execute(ctx:TestingContext) {
+fn execute(ctx: TestingContext) {
     let max_instances = 1000;
     let device = &ctx.device;
 
@@ -91,18 +91,16 @@ fn execute(ctx:TestingContext) {
         encoder.build_acceleration_structures(
             iter::once(&rt::BlasBuildEntry {
                 blas: &blas,
-                geometry: rt::BlasGeometries::TriangleGeometries(vec![
-                    rt::BlasTriangleGeometry {
-                        size: &blas_geo_size_desc,
-                        vertex_buffer: &vertex_buf,
-                        first_vertex: 0,
-                        vertex_stride: mem::size_of::<Vertex>() as u64,
-                        index_buffer: Some(&index_buf),
-                        index_buffer_offset: Some(0),
-                        transform_buffer: None,
-                        transform_buffer_offset: None,
-                    },
-                ]),
+                geometry: rt::BlasGeometries::TriangleGeometries(vec![rt::BlasTriangleGeometry {
+                    size: &blas_geo_size_desc,
+                    vertex_buffer: &vertex_buf,
+                    first_vertex: 0,
+                    vertex_stride: mem::size_of::<Vertex>() as u64,
+                    index_buffer: Some(&index_buf),
+                    index_buffer_offset: Some(0),
+                    transform_buffer: None,
+                    transform_buffer_offset: None,
+                }]),
             }),
             // iter::empty(),
             iter::once(&tlas_package),
