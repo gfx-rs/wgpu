@@ -25,8 +25,8 @@ use crate::hub::Hub;
 use crate::id::CommandBufferId;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::ray_tracing::{BlasAction, TlasAction};
+use crate::resource::{Resource, ResourceInfo, ResourceType};
 use crate::track::{Tracker, UsageScope};
 use crate::{
     api_log, global::Global, hal_api::HalApi, id, identity::GlobalIdentityHandlerFactory,

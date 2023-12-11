@@ -1156,7 +1156,7 @@ pub(crate) struct DeviceRequest {
     not(target_arch = "wasm32"),
     all(
         feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
+        not(target_feature = "atomics")
     )
 ))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + Send + 'static>;
@@ -1172,8 +1172,8 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), BufferAsyncError>) + 'sta
 #[cfg(any(
     not(target_arch = "wasm32"),
     all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
     )
 ))]
 pub(crate) type AdapterRequestDeviceFuture =
@@ -1181,8 +1181,8 @@ pub(crate) type AdapterRequestDeviceFuture =
 #[cfg(not(any(
     not(target_arch = "wasm32"),
     all(
-    feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
+        feature = "fragile-send-sync-non-atomic-wasm",
+        not(target_feature = "atomics")
     )
 )))]
 pub(crate) type AdapterRequestDeviceFuture =
@@ -1219,7 +1219,7 @@ pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>> + Send>;
     not(target_arch = "wasm32"),
     all(
         feature = "fragile-send-sync-non-atomic-wasm",
-    not(target_feature = "atomics")
+        not(target_feature = "atomics")
     )
 )))]
 pub type DevicePopErrorFuture = Box<dyn Future<Output = Option<Error>>>;

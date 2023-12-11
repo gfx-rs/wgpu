@@ -343,7 +343,11 @@ pub trait DeviceRayTracing {
     /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
     /// - desc: The descriptor of the acceleration structure.
     /// - sizes: Size descriptor limiting what can be built into the acceleration structure.
-    fn create_blas(&self, desc: &CreateBlasDescriptor<'_>, sizes: BlasGeometrySizeDescriptors) -> Blas;
+    fn create_blas(
+        &self,
+        desc: &CreateBlasDescriptor<'_>,
+        sizes: BlasGeometrySizeDescriptors,
+    ) -> Blas;
 
     /// Create a top level acceleration structure, used for ray tracing.
     /// - desc: The descriptor of the acceleration structure.
@@ -351,7 +355,11 @@ pub trait DeviceRayTracing {
 }
 
 impl DeviceRayTracing for Device {
-    fn create_blas(&self, desc: &CreateBlasDescriptor<'_>, sizes: BlasGeometrySizeDescriptors) -> Blas {
+    fn create_blas(
+        &self,
+        desc: &CreateBlasDescriptor<'_>,
+        sizes: BlasGeometrySizeDescriptors,
+    ) -> Blas {
         let (id, handle, data) = DynContext::device_create_blas(
             &*self.context,
             &self.id,
@@ -434,23 +442,25 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
             let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry<'_>| {
-                        DynContextBlasTriangleGeometry {
-                            size: tg.size,
-                            vertex_buffer: tg.vertex_buffer.id,
+                    let iter = triangle_geometries
+                        .iter()
+                        .map(
+                            |tg: &BlasTriangleGeometry<'_>| DynContextBlasTriangleGeometry {
+                                size: tg.size,
+                                vertex_buffer: tg.vertex_buffer.id,
 
-                            index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
+                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
 
-                            transform_buffer: tg
-                                .transform_buffer
-                                .map(|transform_buffer| transform_buffer.id),
+                                transform_buffer: tg
+                                    .transform_buffer
+                                    .map(|transform_buffer| transform_buffer.id),
 
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                        }
-                    });
+                                first_vertex: tg.first_vertex,
+                                vertex_stride: tg.vertex_stride,
+                                index_buffer_offset: tg.index_buffer_offset,
+                                transform_buffer_offset: tg.transform_buffer_offset,
+                            },
+                        );
                     DynContextBlasGeometries::TriangleGeometries(Box::new(iter))
                 }
             };
@@ -495,23 +505,25 @@ impl CommandEncoderRayTracing for CommandEncoder {
         let mut blas = blas.into_iter().map(|e: &BlasBuildEntry<'_>| {
             let geometries = match &e.geometry {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                    let iter = triangle_geometries.iter().map(|tg: &BlasTriangleGeometry<'_>| {
-                        DynContextBlasTriangleGeometry {
-                            size: tg.size,
-                            vertex_buffer: tg.vertex_buffer.id,
+                    let iter = triangle_geometries
+                        .iter()
+                        .map(
+                            |tg: &BlasTriangleGeometry<'_>| DynContextBlasTriangleGeometry {
+                                size: tg.size,
+                                vertex_buffer: tg.vertex_buffer.id,
 
-                            index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
+                                index_buffer: tg.index_buffer.map(|index_buffer| index_buffer.id),
 
-                            transform_buffer: tg
-                                .transform_buffer
-                                .map(|transform_buffer| transform_buffer.id),
+                                transform_buffer: tg
+                                    .transform_buffer
+                                    .map(|transform_buffer| transform_buffer.id),
 
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                        }
-                    });
+                                first_vertex: tg.first_vertex,
+                                vertex_stride: tg.vertex_stride,
+                                index_buffer_offset: tg.index_buffer_offset,
+                                transform_buffer_offset: tg.transform_buffer_offset,
+                            },
+                        );
                     DynContextBlasGeometries::TriangleGeometries(Box::new(iter))
                 }
             };

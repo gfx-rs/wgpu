@@ -1,6 +1,6 @@
 use std::{iter, mem};
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 use rt::traits::*;
 use wgpu::ray_tracing as rt;

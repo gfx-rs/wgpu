@@ -18,14 +18,14 @@ use crate::{
 
 use wgt::{math::align_to, BufferUsages};
 
+use crate::ray_tracing::BlasTriangleGeometry;
+use crate::resource::{Buffer, Resource, ResourceInfo, StagingBuffer};
+use crate::track::PendingTransition;
 use std::{cmp::max, iter, num::NonZeroU64, ops::Range, ptr};
 use std::ops::Deref;
 use std::sync::Arc;
 use parking_lot::{Mutex, RwLockReadGuard};
 use hal::{BufferUses, CommandEncoder, Device};
-use crate::ray_tracing::BlasTriangleGeometry;
-use crate::resource::{Buffer, Resource, ResourceInfo, StagingBuffer};
-use crate::track::PendingTransition;
 
 use super::BakedCommands;
 
@@ -108,17 +108,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &crate::ray_tracing::TraceBlasGeometries::TriangleGeometries(
                     ref triangle_geometries,
                 ) => {
-                    let iter = triangle_geometries.iter().map(|tg| {
-                        BlasTriangleGeometry {
-                            size: &tg.size,
-                            vertex_buffer: tg.vertex_buffer,
-                            index_buffer: tg.index_buffer,
-                            transform_buffer: tg.transform_buffer,
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            index_buffer_offset: tg.index_buffer_offset,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                        }
+                    let iter = triangle_geometries.iter().map(|tg| BlasTriangleGeometry {
+                        size: &tg.size,
+                        vertex_buffer: tg.vertex_buffer,
+                        index_buffer: tg.index_buffer,
+                        transform_buffer: tg.transform_buffer,
+                        first_vertex: tg.first_vertex,
+                        vertex_stride: tg.vertex_stride,
+                        index_buffer_offset: tg.index_buffer_offset,
+                        transform_buffer_offset: tg.transform_buffer_offset,
                     });
                     BlasGeometries::TriangleGeometries(Box::new(iter))
                 }
@@ -133,7 +131,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let tlas_iter = trace_tlas.iter();
 
         let mut input_barriers = Vec::<hal::BufferBarrier<A>>::new();
-        let mut buf_storage = Vec::<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>, Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>, Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>, BlasTriangleGeometry, Option<Arc<Blas<A>>>)>::new();
+        let mut buf_storage = Vec::<(
+            Arc<Buffer<A>>,
+            Option<PendingTransition<BufferUses>>,
+            Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>,
+            Option<(Arc<Buffer<A>>, Option<PendingTransition<BufferUses>>)>,
+            BlasTriangleGeometry,
+            Option<Arc<Blas<A>>>
+        )>::new();
 
         let mut scratch_buffer_blas_size = 0;
         let mut blas_storage = Vec::<(&Blas<A>, hal::AccelerationStructureEntries<A>, u64)>::new();
@@ -157,7 +162,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             match entry.geometries {
                 BlasGeometries::TriangleGeometries(triangle_geometries) => {
-
                     for (i, mesh) in triangle_geometries.enumerate() {
                         let size_desc = match &blas.sizes {
                             &wgt::BlasGeometrySizeDescriptors::Triangles { ref desc } => desc,
@@ -176,11 +180,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             || size_desc.vertex_format != mesh.size.vertex_format
                             || size_desc.index_count.is_none() != mesh.size.index_count.is_none()
                             || (size_desc.index_count.is_none()
-                            || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
+                                || size_desc.index_count.unwrap() < mesh.size.index_count.unwrap())
                             || size_desc.index_format.is_none() != mesh.size.index_format.is_none()
                             || (size_desc.index_format.is_none()
-                            || size_desc.index_format.unwrap()
-                            != mesh.size.index_format.unwrap())
+                                || size_desc.index_format.unwrap()
+                                    != mesh.size.index_format.unwrap())
                         {
                             return Err(
                                 BuildAccelerationStructureError::IncompatibleBlasBuildSizes(
@@ -228,7 +232,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .set_single(
                                     match buffer_guard.get(index_id) {
                                         Ok(buffer) => buffer,
-                                        Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(index_id)) },
+                                        Err(_) => {
+                                            return Err(
+                                                BuildAccelerationStructureError::InvalidBuffer(
+                                                    index_id,
+                                                ),
+                                            )
+                                        },
                                     },
                                     hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
@@ -251,7 +261,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 .set_single(
                                     match buffer_guard.get(transform_id) {
                                         Ok(buffer) => buffer,
-                                        Err(_) => { return Err(BuildAccelerationStructureError::InvalidBuffer(transform_id)) },
+                                        Err(_) => {
+                                            return Err(
+                                                BuildAccelerationStructureError::InvalidBuffer(
+                                                    transform_id,
+                                                ),
+                                            )
+                                        },
                                     },
                                     BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                                 )
@@ -281,32 +297,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     BuildAccelerationStructureError::InvalidBuffer(mesh.vertex_buffer),
                 )?;
                 if !vertex_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
-                    return Err(
-                        BuildAccelerationStructureError::MissingBlasInputUsageFlag(
-                            mesh.vertex_buffer,
-                        ),
-                    );
+                    return Err(BuildAccelerationStructureError::MissingBlasInputUsageFlag(
+                        mesh.vertex_buffer,
+                    ));
                 }
-                if let Some(barrier) =
-                    buf.1.take().map(|pending| pending.into_hal(vertex_buffer))
-                {
+                if let Some(barrier) = buf.1.take().map(|pending| pending.into_hal(vertex_buffer)) {
                     input_barriers.push(barrier);
                 }
                 if vertex_buffer.size
-                    < (mesh.size.vertex_count + mesh.first_vertex) as u64
-                    * mesh.vertex_stride
+                    < (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride
                 {
-                    return Err(
-                        BuildAccelerationStructureError::InsufficientBufferSize(
-                            mesh.vertex_buffer,
-                            vertex_buffer.size,
-                            (mesh.size.vertex_count + mesh.first_vertex) as u64
-                                * mesh.vertex_stride,
-                        ),
-                    );
+                    return Err(BuildAccelerationStructureError::InsufficientBufferSize(
+                        mesh.vertex_buffer,
+                        vertex_buffer.size,
+                        (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride,
+                    ));
                 }
-                let vertex_buffer_offset =
-                    mesh.first_vertex as u64 * mesh.vertex_stride;
+                let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
                 cmd_buf_data.buffer_memory_init_actions.extend(
                     vertex_buffer.initialization_status.read().create_action(
                         buffer_guard.get(mesh.vertex_buffer).unwrap(),
@@ -957,7 +964,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             None
                         };
 
-                        buf_storage.push((vertex_buffer, vertex_pending, index_data, transform_data, mesh, None))
+                        buf_storage.push((
+                            vertex_buffer,
+                            vertex_pending,
+                            index_data,
+                            transform_data,
+                            mesh,
+                            None,
+                        ))
                     }
 
                     if let Some(last) = buf_storage.last_mut() {
@@ -1007,7 +1021,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         buffer_guard.get(mesh.vertex_buffer).unwrap(),
                         vertex_buffer_offset
                             ..(vertex_buffer_offset
-                            + mesh.size.vertex_count as u64 * mesh.vertex_stride),
+                                + mesh.size.vertex_count as u64 * mesh.vertex_stride),
                         MemoryInitKind::NeedsInitializedMemory,
                     ),
                 );

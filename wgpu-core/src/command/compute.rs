@@ -540,12 +540,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .extend(texture_memory_actions.register_init_action(action));
                     }
 
-                    let used_resource = bind_group.used.acceleration_structures.used_resources().map(|tlas| {
-                        tracker.tlas_s.add_single(&tlas_guard, tlas.as_info().id());
-                        crate::ray_tracing::TlasAction {
-                            id: tlas.as_info().id(),
-                            kind: crate::ray_tracing::TlasActionKind::Use,
-                        }
+                    let used_resource = bind_group
+                        .used
+                        .acceleration_structures
+                        .used_resources()
+                        .map(|tlas| {
+                            tracker.tlas_s.add_single(&tlas_guard, tlas.as_info().id());
+                            crate::ray_tracing::TlasAction {
+                                id: tlas.as_info().id(),
+                                kind: crate::ray_tracing::TlasActionKind::Use,
+                            }
                     });
 
                     cmd_buf_data.tlas_actions.extend(
