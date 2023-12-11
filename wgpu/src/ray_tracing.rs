@@ -182,6 +182,7 @@ pub(crate) struct DynContextTlasInstance<'a> {
 }
 
 /// [Context version] see `TlasInstance`.
+#[allow(dead_code)]
 pub struct ContextTlasInstance<'a, T: Context> {
     pub(crate) blas_id: T::BlasId,
     pub(crate) transform: &'a [f32; 12],
@@ -291,6 +292,7 @@ pub(crate) struct DynContextTlasPackage<'a> {
 }
 
 /// [Context version] see `BlasTriangleGeometry`.
+#[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a, T: Context> {
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
     pub(crate) vertex_buffer: T::BufferId,
@@ -309,12 +311,14 @@ pub enum ContextBlasGeometries<'a, T: Context> {
 }
 
 /// [Context version] see `BlasBuildEntry`.
+#[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a, T: Context> {
     pub(crate) blas_id: T::BlasId,
     pub(crate) geometries: ContextBlasGeometries<'a, T>,
 }
 
 /// [Context version] see `TlasBuildEntry`.
+#[allow(dead_code)]
 pub struct ContextTlasBuildEntry<T: Context> {
     pub(crate) tlas_id: T::TlasId,
     pub(crate) instance_buffer_id: T::BufferId,
@@ -322,6 +326,7 @@ pub struct ContextTlasBuildEntry<T: Context> {
 }
 
 /// [Context version] see `TlasPackage`.
+#[allow(dead_code)]
 pub struct ContextTlasPackage<'a, T: Context> {
     pub(crate) tlas_id: T::TlasId,
     pub(crate) instances: Box<dyn Iterator<Item = Option<ContextTlasInstance<'a, T>>> + 'a>,
