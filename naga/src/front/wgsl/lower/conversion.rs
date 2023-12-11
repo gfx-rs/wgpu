@@ -51,21 +51,80 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
                 }
             };
 
-        let converted = if let crate::TypeInner::Array { .. } = *goal_inner {
-            let span = self.get_expression_span(expr);
+        self.convert_leaf_scalar(expr, expr_span, goal_scalar)
+    }
+
+    /// Try to convert `expr`'s leaf scalar to `goal` using automatic conversions.
+    ///
+    /// If no conversions are necessary, return `expr` unchanged.
+    ///
+    /// If automatic conversions cannot convert `expr` to `goal_scalar`, return
+    /// an [`AutoConversionLeafScalar`] error.
+    ///
+    /// Although the Load Rule is one of the automatic conversions, this
+    /// function assumes it has already been applied if appropriate, as
+    /// indicated by the fact that the Rust type of `expr` is not `Typed<_>`.
+    ///
+    /// [`AutoConversionLeafScalar`]: super::Error::AutoConversionLeafScalar
+    pub fn try_automatic_conversion_for_leaf_scalar(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        goal_scalar: crate::Scalar,
+        goal_span: Span,
+    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+        let expr_span = self.get_expression_span(expr);
+        let expr_resolution = super::resolve!(self, expr);
+        let types = &self.module.types;
+        let expr_inner = expr_resolution.inner_with(types);
+
+        let make_error = || {
+            let gctx = &self.module.to_ctx();
+            let source_type = expr_resolution.to_wgsl(gctx);
+            super::Error::AutoConversionLeafScalar {
+                dest_span: goal_span,
+                dest_scalar: goal_scalar.to_wgsl(),
+                source_span: expr_span,
+                source_type,
+            }
+        };
+
+        let expr_scalar = match expr_inner.scalar() {
+            Some(scalar) => scalar,
+            None => return Err(make_error()),
+        };
+
+        if expr_scalar == goal_scalar {
+            return Ok(expr);
+        }
+
+        if !expr_scalar.automatically_converts_to(goal_scalar) {
+            return Err(make_error());
+        }
+
+        assert!(expr_scalar.is_abstract());
+
+        self.convert_leaf_scalar(expr, expr_span, goal_scalar)
+    }
+
+    fn convert_leaf_scalar(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        expr_span: Span,
+        goal_scalar: crate::Scalar,
+    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+        let expr_inner = super::resolve_inner!(self, expr);
+        if let crate::TypeInner::Array { .. } = *expr_inner {
             self.as_const_evaluator()
-                .cast_array(expr, goal_scalar, span)
-                .map_err(|err| super::Error::ConstantEvaluatorError(err, span))?
+                .cast_array(expr, goal_scalar, expr_span)
+                .map_err(|err| super::Error::ConstantEvaluatorError(err, expr_span))
         } else {
             let cast = crate::Expression::As {
                 expr,
                 kind: goal_scalar.kind,
                 convert: Some(goal_scalar.width),
             };
-            self.append_expression(cast, expr_span)?
-        };
-
-        Ok(converted)
+            self.append_expression(cast, expr_span)
+        }
     }
 
     /// Try to convert `exprs` to `goal_ty` using WGSL's automatic conversions.
@@ -426,6 +485,11 @@ impl crate::Scalar {
             // Different concrete types cannot be reconciled.
             (Sk::Sint | Sk::Uint | Sk::Float, Sk::Sint | Sk::Uint | Sk::Float) => None,
         }
+    }
+
+    /// Return `true` if automatic conversions will covert `self` to `goal`.
+    pub fn automatically_converts_to(self, goal: Self) -> bool {
+        self.automatic_conversion_combine(goal) == Some(goal)
     }
 
     const fn concretize(self) -> Self {
