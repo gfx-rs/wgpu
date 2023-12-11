@@ -550,11 +550,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 id: tlas.as_info().id(),
                                 kind: crate::ray_tracing::TlasActionKind::Use,
                             }
-                    });
+                        });
 
-                    cmd_buf_data.tlas_actions.extend(
-                        used_resource
-                    );
+                    cmd_buf_data.tlas_actions.extend(used_resource);
 
                     let pipeline_layout = state.binder.pipeline_layout.clone();
                     let entries =
