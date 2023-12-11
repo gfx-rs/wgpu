@@ -174,11 +174,23 @@ impl<'source, 'temp, 'out> super::ExpressionContext<'source, 'temp, 'out> {
         if let Some(scalar) = inner.automatically_convertible_scalar(&self.module.types) {
             let concretized = scalar.concretize();
             if concretized != scalar {
-                let span = self.get_expression_span(expr);
+                assert!(scalar.is_abstract());
+                let expr_span = self.get_expression_span(expr);
                 expr = self
                     .as_const_evaluator()
-                    .cast_array(expr, concretized, span)
-                    .map_err(|err| super::Error::ConstantEvaluatorError(err, span))?;
+                    .cast_array(expr, concretized, expr_span)
+                    .map_err(|err| {
+                        // A `TypeResolution` includes the type's full name, if
+                        // it has one. Also, avoid holding the borrow of `inner`
+                        // across the call to `cast_array`.
+                        let expr_type = &self.typifier()[expr];
+                        super::Error::ConcretizationFailed {
+                            expr_span,
+                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()),
+                            scalar: concretized.to_wgsl(),
+                            inner: err,
+                        }
+                    })?;
             }
         }
 

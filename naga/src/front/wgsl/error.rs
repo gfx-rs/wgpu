@@ -257,6 +257,12 @@ pub enum Error<'a> {
         source_span: Span,
         source_type: String,
     },
+    ConcretizationFailed {
+        expr_span: Span,
+        expr_type: String,
+        scalar: String,
+        inner: ConstantEvaluatorError,
+    },
 }
 
 impl<'a> Error<'a> {
@@ -731,7 +737,19 @@ impl<'a> Error<'a> {
                     )
                 ],
                 notes: vec![],
-            }
+            },
+            Error::ConcretizationFailed { expr_span, ref expr_type, ref scalar, ref inner } => ParseError {
+                message: format!("failed to convert expression to a concrete type: {}", inner),
+                labels: vec![
+                    (
+                        expr_span,
+                        format!("this expression has type {}", expr_type).into(),
+                    )
+                ],
+                notes: vec![
+                    format!("the expression should have been converted to have {} scalar type", scalar),
+                ]
+            },
         }
     }
 }
