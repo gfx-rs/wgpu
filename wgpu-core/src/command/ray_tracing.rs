@@ -1020,8 +1020,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                         mesh.vertex_buffer,
                         vertex_buffer.size,
-                        (mesh.size.vertex_count + mesh.first_vertex) as u64
-                            * mesh.vertex_stride,
+                        (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride,
                     ));
                 }
                 let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
@@ -1113,14 +1112,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         BuildAccelerationStructureError::InvalidBuffer(*transform_id),
                     )?;
                     if !transform_buffer.usage.contains(BufferUsages::BLAS_INPUT) {
-                        return Err(
-                            BuildAccelerationStructureError::MissingBlasInputUsageFlag(
-                                *transform_id,
-                            ),
-                        );
+                        return Err(BuildAccelerationStructureError::MissingBlasInputUsageFlag(
+                            *transform_id,
+                        ));
                     }
-                    if let Some(barrier) =
-                        transform_pending.take().map(|pending| pending.into_hal(transform_buffer))
+                    if let Some(barrier) = transform_pending
+                        .take()
+                        .map(|pending| pending.into_hal(transform_buffer))
                     {
                         input_barriers.push(barrier);
                     }
