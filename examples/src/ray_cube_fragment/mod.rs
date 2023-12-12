@@ -295,12 +295,7 @@ impl crate::framework::Example for Example {
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
         // scene update
@@ -392,7 +387,8 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         required_limits: <Example as crate::framework::Example>::required_limits(),
         skips: vec![],
         failures: Vec::new(),
-        required_downlevel_caps: <Example as crate::framework::Example>::required_downlevel_capabilities(),
+        required_downlevel_caps:
+            <Example as crate::framework::Example>::required_downlevel_capabilities(),
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,

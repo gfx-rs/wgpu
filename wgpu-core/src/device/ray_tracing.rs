@@ -379,10 +379,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             match tlas_guard.get(tlas_id) {
                 Ok(tlas) => {
                     let last_submit_index = tlas.info.submission_index();
-                    (
-                        last_submit_index,
-                        tlas.device.clone()
-                    )
+                    (last_submit_index, tlas.device.clone())
                 }
                 Err(InvalidId) => {
                     hub.tlas_s.unregister_locked(tlas_id, &mut *tlas_guard);

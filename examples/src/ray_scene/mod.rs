@@ -227,7 +227,6 @@ fn upload_scene_components(
         .map(|(vertex_range, geometry_range)| {
             let size_desc: Vec<rt::BlasTriangleGeometrySizeDescriptor> = (*geometry_range)
                 .clone()
-                .into_iter()
                 .map(|i| rt::BlasTriangleGeometrySizeDescriptor {
                     vertex_format: wgpu::VertexFormat::Float32x3,
                     vertex_count: vertex_range.end as u32 - vertex_range.start as u32,
@@ -261,7 +260,7 @@ fn upload_scene_components(
         .map(|(((vertex_range, geometry_range), size_desc), blas)| {
             let triangle_geometries: Vec<_> = size_desc
                 .iter()
-                .zip(geometry_range.clone().into_iter())
+                .zip(geometry_range.clone())
                 .map(|(size, i)| rt::BlasTriangleGeometry {
                     size,
                     vertex_buffer: &vertices,
@@ -461,12 +460,7 @@ impl crate::framework::Example for Example {
         queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(&[self.uniforms]));
     }
 
-    fn render(
-        &mut self,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
+    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
         // scene update
@@ -481,10 +475,14 @@ impl crate::framework::Example for Example {
                 for y in 0..side_count {
                     let instance = self
                         .tlas_package
-                        .get_mut_single(((x + y) * side_count) as usize)
+                        .get_mut_single((x + y) * side_count)
                         .unwrap();
 
-                    let blas_index = (x + y) % self.scene_components.bottom_level_acceleration_structures.len();
+                    let blas_index = (x + y)
+                        % self
+                            .scene_components
+                            .bottom_level_acceleration_structures
+                            .len();
 
                     let x = x as f32 / (side_count - 1) as f32;
                     let y = y as f32 / (side_count - 1) as f32;
@@ -564,7 +562,8 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         required_limits: <Example as crate::framework::Example>::required_limits(),
         skips: vec![],
         failures: Vec::new(),
-        required_downlevel_caps: <Example as crate::framework::Example>::required_downlevel_capabilities(),
+        required_downlevel_caps:
+            <Example as crate::framework::Example>::required_downlevel_capabilities(),
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
