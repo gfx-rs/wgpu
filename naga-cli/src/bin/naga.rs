@@ -93,6 +93,10 @@ struct Args {
     #[argh(option)]
     before_compaction: Option<String>,
 
+    /// bulk validation mode: all filenames are inputs to read and validate.
+    #[argh(switch)]
+    bulk_validate: bool,
+
     /// show version
     #[argh(switch)]
     version: bool,
@@ -105,6 +109,8 @@ struct Args {
     ///
     /// The rest arguments are the output files. If not specified, only
     /// validation will be performed.
+    ///
+    /// In bulk validation mode, these are all input files to be validated.
     #[argh(positional)]
     files: Vec<String>,
 }
@@ -271,10 +277,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
-        block_ctx_dump_prefix: args.block_ctx_dir.map(std::path::PathBuf::from),
+        block_ctx_dump_prefix: args.block_ctx_dir.clone().map(std::path::PathBuf::from),
     };
 
-    params.entry_point = args.entry_point;
+    params.entry_point = args.entry_point.clone();
     if let Some(ref version) = args.profile {
         params.glsl.version = version.0;
     }
@@ -290,6 +296,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         naga::back::spv::WriterFlags::ADJUST_COORDINATE_SPACE,
         !params.keep_coordinate_space,
     );
+
+    if args.bulk_validate {
+        return bulk_validate(args, &params);
+    }
 
     let (input_path, input) = if let Some(path) = args.files.first() {
         let path = Path::new(path);
@@ -647,6 +657,53 @@ fn write_output(
         other => {
             println!("Unknown output extension: {other}");
         }
+    }
+
+    Ok(())
+}
+
+fn bulk_validate(args: Args, params: &Parameters) -> Result<(), Box<dyn std::error::Error>> {
+    let mut invalid = vec![];
+    for input_path in args.files {
+        let path = Path::new(&input_path);
+        let input = fs::read(path)?;
+
+        let Parsed { module, input_text } = match parse_input(path, input, params) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                invalid.push(input_path.clone());
+                eprintln!("Error validating {}:", input_path);
+                eprintln!("{error}");
+                continue;
+            }
+        };
+
+        let mut validator =
+            naga::valid::Validator::new(params.validation_flags, naga::valid::Capabilities::all());
+
+        if let Err(error) = validator.validate(&module) {
+            invalid.push(input_path.clone());
+            eprintln!("Error validating {}:", input_path);
+            if let Some(input) = &input_text {
+                let filename = path.file_name().and_then(std::ffi::OsStr::to_str);
+                emit_annotated_error(&error, filename.unwrap_or("input"), input);
+            }
+            print_err(&error);
+        }
+    }
+
+    if !invalid.is_empty() {
+        use std::fmt::Write;
+        let mut formatted = String::new();
+        writeln!(
+            &mut formatted,
+            "Validation failed for the following inputs:"
+        )
+        .unwrap();
+        for path in invalid {
+            writeln!(&mut formatted, "  {path}").unwrap();
+        }
+        return Err(formatted.into());
     }
 
     Ok(())
