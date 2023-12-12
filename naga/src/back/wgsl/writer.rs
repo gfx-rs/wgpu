@@ -1090,7 +1090,16 @@ impl<W: Write> Writer<W> {
             Expression::Literal(literal) => match literal {
                 crate::Literal::F32(value) => write!(self.out, "{}f", value)?,
                 crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
-                crate::Literal::I32(value) => write!(self.out, "{}i", value)?,
+                crate::Literal::I32(value) => {
+                    // `-2147483648i` is not valid WGSL. The most negative `i32`
+                    // value can only be expressed in WGSL using AbstractInt and
+                    // a unary negation operator.
+                    if value == i32::MIN {
+                        write!(self.out, "i32(-2147483648)")?;
+                    } else {
+                        write!(self.out, "{}i", value)?;
+                    }
+                }
                 crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
                 crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
                 crate::Literal::I64(_) => {

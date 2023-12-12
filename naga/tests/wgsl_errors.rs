@@ -20,6 +20,21 @@ fn check(input: &str, snapshot: &str) {
 }
 
 #[test]
+fn very_negative_integers() {
+    // wgpu#4492
+    check(
+        "const i32min = -0x80000000i;",
+        r###"error: numeric literal not representable by target type: `0x80000000i`
+  ┌─ wgsl:1:17
+  │
+1 │ const i32min = -0x80000000i;
+  │                 ^^^^^^^^^^^ numeric literal not representable by target type
+
+"###,
+    );
+}
+
+#[test]
 fn reserved_identifier_prefix() {
     check(
         "var __bad;",

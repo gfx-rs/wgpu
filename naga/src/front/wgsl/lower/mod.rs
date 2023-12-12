@@ -1574,7 +1574,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Unary { op, expr } => {
-                let expr = self.expression(expr, ctx)?;
+                let expr = self.expression_for_abstract(expr, ctx)?;
                 Typed::Plain(crate::Expression::Unary { op, expr })
             }
             ast::Expression::AddrOf(expr) => {

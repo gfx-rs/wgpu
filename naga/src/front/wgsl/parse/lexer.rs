@@ -117,7 +117,6 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('>') => (Token::Arrow, chars.as_str()),
-                Some('0'..='9' | '.') => consume_number(input),
                 Some('-') => (Token::DecrementOperation, chars.as_str()),
                 Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
                 _ => (Token::Operation(cur), og_chars),
@@ -496,44 +495,60 @@ fn test_numbers() {
 
     // MIN / MAX //
 
-    // min / max decimal signed integer
+    // min / max decimal integer
     sub_test(
-        "-2147483648i 2147483647i -2147483649i 2147483648i",
+        "0i 2147483647i 2147483648i",
         &[
-            Token::Number(Ok(Number::I32(i32::MIN))),
+            Token::Number(Ok(Number::I32(0))),
             Token::Number(Ok(Number::I32(i32::MAX))),
-            Token::Number(Err(NumberError::NotRepresentable)),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
     // min / max decimal unsigned integer
     sub_test(
-        "0u 4294967295u -1u 4294967296u",
+        "0u 4294967295u 4294967296u",
         &[
             Token::Number(Ok(Number::U32(u32::MIN))),
             Token::Number(Ok(Number::U32(u32::MAX))),
-            Token::Number(Err(NumberError::NotRepresentable)),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
 
     // min / max hexadecimal signed integer
     sub_test(
-        "-0x80000000i 0x7FFFFFFFi -0x80000001i 0x80000000i",
+        "0x0i 0x7FFFFFFFi 0x80000000i",
         &[
-            Token::Number(Ok(Number::I32(i32::MIN))),
+            Token::Number(Ok(Number::I32(0))),
             Token::Number(Ok(Number::I32(i32::MAX))),
-            Token::Number(Err(NumberError::NotRepresentable)),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
     // min / max hexadecimal unsigned integer
     sub_test(
-        "0x0u 0xFFFFFFFFu -0x1u 0x100000000u",
+        "0x0u 0xFFFFFFFFu 0x100000000u",
         &[
             Token::Number(Ok(Number::U32(u32::MIN))),
             Token::Number(Ok(Number::U32(u32::MAX))),
             Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+
+    // min/max decimal abstract int
+    sub_test(
+        "0 9223372036854775807 9223372036854775808",
+        &[
+            Token::Number(Ok(Number::AbstractInt(0))),
+            Token::Number(Ok(Number::AbstractInt(i64::MAX))),
+            Token::Number(Err(NumberError::NotRepresentable)),
+        ],
+    );
+
+    // min/max hexadecimal abstract int
+    sub_test(
+        "0 0x7fffffffffffffff 0x8000000000000000",
+        &[
+            Token::Number(Ok(Number::AbstractInt(0))),
+            Token::Number(Ok(Number::AbstractInt(i64::MAX))),
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
     );
@@ -548,77 +563,43 @@ fn test_numbers() {
     const LARGEST_F32_LESS_THAN_ONE: f32 = 0.99999994;
     /// ≈ 1 + 2^−23
     const SMALLEST_F32_LARGER_THAN_ONE: f32 = 1.0000001;
-    /// ≈ -(2^127 * (2 − 2^−23))
-    const SMALLEST_NORMAL_F32: f32 = f32::MIN;
     /// ≈ 2^127 * (2 − 2^−23)
     const LARGEST_NORMAL_F32: f32 = f32::MAX;
 
     // decimal floating point
     sub_test(
-        "1e-45f 1.1754942e-38f 1.17549435e-38f 0.99999994f 1.0000001f -3.40282347e+38f 3.40282347e+38f",
+        "1e-45f 1.1754942e-38f 1.17549435e-38f 0.99999994f 1.0000001f 3.40282347e+38f",
         &[
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_F32_LESS_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_F32_LARGER_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_NORMAL_F32,
-            ))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_NORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_F32_LESS_THAN_ONE))),
+            Token::Number(Ok(Number::F32(SMALLEST_F32_LARGER_THAN_ONE))),
+            Token::Number(Ok(Number::F32(LARGEST_NORMAL_F32))),
         ],
     );
     sub_test(
-        "-3.40282367e+38f 3.40282367e+38f",
+        "3.40282367e+38f",
         &[
-            Token::Number(Err(NumberError::NotRepresentable)), // ≈ -2^128
             Token::Number(Err(NumberError::NotRepresentable)), // ≈ 2^128
         ],
     );
 
     // hexadecimal floating point
     sub_test(
-        "0x1p-149f 0x7FFFFFp-149f 0x1p-126f 0xFFFFFFp-24f 0x800001p-23f -0xFFFFFFp+104f 0xFFFFFFp+104f",
+        "0x1p-149f 0x7FFFFFp-149f 0x1p-126f 0xFFFFFFp-24f 0x800001p-23f 0xFFFFFFp+104f",
         &[
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_SUBNORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_POSITIVE_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_F32_LESS_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_F32_LARGER_THAN_ONE,
-            ))),
-            Token::Number(Ok(Number::F32(
-                SMALLEST_NORMAL_F32,
-            ))),
-            Token::Number(Ok(Number::F32(
-                LARGEST_NORMAL_F32,
-            ))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_SUBNORMAL_F32))),
+            Token::Number(Ok(Number::F32(SMALLEST_POSITIVE_NORMAL_F32))),
+            Token::Number(Ok(Number::F32(LARGEST_F32_LESS_THAN_ONE))),
+            Token::Number(Ok(Number::F32(SMALLEST_F32_LARGER_THAN_ONE))),
+            Token::Number(Ok(Number::F32(LARGEST_NORMAL_F32))),
         ],
     );
     sub_test(
-        "-0x1p128f 0x1p128f 0x1.000001p0f",
+        "0x1p128f 0x1.000001p0f",
         &[
-            Token::Number(Err(NumberError::NotRepresentable)), // = -2^128
             Token::Number(Err(NumberError::NotRepresentable)), // = 2^128
             Token::Number(Err(NumberError::NotRepresentable)),
         ],
