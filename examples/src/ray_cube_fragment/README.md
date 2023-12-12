@@ -10,4 +10,4 @@ cargo run --example ray-cube-fragment
 
 ## Screenshots
 
-![Cube example](./screenshot.png)
+![Cube example](screenshot.png)

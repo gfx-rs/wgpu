@@ -351,7 +351,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     raw: Mutex::new(Some(e)),
                     device: device.clone(),
                     size,
-                    info: ResourceInfo::new("Ratracing scratch buffer"),
+                    info: ResourceInfo::new("Raytracing scratch buffer"),
                     is_coherent: mapping.is_coherent,
                 })))
             }

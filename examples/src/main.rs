@@ -151,6 +151,18 @@ const EXAMPLES: &[ExampleDesc] = &[
         function: wgpu_examples::ray_cube_compute::main,
         webgl: false, // No Ray-tracing extensions
         webgpu: false, // No Ray-tracing extensions (yet)
+    },
+    ExampleDesc {
+        name: "ray_cube_fragment",
+        function: wgpu_examples::ray_cube_fragment::main,
+        webgl: false, // No Ray-tracing extensions
+        webgpu: false, // No Ray-tracing extensions (yet)
+    },
+    ExampleDesc {
+        name: "ray_scene",
+        function: wgpu_examples::ray_scene::main,
+        webgl: false, // No Ray-tracing extensions
+        webgpu: false, // No Ray-tracing extensions (yet)
     }
 ];
 

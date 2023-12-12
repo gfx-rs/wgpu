@@ -25,6 +25,8 @@ pub mod timestamp_queries;
 pub mod uniform_values;
 pub mod water;
 pub mod ray_cube_compute;
+pub mod ray_cube_fragment;
+pub mod ray_scene;
 
 #[cfg(test)]
 wgpu_test::gpu_test_main!();
