@@ -188,10 +188,16 @@ fn run(args: Args) -> anyhow::Result<()> {
                     })
                 }
                 ValidateSubcommand::Wgsl => {
-                    visit_files(snapshots_base_out, "wgsl/*.wgsl", |path| {
-                        ack_visiting(path);
-                        EasyCommand::new("cargo", |cmd| cmd.args(["run", "-p", "naga-cli", "--"]).arg(path)).success()
-                    })
+                    let mut paths = vec![];
+                    let mut error_status = visit_files(snapshots_base_out, "wgsl/*.wgsl", |path| {
+                        paths.push(path.to_owned());
+                        Ok(())
+                    });
+                    EasyCommand::new("cargo", |cmd| {
+                        cmd.args(["run", "-p", "naga-cli", "--", "--bulk-validate"]).args(paths)
+                    }).success()
+                        .log_if_err_found(&mut error_status);
+                    error_status
                 }
                 ValidateSubcommand::Hlsl(cmd) => {
                     let visit_hlsl = |consume_config_item: &mut dyn FnMut(
