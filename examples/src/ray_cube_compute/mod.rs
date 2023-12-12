@@ -5,7 +5,7 @@ use glam::{Affine3A, Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
 use rt::traits::*;
-use wgpu::ray_tracing as rt;
+use wgpu::{ray_tracing as rt, StoreOp};
 
 // from cube
 #[repr(C)]
@@ -259,7 +259,7 @@ struct Example {
     start_inst: Instant,
 }
 
-impl wgpu_example::framework::Example for Example {
+impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY
@@ -543,7 +543,6 @@ impl wgpu_example::framework::Example for Example {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        spawner: &wgpu_example::framework::Spawner,
     ) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -592,7 +591,7 @@ impl wgpu_example::framework::Example for Example {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                        store: true,
+                        store: StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
@@ -607,20 +606,16 @@ impl wgpu_example::framework::Example for Example {
 
         queue.submit(Some(encoder.finish()));
 
-        // If an error occurs, report it and panic.
-        spawner.spawn_local(ErrorFuture {
-            inner: device.pop_error_scope(),
-        });
     }
 }
 
-fn main() {
-    wgpu_example::framework::run::<Example>("ray-cube");
+pub fn main() {
+    crate::framework::run::<Example>("ray-cube");
 }
 
 #[test]
 fn ray_cube_compute() {
-    wgpu_example::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
+    crate::framework::test::<Example>(wgpu_example::framework::FrameworkRefTest {
         image_path: "/examples/ray-cube-compute/screenshot.png",
         width: 1024,
         height: 768,
