@@ -50,7 +50,7 @@ struct FragmentOutput {
 
 const MAX_POINT_LIGHTS: i32 = 10i;
 const MAX_DIRECTIONAL_LIGHTS: i32 = 1i;
-const PI: f32 = 3.1415927;
+const PI: f32 = 3.1415927f;
 
 var<private> v_WorldPosition_1: vec3<f32>;
 var<private> v_WorldNormal_1: vec3<f32>;
@@ -125,13 +125,13 @@ fn getDistanceAttenuation(distanceSquare: f32, inverseRangeSquared: f32) -> f32 
     let _e50 = factor;
     let _e56 = factor;
     let _e57 = factor;
-    smoothFactor = clamp((1.0 - (_e56 * _e57)), 0.0, 1.0);
+    smoothFactor = clamp((1f - (_e56 * _e57)), 0f, 1f);
     let _e64 = smoothFactor;
     let _e65 = smoothFactor;
     attenuation = (_e64 * _e65);
     let _e68 = attenuation;
     let _e73 = distanceSquare_1;
-    return ((_e68 * 1.0) / max(_e73, 0.001));
+    return ((_e68 * 1f) / max(_e73, 0.001f));
 }
 
 fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
@@ -146,7 +146,7 @@ fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
     NoH_1 = NoH;
     let _e46 = NoH_1;
     let _e47 = NoH_1;
-    oneMinusNoHSquared = (1.0 - (_e46 * _e47));
+    oneMinusNoHSquared = (1f - (_e46 * _e47));
     let _e51 = NoH_1;
     let _e52 = roughness_1;
     a = (_e51 * _e52);
@@ -157,7 +157,7 @@ fn D_GGX(roughness: f32, NoH: f32, h: vec3<f32>) -> f32 {
     k = (_e55 / (_e56 + (_e57 * _e58)));
     let _e63 = k;
     let _e64 = k;
-    d = ((_e63 * _e64) * 0.31830987);
+    d = ((_e63 * _e64) * 0.31830987f);
     let _e71 = d;
     return _e71;
 }
@@ -203,7 +203,7 @@ fn V_SmithGGXCorrelated(roughness_2: f32, NoV: f32, NoL: f32) -> f32 {
     lambdaL = (_e72 * sqrt((((_e82 - (_e83 * _e84)) * _e87) + _e89)));
     let _e95 = lambdaV;
     let _e96 = lambdaL;
-    v = (0.5 / (_e95 + _e96));
+    v = (0.5f / (_e95 + _e96));
     let _e100 = v;
     return _e100;
 }
@@ -217,7 +217,7 @@ fn F_Schlick(f0_: vec3<f32>, f90_: f32, VoH: f32) -> vec3<f32> {
     let _e45 = f90_1;
     let _e49 = VoH_1;
     let _e52 = VoH_1;
-    let _e54 = pow5_((1.0 - _e52));
+    let _e54 = pow5_((1f - _e52));
     return (f0_ + ((vec3(_e45) - f0_) * _e54));
 }
 
@@ -234,7 +234,7 @@ fn F_Schlick_1(f0_1: f32, f90_2: f32, VoH_2: f32) -> f32 {
     let _e48 = f0_2;
     let _e51 = VoH_3;
     let _e54 = VoH_3;
-    let _e56 = pow5_((1.0 - _e54));
+    let _e56 = pow5_((1f - _e54));
     return (_e46 + ((_e47 - _e48) * _e56));
 }
 
@@ -247,7 +247,7 @@ fn fresnel(f0_3: vec3<f32>, LoH: f32) -> vec3<f32> {
     LoH_1 = LoH;
     let _e49 = f0_4;
     let _e62 = f0_4;
-    f90_4 = clamp(dot(_e62, vec3(16.5)), 0.0, 1.0);
+    f90_4 = clamp(dot(_e62, vec3(16.5f)), 0f, 1f);
     let _e75 = f0_4;
     let _e76 = f90_4;
     let _e77 = LoH_1;
@@ -310,26 +310,26 @@ fn Fd_Burley(roughness_6: f32, NoV_4: f32, NoL_4: f32, LoH_4: f32) -> f32 {
     let _e50 = roughness_7;
     let _e52 = LoH_5;
     let _e54 = LoH_5;
-    f90_5 = (0.5 + (((2.0 * _e50) * _e52) * _e54));
+    f90_5 = (0.5f + (((2f * _e50) * _e52) * _e54));
     let _e62 = f90_5;
     let _e63 = NoL_5;
-    let _e64 = F_Schlick_1(1.0, _e62, _e63);
+    let _e64 = F_Schlick_1(1f, _e62, _e63);
     lightScatter = _e64;
     let _e70 = f90_5;
     let _e71 = NoV_5;
-    let _e72 = F_Schlick_1(1.0, _e70, _e71);
+    let _e72 = F_Schlick_1(1f, _e70, _e71);
     viewScatter = _e72;
     let _e74 = lightScatter;
     let _e75 = viewScatter;
-    return ((_e74 * _e75) * 0.31830987);
+    return ((_e74 * _e75) * 0.31830987f);
 }
 
 fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3<f32> {
     var f0_8: vec3<f32>;
     var perceptual_roughness_1: f32;
     var NoV_7: f32;
-    var c0_: vec4<f32> = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
-    var c1_: vec4<f32> = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    var c0_: vec4<f32> = vec4<f32>(-1f, -0.0275f, -0.572f, 0.022f);
+    var c1_: vec4<f32> = vec4<f32>(1f, 0.0425f, 1.04f, -0.04f);
     var r: vec4<f32>;
     var a004_: f32;
     var AB: vec2<f32>;
@@ -351,10 +351,10 @@ fn EnvBRDFApprox(f0_7: vec3<f32>, perceptual_roughness: f32, NoV_6: f32) -> vec3
     let _e94 = NoV_7;
     let _e98 = r;
     let _e101 = r;
-    a004_ = ((min((_e83.x * _e85.x), exp2((-9.28 * _e94))) * _e98.x) + _e101.y);
+    a004_ = ((min((_e83.x * _e85.x), exp2((-9.28f * _e94))) * _e98.x) + _e101.y);
     let _e109 = a004_;
     let _e112 = r;
-    AB = ((vec2<f32>(-1.04, 1.04) * vec2(_e109)) + _e112.zw);
+    AB = ((vec2<f32>(-1.04f, 1.04f) * vec2(_e109)) + _e112.zw);
     let _e116 = f0_8;
     let _e117 = AB;
     let _e121 = AB;
@@ -367,7 +367,7 @@ fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
 
     perceptualRoughness_1 = perceptualRoughness;
     let _e45 = perceptualRoughness_1;
-    clampedPerceptualRoughness = clamp(_e45, 0.089, 1.0);
+    clampedPerceptualRoughness = clamp(_e45, 0.089f, 1f);
     let _e50 = clampedPerceptualRoughness;
     let _e51 = clampedPerceptualRoughness;
     return (_e50 * _e51);
@@ -379,7 +379,7 @@ fn reinhard(color: vec3<f32>) -> vec3<f32> {
     color_1 = color;
     let _e42 = color_1;
     let _e45 = color_1;
-    return (_e42 / (vec3(1.0) + _e45));
+    return (_e42 / (vec3(1f) + _e45));
 }
 
 fn reinhard_extended(color_2: vec3<f32>, max_white: f32) -> vec3<f32> {
@@ -393,10 +393,10 @@ fn reinhard_extended(color_2: vec3<f32>, max_white: f32) -> vec3<f32> {
     let _e47 = color_3;
     let _e48 = max_white_1;
     let _e49 = max_white_1;
-    numerator = (_e44 * (vec3(1.0) + (_e47 / vec3((_e48 * _e49)))));
+    numerator = (_e44 * (vec3(1f) + (_e47 / vec3((_e48 * _e49)))));
     let _e56 = numerator;
     let _e59 = color_3;
-    return (_e56 / (vec3(1.0) + _e59));
+    return (_e56 / (vec3(1f) + _e59));
 }
 
 fn luminance(v_1: vec3<f32>) -> f32 {
@@ -404,7 +404,7 @@ fn luminance(v_1: vec3<f32>) -> f32 {
 
     v_2 = v_1;
     let _e47 = v_2;
-    return dot(_e47, vec3<f32>(0.2126, 0.7152, 0.0722));
+    return dot(_e47, vec3<f32>(0.2126f, 0.7152f, 0.0722f));
 }
 
 fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
@@ -434,7 +434,7 @@ fn reinhard_luminance(color_4: vec3<f32>) -> vec3<f32> {
     l_old = _e44;
     let _e46 = l_old;
     let _e48 = l_old;
-    l_new = (_e46 / (1.0 + _e48));
+    l_new = (_e46 / (1f + _e48));
     let _e54 = color_5;
     let _e55 = l_new;
     let _e56 = change_luminance(_e54, _e55);
@@ -457,10 +457,10 @@ fn reinhard_extended_luminance(color_6: vec3<f32>, max_white_l: f32) -> vec3<f32
     let _e50 = l_old_1;
     let _e51 = max_white_l_1;
     let _e52 = max_white_l_1;
-    numerator_1 = (_e48 * (1.0 + (_e50 / (_e51 * _e52))));
+    numerator_1 = (_e48 * (1f + (_e50 / (_e51 * _e52))));
     let _e58 = numerator_1;
     let _e60 = l_old_1;
-    l_new_1 = (_e58 / (1.0 + _e60));
+    l_new_1 = (_e58 / (1f + _e60));
     let _e66 = color_7;
     let _e67 = l_new_1;
     let _e68 = change_luminance(_e66, _e67);
@@ -534,7 +534,7 @@ fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_
     let _e116 = centerToRay;
     let _e120 = centerToRay;
     let _e121 = centerToRay;
-    closestPoint = (_e95 + (_e96 * clamp((_e112 * inverseSqrt(dot(_e120, _e121))), 0.0, 1.0)));
+    closestPoint = (_e95 + (_e96 * clamp((_e112 * inverseSqrt(dot(_e120, _e121))), 0f, 1f)));
     let _e133 = closestPoint;
     let _e134 = closestPoint;
     let _e138 = closestPoint;
@@ -547,7 +547,7 @@ fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_
     let _e153 = a_1;
     let _e154 = radius;
     let _e157 = LspecLengthInverse;
-    normalizationFactor = (_e143 / clamp((_e153 + ((_e154 * 0.5) * _e157)), 0.0, 1.0));
+    normalizationFactor = (_e143 / clamp((_e153 + ((_e154 * 0.5f) * _e157)), 0f, 1f));
     let _e165 = normalizationFactor;
     let _e166 = normalizationFactor;
     specularIntensity_2 = (_e165 * _e166);
@@ -563,17 +563,17 @@ fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_
     let _e184 = L;
     let _e190 = N_1;
     let _e191 = L;
-    NoL_6 = clamp(dot(_e190, _e191), 0.0, 1.0);
+    NoL_6 = clamp(dot(_e190, _e191), 0f, 1f);
     let _e199 = N_1;
     let _e200 = H;
     let _e206 = N_1;
     let _e207 = H;
-    NoH_4 = clamp(dot(_e206, _e207), 0.0, 1.0);
+    NoH_4 = clamp(dot(_e206, _e207), 0f, 1f);
     let _e215 = L;
     let _e216 = H;
     let _e222 = L;
     let _e223 = H;
-    LoH_6 = clamp(dot(_e222, _e223), 0.0, 1.0);
+    LoH_6 = clamp(dot(_e222, _e223), 0f, 1f);
     let _e237 = F0_1;
     let _e238 = roughness_9;
     let _e239 = H;
@@ -595,17 +595,17 @@ fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_
     let _e260 = L;
     let _e266 = N_1;
     let _e267 = L;
-    NoL_6 = clamp(dot(_e266, _e267), 0.0, 1.0);
+    NoL_6 = clamp(dot(_e266, _e267), 0f, 1f);
     let _e274 = N_1;
     let _e275 = H;
     let _e281 = N_1;
     let _e282 = H;
-    NoH_4 = clamp(dot(_e281, _e282), 0.0, 1.0);
+    NoH_4 = clamp(dot(_e281, _e282), 0f, 1f);
     let _e289 = L;
     let _e290 = H;
     let _e296 = L;
     let _e297 = H;
-    LoH_6 = clamp(dot(_e296, _e297), 0.0, 1.0);
+    LoH_6 = clamp(dot(_e296, _e297), 0f, 1f);
     let _e302 = diffuseColor_1;
     let _e307 = roughness_9;
     let _e308 = NdotV_1;
@@ -636,7 +636,7 @@ fn dir_light(light_2: DirectionalLight, roughness_10: f32, NdotV_2: f32, normal:
     var NoH_5: f32;
     var LoH_7: f32;
     var diffuse_1: vec3<f32>;
-    var specularIntensity_3: f32 = 1.0;
+    var specularIntensity_3: f32 = 1f;
     var specular_2: vec3<f32>;
 
     light_3 = light_2;
@@ -658,17 +658,17 @@ fn dir_light(light_2: DirectionalLight, roughness_10: f32, NdotV_2: f32, normal:
     let _e71 = incident_light;
     let _e77 = normal_1;
     let _e78 = incident_light;
-    NoL_7 = clamp(dot(_e77, _e78), 0.0, 1.0);
+    NoL_7 = clamp(dot(_e77, _e78), 0f, 1f);
     let _e86 = normal_1;
     let _e87 = half_vector;
     let _e93 = normal_1;
     let _e94 = half_vector;
-    NoH_5 = clamp(dot(_e93, _e94), 0.0, 1.0);
+    NoH_5 = clamp(dot(_e93, _e94), 0f, 1f);
     let _e102 = incident_light;
     let _e103 = half_vector;
     let _e109 = incident_light;
     let _e110 = half_vector;
-    LoH_7 = clamp(dot(_e109, _e110), 0.0, 1.0);
+    LoH_7 = clamp(dot(_e109, _e110), 0f, 1f);
     let _e116 = diffuseColor_3;
     let _e121 = roughness_11;
     let _e122 = NdotV_3;
@@ -713,7 +713,7 @@ fn main_1() {
     var F0_4: vec3<f32>;
     var diffuseColor_4: vec3<f32>;
     var R_4: vec3<f32>;
-    var light_accum: vec3<f32> = vec3(0.0);
+    var light_accum: vec3<f32> = vec3(0f);
     var i: i32 = 0i;
     var i_1: i32 = 0i;
     var diffuse_ambient: vec3<f32>;
@@ -785,7 +785,7 @@ fn main_1() {
     let _e123 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e122);
     let _e131 = v_Uv_1;
     let _e132 = textureSample(StandardMaterial_normal_map, StandardMaterial_normal_map_sampler, _e131);
-    N_2 = (_e120 * normalize(((_e132.xyz * 2.0) - vec3(1.0))));
+    N_2 = (_e120 * normalize(((_e132.xyz * 2f) - vec3(1f))));
     let _e142 = v_Uv_1;
     let _e143 = textureSample(StandardMaterial_occlusion_texture, StandardMaterial_occlusion_texture_sampler, _e142);
     occlusion = _e143.x;
@@ -808,16 +808,16 @@ fn main_1() {
     let _e178 = V_3;
     let _e183 = N_2;
     let _e184 = V_3;
-    NdotV_4 = max(dot(_e183, _e184), 0.001);
+    NdotV_4 = max(dot(_e183, _e184), 0.001f);
     let _e190 = global_6.reflectance;
     let _e192 = global_6.reflectance;
     let _e195 = metallic;
     let _e199 = output_color;
     let _e201 = metallic;
-    F0_4 = (vec3((((0.16 * _e190) * _e192) * (1.0 - _e195))) + (_e199.xyz * vec3(_e201)));
+    F0_4 = (vec3((((0.16f * _e190) * _e192) * (1f - _e195))) + (_e199.xyz * vec3(_e201)));
     let _e206 = output_color;
     let _e209 = metallic;
-    diffuseColor_4 = (_e206.xyz * vec3((1.0 - _e209)));
+    diffuseColor_4 = (_e206.xyz * vec3((1f - _e209)));
     let _e214 = V_3;
     let _e217 = V_3;
     let _e219 = N_2;
@@ -878,7 +878,7 @@ fn main_1() {
     }
     let _e302 = diffuseColor_4;
     let _e304 = NdotV_4;
-    let _e305 = EnvBRDFApprox(_e302, 1.0, _e304);
+    let _e305 = EnvBRDFApprox(_e302, 1f, _e304);
     diffuse_ambient = _e305;
     let _e310 = F0_4;
     let _e311 = perceptual_roughness_2;

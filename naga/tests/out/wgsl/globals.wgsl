@@ -29,24 +29,24 @@ fn test_msl_packed_vec3_as_arg(arg: vec3<f32>) {
 fn test_msl_packed_vec3_() {
     var idx: i32 = 1i;
 
-    alignment.v3_ = vec3(1.0);
-    alignment.v3_.x = 1.0;
-    alignment.v3_.x = 2.0;
+    alignment.v3_ = vec3(1f);
+    alignment.v3_.x = 1f;
+    alignment.v3_.x = 2f;
     let _e16 = idx;
-    alignment.v3_[_e16] = 3.0;
+    alignment.v3_[_e16] = 3f;
     let data = alignment;
     let l0_ = data.v3_;
     let l1_ = data.v3_.zx;
     test_msl_packed_vec3_as_arg(data.v3_);
     let mvm0_ = (data.v3_ * mat3x3<f32>());
     let mvm1_ = (mat3x3<f32>() * data.v3_);
-    let svm0_ = (data.v3_ * 2.0);
-    let svm1_ = (2.0 * data.v3_);
+    let svm0_ = (data.v3_ * 2f);
+    let svm1_ = (2f * data.v3_);
 }
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
-    var Foo: f32 = 1.0;
+    var Foo: f32 = 1f;
     var at: bool = true;
 
     test_msl_packed_vec3_();
@@ -64,7 +64,7 @@ fn main() {
     wg[3] = _e37;
     let _e43 = alignment.v3_.x;
     wg[2] = _e43;
-    alignment.v1_ = 4.0;
+    alignment.v1_ = 4f;
     wg[1] = f32(arrayLength((&dummy)));
     atomicStore((&at_1), 2u);
     return;

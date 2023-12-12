@@ -92,7 +92,7 @@ fn main_1() {
     let _e150 = a;
     let _e152 = i;
     ldexpOut = ldexp(_e150.x, _e152);
-    smoothStepScalar = f64(smoothstep(0.0, 1.0, 0.5));
+    smoothStepScalar = f64(smoothstep(0f, 1f, 0.5f));
     smoothStepVector = smoothstep(vec4(0.0lf), vec4(1.0lf), vec4(0.5lf));
     smoothStepMixed = smoothstep(vec4(0.0lf), vec4(1.0lf), vec4(0.5lf));
     return;

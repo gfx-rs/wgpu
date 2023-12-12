@@ -1,5 +1,5 @@
 fn main_1() {
-    var a: f32 = 1.0;
+    var a: f32 = 1f;
 
     return;
 }

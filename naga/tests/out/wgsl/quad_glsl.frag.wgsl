@@ -6,7 +6,7 @@ var<private> v_uv_1: vec2<f32>;
 var<private> o_color: vec4<f32>;
 
 fn main_1() {
-    o_color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    o_color = vec4<f32>(1f, 1f, 1f, 1f);
     return;
 }
 

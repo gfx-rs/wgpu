@@ -33,7 +33,7 @@ fn main_1() {
 
     let _e12 = global_1.Model;
     let _e13 = Vertex_Position_1;
-    world_position = (_e12 * vec4<f32>(_e13.x, _e13.y, _e13.z, 1.0));
+    world_position = (_e12 * vec4<f32>(_e13.x, _e13.y, _e13.z, 1f));
     let _e21 = world_position;
     v_WorldPosition = _e21.xyz;
     let _e23 = global_1.Model;

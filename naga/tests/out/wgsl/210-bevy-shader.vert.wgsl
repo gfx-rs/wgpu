@@ -28,18 +28,18 @@ var<private> gl_Position: vec4<f32>;
 fn main_1() {
     let _e10 = global_1.Model;
     let _e11 = Vertex_Normal_1;
-    v_Normal = (_e10 * vec4<f32>(_e11.x, _e11.y, _e11.z, 1.0)).xyz;
+    v_Normal = (_e10 * vec4<f32>(_e11.x, _e11.y, _e11.z, 1f)).xyz;
     let _e19 = global_1.Model;
     let _e29 = Vertex_Normal_1;
     v_Normal = (mat3x3<f32>(_e19[0].xyz, _e19[1].xyz, _e19[2].xyz) * _e29);
     let _e31 = global_1.Model;
     let _e32 = Vertex_Position_1;
-    v_Position = (_e31 * vec4<f32>(_e32.x, _e32.y, _e32.z, 1.0)).xyz;
+    v_Position = (_e31 * vec4<f32>(_e32.x, _e32.y, _e32.z, 1f)).xyz;
     let _e40 = Vertex_Uv_1;
     v_Uv = _e40;
     let _e42 = global.ViewProj;
     let _e43 = v_Position;
-    gl_Position = (_e42 * vec4<f32>(_e43.x, _e43.y, _e43.z, 1.0));
+    gl_Position = (_e42 * vec4<f32>(_e43.x, _e43.y, _e43.z, 1f));
     return;
 }
 

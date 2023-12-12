@@ -19,7 +19,7 @@ fn collatz_iterations(n: u32) -> u32 {
         {
             let _e14 = n_1;
             let _e15 = f32(_e14);
-            if ((_e15 - (floor((_e15 / 2.0)) * 2.0)) == 0.0) {
+            if ((_e15 - (floor((_e15 / 2f)) * 2f)) == 0f) {
                 {
                     let _e25 = n_1;
                     n_1 = (_e25 / 2u);

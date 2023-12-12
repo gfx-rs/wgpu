@@ -5,8 +5,8 @@ struct FragmentOutput {
 
 @fragment 
 fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput {
-    var color: vec4<f32> = vec4<f32>(0.4, 0.3, 0.2, 0.1);
-    var mask: vec4<f32> = vec4<f32>(0.9, 0.8, 0.7, 0.6);
+    var color: vec4<f32> = vec4<f32>(0.4f, 0.3f, 0.2f, 0.1f);
+    var mask: vec4<f32> = vec4<f32>(0.9f, 0.8f, 0.7f, 0.6f);
 
     let _e13 = color;
     let _e14 = mask;
