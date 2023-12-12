@@ -23,9 +23,9 @@ vec4 builtins() {
     return (((((vec4((ivec4(s1_) + v_i32_zero)) + s2_) + m1_) + m2_) + vec4(b1_)) + b2_);
 }
 
-vec4 splat() {
-    vec2 a_2 = (((vec2(1.0) + vec2(2.0)) - vec2(3.0)) / vec2(4.0));
-    ivec4 b = (ivec4(5) % ivec4(2));
+vec4 splat(float m, int n) {
+    vec2 a_2 = (((vec2(2.0) + vec2(m)) - vec2(4.0)) / vec2(8.0));
+    ivec4 b = (ivec4(n) % ivec4(2));
     return (a_2.xyxy + vec4(b));
 }
 
@@ -247,9 +247,10 @@ void negation_avoids_prefix_decrement() {
 }
 
 void main() {
-    vec4 _e0 = builtins();
-    vec4 _e1 = splat();
-    vec3 _e6 = bool_cast(vec3(1.0, 1.0, 1.0));
+    uvec3 id = gl_WorkGroupID;
+    vec4 _e1 = builtins();
+    vec4 _e6 = splat(float(id.x), int(id.y));
+    vec3 _e11 = bool_cast(vec3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();
