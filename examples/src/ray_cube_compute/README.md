@@ -11,4 +11,4 @@ cargo run --example ray-cube-compute
 
 ## Screenshots
 
-![Cube example](./screenshot.png)
+![Cube example](screenshot.png)

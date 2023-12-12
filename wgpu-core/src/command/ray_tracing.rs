@@ -698,7 +698,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 raw: Mutex::new(Some(scratch_buffer)),
                 device: device.clone(),
                 size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
-                info: ResourceInfo::new("Ratracing scratch buffer"),
+                info: ResourceInfo::new("Raytracing scratch buffer"),
                 is_coherent: scratch_mapping.is_coherent,
             })));
 
@@ -1300,12 +1300,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("(wgpu) scratch buffer"),
                     size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
-                    usage: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                    usage: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH | BufferUses::MAP_WRITE,
                     memory_flags: hal::MemoryFlags::empty(),
                 })
                 .map_err(crate::device::DeviceError::from)?
         };
-
         let staging_buffer = if !instance_buffer_staging_source.is_empty() {
             unsafe {
                 let staging_buffer = device
@@ -1324,7 +1323,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         0..instance_buffer_staging_source.len() as u64,
                     )
                     .map_err(crate::device::DeviceError::from)?;
-
                 ptr::copy_nonoverlapping(
                     instance_buffer_staging_source.as_ptr(),
                     mapping.ptr.as_ptr(),
@@ -1335,14 +1333,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .unmap_buffer(&staging_buffer)
                     .map_err(crate::device::DeviceError::from)?;
                 assert!(mapping.is_coherent);
-
-                Some(StagingBuffer {
+                let buf = StagingBuffer {
                     raw: Mutex::new(Some(staging_buffer)),
                     device: device.clone(),
                     size: instance_buffer_staging_source.len() as u64,
                     info: ResourceInfo::new("Raytracing staging buffer"),
                     is_coherent: mapping.is_coherent,
-                })
+                };
+                let staging_fid = hub.staging_buffers.request();
+                let stage_buf = staging_fid.init(buf);
+                Some(stage_buf)
             }
         } else {
             None
@@ -1508,7 +1508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_mut()
                     .unwrap()
                     .temp_resources
-                    .push(TempResource::StagingBuffer(Arc::new(staging_buffer)));
+                    .push(TempResource::StagingBuffer(staging_buffer));
             }
         }
         let scratch_mapping = unsafe {
@@ -1516,23 +1516,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .raw()
                 .map_buffer(
                     &scratch_buffer,
-                    0..instance_buffer_staging_source.len() as u64,
+                    0..max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
                 )
                 .map_err(crate::device::DeviceError::from)?
         };
+
+        let buf = StagingBuffer {
+            raw: Mutex::new(Some(scratch_buffer)),
+            device: device.clone(),
+            size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
+            info: ResourceInfo::new("Ratracing scratch buffer"),
+            is_coherent: scratch_mapping.is_coherent,
+        };
+        let staging_fid = hub.staging_buffers.request();
+        let stage_buf = staging_fid.init(buf);
+
         device
             .pending_writes
             .lock()
             .as_mut()
             .unwrap()
             .temp_resources
-            .push(TempResource::StagingBuffer(Arc::new(StagingBuffer {
-                raw: Mutex::new(Some(scratch_buffer)),
-                device: device.clone(),
-                size: max(scratch_buffer_blas_size, scratch_buffer_tlas_size),
-                info: ResourceInfo::new("Ratracing scratch buffer"),
-                is_coherent: scratch_mapping.is_coherent,
-            })));
+            .push(TempResource::StagingBuffer(stage_buf));
 
         Ok(())
     }

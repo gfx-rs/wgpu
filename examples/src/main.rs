@@ -146,6 +146,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false, // No RODS
         webgpu: true,
     },
+    ExampleDesc {
+        name: "ray_cube_compute",
+        function: wgpu_examples::ray_cube_compute::main,
+        webgl: false, // No Ray-tracing extensions
+        webgpu: false, // No Ray-tracing extensions (yet)
+    }
 ];
 
 fn get_example_name() -> Option<String> {
