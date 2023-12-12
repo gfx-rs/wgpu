@@ -245,7 +245,11 @@ impl Drop for DeviceLostClosureC {
                 // Invoke the closure with reason Destroyed so embedder can recover
                 // the memory.
                 let message = std::ffi::CString::new("Dropped").unwrap();
-                (self.callback)(self.user_data, DeviceLostReason::Destroyed as u8, message.as_ptr())
+                (self.callback)(
+                    self.user_data,
+                    DeviceLostReason::Destroyed as u8,
+                    message.as_ptr(),
+                )
             }
         }
     }
