@@ -94,6 +94,7 @@ pub struct Device<A: HalApi> {
     //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) active_submission_index: AtomicU64, //SubmissionIndex,
     pub(crate) fence: RwLock<Option<A::Fence>>,
+    pub(crate) snatchable_lock: RwLock<SnatchableMarker>,
 
     /// Is this device valid? Valid is closely associated with "lose the device",
     /// which can be triggered by various methods, including at the end of device
@@ -254,6 +255,7 @@ impl<A: HalApi> Device<A> {
             command_allocator: Mutex::new(Some(com_alloc)),
             active_submission_index: AtomicU64::new(0),
             fence: RwLock::new(Some(fence)),
+            snatchable_lock: RwLock::new(SnatchableMarker),
             valid: AtomicBool::new(true),
             trackers: Mutex::new(Tracker::new()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
@@ -538,7 +540,7 @@ impl<A: HalApi> Device<A> {
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }.map_err(DeviceError::from)?;
 
         Ok(Buffer {
-            raw: Some(buffer),
+            raw: Snatchable::new(buffer),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -588,7 +590,7 @@ impl<A: HalApi> Device<A> {
         debug_assert_eq!(self.as_info().id().backend(), A::VARIANT);
 
         Buffer {
-            raw: Some(hal_buffer),
+            raw: Snatchable::new(hal_buffer),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
@@ -1766,6 +1768,7 @@ impl<A: HalApi> Device<A> {
         used: &mut BindGroupStates<A>,
         storage: &'a Storage<Buffer<A>, id::BufferId>,
         limits: &wgt::Limits,
+        snatch_guard: &'a RwLockReadGuard<'a, SnatchableMarker>,
     ) -> Result<hal::BufferBinding<'a, A>, binding_model::CreateBindGroupError> {
         use crate::binding_model::CreateBindGroupError as Error;
 
@@ -1818,7 +1821,7 @@ impl<A: HalApi> Device<A> {
         check_buffer_usage(buffer.usage, pub_usage)?;
         let raw_buffer = buffer
             .raw
-            .as_ref()
+            .get(snatch_guard)
             .ok_or(Error::InvalidBuffer(bb.buffer_id))?;
 
         let (bind_size, bind_end) = match bb.size {
@@ -1966,6 +1969,7 @@ impl<A: HalApi> Device<A> {
         let mut hal_buffers = Vec::new();
         let mut hal_samplers = Vec::new();
         let mut hal_textures = Vec::new();
+        let snatch_guard = self.snatchable_lock.read();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
             // Find the corresponding declaration in the layout
@@ -1985,6 +1989,7 @@ impl<A: HalApi> Device<A> {
                         &mut used,
                         &*buffer_guard,
                         &self.limits,
+                        &snatch_guard,
                     )?;
 
                     let res_index = hal_buffers.len();
@@ -2007,6 +2012,7 @@ impl<A: HalApi> Device<A> {
                             &mut used,
                             &*buffer_guard,
                             &self.limits,
+                            &snatch_guard,
                         )?;
                         hal_buffers.push(bb);
                     }
@@ -3404,5 +3410,36 @@ impl<A: HalApi> Resource<DeviceId> for Device<A> {
 
     fn as_info_mut(&mut self) -> &mut ResourceInfo<DeviceId> {
         &mut self.info
+    }
+}
+
+pub struct SnatchableMarker;
+use parking_lot::RwLockReadGuard;
+
+pub type SnatchGuard<'a> = RwLockReadGuard<'a, SnatchableMarker>;
+
+pub struct Snatchable<T> {
+    value: Option<T>,
+}
+
+impl<T> Snatchable<T> {
+    pub fn new(val: T) -> Self {
+        Snatchable { value: Some(val) }
+    }
+
+    pub fn get(&self, _guard: &SnatchGuard) -> Option<&T> {
+        self.value.as_ref()
+    }
+
+    pub fn take(&mut self) -> Option<T> {
+        self.value.take()
+    }
+}
+
+// Can't safely print the contents of a snatchable objetc without holding
+// the lock.
+impl<T> std::fmt::Debug for Snatchable<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "<snatchable>")
     }
 }

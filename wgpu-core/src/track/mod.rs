@@ -103,6 +103,7 @@ mod texture;
 
 use crate::{
     binding_model, command, conv,
+    device::resource::SnatchGuard,
     hal_api::HalApi,
     id::{self, TypedId},
     pipeline, resource,
@@ -138,8 +139,9 @@ impl PendingTransition<hal::BufferUses> {
     pub fn into_hal<'a, A: HalApi>(
         self,
         buf: &'a resource::Buffer<A>,
+        snatch_guard: &'a SnatchGuard<'a>,
     ) -> hal::BufferBarrier<'a, A> {
-        let buffer = buf.raw.as_ref().expect("Buffer is destroyed");
+        let buffer = buf.raw.get(snatch_guard).expect("Buffer is destroyed");
         hal::BufferBarrier {
             buffer,
             usage: self.usage,

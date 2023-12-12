@@ -223,12 +223,16 @@ impl<A: HalApi> BakedCommands<A> {
                 .unwrap()
                 .1;
 
-            let raw_buf = buffer.raw.as_ref().ok_or(DestroyedBufferError(buffer_id))?;
+            let snatch_guard = buffer.device.snatchable_lock.read();
+            let raw_buf = buffer
+                .raw
+                .get(&snatch_guard)
+                .ok_or(DestroyedBufferError(buffer_id))?;
 
             unsafe {
                 self.encoder.transition_buffers(
                     transition
-                        .map(|pending| pending.into_hal(&buffer))
+                        .map(|pending| pending.into_hal(&buffer, &snatch_guard))
                         .into_iter(),
                 );
             }

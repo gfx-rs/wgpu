@@ -9,6 +9,7 @@ use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
 use super::{PendingTransition, ResourceTracker};
 use crate::{
+    device::resource::SnatchGuard,
     hal_api::HalApi,
     id::{BufferId, TypedId},
     resource::{Buffer, Resource},
@@ -387,10 +388,13 @@ impl<A: HalApi> BufferTracker<A> {
     }
 
     /// Drains all currently pending transitions.
-    pub fn drain_transitions(&mut self) -> impl Iterator<Item = BufferBarrier<A>> {
+    pub fn drain_transitions<'a, 'b: 'a>(
+        &'b mut self,
+        snatch_guard: &'a SnatchGuard<'a>,
+    ) -> impl Iterator<Item = BufferBarrier<'a, A>> {
         let buffer_barriers = self.temp.drain(..).map(|pending| {
             let buf = unsafe { self.metadata.get_resource_unchecked(pending.id as _) };
-            pending.into_hal(buf)
+            pending.into_hal(buf, snatch_guard)
         });
         buffer_barriers
     }
