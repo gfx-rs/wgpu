@@ -35,7 +35,7 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     let uniform_index = uni.index;
     let non_uniform_index = fragment_in.index;
     let uv = vec2(0.0);
-    let pix = vec2(0);
+    let pix = vec2(0i);
     let _e21 = textureDimensions(texture_array_unbounded[0]);
     let _e22 = u2_;
     u2_ = (_e22 + _e21);
@@ -63,13 +63,13 @@ fn main(fragment_in: FragmentIn) -> @location(0) vec4<f32> {
     let _e76 = textureGatherCompare(texture_array_depth[non_uniform_index], samp_comp[non_uniform_index], uv, 0.0);
     let _e77 = v4_;
     v4_ = (_e77 + _e76);
-    let _e82 = textureLoad(texture_array_unbounded[0], pix, 0);
+    let _e82 = textureLoad(texture_array_unbounded[0], pix, 0i);
     let _e83 = v4_;
     v4_ = (_e83 + _e82);
-    let _e88 = textureLoad(texture_array_unbounded[uniform_index], pix, 0);
+    let _e88 = textureLoad(texture_array_unbounded[uniform_index], pix, 0i);
     let _e89 = v4_;
     v4_ = (_e89 + _e88);
-    let _e94 = textureLoad(texture_array_unbounded[non_uniform_index], pix, 0);
+    let _e94 = textureLoad(texture_array_unbounded[non_uniform_index], pix, 0i);
     let _e95 = v4_;
     v4_ = (_e95 + _e94);
     let _e99 = textureNumLayers(texture_array_2darray[0]);

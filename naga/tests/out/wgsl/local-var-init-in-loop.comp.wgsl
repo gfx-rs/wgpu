@@ -1,11 +1,11 @@
 fn main_1() {
     var sum: vec4<f32> = vec4(0.0);
-    var i: i32 = 0;
+    var i: i32 = 0i;
     var a: vec4<f32>;
 
     loop {
         let _e6 = i;
-        if !((_e6 < 4)) {
+        if !((_e6 < 4i)) {
             break;
         }
         {
@@ -16,7 +16,7 @@ fn main_1() {
         }
         continuing {
             let _e10 = i;
-            i = (_e10 + 1);
+            i = (_e10 + 1i);
         }
     }
     return;

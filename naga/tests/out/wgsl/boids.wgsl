@@ -33,8 +33,8 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     var cMass: vec2<f32> = vec2<f32>(0.0, 0.0);
     var cVel: vec2<f32> = vec2<f32>(0.0, 0.0);
     var colVel: vec2<f32> = vec2<f32>(0.0, 0.0);
-    var cMassCount: i32 = 0;
-    var cVelCount: i32 = 0;
+    var cMassCount: i32 = 0i;
+    var cVelCount: i32 = 0i;
     var pos: vec2<f32>;
     var vel: vec2<f32>;
     var i: u32 = 0u;
@@ -70,7 +70,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             let _e61 = pos;
             cMass = (_e60 + _e61);
             let _e63 = cMassCount;
-            cMassCount = (_e63 + 1);
+            cMassCount = (_e63 + 1i);
         }
         let _e66 = pos;
         let _e67 = vPos;
@@ -89,7 +89,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
             let _e86 = vel;
             cVel = (_e85 + _e86);
             let _e88 = cVelCount;
-            cVelCount = (_e88 + 1);
+            cVelCount = (_e88 + 1i);
         }
         continuing {
             let _e91 = i;
@@ -97,14 +97,14 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
         }
     }
     let _e94 = cMassCount;
-    if (_e94 > 0) {
+    if (_e94 > 0i) {
         let _e97 = cMass;
         let _e98 = cMassCount;
         let _e102 = vPos;
         cMass = ((_e97 / vec2(f32(_e98))) - _e102);
     }
     let _e104 = cVelCount;
-    if (_e104 > 0) {
+    if (_e104 > 0i) {
         let _e107 = cVel;
         let _e108 = cVelCount;
         cVel = (_e107 / vec2(f32(_e108)));

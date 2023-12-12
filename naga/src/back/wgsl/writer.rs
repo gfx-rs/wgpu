@@ -1093,7 +1093,7 @@ impl<W: Write> Writer<W> {
                     // decimal part even it's zero
                     crate::Literal::F32(value) => write!(self.out, "{:?}", value)?,
                     crate::Literal::U32(value) => write!(self.out, "{}u", value)?,
-                    crate::Literal::I32(value) => write!(self.out, "{}", value)?,
+                    crate::Literal::I32(value) => write!(self.out, "{}i", value)?,
                     crate::Literal::Bool(value) => write!(self.out, "{}", value)?,
                     crate::Literal::F64(value) => write!(self.out, "{:?}lf", value)?,
                     crate::Literal::I64(_) => {

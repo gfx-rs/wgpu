@@ -48,8 +48,8 @@ struct FragmentOutput {
     @location(0) o_Target: vec4<f32>,
 }
 
-const MAX_POINT_LIGHTS: i32 = 10;
-const MAX_DIRECTIONAL_LIGHTS: i32 = 1;
+const MAX_POINT_LIGHTS: i32 = 10i;
+const MAX_DIRECTIONAL_LIGHTS: i32 = 1i;
 const PI: f32 = 3.1415927;
 
 var<private> v_WorldPosition_1: vec3<f32>;
@@ -714,8 +714,8 @@ fn main_1() {
     var diffuseColor_4: vec3<f32>;
     var R_4: vec3<f32>;
     var light_accum: vec3<f32> = vec3(0.0);
-    var i: i32 = 0;
-    var i_1: i32 = 0;
+    var i: i32 = 0i;
+    var i_1: i32 = 0i;
     var diffuse_ambient: vec3<f32>;
     var specular_ambient: vec3<f32>;
 
@@ -846,7 +846,7 @@ fn main_1() {
         }
         continuing {
             let _e236 = i;
-            i = (_e236 + 1);
+            i = (_e236 + 1i);
         }
     }
     loop {
@@ -873,7 +873,7 @@ fn main_1() {
         }
         continuing {
             let _e273 = i_1;
-            i_1 = (_e273 + 1);
+            i_1 = (_e273 + 1i);
         }
     }
     let _e302 = diffuseColor_4;

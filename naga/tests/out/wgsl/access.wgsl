@@ -25,7 +25,7 @@ struct MatCx2InArray {
     am: array<mat4x2<f32>, 2>,
 }
 
-var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0);
+var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0i);
 @group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
 @group(0) @binding(1) 
@@ -36,11 +36,11 @@ var<storage, read_write> qux: vec2<i32>;
 var<uniform> nested_mat_cx2_: MatCx2InArray;
 
 fn test_matrix_within_struct_accesses() {
-    var idx: i32 = 1;
+    var idx: i32 = 1i;
     var t: Baz = Baz(mat3x2<f32>(vec2(1.0), vec2(2.0), vec2(3.0)));
 
     let _e3 = idx;
-    idx = (_e3 - 1);
+    idx = (_e3 - 1i);
     let l0_ = baz.m;
     let l1_ = baz.m[0];
     let _e14 = idx;
@@ -54,7 +54,7 @@ fn test_matrix_within_struct_accesses() {
     let _e38 = idx;
     let l6_ = baz.m[_e36][_e38];
     let _e51 = idx;
-    idx = (_e51 + 1);
+    idx = (_e51 + 1i);
     t.m = mat3x2<f32>(vec2(6.0), vec2(5.0), vec2(4.0));
     t.m[0] = vec2(9.0);
     let _e66 = idx;
@@ -71,11 +71,11 @@ fn test_matrix_within_struct_accesses() {
 }
 
 fn test_matrix_within_array_within_struct_accesses() {
-    var idx_1: i32 = 1;
+    var idx_1: i32 = 1i;
     var t_1: MatCx2InArray = MatCx2InArray(array<mat4x2<f32>, 2>());
 
     let _e3 = idx_1;
-    idx_1 = (_e3 - 1);
+    idx_1 = (_e3 - 1i);
     let l0_1 = nested_mat_cx2_.am;
     let l1_1 = nested_mat_cx2_.am[0];
     let l2_1 = nested_mat_cx2_.am[0][0];
@@ -90,7 +90,7 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e48 = idx_1;
     let l7_ = nested_mat_cx2_.am[0][_e46][_e48];
     let _e55 = idx_1;
-    idx_1 = (_e55 + 1);
+    idx_1 = (_e55 + 1i);
     t_1.am = array<mat4x2<f32>, 2>();
     t_1.am[0] = mat4x2<f32>(vec2(8.0), vec2(7.0), vec2(6.0), vec2(5.0));
     t_1.am[0][0] = vec2(9.0);
@@ -142,8 +142,8 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let c = qux;
     let data_pointer = (&bar.data[0].value);
     let _e33 = read_from_private((&foo));
-    c2_ = array<i32, 5>(a_1, i32(b), 3, 4, 5);
-    c2_[(vi + 1u)] = 42;
+    c2_ = array<i32, 5>(a_1, i32(b), 3i, 4i, 5i);
+    c2_[(vi + 1u)] = 42i;
     let value = c2_[vi];
     let _e47 = test_arr_as_arg(array<array<f32, 10>, 5>());
     return vec4<f32>((_matrix * vec4<f32>(vec4(value))), 2.0);
@@ -154,7 +154,7 @@ fn foo_frag() -> @location(0) vec4<f32> {
     bar._matrix[1][2] = 1.0;
     bar._matrix = mat4x3<f32>(vec3(0.0), vec3(1.0), vec3(2.0), vec3(3.0));
     bar.arr = array<vec2<u32>, 2>(vec2(0u), vec2(1u));
-    bar.data[1].value = 1;
+    bar.data[1].value = 1i;
     qux = vec2<i32>();
     return vec4(0.0);
 }

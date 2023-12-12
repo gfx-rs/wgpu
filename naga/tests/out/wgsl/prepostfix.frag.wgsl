@@ -1,16 +1,16 @@
 fn main_1() {
     var scalar_target: i32;
-    var scalar: i32 = 1;
+    var scalar: i32 = 1i;
     var vec_target: vec2<u32>;
     var vec: vec2<u32> = vec2(1u);
     var mat_target: mat4x3<f32>;
     var mat: mat4x3<f32> = mat4x3<f32>(vec3<f32>(1.0, 0.0, 0.0), vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.0, 0.0, 0.0));
 
     let _e3 = scalar;
-    scalar = (_e3 + 1);
+    scalar = (_e3 + 1i);
     scalar_target = _e3;
     let _e6 = scalar;
-    let _e8 = (_e6 - 1);
+    let _e8 = (_e6 - 1i);
     scalar = _e8;
     scalar_target = _e8;
     let _e14 = vec;

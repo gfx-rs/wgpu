@@ -156,6 +156,8 @@ Passing an owned value `window` to `Surface` will return a `Surface<'static>`. S
 
 - Emit and init `struct` member padding always. By @ErichDonGubler in [#4701](https://github.com/gfx-rs/wgpu/pull/4701).
 
+- In WGSL output, always include the `i` suffix on `i32` literals. By @jimblandy in [#4863](https://github.com/gfx-rs/wgpu/pull/4863).
+
 ### Bug Fixes
 
 #### General

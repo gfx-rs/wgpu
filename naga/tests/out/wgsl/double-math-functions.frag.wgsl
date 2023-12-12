@@ -2,7 +2,7 @@ fn main_1() {
     var a: vec4<f64> = vec4(1.0lf);
     var b: vec4<f64> = vec4(2.0lf);
     var m: mat4x4<f64>;
-    var i: i32 = 5;
+    var i: i32 = 5i;
     var ceilOut: vec4<f64>;
     var roundOut: vec4<f64>;
     var floorOut: vec4<f64>;
